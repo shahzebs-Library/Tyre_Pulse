@@ -6,7 +6,7 @@ import {
   LayoutDashboard, CircleDot, Package, DollarSign,
   ClipboardList, Search, Upload, Settings, LogOut,
   Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
-  Bell, GitBranch, Layers, AlertTriangle, Globe, Car,
+  Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -225,6 +225,32 @@ export default function Layout({ children }) {
               ))}
             </div>
           ))}
+
+          {/* Admin-only group */}
+          {profile?.role === 'Admin' && (
+            <div className="mb-0.5">
+              {sidebarOpen && (
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700 px-2.5 pt-2.5 pb-1">Admin</p>
+              )}
+              <NavLink
+                to="/users"
+                title={!sidebarOpen ? 'User Management' : undefined}
+                className={({ isActive }) =>
+                  `flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors relative mb-0.5 ${
+                    !sidebarOpen ? 'justify-center' : ''
+                  } ${
+                    isActive
+                      ? 'text-green-400 border border-green-600/20'
+                      : 'text-gray-600 hover:text-gray-300 border border-transparent'
+                  }`
+                }
+                style={({ isActive }) => isActive ? { backgroundColor: 'rgba(22,163,74,0.10)' } : {}}
+              >
+                <Users size={14} className="flex-shrink-0" />
+                {sidebarOpen && <span className="truncate">User Management</span>}
+              </NavLink>
+            </div>
+          )}
         </nav>
 
         {/* User */}

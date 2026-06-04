@@ -23,6 +23,7 @@ import Alerts from './pages/Alerts'
 import Anomalies from './pages/Anomalies'
 import CountryComparison from './pages/CountryComparison'
 import VehicleHistory from './pages/VehicleHistory'
+import UserManagement from './pages/UserManagement'
 
 export default function App() {
   return (
@@ -56,6 +57,7 @@ export default function App() {
                     <Route path="/cleaning"    element={<DataCleaning />} />
                     <Route path="/upload"      element={<UploadData />} />
                     <Route path="/settings"    element={<Settings />} />
+                    <Route path="/users"       element={<UserManagement />} />
                     <Route path="*"            element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

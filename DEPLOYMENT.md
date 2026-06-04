@@ -85,7 +85,28 @@ This adds:
 
 ---
 
-### Step 1.4 — Set Up Photo Storage
+### Step 1.4 — Enable Role-Based Access Control (RLS)
+
+This step enforces which roles (Admin / Manager / Reporter / Director) can read, write, update, and delete each table. **Run this after the previous two SQL files.**
+
+1. In SQL Editor → **New Query**
+2. Open `BACKEND_RLS.sql` from this repo
+3. Copy entire contents → paste → **Run**
+
+This creates a `get_my_role()` helper function and replaces the permissive "full access" policies with role-specific ones across all 14 tables.
+
+| Role | What they can do |
+|---|---|
+| **Admin** | Full access — read, write, update, delete everything |
+| **Manager** | Read everything; edit records, close actions, manage stock / KPI targets |
+| **Director** | Read-only across all tables |
+| **Reporter** | Read everything; can upload data and log corrective actions; cannot delete |
+
+> After running this file, only Admin users can change Settings or delete records. New accounts default to Reporter — promote them via the `profiles` table.
+
+---
+
+### Step 1.5 — Set Up Photo Storage
 
 1. In Supabase dashboard → **Storage** (left sidebar)
 2. Click **New bucket**
@@ -110,7 +131,7 @@ for select using (bucket_id = 'tyre-photos');
 
 ---
 
-### Step 1.5 — Get Your API Keys
+### Step 1.6 — Get Your API Keys
 
 1. Supabase dashboard → **Settings** (gear icon, bottom left)
 2. Click **API**
@@ -122,7 +143,7 @@ for select using (bucket_id = 'tyre-photos');
 
 ---
 
-### Step 1.6 — Configure Authentication Settings
+### Step 1.7 — Configure Authentication Settings
 
 1. Supabase dashboard → **Authentication** → **Providers**
 2. **Email** provider → make sure it is **Enabled**
@@ -154,7 +175,7 @@ npm install
 cp .env.example .env
 ```
 
-Open `.env` in any text editor and fill in your keys from Step 1.5:
+Open `.env` in any text editor and fill in your keys from Step 1.6:
 
 ```env
 VITE_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
@@ -383,6 +404,7 @@ npm run preview
 tyre_pulse/
 ├── SUPABASE_SCHEMA.sql     ← Run this FIRST in Supabase SQL Editor
 ├── MIGRATIONS.sql          ← Run this SECOND (Phase 2 tables)
+├── BACKEND_RLS.sql         ← Run this THIRD (role-based access control)
 ├── .env.example            ← Copy to .env and fill in your keys
 ├── index.html
 ├── vite.config.js
@@ -455,7 +477,7 @@ tyre_pulse/
 
 ### "Row level security" policy error
 
-- Run the policies in `SUPABASE_SCHEMA.sql` — look for the `create policy` lines
+- Run `BACKEND_RLS.sql` — this replaces the permissive default policies with role-based ones
 - Make sure you're logged in (authenticated) before accessing data
 
 ---

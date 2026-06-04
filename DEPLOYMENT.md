@@ -449,6 +449,7 @@ tyre_pulse/
 ├── BACKEND_RLS.sql         ← Run this THIRD (role-based access control)
 ├── MIGRATIONS_V2.sql       ← Run this FOURTH (multi-country, CPK columns)
 ├── MASTER_ENGINE.sql       ← Run this FIFTH (data normalisation engine)
+├── MIGRATIONS_V3.sql       ← Run this SIXTH (extra_fields for unmapped Excel columns)
 ├── .env.example            ← Copy to .env and fill in your keys
 ├── index.html
 ├── vite.config.js

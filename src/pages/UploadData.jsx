@@ -113,6 +113,11 @@ export default function UploadData() {
   }
 
   function buildRows(hdrs, rows, map) {
+    // Which Excel headers are already mapped to a canonical field?
+    const mappedHeaders = new Set(Object.values(map).filter(Boolean))
+    // Remaining headers become extra_fields
+    const unmapped = hdrs.filter(h => !mappedHeaders.has(h))
+
     return rows.map(row => {
       const obj = {}
       CANONICAL_FIELDS.forEach(f => {
@@ -126,6 +131,20 @@ export default function UploadData() {
         else val = val !== '' && val !== null && val !== undefined ? String(val).trim() : null
         obj[f] = val
       })
+
+      // Capture any unmapped columns (extra Excel data not in schema)
+      if (unmapped.length > 0) {
+        const extras = {}
+        unmapped.forEach(h => {
+          const idx = hdrs.indexOf(h)
+          const val = row[idx]
+          if (val !== '' && val !== null && val !== undefined) {
+            extras[h] = String(val).trim()
+          }
+        })
+        if (Object.keys(extras).length > 0) obj.extra_fields = extras
+      }
+
       return obj
     })
   }

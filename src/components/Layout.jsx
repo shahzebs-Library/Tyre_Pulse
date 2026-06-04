@@ -136,8 +136,10 @@ export default function Layout({ children }) {
 
   const pillClass = (c) =>
     `flex-1 py-1 text-[11px] font-semibold rounded transition-colors ${
-      activeCountry === c ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-400'
+      activeCountry === c ? 'text-white' : 'text-gray-600 hover:text-gray-400'
     }`
+
+  const pillStyle = (c) => activeCountry === c ? { backgroundColor: '#15803d' } : {}
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'transparent' }}>
@@ -147,7 +149,7 @@ export default function Layout({ children }) {
 
         {/* Logo */}
         <div className="flex items-center h-13 px-3 py-3 border-b border-white/5 flex-shrink-0">
-          <div className="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">T</div>
+          <div className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: '#15803d' }}>T</div>
           {sidebarOpen && <span className="ml-2.5 font-bold text-white tracking-tight">TyrePulse</span>}
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="ml-auto text-gray-700 hover:text-gray-400 transition-colors">
             {sidebarOpen ? <X size={15} /> : <Menu size={15} />}
@@ -173,9 +175,9 @@ export default function Layout({ children }) {
             <div className="px-2.5 pt-1.5 pb-1">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700 px-0.5 mb-1">Country</p>
               <div className="flex gap-0.5 rounded-md p-0.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <button className={pillClass('All')} onClick={() => setActiveCountry('All')}>All</button>
+                <button className={pillClass('All')} style={pillStyle('All')} onClick={() => setActiveCountry('All')}>All</button>
                 {COUNTRIES.map(c => (
-                  <button key={c} className={pillClass(c)} onClick={() => setActiveCountry(c)}>
+                  <button key={c} className={pillClass(c)} style={pillStyle(c)} onClick={() => setActiveCountry(c)}>
                     {COUNTRY_LABEL[c]}
                   </button>
                 ))}
@@ -197,10 +199,11 @@ export default function Layout({ children }) {
                   className={({ isActive }) =>
                     `flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors relative mb-0.5 ${
                       isActive
-                        ? 'bg-blue-600/12 text-blue-400 border border-blue-500/20'
-                        : 'text-gray-600 hover:text-gray-300 hover:bg-white/3 border border-transparent'
+                        ? 'text-green-400 border border-green-600/20'
+                        : 'text-gray-600 hover:text-gray-300 border border-transparent'
                     }`
                   }
+                  style={({ isActive }) => isActive ? { backgroundColor: 'rgba(22,163,74,0.10)' } : {}}
                 >
                   <Icon size={14} className="flex-shrink-0" />
                   {sidebarOpen && <span className="truncate">{lbl}</span>}

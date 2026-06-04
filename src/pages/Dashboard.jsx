@@ -1,215 +1,380 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import StatCard from '../components/StatCard'
 import { exportToPptx } from '../lib/exportUtils'
-import { Bar, Doughnut } from 'react-chartjs-2'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
-  Title, Tooltip, Legend, ArcElement
+  Title, Tooltip, Legend, ArcElement, LineElement, PointElement, Filler,
 } from 'chart.js'
 import {
   CircleDot, Package, ClipboardList, AlertTriangle,
-  TrendingUp, TrendingDown, DollarSign, Presentation, Minus
+  TrendingUp, TrendingDown, DollarSign, Presentation, Minus,
+  FileSpreadsheet, FileText, Search, X, Calendar,
 } from 'lucide-react'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
+ChartJS.register(
+  CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
+  ArcElement, LineElement, PointElement, Filler,
+)
+
+const GRID   = { color: '#1f2937' }
+const TICK   = { color: '#9ca3af' }
+const LEGEND = { labels: { color: '#9ca3af', boxWidth: 12 } }
 
 const BASE_OPTS = {
   responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { labels: { color: '#9ca3af', boxWidth: 12 } } },
-  scales: {
-    x: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
-    y: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
-  },
+  plugins: { legend: LEGEND },
+  scales: { x: { ticks: TICK, grid: GRID }, y: { ticks: TICK, grid: GRID } },
 }
+const NO_SCALE = { ...BASE_OPTS, scales: undefined }
+const H_BAR    = { ...BASE_OPTS, indexAxis: 'y', plugins: { legend: { display: false } } }
 
-const NO_SCALE_OPTS = { ...BASE_OPTS, scales: undefined }
+function inMonth(t, y, m) {
+  if (!t.issue_date) return false
+  const d = new Date(t.issue_date)
+  return d.getFullYear() === y && d.getMonth() + 1 === m
+}
+function isHigh(t) { return t.risk_level === 'Critical' || t.risk_level === 'High' }
 
 export default function Dashboard() {
   const { profile } = useAuth()
   const { appSettings, activeCountry, activeCurrency } = useSettings()
-  const [stats, setStats]             = useState({ tyres: 0, stock: 0, actions: 0, critical: 0, cost: 0 })
-  const [riskTrend, setRiskTrend]     = useState(null)   // { delta, pct }
-  const [brandData, setBrandData]     = useState(null)
-  const [categoryData, setCategoryData] = useState(null)
-  const [monthlyData, setMonthlyData] = useState(null)
-  const [siteCostData, setSiteCostData] = useState(null)
-  const [recentRecords, setRecentRecords] = useState([])
-  const [openActions, setOpenActions] = useState([])
+
+  const [rawTyres, setRawTyres]       = useState([])
+  const [rawActions, setRawActions]   = useState([])
+  const [rawStock, setRawStock]       = useState([])
+  const [dateFrom, setDateFrom]       = useState('')
+  const [dateTo, setDateTo]           = useState('')
+  const [search, setSearch]           = useState('')
   const [loading, setLoading]         = useState(true)
 
-  useEffect(() => { loadDashboard() }, [activeCountry])
+  useEffect(() => { load() }, [activeCountry, dateFrom, dateTo])
 
-  async function loadDashboard() {
+  async function load() {
+    setLoading(true)
     const cf = activeCountry !== 'All' ? activeCountry : null
     const flt = q => cf ? q.eq('country', cf) : q
-    const [tyreRes, stockRes, actionRes, recentRes, openActionsRes] = await Promise.all([
-      flt(supabase.from('tyre_records').select('id, cost_per_tyre, brand, issue_date, risk_level, site, category', { count: 'exact' })),
+
+    let tyreQ = supabase.from('tyre_records').select(
+      'id,cost_per_tyre,brand,issue_date,risk_level,site,category,asset_no'
+    )
+    if (cf) tyreQ = tyreQ.eq('country', cf)
+    if (dateFrom) tyreQ = tyreQ.gte('issue_date', dateFrom)
+    if (dateTo)   tyreQ = tyreQ.lte('issue_date', dateTo)
+
+    const [tyreRes, stockRes, actionRes, recentRes, openActRes] = await Promise.all([
+      tyreQ,
       flt(supabase.from('stock_records').select('id', { count: 'exact' })),
-      flt(supabase.from('corrective_actions').select('id, status', { count: 'exact' })),
-      flt(supabase.from('tyre_records').select('id, issue_date, brand, asset_no, site, risk_level').order('created_at', { ascending: false }).limit(5)),
-      flt(supabase.from('corrective_actions').select('id, title, priority, site, status').eq('status', 'Open').order('created_at', { ascending: false }).limit(5)),
+      flt(supabase.from('corrective_actions').select('id,status', { count: 'exact' })),
+      flt(supabase.from('tyre_records')
+        .select('id,issue_date,brand,asset_no,site,risk_level')
+        .order('created_at', { ascending: false }).limit(8)),
+      flt(supabase.from('corrective_actions')
+        .select('id,title,priority,site,status')
+        .eq('status', 'Open').order('created_at', { ascending: false }).limit(8)),
     ])
 
-    const tyres = tyreRes.data ?? []
-    const dc = appSettings.cost_per_tyre
-    const totalCost = tyres.reduce((s, t) => s + (t.cost_per_tyre ?? dc), 0)
-    const critical  = tyres.filter(t => t.risk_level === 'Critical' || t.risk_level === 'High').length
-    const openCount = (actionRes.data ?? []).filter(a => a.status === 'Open').length
+    setRawTyres(tyreRes.data ?? [])
+    setRawStock(stockRes.data ?? [])
+    setRawActions(actionRes.data ?? [])
+    setLoading(false)
+    // Keep recent / open actions live (no date filter needed for these)
+    setRecentRecords(recentRes.data ?? [])
+    setOpenActions(openActRes.data ?? [])
+  }
 
-    setStats({ tyres: tyreRes.count ?? 0, stock: stockRes.count ?? 0, actions: openCount, critical, cost: totalCost })
+  const [recentRecords, setRecentRecords] = useState([])
+  const [openActions, setOpenActions]     = useState([])
 
-    // ── Risk trend: this month vs last month ─────────────────────────────────
-    const now = new Date()
+  // ── Client-side search filter (instant, no re-fetch) ──────────────────────
+  const tyres = useMemo(() => {
+    if (!search) return rawTyres
+    const q = search.toLowerCase()
+    return rawTyres.filter(t =>
+      t.asset_no?.toLowerCase().includes(q) ||
+      t.brand?.toLowerCase().includes(q) ||
+      t.site?.toLowerCase().includes(q) ||
+      t.category?.toLowerCase().includes(q)
+    )
+  }, [rawTyres, search])
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => {
+    const dc   = appSettings.cost_per_tyre
+    const cost = tyres.reduce((s, t) => s + (t.cost_per_tyre ?? dc), 0)
+    const crit = tyres.filter(isHigh).length
+    const open = (rawActions ?? []).filter(a => a.status === 'Open').length
+    return { tyres: tyres.length, stock: rawStock.length, actions: open, critical: crit, cost }
+  }, [tyres, rawActions, rawStock, appSettings.cost_per_tyre])
+
+  // ── Risk trend (this month vs last) ─────────────────────────────────────
+  const riskTrend = useMemo(() => {
+    const now  = new Date()
     const thisM = { y: now.getFullYear(), m: now.getMonth() + 1 }
     const lastM = now.getMonth() === 0
       ? { y: now.getFullYear() - 1, m: 12 }
       : { y: now.getFullYear(), m: now.getMonth() }
+    const thisHigh = tyres.filter(t => inMonth(t, thisM.y, thisM.m) && isHigh(t)).length
+    const lastHigh = tyres.filter(t => inMonth(t, lastM.y, lastM.m) && isHigh(t)).length
+    return { delta: thisHigh - lastHigh, lastHigh }
+  }, [tyres])
 
-    const inMonth = (t, { y, m }) => {
-      if (!t.issue_date) return false
-      const d = new Date(t.issue_date)
-      return d.getFullYear() === y && d.getMonth() + 1 === m
-    }
-    const isHigh = t => t.risk_level === 'Critical' || t.risk_level === 'High'
-    const thisHigh = tyres.filter(t => inMonth(t, thisM) && isHigh(t)).length
-    const lastHigh = tyres.filter(t => inMonth(t, lastM) && isHigh(t)).length
-    const delta    = thisHigh - lastHigh
-    setRiskTrend({ delta, lastHigh })
-
-    // ── Brand doughnut ───────────────────────────────────────────────────────
-    const brandCounts = {}
-    tyres.forEach(t => { if (t.brand) brandCounts[t.brand] = (brandCounts[t.brand] ?? 0) + 1 })
-    const topBrands = Object.entries(brandCounts).sort((a, b) => b[1] - a[1]).slice(0, 6)
-    if (topBrands.length) {
-      setBrandData({
-        labels: topBrands.map(([b]) => b),
-        datasets: [{ data: topBrands.map(([, c]) => c), backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'], borderWidth: 0 }],
-      })
-    }
-
-    // ── Category doughnut ────────────────────────────────────────────────────
-    const catCounts = {}
-    tyres.forEach(t => { if (t.category) catCounts[t.category] = (catCounts[t.category] ?? 0) + 1 })
-    const topCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]).slice(0, 7)
-    if (topCats.length) {
-      setCategoryData({
-        labels: topCats.map(([c]) => c),
-        datasets: [{ data: topCats.map(([, n]) => n), backgroundColor: ['#ef4444','#f97316','#f59e0b','#84cc16','#06b6d4','#8b5cf6','#ec4899'], borderWidth: 0 }],
-      })
-    }
-
-    // ── Monthly trend bar ────────────────────────────────────────────────────
-    const months = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1)
-      return { label: d.toLocaleString('default', { month: 'short' }), year: d.getFullYear(), month: d.getMonth() + 1 }
+  // ── Monthly count chart (last 12 months) ─────────────────────────────────
+  const monthlyData = useMemo(() => {
+    const now = new Date()
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
+      return { label: d.toLocaleString('default', { month: 'short', year: '2-digit' }), y: d.getFullYear(), m: d.getMonth() + 1 }
     })
-    setMonthlyData({
+    return {
+      labels: months.map(m => m.label),
+      datasets: [
+        { label: 'All', data: months.map(({ y, m }) => tyres.filter(t => inMonth(t, y, m)).length), backgroundColor: '#3b82f6', borderRadius: 3 },
+        { label: 'High Risk', data: months.map(({ y, m }) => tyres.filter(t => inMonth(t, y, m) && isHigh(t)).length), backgroundColor: '#ef4444', borderRadius: 3 },
+      ],
+    }
+  }, [tyres])
+
+  // ── Monthly cost chart (last 12 months) ─────────────────────────────────
+  const monthlyCostData = useMemo(() => {
+    const dc  = appSettings.cost_per_tyre
+    const now = new Date()
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
+      return { label: d.toLocaleString('default', { month: 'short', year: '2-digit' }), y: d.getFullYear(), m: d.getMonth() + 1 }
+    })
+    return {
       labels: months.map(m => m.label),
       datasets: [{
-        label: 'All',
-        data: months.map(({ year, month }) => tyres.filter(t => inMonth(t, { y: year, m: month })).length),
-        backgroundColor: '#3b82f6', borderRadius: 4,
-      }, {
-        label: 'High Risk',
-        data: months.map(({ year, month }) => tyres.filter(t => inMonth(t, { y: year, m: month }) && isHigh(t)).length),
-        backgroundColor: '#ef4444', borderRadius: 4,
+        label: `Cost (${activeCurrency})`,
+        data: months.map(({ y, m }) =>
+          Math.round(tyres.filter(t => inMonth(t, y, m)).reduce((s, t) => s + (t.cost_per_tyre ?? dc), 0))
+        ),
+        borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)',
+        fill: true, tension: 0.4, pointRadius: 3,
       }],
-    })
-
-    // ── Top sites by cost (horizontal bar) ───────────────────────────────────
-    const siteCosts = {}
-    tyres.forEach(t => { if (t.site) siteCosts[t.site] = (siteCosts[t.site] ?? 0) + (t.cost_per_tyre ?? dc) })
-    const topSites = Object.entries(siteCosts).sort((a, b) => b[1] - a[1]).slice(0, 8)
-    if (topSites.length) {
-      setSiteCostData({
-        labels: topSites.map(([s]) => s),
-        datasets: [{ label: `Cost (${activeCurrency})`, data: topSites.map(([, c]) => c), backgroundColor: '#7c3aed', borderRadius: 4 }],
-      })
     }
+  }, [tyres, appSettings.cost_per_tyre, activeCurrency])
 
-    setRecentRecords(recentRes.data ?? [])
-    setOpenActions(openActionsRes.data ?? [])
-    setLoading(false)
+  // ── Brand doughnut ────────────────────────────────────────────────────────
+  const brandData = useMemo(() => {
+    const m = {}
+    tyres.forEach(t => { if (t.brand) m[t.brand] = (m[t.brand] ?? 0) + 1 })
+    const top = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 7)
+    if (!top.length) return null
+    return {
+      labels: top.map(([b]) => b),
+      datasets: [{ data: top.map(([, c]) => c), backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316'], borderWidth: 0 }],
+    }
+  }, [tyres])
+
+  // ── Category doughnut ─────────────────────────────────────────────────────
+  const categoryData = useMemo(() => {
+    const m = {}
+    tyres.forEach(t => { if (t.category) m[t.category] = (m[t.category] ?? 0) + 1 })
+    const top = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    if (!top.length) return null
+    return {
+      labels: top.map(([c]) => c),
+      datasets: [{ data: top.map(([, n]) => n), backgroundColor: ['#ef4444','#f97316','#f59e0b','#84cc16','#06b6d4','#8b5cf6','#ec4899','#3b82f6'], borderWidth: 0 }],
+    }
+  }, [tyres])
+
+  // ── Risk distribution bar ─────────────────────────────────────────────────
+  const riskDistData = useMemo(() => {
+    const levels = ['Critical', 'High', 'Medium', 'Low', 'Unknown']
+    const counts = Object.fromEntries(levels.map(l => [l, 0]))
+    tyres.forEach(t => { const k = t.risk_level ?? 'Unknown'; if (counts[k] !== undefined) counts[k]++ })
+    return {
+      labels: levels,
+      datasets: [{
+        data: levels.map(l => counts[l]),
+        backgroundColor: ['#dc2626','#ea580c','#ca8a04','#16a34a','#6b7280'],
+        borderRadius: 4,
+      }],
+    }
+  }, [tyres])
+
+  // ── Top assets by cost ────────────────────────────────────────────────────
+  const topAssetsData = useMemo(() => {
+    const dc = appSettings.cost_per_tyre
+    const m  = {}
+    tyres.forEach(t => {
+      if (!t.asset_no) return
+      m[t.asset_no] = (m[t.asset_no] ?? 0) + (t.cost_per_tyre ?? dc)
+    })
+    const top = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 10)
+    if (!top.length) return null
+    return {
+      labels: top.map(([a]) => a),
+      datasets: [{
+        data: top.map(([, c]) => Math.round(c)),
+        backgroundColor: '#7c3aed', borderRadius: 4,
+      }],
+    }
+  }, [tyres, appSettings.cost_per_tyre])
+
+  // ── Top sites by cost ─────────────────────────────────────────────────────
+  const siteCostData = useMemo(() => {
+    const dc = appSettings.cost_per_tyre
+    const m  = {}
+    tyres.forEach(t => { if (t.site) m[t.site] = (m[t.site] ?? 0) + (t.cost_per_tyre ?? dc) })
+    const top = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    if (!top.length) return null
+    return {
+      labels: top.map(([s]) => s),
+      datasets: [{ label: `Cost (${activeCurrency})`, data: top.map(([, c]) => Math.round(c)), backgroundColor: '#7c3aed', borderRadius: 4 }],
+    }
+  }, [tyres, appSettings.cost_per_tyre, activeCurrency])
+
+  // ── Exports ───────────────────────────────────────────────────────────────
+  function handleExcelExport() {
+    const dc = appSettings.cost_per_tyre
+    const rows = tyres.map(t => ({
+      ...t,
+      cost_per_tyre: t.cost_per_tyre ?? dc,
+      total_cost: (t.cost_per_tyre ?? dc),
+    }))
+    exportToExcel(
+      rows,
+      ['issue_date','asset_no','brand','site','category','risk_level','cost_per_tyre'],
+      ['Date','Asset No','Brand','Site','Category','Risk Level',`Cost (${activeCurrency})`],
+      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`,
+      'Dashboard'
+    )
+  }
+
+  function handlePdfExport() {
+    const dc = appSettings.cost_per_tyre
+    exportToPdf(
+      tyres.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre ?? dc })),
+      [
+        { key: 'issue_date', header: 'Date', width: 24 },
+        { key: 'asset_no',   header: 'Asset No', width: 28 },
+        { key: 'brand',      header: 'Brand', width: 24 },
+        { key: 'site',       header: 'Site', width: 30 },
+        { key: 'category',   header: 'Category', width: 32 },
+        { key: 'risk_level', header: 'Risk', width: 20 },
+        { key: 'cost_per_tyre', header: `Cost (${activeCurrency})`, width: 24 },
+      ],
+      `TyrePulse Dashboard Report — ${new Date().toLocaleDateString()}`,
+      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`,
+      'landscape'
+    )
   }
 
   async function handlePptxExport() {
     const [tyreRes, actionRes] = await Promise.all([
-      supabase.from('tyre_records').select('site, category, risk_level, cost_per_tyre, issue_date, brand'),
-      supabase.from('corrective_actions').select('title, priority, site, status').eq('status', 'Open').order('created_at', { ascending: false }).limit(20),
+      supabase.from('tyre_records').select('site,category,risk_level,cost_per_tyre,issue_date,brand'),
+      supabase.from('corrective_actions').select('title,priority,site,status').eq('status','Open').order('created_at',{ascending:false}).limit(20),
     ])
-    const tyres = tyreRes.data ?? []
-    const now   = new Date()
-
-    const countBy = (arr, key) => {
-      const m = {}
-      arr.forEach(t => { if (t[key]) m[t[key]] = (m[t[key]] ?? 0) + 1 })
-      return Object.entries(m).sort((a, b) => b[1] - a[1])
-    }
-    const sumBy = (arr, key, valKey) => {
-      const m = {}
-      arr.forEach(t => { if (t[key]) m[t[key]] = (m[t[key]] ?? 0) + (t[valKey] ?? appSettings.cost_per_tyre) })
-      return Object.entries(m).sort((a, b) => b[1] - a[1])
-    }
-
-    const riskCounts = { Critical: 0, High: 0, Medium: 0, Low: 0 }
-    tyres.forEach(t => { if (t.risk_level && riskCounts[t.risk_level] !== undefined) riskCounts[t.risk_level]++ })
-
-    const monthlyTrend = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1)
-      const count = tyres.filter(t => {
-        if (!t.issue_date) return false
-        const td = new Date(t.issue_date)
-        return td.getFullYear() === d.getFullYear() && td.getMonth() === d.getMonth()
-      }).length
-      return { month: d.toLocaleString('default', { month: 'short', year: '2-digit' }), count }
+    const all = tyreRes.data ?? []
+    const now = new Date()
+    const countBy = (arr, key) => { const m={}; arr.forEach(t=>{if(t[key]) m[t[key]]=(m[t[key]]??0)+1}); return Object.entries(m).sort((a,b)=>b[1]-a[1]) }
+    const sumBy   = (arr, key, vk) => { const m={}; arr.forEach(t=>{if(t[key]) m[t[key]]=(m[t[key]]??0)+(t[vk]??appSettings.cost_per_tyre)}); return Object.entries(m).sort((a,b)=>b[1]-a[1]) }
+    const riskCounts = { Critical:0, High:0, Medium:0, Low:0 }
+    all.forEach(t=>{ if(t.risk_level && riskCounts[t.risk_level]!==undefined) riskCounts[t.risk_level]++ })
+    const monthlyTrend = Array.from({length:6},(_,i)=>{
+      const d = new Date(now.getFullYear(), now.getMonth()-5+i, 1)
+      const count = all.filter(t=>{ if(!t.issue_date) return false; const td=new Date(t.issue_date); return td.getFullYear()===d.getFullYear()&&td.getMonth()===d.getMonth() }).length
+      return { month: d.toLocaleString('default',{month:'short',year:'2-digit'}), count }
     })
-
     await exportToPptx({
-      totalTyres:        tyres.length,
-      totalCost:         tyres.reduce((s, t) => s + (t.cost_per_tyre ?? appSettings.cost_per_tyre), 0),
-      openActions:       (actionRes.data ?? []).length,
-      highRisk:          tyres.filter(t => t.risk_level === 'Critical' || t.risk_level === 'High').length,
-      topSites:          sumBy(tyres, 'site', 'cost_per_tyre').slice(0, 12).map(([site, count]) => ({ site, count })),
-      categoryBreakdown: countBy(tyres, 'category').map(([category, count]) => ({ category, count })),
-      riskBreakdown:     Object.entries(riskCounts).map(([level, count]) => ({ level, count })),
-      monthlyTrend,
-      recentActions:     actionRes.data ?? [],
-      period:            now.toLocaleString('default', { month: 'long', year: 'numeric' }),
-      company:           appSettings.company_name || 'TyrePulse',
-    }, `TyrePulse_Report_${now.toISOString().slice(0, 10)}`)
+      totalTyres: all.length, totalCost: all.reduce((s,t)=>s+(t.cost_per_tyre??appSettings.cost_per_tyre),0),
+      openActions: (actionRes.data??[]).length, highRisk: all.filter(t=>t.risk_level==='Critical'||t.risk_level==='High').length,
+      topSites: sumBy(all,'site','cost_per_tyre').slice(0,12).map(([site,count])=>({site,count})),
+      categoryBreakdown: countBy(all,'category').map(([category,count])=>({category,count})),
+      riskBreakdown: Object.entries(riskCounts).map(([level,count])=>({level,count})),
+      monthlyTrend, recentActions: actionRes.data??[],
+      period: now.toLocaleString('default',{month:'long',year:'numeric'}),
+      company: appSettings.company_name||'TyrePulse',
+    }, `TyrePulse_Report_${now.toISOString().slice(0,10)}`)
   }
 
-  const riskBadge     = l => ({ Critical: 'bg-red-900/50 text-red-300', High: 'bg-orange-900/50 text-orange-300', Medium: 'bg-yellow-900/50 text-yellow-300', Low: 'bg-green-900/50 text-green-300' }[l] ?? 'bg-gray-800 text-gray-400')
-  const priorityBadge = p => ({ High: 'bg-red-900/50 text-red-300', Medium: 'bg-yellow-900/50 text-yellow-300', Low: 'bg-blue-900/50 text-blue-300' }[p] ?? 'bg-gray-800 text-gray-400')
-
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 rounded-full border-2 border-gray-700 border-t-blue-500" /></div>
+  const riskBadge     = l => ({ Critical:'bg-red-900/50 text-red-300', High:'bg-orange-900/50 text-orange-300', Medium:'bg-yellow-900/50 text-yellow-300', Low:'bg-green-900/50 text-green-300' }[l] ?? 'bg-gray-800 text-gray-400')
+  const priorityBadge = p => ({ High:'bg-red-900/50 text-red-300', Medium:'bg-yellow-900/50 text-yellow-300', Low:'bg-blue-900/50 text-blue-300' }[p] ?? 'bg-gray-800 text-gray-400')
 
   const TrendIcon = riskTrend?.delta > 0 ? TrendingUp : riskTrend?.delta < 0 ? TrendingDown : Minus
   const trendCol  = riskTrend?.delta > 0 ? 'text-red-400' : riskTrend?.delta < 0 ? 'text-green-400' : 'text-gray-500'
 
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 rounded-full border-2 border-gray-700 border-t-blue-500" /></div>
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-gray-400 text-sm mt-1">Welcome back, {profile?.full_name ?? profile?.username ?? 'there'}</p>
+
+      {/* Header + filters + exports */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+            <p className="text-gray-400 text-sm mt-1">Welcome back, {profile?.full_name ?? profile?.username ?? 'there'}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={handleExcelExport} className="btn-secondary flex items-center gap-1.5 text-sm">
+              <FileSpreadsheet size={14} className="text-green-400" /> Excel
+            </button>
+            <button onClick={handlePdfExport} className="btn-secondary flex items-center gap-1.5 text-sm">
+              <FileText size={14} className="text-red-400" /> PDF
+            </button>
+            <button onClick={handlePptxExport} className="btn-secondary flex items-center gap-1.5 text-sm">
+              <Presentation size={14} className="text-orange-400" /> PowerPoint
+            </button>
+          </div>
         </div>
-        <button onClick={handlePptxExport} className="btn-secondary flex items-center gap-2 text-sm">
-          <Presentation size={15} className="text-orange-400" /> Export Report (.pptx)
-        </button>
+
+        {/* Filter bar */}
+        <div className="card py-3">
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Search */}
+            <div className="relative flex-1 min-w-48">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input
+                className="input pl-8 w-full"
+                placeholder="Search asset, brand, site, category…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Date range */}
+            <div className="flex items-center gap-2">
+              <Calendar size={14} className="text-gray-500 flex-shrink-0" />
+              <input type="date" className="input w-36 text-sm" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              <span className="text-gray-600 text-sm">→</span>
+              <input type="date" className="input w-36 text-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+              {(dateFrom || dateTo) && (
+                <button onClick={() => { setDateFrom(''); setDateTo('') }} className="text-gray-500 hover:text-gray-300">
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Active filter chips */}
+            {(search || dateFrom || dateTo) && (
+              <p className="text-xs text-blue-400 ml-auto">
+                Showing {tyres.length.toLocaleString()} of {rawTyres.length.toLocaleString()} records
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* KPI stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        <StatCard label="Total Tyres"  value={stats.tyres.toLocaleString()}                     icon={CircleDot}    color="blue" />
-        <StatCard label="Stock Sites"  value={stats.stock.toLocaleString()}                     icon={Package}      color="green" />
-        <StatCard label="Open Actions" value={stats.actions.toLocaleString()}                   icon={ClipboardList} color="yellow" />
-        <StatCard label="High Risk"    value={stats.critical.toLocaleString()}                  icon={AlertTriangle} color="red" />
-        <StatCard label="Total Cost"   value={`${activeCurrency} ${(stats.cost / 1000).toFixed(0)}K`}         icon={DollarSign}   color="purple" />
+        <StatCard label="Tyre Records"  value={stats.tyres.toLocaleString()}                               icon={CircleDot}    color="blue" />
+        <StatCard label="Stock Sites"   value={stats.stock.toLocaleString()}                               icon={Package}      color="green" />
+        <StatCard label="Open Actions"  value={stats.actions.toLocaleString()}                             icon={ClipboardList} color="yellow" />
+        <StatCard label="High Risk"     value={stats.critical.toLocaleString()}                            icon={AlertTriangle} color="red" />
+        <StatCard label="Total Cost"    value={`${activeCurrency} ${(stats.cost / 1000).toFixed(0)}K`}    icon={DollarSign}   color="purple" />
       </div>
 
       {/* Risk trend callout */}
@@ -222,45 +387,96 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Row 1: Monthly trend + Brand doughnut */}
+      {/* Row 1: Monthly count + Brand doughnut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card lg:col-span-2">
-          <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp size={16} /> Monthly Tyre Issues</h2>
+          <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp size={16} /> Monthly Tyre Issues (12 months)</h2>
           <div className="h-56">
-            {monthlyData
-              ? <Bar data={monthlyData} options={{ ...BASE_OPTS, plugins: { ...BASE_OPTS.plugins, legend: { labels: { color: '#9ca3af', boxWidth: 10 } } } }} />
-              : <p className="text-gray-500 text-sm">No data</p>}
+            <Bar data={monthlyData} options={{ ...BASE_OPTS, plugins: { ...BASE_OPTS.plugins, legend: { labels: { color: '#9ca3af', boxWidth: 10 } } } }} />
           </div>
         </div>
         <div className="card">
           <h2 className="text-base font-semibold text-white mb-4">Brand Breakdown</h2>
           <div className="h-56 flex items-center justify-center">
-            {brandData ? <Doughnut data={brandData} options={NO_SCALE_OPTS} /> : <p className="text-gray-500 text-sm">No data</p>}
+            {brandData ? <Doughnut data={brandData} options={NO_SCALE} /> : <p className="text-gray-500 text-sm">No data</p>}
           </div>
         </div>
       </div>
 
-      {/* Row 2: Category doughnut + Top sites by cost */}
+      {/* Row 2: Monthly Cost trend (line) */}
+      <div className="card">
+        <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+          <DollarSign size={16} /> Monthly Cost Trend — {activeCurrency}
+        </h2>
+        <div className="h-52">
+          <Line data={monthlyCostData} options={{
+            ...BASE_OPTS,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: TICK, grid: GRID },
+              y: { ticks: { ...TICK, callback: v => `${activeCurrency} ${(v/1000).toFixed(0)}K` }, grid: GRID },
+            },
+          }} />
+        </div>
+      </div>
+
+      {/* Row 3: Risk distribution + Category mix */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
+          <h2 className="text-base font-semibold text-white mb-4">Risk Level Distribution</h2>
+          <div className="h-52">
+            <Bar data={riskDistData} options={{
+              ...H_BAR,
+              scales: {
+                x: { ticks: TICK, grid: GRID },
+                y: { ticks: { color: '#9ca3af' }, grid: GRID },
+              },
+            }} />
+          </div>
+        </div>
+        <div className="card">
           <h2 className="text-base font-semibold text-white mb-4">Failure Category Mix</h2>
-          <div className="h-56 flex items-center justify-center">
+          <div className="h-52 flex items-center justify-center">
             {categoryData
-              ? <Doughnut data={categoryData} options={NO_SCALE_OPTS} />
-              : <p className="text-gray-500 text-sm">No classified records yet — run Data Cleaning to populate</p>}
+              ? <Doughnut data={categoryData} options={NO_SCALE} />
+              : <p className="text-gray-500 text-sm">No classified records — run Data Cleaning to populate</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 4: Top Assets by Cost + Top Sites by Spend */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="card">
+          <h2 className="text-base font-semibold text-white mb-4">Top 10 Assets by Spend ({activeCurrency})</h2>
+          <div className="h-64">
+            {topAssetsData
+              ? <Bar data={topAssetsData} options={{
+                  ...H_BAR,
+                  scales: {
+                    x: { ticks: { ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid: GRID },
+                    y: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: GRID },
+                  },
+                }} />
+              : <p className="text-gray-500 text-sm">No asset data</p>}
           </div>
         </div>
         <div className="card">
           <h2 className="text-base font-semibold text-white mb-4">Top Sites by Spend ({activeCurrency})</h2>
-          <div className="h-56">
+          <div className="h-64">
             {siteCostData
-              ? <Bar data={siteCostData} options={{ ...BASE_OPTS, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#9ca3af', callback: v => `${(v/1000).toFixed(0)}K` }, grid: { color: '#1f2937' } }, y: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } } } }} />
+              ? <Bar data={siteCostData} options={{
+                  ...H_BAR,
+                  scales: {
+                    x: { ticks: { ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid: GRID },
+                    y: { ticks: { color: '#9ca3af' }, grid: GRID },
+                  },
+                }} />
               : <p className="text-gray-500 text-sm">No data</p>}
           </div>
         </div>
       </div>
 
-      {/* Row 3: Recent records + Open actions */}
+      {/* Row 5: Recent records + Open actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
           <h2 className="text-base font-semibold text-white mb-4">Recent Tyre Records</h2>

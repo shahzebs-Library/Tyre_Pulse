@@ -374,6 +374,19 @@ export default function TyreRecords() {
               </div>
             ))}
           </dl>
+          {detailRecord.extra_fields && Object.keys(detailRecord.extra_fields).length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-800">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Additional Fields (from upload)</p>
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                {Object.entries(detailRecord.extra_fields).map(([k, v]) => (
+                  <div key={k}>
+                    <dt className="text-gray-500 text-xs">{k}</dt>
+                    <dd className="text-gray-300 mt-0.5">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
           <div className="flex gap-2 mt-4 pt-4 border-t border-gray-800">
             <button onClick={() => { openEdit(detailRecord); setDetailRecord(null) }} className="btn-secondary flex items-center gap-2 text-sm">
               <Edit2 size={14} /> Edit

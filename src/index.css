@@ -3,6 +3,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Company colour palette
+   Primary  : #16a34a  (green-600)  — brand green
+   Secondary: #78716c  (stone-500)  — cement gray
+   Bg dark  : #060a08  — near-black with a faint green undertone
+─────────────────────────────────────────────────────────────── */
+
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
 
@@ -14,10 +20,10 @@
 
   body {
     margin: 0;
-    background-color: #080c14;
+    background-color: #060a08;
     background-image:
-      radial-gradient(ellipse 70% 50% at -5% -5%, rgba(37,99,235,0.12) 0%, transparent 55%),
-      radial-gradient(ellipse 50% 40% at 105% 105%, rgba(99,102,241,0.08) 0%, transparent 50%);
+      radial-gradient(ellipse 70% 50% at -5% -5%, rgba(22,163,74,0.10) 0%, transparent 55%),
+      radial-gradient(ellipse 50% 40% at 105% 105%, rgba(120,113,108,0.07) 0%, transparent 50%);
     background-attachment: fixed;
     color: #e2e8f0;
     min-height: 100vh;
@@ -35,12 +41,16 @@
   /* ── Buttons ───────────────────────────────────────────────────────── */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
-           bg-blue-600 hover:bg-blue-500 active:bg-blue-700
            text-white font-semibold py-2 px-4 rounded-md
            transition-colors duration-150 text-sm
-           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 focus:ring-offset-gray-900
+           focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-gray-900
            disabled:opacity-40 disabled:cursor-not-allowed;
+    background-color: #15803d;   /* green-700 */
+    focus-ring-color: #16a34a;
   }
+  .btn-primary:hover  { background-color: #16a34a; }
+  .btn-primary:active { background-color: #166534; }
+  .btn-primary:focus  { --tw-ring-color: #16a34a; }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2
@@ -48,7 +58,7 @@
            border border-gray-700 hover:border-gray-600
            text-gray-300 hover:text-white font-medium py-2 px-4 rounded-md
            transition-colors duration-150 text-sm
-           focus:outline-none focus:ring-2 focus:ring-gray-600 focus:ring-offset-1 focus:ring-offset-gray-900;
+           focus:outline-none focus:ring-2 focus:ring-stone-600 focus:ring-offset-1 focus:ring-offset-gray-900;
   }
 
   .btn-danger {
@@ -61,7 +71,7 @@
 
   /* ── Card ─────────────────────────────────────────────────────────── */
   .card {
-    background: rgba(10, 14, 24, 0.96);
+    background: rgba(8, 12, 10, 0.96);
     border: 1px solid rgba(255,255,255,0.06);
     border-radius: 8px;
     padding: 1.25rem;
@@ -71,9 +81,9 @@
   .card:hover { border-color: rgba(255,255,255,0.09); }
 
   .card-accent {
-    background: rgba(10, 14, 24, 0.96);
+    background: rgba(8, 12, 10, 0.96);
     border: 1px solid rgba(255,255,255,0.06);
-    border-top: 2px solid #3b82f6;
+    border-top: 2px solid #16a34a;   /* green-600 */
     border-radius: 8px;
     padding: 1.25rem;
     box-shadow: 0 1px 4px rgba(0,0,0,0.4);
@@ -88,8 +98,8 @@
   }
   .input:focus {
     background: rgba(255,255,255,0.06);
-    border-color: rgba(59,130,246,0.6);
-    box-shadow: 0 0 0 2px rgba(59,130,246,0.12);
+    border-color: rgba(22,163,74,0.6);
+    box-shadow: 0 0 0 2px rgba(22,163,74,0.12);
   }
 
   /* ── Label ────────────────────────────────────────────────────────── */
@@ -131,7 +141,7 @@
 
 /* ── Sidebar ─────────────────────────────────────────────────────────────── */
 aside {
-  background: linear-gradient(180deg, #090d1b 0%, #070b15 100%);
+  background: linear-gradient(180deg, #050c07 0%, #040b06 100%);
   border-right: 1px solid rgba(255,255,255,0.05);
   box-shadow: 2px 0 12px rgba(0,0,0,0.25);
 }
@@ -152,17 +162,17 @@ main { position: relative; }
 .login-glow {
   position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse 60% 40% at 50% -5%, rgba(37,99,235,0.18) 0%, transparent 55%),
-    radial-gradient(ellipse 40% 30% at 80% 90%, rgba(99,102,241,0.1) 0%, transparent 50%);
+    radial-gradient(ellipse 60% 40% at 50% -5%, rgba(22,163,74,0.16) 0%, transparent 55%),
+    radial-gradient(ellipse 40% 30% at 80% 90%, rgba(120,113,108,0.10) 0%, transparent 50%);
   pointer-events: none;
 }
 .login-card {
   position: relative;
-  background: rgba(9, 13, 27, 0.98);
+  background: rgba(6, 10, 8, 0.98);
   border: 1px solid rgba(255,255,255,0.07);
   border-radius: 10px;
   padding: 2rem;
-  box-shadow: 0 0 0 1px rgba(37,99,235,0.07), 0 8px 40px rgba(0,0,0,0.6);
+  box-shadow: 0 0 0 1px rgba(22,163,74,0.08), 0 8px 40px rgba(0,0,0,0.6);
 }
 
 /* ── Animations ──────────────────────────────────────────────────────────── */

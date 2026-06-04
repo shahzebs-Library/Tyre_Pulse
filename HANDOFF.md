@@ -38,9 +38,10 @@ Run each file **once** in Supabase SQL Editor (copy → paste → Run). They are
 | 3 | `BACKEND_RLS.sql` | `get_my_role()` helper + role-based policies (Reporter/Manager/Director/Admin) |
 | 4 | `MIGRATIONS_V2.sql` | Multi-country: `country` column on 7 tables, `km_at_fitment`/`km_at_removal`, currency settings |
 | 5 | `MASTER_ENGINE.sql` | Brand aliases, normalize trigger, `v_tyre_master` view, `v_data_quality_issues`, RPC functions, indexes, backfill |
-| 6 | `MIGRATIONS_V3.sql` | `extra_fields jsonb` on `tyre_records` for unmapped Excel columns |
+| 6 | `MIGRATIONS_V3.sql` | `extra_fields jsonb` on `tyre_records` for unmapped Excel columns ✅ Done |
+| 7 | `MIGRATIONS_V4.sql` | `country` column on `rca_records` + backfill + index |
 
-> **MIGRATIONS_V3.sql has not been run yet** — run it when you next open Supabase SQL Editor.
+> **MIGRATIONS_V4.sql has not been run yet** — run it when you next open Supabase SQL Editor.
 
 ---
 
@@ -85,9 +86,9 @@ src/
 | Stock Management | `/stock` | ✅ | — | — |
 | Budgets | `/budgets` | ✅ | — | — |
 | Corrective Actions | `/actions` | ✅ | — | — |
-| Root Cause Analysis | `/rca` | ⚠️ See note | — | — |
+| Root Cause Analysis | `/rca` | ✅ (needs V4 migration) | — | — |
 | Inspections | `/inspections` | ✅ | — | — |
-| Alerts | `/alerts` | ⚠️ See note | — | — |
+| Alerts | `/alerts` | ✅ | — | — |
 | Anomaly Detection | `/anomalies` | ✅ | ✅ | — |
 | Data Cleaning | `/cleaning` | ✅ | — | — |
 | Upload Data | `/upload` | ✅ | — | — |
@@ -96,8 +97,7 @@ src/
 
 **⚠️ Known limitations:**
 
-- **RCA Records** (`/rca`): The `rca_records` table has no `country` column, so it can't be filtered by country. To fix: run `ALTER TABLE rca_records ADD COLUMN IF NOT EXISTS country text DEFAULT 'KSA'` and update the form/load function.
-- **Alerts** (`/alerts`): The `alertEngine.js` detects alerts by querying multiple tables internally — it doesn't accept a country filter parameter yet. All alerts (across all countries) are always shown regardless of the sidebar country selector. To fix: refactor `detectAlerts()` in `alertEngine.js` to accept a `country` parameter and pass it into each query.
+- **RCA Records** (`/rca`): Requires `MIGRATIONS_V4.sql` to be run in Supabase SQL Editor to add the `country` column to `rca_records`. The frontend already applies the country filter — just run the migration and it will work automatically.
 
 ---
 
@@ -284,9 +284,7 @@ WHERE extra_fields->>'Driver Name' ILIKE '%Ahmed%';
 
 | Priority | Task |
 |---|---|
-| 🔴 Now | Run **`MIGRATIONS_V3.sql`** in Supabase SQL Editor to activate extra_fields |
-| 🟡 Soon | Add `country` column to `rca_records` table + filter in RcaRecords.jsx |
-| 🟡 Soon | Pass `activeCountry` into `alertEngine.js` so Alerts page respects country filter |
+| 🔴 Now | Run **`MIGRATIONS_V4.sql`** in Supabase SQL Editor to add `country` to `rca_records` |
 | 🟢 Later | Add photo upload to tyre records (Supabase Storage bucket already set up) |
 | 🟢 Later | Email notifications for overdue corrective actions |
 | 🟢 Later | Mobile app (React Native) reusing the same Supabase backend |

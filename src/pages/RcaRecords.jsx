@@ -2,16 +2,18 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Plus, Save, X, Search } from 'lucide-react'
 
 const EMPTY_FORM = {
-  asset_no: '', tyre_serial: '', brand: '', site: '',
+  asset_no: '', tyre_serial: '', brand: '', site: '', country: 'KSA',
   failure_date: '', km_at_failure: '', hours_at_failure: '',
   root_cause: '', contributing_factors: '', ai_analysis: '',
 }
 
 export default function RcaRecords() {
   const { profile } = useAuth()
+  const { activeCountry } = useSettings()
   const navigate    = useNavigate()
   const [records, setRecords]           = useState([])
   const [loading, setLoading]           = useState(true)
@@ -24,23 +26,29 @@ export default function RcaRecords() {
   const [selectedRecord, setSelectedRecord] = useState(null)
   const [creatingAction, setCreatingAction] = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [activeCountry])
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase
+    let q = supabase
       .from('rca_records')
       .select('*, corrective_action:corrective_action_id(id,title,status)')
       .order('created_at', { ascending: false })
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    const { data } = await q
     setRecords(data ?? [])
     setLoading(false)
   }
 
-  function startAdd() { setForm(EMPTY_FORM); setEditId(null); setShowForm(true); setError('') }
+  function startAdd() {
+    const defaultCountry = activeCountry !== 'All' ? activeCountry : 'KSA'
+    setForm({ ...EMPTY_FORM, country: defaultCountry })
+    setEditId(null); setShowForm(true); setError('')
+  }
   function startEdit(r) {
     setForm({
       asset_no: r.asset_no ?? '', tyre_serial: r.tyre_serial ?? '', brand: r.brand ?? '',
-      site: r.site ?? '', failure_date: r.failure_date ?? '',
+      site: r.site ?? '', country: r.country ?? 'KSA', failure_date: r.failure_date ?? '',
       km_at_failure: r.km_at_failure ?? '', hours_at_failure: r.hours_at_failure ?? '',
       root_cause: r.root_cause ?? '',
       contributing_factors: Array.isArray(r.contributing_factors) ? r.contributing_factors.join(', ') : '',
@@ -62,6 +70,7 @@ export default function RcaRecords() {
       contributing_factors: form.contributing_factors
         ? form.contributing_factors.split(',').map(s => s.trim()).filter(Boolean)
         : [],
+      country:    form.country || 'KSA',
       created_by: editId ? undefined : profile?.id,
     }
     const { error: err } = editId
@@ -141,6 +150,7 @@ export default function RcaRecords() {
                     <span className="font-semibold text-white">{r.asset_no ?? '—'}</span>
                     {r.tyre_serial && <span className="text-xs text-gray-400">Serial: {r.tyre_serial}</span>}
                     {r.brand && <span className="badge bg-green-900/40 text-green-300 border border-green-700/50">{r.brand}</span>}
+                    {r.country && <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 border border-gray-700">{r.country}</span>}
                     {r.corrective_action && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/30 text-green-400 border border-green-700/50">
                         ✓ CA Linked
@@ -270,9 +280,15 @@ export default function RcaRecords() {
                 <div><label className="label">Asset No</label><input className="input" value={form.asset_no} onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))} /></div>
                 <div><label className="label">Tyre Serial</label><input className="input" value={form.tyre_serial} onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))} /></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div><label className="label">Brand</label><input className="input" value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} /></div>
                 <div><label className="label">Site</label><input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} /></div>
+                <div>
+                  <label className="label">Country</label>
+                  <select className="input" value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))}>
+                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="label">Failure Date</label><input type="date" className="input" value={form.failure_date} onChange={e => setForm(f => ({ ...f, failure_date: e.target.value }))} /></div>

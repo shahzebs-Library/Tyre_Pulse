@@ -1,15 +1,16 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // alertEngine.js — Rule-based alert detection (no AI tokens)
-// Call detectAlerts(supabase) to get live alert list.
+// Call detectAlerts(supabase, country) to get live alert list.
+// country = null means all countries.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { bucketByMonth, detectRiskSpike } from './analyticsEngine'
+import { detectRiskSpike } from './analyticsEngine'
 
 export const ALERT_TYPES = {
-  STOCK_CRITICAL:   'STOCK_CRITICAL',
-  BUDGET_OVERAGE:   'BUDGET_OVERAGE',
-  OVERDUE_ACTION:   'OVERDUE_ACTION',
-  RISK_SPIKE:       'RISK_SPIKE',
+  STOCK_CRITICAL:     'STOCK_CRITICAL',
+  BUDGET_OVERAGE:     'BUDGET_OVERAGE',
+  OVERDUE_ACTION:     'OVERDUE_ACTION',
+  RISK_SPIKE:         'RISK_SPIKE',
   INSPECTION_OVERDUE: 'INSPECTION_OVERDUE',
 }
 
@@ -20,34 +21,52 @@ export const SEVERITY = {
   INFO:     'info',
 }
 
-/** Unique stable ID for an alert so UI can deduplicate */
 function alertId(type, key) {
   return `${type}::${key}`
+}
+
+/** Apply optional country filter to a Supabase query */
+function withCountry(q, country) {
+  return country ? q.eq('country', country) : q
 }
 
 /**
  * Main entry point — fetches all needed data and returns alerts array.
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {string|null} country  — 'KSA' | 'UAE' | 'Egypt' | null (all)
  * @returns {Promise<Alert[]>}
  */
-export async function detectAlerts(supabase) {
+export async function detectAlerts(supabase, country = null) {
   const alerts = []
   const now    = new Date()
 
-  // ── Fetch data in parallel ────────────────────────────────────────────────
+  // ── Fetch data in parallel with optional country filter ───────────────────
   const [stockRes, budgetRes, actionsRes, tyreRes, inspRes] = await Promise.all([
-    supabase.from('stock_records').select('*').order('site'),
-    supabase.from('budgets').select('*').eq('year', now.getFullYear()),
-    supabase.from('corrective_actions').select('*').neq('status', 'Closed'),
-    supabase.from('tyre_records').select('id,issue_date,risk_level,created_at').order('created_at', { ascending: false }).limit(500),
-    supabase.from('inspections').select('*').neq('status', 'Done').neq('status', 'Cancelled').lte('scheduled_date', now.toISOString().split('T')[0]),
+    withCountry(supabase.from('stock_records').select('*').order('site'), country),
+    withCountry(supabase.from('budgets').select('*').eq('year', now.getFullYear()), country),
+    withCountry(supabase.from('corrective_actions').select('*').neq('status', 'Closed'), country),
+    withCountry(
+      supabase.from('tyre_records')
+        .select('id,issue_date,risk_level,created_at')
+        .order('created_at', { ascending: false })
+        .limit(500),
+      country
+    ),
+    withCountry(
+      supabase.from('inspections')
+        .select('*')
+        .neq('status', 'Done')
+        .neq('status', 'Cancelled')
+        .lte('scheduled_date', now.toISOString().split('T')[0]),
+      country
+    ),
   ])
 
-  const stockRecords   = stockRes.data   || []
-  const budgets        = budgetRes.data  || []
-  const openActions    = actionsRes.data || []
-  const recentTyres    = tyreRes.data    || []
-  const overdueInsp    = inspRes.data    || []
+  const stockRecords = stockRes.data   || []
+  const budgets      = budgetRes.data  || []
+  const openActions  = actionsRes.data || []
+  const recentTyres  = tyreRes.data    || []
+  const overdueInsp  = inspRes.data    || []
 
   // ── 1. Stock Critical ─────────────────────────────────────────────────────
   stockRecords.forEach(s => {
@@ -76,26 +95,19 @@ export async function detectAlerts(supabase) {
     }
   })
 
-  // ── 2. Budget Overage / Near Limit ────────────────────────────────────────
-  // Group budgets by site+month and compare against actual tyre spend
+  // ── 2. Budget Warning ─────────────────────────────────────────────────────
   const currentMonth = now.getMonth() + 1
   const currentYear  = now.getFullYear()
   const thisMonthBudgets = budgets.filter(b => b.month === currentMonth && b.year === currentYear)
 
-  // We don't have tyre actuals here without another query; flag purely on budget records
-  // that have been manually flagged or use the budget threshold logic
   thisMonthBudgets.forEach(b => {
-    // Budget records store the ceiling — we check if actuals (from tyre records) exceed 90%
-    // Since we don't join here, we surface budget records that have zero remaining indicator
-    // The detailed comparison is in KpiScorecard. Here we flag any budget where the
-    // monthly_budget is unusually low (< 5000 SAR) as a configuration warning.
     if (b.monthly_budget < 1000) {
       alerts.push({
         id:       alertId(ALERT_TYPES.BUDGET_OVERAGE, b.id),
         type:     ALERT_TYPES.BUDGET_OVERAGE,
         severity: SEVERITY.INFO,
         title:    `Budget Warning: ${b.site}`,
-        message:  `${b.site}'s monthly budget (SAR ${b.monthly_budget.toLocaleString()}) may be too low for this month.`,
+        message:  `${b.site}'s monthly budget (${b.monthly_budget?.toLocaleString()}) may be too low for this month.`,
         link:     '/budgets',
         data:     b,
         createdAt: now.toISOString(),
@@ -127,7 +139,7 @@ export async function detectAlerts(supabase) {
     const spike = detectRiskSpike(recentTyres, Math.min(50, Math.floor(recentTyres.length / 2)))
     if (spike.isSpike) {
       alerts.push({
-        id:       alertId(ALERT_TYPES.RISK_SPIKE, 'fleet'),
+        id:       alertId(ALERT_TYPES.RISK_SPIKE, country ?? 'fleet'),
         type:     ALERT_TYPES.RISK_SPIKE,
         severity: spike.deltaPct > 50 ? SEVERITY.CRITICAL : SEVERITY.HIGH,
         title:    'Risk Spike Detected',
@@ -164,8 +176,6 @@ export async function detectAlerts(supabase) {
 
 /**
  * Count alerts by severity — used for the badge in Layout
- * @param {Alert[]} alerts
- * @returns {{ critical, high, medium, info, total }}
  */
 export function countAlertsBySeverity(alerts) {
   const counts = { critical: 0, high: 0, medium: 0, info: 0 }
@@ -173,12 +183,11 @@ export function countAlertsBySeverity(alerts) {
   return { ...counts, total: alerts.length }
 }
 
-/** Severity display config */
 export const SEVERITY_CONFIG = {
   critical: { label: 'Critical', color: 'text-red-400',    bg: 'bg-red-900/30',    border: 'border-red-700',    badge: 'bg-red-600' },
   high:     { label: 'High',     color: 'text-orange-400', bg: 'bg-orange-900/30', border: 'border-orange-700', badge: 'bg-orange-600' },
   medium:   { label: 'Medium',   color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700', badge: 'bg-yellow-600' },
-  info:     { label: 'Info',     color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700',   badge: 'bg-blue-600' },
+  info:     { label: 'Info',     color: 'text-green-400',  bg: 'bg-green-900/30',  border: 'border-green-700',  badge: 'bg-green-600' },
 }
 
 export const ALERT_TYPE_LABELS = {

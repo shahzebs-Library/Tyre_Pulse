@@ -52,6 +52,16 @@ export default function Dashboard() {
   const [search, setSearch]           = useState('')
   const [loading, setLoading]         = useState(true)
 
+  function applyPreset(preset) {
+    const now  = new Date()
+    const fmt  = d => d.toISOString().slice(0, 10)
+    const ago  = days => { const d = new Date(now); d.setDate(d.getDate() - days); return d }
+    if (preset === 'all') { setDateFrom(''); setDateTo(''); return }
+    if (preset === 'ytd') { setDateFrom(`${now.getFullYear()}-01-01`); setDateTo(fmt(now)); return }
+    const days = { '7d': 7, '30d': 30, '3m': 90, '6m': 180 }[preset]
+    if (days) { setDateFrom(fmt(ago(days))); setDateTo(fmt(now)) }
+  }
+
   useEffect(() => { load() }, [activeCountry, dateFrom, dateTo])
 
   async function load() {
@@ -327,7 +337,7 @@ export default function Dashboard() {
         </div>
 
         {/* Filter bar */}
-        <div className="card py-3">
+        <div className="card py-3 space-y-3">
           <div className="flex flex-wrap gap-3 items-center">
             {/* Search */}
             <div className="relative flex-1 min-w-48">
@@ -346,22 +356,49 @@ export default function Dashboard() {
             </div>
 
             {/* Date range */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Calendar size={14} className="text-gray-500 flex-shrink-0" />
               <input type="date" className="input w-36 text-sm" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
               <span className="text-gray-600 text-sm">→</span>
               <input type="date" className="input w-36 text-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} />
               {(dateFrom || dateTo) && (
-                <button onClick={() => { setDateFrom(''); setDateTo('') }} className="text-gray-500 hover:text-gray-300">
+                <button onClick={() => { setDateFrom(''); setDateTo('') }} className="text-gray-500 hover:text-gray-300" title="Clear dates">
                   <X size={13} />
                 </button>
               )}
             </div>
+          </div>
 
-            {/* Active filter chips */}
+          {/* Date presets */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-gray-600 mr-1">Quick:</span>
+            {[
+              { id: '7d',  label: '7 Days' },
+              { id: '30d', label: '30 Days' },
+              { id: '3m',  label: '3 Months' },
+              { id: '6m',  label: '6 Months' },
+              { id: 'ytd', label: 'YTD' },
+              { id: 'all', label: 'All Time' },
+            ].map(({ id, label }) => {
+              const isActive = id === 'all' ? (!dateFrom && !dateTo) : false
+              return (
+                <button
+                  key={id}
+                  onClick={() => applyPreset(id)}
+                  className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                    isActive
+                      ? 'border-green-600 text-green-400'
+                      : 'border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'
+                  }`}
+                  style={isActive ? { backgroundColor: 'rgba(22,163,74,0.08)' } : {}}
+                >
+                  {label}
+                </button>
+              )
+            })}
             {(search || dateFrom || dateTo) && (
-              <p className="text-xs text-blue-400 ml-auto">
-                Showing {tyres.length.toLocaleString()} of {rawTyres.length.toLocaleString()} records
+              <p className="text-xs text-green-500 ml-auto">
+                {tyres.length.toLocaleString()} of {rawTyres.length.toLocaleString()} records
               </p>
             )}
           </div>

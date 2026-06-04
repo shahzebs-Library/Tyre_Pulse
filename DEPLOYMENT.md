@@ -148,6 +148,19 @@ This installs the full data processing engine at the database level:
 
 ---
 
+### Step 1.4c — Run Extra Fields + RCA Country Migrations
+
+1. In SQL Editor → **New Query**, open `MIGRATIONS_V3.sql` → paste → **Run**
+   - Adds `extra_fields jsonb` to `tyre_records` so unmapped Excel columns are preserved
+
+2. In SQL Editor → **New Query**, open `MIGRATIONS_V4.sql` → paste → **Run**
+   - Adds `country` column to `rca_records` so RCA records can be filtered by KSA / UAE / Egypt
+   - Backfills existing rows from linked `tyre_records` where possible
+
+> These two files are safe to re-run (idempotent `IF NOT EXISTS`).
+
+---
+
 ### Step 1.5 — Set Up Photo Storage
 
 1. In Supabase dashboard → **Storage** (left sidebar)
@@ -450,6 +463,7 @@ tyre_pulse/
 ├── MIGRATIONS_V2.sql       ← Run this FOURTH (multi-country, CPK columns)
 ├── MASTER_ENGINE.sql       ← Run this FIFTH (data normalisation engine)
 ├── MIGRATIONS_V3.sql       ← Run this SIXTH (extra_fields for unmapped Excel columns)
+├── MIGRATIONS_V4.sql       ← Run this SEVENTH (country column on rca_records)
 ├── .env.example            ← Copy to .env and fill in your keys
 ├── index.html
 ├── vite.config.js

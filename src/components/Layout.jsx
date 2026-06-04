@@ -80,7 +80,8 @@ export default function Layout({ children }) {
   useEffect(() => {
     async function fetchAlertCount() {
       try {
-        const found = await detectAlerts(supabase)
+        const country = activeCountry !== 'All' ? activeCountry : null
+        const found = await detectAlerts(supabase, country)
         const dismissed = (() => {
           try { return new Set(JSON.parse(localStorage.getItem('tp_dismissed_alerts') || '[]')) }
           catch { return new Set() }
@@ -92,7 +93,7 @@ export default function Layout({ children }) {
     fetchAlertCount()
     const iv = setInterval(fetchAlertCount, 5 * 60 * 1000)
     return () => clearInterval(iv)
-  }, [])
+  }, [activeCountry])
 
   useEffect(() => {
     function onKeyDown(e) {
@@ -148,10 +149,14 @@ export default function Layout({ children }) {
       <aside className={`${sidebarOpen ? 'w-60' : 'w-14'} flex-shrink-0 flex flex-col transition-all duration-200`}>
 
         {/* Logo */}
-        <div className="flex items-center h-13 px-3 py-3 border-b border-white/5 flex-shrink-0">
-          <div className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: '#15803d' }}>T</div>
+        <div className={`flex items-center h-13 px-3 py-3 border-b border-white/5 flex-shrink-0 ${!sidebarOpen ? 'justify-center' : ''}`}>
+          {sidebarOpen && <div className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: '#15803d' }}>T</div>}
           {sidebarOpen && <span className="ml-2.5 font-bold text-white tracking-tight">TyrePulse</span>}
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="ml-auto text-gray-700 hover:text-gray-400 transition-colors">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            className={`${sidebarOpen ? 'ml-auto' : ''} text-gray-700 hover:text-gray-400 transition-colors`}
+          >
             {sidebarOpen ? <X size={15} /> : <Menu size={15} />}
           </button>
         </div>
@@ -196,8 +201,11 @@ export default function Layout({ children }) {
               {items.map(({ to, label: lbl, icon: Icon, end }) => (
                 <NavLink
                   key={to} to={to} end={end}
+                  title={!sidebarOpen ? lbl : undefined}
                   className={({ isActive }) =>
                     `flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors relative mb-0.5 ${
+                      !sidebarOpen ? 'justify-center' : ''
+                    } ${
                       isActive
                         ? 'text-green-400 border border-green-600/20'
                         : 'text-gray-600 hover:text-gray-300 border border-transparent'
@@ -220,8 +228,8 @@ export default function Layout({ children }) {
 
         {/* User */}
         <div className="border-t border-white/5 p-3 flex-shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-blue-700/80 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+          <div className={`flex items-center gap-2.5 ${!sidebarOpen ? 'flex-col' : ''}`}>
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ backgroundColor: '#15803d' }}>
               {profile?.full_name?.[0] ?? profile?.username?.[0] ?? 'U'}
             </div>
             {sidebarOpen && (

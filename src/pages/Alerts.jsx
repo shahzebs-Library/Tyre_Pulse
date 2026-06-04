@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useSettings } from '../contexts/SettingsContext'
 import {
   detectAlerts, countAlertsBySeverity,
   SEVERITY_CONFIG, ALERT_TYPE_LABELS, ALERT_TYPES,
@@ -8,6 +9,7 @@ import {
 
 export default function Alerts() {
   const navigate = useNavigate()
+  const { activeCountry } = useSettings()
   const [alerts, setAlerts]   = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter]   = useState('all')
@@ -19,13 +21,14 @@ export default function Alerts() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const found = await detectAlerts(supabase)
+    const country = activeCountry !== 'All' ? activeCountry : null
+    const found = await detectAlerts(supabase, country)
     setAlerts(found)
     setLastRefresh(new Date())
     setLoading(false)
-  }, [])
+  }, [activeCountry])
 
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => { refresh() }, [refresh, activeCountry])
 
   function dismiss(id) {
     setDismissed(prev => {
@@ -134,7 +137,7 @@ export default function Alerts() {
           <button
             onClick={() => setFilter('all')}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-              filter === 'all' ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-300 border-gray-700 hover:border-gray-500'
+              filter === 'all' ? 'bg-green-700 text-white border-green-600' : 'bg-gray-800 text-gray-300 border-gray-700 hover:border-gray-500'
             }`}
           >
             All ({active.length})

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { batchClassify, RISK_COLOUR, CONFIDENCE_COLOUR, ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
 import { Wand2, Info, ChevronLeft, ChevronRight, Check, X, RefreshCw, CheckCheck } from 'lucide-react'
 
@@ -8,6 +9,7 @@ const PAGE_SIZE = 50
 
 export default function DataCleaning() {
   const { profile } = useAuth()
+  const { activeCountry } = useSettings()
 
   const [tab, setTab]                       = useState('pending')
   const [rawRecords, setRawRecords]         = useState([])
@@ -33,19 +35,23 @@ export default function DataCleaning() {
   const [cleanedSelected, setCleanedSelected]   = useState(new Set())
   const [reclassifyProposed, setReclassifyProposed] = useState(null)  // null | array of diffs
 
-  useEffect(() => { loadStats(); loadSites() }, [saveCount])
-  useEffect(() => { tab === 'pending' ? loadPending() : loadCleaned() }, [tab, page, filterConf, filterSite, saveCount])
+  useEffect(() => { loadStats(); loadSites() }, [saveCount, activeCountry])
+  useEffect(() => { tab === 'pending' ? loadPending() : loadCleaned() }, [tab, page, filterConf, filterSite, saveCount, activeCountry])
 
   async function loadStats() {
+    const cf = activeCountry !== 'All' ? activeCountry : null
+    const base = (q) => cf ? q.eq('country', cf) : q
     const [p, c] = await Promise.all([
-      supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('cleaned', false),
-      supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('cleaned', true),
+      base(supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('cleaned', false)),
+      base(supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('cleaned', true)),
     ])
     setStats({ pending: p.count ?? 0, cleaned: c.count ?? 0 })
   }
 
   async function loadSites() {
-    const { data } = await supabase.from('tyre_records').select('site').not('site', 'is', null).eq('cleaned', false)
+    let q = supabase.from('tyre_records').select('site').not('site', 'is', null).eq('cleaned', false)
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    const { data } = await q
     setSites([...new Set((data ?? []).map(r => r.site))].sort())
   }
 
@@ -57,6 +63,7 @@ export default function DataCleaning() {
       .eq('cleaned', false)
       .order('created_at', { ascending: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
     if (filterSite) q = q.eq('site', filterSite)
 
     const { data, count } = await q
@@ -69,7 +76,7 @@ export default function DataCleaning() {
     setClassified(results)
     setSelected(new Set())
     setLoading(false)
-  }, [page, filterConf, filterSite])
+  }, [page, filterConf, filterSite, activeCountry])
 
   async function loadCleaned() {
     setLoading(true)
@@ -207,7 +214,7 @@ export default function DataCleaning() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Wand2 size={22} className="text-blue-400" /> Data Cleaning Engine
+            <Wand2 size={22} className="text-green-400" /> Data Cleaning Engine
           </h1>
           <p className="text-gray-400 text-sm mt-1">Rule-based auto-classification — zero AI tokens required</p>
         </div>
@@ -224,9 +231,9 @@ export default function DataCleaning() {
       </div>
 
       {/* Info */}
-      <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg px-4 py-3 flex gap-3">
-        <Info size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
-        <p className="text-sm text-blue-300">
+      <div className="bg-green-900/20 border border-green-800/50 rounded-lg px-4 py-3 flex gap-3">
+        <Info size={16} className="text-green-400 flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-green-300">
           Matches tyre description + remarks against 13 failure categories using keyword patterns. Confidence reflects keyword match strength. Review, adjust dropdowns if needed, then approve.
         </p>
       </div>
@@ -235,7 +242,7 @@ export default function DataCleaning() {
       <div className="flex gap-0 border-b border-gray-800">
         {[['pending', 'Pending Classification'], ['cleaned', 'Already Cleaned']].map(([val, label]) => (
           <button key={val} onClick={() => { setTab(val); setPage(0) }}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === val ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}`}>
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === val ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-white'}`}>
             {label}
           </button>
         ))}
@@ -298,10 +305,10 @@ export default function DataCleaning() {
                 const result = getResult(r.id)
                 const isSel  = selected.has(r.id)
                 return (
-                  <div key={r.id} className={`card cursor-pointer transition-all ${isSel ? 'border-blue-500/60 bg-blue-950/20' : 'hover:border-gray-700'}`}
+                  <div key={r.id} className={`card cursor-pointer transition-all ${isSel ? 'border-green-600/60 bg-green-950/20' : 'hover:border-gray-700'}`}
                     onClick={() => toggleSelect(r.id)}>
                     <div className="flex items-start gap-4">
-                      <div className={`w-5 h-5 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors ${isSel ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}>
+                      <div className={`w-5 h-5 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors ${isSel ? 'bg-green-700 border-green-600' : 'border-gray-600'}`}>
                         {isSel && <Check size={12} className="text-white" />}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -330,11 +337,11 @@ export default function DataCleaning() {
                       </div>
                       <div className="flex-shrink-0 flex flex-col gap-2 items-end" onClick={e => e.stopPropagation()}>
                         <span className={`text-xs font-medium ${CONFIDENCE_COLOUR[result?.confidence] ?? 'text-gray-500'}`}>{result?.confidence ?? '—'} confidence</span>
-                        <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-600"
                           value={result?.category ?? ''} onChange={e => setOverride(r.id, 'category', e.target.value)}>
                           {ALL_CATEGORY_LABELS.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
-                        <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-600"
                           value={result?.risk_level ?? ''} onChange={e => setOverride(r.id, 'risk_level', e.target.value)}>
                           {['Critical', 'High', 'Medium', 'Low'].map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
@@ -430,7 +437,7 @@ export default function DataCleaning() {
                   </thead>
                   <tbody>
                     {cleanedRecords.map(r => (
-                      <tr key={r.id} className={`transition-colors ${cleanedSelected.has(r.id) ? 'bg-blue-950/30' : 'hover:bg-gray-800/30'}`}>
+                      <tr key={r.id} className={`transition-colors ${cleanedSelected.has(r.id) ? 'bg-green-950/30' : 'hover:bg-gray-800/30'}`}>
                         <td className="table-cell">
                           <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
                             checked={cleanedSelected.has(r.id)} onChange={() => setCleanedSelected(s => { const n = new Set(s); n.has(r.id) ? n.delete(r.id) : n.add(r.id); return n })} />

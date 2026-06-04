@@ -123,7 +123,7 @@ export default function Alerts() {
                 onClick={() => setFilter(type)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                   filter === type
-                    ? 'bg-blue-600 text-white border-blue-500'
+                    ? 'bg-green-700 text-white border-green-600'
                     : 'bg-gray-800 text-gray-300 border-gray-700 hover:border-gray-500'
                 }`}
               >

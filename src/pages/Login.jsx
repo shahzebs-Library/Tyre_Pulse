@@ -59,12 +59,12 @@ export default function Login() {
       {/* Floating orbs for depth */}
       <div style={{
         position: 'fixed', top: '15%', left: '8%', width: 400, height: 400,
-        background: 'radial-gradient(circle, rgba(37,99,235,0.12) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(22,163,74,0.12) 0%, transparent 70%)',
         borderRadius: '50%', filter: 'blur(40px)', pointerEvents: 'none',
       }} />
       <div style={{
         position: 'fixed', bottom: '10%', right: '6%', width: 320, height: 320,
-        background: 'radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(120,113,108,0.10) 0%, transparent 70%)',
         borderRadius: '50%', filter: 'blur(40px)', pointerEvents: 'none',
       }} />
 
@@ -75,9 +75,9 @@ export default function Login() {
           {/* Tyre icon with glow ring */}
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-4"
             style={{
-              background: 'linear-gradient(135deg, rgba(37,99,235,0.25), rgba(99,102,241,0.15))',
-              border: '1px solid rgba(37,99,235,0.35)',
-              boxShadow: '0 0 32px rgba(37,99,235,0.25), 0 0 8px rgba(37,99,235,0.1) inset',
+              background: 'linear-gradient(135deg, rgba(22,163,74,0.22), rgba(120,113,108,0.12))',
+              border: '1px solid rgba(22,163,74,0.35)',
+              boxShadow: '0 0 32px rgba(22,163,74,0.22), 0 0 8px rgba(22,163,74,0.08) inset',
             }}>
             <span style={{ fontSize: 38 }}>🔄</span>
           </div>
@@ -96,7 +96,7 @@ export default function Login() {
                 onClick={() => { setTab(val); setError(''); setSignupDone(false) }}
                 className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-all duration-200 ${
                   tab === val
-                    ? 'border-blue-500 text-blue-400'
+                    ? 'border-green-500 text-green-400'
                     : 'border-transparent text-gray-500 hover:text-gray-300'
                 }`}
               >

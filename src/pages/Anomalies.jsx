@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useSettings } from '../contexts/SettingsContext'
 import {
   detectAnomalies, summariseAnomalies,
   ANOMALY_TYPES, ANOMALY_TYPE_LABELS, ANOMALY_TYPE_DESC,
@@ -30,6 +31,7 @@ const ANOMALY_CONFIGS = [
 ]
 
 export default function Anomalies() {
+  const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [running, setRunning]   = useState(false)
@@ -56,12 +58,13 @@ export default function Anomalies() {
   })
 
   useEffect(() => {
-    supabase
+    let q = supabase
       .from('tyre_records')
       .select('id,issue_date,asset_no,serial_no,brand,site,risk_level,cost_per_tyre,qty,description')
       .order('issue_date', { ascending: true })
-      .then(({ data }) => { setRecords(data || []); setLoading(false) })
-  }, [])
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    q.then(({ data }) => { setRecords(data || []); setHasRun(false); setAnomalies([]); setLoading(false) })
+  }, [activeCountry])
 
   function runDetection() {
     setRunning(true)
@@ -192,7 +195,7 @@ export default function Anomalies() {
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setFilterType('all')}
               className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                filterType === 'all' ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'
+                filterType === 'all' ? 'bg-green-700 text-white border-green-600' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'
               }`}>
               All ({active.length})
             </button>
@@ -204,7 +207,7 @@ export default function Anomalies() {
                   key={type}
                   onClick={() => setFilterType(filterType === type ? 'all' : type)}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex items-center gap-1 ${
-                    filterType === type ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'
+                    filterType === type ? 'bg-green-700 text-white border-green-600' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'
                   }`}
                 >
                   {TYPE_ICON[type]} {ANOMALY_TYPE_LABELS[type]} ({cnt})
@@ -341,7 +344,7 @@ function AnomalyDetail({ anomaly: a }) {
                   }`}>{r.risk_level || '?'}</span>
                 </td>
                 <td className="py-1.5 text-right text-gray-400">
-                  {r.cost_per_tyre ? `SAR ${r.cost_per_tyre.toLocaleString()}` : '—'}
+                  {r.cost_per_tyre ? `${activeCurrency} ${r.cost_per_tyre.toLocaleString()}` : '—'}
                 </td>
               </tr>
             ))}
@@ -381,7 +384,7 @@ function AnomalyDetail({ anomaly: a }) {
         <div className="bg-yellow-900/10 border border-yellow-800/30 rounded-lg p-3">
           <p className="text-xs text-yellow-300 font-medium mb-1">Why this matters</p>
           <p className="text-xs text-gray-400">
-            Cost SAR {a.cost?.toLocaleString()} is <strong className="text-white">{a.zScore?.toFixed(1)}σ</strong> from the fleet average (SAR {a.fleetAvg?.toLocaleString()}).
+            Cost {activeCurrency} {a.cost?.toLocaleString()} is <strong className="text-white">{a.zScore?.toFixed(1)}σ</strong> from the fleet average ({activeCurrency} {a.fleetAvg?.toLocaleString()}).
             Verify the price entry is correct or check for special tyre procurement.
           </p>
         </div>

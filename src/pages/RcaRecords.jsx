@@ -140,7 +140,7 @@ export default function RcaRecords() {
                   <div className="flex items-center gap-3 flex-wrap">
                     <span className="font-semibold text-white">{r.asset_no ?? '—'}</span>
                     {r.tyre_serial && <span className="text-xs text-gray-400">Serial: {r.tyre_serial}</span>}
-                    {r.brand && <span className="badge bg-blue-900/50 text-blue-300 border border-blue-700/50">{r.brand}</span>}
+                    {r.brand && <span className="badge bg-green-900/40 text-green-300 border border-green-700/50">{r.brand}</span>}
                     {r.corrective_action && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/30 text-green-400 border border-green-700/50">
                         ✓ CA Linked
@@ -169,7 +169,7 @@ export default function RcaRecords() {
                 <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                   <button
                     onClick={e => { e.stopPropagation(); startEdit(r) }}
-                    className="text-gray-400 hover:text-blue-400 text-sm transition-colors"
+                    className="text-gray-400 hover:text-green-400 text-sm transition-colors"
                   >
                     Edit
                   </button>
@@ -184,7 +184,7 @@ export default function RcaRecords() {
                     <button
                       onClick={() => createLinkedAction(r)}
                       disabled={creatingAction}
-                      className="text-xs px-2 py-1 rounded bg-blue-900/20 text-blue-400 border border-blue-700/50 hover:bg-blue-900/40 transition-colors disabled:opacity-50 whitespace-nowrap"
+                      className="text-xs px-2 py-1 rounded bg-green-900/20 text-green-400 border border-green-700/50 hover:bg-green-900/40 transition-colors disabled:opacity-50 whitespace-nowrap"
                     >
                       + Create Action
                     </button>

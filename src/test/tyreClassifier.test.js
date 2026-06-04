@@ -288,7 +288,7 @@ describe('classifyTyre — IMPACT (High)', () => {
   })
 
   it('classifies "kerb damage"', () => {
-    const result = classifyTyre('', 'kerb damage on outer sidewall')
+    const result = classifyTyre('', 'kerb damage on outer tread')
     expect(result.category).toBe('Impact Damage')
     expect(result.risk_level).toBe('High')
   })

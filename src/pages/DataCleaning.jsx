@@ -1,41 +1,47 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { batchClassify, RISK_COLOUR, CONFIDENCE_COLOUR, ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
-import { Wand2, CheckCheck, ChevronLeft, ChevronRight, RefreshCw, Info, Filter, Check, X } from 'lucide-react'
+import { Wand2, Info, ChevronLeft, ChevronRight, Check, X, RefreshCw, CheckCheck } from 'lucide-react'
 
 const PAGE_SIZE = 50
 
 export default function DataCleaning() {
   const { profile } = useAuth()
 
-  // ── state ───────────────────────────────────────────────────────────────────
-  const [tab, setTab]                   = useState('pending')   // 'pending' | 'cleaned'
-  const [rawRecords, setRawRecords]     = useState([])
-  const [classified, setClassified]     = useState([])          // pending classifications
-  const [overrides, setOverrides]       = useState({})          // id → { category, risk_level }
-  const [selected, setSelected]         = useState(new Set())
-  const [page, setPage]                 = useState(0)
-  const [totalPending, setTotalPending] = useState(0)
+  const [tab, setTab]                       = useState('pending')
+  const [rawRecords, setRawRecords]         = useState([])
+  const [classified, setClassified]         = useState([])
+  const [overrides, setOverrides]           = useState({})
+  const [selected, setSelected]             = useState(new Set())
+  const [page, setPage]                     = useState(0)
+  const [totalPending, setTotalPending]     = useState(0)
   const [cleanedRecords, setCleanedRecords] = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [saving, setSaving]             = useState(false)
-  const [saveCount, setSaveCount]       = useState(0)
-  const [filterConf, setFilterConf]     = useState('')  // '', 'High', 'Medium', 'Low'
-  const [filterSite, setFilterSite]     = useState('')
-  const [sites, setSites]               = useState([])
-  const [stats, setStats]               = useState({ pending: 0, cleaned: 0 })
+  const [loading, setLoading]               = useState(true)
+  const [saving, setSaving]                 = useState(false)
+  const [saveCount, setSaveCount]           = useState(0)
+  const [filterConf, setFilterConf]         = useState('')
+  const [filterSite, setFilterSite]         = useState('')
+  const [sites, setSites]                   = useState([])
+  const [stats, setStats]                   = useState({ pending: 0, cleaned: 0 })
 
-  // ── load ────────────────────────────────────────────────────────────────────
+  // ── Approve-all progress ─────────────────────────────────────────────────────
+  const [approveAllProgress, setApproveAllProgress] = useState(null)   // null | { done, total }
+  const [showApproveAllConfirm, setShowApproveAllConfirm] = useState(false)
+
+  // ── Re-classify on cleaned tab ───────────────────────────────────────────────
+  const [cleanedSelected, setCleanedSelected]   = useState(new Set())
+  const [reclassifyProposed, setReclassifyProposed] = useState(null)  // null | array of diffs
+
   useEffect(() => { loadStats(); loadSites() }, [saveCount])
   useEffect(() => { tab === 'pending' ? loadPending() : loadCleaned() }, [tab, page, filterConf, filterSite, saveCount])
 
   async function loadStats() {
-    const [pendingRes, cleanedRes] = await Promise.all([
+    const [p, c] = await Promise.all([
       supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('cleaned', false),
       supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('cleaned', true),
     ])
-    setStats({ pending: pendingRes.count ?? 0, cleaned: cleanedRes.count ?? 0 })
+    setStats({ pending: p.count ?? 0, cleaned: c.count ?? 0 })
   }
 
   async function loadSites() {
@@ -51,23 +57,16 @@ export default function DataCleaning() {
       .eq('cleaned', false)
       .order('created_at', { ascending: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
-
     if (filterSite) q = q.eq('site', filterSite)
 
-    const { data, count, error } = await q.returns()
+    const { data, count } = await q
     const records = data ?? []
     setRawRecords(records)
     setTotalPending(count ?? 0)
 
-    // Run classifier on the loaded records
-    const results = batchClassify(records)
-
-    // Filter by confidence if requested
-    const visible = filterConf
-      ? results.filter(r => r.confidence === filterConf)
-      : results
-
-    setClassified(visible)
+    let results = batchClassify(records)
+    if (filterConf) results = results.filter(r => r.confidence === filterConf)
+    setClassified(results)
     setSelected(new Set())
     setLoading(false)
   }, [page, filterConf, filterSite])
@@ -76,108 +75,131 @@ export default function DataCleaning() {
     setLoading(true)
     const { data } = await supabase
       .from('tyre_records')
-      .select('id, asset_no, brand, site, category, risk_level, remarks_cleaned, issue_date')
+      .select('id, asset_no, brand, site, category, risk_level, remarks_cleaned, issue_date, description, remarks')
       .eq('cleaned', true)
       .order('created_at', { ascending: false })
       .limit(100)
     setCleanedRecords(data ?? [])
+    setCleanedSelected(new Set())
+    setReclassifyProposed(null)
     setLoading(false)
   }
 
-  // ── helpers ─────────────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────────
   function getResult(id) {
     const base = classified.find(r => r.id === id)
-    return overrides[id]
-      ? { ...base, ...overrides[id] }
-      : base
+    return overrides[id] ? { ...base, ...overrides[id] } : base
   }
 
   function toggleSelect(id) {
-    setSelected(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
-  function selectAll() {
-    setSelected(new Set(classified.map(r => r.id)))
-  }
-
-  function clearAll() {
-    setSelected(new Set())
+    setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
 
   function setOverride(id, field, value) {
-    setOverrides(prev => ({
-      ...prev,
-      [id]: { ...(prev[id] ?? {}), [field]: value },
-    }))
+    setOverrides(prev => ({ ...prev, [id]: { ...(prev[id] ?? {}), [field]: value } }))
   }
 
-  // ── save (approve) ───────────────────────────────────────────────────────────
+  // ── Approve selected (current page) ─────────────────────────────────────────
   async function approveSelected() {
     if (selected.size === 0) return
     setSaving(true)
-
     const toSave = [...selected].map(id => {
       const r = getResult(id)
-      return {
-        id,
-        category: r?.category ?? null,
-        risk_level: r?.risk_level ?? null,
-        remarks_cleaned: r?.remarks_cleaned ?? null,
-        cleaned: true,
-      }
+      return { id, category: r?.category ?? null, risk_level: r?.risk_level ?? null, remarks_cleaned: r?.remarks_cleaned ?? null, cleaned: true }
     })
-
-    // Upsert in batches of 100
     const BATCH = 100
     const logEntries = []
-
     for (let i = 0; i < toSave.length; i += BATCH) {
       const batch = toSave.slice(i, i + BATCH)
       await supabase.from('tyre_records').upsert(batch, { onConflict: 'id' })
-
-      // Build cleaning_log entries
       batch.forEach(saved => {
-        const original = rawRecords.find(r => r.id === saved.id)
-        if (original) {
-          logEntries.push({
-            original_text: [original.description, original.remarks].filter(Boolean).join(' | '),
-            cleaned_text: saved.remarks_cleaned,
-            category: saved.category,
-            confidence: getResult(saved.id)?.confidence,
-            tyre_record_id: saved.id,
-            cleaned_by_model: 'rule-based-v1',
-          })
-        }
+        const orig = rawRecords.find(r => r.id === saved.id)
+        if (orig) logEntries.push({ original_text: [orig.description, orig.remarks].filter(Boolean).join(' | '), cleaned_text: saved.remarks_cleaned, category: saved.category, confidence: getResult(saved.id)?.confidence, tyre_record_id: saved.id, cleaned_by_model: 'rule-based-v1' })
       })
     }
-
-    // Write cleaning log
-    if (logEntries.length > 0) {
-      await supabase.from('cleaning_log').insert(logEntries)
-    }
-
+    if (logEntries.length) await supabase.from('cleaning_log').insert(logEntries)
     setSaveCount(c => c + 1)
     setOverrides({})
     setSaving(false)
   }
 
-  // ── approve all on current page ──────────────────────────────────────────────
+  // ── Approve ALL pending ──────────────────────────────────────────────────────
   async function approveAll() {
-    selectAll()
-    // Wait a tick then save
-    setTimeout(() => approveSelected(), 0)
+    setShowApproveAllConfirm(false)
+    setSaving(true)
+
+    // Fetch all uncleaned records in batches
+    const FETCH_BATCH = 500
+    let offset = 0
+    let allPending = []
+    while (true) {
+      let q = supabase.from('tyre_records').select('id, description, remarks').eq('cleaned', false).range(offset, offset + FETCH_BATCH - 1)
+      if (filterSite) q = q.eq('site', filterSite)
+      const { data } = await q
+      if (!data || data.length === 0) break
+      allPending.push(...data)
+      if (data.length < FETCH_BATCH) break
+      offset += FETCH_BATCH
+    }
+
+    setApproveAllProgress({ done: 0, total: allPending.length })
+
+    const SAVE_BATCH = 200
+    const logEntries = []
+    for (let i = 0; i < allPending.length; i += SAVE_BATCH) {
+      const batch = allPending.slice(i, i + SAVE_BATCH)
+      const results = batchClassify(batch)
+      const toSave = results.map(r => ({ id: r.id, category: r.category, risk_level: r.risk_level, remarks_cleaned: r.remarks_cleaned, cleaned: true }))
+      await supabase.from('tyre_records').upsert(toSave, { onConflict: 'id' })
+
+      results.forEach(r => {
+        const orig = batch.find(b => b.id === r.id)
+        if (orig) logEntries.push({ original_text: [orig.description, orig.remarks].filter(Boolean).join(' | '), cleaned_text: r.remarks_cleaned, category: r.category, confidence: r.confidence, tyre_record_id: r.id, cleaned_by_model: 'rule-based-v1' })
+      })
+
+      setApproveAllProgress({ done: Math.min(i + SAVE_BATCH, allPending.length), total: allPending.length })
+    }
+
+    if (logEntries.length) {
+      const LOG_BATCH = 500
+      for (let i = 0; i < logEntries.length; i += LOG_BATCH) {
+        await supabase.from('cleaning_log').insert(logEntries.slice(i, i + LOG_BATCH))
+      }
+    }
+
+    setApproveAllProgress(null)
+    setSaveCount(c => c + 1)
+    setSaving(false)
+  }
+
+  // ── Re-classify (cleaned tab) ────────────────────────────────────────────────
+  function runReclassify() {
+    const toReclassify = cleanedRecords.filter(r => cleanedSelected.has(r.id))
+    const results      = batchClassify(toReclassify.map(r => ({ id: r.id, description: r.description, remarks: r.remarks })))
+    const proposed     = results.map(r => {
+      const orig = cleanedRecords.find(c => c.id === r.id)
+      const changed = orig.category !== r.category || orig.risk_level !== r.risk_level
+      return { ...r, orig_category: orig?.category, orig_risk: orig?.risk_level, changed }
+    })
+    setReclassifyProposed(proposed)
+  }
+
+  async function approveReclassify() {
+    if (!reclassifyProposed) return
+    setSaving(true)
+    const toSave = reclassifyProposed.map(r => ({ id: r.id, category: r.category, risk_level: r.risk_level, remarks_cleaned: r.remarks_cleaned, cleaned: true }))
+    const BATCH = 200
+    for (let i = 0; i < toSave.length; i += BATCH) {
+      await supabase.from('tyre_records').upsert(toSave.slice(i, i + BATCH), { onConflict: 'id' })
+    }
+    setReclassifyProposed(null)
+    setCleanedSelected(new Set())
+    setSaveCount(c => c + 1)
+    setSaving(false)
   }
 
   const totalPages = Math.ceil(totalPending / PAGE_SIZE)
-
-  // ── confidence badge ─────────────────────────────────────────────────────────
-  function ConfBadge({ conf }) {
-    return <span className={`text-xs font-medium ${CONFIDENCE_COLOUR[conf] ?? 'text-gray-500'}`}>{conf ?? '—'} confidence</span>
-  }
+  const allSelected = classified.length > 0 && classified.every(r => selected.has(r.id))
 
   return (
     <div className="space-y-4">
@@ -187,9 +209,7 @@ export default function DataCleaning() {
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Wand2 size={22} className="text-blue-400" /> Data Cleaning Engine
           </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Rule-based auto-classification — zero AI tokens required
-          </p>
+          <p className="text-gray-400 text-sm mt-1">Rule-based auto-classification — zero AI tokens required</p>
         </div>
         <div className="flex gap-3">
           <div className="card py-2 px-4 text-center">
@@ -203,32 +223,28 @@ export default function DataCleaning() {
         </div>
       </div>
 
-      {/* Info banner */}
+      {/* Info */}
       <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg px-4 py-3 flex gap-3">
         <Info size={16} className="text-blue-400 flex-shrink-0 mt-0.5" />
         <p className="text-sm text-blue-300">
-          The classifier matches tyre description and remarks against 13 failure categories using keyword patterns.
-          Review proposed changes, adjust if needed, then approve to persist to the database.
-          Confidence reflects how many keywords matched.
+          Matches tyre description + remarks against 13 failure categories using keyword patterns. Confidence reflects keyword match strength. Review, adjust dropdowns if needed, then approve.
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-800 pb-0">
+      <div className="flex gap-0 border-b border-gray-800">
         {[['pending', 'Pending Classification'], ['cleaned', 'Already Cleaned']].map(([val, label]) => (
-          <button
-            key={val}
-            onClick={() => { setTab(val); setPage(0) }}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === val ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}`}
-          >
+          <button key={val} onClick={() => { setTab(val); setPage(0) }}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === val ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}`}>
             {label}
           </button>
         ))}
       </div>
 
+      {/* ── Pending tab ───────────────────────────────────────────────────── */}
       {tab === 'pending' && (
         <>
-          {/* Filters + Actions */}
+          {/* Toolbar */}
           <div className="flex flex-wrap gap-3 items-center">
             <select className="input w-auto" value={filterSite} onChange={e => { setFilterSite(e.target.value); setPage(0) }}>
               <option value="">All Sites</option>
@@ -238,20 +254,36 @@ export default function DataCleaning() {
               <option value="">All Confidence</option>
               {['High', 'Medium', 'Low'].map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-
             <div className="flex-1" />
 
+            {stats.pending > 0 && (
+              <button onClick={() => setShowApproveAllConfirm(true)} disabled={saving}
+                className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40">
+                <CheckCheck size={15} className="text-green-400" /> Approve All {stats.pending.toLocaleString()}
+              </button>
+            )}
+
             <span className="text-sm text-gray-400">{selected.size} selected</span>
-            <button onClick={selectAll} className="btn-secondary py-1.5 px-3 text-sm">Select All</button>
-            <button onClick={clearAll} className="btn-secondary py-1.5 px-3 text-sm">Clear</button>
-            <button
-              onClick={approveSelected}
-              disabled={selected.size === 0 || saving}
-              className="btn-primary flex items-center gap-2 disabled:opacity-40"
-            >
+            <button onClick={() => allSelected ? setSelected(new Set()) : setSelected(new Set(classified.map(r => r.id)))}
+              className="btn-secondary py-1.5 px-3 text-sm">
+              {allSelected ? 'Clear' : 'Select All'}
+            </button>
+            <button onClick={approveSelected} disabled={selected.size === 0 || saving}
+              className="btn-primary flex items-center gap-2 disabled:opacity-40">
               <Check size={15} /> {saving ? 'Saving…' : `Approve ${selected.size > 0 ? selected.size : ''}`}
             </button>
           </div>
+
+          {/* Approve-all progress */}
+          {approveAllProgress && (
+            <div className="card">
+              <p className="text-white font-medium mb-2">Approving all pending records…</p>
+              <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
+                <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${(approveAllProgress.done / approveAllProgress.total) * 100}%` }} />
+              </div>
+              <p className="text-gray-400 text-sm mt-1">{approveAllProgress.done.toLocaleString()} / {approveAllProgress.total.toLocaleString()}</p>
+            </div>
+          )}
 
           {/* Records */}
           {loading ? (
@@ -264,20 +296,14 @@ export default function DataCleaning() {
             <div className="space-y-2">
               {classified.map(r => {
                 const result = getResult(r.id)
-                const isSelected = selected.has(r.id)
+                const isSel  = selected.has(r.id)
                 return (
-                  <div
-                    key={r.id}
-                    className={`card transition-all cursor-pointer ${isSelected ? 'border-blue-500/60 bg-blue-950/20' : 'hover:border-gray-700'}`}
-                    onClick={() => toggleSelect(r.id)}
-                  >
+                  <div key={r.id} className={`card cursor-pointer transition-all ${isSel ? 'border-blue-500/60 bg-blue-950/20' : 'hover:border-gray-700'}`}
+                    onClick={() => toggleSelect(r.id)}>
                     <div className="flex items-start gap-4">
-                      {/* Checkbox */}
-                      <div className={`w-5 h-5 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}>
-                        {isSelected && <Check size={12} className="text-white" />}
+                      <div className={`w-5 h-5 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors ${isSel ? 'bg-blue-600 border-blue-500' : 'border-gray-600'}`}>
+                        {isSel && <Check size={12} className="text-white" />}
                       </div>
-
-                      {/* Record info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap gap-2 items-baseline">
                           <span className="font-medium text-white">{r.original_description || '—'}</span>
@@ -293,55 +319,34 @@ export default function DataCleaning() {
                         </div>
                         {result?.matched_keywords?.length > 0 && (
                           <div className="flex gap-1 mt-2 flex-wrap">
-                            {result.matched_keywords.map((kw, i) => (
-                              <span key={i} className="bg-gray-800 text-gray-400 text-xs px-1.5 py-0.5 rounded">{kw}</span>
-                            ))}
+                            {result.matched_keywords.map((kw, i) => <span key={i} className="bg-gray-800 text-gray-400 text-xs px-1.5 py-0.5 rounded">{kw}</span>)}
+                          </div>
+                        )}
+                        {result?.remarks_cleaned && (
+                          <div className="mt-2 text-xs text-gray-400 bg-gray-800/60 rounded px-3 py-1.5">
+                            <span className="text-gray-600 mr-1">Cleaned:</span>{result.remarks_cleaned}
                           </div>
                         )}
                       </div>
-
-                      {/* Classification result — editable */}
                       <div className="flex-shrink-0 flex flex-col gap-2 items-end" onClick={e => e.stopPropagation()}>
-                        <ConfBadge conf={result?.confidence} />
-
-                        <select
-                          className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          value={result?.category ?? ''}
-                          onChange={e => setOverride(r.id, 'category', e.target.value)}
-                        >
+                        <span className={`text-xs font-medium ${CONFIDENCE_COLOUR[result?.confidence] ?? 'text-gray-500'}`}>{result?.confidence ?? '—'} confidence</span>
+                        <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          value={result?.category ?? ''} onChange={e => setOverride(r.id, 'category', e.target.value)}>
                           {ALL_CATEGORY_LABELS.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
-
-                        <select
-                          className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          value={result?.risk_level ?? ''}
-                          onChange={e => setOverride(r.id, 'risk_level', e.target.value)}
-                        >
-                          {['Critical', 'High', 'Medium', 'Low'].map(l => (
-                            <option key={l} value={l}>{l}</option>
-                          ))}
+                        <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          value={result?.risk_level ?? ''} onChange={e => setOverride(r.id, 'risk_level', e.target.value)}>
+                          {['Critical', 'High', 'Medium', 'Low'].map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
-
-                        <span className={`badge text-xs ${RISK_COLOUR[result?.risk_level] ?? 'bg-gray-800 text-gray-400'}`}>
-                          {result?.risk_level ?? '—'}
-                        </span>
+                        <span className={`badge text-xs ${RISK_COLOUR[result?.risk_level] ?? 'bg-gray-800 text-gray-400'}`}>{result?.risk_level ?? '—'}</span>
                       </div>
                     </div>
-
-                    {/* Cleaned text preview */}
-                    {result?.remarks_cleaned && (
-                      <div className="mt-2 ml-9 text-xs text-gray-400 bg-gray-800/60 rounded px-3 py-1.5">
-                        <span className="text-gray-600 mr-1">Cleaned:</span>
-                        {result.remarks_cleaned}
-                      </div>
-                    )}
                   </div>
                 )
               })}
             </div>
           )}
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-400">
@@ -357,11 +362,54 @@ export default function DataCleaning() {
         </>
       )}
 
+      {/* ── Cleaned tab ───────────────────────────────────────────────────── */}
       {tab === 'cleaned' && (
         <>
-          {loading ? (
-            <div className="text-center py-12 text-gray-500">Loading…</div>
-          ) : cleanedRecords.length === 0 ? (
+          {/* Re-classify toolbar */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm text-gray-400">{cleanedSelected.size} selected</span>
+            {cleanedSelected.size > 0 && (
+              <>
+                <button onClick={runReclassify} disabled={saving}
+                  className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40">
+                  <RefreshCw size={14} /> Re-classify {cleanedSelected.size} Selected
+                </button>
+                <button onClick={() => setCleanedSelected(new Set())} className="text-gray-400 hover:text-white text-sm">Clear</button>
+              </>
+            )}
+          </div>
+
+          {/* Re-classify diff view */}
+          {reclassifyProposed && (
+            <div className="card">
+              <h3 className="font-semibold text-white mb-3">Proposed Re-classification</h3>
+              <div className="space-y-2 mb-4">
+                {reclassifyProposed.map(r => (
+                  <div key={r.id} className={`flex items-center gap-4 px-3 py-2 rounded-lg text-sm ${r.changed ? 'bg-yellow-900/20 border border-yellow-700/40' : 'bg-gray-800/40'}`}>
+                    <span className="text-gray-300 flex-1">{r.original_description?.slice(0, 60) ?? '—'}</span>
+                    {r.changed ? (
+                      <>
+                        <span className="text-gray-500 line-through text-xs">{r.orig_category}</span>
+                        <span className="text-yellow-300 text-xs">→ {r.category}</span>
+                        <span className="text-gray-500 line-through text-xs">{r.orig_risk}</span>
+                        <span className="text-yellow-300 text-xs">→ {r.risk_level}</span>
+                      </>
+                    ) : (
+                      <span className="text-gray-500 text-xs">No change</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={approveReclassify} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+                  <Check size={15} /> {saving ? 'Saving…' : 'Apply Changes'}
+                </button>
+                <button onClick={() => setReclassifyProposed(null)} className="btn-secondary">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {loading ? <div className="text-center py-12 text-gray-500">Loading…</div> : cleanedRecords.length === 0 ? (
             <div className="text-center py-12 text-gray-500">No cleaned records yet</div>
           ) : (
             <div className="card p-0 overflow-hidden">
@@ -369,21 +417,29 @@ export default function DataCleaning() {
                 <table className="w-full">
                   <thead>
                     <tr>
-                      {['Asset No', 'Brand', 'Site', 'Category', 'Risk Level', 'Cleaned Remarks', 'Date'].map(h => (
-                        <th key={h} className="table-header">{h}</th>
-                      ))}
+                      <th className="table-header w-10">
+                        <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
+                          checked={cleanedRecords.length > 0 && cleanedRecords.every(r => cleanedSelected.has(r.id))}
+                          onChange={() => {
+                            if (cleanedRecords.every(r => cleanedSelected.has(r.id))) setCleanedSelected(new Set())
+                            else setCleanedSelected(new Set(cleanedRecords.map(r => r.id)))
+                          }} />
+                      </th>
+                      {['Asset No', 'Brand', 'Site', 'Category', 'Risk Level', 'Cleaned Remarks', 'Date'].map(h => <th key={h} className="table-header">{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {cleanedRecords.map(r => (
-                      <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
+                      <tr key={r.id} className={`transition-colors ${cleanedSelected.has(r.id) ? 'bg-blue-950/30' : 'hover:bg-gray-800/30'}`}>
+                        <td className="table-cell">
+                          <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
+                            checked={cleanedSelected.has(r.id)} onChange={() => setCleanedSelected(s => { const n = new Set(s); n.has(r.id) ? n.delete(r.id) : n.add(r.id); return n })} />
+                        </td>
                         <td className="table-cell font-medium text-white">{r.asset_no ?? '—'}</td>
                         <td className="table-cell">{r.brand ?? '—'}</td>
                         <td className="table-cell">{r.site ?? '—'}</td>
                         <td className="table-cell">{r.category ?? '—'}</td>
-                        <td className="table-cell">
-                          {r.risk_level && <span className={`badge ${RISK_COLOUR[r.risk_level]}`}>{r.risk_level}</span>}
-                        </td>
+                        <td className="table-cell">{r.risk_level ? <span className={`badge ${RISK_COLOUR[r.risk_level]}`}>{r.risk_level}</span> : '—'}</td>
                         <td className="table-cell text-gray-400 text-xs max-w-xs truncate">{r.remarks_cleaned ?? '—'}</td>
                         <td className="table-cell text-gray-500">{r.issue_date ?? '—'}</td>
                       </tr>
@@ -394,6 +450,26 @@ export default function DataCleaning() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Approve-all confirm modal ──────────────────────────────────────── */}
+      {showApproveAllConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowApproveAllConfirm(false)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-white mb-2">Approve All Pending Records</h2>
+            <p className="text-gray-400 text-sm mb-4">
+              The classifier will run on all <strong className="text-white">{stats.pending.toLocaleString()}</strong> pending records and save the results automatically.
+              {filterSite && ` Only records from "${filterSite}" will be processed.`}
+            </p>
+            <p className="text-yellow-300 text-sm mb-4">Low-confidence classifications will still be saved — no manual review step.</p>
+            <div className="flex gap-3">
+              <button onClick={approveAll} className="btn-primary flex items-center gap-2">
+                <CheckCheck size={15} /> Approve All
+              </button>
+              <button onClick={() => setShowApproveAllConfirm(false)} className="btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

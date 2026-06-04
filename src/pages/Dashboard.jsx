@@ -5,40 +5,44 @@ import StatCard from '../components/StatCard'
 import { exportToPptx } from '../lib/exportUtils'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import {
-  Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement, Title,
-  Tooltip, Legend, ArcElement
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement,
+  Title, Tooltip, Legend, ArcElement
 } from 'chart.js'
-import { CircleDot, Package, ClipboardList, AlertTriangle, TrendingUp, DollarSign, Presentation } from 'lucide-react'
+import {
+  CircleDot, Package, ClipboardList, AlertTriangle,
+  TrendingUp, TrendingDown, DollarSign, Presentation, Minus
+} from 'lucide-react'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
 
-const CHART_OPTIONS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { labels: { color: '#9ca3af' } } },
+const BASE_OPTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { labels: { color: '#9ca3af', boxWidth: 12 } } },
   scales: {
     x: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
     y: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
   },
 }
 
+const NO_SCALE_OPTS = { ...BASE_OPTS, scales: undefined }
+
 export default function Dashboard() {
   const { profile } = useAuth()
-  const [stats, setStats] = useState({ tyres: 0, stock: 0, actions: 0, critical: 0, cost: 0 })
-  const [brandData, setBrandData] = useState(null)
+  const [stats, setStats]             = useState({ tyres: 0, stock: 0, actions: 0, critical: 0, cost: 0 })
+  const [riskTrend, setRiskTrend]     = useState(null)   // { delta, pct }
+  const [brandData, setBrandData]     = useState(null)
+  const [categoryData, setCategoryData] = useState(null)
   const [monthlyData, setMonthlyData] = useState(null)
+  const [siteCostData, setSiteCostData] = useState(null)
   const [recentRecords, setRecentRecords] = useState([])
   const [openActions, setOpenActions] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]         = useState(true)
 
-  useEffect(() => {
-    loadDashboard()
-  }, [])
+  useEffect(() => { loadDashboard() }, [])
 
   async function loadDashboard() {
     const [tyreRes, stockRes, actionRes, recentRes, openActionsRes] = await Promise.all([
-      supabase.from('tyre_records').select('id, cost_per_tyre, brand, issue_date, risk_level', { count: 'exact' }),
+      supabase.from('tyre_records').select('id, cost_per_tyre, brand, issue_date, risk_level, site, category', { count: 'exact' }),
       supabase.from('stock_records').select('id', { count: 'exact' }),
       supabase.from('corrective_actions').select('id, status', { count: 'exact' }),
       supabase.from('tyre_records').select('id, issue_date, brand, asset_no, site, risk_level').order('created_at', { ascending: false }).limit(5),
@@ -46,57 +50,80 @@ export default function Dashboard() {
     ])
 
     const tyres = tyreRes.data ?? []
-    const totalCost = tyres.reduce((sum, t) => sum + (t.cost_per_tyre ?? 1200), 0)
-    const critical = tyres.filter(t => t.risk_level === 'Critical' || t.risk_level === 'High').length
+    const totalCost = tyres.reduce((s, t) => s + (t.cost_per_tyre ?? 1200), 0)
+    const critical  = tyres.filter(t => t.risk_level === 'Critical' || t.risk_level === 'High').length
     const openCount = (actionRes.data ?? []).filter(a => a.status === 'Open').length
 
-    setStats({
-      tyres: tyreRes.count ?? 0,
-      stock: stockRes.count ?? 0,
-      actions: openCount,
-      critical,
-      cost: totalCost,
-    })
+    setStats({ tyres: tyreRes.count ?? 0, stock: stockRes.count ?? 0, actions: openCount, critical, cost: totalCost })
 
-    // Brand breakdown for doughnut
+    // ── Risk trend: this month vs last month ─────────────────────────────────
+    const now = new Date()
+    const thisM = { y: now.getFullYear(), m: now.getMonth() + 1 }
+    const lastM = now.getMonth() === 0
+      ? { y: now.getFullYear() - 1, m: 12 }
+      : { y: now.getFullYear(), m: now.getMonth() }
+
+    const inMonth = (t, { y, m }) => {
+      if (!t.issue_date) return false
+      const d = new Date(t.issue_date)
+      return d.getFullYear() === y && d.getMonth() + 1 === m
+    }
+    const isHigh = t => t.risk_level === 'Critical' || t.risk_level === 'High'
+    const thisHigh = tyres.filter(t => inMonth(t, thisM) && isHigh(t)).length
+    const lastHigh = tyres.filter(t => inMonth(t, lastM) && isHigh(t)).length
+    const delta    = thisHigh - lastHigh
+    setRiskTrend({ delta, lastHigh })
+
+    // ── Brand doughnut ───────────────────────────────────────────────────────
     const brandCounts = {}
-    tyres.forEach(t => {
-      if (t.brand) brandCounts[t.brand] = (brandCounts[t.brand] ?? 0) + 1
-    })
+    tyres.forEach(t => { if (t.brand) brandCounts[t.brand] = (brandCounts[t.brand] ?? 0) + 1 })
     const topBrands = Object.entries(brandCounts).sort((a, b) => b[1] - a[1]).slice(0, 6)
-    if (topBrands.length > 0) {
+    if (topBrands.length) {
       setBrandData({
         labels: topBrands.map(([b]) => b),
-        datasets: [{
-          data: topBrands.map(([, c]) => c),
-          backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'],
-          borderWidth: 0,
-        }],
+        datasets: [{ data: topBrands.map(([, c]) => c), backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'], borderWidth: 0 }],
       })
     }
 
-    // Monthly trend (last 6 months)
-    const now = new Date()
+    // ── Category doughnut ────────────────────────────────────────────────────
+    const catCounts = {}
+    tyres.forEach(t => { if (t.category) catCounts[t.category] = (catCounts[t.category] ?? 0) + 1 })
+    const topCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]).slice(0, 7)
+    if (topCats.length) {
+      setCategoryData({
+        labels: topCats.map(([c]) => c),
+        datasets: [{ data: topCats.map(([, n]) => n), backgroundColor: ['#ef4444','#f97316','#f59e0b','#84cc16','#06b6d4','#8b5cf6','#ec4899'], borderWidth: 0 }],
+      })
+    }
+
+    // ── Monthly trend bar ────────────────────────────────────────────────────
     const months = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1)
       return { label: d.toLocaleString('default', { month: 'short' }), year: d.getFullYear(), month: d.getMonth() + 1 }
     })
-    const monthlyCounts = months.map(({ year, month }) =>
-      tyres.filter(t => {
-        if (!t.issue_date) return false
-        const d = new Date(t.issue_date)
-        return d.getFullYear() === year && d.getMonth() + 1 === month
-      }).length
-    )
     setMonthlyData({
       labels: months.map(m => m.label),
       datasets: [{
-        label: 'Tyre Issues',
-        data: monthlyCounts,
-        backgroundColor: '#3b82f6',
-        borderRadius: 4,
+        label: 'All',
+        data: months.map(({ year, month }) => tyres.filter(t => inMonth(t, { y: year, m: month })).length),
+        backgroundColor: '#3b82f6', borderRadius: 4,
+      }, {
+        label: 'High Risk',
+        data: months.map(({ year, month }) => tyres.filter(t => inMonth(t, { y: year, m: month }) && isHigh(t)).length),
+        backgroundColor: '#ef4444', borderRadius: 4,
       }],
     })
+
+    // ── Top sites by cost (horizontal bar) ───────────────────────────────────
+    const siteCosts = {}
+    tyres.forEach(t => { if (t.site) siteCosts[t.site] = (siteCosts[t.site] ?? 0) + (t.cost_per_tyre ?? 1200) })
+    const topSites = Object.entries(siteCosts).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    if (topSites.length) {
+      setSiteCostData({
+        labels: topSites.map(([s]) => s),
+        datasets: [{ label: 'Cost (SAR)', data: topSites.map(([, c]) => c), backgroundColor: '#7c3aed', borderRadius: 4 }],
+      })
+    }
 
     setRecentRecords(recentRes.data ?? [])
     setOpenActions(openActionsRes.data ?? [])
@@ -104,39 +131,27 @@ export default function Dashboard() {
   }
 
   async function handlePptxExport() {
-    // Gather aggregated data for PPT
-    const [tyreRes, actionRes, siteRes, categoryRes, riskRes] = await Promise.all([
-      supabase.from('tyre_records').select('site, category, risk_level, cost_per_tyre, issue_date'),
+    const [tyreRes, actionRes] = await Promise.all([
+      supabase.from('tyre_records').select('site, category, risk_level, cost_per_tyre, issue_date, brand'),
       supabase.from('corrective_actions').select('title, priority, site, status').eq('status', 'Open').order('created_at', { ascending: false }).limit(20),
-      supabase.from('tyre_records').select('site').not('site', 'is', null),
-      supabase.from('tyre_records').select('category').not('category', 'is', null),
-      supabase.from('tyre_records').select('risk_level').not('risk_level', 'is', null),
     ])
-
     const tyres = tyreRes.data ?? []
+    const now   = new Date()
 
-    // Top sites
-    const siteCounts = {}
-    tyres.forEach(t => { if (t.site) siteCounts[t.site] = (siteCounts[t.site] ?? 0) + 1 })
-    const topSites = Object.entries(siteCounts).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([site, count]) => ({ site, count }))
+    const countBy = (arr, key) => {
+      const m = {}
+      arr.forEach(t => { if (t[key]) m[t[key]] = (m[t[key]] ?? 0) + 1 })
+      return Object.entries(m).sort((a, b) => b[1] - a[1])
+    }
+    const sumBy = (arr, key, valKey) => {
+      const m = {}
+      arr.forEach(t => { if (t[key]) m[t[key]] = (m[t[key]] ?? 0) + (t[valKey] ?? 1200) })
+      return Object.entries(m).sort((a, b) => b[1] - a[1])
+    }
 
-    // Brand breakdown (from already loaded brand data)
-    const brandCounts = {}
-    tyres.forEach(t => { if (t.brand) brandCounts[t.brand] = (brandCounts[t.brand] ?? 0) + 1 })
-    const topBrands = Object.entries(brandCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([brand, count]) => ({ brand, count }))
-
-    // Category breakdown
-    const catCounts = {}
-    tyres.forEach(t => { if (t.category) catCounts[t.category] = (catCounts[t.category] ?? 0) + 1 })
-    const categoryBreakdown = Object.entries(catCounts).sort((a, b) => b[1] - a[1]).map(([category, count]) => ({ category, count }))
-
-    // Risk breakdown
     const riskCounts = { Critical: 0, High: 0, Medium: 0, Low: 0 }
     tyres.forEach(t => { if (t.risk_level && riskCounts[t.risk_level] !== undefined) riskCounts[t.risk_level]++ })
-    const riskBreakdown = Object.entries(riskCounts).map(([level, count]) => ({ level, count }))
 
-    // Monthly trend (last 6 months)
-    const now = new Date()
     const monthlyTrend = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1)
       const count = tyres.filter(t => {
@@ -147,38 +162,32 @@ export default function Dashboard() {
       return { month: d.toLocaleString('default', { month: 'short', year: '2-digit' }), count }
     })
 
-    const totalCost = tyres.reduce((s, t) => s + (t.cost_per_tyre ?? 1200), 0)
-    const highRisk = tyres.filter(t => t.risk_level === 'Critical' || t.risk_level === 'High').length
-
     await exportToPptx({
-      totalTyres: tyres.length,
-      totalCost,
-      openActions: (actionRes.data ?? []).length,
-      highRisk,
-      topSites,
-      categoryBreakdown,
-      riskBreakdown,
+      totalTyres:        tyres.length,
+      totalCost:         tyres.reduce((s, t) => s + (t.cost_per_tyre ?? 1200), 0),
+      openActions:       (actionRes.data ?? []).length,
+      highRisk:          tyres.filter(t => t.risk_level === 'Critical' || t.risk_level === 'High').length,
+      topSites:          sumBy(tyres, 'site', 'cost_per_tyre').slice(0, 12).map(([site, count]) => ({ site, count })),
+      categoryBreakdown: countBy(tyres, 'category').map(([category, count]) => ({ category, count })),
+      riskBreakdown:     Object.entries(riskCounts).map(([level, count]) => ({ level, count })),
       monthlyTrend,
-      recentActions: actionRes.data ?? [],
-      period: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
-      company: 'Readymix Concrete Company',
-    }, `TyrePulse_Report_${new Date().toISOString().slice(0, 10)}`)
+      recentActions:     actionRes.data ?? [],
+      period:            now.toLocaleString('default', { month: 'long', year: 'numeric' }),
+      company:           'Readymix Concrete Company',
+    }, `TyrePulse_Report_${now.toISOString().slice(0, 10)}`)
   }
 
-  const riskBadge = (level) => {
-    const map = { Critical: 'bg-red-900/50 text-red-300', High: 'bg-orange-900/50 text-orange-300', Medium: 'bg-yellow-900/50 text-yellow-300', Low: 'bg-green-900/50 text-green-300' }
-    return map[level] ?? 'bg-gray-800 text-gray-400'
-  }
-
-  const priorityBadge = (p) => {
-    const map = { High: 'bg-red-900/50 text-red-300', Medium: 'bg-yellow-900/50 text-yellow-300', Low: 'bg-blue-900/50 text-blue-300' }
-    return map[p] ?? 'bg-gray-800 text-gray-400'
-  }
+  const riskBadge     = l => ({ Critical: 'bg-red-900/50 text-red-300', High: 'bg-orange-900/50 text-orange-300', Medium: 'bg-yellow-900/50 text-yellow-300', Low: 'bg-green-900/50 text-green-300' }[l] ?? 'bg-gray-800 text-gray-400')
+  const priorityBadge = p => ({ High: 'bg-red-900/50 text-red-300', Medium: 'bg-yellow-900/50 text-yellow-300', Low: 'bg-blue-900/50 text-blue-300' }[p] ?? 'bg-gray-800 text-gray-400')
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 rounded-full border-2 border-gray-700 border-t-blue-500" /></div>
 
+  const TrendIcon = riskTrend?.delta > 0 ? TrendingUp : riskTrend?.delta < 0 ? TrendingDown : Minus
+  const trendCol  = riskTrend?.delta > 0 ? 'text-red-400' : riskTrend?.delta < 0 ? 'text-green-400' : 'text-gray-500'
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Dashboard</h1>
@@ -189,38 +198,68 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Stats */}
+      {/* KPI stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        <StatCard label="Total Tyres" value={stats.tyres.toLocaleString()} icon={CircleDot} color="blue" />
-        <StatCard label="Stock Sites" value={stats.stock.toLocaleString()} icon={Package} color="green" />
-        <StatCard label="Open Actions" value={stats.actions.toLocaleString()} icon={ClipboardList} color="yellow" />
-        <StatCard label="High Risk" value={stats.critical.toLocaleString()} icon={AlertTriangle} color="red" />
-        <StatCard label="Total Cost" value={`SAR ${(stats.cost / 1000).toFixed(0)}K`} icon={DollarSign} color="purple" />
+        <StatCard label="Total Tyres"  value={stats.tyres.toLocaleString()}                     icon={CircleDot}    color="blue" />
+        <StatCard label="Stock Sites"  value={stats.stock.toLocaleString()}                     icon={Package}      color="green" />
+        <StatCard label="Open Actions" value={stats.actions.toLocaleString()}                   icon={ClipboardList} color="yellow" />
+        <StatCard label="High Risk"    value={stats.critical.toLocaleString()}                  icon={AlertTriangle} color="red" />
+        <StatCard label="Total Cost"   value={`SAR ${(stats.cost / 1000).toFixed(0)}K`}         icon={DollarSign}   color="purple" />
       </div>
 
-      {/* Charts */}
+      {/* Risk trend callout */}
+      {riskTrend && (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm ${riskTrend.delta > 0 ? 'bg-red-900/20 border-red-800/50 text-red-300' : riskTrend.delta < 0 ? 'bg-green-900/20 border-green-800/50 text-green-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+          <TrendIcon size={18} className={trendCol} />
+          {riskTrend.delta === 0
+            ? 'High-risk record count is unchanged from last month.'
+            : `High-risk records are ${riskTrend.delta > 0 ? 'up' : 'down'} ${Math.abs(riskTrend.delta)} vs last month (${riskTrend.lastHigh} last month).`}
+        </div>
+      )}
+
+      {/* Row 1: Monthly trend + Brand doughnut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card lg:col-span-2">
           <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp size={16} /> Monthly Tyre Issues</h2>
           <div className="h-56">
-            {monthlyData ? <Bar data={monthlyData} options={CHART_OPTIONS} /> : <p className="text-gray-500 text-sm">No data</p>}
+            {monthlyData
+              ? <Bar data={monthlyData} options={{ ...BASE_OPTS, plugins: { ...BASE_OPTS.plugins, legend: { labels: { color: '#9ca3af', boxWidth: 10 } } } }} />
+              : <p className="text-gray-500 text-sm">No data</p>}
           </div>
         </div>
         <div className="card">
           <h2 className="text-base font-semibold text-white mb-4">Brand Breakdown</h2>
           <div className="h-56 flex items-center justify-center">
-            {brandData ? <Doughnut data={brandData} options={{ ...CHART_OPTIONS, scales: undefined }} /> : <p className="text-gray-500 text-sm">No data</p>}
+            {brandData ? <Doughnut data={brandData} options={NO_SCALE_OPTS} /> : <p className="text-gray-500 text-sm">No data</p>}
           </div>
         </div>
       </div>
 
-      {/* Recent Records + Open Actions */}
+      {/* Row 2: Category doughnut + Top sites by cost */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="card">
+          <h2 className="text-base font-semibold text-white mb-4">Failure Category Mix</h2>
+          <div className="h-56 flex items-center justify-center">
+            {categoryData
+              ? <Doughnut data={categoryData} options={NO_SCALE_OPTS} />
+              : <p className="text-gray-500 text-sm">No classified records yet — run Data Cleaning to populate</p>}
+          </div>
+        </div>
+        <div className="card">
+          <h2 className="text-base font-semibold text-white mb-4">Top Sites by Spend (SAR)</h2>
+          <div className="h-56">
+            {siteCostData
+              ? <Bar data={siteCostData} options={{ ...BASE_OPTS, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#9ca3af', callback: v => `${(v/1000).toFixed(0)}K` }, grid: { color: '#1f2937' } }, y: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } } } }} />
+              : <p className="text-gray-500 text-sm">No data</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Recent records + Open actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
           <h2 className="text-base font-semibold text-white mb-4">Recent Tyre Records</h2>
-          {recentRecords.length === 0 ? (
-            <p className="text-gray-500 text-sm">No records yet</p>
-          ) : (
+          {recentRecords.length === 0 ? <p className="text-gray-500 text-sm">No records yet</p> : (
             <div className="space-y-2">
               {recentRecords.map(r => (
                 <div key={r.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">
@@ -240,9 +279,7 @@ export default function Dashboard() {
 
         <div className="card">
           <h2 className="text-base font-semibold text-white mb-4">Open Corrective Actions</h2>
-          {openActions.length === 0 ? (
-            <p className="text-gray-500 text-sm">No open actions</p>
-          ) : (
+          {openActions.length === 0 ? <p className="text-gray-500 text-sm">No open actions</p> : (
             <div className="space-y-2">
               {openActions.map(a => (
                 <div key={a.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">

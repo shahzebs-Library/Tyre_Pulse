@@ -106,6 +106,48 @@ This creates a `get_my_role()` helper function and replaces the permissive "full
 
 ---
 
+### Step 1.4a — Run Multi-Country Migrations
+
+1. In SQL Editor → **New Query**
+2. Open `MIGRATIONS_V2.sql` from this repo
+3. Copy entire contents → paste → **Run**
+
+This adds:
+- `country` column (KSA / UAE / Egypt) to `tyre_records`, `stock_records`, `budgets`, `corrective_actions`, `inspections`, `upload_history`, and `stock_movements`
+- `km_at_fitment` and `km_at_removal` columns to `tyre_records` (for CPK calculation)
+- Currency settings rows for SAR, AED, and EGP
+- Performance indexes on the new columns
+
+> **Must be run after BACKEND_RLS.sql** so the existing tables and RLS policies are already in place.
+
+---
+
+### Step 1.4b — Run the Master Data Engine
+
+1. In SQL Editor → **New Query**
+2. Open `MASTER_ENGINE.sql` from this repo
+3. Copy entire contents → paste → **Run**
+
+This installs the full data processing engine at the database level:
+
+| Component | What it does |
+|---|---|
+| **`brand_aliases` table** | Canonical brand name lookup (Bridgestone, Michelin, Goodyear …) |
+| **`normalize_brand()`** | Cleans any brand alias → canonical name on every insert/update |
+| **`normalize_site()`** | Trims and title-cases site names |
+| **`normalize_country()`** | Maps KSA/SA/Saudi Arabia → 'KSA', UAE/Dubai → 'UAE', Egypt/Cairo → 'Egypt' |
+| **`calc_cpk()`** | Null-safe Cost Per Kilometre calculation |
+| **Insert/Update trigger** | Auto-normalises every row before it hits the database (country, brand, qty, cost, km columns) |
+| **`v_tyre_master` view** | Clean, enriched read surface with CPK, total cost, age in days |
+| **`v_data_quality_issues` view** | Flags rows with missing fields, unusual costs, inverted km values |
+| **`get_country_kpi()` RPC** | Returns KPI summary per country (used by the KPI Scorecard) |
+| **`check_duplicate_serials()` RPC** | Pre-upload duplicate detection |
+| **Backfill pass** | Normalises any existing rows using the new rules |
+
+> **Data quality guarantee:** Any upload path (Excel import, manual entry, direct SQL) is automatically cleaned and validated by the trigger. You never need to manually fix country names, brand aliases, or inverted KM values.
+
+---
+
 ### Step 1.5 — Set Up Photo Storage
 
 1. In Supabase dashboard → **Storage** (left sidebar)
@@ -405,6 +447,8 @@ tyre_pulse/
 ├── SUPABASE_SCHEMA.sql     ← Run this FIRST in Supabase SQL Editor
 ├── MIGRATIONS.sql          ← Run this SECOND (Phase 2 tables)
 ├── BACKEND_RLS.sql         ← Run this THIRD (role-based access control)
+├── MIGRATIONS_V2.sql       ← Run this FOURTH (multi-country, CPK columns)
+├── MASTER_ENGINE.sql       ← Run this FIFTH (data normalisation engine)
 ├── .env.example            ← Copy to .env and fill in your keys
 ├── index.html
 ├── vite.config.js
@@ -511,7 +555,7 @@ vercel --prod
 # or: git push (if Vercel is connected to GitHub, it deploys automatically)
 ```
 
-If new SQL migrations are needed, they will be in `MIGRATIONS.sql` — run only the new sections in Supabase SQL Editor.
+If new SQL migrations are needed, they will be in `MIGRATIONS.sql` or a versioned file like `MIGRATIONS_V2.sql` — run only the new sections in Supabase SQL Editor. The `MASTER_ENGINE.sql` file is idempotent (`CREATE OR REPLACE`) and can be re-run safely to pick up any updates.
 
 ---
 

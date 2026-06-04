@@ -83,7 +83,7 @@ export default function Login() {
           </div>
           <h1 className="text-4xl font-bold text-white tracking-tight">TyrePulse</h1>
           <p className="text-gray-400 mt-2 text-sm tracking-wide">Tyre Intelligence Platform</p>
-          <p className="text-gray-600 text-xs mt-1">Readymix Concrete Company · KSA</p>
+          <p className="text-gray-600 text-xs mt-1">Tyre Intelligence Platform</p>
         </div>
 
         {/* Card */}
@@ -137,18 +137,18 @@ export default function Login() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Full Name</label>
-                  <input className="input" placeholder="Ahmed Al-Rashid"
+                  <input className="input" placeholder="Your full name"
                     value={fullName} onChange={e => setFullName(e.target.value)} />
                 </div>
                 <div>
                   <label className="label">Username *</label>
-                  <input className="input" placeholder="arashid"
+                  <input className="input" placeholder="username"
                     value={username} onChange={e => setUsername(e.target.value)} required />
                 </div>
               </div>
               <div>
                 <label className="label">Email *</label>
-                <input type="email" className="input" placeholder="you@readymix.com.sa"
+                <input type="email" className="input" placeholder="you@company.com"
                   value={email} onChange={e => setEmail(e.target.value)} required />
               </div>
               <div>

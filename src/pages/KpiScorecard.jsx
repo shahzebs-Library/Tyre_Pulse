@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 import {
   bucketByMonth, forecastMonthly, linearRegression,
   computeMonthlyKpiActuals, sum,
@@ -31,6 +32,7 @@ const KPI_LABELS = {
 
 export default function KpiScorecard() {
   const { profile } = useAuth()
+  const { appSettings } = useSettings()
   const [records, setRecords]   = useState([])
   const [actions, setActions]   = useState([])
   const [targets, setTargets]   = useState(DEFAULT_TARGETS)
@@ -76,8 +78,8 @@ export default function KpiScorecard() {
   }, [])
 
   const actuals = useMemo(() =>
-    months.map(m => computeMonthlyKpiActuals(records, actions, m)),
-    [records, actions, months]
+    months.map(m => computeMonthlyKpiActuals(records, actions, m, appSettings.cost_per_tyre)),
+    [records, actions, months, appSettings.cost_per_tyre]
   )
 
   // Cost trend with forecasts

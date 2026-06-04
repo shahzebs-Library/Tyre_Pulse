@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, linearRegression } from '../lib/analyticsEngine'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
@@ -18,6 +19,7 @@ const RISK_BADGE = {
 }
 
 export default function FleetAnalytics() {
+  const { appSettings } = useSettings()
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
@@ -35,7 +37,7 @@ export default function FleetAnalytics() {
       })
   }, [])
 
-  const assetMetrics = useMemo(() => computeAssetMetrics(records), [records])
+  const assetMetrics = useMemo(() => computeAssetMetrics(records, appSettings.cost_per_tyre), [records, appSettings.cost_per_tyre])
 
   const sorted = useMemo(() => {
     const arr = [...assetMetrics]
@@ -152,16 +154,16 @@ export default function FleetAnalytics() {
       </div>
 
       {/* Drill-down */}
-      {selectedAsset && <AssetDrillDown asset={selectedAsset} />}
+      {selectedAsset && <AssetDrillDown asset={selectedAsset} defaultCost={appSettings.cost_per_tyre} />}
     </div>
   )
 }
 
-function AssetDrillDown({ asset }) {
+function AssetDrillDown({ asset, defaultCost = 1200 }) {
   const monthly = useMemo(() =>
     bucketByMonth(asset.records, r => r.issue_date,
-      r => (r.cost_per_tyre || 1200) * (r.qty || 1)),
-    [asset]
+      r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)),
+    [asset, defaultCost]
   )
 
   const points    = monthly.map((d, i) => [i, d.count])
@@ -316,7 +318,7 @@ function AssetDrillDown({ asset }) {
                     </span>
                   </td>
                   <td className="py-1.5 pr-3 text-right text-gray-400">
-                    SAR {((r.cost_per_tyre || 1200) * (r.qty || 1)).toLocaleString()}
+                    SAR {((r.cost_per_tyre || defaultCost) * (r.qty || 1)).toLocaleString()}
                   </td>
                   <td className="py-1.5 text-gray-500 max-w-xs truncate">{r.remarks_cleaned || r.remarks || '—'}</td>
                 </tr>

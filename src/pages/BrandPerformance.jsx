@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { useSettings } from '../contexts/SettingsContext'
 import { computeBrandMetrics, linearRegression, bucketByMonth } from '../lib/analyticsEngine'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
@@ -20,6 +21,7 @@ const CHART_OPTS = (horizontal = false) => ({
 })
 
 export default function BrandPerformance() {
+  const { appSettings } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
@@ -32,7 +34,7 @@ export default function BrandPerformance() {
       .then(({ data }) => { setRecords(data || []); setLoading(false) })
   }, [])
 
-  const metrics = useMemo(() => computeBrandMetrics(records), [records])
+  const metrics = useMemo(() => computeBrandMetrics(records, appSettings.cost_per_tyre), [records, appSettings.cost_per_tyre])
   const selectedData = useMemo(() =>
     selected ? records.filter(r => r.brand === selected) : [],
     [records, selected]
@@ -149,15 +151,15 @@ export default function BrandPerformance() {
       </div>
 
       {/* Drill-down panel */}
-      {selected && <BrandDrillDown brand={selected} records={selectedData} />}
+      {selected && <BrandDrillDown brand={selected} records={selectedData} defaultCost={appSettings.cost_per_tyre} />}
     </div>
   )
 }
 
-function BrandDrillDown({ brand, records }) {
+function BrandDrillDown({ brand, records, defaultCost = 1200 }) {
   const monthly = useMemo(() =>
-    bucketByMonth(records, r => r.issue_date, r => (r.cost_per_tyre || 1200) * (r.qty || 1)),
-    [records]
+    bucketByMonth(records, r => r.issue_date, r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)),
+    [records, defaultCost]
   )
 
   const trendPoints = monthly.map((d, i) => [i, d.count])

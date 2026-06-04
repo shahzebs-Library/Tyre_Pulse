@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { Save, User, Settings2 } from 'lucide-react'
 
 export default function Settings() {
   const { profile, user } = useAuth()
+  const { appSettings: globalSettings, refreshSettings } = useSettings()
   const [appSettings, setAppSettings] = useState({ cost_per_tyre: 1200, company_name: '', currency: 'SAR' })
   const [profileForm, setProfileForm] = useState({ full_name: '', username: '' })
   const [savingApp, setSavingApp] = useState(false)
@@ -17,6 +19,10 @@ export default function Settings() {
     loadSettings()
     loadUploadHistory()
   }, [])
+
+  useEffect(() => {
+    setAppSettings(s => ({ ...s, ...globalSettings }))
+  }, [globalSettings])
 
   useEffect(() => {
     if (profile) {
@@ -51,6 +57,7 @@ export default function Settings() {
       supabase.from('settings').upsert({ key: 'company_name', value: JSON.stringify(appSettings.company_name), updated_by: profile?.id }, { onConflict: 'key' }),
       supabase.from('settings').upsert({ key: 'currency', value: JSON.stringify(appSettings.currency), updated_by: profile?.id }, { onConflict: 'key' }),
     ])
+    await refreshSettings()
     setAppMsg('Settings saved')
     setSavingApp(false)
     setTimeout(() => setAppMsg(''), 3000)

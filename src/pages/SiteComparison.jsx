@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { useSettings } from '../contexts/SettingsContext'
 import { computeSiteMetrics, buildSiteRadar, bucketByMonth } from '../lib/analyticsEngine'
 import {
   Chart as ChartJS, RadialLinearScale, PointElement, LineElement,
@@ -16,6 +17,7 @@ const SITE_COLORS = [
 ]
 
 export default function SiteComparison() {
+  const { appSettings } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedSites, setSelectedSites] = useState([])
@@ -37,7 +39,7 @@ export default function SiteComparison() {
       })
   }, [])
 
-  const allMetrics = useMemo(() => computeSiteMetrics(records), [records])
+  const allMetrics = useMemo(() => computeSiteMetrics(records, appSettings.cost_per_tyre), [records, appSettings.cost_per_tyre])
   const allSites   = useMemo(() => allMetrics.map(s => s.site), [allMetrics])
 
   const filteredMetrics = useMemo(
@@ -189,7 +191,7 @@ export default function SiteComparison() {
           )}
 
           {/* Monthly trend comparison */}
-          <MonthlyComparison metrics={filteredMetrics} records={records} selectedSites={selectedSites} />
+          <MonthlyComparison metrics={filteredMetrics} records={records} selectedSites={selectedSites} defaultCost={appSettings.cost_per_tyre} />
         </>
       )}
     </div>
@@ -205,14 +207,14 @@ function KpiRow({ label, value, highlight }) {
   )
 }
 
-function MonthlyComparison({ metrics, records, selectedSites }) {
+function MonthlyComparison({ metrics, records, selectedSites, defaultCost = 1200 }) {
   const datasets = useMemo(() => {
     return selectedSites.map((site, i) => {
       const siteRecs = records.filter(r => r.site === site)
-      const monthly  = bucketByMonth(siteRecs, r => r.issue_date, r => (r.cost_per_tyre || 1200) * (r.qty || 1))
+      const monthly  = bucketByMonth(siteRecs, r => r.issue_date, r => (r.cost_per_tyre || defaultCost) * (r.qty || 1))
       return { site, monthly, color: SITE_COLORS[i % SITE_COLORS.length] }
     })
-  }, [records, selectedSites])
+  }, [records, selectedSites, defaultCost])
 
   // Build unified month axis
   const allMonths = useMemo(() => {

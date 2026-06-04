@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
 import {
@@ -17,16 +18,17 @@ const RISK_BADGE = {
   Low: 'bg-green-900/50 text-green-300',
 }
 
-const EMPTY_FORM = {
+const EMPTY_FORM = (defaultCost = 1200) => ({
   sr: '', issue_date: '', description: '', brand: '', serial_no: '',
   qty: 1, job_card: '', mis_number: '', asset_no: '', site: '',
-  remarks: '', cost_per_tyre: 1200, risk_level: '', category: '',
-}
+  remarks: '', cost_per_tyre: defaultCost, risk_level: '', category: '',
+})
 
 const EMPTY_BULK = { site: '', brand: '', cost_per_tyre: '', risk_level: '', category: '' }
 
 export default function TyreRecords() {
   const { profile } = useAuth()
+  const { appSettings } = useSettings()
 
   // ── data ────────────────────────────────────────────────────────────────────
   const [records, setRecords]         = useState([])
@@ -52,7 +54,7 @@ export default function TyreRecords() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [saving, setSaving]               = useState(false)
   const [formError, setFormError]         = useState('')
-  const [form, setForm]                   = useState(EMPTY_FORM)
+  const [form, setForm]                   = useState(() => EMPTY_FORM())
   const [bulkForm, setBulkForm]           = useState(EMPTY_BULK)
 
   // ── load ────────────────────────────────────────────────────────────────────
@@ -107,7 +109,7 @@ export default function TyreRecords() {
 
   // ── add / edit ───────────────────────────────────────────────────────────────
   function openAdd() {
-    setForm({ ...EMPTY_FORM })
+    setForm(EMPTY_FORM(appSettings.cost_per_tyre))
     setEditRecord({})
     setFormError('')
   }
@@ -117,7 +119,7 @@ export default function TyreRecords() {
       sr: r.sr ?? '', issue_date: r.issue_date ?? '', description: r.description ?? '',
       brand: r.brand ?? '', serial_no: r.serial_no ?? '', qty: r.qty ?? 1,
       job_card: r.job_card ?? '', mis_number: r.mis_number ?? '', asset_no: r.asset_no ?? '',
-      site: r.site ?? '', remarks: r.remarks ?? '', cost_per_tyre: r.cost_per_tyre ?? 1200,
+      site: r.site ?? '', remarks: r.remarks ?? '', cost_per_tyre: r.cost_per_tyre ?? appSettings.cost_per_tyre,
       risk_level: r.risk_level ?? '', category: r.category ?? '',
     })
     setEditRecord(r)
@@ -131,7 +133,7 @@ export default function TyreRecords() {
     const payload = {
       ...form,
       qty: +form.qty || 1,
-      cost_per_tyre: +form.cost_per_tyre || 1200,
+      cost_per_tyre: +form.cost_per_tyre || appSettings.cost_per_tyre,
       region: profile?.region ?? 'KSA',
       uploaded_by: profile?.id,
     }
@@ -294,7 +296,7 @@ export default function TyreRecords() {
                   <td className="table-cell">
                     {r.risk_level ? <span className={`badge ${RISK_BADGE[r.risk_level] ?? 'bg-gray-800 text-gray-400'}`}>{r.risk_level}</span> : '—'}
                   </td>
-                  <td className="table-cell">SAR {(r.cost_per_tyre ?? 1200).toLocaleString()}</td>
+                  <td className="table-cell">SAR {(r.cost_per_tyre ?? appSettings.cost_per_tyre).toLocaleString()}</td>
                   <td className="table-cell">
                     <div className="flex items-center gap-2">
                       <button onClick={() => setDetailRecord(r)} className="text-gray-400 hover:text-blue-400 transition-colors" title="View"><Eye size={15} /></button>

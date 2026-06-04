@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { Plus, Save, X, Download, FileText } from 'lucide-react'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -19,6 +20,7 @@ const EMPTY_FORM = { site: '', monthly_budget: 25000, year: CURRENT_YEAR, month:
 
 export default function Budgets() {
   const { profile }   = useAuth()
+  const { appSettings } = useSettings()
   const [budgets, setBudgets]     = useState([])
   const [spending, setSpending]   = useState({})   // { 'site-year-month': number }
   const [loading, setLoading]     = useState(true)
@@ -53,7 +55,7 @@ export default function Budgets() {
       const spend = {}
       ;(tyreRes.data ?? []).forEach(t => {
         const key = `${t.site}~${filterYear}~${filterMonth}`
-        spend[key] = (spend[key] ?? 0) + (t.cost_per_tyre ?? 1200) * (t.qty ?? 1)
+        spend[key] = (spend[key] ?? 0) + (t.cost_per_tyre ?? appSettings.cost_per_tyre) * (t.qty ?? 1)
       })
       setSpending(spend)
     } else {
@@ -73,7 +75,7 @@ export default function Budgets() {
         const d = new Date(t.issue_date)
         const m = d.getMonth() + 1
         const key = `${t.site}~${plannerYear}~${m}`
-        spend[key] = (spend[key] ?? 0) + (t.cost_per_tyre ?? 1200) * (t.qty ?? 1)
+        spend[key] = (spend[key] ?? 0) + (t.cost_per_tyre ?? appSettings.cost_per_tyre) * (t.qty ?? 1)
       })
       setSpending(spend)
     }

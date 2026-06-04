@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 import StatCard from '../components/StatCard'
 import { exportToPptx } from '../lib/exportUtils'
 import { Bar, Doughnut } from 'react-chartjs-2'
@@ -28,6 +29,7 @@ const NO_SCALE_OPTS = { ...BASE_OPTS, scales: undefined }
 
 export default function Dashboard() {
   const { profile } = useAuth()
+  const { appSettings } = useSettings()
   const [stats, setStats]             = useState({ tyres: 0, stock: 0, actions: 0, critical: 0, cost: 0 })
   const [riskTrend, setRiskTrend]     = useState(null)   // { delta, pct }
   const [brandData, setBrandData]     = useState(null)
@@ -50,7 +52,8 @@ export default function Dashboard() {
     ])
 
     const tyres = tyreRes.data ?? []
-    const totalCost = tyres.reduce((s, t) => s + (t.cost_per_tyre ?? 1200), 0)
+    const dc = appSettings.cost_per_tyre
+    const totalCost = tyres.reduce((s, t) => s + (t.cost_per_tyre ?? dc), 0)
     const critical  = tyres.filter(t => t.risk_level === 'Critical' || t.risk_level === 'High').length
     const openCount = (actionRes.data ?? []).filter(a => a.status === 'Open').length
 
@@ -116,7 +119,7 @@ export default function Dashboard() {
 
     // ── Top sites by cost (horizontal bar) ───────────────────────────────────
     const siteCosts = {}
-    tyres.forEach(t => { if (t.site) siteCosts[t.site] = (siteCosts[t.site] ?? 0) + (t.cost_per_tyre ?? 1200) })
+    tyres.forEach(t => { if (t.site) siteCosts[t.site] = (siteCosts[t.site] ?? 0) + (t.cost_per_tyre ?? dc) })
     const topSites = Object.entries(siteCosts).sort((a, b) => b[1] - a[1]).slice(0, 8)
     if (topSites.length) {
       setSiteCostData({
@@ -145,7 +148,7 @@ export default function Dashboard() {
     }
     const sumBy = (arr, key, valKey) => {
       const m = {}
-      arr.forEach(t => { if (t[key]) m[t[key]] = (m[t[key]] ?? 0) + (t[valKey] ?? 1200) })
+      arr.forEach(t => { if (t[key]) m[t[key]] = (m[t[key]] ?? 0) + (t[valKey] ?? appSettings.cost_per_tyre) })
       return Object.entries(m).sort((a, b) => b[1] - a[1])
     }
 
@@ -164,7 +167,7 @@ export default function Dashboard() {
 
     await exportToPptx({
       totalTyres:        tyres.length,
-      totalCost:         tyres.reduce((s, t) => s + (t.cost_per_tyre ?? 1200), 0),
+      totalCost:         tyres.reduce((s, t) => s + (t.cost_per_tyre ?? appSettings.cost_per_tyre), 0),
       openActions:       (actionRes.data ?? []).length,
       highRisk:          tyres.filter(t => t.risk_level === 'Critical' || t.risk_level === 'High').length,
       topSites:          sumBy(tyres, 'site', 'cost_per_tyre').slice(0, 12).map(([site, count]) => ({ site, count })),
@@ -173,7 +176,7 @@ export default function Dashboard() {
       monthlyTrend,
       recentActions:     actionRes.data ?? [],
       period:            now.toLocaleString('default', { month: 'long', year: 'numeric' }),
-      company:           'Readymix Concrete Company',
+      company:           appSettings.company_name || 'TyrePulse',
     }, `TyrePulse_Report_${now.toISOString().slice(0, 10)}`)
   }
 

@@ -37,13 +37,21 @@ export default function Login() {
     if (authErr) { setError(authErr.message); setLoading(false); return }
 
     if (data?.user) {
-      await supabase.from('profiles').insert({
+      const { error: profileErr } = await supabase.from('profiles').insert({
         id:        data.user.id,
         username:  username.trim(),
         full_name: fullName.trim() || null,
         role:      'Reporter',
         region:    'KSA',
       })
+      // Profile creation may fail silently if email confirmation is required
+      // (user isn't authenticated yet when insert runs). The database trigger
+      // handle_new_user() will create the row automatically on confirmation.
+      if (profileErr && profileErr.code !== '42501' && profileErr.code !== '23505') {
+        // 42501 = RLS denied (expected when email not yet confirmed)
+        // 23505 = duplicate — trigger already created it
+        console.warn('Profile insert warning:', profileErr.message)
+      }
     }
 
     setSignupDone(true)

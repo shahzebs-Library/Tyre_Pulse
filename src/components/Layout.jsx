@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CircleDot, Package, DollarSign,
   ClipboardList, Search, Upload, Settings, LogOut,
   Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
-  Bell, GitBranch, Layers,
+  Bell, GitBranch, Layers, AlertTriangle,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -24,6 +24,7 @@ const navItems = [
   { to: '/rca',         label: 'Root Cause Analysis',icon: Search },
   { to: '/inspections', label: 'Inspections',       icon: ClipboardCheck },
   { to: '/alerts',      label: 'Alerts',            icon: Bell },
+  { to: '/anomalies',   label: 'Anomaly Detection', icon: AlertTriangle },
   { to: '/cleaning',    label: 'Data Cleaning',     icon: Wand2 },
   { to: '/upload',      label: 'Upload Data',       icon: Upload },
   { to: '/settings',    label: 'Settings',          icon: Settings },

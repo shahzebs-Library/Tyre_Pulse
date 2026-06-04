@@ -19,6 +19,7 @@ import FleetAnalytics from './pages/FleetAnalytics'
 import KpiScorecard from './pages/KpiScorecard'
 import Inspections from './pages/Inspections'
 import Alerts from './pages/Alerts'
+import Anomalies from './pages/Anomalies'
 
 export default function App() {
   return (
@@ -45,6 +46,7 @@ export default function App() {
                     <Route path="/rca"         element={<RcaRecords />} />
                     <Route path="/inspections" element={<Inspections />} />
                     <Route path="/alerts"      element={<Alerts />} />
+                    <Route path="/anomalies"   element={<Anomalies />} />
                     <Route path="/cleaning"    element={<DataCleaning />} />
                     <Route path="/upload"      element={<UploadData />} />
                     <Route path="/settings"    element={<Settings />} />

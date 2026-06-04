@@ -18,17 +18,18 @@ const RISK_BADGE = {
   Low: 'bg-green-900/50 text-green-300',
 }
 
-const EMPTY_FORM = (defaultCost = 1200) => ({
+const EMPTY_FORM = (defaultCost = 1200, country = 'KSA') => ({
   sr: '', issue_date: '', description: '', brand: '', serial_no: '',
-  qty: 1, job_card: '', mis_number: '', asset_no: '', site: '',
+  qty: 1, job_card: '', mis_number: '', asset_no: '', site: '', country,
   remarks: '', cost_per_tyre: defaultCost, risk_level: '', category: '',
+  km_at_fitment: '', km_at_removal: '',
 })
 
 const EMPTY_BULK = { site: '', brand: '', cost_per_tyre: '', risk_level: '', category: '' }
 
 export default function TyreRecords() {
   const { profile } = useAuth()
-  const { appSettings } = useSettings()
+  const { appSettings, activeCountry } = useSettings()
 
   // ── data ────────────────────────────────────────────────────────────────────
   const [records, setRecords]         = useState([])
@@ -109,7 +110,7 @@ export default function TyreRecords() {
 
   // ── add / edit ───────────────────────────────────────────────────────────────
   function openAdd() {
-    setForm(EMPTY_FORM(appSettings.cost_per_tyre))
+    setForm(EMPTY_FORM(appSettings.cost_per_tyre, activeCountry !== 'All' ? activeCountry : 'KSA'))
     setEditRecord({})
     setFormError('')
   }
@@ -119,8 +120,10 @@ export default function TyreRecords() {
       sr: r.sr ?? '', issue_date: r.issue_date ?? '', description: r.description ?? '',
       brand: r.brand ?? '', serial_no: r.serial_no ?? '', qty: r.qty ?? 1,
       job_card: r.job_card ?? '', mis_number: r.mis_number ?? '', asset_no: r.asset_no ?? '',
-      site: r.site ?? '', remarks: r.remarks ?? '', cost_per_tyre: r.cost_per_tyre ?? appSettings.cost_per_tyre,
+      site: r.site ?? '', country: r.country ?? 'KSA', remarks: r.remarks ?? '',
+      cost_per_tyre: r.cost_per_tyre ?? appSettings.cost_per_tyre,
       risk_level: r.risk_level ?? '', category: r.category ?? '',
+      km_at_fitment: r.km_at_fitment ?? '', km_at_removal: r.km_at_removal ?? '',
     })
     setEditRecord(r)
     setFormError('')
@@ -134,6 +137,9 @@ export default function TyreRecords() {
       ...form,
       qty: +form.qty || 1,
       cost_per_tyre: +form.cost_per_tyre || appSettings.cost_per_tyre,
+      km_at_fitment: form.km_at_fitment !== '' ? +form.km_at_fitment : null,
+      km_at_removal: form.km_at_removal !== '' ? +form.km_at_removal : null,
+      country: form.country || 'KSA',
       region: profile?.region ?? 'KSA',
       uploaded_by: profile?.id,
     }
@@ -402,7 +408,19 @@ export default function TyreRecords() {
             </div>
             <div><label className="label">Remarks</label><textarea className="input" rows={2} value={form.remarks} onChange={F('remarks')} /></div>
             <div className="grid grid-cols-3 gap-3">
-              <div><label className="label">Cost (SAR)</label><input type="number" className="input" value={form.cost_per_tyre} onChange={F('cost_per_tyre')} min={0} step={100} /></div>
+              <div>
+                <label className="label">Country</label>
+                <select className="input" value={form.country} onChange={F('country')}>
+                  <option value="KSA">KSA</option>
+                  <option value="UAE">UAE</option>
+                  <option value="Egypt">Egypt</option>
+                </select>
+              </div>
+              <div><label className="label">KM at Fitment</label><input type="number" className="input" value={form.km_at_fitment} onChange={F('km_at_fitment')} placeholder="Optional" min={0} /></div>
+              <div><label className="label">KM at Removal</label><input type="number" className="input" value={form.km_at_removal} onChange={F('km_at_removal')} placeholder="Optional" min={0} /></div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><label className="label">Cost</label><input type="number" className="input" value={form.cost_per_tyre} onChange={F('cost_per_tyre')} min={0} step={100} /></div>
               <div>
                 <label className="label">Risk Level</label>
                 <select className="input" value={form.risk_level} onChange={F('risk_level')}>

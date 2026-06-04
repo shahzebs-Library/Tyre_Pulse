@@ -410,3 +410,52 @@ export function buildSiteRadar(siteMetrics) {
     datasets,
   }
 }
+
+/**
+ * Compute CPK (Cost Per Kilometre) for a single record.
+ * Returns null if km data is missing or invalid.
+ */
+export function recordCpk(record) {
+  const kmRun = (record.km_at_removal ?? 0) - (record.km_at_fitment ?? 0)
+  if (kmRun <= 0 || !record.km_at_fitment || !record.km_at_removal) return null
+  return (record.cost_per_tyre || 0) / kmRun
+}
+
+/**
+ * Compute per-country summary metrics.
+ * Returns array sorted by totalCost desc.
+ */
+export function computeCountryMetrics(records, actions = [], defaultCost = 1200) {
+  const countries = [...new Set(records.map(r => r.country || 'KSA'))]
+
+  return countries.map(country => {
+    const recs      = records.filter(r => (r.country || 'KSA') === country)
+    const count     = recs.length
+    const totalCost = sum(recs.map(r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)))
+    const highRisk  = recs.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length
+    const highRiskPct = count ? (highRisk / count) * 100 : 0
+
+    const cpkValues = recs.map(r => recordCpk(r)).filter(v => v !== null)
+    const avgCpk    = cpkValues.length ? mean(cpkValues) : null
+
+    const openActions = actions.filter(a =>
+      (a.country || 'KSA') === country && a.status !== 'Closed'
+    ).length
+
+    const overdueActions = actions.filter(a =>
+      (a.country || 'KSA') === country &&
+      a.status !== 'Closed' &&
+      a.due_date && new Date(a.due_date) < new Date()
+    ).length
+
+    const brands = [...new Set(recs.map(r => r.brand).filter(Boolean))]
+    const sites  = [...new Set(recs.map(r => r.site).filter(Boolean))]
+
+    return {
+      country, count, totalCost, highRiskPct,
+      avgCpk, openActions, overdueActions,
+      brandCount: brands.length, siteCount: sites.length,
+      avgCostPerTyre: count ? totalCost / count : 0,
+    }
+  }).sort((a, b) => b.totalCost - a.totalCost)
+}

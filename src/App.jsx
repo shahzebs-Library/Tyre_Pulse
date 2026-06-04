@@ -21,6 +21,7 @@ import KpiScorecard from './pages/KpiScorecard'
 import Inspections from './pages/Inspections'
 import Alerts from './pages/Alerts'
 import Anomalies from './pages/Anomalies'
+import CountryComparison from './pages/CountryComparison'
 
 export default function App() {
   return (
@@ -48,7 +49,8 @@ export default function App() {
                     <Route path="/rca"         element={<RcaRecords />} />
                     <Route path="/inspections" element={<Inspections />} />
                     <Route path="/alerts"      element={<Alerts />} />
-                    <Route path="/anomalies"   element={<Anomalies />} />
+                    <Route path="/anomalies"     element={<Anomalies />} />
+                    <Route path="/country-comp" element={<CountryComparison />} />
                     <Route path="/cleaning"    element={<DataCleaning />} />
                     <Route path="/upload"      element={<UploadData />} />
                     <Route path="/settings"    element={<Settings />} />

@@ -2,8 +2,15 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 
+export const COUNTRIES = ['KSA', 'UAE', 'Egypt']
+export const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
+export const COUNTRY_LABEL = { KSA: 'KSA', UAE: 'UAE', Egypt: 'EGY' }
+
 const SettingsContext = createContext({
   appSettings: { cost_per_tyre: 1200, company_name: 'TyrePulse', currency: 'SAR' },
+  activeCountry: 'All',
+  setActiveCountry: () => {},
+  activeCurrency: 'SAR',
   refreshSettings: () => {},
 })
 
@@ -14,6 +21,11 @@ export function SettingsProvider({ children }) {
     company_name: 'TyrePulse',
     currency: 'SAR',
   })
+  const [activeCountry, setActiveCountry] = useState('All')
+
+  const activeCurrency = activeCountry === 'All'
+    ? appSettings.currency
+    : (COUNTRY_CURRENCY[activeCountry] ?? appSettings.currency)
 
   const refreshSettings = useCallback(async () => {
     const { data } = await supabase.from('settings').select('key, value')
@@ -30,7 +42,11 @@ export function SettingsProvider({ children }) {
   }, [user, refreshSettings])
 
   return (
-    <SettingsContext.Provider value={{ appSettings, refreshSettings }}>
+    <SettingsContext.Provider value={{
+      appSettings, refreshSettings,
+      activeCountry, setActiveCountry,
+      activeCurrency,
+    }}>
       {children}
     </SettingsContext.Provider>
   )

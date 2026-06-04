@@ -3,5 +3,11 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  build: { outDir: 'dist', sourcemap: false }
+  build: { outDir: 'dist', sourcemap: false },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.js'],
+    exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**'],
+  },
 })

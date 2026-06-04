@@ -42,7 +42,7 @@ export const CATEGORIES = {
     weight: 10,
     patterns: [
       /separat/i,
-      /delaminate/i,
+      /delaminat/i,
       /belt[-\s]?separat/i,
       /tread[-\s]?peel/i,
       /peel[-\s]?off/i,
@@ -251,7 +251,7 @@ function cleanText(text) {
  * @returns {{ category, risk_level, remarks_cleaned, confidence, matched_keywords }}
  */
 export function classifyTyre(description = '', remarks = '') {
-  const combined = `${description} ${remarks}`.toLowerCase()
+  const combined = expandAbbreviations(`${description} ${remarks}`).toLowerCase()
   const results = []
 
   for (const [key, def] of Object.entries(CATEGORIES)) {

@@ -128,9 +128,9 @@ export default function Layout({ children }) {
   }
 
   return (
-    <div className="flex h-screen bg-gray-950 overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ background: 'transparent' }}>
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-200`}>
+      <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} flex-shrink-0 flex flex-col transition-all duration-200`}>
         {/* Logo */}
         <div className="flex items-center h-16 px-4 border-b border-gray-800 flex-shrink-0">
           <span className="text-2xl">🔄</span>
@@ -202,7 +202,7 @@ export default function Layout({ children }) {
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
-        <div className="p-6">
+        <div className="p-6 max-w-screen-2xl mx-auto">
           {children}
         </div>
       </main>

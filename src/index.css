@@ -2,38 +2,186 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Google Font ────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
-    @apply bg-gray-950 text-gray-100 font-sans;
+    margin: 0;
+    background-color: #080c14;
+    background-image:
+      /* Large radial glow top-left — blue */
+      radial-gradient(ellipse 80% 60% at -10% -10%, rgba(37,99,235,0.18) 0%, transparent 60%),
+      /* Smaller radial glow bottom-right — indigo */
+      radial-gradient(ellipse 60% 50% at 110% 110%, rgba(99,102,241,0.14) 0%, transparent 55%),
+      /* Subtle dot grid */
+      radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 28px 28px;
+    background-attachment: fixed;
+    color: #f1f5f9;
+    min-height: 100vh;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.12);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.22);
   }
 }
 
 @layer components {
+
+  /* ── Buttons ────────────────────────────────────────────────────────── */
   .btn-primary {
-    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-150;
+    @apply inline-flex items-center justify-center gap-2
+           bg-blue-600 hover:bg-blue-500 active:bg-blue-700
+           text-white font-semibold py-2 px-4 rounded-lg
+           transition-all duration-150 shadow-md
+           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-gray-900
+           disabled:opacity-50 disabled:cursor-not-allowed;
+    box-shadow: 0 1px 6px rgba(37,99,235,0.35);
   }
+
   .btn-secondary {
-    @apply bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-150;
+    @apply inline-flex items-center justify-center gap-2
+           bg-gray-800 hover:bg-gray-700 active:bg-gray-900
+           border border-gray-700 hover:border-gray-600
+           text-gray-200 font-medium py-2 px-4 rounded-lg
+           transition-all duration-150
+           focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900;
   }
+
   .btn-danger {
-    @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-150;
+    @apply inline-flex items-center justify-center gap-2
+           bg-red-600 hover:bg-red-500 active:bg-red-700
+           text-white font-semibold py-2 px-4 rounded-lg
+           transition-all duration-150
+           focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-gray-900;
   }
+
+  /* ── Card ───────────────────────────────────────────────────────────── */
   .card {
-    @apply bg-gray-900 border border-gray-800 rounded-xl p-6;
+    background: linear-gradient(135deg, rgba(17,24,39,0.95) 0%, rgba(15,23,42,0.90) 100%);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset,
+      0 4px 24px rgba(0,0,0,0.35);
+    transition: border-color 0.15s ease;
   }
+
+  /* ── Inputs ─────────────────────────────────────────────────────────── */
   .input {
-    @apply bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-500;
+    @apply w-full rounded-lg px-3 py-2 text-gray-100 placeholder-gray-500
+           focus:outline-none transition-all duration-150;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
   }
+  .input:focus {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(59,130,246,0.7);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+  }
+
+  /* ── Label ──────────────────────────────────────────────────────────── */
   .label {
-    @apply block text-sm font-medium text-gray-400 mb-1;
+    @apply block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wide;
   }
+
+  /* ── Table ──────────────────────────────────────────────────────────── */
   .table-header {
-    @apply text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3 bg-gray-800/50;
+    @apply text-left text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 py-3;
+    background: rgba(255,255,255,0.03);
   }
   .table-cell {
-    @apply px-4 py-3 text-sm text-gray-300 border-b border-gray-800;
+    @apply px-4 py-3 text-sm text-gray-300;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
   }
+
+  /* ── Badge ──────────────────────────────────────────────────────────── */
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
+
+  /* ── Page heading ───────────────────────────────────────────────────── */
+  .page-title {
+    @apply text-2xl font-bold text-white tracking-tight;
+  }
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────────────── */
+aside {
+  background: linear-gradient(180deg, rgba(10,14,26,0.98) 0%, rgba(8,12,20,0.96) 100%);
+  border-right: 1px solid rgba(255,255,255,0.06) !important;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+}
+
+/* ── Main content area ─────────────────────────────────────────────────── */
+main {
+  position: relative;
+}
+
+/* ── Login page glow ───────────────────────────────────────────────────── */
+.login-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -5%, rgba(37,99,235,0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 80% 90%, rgba(99,102,241,0.15) 0%, transparent 55%);
+  pointer-events: none;
+}
+
+/* ── Animated gradient ring on login card ──────────────────────────────── */
+.login-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(17,24,39,0.97) 0%, rgba(10,15,28,0.97) 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow:
+    0 0 0 1px rgba(37,99,235,0.12),
+    0 8px 40px rgba(0,0,0,0.6),
+    0 1px 0 rgba(255,255,255,0.05) inset;
+}
+
+/* ── Number / stat animation ────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-in {
+  animation: fadeInUp 0.25s ease-out both;
+}
+
+/* ── Chart canvas sizing ────────────────────────────────────────────────── */
+canvas {
+  max-width: 100%;
+}
+
+/* ── Smooth page transition ─────────────────────────────────────────────── */
+#root > * {
+  animation: fadeInUp 0.2s ease-out;
 }

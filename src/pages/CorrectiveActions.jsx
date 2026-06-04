@@ -1,33 +1,44 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { Plus, Save, X, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 
 const STATUS_ICON = {
-  Open: <AlertCircle size={14} className="text-red-400" />,
+  Open:        <AlertCircle size={14} className="text-red-400" />,
   'In Progress': <Clock size={14} className="text-yellow-400" />,
-  Closed: <CheckCircle size={14} className="text-green-400" />,
+  Closed:      <CheckCircle size={14} className="text-green-400" />,
 }
 
 const PRIORITY_BADGE = {
-  High: 'bg-red-900/50 text-red-300 border border-red-700/50',
+  High:   'bg-red-900/50 text-red-300 border border-red-700/50',
   Medium: 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
-  Low: 'bg-blue-900/50 text-blue-300 border border-blue-700/50',
+  Low:    'bg-blue-900/50 text-blue-300 border border-blue-700/50',
 }
 
-const EMPTY_FORM = { title: '', priority: 'Medium', site: '', description: '', assigned_to: '', status: 'Open', asset_no: '', tyre_serial: '', root_cause: '' }
+const EMPTY_FORM = {
+  title: '', priority: 'Medium', site: '', description: '', assigned_to: '',
+  status: 'Open', asset_no: '', tyre_serial: '', root_cause: '', due_date: '',
+}
+
+function overdueDays(due_date, status) {
+  if (!due_date || status === 'Closed') return null
+  const diff = new Date() - new Date(due_date)
+  const days = Math.floor(diff / (1000 * 86400))
+  return days > 0 ? days : null
+}
 
 export default function CorrectiveActions() {
   const { profile } = useAuth()
-  const [actions, setActions] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [actions, setActions]     = useState([])
+  const [loading, setLoading]     = useState(true)
   const [statusFilter, setStatusFilter] = useState('')
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [editId, setEditId] = useState(null)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [expanded, setExpanded] = useState(null)
+  const [overdueOnly, setOverdueOnly]   = useState(false)
+  const [priorityFilter, setPriorityFilter] = useState('')
+  const [showForm, setShowForm]   = useState(false)
+  const [form, setForm]           = useState(EMPTY_FORM)
+  const [editId, setEditId]       = useState(null)
+  const [saving, setSaving]       = useState(false)
+  const [error, setError]         = useState('')
 
   useEffect(() => { load() }, [statusFilter])
 
@@ -40,9 +51,26 @@ export default function CorrectiveActions() {
     setLoading(false)
   }
 
-  function startAdd() { setForm(EMPTY_FORM); setEditId(null); setShowForm(true); setError('') }
+  function startAdd(prefill = {}) {
+    setForm({ ...EMPTY_FORM, ...prefill })
+    setEditId(null)
+    setShowForm(true)
+    setError('')
+  }
+
   function startEdit(a) {
-    setForm({ title: a.title, priority: a.priority, site: a.site ?? '', description: a.description ?? '', assigned_to: a.assigned_to ?? '', status: a.status, asset_no: a.asset_no ?? '', tyre_serial: a.tyre_serial ?? '', root_cause: a.root_cause ?? '' })
+    setForm({
+      title:        a.title,
+      priority:     a.priority,
+      site:         a.site ?? '',
+      description:  a.description ?? '',
+      assigned_to:  a.assigned_to ?? '',
+      status:       a.status,
+      asset_no:     a.asset_no ?? '',
+      tyre_serial:  a.tyre_serial ?? '',
+      root_cause:   a.root_cause ?? '',
+      due_date:     a.due_date ? a.due_date.split('T')[0] : '',
+    })
     setEditId(a.id)
     setShowForm(true)
     setError('')
@@ -54,8 +82,11 @@ export default function CorrectiveActions() {
     setError('')
     const payload = {
       ...form,
+      due_date: form.due_date || null,
       created_by: editId ? undefined : profile?.id,
-      ...(form.status === 'Closed' && !editId ? { closed_by: profile?.id, closed_at: new Date().toISOString() } : {}),
+      ...(form.status === 'Closed'
+        ? { closed_by: profile?.id, closed_at: new Date().toISOString() }
+        : { closed_by: null, closed_at: null }),
     }
     const { error: err } = editId
       ? await supabase.from('corrective_actions').update(payload).eq('id', editId)
@@ -67,74 +98,132 @@ export default function CorrectiveActions() {
   }
 
   async function closeAction(id) {
-    await supabase.from('corrective_actions').update({ status: 'Closed', closed_by: profile?.id, closed_at: new Date().toISOString() }).eq('id', id)
+    await supabase.from('corrective_actions').update({
+      status: 'Closed',
+      closed_by: profile?.id,
+      closed_at: new Date().toISOString(),
+    }).eq('id', id)
     load()
   }
 
-  const counts = { Open: 0, 'In Progress': 0, Closed: 0 }
-  actions.forEach(a => { if (counts[a.status] !== undefined) counts[a.status]++ })
+  const filtered = useMemo(() => {
+    let arr = actions
+    if (priorityFilter) arr = arr.filter(a => a.priority === priorityFilter)
+    if (overdueOnly)    arr = arr.filter(a => overdueDays(a.due_date, a.status) !== null)
+    return arr
+  }, [actions, priorityFilter, overdueOnly])
+
+  const counts = useMemo(() => {
+    const c = { Open: 0, 'In Progress': 0, Closed: 0 }
+    actions.forEach(a => { if (c[a.status] !== undefined) c[a.status]++ })
+    return c
+  }, [actions])
+
+  const overdueCount = useMemo(() =>
+    actions.filter(a => overdueDays(a.due_date, a.status) !== null).length,
+    [actions]
+  )
+
+  const sites = useMemo(() => [...new Set(actions.map(a => a.site).filter(Boolean))].sort(), [actions])
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Corrective Actions</h1>
-          <p className="text-gray-400 text-sm mt-1">{actions.length} actions</p>
+          <p className="text-gray-400 text-sm mt-1">
+            {actions.length} total
+            {overdueCount > 0 && (
+              <span className="ml-2 text-xs px-2 py-0.5 bg-red-900/40 text-red-400 border border-red-700/50 rounded-full">
+                {overdueCount} overdue
+              </span>
+            )}
+          </p>
         </div>
-        <button onClick={startAdd} className="btn-primary flex items-center gap-2">
+        <button onClick={() => startAdd()} className="btn-primary flex items-center gap-2 text-sm">
           <Plus size={16} /> New Action
         </button>
       </div>
 
-      {/* Status filters */}
-      <div className="flex gap-2">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2">
         {[['', 'All'], ['Open', 'Open'], ['In Progress', 'In Progress'], ['Closed', 'Closed']].map(([val, label]) => (
-          <button
-            key={val}
-            onClick={() => setStatusFilter(val)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${statusFilter === val ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-          >
+          <button key={val} onClick={() => setStatusFilter(val)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${statusFilter === val ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
             {label} {val && <span className="ml-1 text-xs opacity-70">{counts[val] ?? 0}</span>}
           </button>
         ))}
+        <div className="flex items-center gap-1 ml-2">
+          {['High', 'Medium', 'Low'].map(p => (
+            <button key={p} onClick={() => setPriorityFilter(priorityFilter === p ? '' : p)}
+              className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                priorityFilter === p
+                  ? PRIORITY_BADGE[p] + ' ring-1 ring-white/20'
+                  : 'bg-gray-800 text-gray-400 border-gray-700'
+              }`}>
+              {p}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setOverdueOnly(!overdueOnly)}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+            overdueOnly ? 'bg-red-900/40 text-red-400 border-red-700/50' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white'
+          }`}
+        >
+          Overdue {overdueCount > 0 && `(${overdueCount})`}
+        </button>
       </div>
 
       {/* Cards */}
       {loading ? (
         <div className="text-center py-12 text-gray-500">Loading…</div>
-      ) : actions.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-gray-500">No actions found</div>
       ) : (
         <div className="space-y-3">
-          {actions.map(a => (
-            <div key={a.id} className="card">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {STATUS_ICON[a.status]}
-                    <h3 className="font-semibold text-white">{a.title}</h3>
-                    <span className={`badge ${PRIORITY_BADGE[a.priority]}`}>{a.priority}</span>
-                    <span className="text-xs text-gray-500">{a.status}</span>
+          {filtered.map(a => {
+            const od = overdueDays(a.due_date, a.status)
+            return (
+              <div key={a.id} className={`card transition-colors ${od ? 'border-red-800/50' : ''}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {STATUS_ICON[a.status]}
+                      <h3 className="font-semibold text-white">{a.title}</h3>
+                      <span className={`badge text-xs ${PRIORITY_BADGE[a.priority]}`}>{a.priority}</span>
+                      <span className="text-xs text-gray-500">{a.status}</span>
+                      {od && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/40 text-red-400 border border-red-700/50 font-medium">
+                          {od}d overdue
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-400">
+                      {a.site && <span>📍 {a.site}</span>}
+                      {a.assigned_to && <span>👤 {a.assigned_to}</span>}
+                      {a.asset_no && <span>🚛 {a.asset_no}</span>}
+                      {a.due_date && (
+                        <span className={od ? 'text-red-400' : 'text-gray-400'}>
+                          📅 Due: {a.due_date.split('T')[0]}
+                        </span>
+                      )}
+                      <span>🗓 Created: {new Date(a.created_at).toLocaleDateString()}</span>
+                    </div>
+                    {a.description && (
+                      <p className="text-sm text-gray-400 mt-2 line-clamp-2">{a.description}</p>
+                    )}
                   </div>
-                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-400">
-                    {a.site && <span>📍 {a.site}</span>}
-                    {a.assigned_to && <span>👤 {a.assigned_to}</span>}
-                    {a.asset_no && <span>🚛 {a.asset_no}</span>}
-                    <span>🗓 {new Date(a.created_at).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => startEdit(a)} className="text-gray-400 hover:text-blue-400 text-sm transition-colors">Edit</button>
+                    {a.status !== 'Closed' && (
+                      <button onClick={() => closeAction(a.id)} className="text-gray-400 hover:text-green-400 text-sm transition-colors">Close</button>
+                    )}
                   </div>
-                  {a.description && (
-                    <p className="text-sm text-gray-400 mt-2 line-clamp-2">{a.description}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button onClick={() => startEdit(a)} className="text-gray-400 hover:text-blue-400 text-sm transition-colors">Edit</button>
-                  {a.status !== 'Closed' && (
-                    <button onClick={() => closeAction(a.id)} className="text-gray-400 hover:text-green-400 text-sm transition-colors">Close</button>
-                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -148,7 +237,10 @@ export default function CorrectiveActions() {
             </div>
             {error && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{error}</div>}
             <form onSubmit={save} className="space-y-3">
-              <div><label className="label">Title *</label><input className="input" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required /></div>
+              <div>
+                <label className="label">Title *</label>
+                <input className="input" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Priority</label>
@@ -164,15 +256,38 @@ export default function CorrectiveActions() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="label">Site</label><input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} /></div>
-                <div><label className="label">Assigned To</label><input className="input" value={form.assigned_to} onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))} /></div>
+                <div>
+                  <label className="label">Site</label>
+                  <input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} list="ca-sites" />
+                  <datalist id="ca-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
+                </div>
+                <div>
+                  <label className="label">Due Date</label>
+                  <input type="date" className="input" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="label">Asset No</label><input className="input" value={form.asset_no} onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))} /></div>
-                <div><label className="label">Tyre Serial</label><input className="input" value={form.tyre_serial} onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))} /></div>
+                <div>
+                  <label className="label">Assigned To</label>
+                  <input className="input" value={form.assigned_to} onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Asset No</label>
+                  <input className="input" value={form.asset_no} onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))} />
+                </div>
               </div>
-              <div><label className="label">Description</label><textarea className="input" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
-              <div><label className="label">Root Cause</label><textarea className="input" rows={2} value={form.root_cause} onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))} /></div>
+              <div>
+                <label className="label">Tyre Serial</label>
+                <input className="input" value={form.tyre_serial} onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Description</label>
+                <textarea className="input" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Root Cause</label>
+                <textarea className="input" rows={2} value={form.root_cause} onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))} />
+              </div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                   <Save size={16} /> {saving ? 'Saving…' : 'Save'}

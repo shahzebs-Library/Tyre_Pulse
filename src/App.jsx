@@ -12,6 +12,13 @@ import RcaRecords from './pages/RcaRecords'
 import DataCleaning from './pages/DataCleaning'
 import UploadData from './pages/UploadData'
 import Settings from './pages/Settings'
+import Analytics from './pages/Analytics'
+import BrandPerformance from './pages/BrandPerformance'
+import SiteComparison from './pages/SiteComparison'
+import FleetAnalytics from './pages/FleetAnalytics'
+import KpiScorecard from './pages/KpiScorecard'
+import Inspections from './pages/Inspections'
+import Alerts from './pages/Alerts'
 
 export default function App() {
   return (
@@ -25,16 +32,23 @@ export default function App() {
               <ProtectedRoute>
                 <Layout>
                   <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/tyres" element={<TyreRecords />} />
-                    <Route path="/stock" element={<StockManagement />} />
-                    <Route path="/budgets" element={<Budgets />} />
-                    <Route path="/actions" element={<CorrectiveActions />} />
-                    <Route path="/rca" element={<RcaRecords />} />
-                    <Route path="/cleaning" element={<DataCleaning />} />
-                    <Route path="/upload" element={<UploadData />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
+                    <Route path="/"            element={<Dashboard />} />
+                    <Route path="/tyres"       element={<TyreRecords />} />
+                    <Route path="/analytics"   element={<Analytics />} />
+                    <Route path="/brand-perf"  element={<BrandPerformance />} />
+                    <Route path="/site-comp"   element={<SiteComparison />} />
+                    <Route path="/fleet"       element={<FleetAnalytics />} />
+                    <Route path="/kpi"         element={<KpiScorecard />} />
+                    <Route path="/stock"       element={<StockManagement />} />
+                    <Route path="/budgets"     element={<Budgets />} />
+                    <Route path="/actions"     element={<CorrectiveActions />} />
+                    <Route path="/rca"         element={<RcaRecords />} />
+                    <Route path="/inspections" element={<Inspections />} />
+                    <Route path="/alerts"      element={<Alerts />} />
+                    <Route path="/cleaning"    element={<DataCleaning />} />
+                    <Route path="/upload"      element={<UploadData />} />
+                    <Route path="/settings"    element={<Settings />} />
+                    <Route path="*"            element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>

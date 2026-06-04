@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import StatCard from '../components/StatCard'
+import { exportToPptx } from '../lib/exportUtils'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, Title,
   Tooltip, Legend, ArcElement
 } from 'chart.js'
-import { CircleDot, Package, ClipboardList, AlertTriangle, TrendingUp, DollarSign } from 'lucide-react'
+import { CircleDot, Package, ClipboardList, AlertTriangle, TrendingUp, DollarSign, Presentation } from 'lucide-react'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
 
@@ -102,6 +103,68 @@ export default function Dashboard() {
     setLoading(false)
   }
 
+  async function handlePptxExport() {
+    // Gather aggregated data for PPT
+    const [tyreRes, actionRes, siteRes, categoryRes, riskRes] = await Promise.all([
+      supabase.from('tyre_records').select('site, category, risk_level, cost_per_tyre, issue_date'),
+      supabase.from('corrective_actions').select('title, priority, site, status').eq('status', 'Open').order('created_at', { ascending: false }).limit(20),
+      supabase.from('tyre_records').select('site').not('site', 'is', null),
+      supabase.from('tyre_records').select('category').not('category', 'is', null),
+      supabase.from('tyre_records').select('risk_level').not('risk_level', 'is', null),
+    ])
+
+    const tyres = tyreRes.data ?? []
+
+    // Top sites
+    const siteCounts = {}
+    tyres.forEach(t => { if (t.site) siteCounts[t.site] = (siteCounts[t.site] ?? 0) + 1 })
+    const topSites = Object.entries(siteCounts).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([site, count]) => ({ site, count }))
+
+    // Brand breakdown (from already loaded brand data)
+    const brandCounts = {}
+    tyres.forEach(t => { if (t.brand) brandCounts[t.brand] = (brandCounts[t.brand] ?? 0) + 1 })
+    const topBrands = Object.entries(brandCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([brand, count]) => ({ brand, count }))
+
+    // Category breakdown
+    const catCounts = {}
+    tyres.forEach(t => { if (t.category) catCounts[t.category] = (catCounts[t.category] ?? 0) + 1 })
+    const categoryBreakdown = Object.entries(catCounts).sort((a, b) => b[1] - a[1]).map(([category, count]) => ({ category, count }))
+
+    // Risk breakdown
+    const riskCounts = { Critical: 0, High: 0, Medium: 0, Low: 0 }
+    tyres.forEach(t => { if (t.risk_level && riskCounts[t.risk_level] !== undefined) riskCounts[t.risk_level]++ })
+    const riskBreakdown = Object.entries(riskCounts).map(([level, count]) => ({ level, count }))
+
+    // Monthly trend (last 6 months)
+    const now = new Date()
+    const monthlyTrend = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1)
+      const count = tyres.filter(t => {
+        if (!t.issue_date) return false
+        const td = new Date(t.issue_date)
+        return td.getFullYear() === d.getFullYear() && td.getMonth() === d.getMonth()
+      }).length
+      return { month: d.toLocaleString('default', { month: 'short', year: '2-digit' }), count }
+    })
+
+    const totalCost = tyres.reduce((s, t) => s + (t.cost_per_tyre ?? 1200), 0)
+    const highRisk = tyres.filter(t => t.risk_level === 'Critical' || t.risk_level === 'High').length
+
+    await exportToPptx({
+      totalTyres: tyres.length,
+      totalCost,
+      openActions: (actionRes.data ?? []).length,
+      highRisk,
+      topSites,
+      categoryBreakdown,
+      riskBreakdown,
+      monthlyTrend,
+      recentActions: actionRes.data ?? [],
+      period: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
+      company: 'Readymix Concrete Company',
+    }, `TyrePulse_Report_${new Date().toISOString().slice(0, 10)}`)
+  }
+
   const riskBadge = (level) => {
     const map = { Critical: 'bg-red-900/50 text-red-300', High: 'bg-orange-900/50 text-orange-300', Medium: 'bg-yellow-900/50 text-yellow-300', Low: 'bg-green-900/50 text-green-300' }
     return map[level] ?? 'bg-gray-800 text-gray-400'
@@ -116,9 +179,14 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-gray-400 text-sm mt-1">Welcome back, {profile?.full_name ?? profile?.username ?? 'there'}</p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-gray-400 text-sm mt-1">Welcome back, {profile?.full_name ?? profile?.username ?? 'there'}</p>
+        </div>
+        <button onClick={handlePptxExport} className="btn-secondary flex items-center gap-2 text-sm">
+          <Presentation size={15} className="text-orange-400" /> Export Report (.pptx)
+        </button>
       </div>
 
       {/* Stats */}

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-import { Search, Filter, ChevronLeft, ChevronRight, Trash2, Eye } from 'lucide-react'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { Search, ChevronLeft, ChevronRight, Eye, FileSpreadsheet, FileText } from 'lucide-react'
 
 const PAGE_SIZE = 25
 
@@ -66,6 +67,52 @@ export default function TyreRecords() {
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
+  // ── Export helpers ─────────────────────────────────────────────────────────
+  const EXPORT_COLUMNS = [
+    { key: 'issue_date', header: 'Date', width: 22 },
+    { key: 'asset_no', header: 'Asset No', width: 26 },
+    { key: 'serial_no', header: 'Serial No', width: 30 },
+    { key: 'brand', header: 'Brand', width: 24 },
+    { key: 'site', header: 'Site', width: 28 },
+    { key: 'mis_number', header: 'MIS No', width: 24 },
+    { key: 'job_card', header: 'Job Card', width: 24 },
+    { key: 'category', header: 'Category', width: 30 },
+    { key: 'risk_level', header: 'Risk Level', width: 20 },
+    { key: 'cost_per_tyre', header: 'Cost (SAR)', width: 20 },
+    { key: 'remarks_cleaned', header: 'Remarks', width: 40 },
+  ]
+
+  async function fetchAllForExport() {
+    let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: false })
+    if (search) q = q.or(`asset_no.ilike.%${search}%,serial_no.ilike.%${search}%,mis_number.ilike.%${search}%,job_card.ilike.%${search}%`)
+    if (siteFilter) q = q.eq('site', siteFilter)
+    if (brandFilter) q = q.eq('brand', brandFilter)
+    if (riskFilter) q = q.eq('risk_level', riskFilter)
+    const { data } = await q
+    return data ?? []
+  }
+
+  async function handleExcelExport() {
+    const data = await fetchAllForExport()
+    exportToExcel(
+      data,
+      EXPORT_COLUMNS.map(c => c.key),
+      EXPORT_COLUMNS.map(c => c.header),
+      `TyrePulse_Records_${new Date().toISOString().slice(0, 10)}`,
+      'Tyre Records'
+    )
+  }
+
+  async function handlePdfExport() {
+    const data = await fetchAllForExport()
+    exportToPdf(
+      data,
+      EXPORT_COLUMNS,
+      `Tyre Records — ${total.toLocaleString()} records${siteFilter ? ` | ${siteFilter}` : ''}`,
+      `TyrePulse_Records_${new Date().toISOString().slice(0, 10)}`
+    )
+  }
+
   function handleSearchChange(e) {
     setSearch(e.target.value)
     setPage(0)
@@ -73,10 +120,18 @@ export default function TyreRecords() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Tyre Records</h1>
           <p className="text-gray-400 text-sm mt-1">{total.toLocaleString()} total records</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleExcelExport} className="btn-secondary flex items-center gap-2 text-sm">
+            <FileSpreadsheet size={15} className="text-green-400" /> Excel
+          </button>
+          <button onClick={handlePdfExport} className="btn-secondary flex items-center gap-2 text-sm">
+            <FileText size={15} className="text-red-400" /> PDF
+          </button>
         </div>
       </div>
 

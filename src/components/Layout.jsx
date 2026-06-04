@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   LayoutDashboard, CircleDot, Package, DollarSign,
   ClipboardList, Search, Upload, Settings, LogOut,
-  Menu, X, ChevronRight
+  Menu, X, Wand2
 } from 'lucide-react'
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
   { to: '/budgets', label: 'Budgets', icon: DollarSign },
   { to: '/actions', label: 'Corrective Actions', icon: ClipboardList },
   { to: '/rca', label: 'Root Cause Analysis', icon: Search },
+  { to: '/cleaning', label: 'Data Cleaning', icon: Wand2 },
   { to: '/upload', label: 'Upload Data', icon: Upload },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]

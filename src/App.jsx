@@ -9,6 +9,7 @@ import StockManagement from './pages/StockManagement'
 import Budgets from './pages/Budgets'
 import CorrectiveActions from './pages/CorrectiveActions'
 import RcaRecords from './pages/RcaRecords'
+import DataCleaning from './pages/DataCleaning'
 import UploadData from './pages/UploadData'
 import Settings from './pages/Settings'
 
@@ -30,6 +31,7 @@ export default function App() {
                     <Route path="/budgets" element={<Budgets />} />
                     <Route path="/actions" element={<CorrectiveActions />} />
                     <Route path="/rca" element={<RcaRecords />} />
+                    <Route path="/cleaning" element={<DataCleaning />} />
                     <Route path="/upload" element={<UploadData />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={<Navigate to="/" replace />} />

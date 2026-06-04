@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import * as XLSX from 'xlsx'
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X } from 'lucide-react'
+import { Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen } from 'lucide-react'
 
 const CANONICAL_FIELDS = [
   'sr', 'issue_date', 'description', 'brand', 'serial_no', 'qty',
@@ -34,10 +35,16 @@ function guessMapping(headers) {
   return mapping
 }
 
+// Create a stable fingerprint from headers (order-independent)
+function fingerprintHeaders(headers) {
+  return [...headers].sort().join('|').toLowerCase()
+}
+
 export default function UploadData() {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const fileRef = useRef(null)
-  const [step, setStep] = useState('idle') // idle | mapping | preview | uploading | done | error
+  const [step, setStep] = useState('idle')  // idle | mapping | preview | uploading | done
   const [fileName, setFileName] = useState('')
   const [headers, setHeaders] = useState([])
   const [rows, setRows] = useState([])
@@ -45,14 +52,16 @@ export default function UploadData() {
   const [preview, setPreview] = useState([])
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
+  const [savedMappingId, setSavedMappingId] = useState(null)
+  const [mappingSource, setMappingSource] = useState('guess')  // 'guess' | 'memory'
 
-  function handleFile(e) {
+  async function handleFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
     setFileName(file.name)
     setError('')
     const reader = new FileReader()
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         const wb = XLSX.read(ev.target.result, { type: 'binary', cellDates: true })
         const ws = wb.Sheets[wb.SheetNames[0]]
@@ -62,7 +71,25 @@ export default function UploadData() {
         const dataRows = data.slice(1).filter(r => r.some(c => c !== ''))
         setHeaders(hdrs)
         setRows(dataRows)
-        setMapping(guessMapping(hdrs))
+
+        // ── Try to recall saved column mapping for this header fingerprint ──
+        const fp = fingerprintHeaders(hdrs)
+        const { data: saved } = await supabase
+          .from('column_mappings')
+          .select('id, mapping')
+          .eq('fingerprint', fp)
+          .single()
+
+        if (saved?.mapping) {
+          setMapping(saved.mapping)
+          setSavedMappingId(saved.id)
+          setMappingSource('memory')
+        } else {
+          setMapping(guessMapping(hdrs))
+          setSavedMappingId(null)
+          setMappingSource('guess')
+        }
+
         setStep('mapping')
       } catch (err) {
         setError('Failed to parse file: ' + err.message)
@@ -94,19 +121,41 @@ export default function UploadData() {
     if (!s) return null
     const d = new Date(s)
     if (!isNaN(d)) return d.toISOString().split('T')[0]
-    // Try DD/MM/YYYY
     const parts = s.split(/[\/\-]/)
     if (parts.length === 3) {
       const [a, b, c] = parts
-      if (c.length === 4) return `${c}-${String(b).padStart(2,'0')}-${String(a).padStart(2,'0')}`
+      if (c.length === 4) return `${c}-${String(b).padStart(2, '0')}-${String(a).padStart(2, '0')}`
     }
     return null
   }
 
+  async function saveColumnMapping() {
+    const fp = fingerprintHeaders(headers)
+    if (savedMappingId) {
+      // Update use count + last_used_at
+      await supabase.from('column_mappings')
+        .update({ mapping, last_used_at: new Date().toISOString(), use_count: supabase.rpc('coalesce', { x: 1 }) })
+        .eq('id', savedMappingId)
+    } else {
+      await supabase.from('column_mappings').upsert({
+        fingerprint: fp,
+        mapping,
+        file_name: fileName,
+        confirmed_by: profile?.id,
+        use_count: 1,
+        last_used_at: new Date().toISOString(),
+      }, { onConflict: 'fingerprint' })
+    }
+  }
+
   async function upload() {
     setStep('uploading')
+
+    // Save mapping for future recall
+    await saveColumnMapping()
+
     const records = rows.map(row => {
-      const obj = { region: profile?.region ?? 'KSA', uploaded_by: profile?.id }
+      const obj = { region: profile?.region ?? 'KSA', uploaded_by: profile?.id, cleaned: false }
       CANONICAL_FIELDS.forEach(f => {
         const srcCol = mapping[f]
         if (srcCol) {
@@ -132,13 +181,12 @@ export default function UploadData() {
       const { data, error: err } = await supabase.from('tyre_records').insert(batch).select('id')
       if (err) {
         skipped += batch.length
-        skipLog.push({ batch: i / BATCH + 1, error: err.message })
+        skipLog.push({ batch: Math.floor(i / BATCH) + 1, error: err.message })
       } else {
         added += (data ?? []).length
       }
     }
 
-    // Log the upload
     await supabase.from('upload_history').insert({
       file_names: [fileName],
       records_added: added,
@@ -154,14 +202,9 @@ export default function UploadData() {
   }
 
   function reset() {
-    setStep('idle')
-    setFileName('')
-    setHeaders([])
-    setRows([])
-    setMapping({})
-    setPreview([])
-    setResult(null)
-    setError('')
+    setStep('idle'); setFileName(''); setHeaders([]); setRows([])
+    setMapping({}); setPreview([]); setResult(null); setError('')
+    setSavedMappingId(null); setMappingSource('guess')
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -191,10 +234,19 @@ export default function UploadData() {
             <FileSpreadsheet size={16} className="text-blue-400" />
             <span>{fileName}</span>
             <span>· {rows.length.toLocaleString()} rows detected</span>
+            {mappingSource === 'memory' && (
+              <span className="badge bg-green-900/50 text-green-300 border border-green-700/50 flex items-center gap-1">
+                <BookOpen size={11} /> Mapping recalled from memory
+              </span>
+            )}
           </div>
           <div className="card">
-            <h2 className="text-base font-semibold text-white mb-4">Column Mapping</h2>
-            <p className="text-xs text-gray-400 mb-4">Auto-detected based on column names. Adjust if needed.</p>
+            <h2 className="text-base font-semibold text-white mb-1">Column Mapping</h2>
+            <p className="text-xs text-gray-400 mb-4">
+              {mappingSource === 'memory'
+                ? 'Loaded from a previously saved mapping for this file layout. Adjust if needed.'
+                : 'Auto-detected based on column names. Adjust if needed.'}
+            </p>
             <div className="grid grid-cols-2 gap-3">
               {CANONICAL_FIELDS.map(field => (
                 <div key={field}>
@@ -249,7 +301,7 @@ export default function UploadData() {
         <div className="card text-center py-16">
           <div className="animate-spin h-10 w-10 rounded-full border-2 border-gray-700 border-t-blue-500 mx-auto mb-4" />
           <p className="text-white font-medium">Uploading records…</p>
-          <p className="text-gray-400 text-sm mt-1">This may take a moment for large files</p>
+          <p className="text-gray-400 text-sm mt-1">Column mapping saved for future uploads</p>
         </div>
       )}
 
@@ -259,7 +311,7 @@ export default function UploadData() {
             <CheckCircle size={24} className="text-green-400" />
             <h2 className="text-lg font-semibold text-white">Upload Complete</h2>
           </div>
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="bg-green-900/20 border border-green-800 rounded-lg p-4">
               <p className="text-green-400 text-2xl font-bold">{result.added.toLocaleString()}</p>
               <p className="text-green-300 text-sm">Records added</p>
@@ -269,13 +321,37 @@ export default function UploadData() {
               <p className="text-yellow-300 text-sm">Records skipped</p>
             </div>
           </div>
+
+          {/* Classifier prompt */}
+          {result.added > 0 && (
+            <div className="bg-blue-900/20 border border-blue-800 rounded-xl p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <Wand2 size={20} className="text-blue-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-white font-medium">Run Data Cleaning Engine?</p>
+                  <p className="text-sm text-gray-400 mt-0.5">
+                    {result.added.toLocaleString()} new records need category and risk classification.
+                    The rule-based engine classifies them instantly — no AI tokens required.
+                  </p>
+                  <button
+                    onClick={() => navigate('/cleaning')}
+                    className="btn-primary mt-3 text-sm flex items-center gap-2"
+                  >
+                    <Wand2 size={14} /> Go to Data Cleaning
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {result.skipLog.length > 0 && (
             <details className="text-sm text-gray-400 mb-4">
-              <summary className="cursor-pointer text-yellow-400">View skip log ({result.skipLog.length} batches)</summary>
+              <summary className="cursor-pointer text-yellow-400">View skip log</summary>
               <pre className="mt-2 bg-gray-800 rounded p-3 text-xs overflow-auto">{JSON.stringify(result.skipLog, null, 2)}</pre>
             </details>
           )}
-          <button onClick={reset} className="btn-primary">Upload Another File</button>
+
+          <button onClick={reset} className="btn-secondary">Upload Another File</button>
         </div>
       )}
     </div>

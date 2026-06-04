@@ -29,7 +29,7 @@ const EMPTY_BULK = { site: '', brand: '', cost_per_tyre: '', risk_level: '', cat
 
 export default function TyreRecords() {
   const { profile } = useAuth()
-  const { appSettings, activeCountry } = useSettings()
+  const { appSettings, activeCountry, activeCurrency } = useSettings()
 
   // ── data ────────────────────────────────────────────────────────────────────
   const [records, setRecords]         = useState([])
@@ -60,7 +60,7 @@ export default function TyreRecords() {
 
   // ── load ────────────────────────────────────────────────────────────────────
   useEffect(() => { loadFilters() }, [])
-  useEffect(() => { loadRecords() }, [page, search, siteFilter, brandFilter, riskFilter])
+  useEffect(() => { loadRecords() }, [page, search, siteFilter, brandFilter, riskFilter, activeCountry])
 
   async function loadFilters() {
     const [sRes, bRes] = await Promise.all([
@@ -83,13 +83,14 @@ export default function TyreRecords() {
     if (siteFilter) q = q.eq('site', siteFilter)
     if (brandFilter) q = q.eq('brand', brandFilter)
     if (riskFilter) q = q.eq('risk_level', riskFilter)
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
 
     const { data, count } = await q
     setRecords(data ?? [])
     setTotal(count ?? 0)
     setSelected(new Set())
     setLoading(false)
-  }, [page, search, siteFilter, brandFilter, riskFilter])
+  }, [page, search, siteFilter, brandFilter, riskFilter, activeCountry])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
@@ -206,7 +207,7 @@ export default function TyreRecords() {
     { key: 'job_card', header: 'Job Card', width: 24 },
     { key: 'category', header: 'Category', width: 30 },
     { key: 'risk_level', header: 'Risk Level', width: 20 },
-    { key: 'cost_per_tyre', header: 'Cost (SAR)', width: 20 },
+    { key: 'cost_per_tyre', header: `Cost (${activeCurrency})`, width: 20 },
     { key: 'remarks_cleaned', header: 'Remarks', width: 40 },
   ]
 
@@ -216,6 +217,7 @@ export default function TyreRecords() {
     if (siteFilter) q = q.eq('site', siteFilter)
     if (brandFilter) q = q.eq('brand', brandFilter)
     if (riskFilter) q = q.eq('risk_level', riskFilter)
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
     const { data } = await q
     return data ?? []
   }
@@ -276,16 +278,16 @@ export default function TyreRecords() {
                   <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
                     checked={allOnPageSelected} onChange={toggleSelectAll} />
                 </th>
-                {['Date', 'Asset No', 'Serial No', 'Brand', 'Site', 'MIS No', 'Job Card', 'Risk', 'Cost', ''].map(h => (
+                {['Date', 'Asset No', 'Serial No', 'Brand', 'Site', 'MIS No', 'Job Card', 'Risk', 'Cost', 'CPK', ''].map(h => (
                   <th key={h} className="table-header">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={11} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                <tr><td colSpan={12} className="text-center py-12 text-gray-500">Loading…</td></tr>
               ) : records.length === 0 ? (
-                <tr><td colSpan={11} className="text-center py-12 text-gray-500">No records found</td></tr>
+                <tr><td colSpan={12} className="text-center py-12 text-gray-500">No records found</td></tr>
               ) : records.map(r => (
                 <tr key={r.id} className={`transition-colors ${selected.has(r.id) ? 'bg-blue-950/30' : 'hover:bg-gray-800/30'}`}>
                   <td className="table-cell">
@@ -302,7 +304,12 @@ export default function TyreRecords() {
                   <td className="table-cell">
                     {r.risk_level ? <span className={`badge ${RISK_BADGE[r.risk_level] ?? 'bg-gray-800 text-gray-400'}`}>{r.risk_level}</span> : '—'}
                   </td>
-                  <td className="table-cell">SAR {(r.cost_per_tyre ?? appSettings.cost_per_tyre).toLocaleString()}</td>
+                  <td className="table-cell">{activeCurrency} {(r.cost_per_tyre ?? appSettings.cost_per_tyre).toLocaleString()}</td>
+                  <td className="table-cell text-gray-400 text-xs">
+                    {r.km_at_fitment && r.km_at_removal && r.km_at_removal > r.km_at_fitment
+                      ? ((r.cost_per_tyre ?? appSettings.cost_per_tyre) / (r.km_at_removal - r.km_at_fitment)).toFixed(3)
+                      : <span className="text-gray-700">N/A</span>}
+                  </td>
                   <td className="table-cell">
                     <div className="flex items-center gap-2">
                       <button onClick={() => setDetailRecord(r)} className="text-gray-400 hover:text-blue-400 transition-colors" title="View"><Eye size={15} /></button>
@@ -358,7 +365,7 @@ export default function TyreRecords() {
               ['Issue Date', detailRecord.issue_date], ['MIS Number', detailRecord.mis_number],
               ['Job Card', detailRecord.job_card], ['Qty', detailRecord.qty],
               ['Risk Level', detailRecord.risk_level], ['Category', detailRecord.category],
-              ['Cost', detailRecord.cost_per_tyre ? `SAR ${detailRecord.cost_per_tyre}` : null],
+              ['Cost', detailRecord.cost_per_tyre ? `${activeCurrency} ${detailRecord.cost_per_tyre}` : null],
               ['Description', detailRecord.description], ['Remarks', detailRecord.remarks],
             ].filter(([, v]) => v).map(([k, v]) => (
               <div key={k} className={k === 'Description' || k === 'Remarks' ? 'col-span-2' : ''}>

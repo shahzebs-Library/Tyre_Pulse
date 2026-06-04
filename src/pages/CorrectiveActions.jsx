@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { Plus, Save, X, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 
 const STATUS_ICON = {
@@ -29,6 +30,7 @@ function overdueDays(due_date, status) {
 
 export default function CorrectiveActions() {
   const { profile } = useAuth()
+  const { activeCountry } = useSettings()
   const [actions, setActions]     = useState([])
   const [loading, setLoading]     = useState(true)
   const [statusFilter, setStatusFilter] = useState('')
@@ -40,12 +42,13 @@ export default function CorrectiveActions() {
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState('')
 
-  useEffect(() => { load() }, [statusFilter])
+  useEffect(() => { load() }, [statusFilter, activeCountry])
 
   async function load() {
     setLoading(true)
     let q = supabase.from('corrective_actions').select('*').order('created_at', { ascending: false })
     if (statusFilter) q = q.eq('status', statusFilter)
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
     const { data } = await q
     setActions(data ?? [])
     setLoading(false)

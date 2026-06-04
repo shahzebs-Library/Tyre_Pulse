@@ -21,18 +21,19 @@ const CHART_OPTS = (horizontal = false) => ({
 })
 
 export default function BrandPerformance() {
-  const { appSettings } = useSettings()
+  const { appSettings, activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
-    supabase
+    let q = supabase
       .from('tyre_records')
       .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty,description,remarks')
       .order('issue_date')
-      .then(({ data }) => { setRecords(data || []); setLoading(false) })
-  }, [])
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    q.then(({ data }) => { setRecords(data || []); setLoading(false) })
+  }, [activeCountry])
 
   const metrics = useMemo(() => computeBrandMetrics(records, appSettings.cost_per_tyre), [records, appSettings.cost_per_tyre])
   const selectedData = useMemo(() =>
@@ -121,10 +122,10 @@ export default function BrandPerformance() {
                 <td className="py-2 pr-4 font-medium text-white">{b.brand}</td>
                 <td className="py-2 pr-4 text-gray-300 text-right">{b.count}</td>
                 <td className="py-2 pr-4 text-gray-300 text-right">
-                  SAR {b.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
+                  {activeCurrency} {b.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
                 </td>
                 <td className="py-2 pr-4 text-gray-300 text-right">
-                  SAR {Math.round(b.avgCost).toLocaleString()}
+                  {activeCurrency} {Math.round(b.avgCost).toLocaleString()}
                 </td>
                 <td className="py-2 pr-4 text-right">
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${

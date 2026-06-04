@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -20,6 +21,7 @@ const EMPTY_FORM = {
 
 export default function Inspections() {
   const { profile } = useAuth()
+  const { activeCountry } = useSettings()
   const [rows, setRows]       = useState([])
   const [loading, setLoading] = useState(true)
   const [form, setForm]       = useState(null)   // null=closed | {}=new | {..r}=edit
@@ -31,10 +33,9 @@ export default function Inspections() {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase
-      .from('inspections')
-      .select('*')
-      .order('scheduled_date', { ascending: true })
+    let q = supabase.from('inspections').select('*').order('scheduled_date', { ascending: true })
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    const { data } = await q
     // Mark overdue in memory
     const today = new Date().toISOString().split('T')[0]
     const enriched = (data || []).map(r => ({
@@ -46,7 +47,7 @@ export default function Inspections() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [activeCountry])
 
   const sites = useMemo(() => [...new Set(rows.map(r => r.site).filter(Boolean))].sort(), [rows])
 

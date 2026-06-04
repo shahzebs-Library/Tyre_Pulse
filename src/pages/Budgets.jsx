@@ -20,7 +20,7 @@ const EMPTY_FORM = { site: '', monthly_budget: 25000, year: CURRENT_YEAR, month:
 
 export default function Budgets() {
   const { profile }   = useAuth()
-  const { appSettings } = useSettings()
+  const { appSettings, activeCountry } = useSettings()
   const [budgets, setBudgets]     = useState([])
   const [spending, setSpending]   = useState({})   // { 'site-year-month': number }
   const [loading, setLoading]     = useState(true)
@@ -35,20 +35,22 @@ export default function Budgets() {
   const [plannerEdits, setPlannerEdits] = useState({})  // { 'site-m': value }
   const [savingPlanner, setSavingPlanner] = useState(false)
 
-  useEffect(() => { load() }, [filterYear, filterMonth, plannerYear, viewMode])
+  useEffect(() => { load() }, [filterYear, filterMonth, plannerYear, viewMode, activeCountry])
 
   async function load() {
     setLoading(true)
+    const cf = activeCountry !== 'All' ? activeCountry : null
+    const flt = q => cf ? q.eq('country', cf) : q
 
     if (viewMode === 'month') {
       const [budgetRes, tyreRes] = await Promise.all([
-        supabase.from('budgets').select('*').eq('year', filterYear).eq('month', filterMonth).order('site'),
-        supabase.from('tyre_records')
+        flt(supabase.from('budgets').select('*').eq('year', filterYear).eq('month', filterMonth).order('site')),
+        flt(supabase.from('tyre_records')
           .select('site, cost_per_tyre, qty, issue_date')
           .gte('issue_date', `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`)
           .lt('issue_date', filterMonth === 12
             ? `${filterYear + 1}-01-01`
-            : `${filterYear}-${String(filterMonth + 1).padStart(2, '0')}-01`),
+            : `${filterYear}-${String(filterMonth + 1).padStart(2, '0')}-01`)),
       ])
       setBudgets(budgetRes.data ?? [])
 
@@ -61,11 +63,11 @@ export default function Budgets() {
     } else {
       // Annual view — load all 12 months
       const [budgetRes, tyreRes] = await Promise.all([
-        supabase.from('budgets').select('*').eq('year', plannerYear).order('site'),
-        supabase.from('tyre_records')
+        flt(supabase.from('budgets').select('*').eq('year', plannerYear).order('site')),
+        flt(supabase.from('tyre_records')
           .select('site, cost_per_tyre, qty, issue_date')
           .gte('issue_date', `${plannerYear}-01-01`)
-          .lt('issue_date', `${plannerYear + 1}-01-01`),
+          .lt('issue_date', `${plannerYear + 1}-01-01`)),
       ])
       setBudgets(budgetRes.data ?? [])
 

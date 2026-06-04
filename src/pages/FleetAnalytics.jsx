@@ -19,7 +19,7 @@ const RISK_BADGE = {
 }
 
 export default function FleetAnalytics() {
-  const { appSettings } = useSettings()
+  const { appSettings, activeCountry, activeCurrency } = useSettings()
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
@@ -27,15 +27,10 @@ export default function FleetAnalytics() {
   const [sortBy, setSortBy]     = useState('count')
 
   useEffect(() => {
-    supabase
-      .from('tyre_records')
-      .select('*')
-      .order('issue_date', { ascending: false })
-      .then(({ data }) => {
-        setRecords(data || [])
-        setLoading(false)
-      })
-  }, [])
+    let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: false })
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    q.then(({ data }) => { setRecords(data || []); setLoading(false) })
+  }, [activeCountry])
 
   const assetMetrics = useMemo(() => computeAssetMetrics(records, appSettings.cost_per_tyre), [records, appSettings.cost_per_tyre])
 
@@ -75,7 +70,7 @@ export default function FleetAnalytics() {
             color: 'text-red-400' },
           { label: 'Avg Cost/Asset',
             value: assetMetrics.length
-              ? `SAR ${Math.round(assetMetrics.reduce((s, a) => s + a.totalCost, 0) / assetMetrics.length).toLocaleString()}`
+              ? `${activeCurrency} ${Math.round(assetMetrics.reduce((s, a) => s + a.totalCost, 0) / assetMetrics.length).toLocaleString()}`
               : '—',
             color: 'text-green-400' },
         ].map(({ label, value, color }) => (
@@ -129,7 +124,7 @@ export default function FleetAnalytics() {
                   <td className="py-2 pr-4 font-mono text-xs text-blue-400 font-medium">{a.assetNo}</td>
                   <td className="py-2 pr-4 text-gray-300 text-right">{a.count}</td>
                   <td className="py-2 pr-4 text-gray-300 text-right">
-                    SAR {a.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
+                    {activeCurrency} {a.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
                   </td>
                   <td className="py-2 pr-4 text-right">
                     {a.highRiskCount > 0
@@ -154,12 +149,12 @@ export default function FleetAnalytics() {
       </div>
 
       {/* Drill-down */}
-      {selectedAsset && <AssetDrillDown asset={selectedAsset} defaultCost={appSettings.cost_per_tyre} />}
+      {selectedAsset && <AssetDrillDown asset={selectedAsset} defaultCost={appSettings.cost_per_tyre} currency={activeCurrency} />}
     </div>
   )
 }
 
-function AssetDrillDown({ asset, defaultCost = 1200 }) {
+function AssetDrillDown({ asset, defaultCost = 1200, currency = 'SAR' }) {
   const monthly = useMemo(() =>
     bucketByMonth(asset.records, r => r.issue_date,
       r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)),
@@ -172,7 +167,7 @@ function AssetDrillDown({ asset, defaultCost = 1200 }) {
   const costData = {
     labels: monthly.map(d => d.month),
     datasets: [{
-      label: 'Cost (SAR)',
+      label: `Cost (${currency})`,
       data: monthly.map(d => Math.round(d.total)),
       backgroundColor: 'rgba(59,130,246,0.5)',
       borderColor: 'rgba(59,130,246,1)',
@@ -231,7 +226,7 @@ function AssetDrillDown({ asset, defaultCost = 1200 }) {
         <div>
           <h3 className="text-white font-bold text-lg font-mono">{asset.assetNo}</h3>
           <p className="text-gray-400 text-sm mt-1">
-            {asset.count} records · SAR {asset.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })} total
+            {asset.count} records · {activeCurrency} {asset.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })} total
             · active since {asset.firstSeen || '?'}
           </p>
         </div>
@@ -245,7 +240,7 @@ function AssetDrillDown({ asset, defaultCost = 1200 }) {
       {/* Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <p className="text-xs text-gray-400 mb-2">Monthly Cost (SAR)</p>
+          <p className="text-xs text-gray-400 mb-2">Monthly Cost ({currency})</p>
           <div style={{ height: 200 }}>
             <Bar data={costData} options={barOpts} />
           </div>
@@ -318,7 +313,7 @@ function AssetDrillDown({ asset, defaultCost = 1200 }) {
                     </span>
                   </td>
                   <td className="py-1.5 pr-3 text-right text-gray-400">
-                    SAR {((r.cost_per_tyre || defaultCost) * (r.qty || 1)).toLocaleString()}
+                    {currency} {((r.cost_per_tyre || defaultCost) * (r.qty || 1)).toLocaleString()}
                   </td>
                   <td className="py-1.5 text-gray-500 max-w-xs truncate">{r.remarks_cleaned || r.remarks || '—'}</td>
                 </tr>

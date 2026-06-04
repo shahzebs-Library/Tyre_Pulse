@@ -21,7 +21,7 @@ const MOVEMENT_TYPES = ['In', 'Out', 'Adjustment', 'Initial', 'Reorder', 'Scrap'
 
 export default function StockManagement() {
   const { profile } = useAuth()
-  const { appSettings } = useSettings()
+  const { appSettings, activeCountry } = useSettings()
   const [records, setRecords]       = useState([])
   const [loading, setLoading]       = useState(true)
   const [showForm, setShowForm]     = useState(false)
@@ -34,11 +34,13 @@ export default function StockManagement() {
   const [loadingMov, setLoadingMov] = useState(false)
   const [adjForm, setAdjForm]       = useState(null)    // { qty_change, reason, movement_type }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [activeCountry])
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('stock_records').select('*').order('site')
+    let q = supabase.from('stock_records').select('*').order('site')
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    const { data } = await q
     setRecords(data ?? [])
     setLoading(false)
   }

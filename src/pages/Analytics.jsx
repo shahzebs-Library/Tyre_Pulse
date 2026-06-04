@@ -36,7 +36,7 @@ const LINE_OPTS = {
 }
 
 export default function Analytics() {
-  const { appSettings } = useSettings()
+  const { appSettings, activeCountry, activeCurrency } = useSettings()
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [activeTab, setActiveTab] = useState(0)
@@ -45,15 +45,17 @@ export default function Analytics() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data } = await supabase
+      let q = supabase
         .from('tyre_records')
         .select('id,issue_date,brand,site,asset_no,category,risk_level,cost_per_tyre,qty,created_at')
         .order('issue_date', { ascending: true })
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      const { data } = await q
       setRecords(data || [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [activeCountry])
 
   const filtered = useMemo(() =>
     records.filter(r => {
@@ -98,7 +100,7 @@ export default function Analytics() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Records', value: totalCount.toLocaleString(), color: 'text-blue-400' },
-          { label: 'Total Cost (SAR)', value: `SAR ${totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`, color: 'text-green-400' },
+          { label: `Total Cost (${activeCurrency})`, value: `${activeCurrency} ${totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`, color: 'text-green-400' },
           { label: 'Sites Active', value: siteMetrics.length, color: 'text-purple-400' },
           { label: 'Brands Tracked', value: brandMetrics.length, color: 'text-yellow-400' },
         ].map(({ label, value, color }) => (
@@ -122,16 +124,16 @@ export default function Analytics() {
       </div>
 
       {/* Tab Content */}
-      {activeTab === 0 && <CostBySite siteMetrics={siteMetrics} />}
-      {activeTab === 1 && <CostByBrand brandMetrics={brandMetrics} />}
-      {activeTab === 2 && <MonthlyTrend trendData={trendData} />}
-      {activeTab === 3 && <AssetBreakdown assetMetrics={assetMetrics} />}
+      {activeTab === 0 && <CostBySite siteMetrics={siteMetrics} currency={activeCurrency} />}
+      {activeTab === 1 && <CostByBrand brandMetrics={brandMetrics} currency={activeCurrency} />}
+      {activeTab === 2 && <MonthlyTrend trendData={trendData} currency={activeCurrency} />}
+      {activeTab === 3 && <AssetBreakdown assetMetrics={assetMetrics} currency={activeCurrency} />}
     </div>
   )
 }
 
 // ── Tab: Cost by Site ─────────────────────────────────────────────────────────
-function CostBySite({ siteMetrics }) {
+function CostBySite({ siteMetrics, currency = 'SAR' }) {
   const top = siteMetrics.slice(0, 15)
   const chartData = {
     labels: top.map(s => s.site),
@@ -164,8 +166,8 @@ function CostBySite({ siteMetrics }) {
               <tr key={s.site} className="border-b border-gray-800/50 hover:bg-gray-800/20">
                 <td className="py-2 pr-4 text-white font-medium">{s.site}</td>
                 <td className="py-2 pr-4 text-gray-300 text-right">{s.count}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">SAR {s.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">SAR {Math.round(s.avgCost).toLocaleString()}</td>
+                <td className="py-2 pr-4 text-gray-300 text-right">{currency} {s.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}</td>
+                <td className="py-2 pr-4 text-gray-300 text-right">{currency} {Math.round(s.avgCost).toLocaleString()}</td>
                 <td className="py-2 pr-4 text-right">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${s.highRiskPct > 30 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}`}>
                     {s.highRiskCount} ({s.highRiskPct.toFixed(0)}%)
@@ -182,7 +184,7 @@ function CostBySite({ siteMetrics }) {
 }
 
 // ── Tab: Cost by Brand ────────────────────────────────────────────────────────
-function CostByBrand({ brandMetrics }) {
+function CostByBrand({ brandMetrics, currency = 'SAR' }) {
   const top = brandMetrics.slice(0, 12)
   const chartData = {
     labels: top.map(b => b.brand),
@@ -215,8 +217,8 @@ function CostByBrand({ brandMetrics }) {
               <tr key={b.brand} className="border-b border-gray-800/50 hover:bg-gray-800/20">
                 <td className="py-2 pr-4 text-white font-medium">{b.brand}</td>
                 <td className="py-2 pr-4 text-gray-300 text-right">{b.count}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">SAR {b.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">SAR {Math.round(b.avgCost).toLocaleString()}</td>
+                <td className="py-2 pr-4 text-gray-300 text-right">{currency} {b.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}</td>
+                <td className="py-2 pr-4 text-gray-300 text-right">{currency} {Math.round(b.avgCost).toLocaleString()}</td>
                 <td className="py-2 pr-4 text-right">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${b.failureRate > 25 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}`}>
                     {b.failureRate.toFixed(1)}%
@@ -233,7 +235,7 @@ function CostByBrand({ brandMetrics }) {
 }
 
 // ── Tab: Monthly Trend ────────────────────────────────────────────────────────
-function MonthlyTrend({ trendData }) {
+function MonthlyTrend({ trendData, currency = 'SAR' }) {
   const labels  = trendData.map(d => d.month)
   const actuals = trendData.filter(d => !d.isForecast).map(d => d.value ?? d.total)
   const forecast = trendData.map(d => d.isForecast ? (d.value ?? d.total) : null)
@@ -275,7 +277,7 @@ function MonthlyTrend({ trendData }) {
           <div key={d.month} className={`card ${d.isForecast ? 'border border-yellow-800/50' : ''}`}>
             <p className="text-xs text-gray-500">{d.isForecast ? '📈 Forecast' : 'Actual'} — {d.month}</p>
             <p className="text-lg font-bold text-white mt-1">
-              SAR {(d.value ?? d.total ?? 0).toLocaleString('en-SA', { maximumFractionDigits: 0 })}
+              {currency} {(d.value ?? d.total ?? 0).toLocaleString('en-SA', { maximumFractionDigits: 0 })}
             </p>
           </div>
         ))}
@@ -285,7 +287,7 @@ function MonthlyTrend({ trendData }) {
 }
 
 // ── Tab: Asset Breakdown ──────────────────────────────────────────────────────
-function AssetBreakdown({ assetMetrics }) {
+function AssetBreakdown({ assetMetrics, currency = 'SAR' }) {
   const [search, setSearch] = useState('')
   const visible = assetMetrics
     .filter(a => !search || a.assetNo.toLowerCase().includes(search.toLowerCase()))
@@ -334,7 +336,7 @@ function AssetBreakdown({ assetMetrics }) {
               <tr key={a.assetNo} className="border-b border-gray-800/50 hover:bg-gray-800/20">
                 <td className="py-2 pr-4 text-white font-medium font-mono text-xs">{a.assetNo}</td>
                 <td className="py-2 pr-4 text-gray-300 text-right">{a.count}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">SAR {a.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}</td>
+                <td className="py-2 pr-4 text-gray-300 text-right">{currency} {a.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}</td>
                 <td className="py-2 pr-4 text-right">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${a.highRiskCount > 0 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}`}>
                     {a.highRiskCount}

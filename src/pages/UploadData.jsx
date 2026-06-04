@@ -2,13 +2,14 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
 import { batchClassify } from '../lib/tyreClassifier'
 import * as XLSX from 'xlsx'
 import { Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen, AlertTriangle } from 'lucide-react'
 
 const CANONICAL_FIELDS = [
   'sr', 'issue_date', 'description', 'brand', 'serial_no', 'qty',
-  'job_card', 'mis_number', 'asset_no', 'site', 'remarks',
+  'job_card', 'mis_number', 'asset_no', 'site', 'country', 'remarks',
 ]
 
 const FIELD_GUESSES = {
@@ -22,6 +23,7 @@ const FIELD_GUESSES = {
   mis_number: ['mis', 'mis no', 'mis number', 'mis_number'],
   asset_no: ['asset', 'asset no', 'asset_no', 'asset number', 'equipment', 'vehicle'],
   site: ['site', 'location', 'area', 'camp'],
+  country: ['country', 'nation', 'region country'],
   remarks: ['remarks', 'notes', 'comment', 'comments'],
 }
 
@@ -57,6 +59,7 @@ function parseDate(val) {
 
 export default function UploadData() {
   const { profile } = useAuth()
+  const { activeCountry } = useSettings()
   const navigate    = useNavigate()
   const fileRef     = useRef(null)
 
@@ -164,8 +167,14 @@ export default function UploadData() {
 
     await saveColumnMapping(fingerprintHeaders(headers))
 
-    // Build all records
-    let records = buildRows(headers, rows, mapping).map(r => ({ ...r, region: profile?.region ?? 'KSA', uploaded_by: profile?.id }))
+    // Build all records — fall back to active country when not in spreadsheet
+    const defaultCountry = activeCountry !== 'All' ? activeCountry : 'KSA'
+    let records = buildRows(headers, rows, mapping).map(r => ({
+      ...r,
+      country: r.country || defaultCountry,
+      region: profile?.region ?? defaultCountry,
+      uploaded_by: profile?.id,
+    }))
 
     // Filter duplicates if requested
     if (skipDupes && dupes.length > 0) {
@@ -223,7 +232,7 @@ export default function UploadData() {
     // Upload history
     await supabase.from('upload_history').insert({
       file_names: [fileName], records_added: added, records_skipped: skipped + (skipDupes ? dupes.length : 0),
-      skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? 'KSA', uploaded_by: profile?.id,
+      skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? defaultCountry, uploaded_by: profile?.id,
     })
 
     setResult({ added, skipped, skipLog, autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0 })

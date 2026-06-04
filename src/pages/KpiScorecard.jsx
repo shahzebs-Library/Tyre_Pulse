@@ -32,7 +32,7 @@ const KPI_LABELS = {
 
 export default function KpiScorecard() {
   const { profile } = useAuth()
-  const { appSettings } = useSettings()
+  const { appSettings, activeCountry, activeCurrency } = useSettings()
   const [records, setRecords]   = useState([])
   const [actions, setActions]   = useState([])
   const [targets, setTargets]   = useState(DEFAULT_TARGETS)
@@ -46,9 +46,11 @@ export default function KpiScorecard() {
   useEffect(() => {
     async function load() {
       setLoading(true)
+      const cf = activeCountry !== 'All' ? activeCountry : null
+      const flt = q => cf ? q.eq('country', cf) : q
       const [r, a, t] = await Promise.all([
-        supabase.from('tyre_records').select('id,issue_date,risk_level,cost_per_tyre,qty,created_at').order('issue_date'),
-        supabase.from('corrective_actions').select('id,due_date,status').neq('status', 'Closed'),
+        flt(supabase.from('tyre_records').select('id,issue_date,risk_level,cost_per_tyre,qty,created_at').order('issue_date')),
+        flt(supabase.from('corrective_actions').select('id,due_date,status').neq('status', 'Closed')),
         supabase.from('kpi_targets').select('*').eq('year', new Date().getFullYear()),
       ])
       setRecords(r.data || [])
@@ -64,7 +66,7 @@ export default function KpiScorecard() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [activeCountry])
 
   // Build last 12 months axis
   const months = useMemo(() => {
@@ -224,7 +226,7 @@ export default function KpiScorecard() {
             label="Monthly Cost"
             actual={currentMonth.totalCost}
             target={targets.max_monthly_cost}
-            format={v => `SAR ${v.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`}
+            format={v => `${activeCurrency} ${v.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`}
             invert higherIsBad
             prev={prevMonth?.totalCost}
           />
@@ -256,7 +258,7 @@ export default function KpiScorecard() {
             label="Avg Cost / Tyre"
             actual={currentMonth.count ? Math.round(currentMonth.totalCost / currentMonth.count) : 0}
             target={targets.max_avg_cost_tyre}
-            format={v => `SAR ${v.toLocaleString()}`}
+            format={v => `${activeCurrency} ${v.toLocaleString()}`}
             invert higherIsBad
             prev={prevMonth && prevMonth.count ? Math.round(prevMonth.totalCost / prevMonth.count) : undefined}
           />
@@ -264,7 +266,7 @@ export default function KpiScorecard() {
             <div className="card">
               <p className="text-xs text-gray-400 mb-1">Forecast (next month)</p>
               <p className="text-xl font-bold text-yellow-400">
-                SAR {Math.max(0, Math.round(costTrend.reg.predict(months.length))).toLocaleString()}
+                {activeCurrency} {Math.max(0, Math.round(costTrend.reg.predict(months.length))).toLocaleString()}
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 R² = {costTrend.reg.r2.toFixed(2)} · slope {costTrend.reg.slope > 0 ? '+' : ''}{Math.round(costTrend.reg.slope).toLocaleString()}/mo
@@ -314,14 +316,14 @@ export default function KpiScorecard() {
                   <td className="py-2 pr-4 text-gray-300 text-right">{a.count}</td>
                   <td className="py-2 pr-4 text-right">
                     <span className={overBudget ? 'text-red-400 font-medium' : 'text-gray-300'}>
-                      SAR {a.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
+                      {activeCurrency} {a.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
                     </span>
                   </td>
                   <td className="py-2 pr-4 text-right">
                     {a.count === 0
                       ? <span className="text-gray-600">—</span>
                       : <span className={`text-xs px-2 py-0.5 rounded-full ${overBudget ? 'bg-red-900/40 text-red-400' : 'bg-green-900/40 text-green-400'}`}>
-                          {overBudget ? `+SAR ${(a.totalCost - targets.max_monthly_cost).toLocaleString('en-SA', { maximumFractionDigits: 0 })}` : 'On target'}
+                          {overBudget ? `+${activeCurrency} ${(a.totalCost - targets.max_monthly_cost).toLocaleString('en-SA', { maximumFractionDigits: 0 })}` : 'On target'}
                         </span>
                     }
                   </td>

@@ -29,7 +29,7 @@ const NO_SCALE_OPTS = { ...BASE_OPTS, scales: undefined }
 
 export default function Dashboard() {
   const { profile } = useAuth()
-  const { appSettings } = useSettings()
+  const { appSettings, activeCountry, activeCurrency } = useSettings()
   const [stats, setStats]             = useState({ tyres: 0, stock: 0, actions: 0, critical: 0, cost: 0 })
   const [riskTrend, setRiskTrend]     = useState(null)   // { delta, pct }
   const [brandData, setBrandData]     = useState(null)
@@ -40,15 +40,17 @@ export default function Dashboard() {
   const [openActions, setOpenActions] = useState([])
   const [loading, setLoading]         = useState(true)
 
-  useEffect(() => { loadDashboard() }, [])
+  useEffect(() => { loadDashboard() }, [activeCountry])
 
   async function loadDashboard() {
+    const cf = activeCountry !== 'All' ? activeCountry : null
+    const flt = q => cf ? q.eq('country', cf) : q
     const [tyreRes, stockRes, actionRes, recentRes, openActionsRes] = await Promise.all([
-      supabase.from('tyre_records').select('id, cost_per_tyre, brand, issue_date, risk_level, site, category', { count: 'exact' }),
-      supabase.from('stock_records').select('id', { count: 'exact' }),
-      supabase.from('corrective_actions').select('id, status', { count: 'exact' }),
-      supabase.from('tyre_records').select('id, issue_date, brand, asset_no, site, risk_level').order('created_at', { ascending: false }).limit(5),
-      supabase.from('corrective_actions').select('id, title, priority, site, status').eq('status', 'Open').order('created_at', { ascending: false }).limit(5),
+      flt(supabase.from('tyre_records').select('id, cost_per_tyre, brand, issue_date, risk_level, site, category', { count: 'exact' })),
+      flt(supabase.from('stock_records').select('id', { count: 'exact' })),
+      flt(supabase.from('corrective_actions').select('id, status', { count: 'exact' })),
+      flt(supabase.from('tyre_records').select('id, issue_date, brand, asset_no, site, risk_level').order('created_at', { ascending: false }).limit(5)),
+      flt(supabase.from('corrective_actions').select('id, title, priority, site, status').eq('status', 'Open').order('created_at', { ascending: false }).limit(5)),
     ])
 
     const tyres = tyreRes.data ?? []
@@ -124,7 +126,7 @@ export default function Dashboard() {
     if (topSites.length) {
       setSiteCostData({
         labels: topSites.map(([s]) => s),
-        datasets: [{ label: 'Cost (SAR)', data: topSites.map(([, c]) => c), backgroundColor: '#7c3aed', borderRadius: 4 }],
+        datasets: [{ label: `Cost (${activeCurrency})`, data: topSites.map(([, c]) => c), backgroundColor: '#7c3aed', borderRadius: 4 }],
       })
     }
 
@@ -207,7 +209,7 @@ export default function Dashboard() {
         <StatCard label="Stock Sites"  value={stats.stock.toLocaleString()}                     icon={Package}      color="green" />
         <StatCard label="Open Actions" value={stats.actions.toLocaleString()}                   icon={ClipboardList} color="yellow" />
         <StatCard label="High Risk"    value={stats.critical.toLocaleString()}                  icon={AlertTriangle} color="red" />
-        <StatCard label="Total Cost"   value={`SAR ${(stats.cost / 1000).toFixed(0)}K`}         icon={DollarSign}   color="purple" />
+        <StatCard label="Total Cost"   value={`${activeCurrency} ${(stats.cost / 1000).toFixed(0)}K`}         icon={DollarSign}   color="purple" />
       </div>
 
       {/* Risk trend callout */}
@@ -249,7 +251,7 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="card">
-          <h2 className="text-base font-semibold text-white mb-4">Top Sites by Spend (SAR)</h2>
+          <h2 className="text-base font-semibold text-white mb-4">Top Sites by Spend ({activeCurrency})</h2>
           <div className="h-56">
             {siteCostData
               ? <Bar data={siteCostData} options={{ ...BASE_OPTS, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#9ca3af', callback: v => `${(v/1000).toFixed(0)}K` }, grid: { color: '#1f2937' } }, y: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } } } }} />

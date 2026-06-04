@@ -17,27 +17,29 @@ const SITE_COLORS = [
 ]
 
 export default function SiteComparison() {
-  const { appSettings } = useSettings()
+  const { appSettings, activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedSites, setSelectedSites] = useState([])
 
   useEffect(() => {
-    supabase
+    let q = supabase
       .from('tyre_records')
       .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty')
       .order('issue_date')
-      .then(({ data }) => {
-        const recs = data || []
-        setRecords(recs)
-        // Default: top 4 sites by count
-        const byCount = {}
-        recs.forEach(r => { if (r.site) byCount[r.site] = (byCount[r.site] || 0) + 1 })
-        const top4 = Object.entries(byCount).sort(([, a], [, b]) => b - a).slice(0, 4).map(([s]) => s)
-        setSelectedSites(top4)
-        setLoading(false)
-      })
-  }, [])
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    q.then(({ data }) => {
+      const recs = data || []
+      setRecords(recs)
+      setSelectedSites([])
+      // Default: top 4 sites by count
+      const byCount = {}
+      recs.forEach(r => { if (r.site) byCount[r.site] = (byCount[r.site] || 0) + 1 })
+      const top4 = Object.entries(byCount).sort(([, a], [, b]) => b - a).slice(0, 4).map(([s]) => s)
+      setSelectedSites(top4)
+      setLoading(false)
+    })
+  }, [activeCountry])
 
   const allMetrics = useMemo(() => computeSiteMetrics(records, appSettings.cost_per_tyre), [records, appSettings.cost_per_tyre])
   const allSites   = useMemo(() => allMetrics.map(s => s.site), [allMetrics])
@@ -149,7 +151,7 @@ export default function SiteComparison() {
                 <p className="text-white font-semibold text-sm">{s.site}</p>
                 <div className="mt-3 space-y-2">
                   <KpiRow label="Records" value={s.count} />
-                  <KpiRow label="Total Cost" value={`SAR ${s.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`} />
+                  <KpiRow label="Total Cost" value={`${activeCurrency} ${s.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`} />
                   <KpiRow label="High Risk" value={`${s.highRiskCount} (${s.highRiskPct.toFixed(0)}%)`}
                     highlight={s.highRiskPct > 30 ? 'text-red-400' : s.highRiskPct > 15 ? 'text-yellow-400' : 'text-green-400'} />
                   <KpiRow label="Top Brand" value={s.topBrand} />

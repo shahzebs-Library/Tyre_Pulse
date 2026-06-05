@@ -26,6 +26,9 @@ export default function DataCleaning() {
   const [filterSite, setFilterSite]         = useState('')
   const [sites, setSites]                   = useState([])
   const [stats, setStats]                   = useState({ pending: 0, cleaned: 0 })
+  const [cleanedSearch, setCleanedSearch]   = useState('')
+  const [cleanedPage, setCleanedPage]       = useState(1)
+  const CLEANED_PAGE_SIZE = 50
 
   // ── Approve-all progress ─────────────────────────────────────────────────────
   const [approveAllProgress, setApproveAllProgress] = useState(null)   // null | { done, total }
@@ -85,7 +88,7 @@ export default function DataCleaning() {
       .select('id, asset_no, brand, site, category, risk_level, remarks_cleaned, issue_date, description, remarks')
       .eq('cleaned', true)
       .order('created_at', { ascending: false })
-      .limit(100)
+      .limit(500)
     setCleanedRecords(data ?? [])
     setCleanedSelected(new Set())
     setReclassifyProposed(null)
@@ -205,8 +208,36 @@ export default function DataCleaning() {
     setSaving(false)
   }
 
+  // ── Undo classification (cleaned tab) ───────────────────────────────────────
+  async function undoClassification(record) {
+    await supabase.from('tyre_records').update({
+      category: null,
+      risk_level: null,
+      remarks_cleaned: null,
+      cleaned: false,
+    }).eq('id', record.id)
+
+    await supabase.from('cleaning_log').delete().eq('tyre_record_id', record.id)
+
+    await loadCleaned()
+    setSaveCount(c => c + 1)
+  }
+
   const totalPages = Math.ceil(totalPending / PAGE_SIZE)
   const allSelected = classified.length > 0 && classified.every(r => selected.has(r.id))
+
+  // ── Cleaned tab derived data ─────────────────────────────────────────────────
+  let cleanedFiltered = cleanedRecords
+  if (cleanedSearch) {
+    const q = cleanedSearch.toLowerCase()
+    cleanedFiltered = cleanedFiltered.filter(r =>
+      r.asset_no?.toLowerCase().includes(q) ||
+      r.brand?.toLowerCase().includes(q) ||
+      r.site?.toLowerCase().includes(q) ||
+      r.serial_no?.toLowerCase().includes(q)
+    )
+  }
+  const cleanedPaged = cleanedFiltered.slice((cleanedPage - 1) * CLEANED_PAGE_SIZE, cleanedPage * CLEANED_PAGE_SIZE)
 
   return (
     <div className="space-y-4">
@@ -372,6 +403,16 @@ export default function DataCleaning() {
       {/* ── Cleaned tab ───────────────────────────────────────────────────── */}
       {tab === 'cleaned' && (
         <>
+          {/* Filter / search bar */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              className="input flex-1 min-w-48"
+              placeholder="Search asset, brand, site…"
+              value={cleanedSearch}
+              onChange={e => { setCleanedSearch(e.target.value); setCleanedPage(1) }}
+            />
+          </div>
+
           {/* Re-classify toolbar */}
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-sm text-gray-400">{cleanedSelected.size} selected</span>
@@ -426,17 +467,17 @@ export default function DataCleaning() {
                     <tr>
                       <th className="table-header w-10">
                         <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
-                          checked={cleanedRecords.length > 0 && cleanedRecords.every(r => cleanedSelected.has(r.id))}
+                          checked={cleanedPaged.length > 0 && cleanedPaged.every(r => cleanedSelected.has(r.id))}
                           onChange={() => {
-                            if (cleanedRecords.every(r => cleanedSelected.has(r.id))) setCleanedSelected(new Set())
-                            else setCleanedSelected(new Set(cleanedRecords.map(r => r.id)))
+                            if (cleanedPaged.every(r => cleanedSelected.has(r.id))) setCleanedSelected(new Set())
+                            else setCleanedSelected(new Set(cleanedPaged.map(r => r.id)))
                           }} />
                       </th>
-                      {['Asset No', 'Brand', 'Site', 'Category', 'Risk Level', 'Cleaned Remarks', 'Date'].map(h => <th key={h} className="table-header">{h}</th>)}
+                      {['Asset No', 'Brand', 'Site', 'Category', 'Risk Level', 'Cleaned Remarks', 'Original Remarks', 'Date', ''].map(h => <th key={h} className="table-header">{h}</th>)}
                     </tr>
                   </thead>
                   <tbody>
-                    {cleanedRecords.map(r => (
+                    {cleanedPaged.map(r => (
                       <tr key={r.id} className={`transition-colors ${cleanedSelected.has(r.id) ? 'bg-green-950/30' : 'hover:bg-gray-800/30'}`}>
                         <td className="table-cell">
                           <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
@@ -448,12 +489,41 @@ export default function DataCleaning() {
                         <td className="table-cell">{r.category ?? '—'}</td>
                         <td className="table-cell">{r.risk_level ? <span className={`badge ${RISK_COLOUR[r.risk_level]}`}>{r.risk_level}</span> : '—'}</td>
                         <td className="table-cell text-gray-400 text-xs max-w-xs truncate">{r.remarks_cleaned ?? '—'}</td>
+                        <td className="py-2 pr-3 text-gray-500 text-xs max-w-48 truncate" title={r.remarks || r.description}>
+                          {(r.remarks || r.description || '—').slice(0, 60)}{(r.remarks || r.description || '').length > 60 ? '…' : ''}
+                        </td>
                         <td className="table-cell text-gray-500">{r.issue_date ?? '—'}</td>
+                        <td className="table-cell">
+                          <button
+                            onClick={() => undoClassification(r)}
+                            className="text-xs px-2 py-1 rounded bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 border border-yellow-700/40 transition-colors"
+                            title="Move back to Pending"
+                          >
+                            Undo
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              {cleanedFiltered.length > CLEANED_PAGE_SIZE && (
+                <div className="flex items-center justify-between mt-3 px-4 pb-3 text-sm text-gray-500">
+                  <span>{cleanedFiltered.length} records · page {cleanedPage} of {Math.ceil(cleanedFiltered.length / CLEANED_PAGE_SIZE)}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setCleanedPage(p => Math.max(1, p - 1))}
+                      disabled={cleanedPage === 1}
+                      className="px-3 py-1 rounded bg-gray-800 border border-gray-700 disabled:opacity-40 hover:bg-gray-700"
+                    >← Prev</button>
+                    <button
+                      onClick={() => setCleanedPage(p => Math.min(Math.ceil(cleanedFiltered.length / CLEANED_PAGE_SIZE), p + 1))}
+                      disabled={cleanedPage >= Math.ceil(cleanedFiltered.length / CLEANED_PAGE_SIZE)}
+                      className="px-3 py-1 rounded bg-gray-800 border border-gray-700 disabled:opacity-40 hover:bg-gray-700"
+                    >Next →</button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>

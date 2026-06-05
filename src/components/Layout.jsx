@@ -6,7 +6,7 @@ import {
   LayoutDashboard, CircleDot, Package, DollarSign,
   ClipboardList, Search, Upload, Settings, LogOut,
   Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
-  Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users,
+  Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, Sparkles,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -46,6 +46,7 @@ const NAV_GROUPS = [
       { to: '/alerts',          label: 'Alerts',           icon: Bell },
       { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle },
       { to: '/vehicle-history', label: 'Vehicle History',  icon: Car },
+      { to: '/ai',              label: 'AI Analytics',     icon: Sparkles },
     ],
   },
   {

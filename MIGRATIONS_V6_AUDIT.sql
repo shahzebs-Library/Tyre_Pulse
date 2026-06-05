@@ -5,18 +5,21 @@
 -- Built by Shahzeb Rahman © 2026
 -- ============================================================
 
--- Create table without user_id first (safe if table already exists from a prior attempt)
+-- Create table with minimum required columns only (safe if already partially exists)
 CREATE TABLE IF NOT EXISTS public.audit_log (
-  id           uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  action       text NOT NULL,
-  table_name   text,
-  record_count integer DEFAULT 1,
-  details      jsonb,
-  created_at   timestamptz DEFAULT now()
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY
 );
 
--- Add user_id separately — idempotent, works even if table was partially created before
-ALTER TABLE public.audit_log ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES public.profiles(id);
+-- Add every column separately — each is idempotent, handles any partial table state
+ALTER TABLE public.audit_log ADD COLUMN IF NOT EXISTS user_id      uuid REFERENCES public.profiles(id);
+ALTER TABLE public.audit_log ADD COLUMN IF NOT EXISTS action       text;
+ALTER TABLE public.audit_log ADD COLUMN IF NOT EXISTS table_name   text;
+ALTER TABLE public.audit_log ADD COLUMN IF NOT EXISTS record_count integer DEFAULT 1;
+ALTER TABLE public.audit_log ADD COLUMN IF NOT EXISTS details      jsonb;
+ALTER TABLE public.audit_log ADD COLUMN IF NOT EXISTS created_at   timestamptz DEFAULT now();
+
+-- Add NOT NULL constraint to action if not already set
+ALTER TABLE public.audit_log ALTER COLUMN action SET NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_audit_log_user    ON public.audit_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_action  ON public.audit_log(action);
@@ -24,7 +27,6 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_created ON public.audit_log(created_at 
 
 ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
 
--- Drop policies first so the script is safe to re-run
 DROP POLICY IF EXISTS "audit_select" ON public.audit_log;
 DROP POLICY IF EXISTS "audit_insert" ON public.audit_log;
 CREATE POLICY "audit_select" ON public.audit_log FOR SELECT USING (auth.role() = 'authenticated');

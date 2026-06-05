@@ -123,6 +123,63 @@ function computeMisuseScore(anomalies, highRiskCount, totalCount, spanMonths) {
   return Math.min(100, score)
 }
 
+// ── Fleet-policy red flags (computed locally using fleet master data) ─────────
+
+function computeFleetPolicyFlags(assetRecords, fleetRecord) {
+  const flags = []
+  if (!fleetRecord) return flags
+
+  // BUDGET_BREACH: monthly spend > monthly_tyre_budget
+  if (fleetRecord.monthly_tyre_budget) {
+    const budget = +fleetRecord.monthly_tyre_budget
+    // Group records by YYYY-MM
+    const byMonth = {}
+    assetRecords.forEach(r => {
+      if (!r.issue_date) return
+      const month = r.issue_date.slice(0, 7)
+      if (!byMonth[month]) byMonth[month] = []
+      byMonth[month].push(r)
+    })
+    Object.entries(byMonth).forEach(([month, recs]) => {
+      const spend = recs.reduce((s, r) => s + (+(r.cost_per_tyre || 0)) * (+(r.qty || 1)), 0)
+      if (spend > budget) {
+        flags.push({
+          type: 'BUDGET_BREACH',
+          severity: 'high',
+          record_ids: recs.map(r => r.id),
+          records: recs,
+          message: `Monthly budget exceeded in ${month}: spent ${spend.toLocaleString()} vs budget ${budget.toLocaleString()}`,
+          detail: `${recs.length} tyre record(s) in ${month}, total cost: ${spend.toLocaleString()}`,
+        })
+      }
+    })
+  }
+
+  // LOW_KM_VS_POLICY: km run < 40% of expected_km_per_tyre
+  if (fleetRecord.expected_km_per_tyre) {
+    const threshold = +fleetRecord.expected_km_per_tyre * 0.4
+    assetRecords.forEach(r => {
+      const kmFit = r.km_at_fitment != null ? +r.km_at_fitment : null
+      const kmRem = r.km_at_removal  != null ? +r.km_at_removal  : null
+      if (kmFit !== null && kmRem !== null && !isNaN(kmFit) && !isNaN(kmRem) && kmRem > kmFit) {
+        const km = kmRem - kmFit
+        if (km < threshold) {
+          flags.push({
+            type: 'LOW_KM_VS_POLICY',
+            severity: 'high',
+            record_ids: [r.id],
+            records: [r],
+            message: `Tyre removed after only ${km.toLocaleString()} km — below 40% of policy threshold (${Math.round(threshold).toLocaleString()} km)`,
+            detail: `Expected: ${fleetRecord.expected_km_per_tyre.toLocaleString()} km, actual: ${km.toLocaleString()} km on ${r.issue_date}`,
+          })
+        }
+      }
+    })
+  }
+
+  return flags
+}
+
 // ── Flag type metadata ────────────────────────────────────────────────────────
 
 const FLAG_META = {
@@ -134,6 +191,8 @@ const FLAG_META = {
   DUPLICATE_ENTRY:   { label: 'Duplicate Entry',        color: 'text-yellow-400', bg: 'bg-yellow-900/20 border-yellow-700/40' },
   LOW_KM_USAGE:      { label: 'Low KM Usage',           color: 'text-orange-400', bg: 'bg-orange-900/20 border-orange-700/40' },
   INCONSISTENT_KM:   { label: 'Inconsistent Odometer',  color: 'text-red-400',    bg: 'bg-red-900/20 border-red-700/40' },
+  BUDGET_BREACH:     { label: 'Budget Breach',          color: 'text-red-400',    bg: 'bg-red-900/20 border-red-700/40' },
+  LOW_KM_VS_POLICY:  { label: 'KM Below Policy',        color: 'text-orange-400', bg: 'bg-orange-900/20 border-orange-700/40' },
 }
 
 function getFlagMeta(type) {
@@ -157,6 +216,9 @@ export default function VehicleHistory() {
   const [sites, setSites]             = useState([])
   const [selected, setSelected]       = useState(null)   // asset_no string
 
+  // Fleet master data
+  const [fleetMap, setFleetMap] = useState({})   // asset_no -> vehicle_fleet row
+
   // Filters
   const [search, setSearch]               = useState('')
   const [siteFilter, setSiteFilter]       = useState('')
@@ -179,6 +241,13 @@ export default function VehicleHistory() {
       setAllRecords(rows)
       const uniqSites = [...new Set(rows.map(r => r.site).filter(Boolean))].sort()
       setSites(uniqSites)
+
+      // Load fleet master data
+      const { data: fleetData } = await supabase.from('vehicle_fleet').select('*')
+      const map = {}
+      ;(fleetData || []).forEach(v => { map[v.asset_no] = v })
+      setFleetMap(map)
+
       setLoading(false)
     }
     load()
@@ -203,21 +272,25 @@ export default function VehicleHistory() {
         return a.asset_no === asset.assetNo
       })
 
-      const localFlags  = computeLocalRedFlags(asset.records)
-      const allFlags    = [...assetAnomalies, ...localFlags]
-      const misuseScore = computeMisuseScore(assetAnomalies, asset.highRiskCount, asset.count, asset.spanMonths)
-      const avgDays     = asset.count > 1 ? Math.round((asset.spanMonths * 30) / asset.count) : null
+      const fleetRecord   = fleetMap[asset.assetNo] || null
+      const localFlags    = computeLocalRedFlags(asset.records)
+      const policyFlags   = computeFleetPolicyFlags(asset.records, fleetRecord)
+      const allFlags      = [...assetAnomalies, ...localFlags, ...policyFlags]
+      const misuseScore   = computeMisuseScore(assetAnomalies, asset.highRiskCount, asset.count, asset.spanMonths)
+      const avgDays       = asset.count > 1 ? Math.round((asset.spanMonths * 30) / asset.count) : null
 
       return {
         ...asset,
         anomalies: assetAnomalies,
         localFlags,
+        policyFlags,
         allFlags,
         misuseScore,
         avgDays,
+        fleetRecord,
       }
     })
-  }, [assetMetrics, allAnomalies])
+  }, [assetMetrics, allAnomalies, fleetMap])
 
   // ── Filter + sort ────────────────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
@@ -445,6 +518,7 @@ export default function VehicleHistory() {
           relatedActions={relatedActions}
           relatedRca={relatedRca}
           relatedInspections={relatedInspections}
+          fleetRecord={selectedRow.fleetRecord}
         />
       )}
     </div>
@@ -455,7 +529,7 @@ export default function VehicleHistory() {
 // Vehicle Detail Panel
 // ─────────────────────────────────────────────────────────────────────────────
 
-function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedActions, relatedRca, relatedInspections }) {
+function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedActions, relatedRca, relatedInspections, fleetRecord }) {
   const [activeTab, setActiveTab] = useState(0)
 
   // Build set of flagged record IDs for highlighting in timeline
@@ -554,6 +628,45 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
           </button>
         </div>
       </div>
+
+      {/* Vehicle Specs row */}
+      {fleetRecord ? (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs text-gray-500 mr-1">Vehicle Specs:</span>
+          {fleetRecord.make && (
+            <span className="text-xs px-2 py-0.5 rounded bg-blue-900/30 border border-blue-700/40 text-blue-300">
+              <span className="text-gray-500 mr-1">Make</span>{fleetRecord.make}
+            </span>
+          )}
+          {fleetRecord.model && (
+            <span className="text-xs px-2 py-0.5 rounded bg-blue-900/30 border border-blue-700/40 text-blue-300">
+              <span className="text-gray-500 mr-1">Model</span>{fleetRecord.model}
+            </span>
+          )}
+          {fleetRecord.year && (
+            <span className="text-xs px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300">
+              <span className="text-gray-500 mr-1">Year</span>{fleetRecord.year}
+            </span>
+          )}
+          {fleetRecord.vehicle_type && (
+            <span className="text-xs px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300">
+              <span className="text-gray-500 mr-1">Type</span>{fleetRecord.vehicle_type}
+            </span>
+          )}
+          {fleetRecord.operator_name && (
+            <span className="text-xs px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300">
+              <span className="text-gray-500 mr-1">Operator</span>{fleetRecord.operator_name}
+            </span>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-600">
+          No fleet record —{' '}
+          <a href="/fleet-master" className="text-blue-500 hover:text-blue-400 underline">
+            add in Fleet Master
+          </a>
+        </p>
+      )}
 
       {/* Red flags alert box */}
       {row.allFlags.length > 0 && (
@@ -816,6 +929,8 @@ const FLAG_RECOMMENDATIONS = {
   COST_SPIKE:      'Verify invoice. Compare against supplier rate card. May indicate billing error or procurement issue.',
   LOW_KM_USAGE:    'Physical inspection recommended. Extremely low mileage before removal is a strong indicator of tyre theft.',
   INCONSISTENT_KM: 'Audit odometer readings. Non-sequential km may indicate tampering, odometer rollback, or data entry error.',
+  BUDGET_BREACH:   'Review monthly spend against approved budget. Escalate to procurement if systematic. Update budget in Fleet Master if policy has changed.',
+  LOW_KM_VS_POLICY:'Tyre was removed well below the expected km threshold in Fleet Master. Investigate for premature failure, misuse, or incorrect odometer data.',
 }
 
 function RedFlagsTab({ flags }) {

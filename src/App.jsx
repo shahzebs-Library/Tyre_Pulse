@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { SettingsProvider } from './contexts/SettingsContext'
-import ProtectedRoute from './components/ProtectedRoute'
+import ProtectedRoute, { RoleRoute } from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -54,16 +54,16 @@ export default function App() {
                     <Route path="/rca"         element={<RcaRecords />} />
                     <Route path="/inspections" element={<Inspections />} />
                     <Route path="/alerts"      element={<Alerts />} />
-                    <Route path="/anomalies"     element={<Anomalies />} />
+                    <Route path="/anomalies"     element={<RoleRoute allowed={['Admin']}><Anomalies /></RoleRoute>} />
                     <Route path="/country-comp" element={<CountryComparison />} />
-                    <Route path="/vehicle-history" element={<VehicleHistory />} />
+                    <Route path="/vehicle-history" element={<RoleRoute allowed={['Admin']}><VehicleHistory /></RoleRoute>} />
                     <Route path="/fleet-master"   element={<FleetMaster />} />
-                    <Route path="/ai"          element={<AiAnalytics />} />
-                    <Route path="/cleaning"    element={<DataCleaning />} />
+                    <Route path="/ai"          element={<RoleRoute allowed={['Admin']}><AiAnalytics /></RoleRoute>} />
+                    <Route path="/cleaning"    element={<RoleRoute allowed={['Admin']}><DataCleaning /></RoleRoute>} />
                     <Route path="/upload"      element={<UploadData />} />
-                    <Route path="/audit"       element={<AuditTrail />} />
+                    <Route path="/audit"       element={<RoleRoute allowed={['Admin']}><AuditTrail /></RoleRoute>} />
                     <Route path="/settings"    element={<Settings />} />
-                    <Route path="/users"       element={<UserManagement />} />
+                    <Route path="/users"       element={<RoleRoute allowed={['Admin']}><UserManagement /></RoleRoute>} />
                     <Route path="*"            element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

@@ -47,17 +47,17 @@ const NAV_GROUPS = [
     label: 'Intelligence',
     items: [
       { to: '/alerts',          label: 'Alerts',           icon: Bell },
-      { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle },
-      { to: '/vehicle-history', label: 'Vehicle History',  icon: Car },
-      { to: '/ai',              label: 'Smart Analytics',  icon: Sparkles },
+      { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle, adminOnly: true },
+      { to: '/vehicle-history', label: 'Vehicle History',  icon: Car,           adminOnly: true },
+      { to: '/ai',              label: 'Smart Analytics',  icon: Sparkles,      adminOnly: true },
     ],
   },
   {
     label: 'Data',
     items: [
-      { to: '/cleaning', label: 'Data Cleaning', icon: Wand2 },
+      { to: '/cleaning', label: 'Data Cleaning', icon: Wand2,        adminOnly: true },
       { to: '/upload',   label: 'Upload Data',   icon: Upload },
-      { to: '/audit',    label: 'Audit Trail',   icon: ClipboardList },
+      { to: '/audit',    label: 'Audit Trail',   icon: ClipboardList, adminOnly: true },
       { to: '/settings', label: 'Settings',      icon: Settings },
     ],
   },
@@ -205,7 +205,7 @@ export default function Layout({ children }) {
               {sidebarOpen && (
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700 px-2.5 pt-2.5 pb-1">{label}</p>
               )}
-              {items.map(({ to, label: lbl, icon: Icon, end }) => (
+              {items.filter(item => !item.adminOnly || profile?.role === 'Admin').map(({ to, label: lbl, icon: Icon, end }) => (
                 <NavLink
                   key={to} to={to} end={end}
                   title={!sidebarOpen ? lbl : undefined}

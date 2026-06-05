@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES, COUNTRY_LABEL } from '../contexts/SettingsContext'
+import { useTheme } from '../contexts/ThemeContext'
 import {
   LayoutDashboard, CircleDot, Package, DollarSign,
   ClipboardList, Search, Upload, Settings, LogOut,
   Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
-  Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users,
+  Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, Sparkles,
+  Sun, Moon,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -46,6 +48,7 @@ const NAV_GROUPS = [
       { to: '/alerts',          label: 'Alerts',           icon: Bell },
       { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle },
       { to: '/vehicle-history', label: 'Vehicle History',  icon: Car },
+      { to: '/ai',              label: 'AI Analytics',     icon: Sparkles },
     ],
   },
   {
@@ -68,6 +71,7 @@ const SEARCH_TABLES = [
 export default function Layout({ children }) {
   const { profile, signOut }                = useAuth()
   const { activeCountry, setActiveCountry } = useSettings()
+  const { theme, toggleTheme }              = useTheme()
   const navigate     = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [searchOpen, setSearchOpen]   = useState(false)
@@ -265,6 +269,16 @@ export default function Layout({ children }) {
                 <p className="text-[11px] text-gray-600 truncate">{profile?.role ?? 'Reporter'}</p>
               </div>
             )}
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="text-gray-700 hover:text-gray-400 transition-colors flex-shrink-0"
+            >
+              {theme === 'dark'
+                ? <Sun size={14} />
+                : <Moon size={14} />
+              }
+            </button>
             <button onClick={handleSignOut} title="Sign out" className="text-gray-700 hover:text-red-400 transition-colors flex-shrink-0">
               <LogOut size={14} />
             </button>

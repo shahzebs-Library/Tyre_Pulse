@@ -6,6 +6,7 @@ import {
   RISK_COLOUR,
   CONFIDENCE_COLOUR,
   ALL_CATEGORY_LABELS,
+  containsArabic,
 } from '../lib/tyreClassifier'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -619,5 +620,45 @@ describe('RISK_COLOUR and CONFIDENCE_COLOUR constants', () => {
       expect(typeof val).toBe('string')
       expect(val.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('classifyTyre — Arabic and Urdu terms', () => {
+  it('classifies Arabic blowout انفجار', () => {
+    const r = classifyTyre('', 'انفجار في الإطار الأمامي')
+    expect(r.category).toBe('Blowout')
+  })
+  it('classifies Arabic puncture ثقب', () => {
+    const r = classifyTyre('', 'ثقب في العجلة')
+    expect(r.category).toBe('Puncture')
+  })
+  it('classifies Arabic worn تآكل', () => {
+    const r = classifyTyre('', 'تآكل في المطاط')
+    expect(r.category).toBe('Normal Wear')
+  })
+  it('classifies Urdu blowout phat gaya', () => {
+    const r = classifyTyre('', 'tyre phat gaya front axle')
+    expect(r.category).toBe('Blowout')
+  })
+  it('classifies Urdu puncture pankchar', () => {
+    const r = classifyTyre('', 'pankchar ho gaya rear left')
+    expect(r.category).toBe('Puncture')
+  })
+  it('classifies Urdu worn ghis gaya', () => {
+    const r = classifyTyre('', 'tyre ghis gaya bilkul')
+    expect(r.category).toBe('Normal Wear')
+  })
+  it('classifies mixed Arabic-English', () => {
+    const r = classifyTyre('', 'انفجار sudden on highway')
+    expect(r.category).toBe('Blowout')
+  })
+  it('containsArabic detects Arabic script', () => {
+    expect(containsArabic('انفجار')).toBe(true)
+    expect(containsArabic('blowout')).toBe(false)
+    expect(containsArabic('')).toBe(false)
+  })
+  it('containsArabic handles null/undefined', () => {
+    expect(containsArabic(null)).toBe(false)
+    expect(containsArabic(undefined)).toBe(false)
   })
 })

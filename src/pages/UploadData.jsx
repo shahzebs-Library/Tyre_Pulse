@@ -17,7 +17,8 @@ const FIELD_GUESSES = {
   sr: ['sr', 'no', 'sno', 's.no', '#'],
   issue_date: ['date', 'issue date', 'issue_date', 'issuance date'],
   description: ['description', 'desc', 'tyre description', 'type'],
-  brand: ['brand', 'make', 'manufacturer'],
+  // 'make', 'vehicle make', 'model' intentionally excluded — those are vehicle/fleet fields, not tyre brand
+  brand: ['brand', 'tyre brand', 'tyre_brand', 'manufacturer'],
   serial_no: ['serial', 'serial no', 'serial_no', 'serial number', 's/n'],
   qty: ['qty', 'quantity', 'count'],
   job_card: ['job card', 'job_card', 'jc', 'work order', 'wo'],
@@ -58,6 +59,17 @@ function parseDate(val) {
   return null
 }
 
+function guessFileType(headers) {
+  const h = headers.map(x => String(x).toLowerCase())
+  const fleetSignals = ['make', 'model', 'vehicle_type', 'fleet_number', 'fleet number', 'vehicle type', 'operator']
+  const tyreSignals = ['serial_no', 'serial no', 'description', 'remarks', 'job_card', 'job card', 'mis_number', 'mis number']
+  const fleetScore = fleetSignals.filter(s => h.some(x => x.includes(s))).length
+  const tyreScore = tyreSignals.filter(s => h.some(x => x.includes(s))).length
+  if (fleetScore >= 2 && fleetScore > tyreScore) return 'fleet'
+  if (tyreScore >= 2) return 'tyres'
+  return 'unknown'
+}
+
 export default function UploadData() {
   const { profile } = useAuth()
   const { activeCountry } = useSettings()
@@ -74,6 +86,7 @@ export default function UploadData() {
   const [error, setError]             = useState('')
   const [savedMappingId, setSavedMappingId] = useState(null)
   const [mappingSource, setMappingSource]   = useState('guess')
+  const [uploadType, setUploadType] = useState('tyres') // 'tyres' | 'fleet' | 'auto'
 
   // ── Duplicate detection state ────────────────────────────────────────────────
   const [dupes, setDupes]             = useState([])   // existing serial_no matches
@@ -98,6 +111,17 @@ export default function UploadData() {
         const dataRows = data.slice(1).filter(r => r.some(c => c !== ''))
         setHeaders(hdrs)
         setRows(dataRows)
+
+        // After parsing headers from file:
+        if (uploadType === 'auto') {
+          const detected = guessFileType(hdrs)
+          if (detected === 'fleet') {
+            setUploadType('fleet')
+            // Don't proceed to mapping step — show fleet redirect notice
+            return
+          }
+          setUploadType('tyres')
+        }
 
         // Recall saved mapping
         const fp = fingerprintHeaders(hdrs)
@@ -272,6 +296,7 @@ export default function UploadData() {
     setStep('idle'); setFileName(''); setHeaders([]); setRows([])
     setMapping({}); setPreview([]); setResult(null); setError('')
     setSavedMappingId(null); setMappingSource('guess'); setDupes([]); setSkipDupes(true)
+    setUploadType('tyres')
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -284,19 +309,66 @@ export default function UploadData() {
 
       {/* ── Idle ──────────────────────────────────────────────────────────── */}
       {step === 'idle' && (
-        <div className="card border-2 border-dashed border-gray-700 hover:border-blue-600 transition-colors cursor-pointer text-center py-16"
-          onClick={() => fileRef.current?.click()}>
-          <Upload size={40} className="text-gray-500 mx-auto mb-4" />
-          <p className="text-lg font-medium text-white mb-1">Drop your Excel or CSV file here</p>
-          <p className="text-sm text-gray-400">or click to browse — .xlsx, .xls, .csv supported</p>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
-          {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
-        </div>
+        <>
+          {/* Upload type selector */}
+          <div className="card mb-4">
+            <p className="text-sm font-medium text-gray-300 mb-3">What are you uploading?</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { val: 'tyres', label: 'Tyre Records', desc: 'Issue records, replacements, costs' },
+                { val: 'fleet', label: 'Fleet / Vehicle Data', desc: 'Vehicle registry, asset specs' },
+                { val: 'auto', label: 'Auto-detect', desc: 'We will figure it out from column names' },
+              ].map(opt => (
+                <button
+                  key={opt.val}
+                  onClick={() => setUploadType(opt.val)}
+                  className={`flex-1 min-w-[140px] px-4 py-3 rounded-lg border text-left transition-colors ${
+                    uploadType === opt.val
+                      ? 'border-green-500/60 bg-green-900/20 text-green-300'
+                      : 'border-white/10 text-gray-400 hover:border-white/20'
+                  }`}
+                >
+                  <p className="text-sm font-medium">{opt.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {uploadType === 'fleet' && (
+            <div className="card mb-4 border-yellow-700/40 bg-yellow-900/10">
+              <div className="flex items-start gap-3">
+                <span className="text-yellow-400 text-lg">&#9888;</span>
+                <div>
+                  <p className="text-sm font-semibold text-yellow-300">Fleet / Vehicle Data</p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    To upload vehicle/fleet data, use the <strong className="text-white">Fleet Master</strong> page which has a dedicated vehicle import with the correct column mapping.
+                  </p>
+                  <a href="/fleet-master" className="inline-block mt-2 text-sm text-green-400 underline hover:text-green-300">Go to Fleet Master &rarr;</a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="card border-2 border-dashed border-gray-700 hover:border-blue-600 transition-colors cursor-pointer text-center py-16"
+            onClick={() => fileRef.current?.click()}>
+            <Upload size={40} className="text-gray-500 mx-auto mb-4" />
+            <p className="text-lg font-medium text-white mb-1">Drop your Excel or CSV file here</p>
+            <p className="text-sm text-gray-400">or click to browse — .xlsx, .xls, .csv supported</p>
+            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
+            {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
+          </div>
+        </>
       )}
 
       {/* ── Mapping ───────────────────────────────────────────────────────── */}
       {step === 'mapping' && (
         <div className="space-y-4">
+          {uploadType === 'fleet' && (
+            <div className="text-xs text-yellow-400 bg-yellow-900/20 border border-yellow-700/30 rounded px-3 py-1.5 mb-3">
+              This looks like vehicle/fleet data. For best results, use Fleet Master for vehicle uploads.
+            </div>
+          )}
           <div className="flex items-center gap-3 text-sm text-gray-400">
             <FileSpreadsheet size={16} className="text-blue-400" />
             <span>{fileName}</span>

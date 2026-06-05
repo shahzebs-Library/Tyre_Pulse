@@ -231,37 +231,6 @@ export default function Inspections() {
             + Add Record
           </button>
         </div>
-<<<<<<< HEAD
-        <div className="flex gap-2">
-          <button
-            onClick={() => exportToExcel(
-              filtered,
-              ['asset_no','inspection_type','scheduled_date','status','site'],
-              ['Asset No','Inspection Type','Scheduled Date','Status','Site'],
-              'TyrePulse_Inspections'
-            )}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <Download size={14}/> Excel
-          </button>
-          <button
-            onClick={() => exportToPdf(
-              filtered,
-              [{key:'asset_no',header:'Asset No'},{key:'inspection_type',header:'Type'},{key:'scheduled_date',header:'Scheduled Date'},{key:'status',header:'Status'},{key:'site',header:'Site'},{key:'inspector',header:'Inspector'}],
-              'Inspections',
-              'TyrePulse_Inspections',
-              'landscape'
-            )}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <FileText size={14}/> PDF
-          </button>
-          <button className="btn-primary text-sm" onClick={() => setForm(EMPTY_FORM)}>
-            + Schedule Inspection
-          </button>
-        </div>
-=======
->>>>>>> d6b559a (Inspections: add Site Observations and Training with photo upload and raise-action)
       </div>
 
       {/* Tabs */}

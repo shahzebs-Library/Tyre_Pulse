@@ -3,9 +3,32 @@ import { useAuth } from '../contexts/AuthContext'
 import LoadingSpinner from './LoadingSpinner'
 
 export default function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
+  const { user, profile, loading } = useAuth()
   if (loading) return <LoadingSpinner />
   if (!user) return <Navigate to="/login" replace />
+  // Show pending approval screen for unapproved accounts (approved column added in V10)
+  if (profile && profile.approved === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-5"
+            style={{ background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.3)' }}>
+            <span className="text-4xl">⏳</span>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-3">Awaiting Admin Approval</h2>
+          <p className="text-gray-400 text-sm leading-relaxed">
+            Your account is pending approval. An administrator will review and activate your account shortly.
+            Please sign in again later or contact your administrator.
+          </p>
+          <button
+            onClick={() => import('../lib/supabase').then(m => m.supabase.auth.signOut())}
+            className="mt-6 text-sm text-gray-500 hover:text-green-400 transition-colors">
+            Sign out
+          </button>
+        </div>
+      </div>
+    )
+  }
   return children
 }
 

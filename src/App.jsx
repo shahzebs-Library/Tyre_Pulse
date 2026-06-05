@@ -27,6 +27,7 @@ import UserManagement from './pages/UserManagement'
 import AiAnalytics from './pages/AiAnalytics'
 import FleetMaster from './pages/FleetMaster'
 import AuditTrail from './pages/AuditTrail'
+import ResetPassword from './pages/ResetPassword'
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
         <SettingsProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route
             path="/*"
             element={

@@ -10,8 +10,22 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { Search, AlertTriangle, X, FileText, Car } from 'lucide-react'
+import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
+
+// ── Vehicle type icons ────────────────────────────────────────────────────────
+
+const VEHICLE_ICONS = {
+  'Pickup':        '🛻',
+  'Tri-mixer':     '🚛',
+  'Concrete pump': '🏗️',
+  'Canter':        '🚚',
+  'Wheel loader':  '🚜',
+  'Skid loader':   '🚜',
+}
+
+function vehicleIcon(type) { return VEHICLE_ICONS[type] ?? '🚗' }
 
 // ── Shared badge helpers ──────────────────────────────────────────────────────
 
@@ -230,6 +244,9 @@ export default function VehicleHistory() {
   const [relatedRca, setRelatedRca]                 = useState([])
   const [relatedInspections, setRelatedInspections] = useState([])
 
+  // Tyre positions for SVG diagram
+  const [tyrePositions, setTyrePositions] = useState([])
+
   // ── Load data ────────────────────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
@@ -324,10 +341,11 @@ export default function VehicleHistory() {
       setRelatedActions([])
       setRelatedRca([])
       setRelatedInspections([])
+      setTyrePositions([])
       return
     }
     async function loadRelated() {
-      const [actRes, rcaRes, insRes] = await Promise.all([
+      const [actRes, rcaRes, insRes, tyreRes] = await Promise.all([
         supabase.from('corrective_actions')
           .select('id,title,status,priority,due_date,site,created_at')
           .or(`asset_no.eq.${selected},description.ilike.%${selected}%`)
@@ -340,10 +358,23 @@ export default function VehicleHistory() {
           .select('id,asset_no,status,site,created_at')
           .eq('asset_no', selected)
           .limit(20),
+        supabase.from('tyre_records')
+          .select('position,risk_level,brand,serial_no,issue_date')
+          .eq('asset_no', selected)
+          .order('issue_date', { ascending: false }),
       ])
       setRelatedActions(actRes.data || [])
       setRelatedRca(rcaRes.data || [])
       setRelatedInspections(insRes.data || [])
+
+      const rows = tyreRes.data || []
+      const latestPerPosition = Object.values(
+        rows.reduce((acc, r) => {
+          if (r.position && !acc[r.position]) acc[r.position] = r
+          return acc
+        }, {})
+      )
+      setTyrePositions(latestPerPosition)
     }
     loadRelated()
   }, [selected])
@@ -519,6 +550,7 @@ export default function VehicleHistory() {
           relatedRca={relatedRca}
           relatedInspections={relatedInspections}
           fleetRecord={selectedRow.fleetRecord}
+          tyrePositions={tyrePositions}
         />
       )}
     </div>
@@ -529,7 +561,7 @@ export default function VehicleHistory() {
 // Vehicle Detail Panel
 // ─────────────────────────────────────────────────────────────────────────────
 
-function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedActions, relatedRca, relatedInspections, fleetRecord }) {
+function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedActions, relatedRca, relatedInspections, fleetRecord, tyrePositions }) {
   const [activeTab, setActiveTab] = useState(0)
 
   // Build set of flagged record IDs for highlighting in timeline
@@ -650,7 +682,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
           )}
           {fleetRecord.vehicle_type && (
             <span className="text-xs px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300">
-              <span className="text-gray-500 mr-1">Type</span>{fleetRecord.vehicle_type}
+              <span className="text-gray-500 mr-1">Type</span>{vehicleIcon(fleetRecord.vehicle_type)} {fleetRecord.vehicle_type}
             </span>
           )}
           {fleetRecord.operator_name && (
@@ -666,6 +698,54 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
             add in Fleet Master
           </a>
         </p>
+      )}
+
+      {/* Tyre Position Overview */}
+      {fleetRecord?.vehicle_type && (
+        <div className="card">
+          <p className="text-sm font-semibold text-gray-300 mb-4">Tyre Position Overview</p>
+          <div className="flex flex-wrap gap-8 items-start">
+            <VehicleTyreDiagram
+              positions={tyrePositions}
+              vehicleType={fleetRecord.vehicle_type}
+            />
+            <div className="flex-1 min-w-48">
+              <p className="text-xs text-gray-500 mb-3">Risk level by position</p>
+              <div className="flex flex-wrap gap-3">
+                {[
+                  { label: 'Low',     color: '#16a34a' },
+                  { label: 'Medium',  color: '#ca8a04' },
+                  { label: 'High',    color: '#ea580c' },
+                  { label: 'Critical',color: '#dc2626' },
+                  { label: 'No data', color: '#374151' },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center gap-1.5">
+                    <span
+                      className="inline-block w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: item.color, opacity: item.label === 'No data' ? 0.4 : 1 }}
+                    />
+                    <span className="text-xs text-gray-400">{item.label}</span>
+                  </div>
+                ))}
+              </div>
+              {tyrePositions.length > 0 && (
+                <div className="mt-4 space-y-1">
+                  <p className="text-xs text-gray-500 mb-2">Current tyre data</p>
+                  {tyrePositions.filter(p => p.risk_level).map(p => (
+                    <div key={p.position} className="flex items-center gap-2 text-xs">
+                      <span
+                        className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: { Low: '#16a34a', Medium: '#ca8a04', High: '#ea580c', Critical: '#dc2626' }[p.risk_level] ?? '#374151' }}
+                      />
+                      <span className="font-mono text-gray-400 w-16">{p.position}</span>
+                      <span className="text-gray-500">{p.brand || '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Red flags alert box */}

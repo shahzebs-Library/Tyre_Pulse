@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { Download, FileText } from 'lucide-react'
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -118,9 +120,34 @@ export default function Inspections() {
           <h1 className="text-2xl font-bold text-white">Inspections</h1>
           <p className="text-gray-400 text-sm mt-1">Schedule, track and complete tyre inspections</p>
         </div>
-        <button className="btn-primary text-sm" onClick={() => setForm(EMPTY_FORM)}>
-          + Schedule Inspection
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportToExcel(
+              filtered,
+              ['asset_no','inspection_type','scheduled_date','status','site'],
+              ['Asset No','Inspection Type','Scheduled Date','Status','Site'],
+              'TyrePulse_Inspections'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <Download size={14}/> Excel
+          </button>
+          <button
+            onClick={() => exportToPdf(
+              filtered,
+              [{key:'asset_no',header:'Asset No'},{key:'inspection_type',header:'Type'},{key:'scheduled_date',header:'Scheduled Date'},{key:'status',header:'Status'},{key:'site',header:'Site'},{key:'inspector',header:'Inspector'}],
+              'Inspections',
+              'TyrePulse_Inspections',
+              'landscape'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <FileText size={14}/> PDF
+          </button>
+          <button className="btn-primary text-sm" onClick={() => setForm(EMPTY_FORM)}>
+            + Schedule Inspection
+          </button>
+        </div>
       </div>
 
       {/* Status summary */}

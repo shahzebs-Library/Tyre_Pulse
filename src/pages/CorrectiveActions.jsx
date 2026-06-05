@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { Plus, Save, X, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { Plus, Save, X, CheckCircle, Clock, AlertCircle, Download, FileText } from 'lucide-react'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const STATUS_ICON = {
   Open:        <AlertCircle size={14} className="text-red-400" />,
@@ -143,9 +144,34 @@ export default function CorrectiveActions() {
             )}
           </p>
         </div>
-        <button onClick={() => startAdd()} className="btn-primary flex items-center gap-2 text-sm">
-          <Plus size={16} /> New Action
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportToExcel(
+              filtered,
+              ['title','site','priority','status','due_date'],
+              ['Title','Site','Priority','Status','Due Date'],
+              'TyrePulse_CorrectiveActions'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <Download size={14}/> Excel
+          </button>
+          <button
+            onClick={() => exportToPdf(
+              filtered,
+              [{key:'title',header:'Title'},{key:'site',header:'Site'},{key:'priority',header:'Priority'},{key:'status',header:'Status'},{key:'due_date',header:'Due Date'}],
+              'Corrective Actions',
+              'TyrePulse_CorrectiveActions',
+              'landscape'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <FileText size={14}/> PDF
+          </button>
+          <button onClick={() => startAdd()} className="btn-primary flex items-center gap-2 text-sm">
+            <Plus size={16} /> New Action
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

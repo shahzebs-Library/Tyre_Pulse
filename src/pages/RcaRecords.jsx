@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { Plus, Save, X, Search } from 'lucide-react'
+import { Plus, Save, X, Search, Download, FileText } from 'lucide-react'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const EMPTY_FORM = {
   asset_no: '', tyre_serial: '', brand: '', site: '', country: 'KSA',
@@ -126,9 +127,34 @@ export default function RcaRecords() {
           <h1 className="text-2xl font-bold text-white">Root Cause Analysis</h1>
           <p className="text-gray-400 text-sm mt-1">{records.length} RCA records</p>
         </div>
-        <button onClick={startAdd} className="btn-primary flex items-center gap-2 text-sm">
-          <Plus size={16} /> New RCA
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportToExcel(
+              filtered,
+              ['asset_no','tyre_serial','brand','site','failure_date','root_cause'],
+              ['Asset No','Tyre Serial','Brand','Site','Failure Date','Root Cause'],
+              'TyrePulse_RCA'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <Download size={14}/> Excel
+          </button>
+          <button
+            onClick={() => exportToPdf(
+              filtered,
+              [{key:'asset_no',header:'Asset No'},{key:'tyre_serial',header:'Tyre Serial'},{key:'brand',header:'Brand'},{key:'site',header:'Site'},{key:'failure_date',header:'Failure Date'},{key:'root_cause',header:'Root Cause'}],
+              'Root Cause Analysis Records',
+              'TyrePulse_RCA',
+              'landscape'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <FileText size={14}/> PDF
+          </button>
+          <button onClick={startAdd} className="btn-primary flex items-center gap-2 text-sm">
+            <Plus size={16} /> New RCA
+          </button>
+        </div>
       </div>
 
       <div className="relative max-w-md">

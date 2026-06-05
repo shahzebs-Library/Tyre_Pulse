@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
-import { computeBrandMetrics, linearRegression, bucketByMonth } from '../lib/analyticsEngine'
+import { computeBrandMetrics, linearRegression, bucketByMonth, recordCost } from '../lib/analyticsEngine'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, Title, Tooltip, Legend,
@@ -21,7 +21,7 @@ const CHART_OPTS = (horizontal = false) => ({
 })
 
 export default function BrandPerformance() {
-  const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
@@ -35,7 +35,7 @@ export default function BrandPerformance() {
     q.then(({ data }) => { setRecords(data || []); setLoading(false) })
   }, [activeCountry])
 
-  const metrics = useMemo(() => computeBrandMetrics(records, appSettings.cost_per_tyre), [records, appSettings.cost_per_tyre])
+  const metrics = useMemo(() => computeBrandMetrics(records), [records])
   const selectedData = useMemo(() =>
     selected ? records.filter(r => r.brand === selected) : [],
     [records, selected]
@@ -152,15 +152,15 @@ export default function BrandPerformance() {
       </div>
 
       {/* Drill-down panel */}
-      {selected && <BrandDrillDown brand={selected} records={selectedData} defaultCost={appSettings.cost_per_tyre} />}
+      {selected && <BrandDrillDown brand={selected} records={selectedData} />}
     </div>
   )
 }
 
-function BrandDrillDown({ brand, records, defaultCost = 1200 }) {
+function BrandDrillDown({ brand, records }) {
   const monthly = useMemo(() =>
-    bucketByMonth(records, r => r.issue_date, r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)),
-    [records, defaultCost]
+    bucketByMonth(records, r => r.issue_date, r => recordCost(r)),
+    [records]
   )
 
   const trendPoints = monthly.map((d, i) => [i, d.count])

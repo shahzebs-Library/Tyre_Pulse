@@ -2,12 +2,13 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { computeCountryMetrics, sum } from '../lib/analyticsEngine'
-import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity } from 'lucide-react'
+import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText } from 'lucide-react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -131,9 +132,45 @@ export default function CountryComparison() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="page-title flex items-center gap-2"><Globe size={20} className="text-blue-400" /> Country Comparison</h1>
-        <p className="text-gray-500 text-sm mt-0.5">KPI breakdown across KSA, UAE and Egypt</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="page-title flex items-center gap-2"><Globe size={20} className="text-blue-400" /> Country Comparison</h1>
+          <p className="text-gray-500 text-sm mt-0.5">KPI breakdown across KSA, UAE and Egypt</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportToExcel(
+              metrics,
+              ['country','count','totalCost','avgCostPerTyre','highRiskPct','openActions','overdueActions','siteCount','brandCount'],
+              ['Country','Fleet Records','Total Cost','Avg Cost/Tyre','High Risk %','Open Actions','Overdue Actions','Sites','Brands'],
+              'TyrePulse_CountryComparison'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <Download size={14}/> Excel
+          </button>
+          <button
+            onClick={() => exportToPdf(
+              metrics,
+              [
+                {key:'country',header:'Country'},
+                {key:'count',header:'Fleet Records'},
+                {key:'totalCost',header:'Total Cost'},
+                {key:'avgCostPerTyre',header:'Avg Cost/Tyre'},
+                {key:'highRiskPct',header:'High Risk %'},
+                {key:'openActions',header:'Open Actions'},
+                {key:'overdueActions',header:'Overdue'},
+                {key:'siteCount',header:'Sites'},
+              ],
+              'Country Comparison',
+              'TyrePulse_CountryComparison',
+              'landscape'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <FileText size={14}/> PDF
+          </button>
+        </div>
       </div>
 
       {/* Summary cards */}

@@ -5,6 +5,8 @@ import {
   detectAnomalies, summariseAnomalies,
   ANOMALY_TYPES, ANOMALY_TYPE_LABELS, ANOMALY_TYPE_DESC,
 } from '../lib/anomalyEngine'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { Download, FileText } from 'lucide-react'
 
 const SEVERITY_STYLE = {
   high:   { badge: 'bg-red-900/40 text-red-400 border-red-700/50',    icon: '🔴', label: 'High' },
@@ -135,6 +137,33 @@ export default function Anomalies() {
           >
             {running ? 'Scanning…' : hasRun ? '↻ Re-scan' : '▶ Run Scan'}
           </button>
+          {hasRun && visible.length > 0 && (
+            <>
+              <button
+                onClick={() => exportToExcel(
+                  visible.map(a => ({ type: ANOMALY_TYPE_LABELS[a.type] ?? a.type, severity: a.severity, asset_no: a.asset_no ?? '', message: a.message ?? '', site: a.site ?? '', date: a.date ?? '' })),
+                  ['type','severity','asset_no','message','site','date'],
+                  ['Type','Severity','Asset No','Message','Site','Date'],
+                  'TyrePulse_Anomalies'
+                )}
+                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              >
+                <Download size={14}/> Excel
+              </button>
+              <button
+                onClick={() => exportToPdf(
+                  visible.map(a => ({ type: ANOMALY_TYPE_LABELS[a.type] ?? a.type, severity: a.severity, asset_no: a.asset_no ?? '', message: a.message ?? '', site: a.site ?? '', date: a.date ?? '' })),
+                  [{key:'type',header:'Type'},{key:'severity',header:'Severity'},{key:'asset_no',header:'Asset No'},{key:'message',header:'Message'},{key:'site',header:'Site'},{key:'date',header:'Date'}],
+                  'Anomaly Detection Report',
+                  'TyrePulse_Anomalies',
+                  'landscape'
+                )}
+                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              >
+                <FileText size={14}/> PDF
+              </button>
+            </>
+          )}
         </div>
       </div>
 

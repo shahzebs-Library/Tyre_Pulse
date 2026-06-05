@@ -6,6 +6,8 @@ import {
   bucketByMonth, forecastMonthly, linearRegression,
   computeMonthlyKpiActuals, sum,
 } from '../lib/analyticsEngine'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { Download, FileText } from 'lucide-react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement,
   Filler, Title, Tooltip, Legend,
@@ -186,7 +188,33 @@ export default function KpiScorecard() {
           <h1 className="text-2xl font-bold text-white">KPI Scorecard</h1>
           <p className="text-gray-400 text-sm mt-1">Monthly targets vs actuals with regression forecasting</p>
         </div>
-        {!editing
+        <div className="flex gap-2">
+          {(() => {
+            const KPI_COLS = [
+              { key: 'month', header: 'Month' },
+              { key: 'count', header: 'Records' },
+              { key: 'totalCost', header: 'Total Cost' },
+              { key: 'highRiskPct', header: 'High Risk %' },
+              { key: 'overdueActions', header: 'Overdue Actions' },
+            ]
+            return (
+              <>
+                <button
+                  onClick={() => exportToExcel(actuals, KPI_COLS.map(c => c.key), KPI_COLS.map(c => c.header), 'TyrePulse_KpiScorecard')}
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                >
+                  <Download size={14} /> Excel
+                </button>
+                <button
+                  onClick={() => exportToPdf(actuals, KPI_COLS, 'KPI Scorecard — Monthly Actuals', 'TyrePulse_KpiScorecard', 'landscape')}
+                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                >
+                  <FileText size={14} /> PDF
+                </button>
+              </>
+            )
+          })()}
+          {!editing
           ? <button onClick={() => setEditing(true)} className="btn-secondary text-sm">Edit Targets</button>
           : (
             <div className="flex gap-2">

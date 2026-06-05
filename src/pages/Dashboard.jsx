@@ -56,16 +56,43 @@ export default function Dashboard() {
   const [dateTo, setDateTo]           = useState('')
   const [search, setSearch]           = useState('')
   const [loading, setLoading]         = useState(true)
+  const [dateShortcut, setDateShortcut] = useState('This Month')
+  const [showCustom, setShowCustom]   = useState(false)
+  const [granularity, setGranularity] = useState('monthly')
 
-  function applyPreset(preset) {
-    const now  = new Date()
-    const fmt  = d => d.toISOString().slice(0, 10)
-    const ago  = days => { const d = new Date(now); d.setDate(d.getDate() - days); return d }
-    if (preset === 'all') { setDateFrom(''); setDateTo(''); return }
-    if (preset === 'ytd') { setDateFrom(`${now.getFullYear()}-01-01`); setDateTo(fmt(now)); return }
-    const days = { '7d': 7, '30d': 30, '3m': 90, '6m': 180 }[preset]
-    if (days) { setDateFrom(fmt(ago(days))); setDateTo(fmt(now)) }
+  const pad = n => String(n).padStart(2, '0')
+  const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+
+  function applyShortcut(label) {
+    const now = new Date()
+    const today = fmt(now)
+    let from, to
+    if (label === 'Today') {
+      from = today; to = today
+    } else if (label === 'Yesterday') {
+      const y = new Date(now); y.setDate(y.getDate()-1)
+      from = fmt(y); to = fmt(y)
+    } else if (label === 'This Week') {
+      const d = new Date(now); d.setDate(d.getDate() - d.getDay())
+      from = fmt(d); to = today
+    } else if (label === 'This Month') {
+      from = `${now.getFullYear()}-${pad(now.getMonth()+1)}-01`; to = today
+    } else if (label === 'Last Month') {
+      const lm = new Date(now.getFullYear(), now.getMonth()-1, 1)
+      const lme = new Date(now.getFullYear(), now.getMonth(), 0)
+      from = fmt(lm); to = fmt(lme)
+    } else if (label === 'This Year') {
+      from = `${now.getFullYear()}-01-01`; to = today
+    }
+    if (label !== 'Custom') {
+      setDateFrom(from)
+      setDateTo(to)
+    }
+    setDateShortcut(label)
+    setShowCustom(label === 'Custom')
   }
+
+  useEffect(() => { applyShortcut('This Month') }, [])
 
   useEffect(() => { load() }, [activeCountry, dateFrom, dateTo])
 
@@ -97,7 +124,6 @@ export default function Dashboard() {
     setRawStock(stockRes.data ?? [])
     setRawActions(actionRes.data ?? [])
     setLoading(false)
-    // Keep recent / open actions live (no date filter needed for these)
     setRecentRecords(recentRes.data ?? [])
     setOpenActions(openActRes.data ?? [])
   }
@@ -105,7 +131,6 @@ export default function Dashboard() {
   const [recentRecords, setRecentRecords] = useState([])
   const [openActions, setOpenActions]     = useState([])
 
-  // ── Client-side search filter (instant, no re-fetch) ──────────────────────
   const tyres = useMemo(() => {
     if (!search) return rawTyres
     const q = search.toLowerCase()
@@ -117,7 +142,6 @@ export default function Dashboard() {
     )
   }, [rawTyres, search])
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     const cost = tyres.reduce((s, t) => s + recordCost(t), 0)
     const crit = tyres.filter(isHigh).length
@@ -125,12 +149,10 @@ export default function Dashboard() {
     return { tyres: tyres.length, stock: rawStock.length, actions: open, critical: crit, cost }
   }, [tyres, rawActions, rawStock])
 
-  // ── Fleet health, seasonal trends, tyre life ──────────────────────────────
   const fleetHealthScore = useMemo(() => computeFleetHealthScore(tyres), [tyres])
   const seasonalTrends   = useMemo(() => computeSeasonalTrends(tyres), [tyres])
   const tyreLife         = useMemo(() => computeTyreLifeAnalysis(tyres), [tyres])
 
-  // ── Seasonal trends bar chart data ────────────────────────────────────────
   const seasonalBarData = useMemo(() => ({
     labels: seasonalTrends.map(d => d.month),
     datasets: [{
@@ -144,7 +166,6 @@ export default function Dashboard() {
     }],
   }), [seasonalTrends])
 
-  // ── Risk trend (this month vs last) ─────────────────────────────────────
   const riskTrend = useMemo(() => {
     const now  = new Date()
     const thisM = { y: now.getFullYear(), m: now.getMonth() + 1 }
@@ -156,9 +177,95 @@ export default function Dashboard() {
     return { delta: thisHigh - lastHigh, lastHigh }
   }, [tyres])
 
-  // ── Monthly count chart (last 12 months) ─────────────────────────────────
-  const monthlyData = useMemo(() => {
+  const periodChartData = useMemo(() => {
     const now = new Date()
+
+    if (granularity === 'daily') {
+      const days = []
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(now)
+        d.setDate(d.getDate() - i)
+        days.push(fmt(d))
+      }
+      const counts = {}
+      tyres.forEach(t => {
+        const key = t.issue_date ? t.issue_date.slice(0,10) : null
+        if (key && counts[key] !== undefined) counts[key]++
+        else if (key) counts[key] = (counts[key] ?? 0) + 1
+      })
+      const dayCounts = days.map(day => {
+        let n = 0
+        tyres.forEach(t => { if (t.issue_date?.slice(0,10) === day) n++ })
+        return n
+      })
+      const highCounts = days.map(day => {
+        let n = 0
+        tyres.forEach(t => { if (t.issue_date?.slice(0,10) === day && isHigh(t)) n++ })
+        return n
+      })
+      const labels = days.map(d => {
+        const [, m, dy] = d.split('-')
+        return `${dy}/${m}`
+      })
+      return {
+        labels,
+        datasets: [
+          { label: 'All', data: dayCounts, backgroundColor: '#3b82f6', borderRadius: 3 },
+          { label: 'High Risk', data: highCounts, backgroundColor: '#ef4444', borderRadius: 3 },
+        ],
+      }
+    }
+
+    if (granularity === 'weekly') {
+      const weeks = []
+      for (let i = 12; i >= 0; i--) {
+        const d = new Date(now)
+        d.setDate(d.getDate() - i * 7)
+        const weekNum = Math.ceil((((d - new Date(d.getFullYear(),0,1))/86400000)+1)/7)
+        const key = `W${weekNum} ${d.getFullYear()}`
+        if (!weeks.find(w => w.key === key)) weeks.push({ key })
+      }
+      const allCounts = weeks.map(({ key }) => {
+        let n = 0
+        tyres.forEach(t => {
+          if (!t.issue_date) return
+          const d = new Date(t.issue_date)
+          const weekNum = Math.ceil((((d - new Date(d.getFullYear(),0,1))/86400000)+1)/7)
+          if (`W${weekNum} ${d.getFullYear()}` === key) n++
+        })
+        return n
+      })
+      const highCounts = weeks.map(({ key }) => {
+        let n = 0
+        tyres.forEach(t => {
+          if (!t.issue_date || !isHigh(t)) return
+          const d = new Date(t.issue_date)
+          const weekNum = Math.ceil((((d - new Date(d.getFullYear(),0,1))/86400000)+1)/7)
+          if (`W${weekNum} ${d.getFullYear()}` === key) n++
+        })
+        return n
+      })
+      return {
+        labels: weeks.map(w => w.key),
+        datasets: [
+          { label: 'All', data: allCounts, backgroundColor: '#3b82f6', borderRadius: 3 },
+          { label: 'High Risk', data: highCounts, backgroundColor: '#ef4444', borderRadius: 3 },
+        ],
+      }
+    }
+
+    if (granularity === 'yearly') {
+      const years = []
+      for (let i = 4; i >= 0; i--) years.push(now.getFullYear() - i)
+      return {
+        labels: years.map(String),
+        datasets: [
+          { label: 'All', data: years.map(y => tyres.filter(t => t.issue_date?.slice(0,4) === String(y)).length), backgroundColor: '#3b82f6', borderRadius: 3 },
+          { label: 'High Risk', data: years.map(y => tyres.filter(t => t.issue_date?.slice(0,4) === String(y) && isHigh(t)).length), backgroundColor: '#ef4444', borderRadius: 3 },
+        ],
+      }
+    }
+
     const months = Array.from({ length: 12 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
       return { label: d.toLocaleString('default', { month: 'short', year: '2-digit' }), y: d.getFullYear(), m: d.getMonth() + 1 }
@@ -170,9 +277,15 @@ export default function Dashboard() {
         { label: 'High Risk', data: months.map(({ y, m }) => tyres.filter(t => inMonth(t, y, m) && isHigh(t)).length), backgroundColor: '#ef4444', borderRadius: 3 },
       ],
     }
-  }, [tyres])
+  }, [tyres, granularity])
 
-  // ── Monthly cost chart (last 12 months) ─────────────────────────────────
+  const periodChartTitle = {
+    daily: 'Daily Changes',
+    weekly: 'Weekly Changes',
+    monthly: 'Monthly Changes',
+    yearly: 'Yearly Changes',
+  }[granularity]
+
   const monthlyCostData = useMemo(() => {
     const now = new Date()
     const months = Array.from({ length: 12 }, (_, i) => {
@@ -192,7 +305,6 @@ export default function Dashboard() {
     }
   }, [tyres, activeCurrency])
 
-  // ── Brand doughnut ────────────────────────────────────────────────────────
   const brandData = useMemo(() => {
     const m = {}
     tyres.forEach(t => { if (t.brand) m[t.brand] = (m[t.brand] ?? 0) + 1 })
@@ -204,7 +316,6 @@ export default function Dashboard() {
     }
   }, [tyres])
 
-  // ── Category doughnut ─────────────────────────────────────────────────────
   const categoryData = useMemo(() => {
     const m = {}
     tyres.forEach(t => { if (t.category) m[t.category] = (m[t.category] ?? 0) + 1 })
@@ -216,7 +327,6 @@ export default function Dashboard() {
     }
   }, [tyres])
 
-  // ── Risk distribution bar ─────────────────────────────────────────────────
   const riskDistData = useMemo(() => {
     const levels = ['Critical', 'High', 'Medium', 'Low', 'Unknown']
     const counts = Object.fromEntries(levels.map(l => [l, 0]))
@@ -231,7 +341,6 @@ export default function Dashboard() {
     }
   }, [tyres])
 
-  // ── Top assets by cost ────────────────────────────────────────────────────
   const topAssetsData = useMemo(() => {
     const m  = {}
     tyres.forEach(t => {
@@ -249,7 +358,6 @@ export default function Dashboard() {
     }
   }, [tyres])
 
-  // ── Top sites by cost ─────────────────────────────────────────────────────
   const siteCostData = useMemo(() => {
     const m  = {}
     tyres.forEach(t => { if (t.site) m[t.site] = (m[t.site] ?? 0) + recordCost(t) })
@@ -261,7 +369,40 @@ export default function Dashboard() {
     }
   }, [tyres, activeCurrency])
 
-  // ── Exports ───────────────────────────────────────────────────────────────
+  const forecastData = useMemo(() => {
+    const now = new Date()
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1)
+      return { y: d.getFullYear(), m: d.getMonth() + 1, label: d.toLocaleString('default', { month: 'short' }) }
+    })
+    const monthlyCounts = months.map(({ y, m }) => rawTyres.filter(t => inMonth(t, y, m)).length)
+    const last3 = monthlyCounts.slice(3)
+    const avg = last3.reduce((s, v) => s + v, 0) / 3
+    const forecastThisMonth = Math.round(avg)
+    const forecastNextMonth = Math.round(avg)
+
+    const last3Labels = months.slice(3).map(m => m.label)
+    const thisMonthLabel = 'This Month'
+    const nextMonthLabel = 'Next Month'
+
+    const nonZeroMonths = last3.filter(v => v > 0).length
+    let confidence = 'Low'
+    if (nonZeroMonths >= 3) {
+      const mean = avg
+      const stdDev = Math.sqrt(last3.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / 3)
+      const cv = mean > 0 ? (stdDev / mean) * 100 : 100
+      confidence = cv < 20 ? 'High' : 'Medium'
+    } else if (nonZeroMonths >= 1) {
+      confidence = 'Medium'
+    }
+
+    const chartLabels = [...last3Labels, thisMonthLabel, nextMonthLabel]
+    const actualData = [...last3, null, null]
+    const projectedData = [null, null, null, forecastThisMonth, forecastNextMonth]
+
+    return { forecastThisMonth, forecastNextMonth, confidence, nonZeroMonths, chartLabels, actualData, projectedData }
+  }, [rawTyres])
+
   function handleExcelExport() {
     const rows = tyres.map(t => ({
       ...t,
@@ -334,7 +475,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
 
-      {/* Header + filters + exports */}
+      {/* Header + exports */}
       <div className="flex flex-col gap-4">
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
@@ -372,54 +513,54 @@ export default function Dashboard() {
                 </button>
               )}
             </div>
+          </div>
 
-            {/* Date range */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <Calendar size={14} className="text-gray-500 flex-shrink-0" />
-              <input type="date" className="input w-36 text-sm" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-              <span className="text-gray-600 text-sm">→</span>
-              <input type="date" className="input w-36 text-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-              {(dateFrom || dateTo) && (
-                <button onClick={() => { setDateFrom(''); setDateTo('') }} className="text-gray-500 hover:text-gray-300" title="Clear dates">
-                  <X size={13} />
+          {/* Date shortcuts */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Calendar size={14} className="text-gray-500 flex-shrink-0" />
+            <div className="flex flex-wrap gap-2">
+              {['Today','Yesterday','This Week','This Month','Last Month','This Year','Custom'].map(label => (
+                <button key={label}
+                  onClick={() => applyShortcut(label)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    dateShortcut === label
+                      ? 'bg-green-700 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700'
+                  }`}>
+                  {label}
                 </button>
-              )}
+              ))}
             </div>
           </div>
 
-          {/* Date presets */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-gray-600 mr-1">Quick:</span>
-            {[
-              { id: '7d',  label: '7 Days' },
-              { id: '30d', label: '30 Days' },
-              { id: '3m',  label: '3 Months' },
-              { id: '6m',  label: '6 Months' },
-              { id: 'ytd', label: 'YTD' },
-              { id: 'all', label: 'All Time' },
-            ].map(({ id, label }) => {
-              const isActive = id === 'all' ? (!dateFrom && !dateTo) : false
-              return (
-                <button
-                  key={id}
-                  onClick={() => applyPreset(id)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                    isActive
-                      ? 'border-green-600 text-green-400'
-                      : 'border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'
-                  }`}
-                  style={isActive ? { backgroundColor: 'rgba(22,163,74,0.08)' } : {}}
-                >
-                  {label}
-                </button>
-              )
-            })}
-            {(search || dateFrom || dateTo) && (
-              <p className="text-xs text-green-500 ml-auto">
-                {tyres.length.toLocaleString()} of {rawTyres.length.toLocaleString()} records
-              </p>
-            )}
+          {showCustom && (
+            <div className="flex gap-2 mt-2">
+              <input type="date" className="input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              <span className="text-gray-500 self-center">to</span>
+              <input type="date" className="input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            </div>
+          )}
+
+          {/* Granularity pill tabs */}
+          <div className="flex gap-1 mt-3">
+            {[['daily','Daily'],['weekly','Weekly'],['monthly','Monthly'],['yearly','Yearly']].map(([val, label]) => (
+              <button key={val}
+                onClick={() => setGranularity(val)}
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  granularity === val
+                    ? 'bg-gray-600 text-white'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}>
+                {label}
+              </button>
+            ))}
           </div>
+
+          {search && (
+            <p className="text-xs text-green-500">
+              {tyres.length.toLocaleString()} of {rawTyres.length.toLocaleString()} records
+            </p>
+          )}
         </div>
       </div>
 
@@ -464,7 +605,6 @@ export default function Dashboard() {
 
       {/* Fleet intelligence row: Health Score + Avg Tyre Life */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Fleet Health Score */}
         <div className="card text-center col-span-1">
           <div className={`text-4xl font-bold mb-1 ${
             fleetHealthScore >= 70 ? 'text-green-400' :
@@ -483,7 +623,6 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Avg Tyre Life */}
         <div className="card text-center col-span-1">
           <div className="text-4xl font-bold mb-1 text-blue-400">
             {tyreLife?.avgLifeDays != null ? tyreLife.avgLifeDays : '—'}
@@ -496,7 +635,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Seasonal Trends mini chart */}
         <div className="card col-span-2">
           <h2 className="text-sm font-semibold text-white mb-3">Seasonal Tyre Issues (by Month)</h2>
           <div className="h-28">
@@ -522,12 +660,12 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Row 1: Monthly count + Brand doughnut */}
+      {/* Row 1: Period chart + Brand doughnut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card lg:col-span-2">
-          <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp size={16} /> Monthly Tyre Issues (12 months)</h2>
+          <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp size={16} /> {periodChartTitle}</h2>
           <div className="h-56">
-            <Bar data={monthlyData} options={{ ...BASE_OPTS, plugins: { ...BASE_OPTS.plugins, legend: { labels: { color: '#9ca3af', boxWidth: 10 } } } }} />
+            <Bar data={periodChartData} options={{ ...BASE_OPTS, plugins: { ...BASE_OPTS.plugins, legend: { labels: { color: '#9ca3af', boxWidth: 10 } } } }} />
           </div>
         </div>
         <div className="card">
@@ -553,6 +691,62 @@ export default function Dashboard() {
             },
           }} />
         </div>
+      </div>
+
+      {/* Tyre Forecast Card */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-white font-semibold">Tyre Forecast</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Based on 3-month rolling average</p>
+          </div>
+          <span className="text-2xl">📈</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-blue-400">~{forecastData.forecastThisMonth}</p>
+            <p className="text-xs text-gray-500 mt-1">This month (forecast)</p>
+          </div>
+          <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-blue-300">~{forecastData.forecastNextMonth}</p>
+            <p className="text-xs text-gray-500 mt-1">Next month (forecast)</p>
+          </div>
+        </div>
+
+        <div className="h-48">
+          <Bar
+            data={{
+              labels: forecastData.chartLabels,
+              datasets: [
+                {
+                  label: 'Actual',
+                  data: forecastData.actualData,
+                  backgroundColor: '#16a34a',
+                  borderRadius: 4,
+                },
+                {
+                  label: 'Forecast',
+                  data: forecastData.projectedData,
+                  backgroundColor: '#3b82f680',
+                  borderRadius: 4,
+                },
+              ],
+            }}
+            options={{
+              ...BASE_OPTS,
+              plugins: { legend: { labels: { color: '#9ca3af', boxWidth: 10 } } },
+              scales: {
+                x: { ticks: TICK, grid: GRID, stacked: false },
+                y: { ticks: TICK, grid: GRID },
+              },
+            }}
+          />
+        </div>
+
+        <p className="text-xs text-gray-500 mt-3">
+          Confidence: {forecastData.confidence} · based on {forecastData.nonZeroMonths} month{forecastData.nonZeroMonths !== 1 ? 's' : ''} of data
+        </p>
       </div>
 
       {/* Row 3: Risk distribution + Category mix */}

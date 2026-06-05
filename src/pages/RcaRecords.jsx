@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { Plus, Save, X, Search, Download, FileText } from 'lucide-react'
+import { Plus, Save, X, Search, Download, FileText, Camera } from 'lucide-react'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const EMPTY_FORM = {
@@ -26,6 +26,15 @@ export default function RcaRecords() {
   const [search, setSearch]             = useState('')
   const [selectedRecord, setSelectedRecord] = useState(null)
   const [creatingAction, setCreatingAction] = useState(false)
+  const photoRef = useRef(null)
+
+  function handlePhoto(e, setter) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => setter(f => ({ ...f, photo_data: ev.target.result }))
+    reader.readAsDataURL(file)
+  }
 
   useEffect(() => { load() }, [activeCountry])
 
@@ -173,7 +182,7 @@ export default function RcaRecords() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelectedRecord(r)}>
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className="font-semibold text-white">{r.asset_no ?? '—'}</span>
+                    <span className="font-semibold text-white">{r.asset_no ?? '—'}{r.photo_data && <Camera className="inline w-3 h-3 ml-1.5 text-gray-500" title="Has photo" />}</span>
                     {r.tyre_serial && <span className="text-xs text-gray-400">Serial: {r.tyre_serial}</span>}
                     {r.brand && <span className="badge bg-green-900/40 text-green-300 border border-green-700/50">{r.brand}</span>}
                     {r.country && <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 border border-gray-700">{r.country}</span>}
@@ -324,6 +333,29 @@ export default function RcaRecords() {
               <div><label className="label">Root Cause</label><textarea className="input" rows={3} value={form.root_cause} onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))} /></div>
               <div><label className="label">Contributing Factors (comma-separated)</label><input className="input" value={form.contributing_factors} onChange={e => setForm(f => ({ ...f, contributing_factors: e.target.value }))} placeholder="e.g. Overloading, Poor inflation, Road hazards" /></div>
               <div><label className="label">Analysis Notes</label><textarea className="input" rows={3} value={form.ai_analysis} onChange={e => setForm(f => ({ ...f, ai_analysis: e.target.value }))} /></div>
+              {/* Photo */}
+              <div>
+                <label className="label">Photo / Evidence</label>
+                <div className="flex items-center gap-3">
+                  <button type="button"
+                    onClick={() => photoRef.current?.click()}
+                    className="btn-secondary text-sm flex items-center gap-2 px-3 py-2">
+                    <Camera size={14} /> {form?.photo_data ? 'Change Photo' : 'Attach Photo'}
+                  </button>
+                  {form?.photo_data && (
+                    <button type="button"
+                      onClick={() => setForm(f => ({ ...f, photo_data: null }))}
+                      className="text-xs text-red-400 hover:text-red-300">
+                      Remove
+                    </button>
+                  )}
+                  <input ref={photoRef} type="file" accept="image/*" className="hidden"
+                    onChange={e => handlePhoto(e, setForm)} />
+                </div>
+                {form?.photo_data && (
+                  <img src={form.photo_data} alt="Evidence" className="mt-2 rounded-lg max-h-40 border border-gray-700 object-cover" />
+                )}
+              </div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                   <Save size={16} /> {saving ? 'Saving…' : 'Save'}

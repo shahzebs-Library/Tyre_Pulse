@@ -178,6 +178,14 @@ export function forecastMonthly(monthlyData, futureMonths = 3, field = 'count') 
 
 // ── Domain-Specific Metrics ───────────────────────────────────────────────────
 
+/**
+ * Cost for a single record using the record's own cost_per_tyre field.
+ * Falls back to 0 if cost_per_tyre is absent.
+ */
+export function recordCost(r) {
+  return (r.cost_per_tyre || 0) * (r.qty || 1)
+}
+
 const RISK_WEIGHT = { High: 3, Medium: 1.5, Low: 1, Unknown: 0.5 }
 
 /**
@@ -185,12 +193,12 @@ const RISK_WEIGHT = { High: 3, Medium: 1.5, Low: 1, Unknown: 0.5 }
  * @returns {{ brand, count, totalCost, avgCost, highRiskCount, failureRate,
  *             topCategory, avgLifeDays, riskScore, rankScore }[]}
  */
-export function computeBrandMetrics(records, defaultCost = 1200) {
+export function computeBrandMetrics(records, _defaultCost) {
   const byBrand = groupBy(records, r => r.brand || 'Unknown')
 
   return Object.entries(byBrand).map(([brand, recs]) => {
     const count      = recs.length
-    const totalCost  = sum(recs.map(r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)))
+    const totalCost  = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
     const avgCost    = count ? totalCost / count : 0
     const highRisk   = recs.filter(r => r.risk_level === 'High').length
     const failureRate = count ? (highRisk / count) * 100 : 0
@@ -226,12 +234,12 @@ export function computeBrandMetrics(records, defaultCost = 1200) {
  * @returns {{ site, count, totalCost, avgCost, highRiskCount, riskScore,
  *             highRiskPct, topCategory, topBrand, monthlyTrend }[]}
  */
-export function computeSiteMetrics(records, defaultCost = 1200) {
+export function computeSiteMetrics(records, _defaultCost) {
   const bySite = groupBy(records, r => r.site || 'Unknown')
 
   return Object.entries(bySite).map(([site, recs]) => {
     const count     = recs.length
-    const totalCost = sum(recs.map(r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)))
+    const totalCost = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
     const avgCost   = count ? totalCost / count : 0
     const highRisk  = recs.filter(r => r.risk_level === 'High').length
     const highRiskPct = count ? (highRisk / count) * 100 : 0
@@ -239,7 +247,7 @@ export function computeSiteMetrics(records, defaultCost = 1200) {
     const catCounts  = countBy(recs.filter(r => r.category), r => r.category)
     const brandCounts = countBy(recs.filter(r => r.brand), r => r.brand)
 
-    const monthly = bucketByMonth(recs, r => r.issue_date, r => (r.cost_per_tyre || defaultCost) * (r.qty || 1))
+    const monthly = bucketByMonth(recs, r => r.issue_date, r => (r.cost_per_tyre || 0) * (r.qty || 1))
 
     const riskScore = count
       ? recs.reduce((s, r) => s + (RISK_WEIGHT[r.risk_level] || 1), 0) / count
@@ -261,12 +269,12 @@ export function computeSiteMetrics(records, defaultCost = 1200) {
  * @returns {{ assetNo, count, totalCost, highRiskCount, lastSeen,
  *             brands, sites, categories, failureFreqPerMonth }[]}
  */
-export function computeAssetMetrics(records, defaultCost = 1200) {
+export function computeAssetMetrics(records, _defaultCost) {
   const byAsset = groupBy(records, r => r.asset_no || 'Unknown')
 
   return Object.entries(byAsset).map(([assetNo, recs]) => {
     const count     = recs.length
-    const totalCost = sum(recs.map(r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)))
+    const totalCost = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
     const highRisk  = recs.filter(r => r.risk_level === 'High').length
 
     const dates = recs
@@ -301,11 +309,11 @@ export function computeAssetMetrics(records, defaultCost = 1200) {
  * @param {Array}  records
  * @param {number} forecastMonths
  */
-export function monthlyTrendWithForecast(records, forecastMonths = 3, defaultCost = 1200) {
+export function monthlyTrendWithForecast(records, forecastMonths = 3, _defaultCost) {
   const buckets = bucketByMonth(
     records,
     r => r.issue_date,
-    r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)
+    r => (r.cost_per_tyre || 0) * (r.qty || 1)
   )
   if (buckets.length < 2) return buckets.map(b => ({ ...b, isForecast: false }))
   return forecastMonthly(buckets, forecastMonths, 'total')
@@ -314,14 +322,14 @@ export function monthlyTrendWithForecast(records, forecastMonths = 3, defaultCos
 /**
  * KPI actuals: compute real values from records for a given month (YYYY-MM)
  */
-export function computeMonthlyKpiActuals(records, actions, month, defaultCost = 1200) {
+export function computeMonthlyKpiActuals(records, actions, month, _defaultCost) {
   const monthRecs = records.filter(r => {
     if (!r.issue_date) return false
     const d = new Date(r.issue_date)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === month
   })
 
-  const totalCost    = sum(monthRecs.map(r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)))
+  const totalCost    = sum(monthRecs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
   const highRiskCount = monthRecs.filter(r => r.risk_level === 'High').length
   const count        = monthRecs.length
 
@@ -425,13 +433,13 @@ export function recordCpk(record) {
  * Compute per-country summary metrics.
  * Returns array sorted by totalCost desc.
  */
-export function computeCountryMetrics(records, actions = [], defaultCost = 1200) {
+export function computeCountryMetrics(records, actions = [], _defaultCost) {
   const countries = [...new Set(records.map(r => r.country || 'KSA'))]
 
   return countries.map(country => {
     const recs      = records.filter(r => (r.country || 'KSA') === country)
     const count     = recs.length
-    const totalCost = sum(recs.map(r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)))
+    const totalCost = sum(recs.map(r => (r.cost_per_tyre || 0) * (r.qty || 1)))
     const highRisk  = recs.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length
     const highRiskPct = count ? (highRisk / count) * 100 : 0
 
@@ -458,4 +466,80 @@ export function computeCountryMetrics(records, actions = [], defaultCost = 1200)
       avgCostPerTyre: count ? totalCost / count : 0,
     }
   }).sort((a, b) => b.totalCost - a.totalCost)
+}
+
+// ── Intelligence Functions ────────────────────────────────────────────────────
+
+export function computeCpkAnalysis(records) {
+  const valid = records.filter(r =>
+    (r.cost_per_tyre||0) > 0 && (r.km_at_fitment||0) >= 0 && (r.km_at_removal||0) > (r.km_at_fitment||0)
+  )
+  if (valid.length < 3) return null
+  const cpks = valid.map(r => r.cost_per_tyre / (r.km_at_removal - r.km_at_fitment))
+  const avgCpk = mean(cpks)
+  const byBrand = {}
+  valid.forEach(r => {
+    if (!r.brand) return
+    if (!byBrand[r.brand]) byBrand[r.brand] = []
+    byBrand[r.brand].push(r.cost_per_tyre / (r.km_at_removal - r.km_at_fitment))
+  })
+  return {
+    avgCpk, medianCpk: median(cpks), validCount: valid.length,
+    byBrand: Object.entries(byBrand)
+      .map(([brand, vals]) => ({ brand, avgCpk: mean(vals), count: vals.length }))
+      .sort((a, b) => a.avgCpk - b.avgCpk),
+  }
+}
+
+export function computeFleetHealthScore(records) {
+  if (!records.length) return 0
+  const highRiskRate = records.filter(r => r.risk_level==='High'||r.risk_level==='Critical').length / records.length
+  const blowoutRate = records.filter(r => r.category==='Blowout').length / records.length
+  return Math.max(0, Math.min(100, Math.round(100 - highRiskRate*40 - blowoutRate*30)))
+}
+
+export function computeSeasonalTrends(records) {
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const byMonth = {}
+  records.forEach(r => {
+    if (!r.issue_date) return
+    const m = r.issue_date.substring(5,7)
+    if (!byMonth[m]) byMonth[m] = { count:0, cost:0, highRisk:0, blowouts:0 }
+    byMonth[m].count++
+    byMonth[m].cost += recordCost(r)
+    if (r.risk_level==='High'||r.risk_level==='Critical') byMonth[m].highRisk++
+    if (r.category==='Blowout') byMonth[m].blowouts++
+  })
+  return Array.from({length:12},(_,i) => {
+    const key = String(i+1).padStart(2,'0')
+    const d = byMonth[key] || {count:0,cost:0,highRisk:0,blowouts:0}
+    return { month:monthNames[i], key, ...d, highRiskRate: d.count ? d.highRisk/d.count : 0 }
+  })
+}
+
+export function computeTyreLifeAnalysis(records) {
+  const byAsset = {}
+  records.forEach(r => {
+    if (!r.asset_no||!r.issue_date) return
+    if (!byAsset[r.asset_no]) byAsset[r.asset_no] = []
+    byAsset[r.asset_no].push(r)
+  })
+  const lifeDays = []
+  Object.values(byAsset).forEach(recs => {
+    const sorted = [...recs].sort((a,b)=>new Date(a.issue_date)-new Date(b.issue_date))
+    for (let i=1;i<sorted.length;i++) {
+      const d = (new Date(sorted[i].issue_date)-new Date(sorted[i-1].issue_date))/86400000
+      if (d>0&&d<3650) lifeDays.push(d)
+    }
+  })
+  const kmLives = records
+    .filter(r=>(r.km_at_fitment||0)>=0&&(r.km_at_removal||0)>(r.km_at_fitment||0))
+    .map(r=>r.km_at_removal-r.km_at_fitment)
+  return {
+    avgLifeDays: lifeDays.length ? Math.round(mean(lifeDays)) : null,
+    medianLifeDays: lifeDays.length ? Math.round(median(lifeDays)) : null,
+    avgLifeKm: kmLives.length ? Math.round(mean(kmLives)) : null,
+    shortLifeCount: lifeDays.filter(d=>d<30).length,
+    totalSamples: lifeDays.length,
+  }
 }

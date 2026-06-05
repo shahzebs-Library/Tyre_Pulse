@@ -57,6 +57,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/cleaning', label: 'Data Cleaning', icon: Wand2 },
       { to: '/upload',   label: 'Upload Data',   icon: Upload },
+      { to: '/audit',    label: 'Audit Trail',   icon: ClipboardList },
       { to: '/settings', label: 'Settings',      icon: Settings },
     ],
   },

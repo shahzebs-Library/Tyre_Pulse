@@ -26,6 +26,7 @@ import VehicleHistory from './pages/VehicleHistory'
 import UserManagement from './pages/UserManagement'
 import AiAnalytics from './pages/AiAnalytics'
 import FleetMaster from './pages/FleetMaster'
+import AuditTrail from './pages/AuditTrail'
 
 export default function App() {
   return (
@@ -60,6 +61,7 @@ export default function App() {
                     <Route path="/ai"          element={<AiAnalytics />} />
                     <Route path="/cleaning"    element={<DataCleaning />} />
                     <Route path="/upload"      element={<UploadData />} />
+                    <Route path="/audit"       element={<AuditTrail />} />
                     <Route path="/settings"    element={<Settings />} />
                     <Route path="/users"       element={<UserManagement />} />
                     <Route path="*"            element={<Navigate to="/" replace />} />

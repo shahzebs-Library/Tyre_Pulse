@@ -5,6 +5,9 @@ import { useSettings } from '../contexts/SettingsContext'
 import StatCard from '../components/StatCard'
 import { exportToPptx } from '../lib/exportUtils'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import {
+  recordCost, computeFleetHealthScore, computeSeasonalTrends, computeTyreLifeAnalysis,
+} from '../lib/analyticsEngine'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
@@ -13,7 +16,7 @@ import {
 import {
   CircleDot, Package, ClipboardList, AlertTriangle,
   TrendingUp, TrendingDown, DollarSign, Presentation, Minus,
-  FileSpreadsheet, FileText, Search, X, Calendar,
+  FileSpreadsheet, FileText, Search, X, Calendar, Activity, Clock,
 } from 'lucide-react'
 
 ChartJS.register(
@@ -114,12 +117,30 @@ export default function Dashboard() {
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const dc   = appSettings.cost_per_tyre
-    const cost = tyres.reduce((s, t) => s + (t.cost_per_tyre ?? dc), 0)
+    const cost = tyres.reduce((s, t) => s + recordCost(t), 0)
     const crit = tyres.filter(isHigh).length
     const open = (rawActions ?? []).filter(a => a.status === 'Open').length
     return { tyres: tyres.length, stock: rawStock.length, actions: open, critical: crit, cost }
-  }, [tyres, rawActions, rawStock, appSettings.cost_per_tyre])
+  }, [tyres, rawActions, rawStock])
+
+  // ── Fleet health, seasonal trends, tyre life ──────────────────────────────
+  const fleetHealthScore = useMemo(() => computeFleetHealthScore(tyres), [tyres])
+  const seasonalTrends   = useMemo(() => computeSeasonalTrends(tyres), [tyres])
+  const tyreLife         = useMemo(() => computeTyreLifeAnalysis(tyres), [tyres])
+
+  // ── Seasonal trends bar chart data ────────────────────────────────────────
+  const seasonalBarData = useMemo(() => ({
+    labels: seasonalTrends.map(d => d.month),
+    datasets: [{
+      label: 'Tyre Issues',
+      data: seasonalTrends.map(d => d.count),
+      backgroundColor: seasonalTrends.map(d =>
+        d.highRiskRate > 0.3 ? 'rgba(239,68,68,0.7)' :
+        d.highRiskRate > 0.15 ? 'rgba(245,158,11,0.7)' : 'rgba(59,130,246,0.6)'
+      ),
+      borderRadius: 3,
+    }],
+  }), [seasonalTrends])
 
   // ── Risk trend (this month vs last) ─────────────────────────────────────
   const riskTrend = useMemo(() => {
@@ -151,7 +172,6 @@ export default function Dashboard() {
 
   // ── Monthly cost chart (last 12 months) ─────────────────────────────────
   const monthlyCostData = useMemo(() => {
-    const dc  = appSettings.cost_per_tyre
     const now = new Date()
     const months = Array.from({ length: 12 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
@@ -162,13 +182,13 @@ export default function Dashboard() {
       datasets: [{
         label: `Cost (${activeCurrency})`,
         data: months.map(({ y, m }) =>
-          Math.round(tyres.filter(t => inMonth(t, y, m)).reduce((s, t) => s + (t.cost_per_tyre ?? dc), 0))
+          Math.round(tyres.filter(t => inMonth(t, y, m)).reduce((s, t) => s + recordCost(t), 0))
         ),
         borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)',
         fill: true, tension: 0.4, pointRadius: 3,
       }],
     }
-  }, [tyres, appSettings.cost_per_tyre, activeCurrency])
+  }, [tyres, activeCurrency])
 
   // ── Brand doughnut ────────────────────────────────────────────────────────
   const brandData = useMemo(() => {
@@ -211,11 +231,10 @@ export default function Dashboard() {
 
   // ── Top assets by cost ────────────────────────────────────────────────────
   const topAssetsData = useMemo(() => {
-    const dc = appSettings.cost_per_tyre
     const m  = {}
     tyres.forEach(t => {
       if (!t.asset_no) return
-      m[t.asset_no] = (m[t.asset_no] ?? 0) + (t.cost_per_tyre ?? dc)
+      m[t.asset_no] = (m[t.asset_no] ?? 0) + recordCost(t)
     })
     const top = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 10)
     if (!top.length) return null
@@ -226,28 +245,26 @@ export default function Dashboard() {
         backgroundColor: '#7c3aed', borderRadius: 4,
       }],
     }
-  }, [tyres, appSettings.cost_per_tyre])
+  }, [tyres])
 
   // ── Top sites by cost ─────────────────────────────────────────────────────
   const siteCostData = useMemo(() => {
-    const dc = appSettings.cost_per_tyre
     const m  = {}
-    tyres.forEach(t => { if (t.site) m[t.site] = (m[t.site] ?? 0) + (t.cost_per_tyre ?? dc) })
+    tyres.forEach(t => { if (t.site) m[t.site] = (m[t.site] ?? 0) + recordCost(t) })
     const top = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 8)
     if (!top.length) return null
     return {
       labels: top.map(([s]) => s),
       datasets: [{ label: `Cost (${activeCurrency})`, data: top.map(([, c]) => Math.round(c)), backgroundColor: '#7c3aed', borderRadius: 4 }],
     }
-  }, [tyres, appSettings.cost_per_tyre, activeCurrency])
+  }, [tyres, activeCurrency])
 
   // ── Exports ───────────────────────────────────────────────────────────────
   function handleExcelExport() {
-    const dc = appSettings.cost_per_tyre
     const rows = tyres.map(t => ({
       ...t,
-      cost_per_tyre: t.cost_per_tyre ?? dc,
-      total_cost: (t.cost_per_tyre ?? dc),
+      cost_per_tyre: t.cost_per_tyre || 0,
+      total_cost: recordCost(t),
     }))
     exportToExcel(
       rows,
@@ -259,9 +276,8 @@ export default function Dashboard() {
   }
 
   function handlePdfExport() {
-    const dc = appSettings.cost_per_tyre
     exportToPdf(
-      tyres.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre ?? dc })),
+      tyres.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre || 0 })),
       [
         { key: 'issue_date', header: 'Date', width: 24 },
         { key: 'asset_no',   header: 'Asset No', width: 28 },
@@ -285,7 +301,7 @@ export default function Dashboard() {
     const all = tyreRes.data ?? []
     const now = new Date()
     const countBy = (arr, key) => { const m={}; arr.forEach(t=>{if(t[key]) m[t[key]]=(m[t[key]]??0)+1}); return Object.entries(m).sort((a,b)=>b[1]-a[1]) }
-    const sumBy   = (arr, key, vk) => { const m={}; arr.forEach(t=>{if(t[key]) m[t[key]]=(m[t[key]]??0)+(t[vk]??appSettings.cost_per_tyre)}); return Object.entries(m).sort((a,b)=>b[1]-a[1]) }
+    const sumBy   = (arr, key) => { const m={}; arr.forEach(t=>{if(t[key]) m[t[key]]=(m[t[key]]??0)+recordCost(t)}); return Object.entries(m).sort((a,b)=>b[1]-a[1]) }
     const riskCounts = { Critical:0, High:0, Medium:0, Low:0 }
     all.forEach(t=>{ if(t.risk_level && riskCounts[t.risk_level]!==undefined) riskCounts[t.risk_level]++ })
     const monthlyTrend = Array.from({length:6},(_,i)=>{
@@ -294,9 +310,9 @@ export default function Dashboard() {
       return { month: d.toLocaleString('default',{month:'short',year:'2-digit'}), count }
     })
     await exportToPptx({
-      totalTyres: all.length, totalCost: all.reduce((s,t)=>s+(t.cost_per_tyre??appSettings.cost_per_tyre),0),
+      totalTyres: all.length, totalCost: all.reduce((s,t)=>s+recordCost(t),0),
       openActions: (actionRes.data??[]).length, highRisk: all.filter(t=>t.risk_level==='Critical'||t.risk_level==='High').length,
-      topSites: sumBy(all,'site','cost_per_tyre').slice(0,12).map(([site,count])=>({site,count})),
+      topSites: sumBy(all,'site').slice(0,12).map(([site,count])=>({site,count})),
       categoryBreakdown: countBy(all,'category').map(([category,count])=>({category,count})),
       riskBreakdown: Object.entries(riskCounts).map(([level,count])=>({level,count})),
       monthlyTrend, recentActions: actionRes.data??[],
@@ -410,8 +426,62 @@ export default function Dashboard() {
         <StatCard label="Tyre Records"  value={stats.tyres.toLocaleString()}                               icon={CircleDot}    color="blue" />
         <StatCard label="Stock Sites"   value={stats.stock.toLocaleString()}                               icon={Package}      color="green" />
         <StatCard label="Open Actions"  value={stats.actions.toLocaleString()}                             icon={ClipboardList} color="yellow" />
-        <StatCard label="High Risk"     value={stats.critical.toLocaleString()}                            icon={AlertTriangle} color="red" />
+        <StatCard
+          label="High Risk"
+          value={`${stats.critical.toLocaleString()} (${stats.tyres ? ((stats.critical / stats.tyres) * 100).toFixed(1) : 0}%)`}
+          icon={AlertTriangle} color="red"
+        />
         <StatCard label="Total Cost"    value={`${activeCurrency} ${(stats.cost / 1000).toFixed(0)}K`}    icon={DollarSign}   color="purple" />
+      </div>
+
+      {/* Fleet intelligence row: Health Score + Avg Tyre Life */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Fleet Health Score */}
+        <div className="card text-center col-span-1">
+          <div className={`text-4xl font-bold mb-1 ${
+            fleetHealthScore >= 70 ? 'text-green-400' :
+            fleetHealthScore >= 40 ? 'text-yellow-400' : 'text-red-400'
+          }`}>
+            {fleetHealthScore}
+          </div>
+          <p className="text-gray-400 text-sm flex items-center justify-center gap-1">
+            <Activity size={13} /> Fleet Health Score
+          </p>
+          <p className={`text-xs mt-1 ${
+            fleetHealthScore >= 70 ? 'text-green-500' :
+            fleetHealthScore >= 40 ? 'text-yellow-500' : 'text-red-500'
+          }`}>
+            {fleetHealthScore >= 70 ? 'Good' : fleetHealthScore >= 40 ? 'Moderate' : 'At Risk'}
+          </p>
+        </div>
+
+        {/* Avg Tyre Life */}
+        <div className="card text-center col-span-1">
+          <div className="text-4xl font-bold mb-1 text-blue-400">
+            {tyreLife?.avgLifeDays != null ? tyreLife.avgLifeDays : '—'}
+          </div>
+          <p className="text-gray-400 text-sm flex items-center justify-center gap-1">
+            <Clock size={13} /> Avg Tyre Life (days)
+          </p>
+          {tyreLife?.avgLifeKm != null && (
+            <p className="text-xs mt-1 text-gray-500">{tyreLife.avgLifeKm.toLocaleString()} km avg</p>
+          )}
+        </div>
+
+        {/* Seasonal Trends mini chart */}
+        <div className="card col-span-2">
+          <h2 className="text-sm font-semibold text-white mb-3">Seasonal Tyre Issues (by Month)</h2>
+          <div className="h-28">
+            <Bar data={seasonalBarData} options={{
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { ticks: { color: '#6b7280', font: { size: 9 } }, grid: { display: false } },
+                y: { ticks: { color: '#6b7280', font: { size: 9 } }, grid: { color: '#1f2937' } },
+              },
+            }} />
+          </div>
+        </div>
       </div>
 
       {/* Risk trend callout */}

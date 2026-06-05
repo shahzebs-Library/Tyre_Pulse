@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { batchClassify } from '../lib/tyreClassifier'
+import { logAuditEvent } from '../lib/auditLogger'
 import * as XLSX from 'xlsx'
 import { Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen, AlertTriangle } from 'lucide-react'
 
@@ -252,6 +253,15 @@ export default function UploadData() {
     await supabase.from('upload_history').insert({
       file_names: [fileName], records_added: added, records_skipped: skipped + (skipDupes ? dupes.length : 0),
       skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? defaultCountry, uploaded_by: profile?.id,
+    })
+
+    // Audit log
+    const skippedCount = skipped + (skipDupes ? dupes.length : 0)
+    await logAuditEvent({
+      action: 'UPLOAD',
+      tableName: 'tyre_records',
+      recordCount: added,
+      details: { filename: fileName, rowCount: added, skippedCount, country: activeCountry },
     })
 
     setResult({ added, skipped, skipLog, autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0 })

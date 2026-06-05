@@ -50,12 +50,12 @@
 
 | # | Feature | Status |
 |---|---------|--------|
-| 2A | Multi-sheet Excel upload with sheet picker (select/skip sheets) | ⬜ |
-| 2B | Stock upload mapping (4th upload type, maps to stock_records) | ⬜ |
-| 2C | Upload batch delete — Admin can remove all records from a batch | ⬜ |
-| 2D | Dashboard date shortcuts (Today / This Week / This Month / This Year / Custom) | ⬜ |
-| 2E | Dashboard period breakdown toggle (Daily / Weekly / Monthly / Yearly) | ⬜ |
-| 2F | Tyre forecast card on Dashboard (rolling 3-month projection) | ⬜ |
+| 2A | Multi-sheet Excel upload with sheet picker (select/skip sheets) | ✅ |
+| 2B | Stock upload mapping (4th upload type, maps to stock_records) | ✅ |
+| 2C | Upload batch delete — Admin can remove all records from a batch | ✅ |
+| 2D | Dashboard date shortcuts (Today / This Week / This Month / This Year / Custom) | ✅ |
+| 2E | Dashboard period breakdown toggle (Daily / Weekly / Monthly / Yearly) | ✅ |
+| 2F | Tyre forecast card on Dashboard (rolling 3-month projection) | ✅ |
 
 ---
 
@@ -63,9 +63,9 @@
 
 | # | Feature | Status |
 |---|---------|--------|
-| 3A | Accidents / Incident Tracking page with dashboard | ⬜ |
-| 3B | Custom Reports page (report builder with filters + Excel/PDF output) | ⬜ |
-| 3C | Chart enlargement modal (fullscreen any chart with date filter) | ⬜ |
+| 3A | Accidents / Incident Tracking page with dashboard | ✅ |
+| 3B | Custom Reports page (report builder with filters + Excel/PDF output) | ✅ |
+| 3C | Chart enlargement modal (fullscreen any chart with date filter) | ✅ |
 
 ---
 

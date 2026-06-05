@@ -225,6 +225,7 @@ export default function KpiScorecard() {
             </div>
           )
         }
+        </div>
       </div>
 
       {/* Target editor */}

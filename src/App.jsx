@@ -28,6 +28,7 @@ import AiAnalytics from './pages/AiAnalytics'
 import FleetMaster from './pages/FleetMaster'
 import AuditTrail from './pages/AuditTrail'
 import ResetPassword from './pages/ResetPassword'
+import Accidents from './pages/Accidents'
 
 export default function App() {
   return (
@@ -53,6 +54,7 @@ export default function App() {
                     <Route path="/stock"       element={<StockManagement />} />
                     <Route path="/budgets"     element={<Budgets />} />
                     <Route path="/actions"     element={<CorrectiveActions />} />
+                    <Route path="/accidents"   element={<Accidents />} />
                     <Route path="/rca"         element={<RcaRecords />} />
                     <Route path="/inspections" element={<Inspections />} />
                     <Route path="/alerts"      element={<Alerts />} />

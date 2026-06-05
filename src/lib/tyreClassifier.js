@@ -21,6 +21,37 @@ const ABBREV_MAP = {
   'insp': 'Inspection', 'mnt': 'Mounted',
 }
 
+const ARABIC_TERM_MAP = {
+  // Blowout — Arabic script + transliteration
+  'انفجار': 'Blowout', 'انفجر': 'Blowout', 'إنفجار': 'Blowout',
+  'infijar': 'Blowout', 'infijaar': 'Blowout',
+  // Puncture
+  'ثقب': 'Puncture', 'ثقوب': 'Puncture', 'تسريب': 'Puncture',
+  'tasreeb': 'Puncture', 'tasrib': 'Puncture', 'thaqb': 'Puncture',
+  // Worn out / Normal wear
+  'تآكل': 'Worn out', 'بالى': 'Worn out', 'مستهلك': 'Worn out', 'اهتراء': 'Worn out',
+  'ta\'akul': 'Worn out', 'mustahlak': 'Worn out', 'ihtira': 'Worn out',
+  // Sidewall
+  'جانبي': 'Sidewall', 'جدار جانبي': 'Sidewall',
+  'janbi': 'Sidewall',
+  // Blowout — Urdu transliteration
+  'phat gaya': 'Blowout', 'phat gayi': 'Blowout', 'fut gaya': 'Blowout', 'phata': 'Blowout',
+  // Puncture — Urdu
+  'pankchar': 'Puncture', 'panchar': 'Puncture', 'punctchar': 'Puncture',
+  'hawa nikal': 'Puncture',
+  // Worn — Urdu
+  'ghis gaya': 'Worn out', 'ghisa': 'Worn out', 'ghas gaya': 'Worn out',
+  'khatam': 'Worn out', 'khatm': 'Worn out',
+  // Sidewall — Urdu
+  'side kat': 'Sidewall cut', 'kinara': 'Sidewall', 'side phata': 'Sidewall',
+  // Cut — Urdu/Arabic
+  'kata hua': 'Cut', 'kat gaya': 'Cut',
+  // Heat — Urdu/Arabic
+  'jala hua': 'Heat damage', 'garmi se': 'Heat damage', 'harara': 'Heat damage',
+  // Irregular wear — Urdu
+  'ek taraf ghisa': 'Irregular wear',
+}
+
 // ── Category definitions ───────────────────────────────────────────────────────
 export const CATEGORIES = {
   BLOWOUT: {
@@ -223,9 +254,26 @@ const JUNK_PATTERN = /[/\\|*]{2,}|[?!]{3,}|[-_=]{4,}|\s{2,}/g
 // ── Expand abbreviations in text ──────────────────────────────────────────────
 function expandAbbreviations(text) {
   let out = text
+  // English abbreviations (existing logic — keep unchanged)
   for (const [abbr, expansion] of Object.entries(ABBREV_MAP)) {
     const re = new RegExp(`\\b${abbr.replace(/[/]/g, '\\/')}\\b`, 'gi')
     out = out.replace(re, expansion)
+  }
+  // Arabic script + Urdu transliterations
+  for (const [term, expansion] of Object.entries(ARABIC_TERM_MAP)) {
+    if (/[؀-ۿ]/.test(term)) {
+      // Arabic script: plain replace (no word boundary — Arabic doesn't use \b)
+      out = out.split(term).join(expansion)
+    } else {
+      // Latin-script Urdu transliterations: use word boundary when safe
+      try {
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const re = new RegExp(`\\b${escaped}\\b`, 'gi')
+        out = out.replace(re, expansion)
+      } catch (_) {
+        out = out.split(term).join(expansion)
+      }
+    }
   }
   return out
 }
@@ -320,3 +368,7 @@ export const CONFIDENCE_COLOUR = {
 }
 
 export const ALL_CATEGORY_LABELS = Object.values(CATEGORIES).map(c => c.label).concat(['Unclassified'])
+
+export function containsArabic(text) {
+  return /[؀-ۿ]/.test(String(text || ''))
+}

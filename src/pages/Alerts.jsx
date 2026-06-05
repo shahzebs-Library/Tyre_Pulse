@@ -1,11 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Clock, TrendingUp, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   detectAlerts, countAlertsBySeverity,
   SEVERITY_CONFIG, ALERT_TYPE_LABELS, ALERT_TYPES,
 } from '../lib/alertEngine'
+
+const TYPE_ICON_CONFIG = {
+  [ALERT_TYPES.VEHICLE_INACTIVE]: { Icon: Clock,         color: 'text-orange-400' },
+  [ALERT_TYPES.HIGH_CPK]:         { Icon: TrendingUp,    color: 'text-red-400'    },
+  [ALERT_TYPES.DATA_QUALITY]:     { Icon: AlertTriangle, color: 'text-yellow-400' },
+}
 
 export default function Alerts() {
   const navigate = useNavigate()
@@ -177,7 +184,7 @@ export default function Alerts() {
                 key={alert.id}
                 className={`rounded-xl border p-4 flex items-start gap-4 ${cfg.bg} ${cfg.border}`}
               >
-                <SeverityIcon severity={alert.severity} />
+                <AlertIcon type={alert.type} severity={alert.severity} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`text-sm font-semibold ${cfg.color}`}>{alert.title}</span>
@@ -214,6 +221,15 @@ export default function Alerts() {
       )}
     </div>
   )
+}
+
+function AlertIcon({ type, severity }) {
+  const typeCfg = TYPE_ICON_CONFIG[type]
+  if (typeCfg) {
+    const { Icon, color } = typeCfg
+    return <Icon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${color}`} />
+  }
+  return <SeverityIcon severity={severity} />
 }
 
 function SeverityIcon({ severity }) {

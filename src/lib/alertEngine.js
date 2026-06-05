@@ -12,6 +12,9 @@ export const ALERT_TYPES = {
   OVERDUE_ACTION:     'OVERDUE_ACTION',
   RISK_SPIKE:         'RISK_SPIKE',
   INSPECTION_OVERDUE: 'INSPECTION_OVERDUE',
+  VEHICLE_INACTIVE:   'VEHICLE_INACTIVE',
+  HIGH_CPK:           'HIGH_CPK',
+  DATA_QUALITY:       'DATA_QUALITY',
 }
 
 export const SEVERITY = {
@@ -30,6 +33,94 @@ function withCountry(q, country) {
   return country ? q.eq('country', country) : q
 }
 
+function detectVehicleInactivity(tyreRecords = [], thresholds = {}) {
+  const inactiveDays = thresholds.vehicleInactiveDays || 90
+  const now = new Date()
+  const lastSeen = {}
+  tyreRecords.forEach(r => {
+    if (!r.asset_no || !r.issue_date) return
+    const d = new Date(r.issue_date)
+    if (!lastSeen[r.asset_no] || d > lastSeen[r.asset_no].date)
+      lastSeen[r.asset_no] = { date: d, site: r.site }
+  })
+  return Object.entries(lastSeen)
+    .map(([assetNo, info]) => {
+      const daysSince = Math.floor((now - info.date) / 86400000)
+      if (daysSince < inactiveDays) return null
+      return {
+        type: ALERT_TYPES.VEHICLE_INACTIVE,
+        severity: daysSince >= 180 ? 'high' : 'medium',
+        title: `Vehicle ${assetNo} — No Activity`,
+        message: `No tyre records for ${daysSince} days. Last seen: ${info.date.toLocaleDateString()}`,
+        site: info.site,
+        meta: { assetNo, daysSince, lastSeen: info.date.toISOString() },
+      }
+    })
+    .filter(Boolean)
+    .slice(0, 20)
+}
+
+function detectHighCpk(tyreRecords = [], thresholds = {}) {
+  const multiplier = thresholds.cpkAlertMultiplier || 2.5
+  const withCpk = tyreRecords.filter(r =>
+    (r.cost_per_tyre||0) > 0 && (r.km_at_fitment||0) >= 0 && (r.km_at_removal||0) > (r.km_at_fitment||0)
+  ).map(r => ({ ...r, cpk: r.cost_per_tyre / (r.km_at_removal - r.km_at_fitment) }))
+  if (withCpk.length < 5) return []
+  const avgCpk = withCpk.reduce((s,r) => s+r.cpk, 0) / withCpk.length
+  const threshold = avgCpk * multiplier
+  const byAsset = {}
+  withCpk.forEach(r => {
+    if (!r.asset_no) return
+    if (!byAsset[r.asset_no]) byAsset[r.asset_no] = []
+    byAsset[r.asset_no].push(r.cpk)
+  })
+  return Object.entries(byAsset)
+    .filter(([,cpks]) => cpks.length >= 2)
+    .map(([assetNo, cpks]) => {
+      const assetAvg = cpks.reduce((s,v)=>s+v,0)/cpks.length
+      if (assetAvg <= threshold) return null
+      return {
+        type: ALERT_TYPES.HIGH_CPK,
+        severity: assetAvg > threshold*1.5 ? 'high' : 'medium',
+        title: `High CPK — ${assetNo}`,
+        message: `Avg CPK ${assetAvg.toFixed(4)} SAR/km is ${(assetAvg/avgCpk).toFixed(1)}x fleet average (${avgCpk.toFixed(4)})`,
+        meta: { assetNo, assetAvg, fleetAvg: avgCpk, ratio: assetAvg/avgCpk },
+      }
+    })
+    .filter(Boolean)
+    .slice(0, 10)
+}
+
+function detectDataQuality(tyreRecords = [], thresholds = {}) {
+  const missingCostThreshold = thresholds.missingCostPct || 0.3
+  const unclassifiedThreshold = thresholds.unclassifiedPct || 0.4
+  const alerts = []
+  if (!tyreRecords.length) return alerts
+  const missingCost = tyreRecords.filter(r => !r.cost_per_tyre || r.cost_per_tyre === 0).length
+  const unclassified = tyreRecords.filter(r => !r.category || r.category === 'Unclassified').length
+  const missingKm = tyreRecords.filter(r => !(r.km_at_fitment||0) && !(r.km_at_removal||0)).length
+  const n = tyreRecords.length
+  if (missingCost/n > missingCostThreshold) alerts.push({
+    type: ALERT_TYPES.DATA_QUALITY, severity: missingCost/n > 0.6 ? 'high' : 'medium',
+    title: 'Missing Cost Data',
+    message: `${missingCost}/${n} records (${(missingCost/n*100).toFixed(0)}%) have no cost. Analytics accuracy reduced.`,
+    meta: { missingCost, total: n },
+  })
+  if (unclassified/n > unclassifiedThreshold) alerts.push({
+    type: ALERT_TYPES.DATA_QUALITY, severity: 'medium',
+    title: 'High Unclassified Rate',
+    message: `${unclassified}/${n} records (${(unclassified/n*100).toFixed(0)}%) unclassified. Run Data Cleaning.`,
+    meta: { unclassified, total: n },
+  })
+  if (missingKm/n > 0.7) alerts.push({
+    type: ALERT_TYPES.DATA_QUALITY, severity: 'info',
+    title: 'Missing KM Data',
+    message: `${missingKm} records lack km_at_fitment/km_at_removal. CPK analysis unavailable.`,
+    meta: { missingKm, total: n },
+  })
+  return alerts
+}
+
 /**
  * Main entry point — fetches all needed data and returns alerts array.
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
@@ -41,7 +132,7 @@ export async function detectAlerts(supabase, country = null) {
   const now    = new Date()
 
   // ── Fetch data in parallel with optional country filter ───────────────────
-  const [stockRes, budgetRes, actionsRes, tyreRes, inspRes] = await Promise.all([
+  const [stockRes, budgetRes, actionsRes, tyreRes, inspRes, fullTyreRes] = await Promise.all([
     withCountry(supabase.from('stock_records').select('*').order('site'), country),
     withCountry(supabase.from('budgets').select('*').eq('year', now.getFullYear()), country),
     withCountry(supabase.from('corrective_actions').select('*').neq('status', 'Closed'), country),
@@ -60,13 +151,21 @@ export async function detectAlerts(supabase, country = null) {
         .lte('scheduled_date', now.toISOString().split('T')[0]),
       country
     ),
+    withCountry(
+      supabase.from('tyre_records')
+        .select('id,asset_no,site,issue_date,cost_per_tyre,km_at_fitment,km_at_removal,category')
+        .order('issue_date', { ascending: false })
+        .limit(2000),
+      country
+    ),
   ])
 
-  const stockRecords = stockRes.data   || []
-  const budgets      = budgetRes.data  || []
-  const openActions  = actionsRes.data || []
-  const recentTyres  = tyreRes.data    || []
-  const overdueInsp  = inspRes.data    || []
+  const stockRecords = stockRes.data    || []
+  const budgets      = budgetRes.data   || []
+  const openActions  = actionsRes.data  || []
+  const recentTyres  = tyreRes.data     || []
+  const overdueInsp  = inspRes.data     || []
+  const fullTyres    = fullTyreRes.data || []
 
   // ── 1. Stock Critical ─────────────────────────────────────────────────────
   stockRecords.forEach(s => {
@@ -169,6 +268,48 @@ export async function detectAlerts(supabase, country = null) {
     }
   })
 
+  // ── 6. Vehicle Inactivity ─────────────────────────────────────────────────
+  detectVehicleInactivity(fullTyres).forEach((a, i) => {
+    alerts.push({
+      id:        alertId(ALERT_TYPES.VEHICLE_INACTIVE, `${a.meta.assetNo}-${i}`),
+      type:      a.type,
+      severity:  a.severity,
+      title:     a.title,
+      message:   a.message,
+      link:      '/analytics',
+      data:      a.meta,
+      createdAt: now.toISOString(),
+    })
+  })
+
+  // ── 7. High CPK ───────────────────────────────────────────────────────────
+  detectHighCpk(fullTyres).forEach((a, i) => {
+    alerts.push({
+      id:        alertId(ALERT_TYPES.HIGH_CPK, `${a.meta.assetNo}-${i}`),
+      type:      a.type,
+      severity:  a.severity,
+      title:     a.title,
+      message:   a.message,
+      link:      '/analytics',
+      data:      a.meta,
+      createdAt: now.toISOString(),
+    })
+  })
+
+  // ── 8. Data Quality ───────────────────────────────────────────────────────
+  detectDataQuality(fullTyres).forEach((a, i) => {
+    alerts.push({
+      id:        alertId(ALERT_TYPES.DATA_QUALITY, `${a.title.replace(/\s+/g, '-')}-${i}`),
+      type:      a.type,
+      severity:  a.severity,
+      title:     a.title,
+      message:   a.message,
+      link:      '/analytics',
+      data:      a.meta,
+      createdAt: now.toISOString(),
+    })
+  })
+
   // Sort by severity then date
   const ORDER = { critical: 0, high: 1, medium: 2, info: 3 }
   return alerts.sort((a, b) => (ORDER[a.severity] ?? 4) - (ORDER[b.severity] ?? 4))
@@ -196,4 +337,7 @@ export const ALERT_TYPE_LABELS = {
   [ALERT_TYPES.OVERDUE_ACTION]:      'Action',
   [ALERT_TYPES.RISK_SPIKE]:          'Risk',
   [ALERT_TYPES.INSPECTION_OVERDUE]:  'Inspection',
+  [ALERT_TYPES.VEHICLE_INACTIVE]:    'Vehicle Inactive',
+  [ALERT_TYPES.HIGH_CPK]:            'High Cost Per KM',
+  [ALERT_TYPES.DATA_QUALITY]:        'Data Quality',
 }

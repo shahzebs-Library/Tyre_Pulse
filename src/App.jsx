@@ -29,6 +29,7 @@ import FleetMaster from './pages/FleetMaster'
 import AuditTrail from './pages/AuditTrail'
 import ResetPassword from './pages/ResetPassword'
 import Accidents from './pages/Accidents'
+import Reports from './pages/Reports'
 
 export default function App() {
   return (
@@ -68,6 +69,7 @@ export default function App() {
                     <Route path="/audit"       element={<RoleRoute allowed={['Admin']}><AuditTrail /></RoleRoute>} />
                     <Route path="/settings"    element={<Settings />} />
                     <Route path="/users"       element={<RoleRoute allowed={['Admin']}><UserManagement /></RoleRoute>} />
+                    <Route path="/reports"     element={<Reports />} />
                     <Route path="*"            element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

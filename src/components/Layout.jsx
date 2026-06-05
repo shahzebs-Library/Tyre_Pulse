@@ -8,7 +8,7 @@ import {
   ClipboardList, Search, Upload, Settings, LogOut,
   Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
   Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, Sparkles,
-  Sun, Moon, Truck, AlertOctagon,
+  Sun, Moon, Truck, AlertOctagon, FileText,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -42,6 +42,7 @@ const NAV_GROUPS = [
       { to: '/accidents',    label: 'Accidents',          icon: AlertOctagon },
       { to: '/rca',          label: 'Root Cause',         icon: Search },
       { to: '/inspections',  label: 'Inspections',        icon: ClipboardCheck },
+      { to: '/reports',      label: 'Reports',            icon: FileText },
     ],
   },
   {

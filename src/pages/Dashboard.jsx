@@ -18,8 +18,9 @@ import {
   CircleDot, Package, ClipboardList, AlertTriangle,
   TrendingUp, TrendingDown, DollarSign, Presentation, Minus,
   FileSpreadsheet, FileText, Search, X, Calendar, Activity, Clock,
-  Bell, Upload, ClipboardCheck,
+  Bell, Upload, ClipboardCheck, Maximize2,
 } from 'lucide-react'
+import { ChartModal } from '../components/ChartModal'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
@@ -127,6 +128,8 @@ export default function Dashboard() {
     setRecentRecords(recentRes.data ?? [])
     setOpenActions(openActRes.data ?? [])
   }
+
+  const [expandedChart, setExpandedChart] = useState(null)
 
   const [recentRecords, setRecentRecords] = useState([])
   const [openActions, setOpenActions]     = useState([])
@@ -663,7 +666,16 @@ export default function Dashboard() {
       {/* Row 1: Period chart + Brand doughnut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card lg:col-span-2">
-          <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp size={16} /> {periodChartTitle}</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-white flex items-center gap-2"><TrendingUp size={16} /> {periodChartTitle}</h2>
+            <button
+              onClick={() => setExpandedChart('main')}
+              className="text-gray-500 hover:text-white transition-colors"
+              title="Expand chart"
+            >
+              <Maximize2 size={15} />
+            </button>
+          </div>
           <div className="h-56">
             <Bar data={periodChartData} options={{ ...BASE_OPTS, plugins: { ...BASE_OPTS.plugins, legend: { labels: { color: '#9ca3af', boxWidth: 10 } } } }} />
           </div>
@@ -678,9 +690,18 @@ export default function Dashboard() {
 
       {/* Row 2: Monthly Cost trend (line) */}
       <div className="card">
-        <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-          <DollarSign size={16} /> Monthly Cost Trend · {activeCurrency}
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <DollarSign size={16} /> Monthly Cost Trend · {activeCurrency}
+          </h2>
+          <button
+            onClick={() => setExpandedChart('cost')}
+            className="text-gray-500 hover:text-white transition-colors"
+            title="Expand chart"
+          >
+            <Maximize2 size={15} />
+          </button>
+        </div>
         <div className="h-52">
           <Line data={monthlyCostData} options={{
             ...BASE_OPTS,
@@ -846,6 +867,25 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {expandedChart === 'main' && (
+        <ChartModal title={periodChartTitle} onClose={() => setExpandedChart(null)}>
+          <Bar data={periodChartData} options={{ ...BASE_OPTS, plugins: { ...BASE_OPTS.plugins, legend: { labels: { color: '#9ca3af', boxWidth: 10 } } } }} />
+        </ChartModal>
+      )}
+
+      {expandedChart === 'cost' && (
+        <ChartModal title={`Monthly Cost Trend · ${activeCurrency}`} onClose={() => setExpandedChart(null)}>
+          <Line data={monthlyCostData} options={{
+            ...BASE_OPTS,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: TICK, grid: GRID },
+              y: { ticks: { ...TICK, callback: v => `${activeCurrency} ${(v/1000).toFixed(0)}K` }, grid: GRID },
+            },
+          }} />
+        </ChartModal>
+      )}
     </div>
   )
 }

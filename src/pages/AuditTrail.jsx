@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { exportToExcel } from '../lib/exportUtils'
+import { useAuth } from '../contexts/AuthContext'
+import { logAuditEvent } from '../lib/auditLogger'
 import {
   FileSpreadsheet, ChevronLeft, ChevronRight, ClipboardList, RefreshCw,
 } from 'lucide-react'
@@ -30,6 +32,7 @@ function SummaryCard({ label, value, color }) {
 }
 
 export default function AuditTrail() {
+  const { profile } = useAuth()
   const [activeTab, setActiveTab] = useState('audit')
 
   // ── Summary stats ──────────────────────────────────────────────────────────
@@ -55,6 +58,11 @@ export default function AuditTrail() {
   const [uploadTotal, setUploadTotal] = useState(0)
   const [uploadPage, setUploadPage]   = useState(0)
   const [uploadLoading, setUploadLoading] = useState(false)
+
+  // ── Batch delete state ─────────────────────────────────────────────────────
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   // ── Load summary stats ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -187,6 +195,17 @@ export default function AuditTrail() {
       `TyrePulse_UploadHistory_${new Date().toISOString().slice(0, 10)}`,
       'Upload History'
     )
+  }
+
+  async function handleDeleteBatch() {
+    if (deleteConfirm !== 'DELETE') return
+    setDeleting(true)
+    await supabase.from('tyre_records').delete().eq('upload_batch_id', deleteTarget.batchId)
+    await logAuditEvent({ action: 'batch_delete', table_name: 'tyre_records', record_count: deleteTarget.count, details: { batch_id: deleteTarget.batchId } })
+    setDeleteTarget(null)
+    setDeleteConfirm('')
+    setDeleting(false)
+    loadUploadHistory()
   }
 
   const auditPages  = Math.ceil(auditTotal  / PAGE_SIZE)
@@ -371,16 +390,16 @@ export default function AuditTrail() {
               <table className="w-full">
                 <thead>
                   <tr>
-                    {['File Names', 'Records Added', 'Records Skipped', 'Uploaded By', 'Uploaded At', 'Region'].map(h => (
+                    {['File Names', 'Records Added', 'Records Skipped', 'Uploaded By', 'Uploaded At', 'Region', ...(profile?.role === 'Admin' ? ['Delete Batch'] : [])].map(h => (
                       <th key={h} className="table-header">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {uploadLoading ? (
-                    <tr><td colSpan={6} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                    <tr><td colSpan={profile?.role === 'Admin' ? 7 : 6} className="text-center py-12 text-gray-500">Loading…</td></tr>
                   ) : uploadRows.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center py-12 text-gray-500">No upload history found</td></tr>
+                    <tr><td colSpan={profile?.role === 'Admin' ? 7 : 6} className="text-center py-12 text-gray-500">No upload history found</td></tr>
                   ) : uploadRows.map(row => (
                     <tr key={row.id} className="hover:bg-gray-800/30 transition-colors">
                       <td className="table-cell text-gray-200 max-w-xs truncate">
@@ -401,6 +420,16 @@ export default function AuditTrail() {
                         {row.uploaded_at ? new Date(row.uploaded_at).toLocaleString() : '—'}
                       </td>
                       <td className="table-cell text-gray-400">{row.region ?? '—'}</td>
+                      {profile?.role === 'Admin' && (
+                        <td className="table-cell">
+                          {row.batch_id ? (
+                            <button onClick={() => setDeleteTarget({ batchId: row.batch_id, count: row.records_added, date: row.uploaded_at })}
+                              className="text-xs text-red-400 border border-red-800/50 hover:bg-red-900/20 px-2 py-1 rounded transition-colors">
+                              Delete Batch
+                            </button>
+                          ) : <span className="text-gray-700 text-xs">—</span>}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -423,6 +452,27 @@ export default function AuditTrail() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Batch delete confirmation modal ───────────────────────────────── */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setDeleteTarget(null); setDeleteConfirm('') }}>
+          <div className="bg-gray-900 border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-white mb-3">Delete Upload Batch</h2>
+            <p className="text-gray-400 text-sm mb-4">
+              This will permanently delete <strong className="text-white">{deleteTarget.count} records</strong> uploaded on {new Date(deleteTarget.date).toLocaleDateString()}. This cannot be undone.
+            </p>
+            <p className="text-sm text-gray-400 mb-2">Type <span className="font-mono text-red-400">DELETE</span> to confirm:</p>
+            <input className="input mb-4" placeholder="DELETE" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} />
+            <div className="flex gap-3">
+              <button onClick={handleDeleteBatch} disabled={deleteConfirm !== 'DELETE' || deleting}
+                className="btn-primary bg-red-700 hover:bg-red-600 disabled:opacity-40 flex-1">
+                {deleting ? 'Deleting…' : 'Delete Permanently'}
+              </button>
+              <button onClick={() => { setDeleteTarget(null); setDeleteConfirm('') }} className="btn-secondary">Cancel</button>
+            </div>
           </div>
         </div>
       )}

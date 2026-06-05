@@ -6,7 +6,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { batchClassify } from '../lib/tyreClassifier'
 import { logAuditEvent } from '../lib/auditLogger'
 import * as XLSX from 'xlsx'
-import { Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen, AlertTriangle } from 'lucide-react'
+import { Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen, AlertTriangle, Package } from 'lucide-react'
 
 const CANONICAL_FIELDS = [
   'sr', 'issue_date', 'description', 'brand', 'serial_no', 'qty',
@@ -29,11 +29,32 @@ const FIELD_GUESSES = {
   remarks: ['remarks', 'notes', 'comment', 'comments'],
 }
 
-function guessMapping(headers) {
+const STOCK_CANONICAL_FIELDS = [
+  'item_code', 'description', 'brand', 'category', 'qty', 'unit_cost',
+  'site', 'location', 'min_level', 'reorder_qty', 'supplier', 'notes',
+]
+
+const STOCK_FIELD_GUESSES = {
+  item_code:   ['item code', 'item_code', 'code', 'part no', 'part number', 'sku', 'item no'],
+  description: ['description', 'desc', 'item name', 'product name', 'item description'],
+  brand:       ['brand', 'manufacturer', 'make'],
+  category:    ['category', 'type', 'class', 'group'],
+  qty:         ['qty', 'quantity', 'count', 'stock', 'on hand', 'balance'],
+  unit_cost:   ['unit cost', 'unit_cost', 'price', 'cost', 'rate', 'unit price'],
+  site:        ['site', 'warehouse', 'branch', 'store'],
+  location:    ['location', 'bin', 'shelf', 'bin location', 'rack', 'bin no'],
+  min_level:   ['min level', 'min_level', 'minimum', 'reorder level', 'min stock'],
+  reorder_qty: ['reorder qty', 'reorder_qty', 'order qty', 'order quantity'],
+  supplier:    ['supplier', 'vendor', 'vendor name'],
+  notes:       ['notes', 'remarks', 'comment', 'comments'],
+}
+
+function guessMapping(headers, fieldGuesses = FIELD_GUESSES) {
   const mapping = {}
   const lc = headers.map(h => h.toLowerCase().trim())
-  CANONICAL_FIELDS.forEach(field => {
-    const guesses = FIELD_GUESSES[field] ?? [field]
+  const fields = Object.keys(fieldGuesses)
+  fields.forEach(field => {
+    const guesses = fieldGuesses[field] ?? [field]
     const idx = lc.findIndex(h => guesses.some(g => h.includes(g)))
     if (idx !== -1) mapping[field] = headers[idx]
   })
@@ -76,7 +97,9 @@ export default function UploadData() {
   const navigate    = useNavigate()
   const fileRef     = useRef(null)
 
-  const [step, setStep]       = useState('idle')  // idle|mapping|preview|uploading|done
+  const wbRef = useRef(null)
+
+  const [step, setStep]       = useState('idle')  // idle|sheets|mapping|preview|uploading|done
   const [fileName, setFileName]       = useState('')
   const [headers, setHeaders]         = useState([])
   const [rows, setRows]               = useState([])
@@ -86,7 +109,8 @@ export default function UploadData() {
   const [error, setError]             = useState('')
   const [savedMappingId, setSavedMappingId] = useState(null)
   const [mappingSource, setMappingSource]   = useState('guess')
-  const [uploadType, setUploadType] = useState('tyres') // 'tyres' | 'fleet' | 'auto'
+  const [uploadType, setUploadType] = useState('tyres') // 'tyres' | 'fleet' | 'stock' | 'auto'
+  const [sheetOptions, setSheetOptions] = useState([])
 
   // ── Duplicate detection state ────────────────────────────────────────────────
   const [dupes, setDupes]             = useState([])   // existing serial_no matches
@@ -94,6 +118,10 @@ export default function UploadData() {
 
   // ── Upload progress ──────────────────────────────────────────────────────────
   const [progress, setProgress]       = useState({ done: 0, total: 0 })
+
+  // ── Active field set based on upload type ────────────────────────────────────
+  const activeFields  = uploadType === 'stock' ? STOCK_CANONICAL_FIELDS : CANONICAL_FIELDS
+  const activeGuesses = uploadType === 'stock' ? STOCK_FIELD_GUESSES  : FIELD_GUESSES
 
   async function handleFile(e) {
     const file = e.target.files?.[0]
@@ -104,6 +132,23 @@ export default function UploadData() {
     reader.onload = async (ev) => {
       try {
         const wb = XLSX.read(ev.target.result, { type: 'binary', cellDates: true })
+        wbRef.current = wb
+
+        if (wb.SheetNames.length > 1) {
+          const opts = wb.SheetNames.map(name => {
+            const sheetRows = XLSX.utils.sheet_to_json(wb.Sheets[name])
+            const allKeys = Object.keys(wb.Sheets[name]).filter(k => !k.startsWith('!'))
+            const colCount = new Set(allKeys.map(k => k.replace(/\d+/, ''))).size
+            const likelyPivot = sheetRows.length < 15 && colCount > 15
+            return { name, rows: sheetRows.length, selected: !likelyPivot, likelyPivot }
+          })
+          setSheetOptions(opts)
+          setFileName(file.name)
+          setStep('sheets')
+          return
+        }
+
+        // Single sheet — fall through to existing logic
         const ws = wb.Sheets[wb.SheetNames[0]]
         const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
         if (data.length < 2) { setError('File is empty or has no data rows'); return }
@@ -145,7 +190,7 @@ export default function UploadData() {
 
     return rows.map(row => {
       const obj = {}
-      CANONICAL_FIELDS.forEach(f => {
+      activeFields.forEach(f => {
         const srcCol = map[f]
         if (!srcCol) return
         const idx = hdrs.indexOf(srcCol)
@@ -209,6 +254,38 @@ export default function UploadData() {
     setStep('uploading')
     setProgress({ done: 0, total: rows.length })
 
+    const batchId = crypto.randomUUID()
+
+    // ── Stock upload branch ───────────────────────────────────────────────────
+    if (uploadType === 'stock') {
+      const finalRows = buildRows(headers, rows, mapping)
+      const stockRows = finalRows.map(row => ({
+        item_code:   row.item_code   || null,
+        description: row.description || null,
+        brand:       row.brand       || null,
+        category:    row.category    || null,
+        qty:         parseFloat(row.qty)         || 0,
+        unit_cost:   parseFloat(row.unit_cost)   || 0,
+        site:        row.site     || activeCountry || null,
+        location:    row.location || null,
+        min_level:   parseFloat(row.min_level)   || 0,
+        reorder_qty: parseFloat(row.reorder_qty) || 0,
+        supplier:    row.supplier || null,
+        notes:       row.notes    || null,
+      }))
+      const CHUNK = 500
+      let added = 0
+      for (let i = 0; i < stockRows.length; i += CHUNK) {
+        const chunk = stockRows.slice(i, i + CHUNK)
+        const { error } = await supabase.from('stock_records').insert(chunk)
+        if (!error) added += chunk.length
+      }
+      await logAuditEvent({ action: 'upload_stock', table_name: 'stock_records', record_count: added, details: { file: fileName, batch_id: batchId } })
+      setResult({ added, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipLog: [] })
+      setStep('done')
+      return
+    }
+
     await saveColumnMapping(fingerprintHeaders(headers))
 
     // Build all records — fall back to active country when not in spreadsheet
@@ -218,6 +295,7 @@ export default function UploadData() {
       country: r.country || defaultCountry,
       region: profile?.region ?? defaultCountry,
       uploaded_by: profile?.id,
+      upload_batch_id: batchId,
     }))
 
     // Filter duplicates if requested
@@ -277,6 +355,7 @@ export default function UploadData() {
     await supabase.from('upload_history').insert({
       file_names: [fileName], records_added: added, records_skipped: skipped + (skipDupes ? dupes.length : 0),
       skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? defaultCountry, uploaded_by: profile?.id,
+      batch_id: batchId,
     })
 
     // Audit log
@@ -285,7 +364,7 @@ export default function UploadData() {
       action: 'UPLOAD',
       tableName: 'tyre_records',
       recordCount: added,
-      details: { filename: fileName, rowCount: added, skippedCount, country: activeCountry },
+      details: { filename: fileName, rowCount: added, skippedCount, country: activeCountry, batch_id: batchId },
     })
 
     setResult({ added, skipped, skipLog, autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0 })
@@ -296,7 +375,7 @@ export default function UploadData() {
     setStep('idle'); setFileName(''); setHeaders([]); setRows([])
     setMapping({}); setPreview([]); setResult(null); setError('')
     setSavedMappingId(null); setMappingSource('guess'); setDupes([]); setSkipDupes(true)
-    setUploadType('tyres')
+    setUploadType('tyres'); setSheetOptions([])
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -317,6 +396,7 @@ export default function UploadData() {
               {[
                 { val: 'tyres', label: 'Tyre Records', desc: 'Issue records, replacements, costs' },
                 { val: 'fleet', label: 'Fleet / Vehicle Data', desc: 'Vehicle registry, asset specs' },
+                { val: 'stock', label: 'Stock Records', desc: 'Inventory items and stock levels', icon: <Package size={20} /> },
                 { val: 'auto', label: 'Auto-detect', desc: 'We will figure it out from column names' },
               ].map(opt => (
                 <button
@@ -328,6 +408,7 @@ export default function UploadData() {
                       : 'border-white/10 text-gray-400 hover:border-white/20'
                   }`}
                 >
+                  {opt.icon && <div className="mb-1 opacity-70">{opt.icon}</div>}
                   <p className="text-sm font-medium">{opt.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
                 </button>
@@ -361,6 +442,53 @@ export default function UploadData() {
         </>
       )}
 
+      {/* ── Sheets picker ─────────────────────────────────────────────────── */}
+      {step === 'sheets' && (
+        <div className="card space-y-4">
+          <h2 className="text-base font-semibold text-white">Select Sheets to Import</h2>
+          <p className="text-sm text-gray-400">This workbook has {sheetOptions.length} sheets. Choose which to include — pivot and summary sheets are suggested to skip.</p>
+          <div className="space-y-2">
+            {sheetOptions.map((s, i) => (
+              <label key={s.name} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                s.selected ? 'border-green-700/50 bg-green-900/10' : 'border-gray-700 bg-gray-800/30'
+              }`}>
+                <input type="checkbox" checked={s.selected}
+                  onChange={() => setSheetOptions(prev => prev.map((x, j) => j === i ? {...x, selected: !x.selected} : x))}
+                  className="accent-green-500" />
+                <span className="text-white text-sm font-medium flex-1">{s.name}</span>
+                {s.likelyPivot && <span className="text-xs text-yellow-400">looks like a pivot</span>}
+                <span className="text-xs text-gray-500">{s.rows} rows</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-3">
+            <button
+              disabled={!sheetOptions.some(s => s.selected)}
+              onClick={async () => {
+                const wb = wbRef.current
+                const merged = []
+                sheetOptions.filter(s => s.selected).forEach(s => {
+                  merged.push(...XLSX.utils.sheet_to_json(wb.Sheets[s.name]))
+                })
+                const hdrs = merged.length > 0 ? Object.keys(merged[0]) : []
+                setRows(merged)
+                setHeaders(hdrs)
+                const detectedType = guessFileType(hdrs)
+                if (uploadType === 'auto') setUploadType(detectedType !== 'unknown' ? detectedType : 'tyres')
+                const fp = fingerprintHeaders(hdrs)
+                const { data: saved } = await supabase.from('column_mappings').select('id, mapping').eq('fingerprint', fp).single()
+                if (saved?.mapping) { setMapping(saved.mapping); setSavedMappingId(saved.id); setMappingSource('memory') }
+                else { setMapping(guessMapping(hdrs, activeGuesses)); setSavedMappingId(null); setMappingSource('auto') }
+                setStep('mapping')
+              }}
+              className="btn-primary disabled:opacity-40">
+              Import {sheetOptions.filter(s => s.selected).reduce((a, s) => a + s.rows, 0)} rows →
+            </button>
+            <button onClick={reset} className="btn-secondary">Cancel</button>
+          </div>
+        </div>
+      )}
+
       {/* ── Mapping ───────────────────────────────────────────────────────── */}
       {step === 'mapping' && (
         <div className="space-y-4">
@@ -383,9 +511,9 @@ export default function UploadData() {
             <h2 className="text-base font-semibold text-white mb-1">Column Mapping</h2>
             <p className="text-xs text-gray-400 mb-4">{mappingSource === 'memory' ? 'Loaded from a previously saved mapping.' : 'Auto-detected. Adjust if needed.'}</p>
             <div className="grid grid-cols-2 gap-3">
-              {CANONICAL_FIELDS.map(field => (
+              {activeFields.map(field => (
                 <div key={field}>
-                  <label className="label capitalize">{field.replace('_', ' ')}</label>
+                  <label className="label capitalize">{field.replace(/_/g, ' ')}</label>
                   <select className="input" value={mapping[field] ?? ''} onChange={e => setMapping(m => ({ ...m, [field]: e.target.value || undefined }))}>
                     <option value="">(skip)</option>
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
@@ -439,11 +567,11 @@ export default function UploadData() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr>{CANONICAL_FIELDS.filter(f => mapping[f]).map(f => <th key={f} className="table-header capitalize">{f.replace('_', ' ')}</th>)}</tr>
+                  <tr>{activeFields.filter(f => mapping[f]).map(f => <th key={f} className="table-header capitalize">{f.replace(/_/g, ' ')}</th>)}</tr>
                 </thead>
                 <tbody>
                   {preview.map((row, i) => (
-                    <tr key={i}>{CANONICAL_FIELDS.filter(f => mapping[f]).map(f => <td key={f} className="table-cell">{String(row[f] ?? '—')}</td>)}</tr>
+                    <tr key={i}>{activeFields.filter(f => mapping[f]).map(f => <td key={f} className="table-cell">{String(row[f] ?? '—')}</td>)}</tr>
                   ))}
                 </tbody>
               </table>

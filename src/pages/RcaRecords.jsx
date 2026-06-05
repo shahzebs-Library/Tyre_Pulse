@@ -87,7 +87,7 @@ export default function RcaRecords() {
   async function createLinkedAction(rca) {
     setCreatingAction(true)
     const payload = {
-      title:       `CA for ${rca.asset_no || rca.tyre_serial || 'RCA'} — ${rca.site || ''}`.trim(),
+      title:       `CA for ${rca.asset_no || rca.tyre_serial || 'RCA'} · ${rca.site || ''}`.trim(),
       priority:    'High',
       site:        rca.site ?? '',
       description: rca.root_cause ? `Root cause: ${rca.root_cause}` : '',

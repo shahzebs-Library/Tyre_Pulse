@@ -287,7 +287,7 @@ export default function Dashboard() {
         { key: 'risk_level', header: 'Risk', width: 20 },
         { key: 'cost_per_tyre', header: `Cost (${activeCurrency})`, width: 24 },
       ],
-      `TyrePulse Dashboard Report — ${new Date().toLocaleDateString()}`,
+      `TyrePulse Dashboard Report · ${new Date().toLocaleDateString()}`,
       `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`,
       'landscape'
     )
@@ -513,7 +513,7 @@ export default function Dashboard() {
       {/* Row 2: Monthly Cost trend (line) */}
       <div className="card">
         <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-          <DollarSign size={16} /> Monthly Cost Trend — {activeCurrency}
+          <DollarSign size={16} /> Monthly Cost Trend · {activeCurrency}
         </h2>
         <div className="h-52">
           <Line data={monthlyCostData} options={{

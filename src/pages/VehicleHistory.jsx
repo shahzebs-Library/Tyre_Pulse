@@ -589,7 +589,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
     }))
     exportToPdf(
       pdfRows, cols,
-      `Vehicle Asset History — ${row.assetNo} (${row.count} records, Misuse Score: ${row.misuseScore})`,
+      `Vehicle Asset History · ${row.assetNo} (${row.count} records, Misuse Score: ${row.misuseScore})`,
       `VehicleHistory_${row.assetNo}_${new Date().toISOString().slice(0, 10)}`
     )
   }

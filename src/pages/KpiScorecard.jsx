@@ -206,7 +206,7 @@ export default function KpiScorecard() {
                   <Download size={14} /> Excel
                 </button>
                 <button
-                  onClick={() => exportToPdf(actuals, KPI_COLS, 'KPI Scorecard — Monthly Actuals', 'TyrePulse_KpiScorecard', 'landscape')}
+                  onClick={() => exportToPdf(actuals, KPI_COLS, 'KPI Scorecard · Monthly Actuals', 'TyrePulse_KpiScorecard', 'landscape')}
                   className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
                 >
                   <FileText size={14} /> PDF

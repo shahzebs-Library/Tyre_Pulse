@@ -49,7 +49,7 @@ const NAV_GROUPS = [
       { to: '/alerts',          label: 'Alerts',           icon: Bell },
       { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle },
       { to: '/vehicle-history', label: 'Vehicle History',  icon: Car },
-      { to: '/ai',              label: 'AI Analytics',     icon: Sparkles },
+      { to: '/ai',              label: 'Smart Analytics',  icon: Sparkles },
     ],
   },
   {

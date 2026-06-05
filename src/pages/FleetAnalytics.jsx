@@ -259,7 +259,7 @@ function AssetDrillDown({ asset, currency = 'SAR' }) {
 
       {/* Tyre Lifecycle / Serial number history */}
       <div>
-        <p className="text-sm font-medium text-gray-300 mb-3">Tyre Lifecycle — Serial Number History</p>
+        <p className="text-sm font-medium text-gray-300 mb-3">Tyre Lifecycle · Serial Number History</p>
         {serials.length > 0 ? (
           <div className="space-y-2">
             {serials.map(([serial, recs]) => {

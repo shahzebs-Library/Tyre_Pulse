@@ -135,7 +135,7 @@ function ExportRow({ tableHeaders, tableRows, exportTitle }) {
     const rows = tableRows.map(row =>
       Object.fromEntries(tableHeaders.map((h, i) => [String(i), row[i] ?? '']))
     )
-    exportToPdf(rows, columns, exportTitle || 'AI Analytics', exportTitle || 'ai-analytics')
+    exportToPdf(rows, columns, exportTitle || 'Smart Analytics', exportTitle || 'smart-analytics')
   }
 
   return (
@@ -262,10 +262,10 @@ export default function AiAnalytics() {
       <div>
         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
           <Sparkles size={22} className="text-green-400" />
-          AI Analytics
+          Smart Analytics
         </h1>
         <p className="text-gray-400 text-sm mt-1">
-          Ask questions in plain language — get charts, tables, and written insights powered by Claude AI
+          Ask questions in plain language · get charts, tables, and written insights powered by Claude Smart
         </p>
       </div>
 

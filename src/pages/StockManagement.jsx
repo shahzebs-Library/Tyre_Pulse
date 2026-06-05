@@ -171,7 +171,7 @@ export default function StockManagement() {
     doc.text('REORDER REQUEST', 14, 20)
     doc.setFontSize(11)
     doc.setTextColor(160, 160, 180)
-    doc.text(`${appSettings.company_name || 'TyrePulse'} — Stock Report`, 14, 28)
+    doc.text(`${appSettings.company_name || 'TyrePulse'} · Stock Report`, 14, 28)
     doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')}`, 14, 34)
 
     autoTable(doc, {
@@ -325,7 +325,7 @@ export default function StockManagement() {
           <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-800">
               <div>
-                <h2 className="text-lg font-semibold text-white">Movement History — {historyFor.site}</h2>
+                <h2 className="text-lg font-semibold text-white">Movement History · {historyFor.site}</h2>
                 <p className="text-gray-400 text-xs mt-0.5">{historyFor.description || ''} · Current: {historyFor.stock_qty}</p>
               </div>
               <button onClick={() => setHistoryFor(null)} className="text-gray-400 hover:text-white"><X size={18} /></button>

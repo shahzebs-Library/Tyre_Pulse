@@ -6,7 +6,7 @@ import {
   ANOMALY_TYPES, ANOMALY_TYPE_LABELS, ANOMALY_TYPE_DESC,
 } from '../lib/anomalyEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { Download, FileText } from 'lucide-react'
+import { Download, FileText, Search } from 'lucide-react'
 
 const SEVERITY_STYLE = {
   high:   { badge: 'bg-red-900/40 text-red-400 border-red-700/50',    icon: '🔴', label: 'High' },
@@ -32,6 +32,66 @@ const ANOMALY_CONFIGS = [
   { key: 'costSpikeZScore',       label: 'Cost spike Z-score threshold',      default: 3  },
 ]
 
+function AnomalyTypeGroup({ typeName, items }) {
+  const [open, setOpen] = useState(true)
+  const maxSev = items.some(i => i.severity === 'high') ? 'high' : 'medium'
+  const sevColour = maxSev === 'high' ? 'text-red-400' : 'text-yellow-400'
+  const sevBg = maxSev === 'high' ? 'bg-red-900/20 border-red-700/30' : 'bg-yellow-900/20 border-yellow-700/30'
+
+  return (
+    <div className="card overflow-hidden mb-3">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className={`font-semibold text-sm ${sevColour}`}>
+            {typeName.replace(/_/g, ' ')}
+          </span>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${sevBg} ${sevColour}`}>
+            {maxSev}
+          </span>
+          <span className="text-xs text-gray-500">{items.length} instance{items.length !== 1 ? 's' : ''}</span>
+        </div>
+        <span className="text-gray-500 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && items.map((anomaly, idx) => (
+        <div key={anomaly.id ?? idx} className="border-t border-white/5 px-4 py-3">
+          <p className="text-sm text-gray-300 mb-2">{anomaly.message}</p>
+          {anomaly.detail && <p className="text-xs text-gray-500 mb-2">{anomaly.detail}</p>}
+          {anomaly.records && anomaly.records.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-gray-500 border-b border-white/5">
+                    <th className="text-left pb-1 pr-3">Date</th>
+                    <th className="text-left pb-1 pr-3">Brand</th>
+                    <th className="text-left pb-1 pr-3">Serial</th>
+                    <th className="text-left pb-1 pr-3">Site</th>
+                    <th className="text-left pb-1">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {anomaly.records.map((r, ri) => (
+                    <tr key={ri} className="border-b border-white/5 last:border-0">
+                      <td className="py-1 pr-3 text-gray-400">{r.issue_date ?? '—'}</td>
+                      <td className="py-1 pr-3 text-gray-300">{r.brand ?? '—'}</td>
+                      <td className="py-1 pr-3 text-gray-400 font-mono">{r.serial_no ?? '—'}</td>
+                      <td className="py-1 pr-3 text-gray-400">{r.site ?? '—'}</td>
+                      <td className="py-1 text-gray-300">{r.cost_per_tyre ? `SAR ${Number(r.cost_per_tyre).toLocaleString()}` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Anomalies() {
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords]   = useState([])
@@ -52,6 +112,8 @@ export default function Anomalies() {
     rapidRecurrenceCount: 3,
     costSpikeZScore:      3,
   })
+  const [assetSearch, setAssetSearch] = useState('')
+  const [viewMode, setViewMode] = useState('search') // 'search' | 'all'
 
   // Dismissed anomalies (local)
   const [dismissed, setDismissed] = useState(() => {
@@ -206,20 +268,70 @@ export default function Anomalies() {
 
       {/* Summary after scan */}
       {hasRun && (
-        <>
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: 'High',   count: summary.bySeverity.high,   style: SEVERITY_STYLE.high },
-              { label: 'Medium', count: summary.bySeverity.medium, style: SEVERITY_STYLE.medium },
-              { label: 'Total',  count: summary.total,             style: { badge: 'bg-gray-800 text-gray-300 border-gray-700', icon: '⚪' } },
-            ].map(({ label, count, style }) => (
-              <div key={label} className={`card border ${style.badge}`}>
-                <p className="text-2xl font-bold">{count}</p>
-                <p className="text-sm mt-1 text-gray-400">{label} anomalies</p>
-              </div>
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label: 'High',   count: summary.bySeverity.high,   style: SEVERITY_STYLE.high },
+            { label: 'Medium', count: summary.bySeverity.medium, style: SEVERITY_STYLE.medium },
+            { label: 'Total',  count: summary.total,             style: { badge: 'bg-gray-800 text-gray-300 border-gray-700', icon: '⚪' } },
+          ].map(({ label, count, style }) => (
+            <div key={label} className={`card border ${style.badge}`}>
+              <p className="text-2xl font-bold">{count}</p>
+              <p className="text-sm mt-1 text-gray-400">{label} anomalies</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Search + mode toggle */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <input
+            type="text"
+            value={assetSearch}
+            onChange={e => { setAssetSearch(e.target.value); setViewMode('search') }}
+            placeholder="Search by asset number to see its anomalies…"
+            className="input pl-9 w-full"
+          />
+          {assetSearch && (
+            <button onClick={() => setAssetSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">✕</button>
+          )}
+        </div>
+        <button
+          onClick={() => setViewMode(m => m === 'all' ? 'search' : 'all')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${viewMode === 'all' ? 'bg-green-700/20 border-green-600/40 text-green-400' : 'border-white/10 text-gray-400 hover:text-white'}`}
+        >
+          {viewMode === 'all' ? '✓ Viewing All' : 'View All Anomalies'}
+        </button>
+      </div>
+
+      {/* Content area */}
+      {viewMode === 'search' && !assetSearch && hasRun && (
+        <p className="text-gray-500 text-sm">Type an asset number above to see its anomalies, or click "View All Anomalies".</p>
+      )}
+
+      {viewMode === 'search' && assetSearch && hasRun && (() => {
+        const filtered = anomalies.filter(a => (a.asset_no ?? '').toLowerCase().includes(assetSearch.toLowerCase()))
+        if (filtered.length === 0) return <p className="text-gray-500 text-sm">No anomalies found for "{assetSearch}".</p>
+        const grouped = filtered.reduce((acc, a) => {
+          const t = a.type ?? 'OTHER'
+          if (!acc[t]) acc[t] = []
+          acc[t].push(a)
+          return acc
+        }, {})
+        return (
+          <div>
+            <p className="text-xs text-gray-500 mb-4">{filtered.length} anomal{filtered.length !== 1 ? 'ies' : 'y'} found for <span className="text-white font-medium">{assetSearch}</span></p>
+            {Object.entries(grouped).map(([type, items]) => (
+              <AnomalyTypeGroup key={type} typeName={type} items={items} />
             ))}
           </div>
+        )
+      })()}
 
+      {/* View All mode */}
+      {viewMode === 'all' && hasRun && (
+        <>
           {/* Type breakdown pills */}
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setFilterType('all')}
@@ -341,6 +453,7 @@ export default function Anomalies() {
 }
 
 function AnomalyDetail({ anomaly: a }) {
+  const { activeCurrency } = useSettings()
   return (
     <div className="space-y-3">
       <p className="text-xs text-gray-400 font-medium">Affected Records ({a.records.length})</p>

@@ -239,7 +239,7 @@ export default function TyreRecords() {
           <button onClick={async () => exportToExcel(await fetchAll(), EXPORT_COLS.map(c => c.key), EXPORT_COLS.map(c => c.header), `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`, 'Tyre Records')} className="btn-secondary flex items-center gap-2 text-sm">
             <FileSpreadsheet size={15} className="text-green-400" /> Excel
           </button>
-          <button onClick={async () => exportToPdf(await fetchAll(), EXPORT_COLS, `Tyre Records — ${total.toLocaleString()} records`, `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`)} className="btn-secondary flex items-center gap-2 text-sm">
+          <button onClick={async () => exportToPdf(await fetchAll(), EXPORT_COLS, `Tyre Records · ${total.toLocaleString()} records`, `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`)} className="btn-secondary flex items-center gap-2 text-sm">
             <FileText size={15} className="text-red-400" /> PDF
           </button>
         </div>
@@ -468,7 +468,7 @@ export default function TyreRecords() {
 
       {/* ── Bulk edit modal ──────────────────────────────────────────────────── */}
       {showBulkEdit && (
-        <Modal title={`Bulk Edit — ${selected.size} records`} onClose={() => setShowBulkEdit(false)}>
+        <Modal title={`Bulk Edit · ${selected.size} records`} onClose={() => setShowBulkEdit(false)}>
           <p className="text-sm text-gray-400 mb-4">Leave a field blank to keep existing values unchanged.</p>
           <form onSubmit={saveBulkEdit} className="space-y-3">
             <div>

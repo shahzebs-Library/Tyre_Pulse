@@ -8,7 +8,7 @@ import {
   ClipboardList, Search, Upload, Settings, LogOut,
   Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
   Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, Sparkles,
-  Sun, Moon,
+  Sun, Moon, Truck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -35,11 +35,12 @@ const NAV_GROUPS = [
   {
     label: 'Operations',
     items: [
-      { to: '/stock',       label: 'Stock',              icon: Package },
-      { to: '/budgets',     label: 'Budgets',            icon: DollarSign },
-      { to: '/actions',     label: 'Corrective Actions', icon: ClipboardList },
-      { to: '/rca',         label: 'Root Cause',         icon: Search },
-      { to: '/inspections', label: 'Inspections',        icon: ClipboardCheck },
+      { to: '/fleet-master', label: 'Fleet Master',       icon: Truck },
+      { to: '/stock',        label: 'Stock',              icon: Package },
+      { to: '/budgets',      label: 'Budgets',            icon: DollarSign },
+      { to: '/actions',      label: 'Corrective Actions', icon: ClipboardList },
+      { to: '/rca',          label: 'Root Cause',         icon: Search },
+      { to: '/inspections',  label: 'Inspections',        icon: ClipboardCheck },
     ],
   },
   {
@@ -48,7 +49,7 @@ const NAV_GROUPS = [
       { to: '/alerts',          label: 'Alerts',           icon: Bell },
       { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle },
       { to: '/vehicle-history', label: 'Vehicle History',  icon: Car },
-      { to: '/ai',              label: 'AI Analytics',     icon: Sparkles },
+      { to: '/ai',              label: 'Smart Analytics',  icon: Sparkles },
     ],
   },
   {
@@ -56,6 +57,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/cleaning', label: 'Data Cleaning', icon: Wand2 },
       { to: '/upload',   label: 'Upload Data',   icon: Upload },
+      { to: '/audit',    label: 'Audit Trail',   icon: ClipboardList },
       { to: '/settings', label: 'Settings',      icon: Settings },
     ],
   },

@@ -25,6 +25,8 @@ import CountryComparison from './pages/CountryComparison'
 import VehicleHistory from './pages/VehicleHistory'
 import UserManagement from './pages/UserManagement'
 import AiAnalytics from './pages/AiAnalytics'
+import FleetMaster from './pages/FleetMaster'
+import AuditTrail from './pages/AuditTrail'
 
 export default function App() {
   return (
@@ -55,9 +57,11 @@ export default function App() {
                     <Route path="/anomalies"     element={<Anomalies />} />
                     <Route path="/country-comp" element={<CountryComparison />} />
                     <Route path="/vehicle-history" element={<VehicleHistory />} />
+                    <Route path="/fleet-master"   element={<FleetMaster />} />
                     <Route path="/ai"          element={<AiAnalytics />} />
                     <Route path="/cleaning"    element={<DataCleaning />} />
                     <Route path="/upload"      element={<UploadData />} />
+                    <Route path="/audit"       element={<AuditTrail />} />
                     <Route path="/settings"    element={<Settings />} />
                     <Route path="/users"       element={<UserManagement />} />
                     <Route path="*"            element={<Navigate to="/" replace />} />

@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   computeSiteMetrics, computeBrandMetrics, computeAssetMetrics,
-  bucketByMonth, monthlyTrendWithForecast, sum,
+  bucketByMonth, monthlyTrendWithForecast, sum, recordCost,
 } from '../lib/analyticsEngine'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
@@ -36,7 +36,7 @@ const LINE_OPTS = {
 }
 
 export default function Analytics() {
-  const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [activeTab, setActiveTab] = useState(0)
@@ -63,13 +63,12 @@ export default function Analytics() {
       return new Date(r.issue_date).getFullYear() === yearFilter
     }), [records, yearFilter])
 
-  const dc = appSettings.cost_per_tyre
-  const siteMetrics  = useMemo(() => computeSiteMetrics(filtered, dc),  [filtered, dc])
-  const brandMetrics = useMemo(() => computeBrandMetrics(filtered, dc), [filtered, dc])
-  const assetMetrics = useMemo(() => computeAssetMetrics(filtered, dc), [filtered, dc])
-  const trendData    = useMemo(() => monthlyTrendWithForecast(filtered, 3, dc), [filtered, dc])
+  const siteMetrics  = useMemo(() => computeSiteMetrics(filtered),  [filtered])
+  const brandMetrics = useMemo(() => computeBrandMetrics(filtered), [filtered])
+  const assetMetrics = useMemo(() => computeAssetMetrics(filtered), [filtered])
+  const trendData    = useMemo(() => monthlyTrendWithForecast(filtered, 3), [filtered])
 
-  const totalCost  = sum(filtered.map(r => (r.cost_per_tyre || dc) * (r.qty || 1)))
+  const totalCost  = sum(filtered.map(r => recordCost(r)))
   const totalCount = filtered.length
 
   const years = useMemo(() => {

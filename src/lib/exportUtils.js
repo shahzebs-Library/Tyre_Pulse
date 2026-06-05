@@ -23,7 +23,7 @@ export function exportToExcel(rows, columns, headers, filename = 'export', sheet
   )
   const ws = XLSX.utils.json_to_sheet(displayRows, { header: headers })
 
-  // Column widths — auto-size up to 40 chars
+  // Column widths · auto-size up to 40 chars
   ws['!cols'] = headers.map((h, i) => {
     const maxLen = Math.max(
       h.length,
@@ -49,13 +49,13 @@ export function exportToExcel(rows, columns, headers, filename = 'export', sheet
 export function exportToPdf(rows, columns, title, filename = 'report', orientation = 'landscape') {
   const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
 
-  // Header
-  doc.setFillColor(17, 24, 39)          // gray-900
+  // Header · TyrePulse green band
+  doc.setFillColor(22, 101, 52)          // green-800 (#15803d)
   doc.rect(0, 0, doc.internal.pageSize.width, 22, 'F')
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(14)
   doc.setFont('helvetica', 'bold')
-  doc.text('TyrePulse — Tyre Intelligence Platform', 14, 10)
+  doc.text('TYREPULSE · Tyre Intelligence Platform', 14, 10)
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
   doc.text(title, 14, 17)
@@ -64,10 +64,32 @@ export function exportToPdf(rows, columns, title, filename = 'report', orientati
   doc.setFontSize(8)
   doc.text(`Generated: ${nowStr()}  |  ${rows.length} records`, doc.internal.pageSize.width - 14, 17, { align: 'right' })
 
+  // Auto-fit column widths to fill usable page width
+  const usableWidth = orientation === 'landscape' ? 237 : 170
+  const colWidths = columns.map(c => {
+    const key = c.key?.toLowerCase() ?? ''
+    const hdr = c.header?.toLowerCase() ?? ''
+    if (key.includes('id') || key === 'qty' || key === 'no') return 22
+    if (key.includes('risk') || hdr.includes('risk')) return 30
+    if (key.includes('remark') || key.includes('description') || key.includes('note')) return 55
+    if (key.includes('date') || key.includes('month')) return 28
+    if (key.includes('cost') || key.includes('sar')) return 30
+    if (key.includes('site') || key.includes('brand') || key.includes('category')) return 32
+    return 30
+  })
+  const rawTotal = colWidths.reduce((s, w) => s + w, 0)
+  const scaleFactor = usableWidth / rawTotal
+  const scaledWidths = colWidths.map(w => Math.round(w * scaleFactor * 10) / 10)
+
+  // Identify risk column index for cell colouring
+  const riskColIdx = columns.findIndex(c =>
+    /risk/i.test(c.header ?? '') || /risk_level/i.test(c.key ?? '')
+  )
+
   autoTable(doc, {
     startY: 26,
     head: [columns.map(c => c.header)],
-    body: rows.map(r => columns.map(c => String(r[c.key] ?? '—'))),
+    body: rows.map(r => columns.map(c => String(r[c.key] ?? ' '))),
     styles: {
       fontSize: 8,
       cellPadding: 2.5,
@@ -82,18 +104,43 @@ export function exportToPdf(rows, columns, title, filename = 'report', orientati
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: Object.fromEntries(
-      columns.map((c, i) => [i, { cellWidth: c.width ?? 'auto' }])
+      scaledWidths.map((w, i) => [i, { cellWidth: w }])
     ),
     margin: { left: 14, right: 14 },
+    didParseCell: riskColIdx >= 0 ? (data) => {
+      if (data.section === 'body' && data.column.index === riskColIdx) {
+        const val = String(data.cell.raw ?? '').trim().toLowerCase()
+        if (val === 'critical') {
+          data.cell.styles.fillColor = [127, 29, 29]
+          data.cell.styles.textColor = [255, 255, 255]
+        } else if (val === 'high') {
+          data.cell.styles.fillColor = [124, 45, 18]
+          data.cell.styles.textColor = [255, 255, 255]
+        } else if (val === 'medium') {
+          data.cell.styles.fillColor = [113, 63, 18]
+          data.cell.styles.textColor = [255, 255, 255]
+        } else if (val === 'low') {
+          data.cell.styles.fillColor = [20, 83, 45]
+          data.cell.styles.textColor = [255, 255, 255]
+        }
+      }
+    } : undefined,
     didDrawPage: (data) => {
       // Footer on every page
+      const pageH = doc.internal.pageSize.height
+      const pageW = doc.internal.pageSize.width
       doc.setFontSize(7)
-      doc.setTextColor(150)
+      doc.setTextColor(107, 114, 128)
+      doc.text(
+        'Confidential · Internal Use Only | TyrePulse',
+        14,
+        pageH - 6
+      )
       doc.text(
         `Page ${data.pageNumber}`,
-        doc.internal.pageSize.width / 2,
-        doc.internal.pageSize.height - 6,
-        { align: 'center' }
+        pageW - 14,
+        pageH - 6,
+        { align: 'right' }
       )
     },
   })
@@ -144,7 +191,7 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
 
   s1.addText('🔄 TyrePulse', { x: 0.6, y: 1.4, w: 12, h: 1, fontSize: 44, bold: true, color: WHITE, fontFace: 'Arial' })
   s1.addText('Tyre Intelligence Platform', { x: 0.6, y: 2.4, w: 12, h: 0.6, fontSize: 22, color: '93C5FD', fontFace: 'Arial' })
-  s1.addText(`Management Summary Report — ${data.period}`, { x: 0.6, y: 3.1, w: 12, h: 0.5, fontSize: 16, color: '9CA3AF', fontFace: 'Arial' })
+  s1.addText(`Management Summary Report · ${data.period}`, { x: 0.6, y: 3.1, w: 12, h: 0.5, fontSize: 16, color: '9CA3AF', fontFace: 'Arial' })
   if (data.company) {
     s1.addText(data.company, { x: 0.6, y: 3.8, w: 12, h: 0.4, fontSize: 13, color: '6B7280', fontFace: 'Arial' })
   }
@@ -253,7 +300,7 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
 
     const actionRows = data.recentActions.slice(0, 10).map(a => [
       { text: a.title, options: { color: WHITE, fontSize: 10 } },
-      { text: a.site ?? '—', options: { color: '9CA3AF', fontSize: 10 } },
+      { text: a.site ?? ' ', options: { color: '9CA3AF', fontSize: 10 } },
       { text: a.priority, options: { color: RISK_COLORS[a.priority] ?? WHITE, fontSize: 10, bold: a.priority === 'High' } },
       { text: a.status, options: { color: '9CA3AF', fontSize: 10 } },
     ])

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
-import { computeAssetMetrics, bucketByMonth, linearRegression } from '../lib/analyticsEngine'
+import { computeAssetMetrics, bucketByMonth, linearRegression, recordCost } from '../lib/analyticsEngine'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, Title, Tooltip, Legend, Filler,
@@ -19,7 +19,7 @@ const RISK_BADGE = {
 }
 
 export default function FleetAnalytics() {
-  const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
@@ -32,7 +32,7 @@ export default function FleetAnalytics() {
     q.then(({ data }) => { setRecords(data || []); setLoading(false) })
   }, [activeCountry])
 
-  const assetMetrics = useMemo(() => computeAssetMetrics(records, appSettings.cost_per_tyre), [records, appSettings.cost_per_tyre])
+  const assetMetrics = useMemo(() => computeAssetMetrics(records), [records])
 
   const sorted = useMemo(() => {
     const arr = [...assetMetrics]
@@ -149,16 +149,15 @@ export default function FleetAnalytics() {
       </div>
 
       {/* Drill-down */}
-      {selectedAsset && <AssetDrillDown asset={selectedAsset} defaultCost={appSettings.cost_per_tyre} currency={activeCurrency} />}
+      {selectedAsset && <AssetDrillDown asset={selectedAsset} currency={activeCurrency} />}
     </div>
   )
 }
 
-function AssetDrillDown({ asset, defaultCost = 1200, currency = 'SAR' }) {
+function AssetDrillDown({ asset, currency = 'SAR' }) {
   const monthly = useMemo(() =>
-    bucketByMonth(asset.records, r => r.issue_date,
-      r => (r.cost_per_tyre || defaultCost) * (r.qty || 1)),
-    [asset, defaultCost]
+    bucketByMonth(asset.records, r => r.issue_date, r => recordCost(r)),
+    [asset]
   )
 
   const points    = monthly.map((d, i) => [i, d.count])
@@ -260,7 +259,7 @@ function AssetDrillDown({ asset, defaultCost = 1200, currency = 'SAR' }) {
 
       {/* Tyre Lifecycle / Serial number history */}
       <div>
-        <p className="text-sm font-medium text-gray-300 mb-3">Tyre Lifecycle — Serial Number History</p>
+        <p className="text-sm font-medium text-gray-300 mb-3">Tyre Lifecycle · Serial Number History</p>
         {serials.length > 0 ? (
           <div className="space-y-2">
             {serials.map(([serial, recs]) => {
@@ -313,7 +312,7 @@ function AssetDrillDown({ asset, defaultCost = 1200, currency = 'SAR' }) {
                     </span>
                   </td>
                   <td className="py-1.5 pr-3 text-right text-gray-400">
-                    {currency} {((r.cost_per_tyre || defaultCost) * (r.qty || 1)).toLocaleString()}
+                    {currency} {recordCost(r).toLocaleString()}
                   </td>
                   <td className="py-1.5 text-gray-500 max-w-xs truncate">{r.remarks_cleaned || r.remarks || '—'}</td>
                 </tr>

@@ -38,6 +38,10 @@ create table if not exists public.tyre_records (
   source_sheet text,
   source_file text,
   region text default 'KSA',
+  country text,
+  position text,
+  km_at_fitment numeric,
+  km_at_removal numeric,
   uploaded_by uuid references public.profiles(id),
   cost_per_tyre numeric default 1200,
   cleaned boolean default false,
@@ -56,6 +60,7 @@ create table if not exists public.stock_records (
   reorder_qty integer default 0,
   management_action text,
   region text default 'KSA',
+  country text,
   updated_by uuid references public.profiles(id),
   updated_at timestamptz default now()
 );
@@ -87,6 +92,7 @@ create table if not exists public.corrective_actions (
   root_cause text,
   asset_no text,
   tyre_serial text,
+  country text,
   created_by uuid references public.profiles(id),
   closed_by uuid references public.profiles(id),
   created_at timestamptz default now(),
@@ -108,6 +114,7 @@ create table if not exists public.rca_records (
   contributing_factors jsonb default '[]',
   photos jsonb default '[]',
   ai_analysis text,
+  country text,
   corrective_action_id uuid references public.corrective_actions(id),
   created_by uuid references public.profiles(id),
   created_at timestamptz default now()
@@ -122,6 +129,7 @@ create table if not exists public.upload_history (
   skip_log jsonb default '[]',
   mapping_used jsonb default '{}',
   region text default 'KSA',
+  country text,
   uploaded_by uuid references public.profiles(id),
   uploaded_at timestamptz default now()
 );
@@ -168,6 +176,64 @@ create index if not exists idx_tyre_records_mis on public.tyre_records(mis_numbe
 create index if not exists idx_tyre_records_jobcard on public.tyre_records(job_card);
 create index if not exists idx_tyre_records_region on public.tyre_records(region);
 create index if not exists idx_corrective_status on public.corrective_actions(status);
+
+
+-- ── INSPECTIONS ───────────────────────────────────────────
+create table if not exists public.inspections (
+  id uuid default uuid_generate_v4() primary key,
+  asset_no text,
+  inspection_type text default 'Routine'
+    check (inspection_type in ('Routine','Pressure Check','Visual','Full Inspection','Pre-Trip')),
+  scheduled_date date not null,
+  completed_date date,
+  status text default 'Scheduled'
+    check (status in ('Scheduled','In Progress','Done','Overdue','Cancelled')),
+  site text,
+  country text,
+  region text default 'KSA',
+  inspector_name text,
+  findings text,
+  photos jsonb default '[]',
+  created_by uuid references public.profiles(id),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- ── KPI TARGETS ───────────────────────────────────────────
+create table if not exists public.kpi_targets (
+  id uuid default uuid_generate_v4() primary key,
+  month integer not null check (month between 1 and 12),
+  year integer not null,
+  region text default 'KSA',
+  country text,
+  target_cost numeric,
+  target_high_risk_count integer,
+  target_overdue_actions integer,
+  target_cpk numeric,
+  target_replacement_count integer,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz default now(),
+  unique (month, year, region)
+);
+
+-- ── STOCK MOVEMENTS ───────────────────────────────────────
+create table if not exists public.stock_movements (
+  id uuid default uuid_generate_v4() primary key,
+  stock_record_id uuid references public.stock_records(id) on delete cascade,
+  site text not null,
+  region text default 'KSA',
+  country text,
+  brand text,
+  tyre_size text,
+  movement_type text not null
+    check (movement_type in ('RECEIVED','ISSUED','RETURNED','ADJUSTED','TRANSFERRED')),
+  qty_change integer not null,
+  qty_after integer,
+  reference_no text,
+  notes text,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz default now()
+);
 
 -- ── ROW LEVEL SECURITY ────────────────────────────────────
 alter table public.profiles enable row level security;

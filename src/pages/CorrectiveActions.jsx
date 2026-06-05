@@ -1,8 +1,9 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { Plus, Save, X, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { Plus, Save, X, CheckCircle, Clock, AlertCircle, Download, FileText, Camera } from 'lucide-react'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const STATUS_ICON = {
   Open:        <AlertCircle size={14} className="text-red-400" />,
@@ -41,6 +42,15 @@ export default function CorrectiveActions() {
   const [editId, setEditId]       = useState(null)
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState('')
+  const photoRef = useRef(null)
+
+  function handlePhoto(e, setter) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => setter(f => ({ ...f, photo_data: ev.target.result }))
+    reader.readAsDataURL(file)
+  }
 
   useEffect(() => { load() }, [statusFilter, activeCountry])
 
@@ -143,9 +153,34 @@ export default function CorrectiveActions() {
             )}
           </p>
         </div>
-        <button onClick={() => startAdd()} className="btn-primary flex items-center gap-2 text-sm">
-          <Plus size={16} /> New Action
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportToExcel(
+              filtered,
+              ['title','site','priority','status','due_date'],
+              ['Title','Site','Priority','Status','Due Date'],
+              'TyrePulse_CorrectiveActions'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <Download size={14}/> Excel
+          </button>
+          <button
+            onClick={() => exportToPdf(
+              filtered,
+              [{key:'title',header:'Title'},{key:'site',header:'Site'},{key:'priority',header:'Priority'},{key:'status',header:'Status'},{key:'due_date',header:'Due Date'}],
+              'Corrective Actions',
+              'TyrePulse_CorrectiveActions',
+              'landscape'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <FileText size={14}/> PDF
+          </button>
+          <button onClick={() => startAdd()} className="btn-primary flex items-center gap-2 text-sm">
+            <Plus size={16} /> New Action
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -193,7 +228,7 @@ export default function CorrectiveActions() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       {STATUS_ICON[a.status]}
-                      <h3 className="font-semibold text-white">{a.title}</h3>
+                      <h3 className="font-semibold text-white">{a.title}{a.photo_data && <Camera className="inline w-3 h-3 ml-1.5 text-gray-500" title="Has photo" />}</h3>
                       <span className={`badge text-xs ${PRIORITY_BADGE[a.priority]}`}>{a.priority}</span>
                       <span className="text-xs text-gray-500">{a.status}</span>
                       {od && (
@@ -290,6 +325,29 @@ export default function CorrectiveActions() {
               <div>
                 <label className="label">Root Cause</label>
                 <textarea className="input" rows={2} value={form.root_cause} onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))} />
+              </div>
+              {/* Photo */}
+              <div>
+                <label className="label">Photo / Evidence</label>
+                <div className="flex items-center gap-3">
+                  <button type="button"
+                    onClick={() => photoRef.current?.click()}
+                    className="btn-secondary text-sm flex items-center gap-2 px-3 py-2">
+                    <Camera size={14} /> {form?.photo_data ? 'Change Photo' : 'Attach Photo'}
+                  </button>
+                  {form?.photo_data && (
+                    <button type="button"
+                      onClick={() => setForm(f => ({ ...f, photo_data: null }))}
+                      className="text-xs text-red-400 hover:text-red-300">
+                      Remove
+                    </button>
+                  )}
+                  <input ref={photoRef} type="file" accept="image/*" className="hidden"
+                    onChange={e => handlePhoto(e, setForm)} />
+                </div>
+                {form?.photo_data && (
+                  <img src={form.photo_data} alt="Evidence" className="mt-2 rounded-lg max-h-40 border border-gray-700 object-cover" />
+                )}
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">

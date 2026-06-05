@@ -9,7 +9,7 @@ function getClient() {
 export async function askAI(question, dataContext) {
   const client = getClient()
 
-  const system = `You are TyrePulse AI, an analytics assistant for a fleet tyre management platform.
+  const system = `You are TyrePulse Smart Analytics, an analytics assistant for a fleet tyre management platform.
 You receive pre-aggregated tyre fleet statistics and answer questions about them.
 Respond ONLY with valid JSON matching this exact structure — no markdown, no explanation outside the JSON:
 {

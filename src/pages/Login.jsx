@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -15,6 +15,11 @@ export default function Login() {
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
   const [signupDone, setSignupDone] = useState(false)
+
+  const sessionExpired = localStorage.getItem('tp_session_expired') === '1'
+  useEffect(() => {
+    if (sessionExpired) localStorage.removeItem('tp_session_expired')
+  }, [])
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -93,6 +98,13 @@ export default function Login() {
           <p className="text-gray-400 mt-2 text-sm tracking-wide">Tyre Intelligence Platform</p>
           <p className="text-gray-600 text-xs mt-1">Tyre Intelligence Platform</p>
         </div>
+
+        {sessionExpired && (
+          <div className="rounded-lg px-4 py-3 mb-4 text-sm text-yellow-300 text-center"
+            style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)' }}>
+            Your session expired after inactivity. Please sign in again.
+          </div>
+        )}
 
         {/* Card */}
         <div className="login-card">

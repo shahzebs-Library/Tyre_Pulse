@@ -265,7 +265,7 @@ export default function AiAnalytics() {
           Smart Analytics
         </h1>
         <p className="text-gray-400 text-sm mt-1">
-          Ask questions in plain language · get charts, tables, and written insights powered by Claude Smart
+          Ask questions in plain language · get charts, tables, and written insights powered by Smart Engine
         </p>
       </div>
 
@@ -274,8 +274,8 @@ export default function AiAnalytics() {
         <div className="rounded-lg p-4 border border-yellow-700/50 bg-yellow-900/15">
           <p className="text-yellow-300 text-sm font-semibold mb-1">API Key Required</p>
           <p className="text-yellow-400/80 text-sm">
-            AI features require an Anthropic API key. Add{' '}
-            <code className="bg-yellow-900/40 px-1 rounded text-yellow-300">VITE_ANTHROPIC_API_KEY=your_key</code>{' '}
+            Smart Analytics features require an Analytics API key. Add{' '}
+            <code className="bg-yellow-900/40 px-1 rounded text-yellow-300">VITE_ANALYTICS_API_KEY=your_key</code>{' '}
             to your <code className="bg-yellow-900/40 px-1 rounded text-yellow-300">.env.local</code> file.
             Get a key at{' '}
             <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" className="underline text-yellow-300 hover:text-yellow-200">
@@ -348,7 +348,7 @@ export default function AiAnalytics() {
             ) : (
               <>
                 <Sparkles size={14} />
-                Ask AI
+                Ask
               </>
             )}
           </button>
@@ -370,7 +370,7 @@ export default function AiAnalytics() {
           <div className="card space-y-4">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-green-400">
               <Sparkles size={12} />
-              AI Response
+              Smart Analytics Response
             </div>
 
             {response.answer && (

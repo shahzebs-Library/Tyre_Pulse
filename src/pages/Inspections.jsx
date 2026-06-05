@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { Download, FileText } from 'lucide-react'
+import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap } from 'lucide-react'
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -13,37 +13,55 @@ const STATUS_CONFIG = {
   Cancelled:    { color: 'text-gray-400',   bg: 'bg-gray-800',      border: 'border-gray-700' },
 }
 
-const TYPES = ['Routine', 'Pressure', 'Visual', 'Full', 'Pre-Trip']
+const SEV_CONFIG = {
+  Low:      { color: 'text-green-400',  bg: 'bg-green-900/20',  border: 'border-green-700/40' },
+  Medium:   { color: 'text-yellow-400', bg: 'bg-yellow-900/20', border: 'border-yellow-700/40' },
+  High:     { color: 'text-orange-400', bg: 'bg-orange-900/20', border: 'border-orange-700/40' },
+  Critical: { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-700/40' },
+}
+
+const INSPECTION_TYPES   = ['Routine', 'Pressure', 'Visual', 'Full', 'Pre-Trip']
+const OBSERVATION_TYPES  = ['Site Observation']
+const TRAINING_TYPES     = ['Safety Training', 'Training Session']
+const ALL_TYPES = [...INSPECTION_TYPES, ...OBSERVATION_TYPES, ...TRAINING_TYPES]
+
 const STATUSES = ['Scheduled', 'In Progress', 'Done', 'Overdue', 'Cancelled']
+const SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
 
 const EMPTY_FORM = {
   title: '', inspection_type: 'Routine', site: '', asset_no: '', tyre_serial: '',
   scheduled_date: '', status: 'Scheduled', findings: '', inspector: '', notes: '',
+  attendees: '', severity: 'Medium', photo_data: null,
 }
+
+function isObservationType(t) { return OBSERVATION_TYPES.includes(t) }
+function isTrainingType(t)     { return TRAINING_TYPES.includes(t) }
 
 export default function Inspections() {
   const { profile } = useAuth()
   const { activeCountry } = useSettings()
-  const [rows, setRows]       = useState([])
-  const [loading, setLoading] = useState(true)
-  const [form, setForm]       = useState(null)   // null=closed | {}=new | {..r}=edit
-  const [saving, setSaving]   = useState(false)
+  const [rows, setRows]         = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [form, setForm]         = useState(null)
+  const [saving, setSaving]     = useState(false)
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterSite, setFilterSite]     = useState('all')
   const [search, setSearch]             = useState('')
   const [deleteId, setDeleteId]         = useState(null)
+  const [activeTab, setActiveTab]       = useState('all')
+  const [raisingAction, setRaisingAction] = useState(null) // inspection row for raise-action modal
+  const fileRef = useRef(null)
 
   async function load() {
     setLoading(true)
-    let q = supabase.from('inspections').select('*').order('scheduled_date', { ascending: true })
+    let q = supabase.from('inspections').select('*').order('scheduled_date', { ascending: false })
     if (activeCountry !== 'All') q = q.eq('country', activeCountry)
     const { data } = await q
-    // Mark overdue in memory
     const today = new Date().toISOString().split('T')[0]
     const enriched = (data || []).map(r => ({
       ...r,
       status: r.status !== 'Done' && r.status !== 'Cancelled' && r.scheduled_date < today
-        ? 'Overdue' : r.status
+        ? 'Overdue' : r.status,
     }))
     setRows(enriched)
     setLoading(false)
@@ -53,8 +71,15 @@ export default function Inspections() {
 
   const sites = useMemo(() => [...new Set(rows.map(r => r.site).filter(Boolean))].sort(), [rows])
 
+  const tabFiltered = useMemo(() => {
+    if (activeTab === 'inspections') return rows.filter(r => INSPECTION_TYPES.includes(r.inspection_type))
+    if (activeTab === 'observations') return rows.filter(r => isObservationType(r.inspection_type))
+    if (activeTab === 'training')     return rows.filter(r => isTrainingType(r.inspection_type))
+    return rows
+  }, [rows, activeTab])
+
   const filtered = useMemo(() => {
-    let r = rows
+    let r = tabFiltered
     if (filterStatus !== 'all') r = r.filter(x => x.status === filterStatus)
     if (filterSite !== 'all')   r = r.filter(x => x.site === filterSite)
     if (search) {
@@ -63,27 +88,44 @@ export default function Inspections() {
         x.title?.toLowerCase().includes(q) ||
         x.site?.toLowerCase().includes(q) ||
         x.asset_no?.toLowerCase().includes(q) ||
-        x.tyre_serial?.toLowerCase().includes(q)
+        x.tyre_serial?.toLowerCase().includes(q) ||
+        x.inspector?.toLowerCase().includes(q) ||
+        x.attendees?.toLowerCase().includes(q)
       )
     }
     return r
-  }, [rows, filterStatus, filterSite, search])
+  }, [tabFiltered, filterStatus, filterSite, search])
 
   const counts = useMemo(() => {
-    const c = { all: rows.length, Scheduled: 0, 'In Progress': 0, Done: 0, Overdue: 0, Cancelled: 0 }
-    rows.forEach(r => { c[r.status] = (c[r.status] || 0) + 1 })
+    const c = { all: rows.length, inspections: 0, observations: 0, training: 0 }
+    rows.forEach(r => {
+      if (INSPECTION_TYPES.includes(r.inspection_type)) c.inspections++
+      else if (isObservationType(r.inspection_type)) c.observations++
+      else if (isTrainingType(r.inspection_type)) c.training++
+    })
     return c
   }, [rows])
+
+  const statusCounts = useMemo(() => {
+    const c = { all: filtered.length, Scheduled: 0, 'In Progress': 0, Done: 0, Overdue: 0, Cancelled: 0 }
+    filtered.forEach(r => { c[r.status] = (c[r.status] || 0) + 1 })
+    return c
+  }, [filtered])
+
+  function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => setForm(f => ({ ...f, photo_data: ev.target.result }))
+    reader.readAsDataURL(file)
+  }
 
   async function save() {
     if (!form.title?.trim()) return
     if (!form.site?.trim()) return
     if (!form.scheduled_date) return
     setSaving(true)
-    const payload = {
-      ...form,
-      created_by: profile?.id ?? null,
-    }
+    const payload = { ...form, created_by: profile?.id ?? null }
     delete payload.id
 
     let error
@@ -110,16 +152,86 @@ export default function Inspections() {
     await load()
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading inspections…</div>
+  async function raiseAction(row, actionTitle) {
+    const { data, error } = await supabase.from('corrective_actions').insert({
+      title: actionTitle || `Action from: ${row.title}`,
+      description: row.findings || row.notes || '',
+      site: row.site,
+      asset_no: row.asset_no || null,
+      priority: row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium',
+      status: 'Open',
+      source: 'Observation',
+      created_by: profile?.id ?? null,
+    }).select('id').single()
+    if (!error && data?.id) {
+      await supabase.from('inspections').update({ linked_action_id: data.id }).eq('id', row.id)
+      await load()
+    }
+    setRaisingAction(null)
+  }
+
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading…</div>
+
+  const tabConfig = [
+    { key: 'all',          label: 'All',          icon: null,            count: counts.all },
+    { key: 'inspections',  label: 'Inspections',  icon: ClipboardList,   count: counts.inspections },
+    { key: 'observations', label: 'Observations', icon: Eye,             count: counts.observations },
+    { key: 'training',     label: 'Training',     icon: GraduationCap,   count: counts.training },
+  ]
+
+  const defaultType = activeTab === 'observations' ? 'Site Observation'
+    : activeTab === 'training' ? 'Safety Training'
+    : 'Routine'
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Inspections</h1>
-          <p className="text-gray-400 text-sm mt-1">Schedule, track and complete tyre inspections</p>
+          <h1 className="text-2xl font-bold text-white">Inspections & Observations</h1>
+          <p className="text-gray-400 text-sm mt-1">Schedule inspections, record site observations and track training</p>
         </div>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => exportToExcel(
+              filtered,
+              ['inspection_type','title','site','asset_no','scheduled_date','status','severity','inspector','attendees','findings'],
+              ['Type','Title','Site','Asset No','Date','Status','Severity','Inspector','Attendees','Findings'],
+              'TyrePulse_Inspections'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <Download size={14}/> Excel
+          </button>
+          <button
+            onClick={() => exportToPdf(
+              filtered,
+              [
+                {key:'inspection_type',header:'Type'},
+                {key:'title',header:'Title'},
+                {key:'site',header:'Site'},
+                {key:'asset_no',header:'Asset'},
+                {key:'scheduled_date',header:'Date'},
+                {key:'status',header:'Status'},
+                {key:'severity',header:'Severity'},
+                {key:'inspector',header:'Inspector'},
+              ],
+              'Inspections & Observations',
+              'TyrePulse_Inspections',
+              'landscape'
+            )}
+            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+          >
+            <FileText size={14}/> PDF
+          </button>
+          <button
+            className="btn-primary text-sm"
+            onClick={() => setForm({ ...EMPTY_FORM, inspection_type: defaultType })}
+          >
+            + Add Record
+          </button>
+        </div>
+<<<<<<< HEAD
         <div className="flex gap-2">
           <button
             onClick={() => exportToExcel(
@@ -148,9 +260,32 @@ export default function Inspections() {
             + Schedule Inspection
           </button>
         </div>
+=======
+>>>>>>> d6b559a (Inspections: add Site Observations and Training with photo upload and raise-action)
       </div>
 
-      {/* Status summary */}
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg w-fit flex-wrap">
+        {tabConfig.map(({ key, label, icon: Icon, count }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === key
+                ? 'bg-gray-700 text-white shadow'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            {Icon && <Icon className="w-4 h-4" />}
+            {label}
+            <span className={`px-1.5 py-0.5 rounded-full text-xs ${activeTab === key ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+              {count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Status filter pills */}
       <div className="flex flex-wrap gap-2">
         {[['all', 'All', 'bg-gray-800 text-gray-300 border-gray-700'],
           ['Overdue', 'Overdue', 'bg-red-900/30 text-red-400 border-red-700/50'],
@@ -163,19 +298,15 @@ export default function Inspections() {
             onClick={() => setFilterStatus(val)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${cls} ${filterStatus === val ? 'ring-2 ring-white/20' : 'opacity-70 hover:opacity-100'}`}
           >
-            {label} ({counts[val] ?? 0})
+            {label} ({statusCounts[val] ?? 0})
           </button>
         ))}
       </div>
 
-      {/* Filters */}
+      {/* Search + site filter */}
       <div className="flex flex-wrap gap-3">
-        <input
-          className="input flex-1 min-w-48"
-          placeholder="Search title, site, asset, serial…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+        <input className="input flex-1 min-w-48" placeholder="Search title, site, asset, inspector, attendees…"
+          value={search} onChange={e => setSearch(e.target.value)} />
         <select className="input w-44" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
           <option value="all">All Sites</option>
           {sites.map(s => <option key={s} value={s}>{s}</option>)}
@@ -187,53 +318,80 @@ export default function Inspections() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-gray-400 border-b border-gray-800">
-              <th className="pb-2 pr-4">Title</th>
-              <th className="pb-2 pr-4">Type</th>
-              <th className="pb-2 pr-4">Site</th>
-              <th className="pb-2 pr-4">Asset</th>
-              <th className="pb-2 pr-4">Scheduled</th>
-              <th className="pb-2 pr-4">Status</th>
-              <th className="pb-2 pr-4">Inspector</th>
+              <th className="pb-2 pr-3">Type</th>
+              <th className="pb-2 pr-3">Title</th>
+              <th className="pb-2 pr-3">Site</th>
+              <th className="pb-2 pr-3">Asset</th>
+              <th className="pb-2 pr-3">Date</th>
+              <th className="pb-2 pr-3">Severity</th>
+              <th className="pb-2 pr-3">Status</th>
+              <th className="pb-2 pr-3">Inspector</th>
               <th className="pb-2">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map(r => {
-              const cfg = STATUS_CONFIG[r.status] || STATUS_CONFIG.Scheduled
+              const cfg    = STATUS_CONFIG[r.status] || STATUS_CONFIG.Scheduled
+              const sevCfg = SEV_CONFIG[r.severity]  || SEV_CONFIG.Medium
+              const isObs  = isObservationType(r.inspection_type)
+              const isTrn  = isTrainingType(r.inspection_type)
               return (
                 <tr key={r.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                  <td className="py-2 pr-4 text-white font-medium">{r.title}</td>
-                  <td className="py-2 pr-4 text-gray-400 text-xs">{r.inspection_type}</td>
-                  <td className="py-2 pr-4 text-gray-300">{r.site}</td>
-                  <td className="py-2 pr-4 font-mono text-xs text-gray-400">{r.asset_no || '—'}</td>
-                  <td className="py-2 pr-4 text-gray-400">{r.scheduled_date}</td>
-                  <td className="py-2 pr-4">
+                  <td className="py-2 pr-3">
+                    <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                      isObs ? 'bg-purple-900/20 text-purple-400 border-purple-700/40'
+                      : isTrn ? 'bg-blue-900/20 text-blue-400 border-blue-700/40'
+                      : 'bg-gray-800 text-gray-400 border-gray-700'
+                    }`}>
+                      {r.inspection_type}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-3 text-white font-medium max-w-48 truncate" title={r.title}>
+                    {r.title}
+                    {r.photo_data && <Camera className="inline w-3 h-3 ml-1 text-gray-500" title="Has photo" />}
+                    {r.linked_action_id && <ClipboardList className="inline w-3 h-3 ml-1 text-yellow-400" title="Action raised" />}
+                  </td>
+                  <td className="py-2 pr-3 text-gray-300">{r.site}</td>
+                  <td className="py-2 pr-3 font-mono text-xs text-gray-400">{r.asset_no || '—'}</td>
+                  <td className="py-2 pr-3 text-gray-400 text-xs">{r.scheduled_date}</td>
+                  <td className="py-2 pr-3">
+                    {r.severity && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${sevCfg.bg} ${sevCfg.color} ${sevCfg.border}`}>
+                        {r.severity}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
                       {r.status}
                     </span>
                   </td>
-                  <td className="py-2 pr-4 text-gray-400 text-xs">{r.inspector || '—'}</td>
+                  <td className="py-2 pr-3 text-gray-400 text-xs">{r.inspector || r.attendees || '—'}</td>
                   <td className="py-2">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
                       {r.status !== 'Done' && r.status !== 'Cancelled' && (
-                        <button
-                          onClick={() => markDone(r.id)}
-                          title="Mark as Done"
-                          className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-700/50 transition-colors"
-                        >
+                        <button onClick={() => markDone(r.id)}
+                          className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-700/50 transition-colors">
                           ✓ Done
                         </button>
                       )}
-                      <button
-                        onClick={() => setForm({ ...r })}
-                        className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
-                      >
+                      {isObs && r.status === 'Done' && !r.linked_action_id && (
+                        <button onClick={() => setRaisingAction(r)}
+                          className="text-xs px-2 py-1 rounded bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 border border-yellow-700/40 transition-colors">
+                          Raise Action
+                        </button>
+                      )}
+                      {r.linked_action_id && (
+                        <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-500 border border-gray-700">
+                          Action ✓
+                        </span>
+                      )}
+                      <button onClick={() => setForm({ ...r })}
+                        className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors">
                         Edit
                       </button>
-                      <button
-                        onClick={() => setDeleteId(r.id)}
-                        className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-800/50 transition-colors"
-                      >
+                      <button onClick={() => setDeleteId(r.id)}
+                        className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-800/50 transition-colors">
                         Del
                       </button>
                     </div>
@@ -242,9 +400,7 @@ export default function Inspections() {
               )
             })}
             {filtered.length === 0 && (
-              <tr>
-                <td colSpan={8} className="py-12 text-center text-gray-500">No inspections found</td>
-              </tr>
+              <tr><td colSpan={9} className="py-12 text-center text-gray-500">No records found</td></tr>
             )}
           </tbody>
         </table>
@@ -254,23 +410,35 @@ export default function Inspections() {
       {form !== null && (
         <Modal onClose={() => setForm(null)}>
           <h3 className="text-lg font-bold text-white mb-5">
-            {form.id ? 'Edit Inspection' : 'Schedule Inspection'}
+            {form.id ? 'Edit Record' : 'Add Record'}
           </h3>
           <div className="space-y-4">
             <div>
               <label className="label">Title *</label>
-              <input className="input" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Monthly Pressure Check — Site A" />
+              <input className="input" value={form.title}
+                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="Descriptive title…" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Type</label>
-                <select className="input" value={form.inspection_type} onChange={e => setForm(f => ({ ...f, inspection_type: e.target.value }))}>
-                  {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                <select className="input" value={form.inspection_type}
+                  onChange={e => setForm(f => ({ ...f, inspection_type: e.target.value }))}>
+                  <optgroup label="Inspections">
+                    {INSPECTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </optgroup>
+                  <optgroup label="Observations">
+                    {OBSERVATION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </optgroup>
+                  <optgroup label="Training">
+                    {TRAINING_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </optgroup>
                 </select>
               </div>
               <div>
                 <label className="label">Status</label>
-                <select className="input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                <select className="input" value={form.status}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
                   {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
@@ -278,57 +446,125 @@ export default function Inspections() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Site *</label>
-                <input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} placeholder="Site name" list="insp-sites" />
+                <input className="input" value={form.site}
+                  onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
+                  placeholder="Site name" list="insp-sites" />
                 <datalist id="insp-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
               </div>
               <div>
-                <label className="label">Scheduled Date *</label>
-                <input type="date" className="input" value={form.scheduled_date} onChange={e => setForm(f => ({ ...f, scheduled_date: e.target.value }))} />
+                <label className="label">Date *</label>
+                <input type="date" className="input" value={form.scheduled_date}
+                  onChange={e => setForm(f => ({ ...f, scheduled_date: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Asset No</label>
-                <input className="input" value={form.asset_no} onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))} placeholder="e.g. CM-0123" />
+                <input className="input" value={form.asset_no}
+                  onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))}
+                  placeholder="e.g. CM-0123" />
               </div>
+              {!isTrainingType(form.inspection_type) && (
+                <div>
+                  <label className="label">Severity</label>
+                  <select className="input" value={form.severity || 'Medium'}
+                    onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}>
+                    {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              )}
+              {isTrainingType(form.inspection_type) && (
+                <div>
+                  <label className="label">Tyre Serial</label>
+                  <input className="input" value={form.tyre_serial}
+                    onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))}
+                    placeholder="Serial number" />
+                </div>
+              )}
+            </div>
+
+            {isTrainingType(form.inspection_type) ? (
               <div>
-                <label className="label">Tyre Serial</label>
-                <input className="input" value={form.tyre_serial} onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))} placeholder="Serial number" />
+                <label className="label">Attendees</label>
+                <input className="input" value={form.attendees || ''}
+                  onChange={e => setForm(f => ({ ...f, attendees: e.target.value }))}
+                  placeholder="Names or count of attendees" />
               </div>
-            </div>
+            ) : (
+              <div>
+                <label className="label">Inspector / Observer</label>
+                <input className="input" value={form.inspector}
+                  onChange={e => setForm(f => ({ ...f, inspector: e.target.value }))}
+                  placeholder="Name" />
+              </div>
+            )}
+
             <div>
-              <label className="label">Inspector</label>
-              <input className="input" value={form.inspector} onChange={e => setForm(f => ({ ...f, inspector: e.target.value }))} placeholder="Name of inspector" />
-            </div>
-            <div>
-              <label className="label">Findings</label>
-              <textarea className="input h-20 resize-none" value={form.findings} onChange={e => setForm(f => ({ ...f, findings: e.target.value }))} placeholder="Inspection findings…" />
+              <label className="label">{isTrainingType(form.inspection_type) ? 'Training Content' : 'Findings'}</label>
+              <textarea className="input h-20 resize-none" value={form.findings}
+                onChange={e => setForm(f => ({ ...f, findings: e.target.value }))}
+                placeholder={isTrainingType(form.inspection_type) ? 'Topics covered…' : 'What was found…'} />
             </div>
             <div>
               <label className="label">Notes</label>
-              <textarea className="input h-16 resize-none" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Additional notes…" />
+              <textarea className="input h-16 resize-none" value={form.notes}
+                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Additional notes…" />
             </div>
+
+            {/* Photo upload */}
+            <div>
+              <label className="label">Photo</label>
+              <div className="flex items-center gap-3">
+                <button type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="btn-secondary text-sm flex items-center gap-2 px-3 py-2">
+                  <Camera size={14} /> {form.photo_data ? 'Change Photo' : 'Upload Photo'}
+                </button>
+                {form.photo_data && (
+                  <button type="button" onClick={() => setForm(f => ({ ...f, photo_data: null }))}
+                    className="text-xs text-red-400 hover:text-red-300">Remove</button>
+                )}
+                <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                  onChange={handlePhotoChange} />
+              </div>
+              {form.photo_data && (
+                <img src={form.photo_data} alt="Attached" className="mt-2 rounded-lg max-h-48 border border-gray-700 object-cover" />
+              )}
+            </div>
+
             {form.status === 'Done' && (
               <div>
                 <label className="label">Completed Date</label>
-                <input type="date" className="input" value={form.completed_date || ''} onChange={e => setForm(f => ({ ...f, completed_date: e.target.value }))} />
+                <input type="date" className="input" value={form.completed_date || ''}
+                  onChange={e => setForm(f => ({ ...f, completed_date: e.target.value }))} />
               </div>
             )}
           </div>
           <div className="flex gap-3 mt-6">
             <button onClick={() => setForm(null)} className="btn-secondary flex-1">Cancel</button>
-            <button onClick={save} disabled={saving || !form.title?.trim() || !form.site?.trim() || !form.scheduled_date}
+            <button onClick={save}
+              disabled={saving || !form.title?.trim() || !form.site?.trim() || !form.scheduled_date}
               className="btn-primary flex-1 disabled:opacity-50">
-              {saving ? 'Saving…' : form.id ? 'Save Changes' : 'Schedule'}
+              {saving ? 'Saving…' : form.id ? 'Save Changes' : 'Add'}
             </button>
           </div>
         </Modal>
       )}
 
+      {/* Raise Corrective Action modal */}
+      {raisingAction && (
+        <RaiseActionModal
+          row={raisingAction}
+          onConfirm={(title) => raiseAction(raisingAction, title)}
+          onClose={() => setRaisingAction(null)}
+        />
+      )}
+
       {/* Delete confirm */}
       {deleteId && (
         <Modal onClose={() => setDeleteId(null)}>
-          <p className="text-white font-semibold mb-2">Delete this inspection?</p>
+          <p className="text-white font-semibold mb-2">Delete this record?</p>
           <p className="text-gray-400 text-sm mb-5">This action cannot be undone.</p>
           <div className="flex gap-3">
             <button onClick={() => setDeleteId(null)} className="btn-secondary flex-1">Cancel</button>
@@ -337,6 +573,32 @@ export default function Inspections() {
         </Modal>
       )}
     </div>
+  )
+}
+
+function RaiseActionModal({ row, onConfirm, onClose }) {
+  const [title, setTitle] = useState(`Action: ${row.title}`)
+  return (
+    <Modal onClose={onClose}>
+      <h3 className="text-lg font-bold text-white mb-4">Raise Corrective Action</h3>
+      <p className="text-gray-400 text-sm mb-4">
+        This will create a new corrective action linked to this observation.
+      </p>
+      <div className="mb-4">
+        <label className="label">Action Title</label>
+        <input className="input" value={title} onChange={e => setTitle(e.target.value)} />
+      </div>
+      <div className="bg-gray-800 rounded-lg p-3 text-xs text-gray-400 mb-4 space-y-1">
+        <p><span className="text-gray-500">Site:</span> {row.site}</p>
+        <p><span className="text-gray-500">Asset:</span> {row.asset_no || '—'}</p>
+        <p><span className="text-gray-500">Priority:</span> {row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium'}</p>
+        {row.findings && <p><span className="text-gray-500">Findings:</span> {row.findings.slice(0, 100)}{row.findings.length > 100 ? '…' : ''}</p>}
+      </div>
+      <div className="flex gap-3">
+        <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+        <button onClick={() => onConfirm(title)} className="btn-primary flex-1">Raise Action</button>
+      </div>
+    </Modal>
   )
 }
 

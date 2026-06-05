@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -17,6 +18,7 @@ import {
   CircleDot, Package, ClipboardList, AlertTriangle,
   TrendingUp, TrendingDown, DollarSign, Presentation, Minus,
   FileSpreadsheet, FileText, Search, X, Calendar, Activity, Clock,
+  Bell, Upload, ClipboardCheck,
 } from 'lucide-react'
 
 ChartJS.register(
@@ -423,15 +425,41 @@ export default function Dashboard() {
 
       {/* KPI stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        <StatCard label="Tyre Records"  value={stats.tyres.toLocaleString()}                               icon={CircleDot}    color="blue" />
-        <StatCard label="Stock Sites"   value={stats.stock.toLocaleString()}                               icon={Package}      color="green" />
-        <StatCard label="Open Actions"  value={stats.actions.toLocaleString()}                             icon={ClipboardList} color="yellow" />
-        <StatCard
-          label="High Risk"
-          value={`${stats.critical.toLocaleString()} (${stats.tyres ? ((stats.critical / stats.tyres) * 100).toFixed(1) : 0}%)`}
-          icon={AlertTriangle} color="red"
-        />
-        <StatCard label="Total Cost"    value={`${activeCurrency} ${(stats.cost / 1000).toFixed(0)}K`}    icon={DollarSign}   color="purple" />
+        <Link to="/tyres" className="hover:border-green-500/40 hover:shadow-lg hover:shadow-green-900/10 cursor-pointer transition-all duration-200 rounded-xl">
+          <StatCard label="Tyre Records" value={stats.tyres.toLocaleString()} icon={CircleDot} color="blue" />
+        </Link>
+        <Link to="/stock" className="hover:border-green-500/40 hover:shadow-lg hover:shadow-green-900/10 cursor-pointer transition-all duration-200 rounded-xl">
+          <StatCard label="Stock Sites" value={stats.stock.toLocaleString()} icon={Package} color="green" />
+        </Link>
+        <Link to="/actions" className="hover:border-green-500/40 hover:shadow-lg hover:shadow-green-900/10 cursor-pointer transition-all duration-200 rounded-xl">
+          <StatCard label="Open Actions" value={stats.actions.toLocaleString()} icon={ClipboardList} color="yellow" />
+        </Link>
+        <Link to="/anomalies" className="hover:border-green-500/40 hover:shadow-lg hover:shadow-green-900/10 cursor-pointer transition-all duration-200 rounded-xl">
+          <StatCard
+            label="High Risk"
+            value={`${stats.critical.toLocaleString()} (${stats.tyres ? ((stats.critical / stats.tyres) * 100).toFixed(1) : 0}%)`}
+            icon={AlertTriangle} color="red"
+          />
+        </Link>
+        <Link to="/analytics" className="hover:border-green-500/40 hover:shadow-lg hover:shadow-green-900/10 cursor-pointer transition-all duration-200 rounded-xl">
+          <StatCard label="Total Cost" value={`${activeCurrency} ${(stats.cost / 1000).toFixed(0)}K`} icon={DollarSign} color="purple" />
+        </Link>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="flex flex-wrap gap-3 mb-6">
+        <Link to="/anomalies" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-red-900/20 border border-red-700/30 text-red-300 hover:bg-red-900/40 transition-colors">
+          <AlertTriangle className="w-4 h-4" /> Run Anomaly Scan
+        </Link>
+        <Link to="/alerts" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-yellow-900/20 border border-yellow-700/30 text-yellow-300 hover:bg-yellow-900/40 transition-colors">
+          <Bell className="w-4 h-4" /> View Alerts
+        </Link>
+        <Link to="/upload" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-900/20 border border-blue-700/30 text-blue-300 hover:bg-blue-900/40 transition-colors">
+          <Upload className="w-4 h-4" /> Upload Data
+        </Link>
+        <Link to="/inspections" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-green-900/20 border border-green-700/30 text-green-300 hover:bg-green-900/40 transition-colors">
+          <ClipboardCheck className="w-4 h-4" /> Inspections
+        </Link>
       </div>
 
       {/* Fleet intelligence row: Health Score + Avg Tyre Life */}
@@ -592,7 +620,9 @@ export default function Dashboard() {
               {recentRecords.map(r => (
                 <div key={r.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">
                   <div>
-                    <p className="text-sm text-white font-medium">{r.asset_no ?? '—'}</p>
+                    <Link to={`/vehicle-history?asset=${r.asset_no}`} className="text-sm text-white font-medium hover:text-green-400 transition-colors">
+                      {r.asset_no ?? '—'}
+                    </Link>
                     <p className="text-xs text-gray-400">{r.brand} · {r.site}</p>
                   </div>
                   <div className="text-right">

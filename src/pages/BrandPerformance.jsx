@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeBrandMetrics, linearRegression, bucketByMonth, recordCost } from '../lib/analyticsEngine'
@@ -7,6 +7,8 @@ import {
   PointElement, Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
+import { Maximize2, X } from 'lucide-react'
+import { ChartModal } from '../components/ChartModal'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -20,11 +22,23 @@ const CHART_OPTS = (horizontal = false) => ({
   },
 })
 
+const RISK_LEVELS = ['Low', 'Medium', 'High', 'Critical']
+
 export default function BrandPerformance() {
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+
+  // Filters
+  const [dateFrom, setDateFrom]         = useState('')
+  const [dateTo, setDateTo]             = useState('')
+  const [selectedSites, setSelectedSites] = useState([])
+  const [riskLevels, setRiskLevels]     = useState([])
+
+  // Modal
+  const [modalOpen, setModalOpen] = useState(false)
+  const chartRef = useRef(null)
 
   useEffect(() => {
     let q = supabase
@@ -35,11 +49,46 @@ export default function BrandPerformance() {
     q.then(({ data }) => { setRecords(data || []); setLoading(false) })
   }, [activeCountry])
 
-  const metrics = useMemo(() => computeBrandMetrics(records), [records])
+  const uniqueSites = useMemo(() => {
+    const s = new Set(records.map(r => r.site).filter(Boolean))
+    return [...s].sort()
+  }, [records])
+
+  const filtered = useMemo(() => {
+    return records.filter(r => {
+      if (dateFrom && r.issue_date && r.issue_date < dateFrom) return false
+      if (dateTo && r.issue_date && r.issue_date > dateTo) return false
+      if (selectedSites.length > 0 && !selectedSites.includes(r.site)) return false
+      if (riskLevels.length > 0) {
+        const level = (r.risk_level || '').toLowerCase()
+        if (!riskLevels.map(l => l.toLowerCase()).includes(level)) return false
+      }
+      return true
+    })
+  }, [records, dateFrom, dateTo, selectedSites, riskLevels])
+
+  const metrics = useMemo(() => computeBrandMetrics(filtered), [filtered])
   const selectedData = useMemo(() =>
-    selected ? records.filter(r => r.brand === selected) : [],
-    [records, selected]
+    selected ? filtered.filter(r => r.brand === selected) : [],
+    [filtered, selected]
   )
+
+  const hasActiveFilter = dateFrom !== '' || dateTo !== '' || selectedSites.length > 0 || riskLevels.length > 0
+
+  function toggleSite(site) {
+    setSelectedSites(prev => prev.includes(site) ? prev.filter(s => s !== site) : [...prev, site])
+  }
+
+  function toggleRisk(level) {
+    setRiskLevels(prev => prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level])
+  }
+
+  function clearFilters() {
+    setDateFrom('')
+    setDateTo('')
+    setSelectedSites([])
+    setRiskLevels([])
+  }
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading brand data…</div>
 
@@ -79,12 +128,103 @@ export default function BrandPerformance() {
         <p className="text-gray-400 text-sm mt-1">Failure rates, avg life, cost and ranking by brand</p>
       </div>
 
+      {/* Filter bar */}
+      <div className="card space-y-3">
+        <div className="flex flex-wrap gap-3 items-end">
+          {/* Date range */}
+          <div className="flex flex-col gap-1">
+            <label className="label text-xs">Date From</label>
+            <input type="date" className="input py-1.5 text-sm w-36" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="label text-xs">Date To</label>
+            <input type="date" className="input py-1.5 text-sm w-36" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+          </div>
+
+          {/* Clear */}
+          {hasActiveFilter && (
+            <button onClick={clearFilters} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 self-end">
+              <X size={14} /> Clear Filters
+            </button>
+          )}
+        </div>
+
+        {/* Site multi-select chips */}
+        {uniqueSites.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500">Sites:</span>
+            <button
+              onClick={() => setSelectedSites([])}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                selectedSites.length === 0 ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'
+              }`}
+            >
+              All
+            </button>
+            {uniqueSites.map(site => (
+              <button
+                key={site}
+                onClick={() => toggleSite(site)}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  selectedSites.includes(site)
+                    ? 'bg-purple-700 border-purple-700 text-white'
+                    : 'border-gray-700 text-gray-400 hover:border-gray-500'
+                }`}
+              >
+                {site}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Risk level chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-500">Risk:</span>
+          <button
+            onClick={() => setRiskLevels([])}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              riskLevels.length === 0 ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'
+            }`}
+          >
+            All
+          </button>
+          {RISK_LEVELS.map(level => {
+            const active = riskLevels.includes(level)
+            const colorMap = { Low: 'green', Medium: 'yellow', High: 'orange', Critical: 'red' }
+            const c = colorMap[level]
+            return (
+              <button
+                key={level}
+                onClick={() => toggleRisk(level)}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  active
+                    ? c === 'green' ? 'bg-green-700 border-green-700 text-white'
+                    : c === 'yellow' ? 'bg-yellow-700 border-yellow-700 text-white'
+                    : c === 'orange' ? 'bg-orange-700 border-orange-700 text-white'
+                    : 'bg-red-700 border-red-700 text-white'
+                    : 'border-gray-700 text-gray-400 hover:border-gray-500'
+                }`}
+              >
+                {level}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       {/* Charts row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="card">
+        <div className="card relative">
           <h3 className="text-sm font-medium text-gray-400 mb-4">Volume by Brand (top 10)</h3>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="absolute top-3 right-3 z-10 text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
+            title="Fullscreen"
+          >
+            <Maximize2 size={15} />
+          </button>
           <div style={{ height: 240 }}>
-            <Bar data={rankingChart} options={CHART_OPTS()} />
+            <Bar ref={chartRef} data={rankingChart} options={CHART_OPTS()} />
           </div>
         </div>
         <div className="card">
@@ -153,6 +293,22 @@ export default function BrandPerformance() {
 
       {/* Drill-down panel */}
       {selected && <BrandDrillDown brand={selected} records={selectedData} />}
+
+      {/* ChartModal */}
+      <ChartModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Volume by Brand (top 10)"
+        chartRef={chartRef}
+        filters={{}}
+        filterOptions={{ sites: uniqueSites, brands: [] }}
+        showSite={false}
+        showBrand={false}
+      >
+        <div style={{ height: 480 }}>
+          <Bar ref={chartRef} data={rankingChart} options={CHART_OPTS()} />
+        </div>
+      </ChartModal>
     </div>
   )
 }
@@ -214,7 +370,7 @@ function BrandDrillDown({ brand, records }) {
           </div>
           {reg && (
             <p className="text-xs text-gray-500 mt-2">
-              Trend slope: {reg.slope > 0 ? '↑' : '↓'} {Math.abs(reg.slope).toFixed(2)}/mo
+              Trend slope: {reg.slope > 0 ? 'up' : 'down'} {Math.abs(reg.slope).toFixed(2)}/mo
               &nbsp;· R² = {reg.r2.toFixed(2)}
             </p>
           )}

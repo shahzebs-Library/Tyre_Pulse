@@ -1,14 +1,15 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeSiteMetrics, buildSiteRadar, bucketByMonth } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { Download, FileText } from 'lucide-react'
+import { Download, FileText, Maximize2 } from 'lucide-react'
 import {
   Chart as ChartJS, RadialLinearScale, PointElement, LineElement,
   Filler, Tooltip, Legend, CategoryScale, LinearScale, BarElement,
 } from 'chart.js'
 import { Radar, Bar, Line } from 'react-chartjs-2'
+import { ChartModal } from '../components/ChartModal'
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend,
   CategoryScale, LinearScale, BarElement)
@@ -18,11 +19,57 @@ const SITE_COLORS = [
   '#06b6d4', '#84cc16', '#f97316', '#a855f7',
 ]
 
+const GRANULARITIES = ['Monthly', 'Quarterly', 'Yearly']
+
+// ── helpers for granularity bucketing ────────────────────────────────────────
+function getPeriodKey(dateStr, granularity) {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  if (isNaN(d)) return null
+  const y = d.getFullYear()
+  if (granularity === 'Yearly') return String(y)
+  if (granularity === 'Quarterly') {
+    const q = Math.ceil((d.getMonth() + 1) / 3)
+    return `${y} Q${q}`
+  }
+  // Monthly
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
+}
+
+function buildPeriodBuckets(records, granularity, defaultCost) {
+  const map = {}
+  records.forEach(r => {
+    const key = getPeriodKey(r.issue_date, granularity)
+    if (!key) return
+    if (!map[key]) map[key] = { period: key, total: 0, count: 0 }
+    map[key].total += (r.cost_per_tyre || defaultCost) * (r.qty || 1)
+    map[key].count += 1
+  })
+  return Object.values(map).sort((a, b) => a.period.localeCompare(b.period))
+}
+
+function slicePeriods(buckets, granularity) {
+  if (granularity === 'Yearly') return buckets.slice(-5)
+  if (granularity === 'Quarterly') return buckets.slice(-8)
+  return buckets.slice(-12)
+}
+
+// ── main component ────────────────────────────────────────────────────────────
 export default function SiteComparison() {
   const { appSettings, activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedSites, setSelectedSites] = useState([])
+
+  // Filters
+  const [dateFrom, setDateFrom]       = useState('')
+  const [dateTo, setDateTo]           = useState('')
+  const [granularity, setGranularity] = useState('Monthly')
+
+  // Modal
+  const [modalOpen, setModalOpen] = useState(false)
+  const trendChartRef = useRef(null)
 
   useEffect(() => {
     let q = supabase
@@ -43,7 +90,16 @@ export default function SiteComparison() {
     })
   }, [activeCountry])
 
-  const allMetrics = useMemo(() => computeSiteMetrics(records, appSettings.cost_per_tyre), [records, appSettings.cost_per_tyre])
+  // Apply date range filter to records
+  const filteredRecords = useMemo(() => {
+    return records.filter(r => {
+      if (dateFrom && r.issue_date && r.issue_date < dateFrom) return false
+      if (dateTo && r.issue_date && r.issue_date > dateTo) return false
+      return true
+    })
+  }, [records, dateFrom, dateTo])
+
+  const allMetrics = useMemo(() => computeSiteMetrics(filteredRecords, appSettings.cost_per_tyre), [filteredRecords, appSettings.cost_per_tyre])
   const allSites   = useMemo(() => allMetrics.map(s => s.site), [allMetrics])
 
   const filteredMetrics = useMemo(
@@ -148,28 +204,63 @@ export default function SiteComparison() {
         </div>
       </div>
 
-      {/* Site selector */}
-      <div className="card">
-        <p className="text-sm text-gray-400 mb-3">Select sites to compare (up to 6):</p>
-        <div className="flex flex-wrap gap-2">
-          {allSites.map((site, i) => {
-            const active = selectedSites.includes(site)
-            return (
-              <button
-                key={site}
-                onClick={() => toggleSite(site)}
-                disabled={!active && selectedSites.length >= 6}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
-                  active
-                    ? 'border-transparent text-white'
-                    : 'border-gray-700 text-gray-400 hover:border-gray-500 disabled:opacity-30'
-                }`}
-                style={active ? { backgroundColor: SITE_COLORS[selectedSites.indexOf(site) % SITE_COLORS.length] } : {}}
-              >
-                {site}
-              </button>
-            )
-          })}
+      {/* Filter bar + site selector */}
+      <div className="card space-y-4">
+        {/* Date range + granularity */}
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="label text-xs">Date From</label>
+            <input type="date" className="input py-1.5 text-sm w-36" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="label text-xs">Date To</label>
+            <input type="date" className="input py-1.5 text-sm w-36" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+          </div>
+
+          {/* Granularity pills */}
+          <div className="flex flex-col gap-1">
+            <label className="label text-xs">Granularity</label>
+            <div className="flex gap-1">
+              {GRANULARITIES.map(g => (
+                <button
+                  key={g}
+                  onClick={() => setGranularity(g)}
+                  className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                    granularity === g
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Site selector */}
+        <div>
+          <p className="text-sm text-gray-400 mb-3">Select sites to compare (up to 6):</p>
+          <div className="flex flex-wrap gap-2">
+            {allSites.map((site, i) => {
+              const active = selectedSites.includes(site)
+              return (
+                <button
+                  key={site}
+                  onClick={() => toggleSite(site)}
+                  disabled={!active && selectedSites.length >= 6}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                    active
+                      ? 'border-transparent text-white'
+                      : 'border-gray-700 text-gray-400 hover:border-gray-500 disabled:opacity-30'
+                  }`}
+                  style={active ? { backgroundColor: SITE_COLORS[selectedSites.indexOf(site) % SITE_COLORS.length] } : {}}
+                >
+                  {site}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 
@@ -216,7 +307,7 @@ export default function SiteComparison() {
           {filteredMetrics.length >= 2 && (
             <div className="card">
               <h3 className="text-sm font-medium text-gray-400 mb-4">
-                Multi-Dimension Radar (0–100, higher = better)
+                Multi-Dimension Radar (0-100, higher = better)
               </h3>
               <div className="max-w-xl mx-auto" style={{ height: 380 }}>
                 <Radar data={radarData} options={RADAR_OPTS} />
@@ -227,10 +318,29 @@ export default function SiteComparison() {
             </div>
           )}
 
-          {/* Monthly trend comparison */}
-          <MonthlyComparison metrics={filteredMetrics} records={records} selectedSites={selectedSites} defaultCost={appSettings.cost_per_tyre} />
+          {/* Trend comparison with granularity */}
+          <TrendComparison
+            records={filteredRecords}
+            selectedSites={selectedSites}
+            defaultCost={appSettings.cost_per_tyre}
+            granularity={granularity}
+            chartRef={trendChartRef}
+            onMaximize={() => setModalOpen(true)}
+          />
         </>
       )}
+
+      {/* ChartModal for trend */}
+      <TrendModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        records={filteredRecords}
+        selectedSites={selectedSites}
+        defaultCost={appSettings.cost_per_tyre}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+        chartRef={trendChartRef}
+      />
     </div>
   )
 }
@@ -244,35 +354,9 @@ function KpiRow({ label, value, highlight }) {
   )
 }
 
-function MonthlyComparison({ metrics, records, selectedSites, defaultCost = 1200 }) {
-  const datasets = useMemo(() => {
-    return selectedSites.map((site, i) => {
-      const siteRecs = records.filter(r => r.site === site)
-      const monthly  = bucketByMonth(siteRecs, r => r.issue_date, r => (r.cost_per_tyre || defaultCost) * (r.qty || 1))
-      return { site, monthly, color: SITE_COLORS[i % SITE_COLORS.length] }
-    })
-  }, [records, selectedSites, defaultCost])
-
-  // Build unified month axis
-  const allMonths = useMemo(() => {
-    const s = new Set()
-    datasets.forEach(d => d.monthly.forEach(m => s.add(m.month)))
-    return [...s].sort()
-  }, [datasets])
-
-  const chartData = {
-    labels: allMonths,
-    datasets: datasets.map(d => ({
-      label: d.site,
-      data: allMonths.map(m => {
-        const found = d.monthly.find(x => x.month === m)
-        return found ? Math.round(found.total) : null
-      }),
-      borderColor: d.color,
-      backgroundColor: d.color + '22',
-      fill: false, tension: 0.4, spanGaps: true, pointRadius: 3,
-    })),
-  }
+// ── Trend chart with granularity ──────────────────────────────────────────────
+function TrendComparison({ records, selectedSites, defaultCost = 1200, granularity, chartRef, onMaximize }) {
+  const { chartData, allPeriods } = useTrendData(records, selectedSites, defaultCost, granularity)
 
   const opts = {
     responsive: true, maintainAspectRatio: false,
@@ -283,14 +367,108 @@ function MonthlyComparison({ metrics, records, selectedSites, defaultCost = 1200
     },
   }
 
-  if (allMonths.length < 2) return null
+  if (allPeriods.length < 2) return null
+
+  const labelMap = { Monthly: 'last 12 months', Quarterly: 'last 8 quarters', Yearly: 'last 5 years' }
 
   return (
-    <div className="card">
-      <h3 className="text-sm font-medium text-gray-400 mb-4">Monthly Cost Trend by Site</h3>
+    <div className="card relative">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-gray-400">
+          {granularity} Cost Trend by Site ({labelMap[granularity]})
+        </h3>
+        <button
+          onClick={onMaximize}
+          className="text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
+          title="Fullscreen"
+        >
+          <Maximize2 size={15} />
+        </button>
+      </div>
       <div style={{ height: 300 }}>
-        <Line data={chartData} options={opts} />
+        <Line ref={chartRef} data={chartData} options={opts} />
       </div>
     </div>
   )
+}
+
+// ── Modal wrapper for trend chart ─────────────────────────────────────────────
+function TrendModal({ open, onClose, records, selectedSites, defaultCost, granularity, onGranularityChange, chartRef }) {
+  const { chartData } = useTrendData(records, selectedSites, defaultCost, granularity)
+
+  const opts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#9ca3af' } } },
+    scales: {
+      x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
+      y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
+    },
+  }
+
+  return (
+    <ChartModal
+      open={open}
+      onClose={onClose}
+      title="Cost Trend by Site"
+      chartRef={chartRef}
+      filters={{ granularity }}
+      onFilterChange={(key, val) => { if (key === 'granularity') onGranularityChange(val) }}
+      filterOptions={{}}
+      showGranularity={false}
+      showSite={false}
+      showBrand={false}
+    >
+      {/* Granularity pills inside modal */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xs text-gray-500">Granularity:</span>
+        {GRANULARITIES.map(g => (
+          <button
+            key={g}
+            onClick={() => onGranularityChange(g)}
+            className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+              granularity === g ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+            }`}
+          >
+            {g}
+          </button>
+        ))}
+      </div>
+      <div style={{ height: 420 }}>
+        <Line ref={chartRef} data={chartData} options={opts} />
+      </div>
+    </ChartModal>
+  )
+}
+
+// ── shared hook for building trend chart data ─────────────────────────────────
+function useTrendData(records, selectedSites, defaultCost, granularity) {
+  return useMemo(() => {
+    const datasets = selectedSites.map((site, i) => {
+      const siteRecs = records.filter(r => r.site === site)
+      const allBuckets = buildPeriodBuckets(siteRecs, granularity, defaultCost)
+      const buckets = slicePeriods(allBuckets, granularity)
+      return { site, buckets, color: SITE_COLORS[i % SITE_COLORS.length] }
+    })
+
+    // Build unified period axis
+    const periodSet = new Set()
+    datasets.forEach(d => d.buckets.forEach(b => periodSet.add(b.period)))
+    const allPeriods = [...periodSet].sort()
+
+    const chartData = {
+      labels: allPeriods,
+      datasets: datasets.map(d => ({
+        label: d.site,
+        data: allPeriods.map(p => {
+          const found = d.buckets.find(b => b.period === p)
+          return found ? Math.round(found.total) : null
+        }),
+        borderColor: d.color,
+        backgroundColor: d.color + '22',
+        fill: false, tension: 0.4, spanGaps: true, pointRadius: 3,
+      })),
+    }
+
+    return { chartData, allPeriods }
+  }, [records, selectedSites, defaultCost, granularity])
 }

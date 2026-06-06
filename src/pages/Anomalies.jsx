@@ -9,9 +9,12 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { Download, FileText, Search } from 'lucide-react'
 
 const SEVERITY_STYLE = {
-  high:   { badge: 'bg-red-900/40 text-red-400 border-red-700/50',    icon: '🔴', label: 'High' },
-  medium: { badge: 'bg-yellow-900/40 text-yellow-400 border-yellow-700/50', icon: '🟡', label: 'Medium' },
-  low:    { badge: 'bg-blue-900/40 text-blue-400 border-blue-700/50', icon: '🔵', label: 'Low' },
+  critical:  { badge: 'bg-red-500/15 text-red-200 border-red-500/40',       icon: '🔴', label: 'Critical' },
+  high:      { badge: 'bg-orange-500/15 text-orange-200 border-orange-500/40', icon: '🟠', label: 'High' },
+  medium:    { badge: 'bg-yellow-500/15 text-yellow-200 border-yellow-500/35', icon: '🟡', label: 'Medium' },
+  low:       { badge: 'bg-blue-500/15 text-blue-300 border-blue-500/35',     icon: '🔵', label: 'Low' },
+  dismissed: { badge: 'bg-gray-800/50 text-gray-400 border-gray-700/50',    icon: '⚪', label: 'Dismissed' },
+  unknown:   { badge: 'bg-gray-800/50 text-gray-400 border-gray-700/50',    icon: '⚪', label: 'Unknown' },
 }
 
 const TYPE_ICON = {
@@ -199,13 +202,13 @@ export default function Anomalies() {
           >
             {running ? 'Scanning…' : hasRun ? '↻ Re-scan' : '▶ Run Scan'}
           </button>
-          {hasRun && visible.length > 0 && (
+          {hasRun && (
             <>
               <button
                 onClick={() => exportToExcel(
-                  visible.map(a => ({ type: ANOMALY_TYPE_LABELS[a.type] ?? a.type, severity: a.severity, asset_no: a.asset_no ?? '', message: a.message ?? '', site: a.site ?? '', date: a.date ?? '' })),
-                  ['type','severity','asset_no','message','site','date'],
-                  ['Type','Severity','Asset No','Message','Site','Date'],
+                  anomalies.map(a => ({ type: ANOMALY_TYPE_LABELS[a.type] ?? a.type, severity: a.severity, asset_no: a.asset_no ?? '', site: a.site ?? '', description: a.message ?? '', detected_at: a.date ?? '' })),
+                  ['type','severity','asset_no','site','description','detected_at'],
+                  ['Type','Severity','Asset No','Site','Description','Detected At'],
                   'TyrePulse_Anomalies'
                 )}
                 className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
@@ -214,8 +217,8 @@ export default function Anomalies() {
               </button>
               <button
                 onClick={() => exportToPdf(
-                  visible.map(a => ({ type: ANOMALY_TYPE_LABELS[a.type] ?? a.type, severity: a.severity, asset_no: a.asset_no ?? '', message: a.message ?? '', site: a.site ?? '', date: a.date ?? '' })),
-                  [{key:'type',header:'Type'},{key:'severity',header:'Severity'},{key:'asset_no',header:'Asset No'},{key:'message',header:'Message'},{key:'site',header:'Site'},{key:'date',header:'Date'}],
+                  anomalies.map(a => ({ type: ANOMALY_TYPE_LABELS[a.type] ?? a.type, severity: a.severity, asset_no: a.asset_no ?? '', site: a.site ?? '', description: a.message ?? '', detected_at: a.date ?? '' })),
+                  [{key:'type',header:'Type'},{key:'severity',header:'Severity'},{key:'asset_no',header:'Asset No'},{key:'site',header:'Site'},{key:'description',header:'Description'},{key:'detected_at',header:'Detected At'}],
                   'Anomaly Detection Report',
                   'TyrePulse_Anomalies',
                   'landscape'

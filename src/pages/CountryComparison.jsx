@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { useSettings, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
+import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { computeCountryMetrics, sum } from '../lib/analyticsEngine'
 import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText } from 'lucide-react'
 import {
@@ -12,7 +12,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
-const COUNTRY_COLORS = { KSA: '#3b82f6', UAE: '#10b981', Egypt: '#f59e0b' }
+const COLOR_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#f97316']
 const COUNTRY_CURRENCY_MAP = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
 
 const BAR_OPTS = {
@@ -65,6 +65,9 @@ export default function CountryComparison() {
   const [records, setRecords]   = useState([])
   const [actions, setActions]   = useState([])
   const [loading, setLoading]   = useState(true)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo]     = useState('')
+  const [selectedCountries, setSelectedCountries] = useState(new Set(COUNTRIES))
 
   useEffect(() => {
     async function load() {
@@ -81,10 +84,40 @@ export default function CountryComparison() {
     load()
   }, [])
 
-  const metrics = useMemo(
-    () => computeCountryMetrics(records, actions, appSettings.cost_per_tyre),
-    [records, actions, appSettings.cost_per_tyre]
+  // Dynamic color map based on available countries
+  const countryColorMap = useMemo(() => {
+    const map = {}
+    COUNTRIES.forEach((c, i) => { map[c] = COLOR_PALETTE[i % COLOR_PALETTE.length] })
+    return map
+  }, [])
+
+  const filteredRecords = useMemo(() => {
+    let arr = records
+    if (dateFrom) arr = arr.filter(r => r.issue_date && r.issue_date >= dateFrom)
+    if (dateTo)   arr = arr.filter(r => r.issue_date && r.issue_date <= dateTo)
+    return arr
+  }, [records, dateFrom, dateTo])
+
+  const allMetrics = useMemo(
+    () => computeCountryMetrics(filteredRecords, actions, appSettings.cost_per_tyre),
+    [filteredRecords, actions, appSettings.cost_per_tyre]
   )
+
+  const metrics = useMemo(
+    () => allMetrics.filter(m => selectedCountries.has(m.country)),
+    [allMetrics, selectedCountries]
+  )
+
+  // Available countries that actually have data
+  const availableCountries = useMemo(() => allMetrics.map(m => m.country), [allMetrics])
+
+  function toggleCountry(c) {
+    setSelectedCountries(prev => {
+      const next = new Set(prev)
+      if (next.has(c)) { next.delete(c) } else { next.add(c) }
+      return next
+    })
+  }
 
   const countries = metrics.map(m => m.country)
 
@@ -92,7 +125,7 @@ export default function CountryComparison() {
     labels: countries,
     datasets: [{
       data: metrics.map(m => m.totalCost),
-      backgroundColor: countries.map(c => COUNTRY_COLORS[c] ?? '#6b7280'),
+      backgroundColor: countries.map(c => countryColorMap[c] ?? '#6b7280'),
       borderRadius: 4,
     }],
   }
@@ -101,7 +134,7 @@ export default function CountryComparison() {
     labels: countries,
     datasets: [{
       data: metrics.map(m => m.highRiskPct),
-      backgroundColor: countries.map(m => '#ef4444'),
+      backgroundColor: countries.map(() => '#ef4444'),
       borderRadius: 4,
     }],
   }
@@ -110,7 +143,16 @@ export default function CountryComparison() {
     labels: countries,
     datasets: [{
       data: metrics.map(m => m.avgCpk ?? 0),
-      backgroundColor: countries.map(c => COUNTRY_COLORS[c] ?? '#6b7280'),
+      backgroundColor: countries.map(c => countryColorMap[c] ?? '#6b7280'),
+      borderRadius: 4,
+    }],
+  }
+
+  const openActionsChartData = {
+    labels: countries,
+    datasets: [{
+      data: metrics.map(m => m.openActions ?? 0),
+      backgroundColor: countries.map(() => '#f59e0b'),
       borderRadius: 4,
     }],
   }
@@ -121,7 +163,7 @@ export default function CountryComparison() {
     </div>
   )
 
-  if (metrics.length === 0) return (
+  if (allMetrics.length === 0) return (
     <div className="flex flex-col items-center justify-center h-64 gap-3">
       <Globe size={36} className="text-gray-700" />
       <p className="text-gray-500 text-sm">No country data yet.</p>
@@ -135,14 +177,14 @@ export default function CountryComparison() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="page-title flex items-center gap-2"><Globe size={20} className="text-blue-400" /> Country Comparison</h1>
-          <p className="text-gray-500 text-sm mt-0.5">KPI breakdown across KSA, UAE and Egypt</p>
+          <p className="text-gray-500 text-sm mt-0.5">KPI breakdown across {availableCountries.join(', ')}</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => exportToExcel(
               metrics,
-              ['country','count','totalCost','avgCostPerTyre','highRiskPct','openActions','overdueActions','siteCount','brandCount'],
-              ['Country','Fleet Records','Total Cost','Avg Cost/Tyre','High Risk %','Open Actions','Overdue Actions','Sites','Brands'],
+              ['country','count','totalCost','avgCostPerTyre','highRiskPct','avgCpk','openActions','overdueActions','siteCount','brandCount'],
+              ['Country','Fleet Records','Total Cost','Avg Cost/Tyre','High Risk %','Avg CPK','Open Actions','Overdue Actions','Sites','Brands'],
               'TyrePulse_CountryComparison'
             )}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
@@ -158,6 +200,7 @@ export default function CountryComparison() {
                 {key:'totalCost',header:'Total Cost'},
                 {key:'avgCostPerTyre',header:'Avg Cost/Tyre'},
                 {key:'highRiskPct',header:'High Risk %'},
+                {key:'avgCpk',header:'Avg CPK'},
                 {key:'openActions',header:'Open Actions'},
                 {key:'overdueActions',header:'Overdue'},
                 {key:'siteCount',header:'Sites'},
@@ -173,11 +216,57 @@ export default function CountryComparison() {
         </div>
       </div>
 
+      {/* Filters: country checkboxes + date pickers */}
+      <div className="card py-3 space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-gray-500">Countries:</span>
+          {availableCountries.map(c => {
+            const color = countryColorMap[c] ?? '#6b7280'
+            const checked = selectedCountries.has(c)
+            return (
+              <label key={c} className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleCountry(c)}
+                  className="rounded"
+                  style={{ accentColor: color }}
+                />
+                <span className="text-sm font-medium" style={{ color: checked ? color : '#6b7280' }}>
+                  {COUNTRY_LABEL[c] ?? c}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-gray-500">Date range:</span>
+          <input
+            type="date"
+            className="input w-40"
+            value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)}
+          />
+          <span className="text-gray-500 text-xs">to</span>
+          <input
+            type="date"
+            className="input w-40"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+          />
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(''); setDateTo('') }} className="text-xs text-gray-400 hover:text-white">
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4">
         {metrics.map(m => {
           const currency = COUNTRY_CURRENCY_MAP[m.country] || 'SAR'
-          const color    = COUNTRY_COLORS[m.country] || '#6b7280'
+          const color    = countryColorMap[m.country] ?? '#6b7280'
           return (
             <div key={m.country} className="card" style={{ borderTop: `2px solid ${color}` }}>
               <div className="flex items-center justify-between mb-3">
@@ -203,6 +292,14 @@ export default function CountryComparison() {
                   <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">Avg CPK</p>
                   <p className="text-lg font-bold text-white">{cpk(m.avgCpk)}</p>
                 </div>
+                <div>
+                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">Open Actions</p>
+                  <p className={`text-lg font-bold ${overdueColor(m.openActions)}`}>{(m.openActions ?? 0).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">Overdue</p>
+                  <p className={`text-lg font-bold ${overdueColor(m.overdueActions)}`}>{(m.overdueActions ?? 0).toLocaleString()}</p>
+                </div>
               </div>
             </div>
           )
@@ -218,7 +315,7 @@ export default function CountryComparison() {
               <tr>
                 <th className="table-header rounded-tl-md w-48">Metric</th>
                 {metrics.map(m => (
-                  <th key={m.country} className="table-header text-center" style={{ color: COUNTRY_COLORS[m.country] || '#6b7280' }}>
+                  <th key={m.country} className="table-header text-center" style={{ color: countryColorMap[m.country] || '#6b7280' }}>
                     {m.country}
                   </th>
                 ))}
@@ -239,6 +336,7 @@ export default function CountryComparison() {
                     let colorClass = 'text-gray-200'
                     if (key === 'highRiskPct')    colorClass = riskColor(val)
                     if (key === 'overdueActions') colorClass = overdueColor(val)
+                    if (key === 'openActions')    colorClass = overdueColor(val)
                     return (
                       <td key={m.country} className="table-cell text-center">
                         <span className={`font-semibold ${colorClass}`}>{display}</span>
@@ -253,7 +351,7 @@ export default function CountryComparison() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <div className="card">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Total Cost by Country</p>
           <div style={{ height: 160 }}>
@@ -270,6 +368,12 @@ export default function CountryComparison() {
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Avg CPK by Country</p>
           <div style={{ height: 160 }}>
             <Bar data={cpkChartData} options={BAR_OPTS} />
+          </div>
+        </div>
+        <div className="card">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Open Corrective Actions by Country</p>
+          <div style={{ height: 160 }}>
+            <Bar data={openActionsChartData} options={BAR_OPTS} />
           </div>
         </div>
       </div>

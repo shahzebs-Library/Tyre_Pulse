@@ -253,10 +253,27 @@ export default function CorrectiveActions() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    <select
+                      value={a.status}
+                      onChange={async e => {
+                        const newStatus = e.target.value
+                        await supabase.from('corrective_actions').update({
+                          status: newStatus,
+                          ...(newStatus === 'Closed' ? { closed_at: new Date().toISOString() } : {}),
+                        }).eq('id', a.id)
+                        load()
+                      }}
+                      className={`text-xs border rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-500/50 transition-colors cursor-pointer ${
+                        a.status === 'Closed' ? 'bg-green-900/30 text-green-300 border-green-700/40'
+                        : a.status === 'In Progress' ? 'bg-yellow-900/30 text-yellow-300 border-yellow-700/40'
+                        : 'bg-red-900/30 text-red-300 border-red-700/40'
+                      }`}
+                    >
+                      <option value="Open">Open</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Closed">Closed</option>
+                    </select>
                     <button onClick={() => startEdit(a)} className="text-gray-400 hover:text-blue-400 text-sm transition-colors">Edit</button>
-                    {a.status !== 'Closed' && (
-                      <button onClick={() => closeAction(a.id)} className="text-gray-400 hover:text-green-400 text-sm transition-colors">Close</button>
-                    )}
                   </div>
                 </div>
               </div>

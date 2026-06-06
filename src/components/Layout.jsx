@@ -10,6 +10,7 @@ import {
   Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
   Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, Sparkles,
   Sun, Moon, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare,
+  ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -83,12 +84,21 @@ export default function Layout({ children }) {
   const { theme, toggleTheme }              = useTheme()
   const navigate     = useNavigate()
   const location     = useLocation()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [searchOpen, setSearchOpen]   = useState(false)
-  const [query, setQuery]             = useState('')
-  const [results, setResults]         = useState([])
-  const [searching, setSearching]     = useState(false)
-  const [alertCount, setAlertCount]   = useState(0)
+  const [sidebarOpen, setSidebarOpen]       = useState(true)
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set())
+  const [searchOpen, setSearchOpen]         = useState(false)
+  const [query, setQuery]                   = useState('')
+  const [results, setResults]               = useState([])
+  const [searching, setSearching]           = useState(false)
+  const [alertCount, setAlertCount]         = useState(0)
+
+  function toggleGroup(label) {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(label)) { next.delete(label) } else { next.add(label) }
+      return next
+    })
+  }
   const searchRef   = useRef(null)
   const debounceRef = useRef(null)
 
@@ -262,88 +272,140 @@ export default function Layout({ children }) {
                 return true
               })
             if (visibleItems.length === 0) return null
+            const isCollapsed = collapsedGroups.has(label)
             return (
-            <div key={label} className="mb-0.5">
-              {sidebarOpen && (
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700 px-2.5 pt-2.5 pb-1">{label}</p>
-              )}
-              {visibleItems.map(({ to, label: lbl, icon: Icon, end }) => (
-                <NavLink
-                  key={to} to={to} end={end}
-                  title={!sidebarOpen ? lbl : undefined}
-                  className={({ isActive }) =>
-                    `relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group ${
-                      !sidebarOpen ? 'justify-center' : ''
-                    } ${
-                      isActive
-                        ? 'text-green-300'
-                        : 'text-gray-600 hover:text-gray-300'
-                    }`
-                  }
-                  style={({ isActive }) => isActive ? {
-                    background: 'linear-gradient(135deg, rgba(22,163,74,0.14) 0%, rgba(22,163,74,0.07) 100%)',
-                    border: '1px solid rgba(22,163,74,0.22)',
-                    boxShadow: '0 0 14px rgba(22,163,74,0.1)'
-                  } : {
-                    border: '1px solid transparent',
-                  }}
-                >
-                  {({ isActive }) => (
-                    <>
-                      {/* active left bar */}
-                      {isActive && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] rounded-r-full"
-                          style={{ background: 'linear-gradient(180deg,#4ade80,#16a34a)', boxShadow: '0 0 8px rgba(74,222,128,0.8)' }} />
-                      )}
-                      <Icon size={14} className={`flex-shrink-0 transition-colors ${isActive ? 'text-green-400' : 'text-gray-600 group-hover:text-gray-300'}`} />
-                      {sidebarOpen && <span className="truncate">{lbl}</span>}
-                      {to === '/alerts' && alertCount > 0 && (
-                        <span className={`${sidebarOpen ? 'ml-auto' : 'absolute -top-0.5 -right-0.5'} text-[10px] bg-red-600 text-white rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 font-bold`}
-                          style={{ boxShadow: '0 0 8px rgba(239,68,68,0.6)' }}>
-                          {alertCount > 9 ? '9+' : alertCount}
-                        </span>
-                      )}
-                    </>
+              <div key={label} className="mb-0.5">
+                {sidebarOpen && (
+                  <button
+                    onClick={() => toggleGroup(label)}
+                    className="w-full flex items-center justify-between px-2.5 pt-2.5 pb-1 group/section cursor-pointer"
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700 group-hover/section:text-gray-500 transition-colors">
+                      {label}
+                    </p>
+                    {isCollapsed
+                      ? <ChevronRight size={10} className="text-gray-700 group-hover/section:text-gray-500 transition-colors flex-shrink-0" />
+                      : <ChevronDown size={10} className="text-gray-700 group-hover/section:text-gray-500 transition-colors flex-shrink-0" />
+                    }
+                  </button>
+                )}
+                <AnimatePresence initial={false}>
+                  {(!isCollapsed || !sidebarOpen) && (
+                    <motion.div
+                      key={label + '-items'}
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      {visibleItems.map(({ to, label: lbl, icon: Icon, end }) => (
+                        <NavLink
+                          key={to} to={to} end={end}
+                          title={!sidebarOpen ? lbl : undefined}
+                          className={({ isActive }) =>
+                            `relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group ${
+                              !sidebarOpen ? 'justify-center' : ''
+                            } ${
+                              isActive
+                                ? 'text-green-300'
+                                : 'text-gray-600 hover:text-gray-300'
+                            }`
+                          }
+                          style={({ isActive }) => isActive ? {
+                            background: 'linear-gradient(135deg, rgba(22,163,74,0.14) 0%, rgba(22,163,74,0.07) 100%)',
+                            border: '1px solid rgba(22,163,74,0.22)',
+                            boxShadow: '0 0 14px rgba(22,163,74,0.1)'
+                          } : {
+                            border: '1px solid transparent',
+                          }}
+                        >
+                          {({ isActive }) => (
+                            <>
+                              {/* active left bar */}
+                              {isActive && (
+                                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] rounded-r-full"
+                                  style={{ background: 'linear-gradient(180deg,#4ade80,#16a34a)', boxShadow: '0 0 8px rgba(74,222,128,0.8)' }} />
+                              )}
+                              <Icon size={14} className={`flex-shrink-0 transition-colors ${isActive ? 'text-green-400' : 'text-gray-600 group-hover:text-gray-300'}`} />
+                              {sidebarOpen && <span className="truncate">{lbl}</span>}
+                              {to === '/alerts' && alertCount > 0 && (
+                                <span className={`${sidebarOpen ? 'ml-auto' : 'absolute -top-0.5 -right-0.5'} text-[10px] bg-red-600 text-white rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 font-bold`}
+                                  style={{ boxShadow: '0 0 8px rgba(239,68,68,0.6)' }}>
+                                  {alertCount > 9 ? '9+' : alertCount}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </NavLink>
+                      ))}
+                    </motion.div>
                   )}
-                </NavLink>
-              ))}
-            </div>
-          )
+                </AnimatePresence>
+              </div>
+            )
           })}
 
           {/* Admin-only group */}
-          {profile?.role === 'Admin' && (
-            <div className="mb-0.5">
-              {sidebarOpen && (
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700 px-2.5 pt-2.5 pb-1">Admin</p>
-              )}
-              <NavLink
-                to="/users"
-                title={!sidebarOpen ? 'User Management' : undefined}
-                className={({ isActive }) =>
-                  `relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group ${
-                    !sidebarOpen ? 'justify-center' : ''
-                  } ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-300'}`
-                }
-                style={({ isActive }) => isActive ? {
-                  background: 'linear-gradient(135deg, rgba(22,163,74,0.14) 0%, rgba(22,163,74,0.07) 100%)',
-                  border: '1px solid rgba(22,163,74,0.22)',
-                  boxShadow: '0 0 14px rgba(22,163,74,0.1)'
-                } : { border: '1px solid transparent' }}
-              >
-                {({ isActive }) => (
-                  <>
-                    {isActive && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] rounded-r-full"
-                        style={{ background: 'linear-gradient(180deg,#4ade80,#16a34a)', boxShadow: '0 0 8px rgba(74,222,128,0.8)' }} />
-                    )}
-                    <Users size={14} className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-600 group-hover:text-gray-300'}`} />
-                    {sidebarOpen && <span className="truncate">User Management</span>}
-                  </>
+          {profile?.role === 'Admin' && (() => {
+            const adminCollapsed = collapsedGroups.has('Admin')
+            return (
+              <div className="mb-0.5">
+                {sidebarOpen && (
+                  <button
+                    onClick={() => toggleGroup('Admin')}
+                    className="w-full flex items-center justify-between px-2.5 pt-2.5 pb-1 group/section cursor-pointer"
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700 group-hover/section:text-gray-500 transition-colors">
+                      Admin
+                    </p>
+                    {adminCollapsed
+                      ? <ChevronRight size={10} className="text-gray-700 group-hover/section:text-gray-500 transition-colors flex-shrink-0" />
+                      : <ChevronDown size={10} className="text-gray-700 group-hover/section:text-gray-500 transition-colors flex-shrink-0" />
+                    }
+                  </button>
                 )}
-              </NavLink>
-            </div>
-          )}
+                <AnimatePresence initial={false}>
+                  {(!adminCollapsed || !sidebarOpen) && (
+                    <motion.div
+                      key="admin-items"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      <NavLink
+                        to="/users"
+                        title={!sidebarOpen ? 'User Management' : undefined}
+                        className={({ isActive }) =>
+                          `relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group ${
+                            !sidebarOpen ? 'justify-center' : ''
+                          } ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-300'}`
+                        }
+                        style={({ isActive }) => isActive ? {
+                          background: 'linear-gradient(135deg, rgba(22,163,74,0.14) 0%, rgba(22,163,74,0.07) 100%)',
+                          border: '1px solid rgba(22,163,74,0.22)',
+                          boxShadow: '0 0 14px rgba(22,163,74,0.1)'
+                        } : { border: '1px solid transparent' }}
+                      >
+                        {({ isActive }) => (
+                          <>
+                            {isActive && (
+                              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] rounded-r-full"
+                                style={{ background: 'linear-gradient(180deg,#4ade80,#16a34a)', boxShadow: '0 0 8px rgba(74,222,128,0.8)' }} />
+                            )}
+                            <Users size={14} className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-600 group-hover:text-gray-300'}`} />
+                            {sidebarOpen && <span className="truncate">User Management</span>}
+                          </>
+                        )}
+                      </NavLink>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )
+          })()}
         </nav>
 
         {/* User footer */}

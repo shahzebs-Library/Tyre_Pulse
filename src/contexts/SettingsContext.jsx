@@ -15,13 +15,24 @@ const SettingsContext = createContext({
 })
 
 export function SettingsProvider({ children }) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [appSettings, setAppSettings] = useState({
     cost_per_tyre: 1200,
     company_name: 'TyrePulse',
     currency: 'SAR',
   })
-  const [activeCountry, setActiveCountry] = useState('All')
+  const [activeCountry, setActiveCountryInternal] = useState('All')
+
+  function setActiveCountry(c) {
+    if (profile && profile.role !== 'Admin' && profile.country?.length > 0) return
+    setActiveCountryInternal(c)
+  }
+
+  useEffect(() => {
+    if (profile && profile.role !== 'Admin' && profile.country?.length > 0) {
+      setActiveCountryInternal(profile.country[0])
+    }
+  }, [profile])
 
   const activeCurrency = activeCountry === 'All'
     ? appSettings.currency
@@ -44,7 +55,7 @@ export function SettingsProvider({ children }) {
   return (
     <SettingsContext.Provider value={{
       appSettings, refreshSettings,
-      activeCountry, setActiveCountry,
+      activeCountry, setActiveCountry: setActiveCountry,
       activeCurrency,
     }}>
       {children}

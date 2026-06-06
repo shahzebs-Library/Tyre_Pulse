@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap } from 'lucide-react'
+import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare } from 'lucide-react'
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -28,6 +28,16 @@ const ALL_TYPES = [...INSPECTION_TYPES, ...OBSERVATION_TYPES, ...TRAINING_TYPES]
 const STATUSES = ['Scheduled', 'In Progress', 'Done', 'Overdue', 'Cancelled']
 const SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
 
+const TYRE_POSITIONS = {
+  'Pickup':        ['FL', 'FR', 'RL', 'RR'],
+  'Wheel Loader':  ['FL', 'FR', 'RL', 'RR'],
+  'Skid Loader':   ['FL', 'FR', 'RL', 'RR'],
+  'Canter':        ['FL', 'FR', 'RLO', 'RLI', 'RRO', 'RRI'],
+  'Tri-mixer':     ['FL1', 'FL2', 'FR1', 'FR2', 'RL1', 'RL2', 'RL3', 'RL4', 'RR1', 'RR2', 'RR3', 'RR4'],
+  'Concrete Pump': ['FL1', 'FL2', 'FR1', 'FR2', 'RL1', 'RL2', 'RL3', 'RL4', 'RR1', 'RR2', 'RR3', 'RR4', 'RL5', 'RR5'],
+}
+const DEFAULT_POSITIONS = ['FL', 'FR', 'RL', 'RR']
+
 const EMPTY_FORM = {
   title: '', inspection_type: 'Routine', site: '', asset_no: '', tyre_serial: '',
   scheduled_date: '', status: 'Scheduled', findings: '', inspector: '', notes: '',
@@ -49,8 +59,24 @@ export default function Inspections() {
   const [search, setSearch]             = useState('')
   const [deleteId, setDeleteId]         = useState(null)
   const [activeTab, setActiveTab]       = useState('all')
-  const [raisingAction, setRaisingAction] = useState(null) // inspection row for raise-action modal
+  const [raisingAction, setRaisingAction] = useState(null)
   const fileRef = useRef(null)
+
+  // Checklist tab state
+  const [clAsset, setClAsset]         = useState('')
+  const [clSite, setClSite]           = useState('')
+  const [clDate, setClDate]           = useState(new Date().toISOString().split('T')[0])
+  const [clInspector, setClInspector] = useState('')
+  const [clFleetInfo, setClFleetInfo] = useState(null)
+  const [clPositions, setClPositions] = useState([])
+  const [clNotes, setClNotes]         = useState('')
+  const [clSaving, setClSaving]       = useState(false)
+  const [clSaved, setClSaved]         = useState(null)
+  const [clLookingUp, setClLookingUp] = useState(false)
+
+  useEffect(() => {
+    if (profile?.full_name && !clInspector) setClInspector(profile.full_name)
+  }, [profile])
 
   async function load() {
     setLoading(true)
@@ -170,6 +196,62 @@ export default function Inspections() {
     setRaisingAction(null)
   }
 
+  async function loadFleetInfo(assetNo) {
+    if (!assetNo.trim()) return
+    setClLookingUp(true)
+    const { data } = await supabase.from('vehicle_fleet').select('vehicle_type, asset_no, site').eq('asset_no', assetNo.trim()).maybeSingle()
+    if (data) {
+      setClFleetInfo(data)
+      const positions = TYRE_POSITIONS[data.vehicle_type] || DEFAULT_POSITIONS
+      setClPositions(positions.map(pos => ({ position: pos, pressure: '', condition: 'Good', treadDepth: '' })))
+      if (data.site && !clSite) setClSite(data.site)
+    } else {
+      setClFleetInfo(null)
+      setClPositions(DEFAULT_POSITIONS.map(pos => ({ position: pos, pressure: '', condition: 'Good', treadDepth: '' })))
+    }
+    setClLookingUp(false)
+  }
+
+  async function saveChecklist() {
+    if (!clAsset.trim() || clPositions.length === 0) return
+    setClSaving(true)
+    const payload = {
+      title: `Daily Tyre Checklist: ${clAsset} (${clDate})`,
+      inspection_type: 'Daily Checklist',
+      site: clSite,
+      asset_no: clAsset.trim(),
+      scheduled_date: clDate,
+      status: 'Done',
+      completed_date: clDate,
+      inspector: clInspector,
+      findings: JSON.stringify(clPositions),
+      notes: clNotes,
+      country: activeCountry !== 'All' ? activeCountry : null,
+      created_by: profile?.id ?? null,
+    }
+    const { data, error } = await supabase.from('inspections').insert(payload).select().single()
+    if (!error) { setClSaved(data); await load() }
+    setClSaving(false)
+  }
+
+  function exportChecklistPdf() {
+    if (!clSaved) return
+    let tyreData = []
+    try { tyreData = JSON.parse(clSaved.findings || '[]') } catch { tyreData = [] }
+    exportToPdf(
+      tyreData,
+      [
+        { key: 'position', header: 'Position' },
+        { key: 'pressure', header: 'Pressure (PSI)' },
+        { key: 'condition', header: 'Condition' },
+        { key: 'treadDepth', header: 'Tread (mm)' },
+      ],
+      `Daily Tyre Inspection: ${clSaved.asset_no} · ${clSaved.scheduled_date}`,
+      `TyrePulse_Checklist_${clSaved.asset_no}`,
+      'landscape'
+    )
+  }
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading…</div>
 
   const tabConfig = [
@@ -177,6 +259,7 @@ export default function Inspections() {
     { key: 'inspections',  label: 'Inspections',  icon: ClipboardList,   count: counts.inspections },
     { key: 'observations', label: 'Observations', icon: Eye,             count: counts.observations },
     { key: 'training',     label: 'Training',     icon: GraduationCap,   count: counts.training },
+    { key: 'checklist',    label: 'Checklist',    icon: CheckSquare,     count: null },
   ]
 
   const defaultType = activeTab === 'observations' ? 'Site Observation'
@@ -254,7 +337,126 @@ export default function Inspections() {
         ))}
       </div>
 
-      {/* Status filter pills */}
+      {/* Checklist tab content */}
+      {activeTab === 'checklist' && (
+        <div className="space-y-4">
+          {clSaved ? (
+            <div className="card">
+              <div className="flex items-center gap-3 mb-4">
+                <CheckSquare size={20} className="text-green-400" />
+                <h3 className="text-lg font-semibold text-white">Checklist Saved</h3>
+              </div>
+              <p className="text-gray-400 text-sm mb-4">
+                Inspection for <span className="text-white font-mono">{clSaved.asset_no}</span> on {clSaved.scheduled_date} has been saved.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={exportChecklistPdf} className="btn-secondary flex items-center gap-2 text-sm">
+                  <FileText size={14} /> Export PDF
+                </button>
+                <button onClick={() => { setClSaved(null); setClAsset(''); setClPositions([]); setClFleetInfo(null); setClNotes('') }}
+                  className="btn-primary text-sm">
+                  New Checklist
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="card space-y-4">
+              <h3 className="text-lg font-semibold text-white">Daily Tyre Inspection</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Asset Number</label>
+                  <div className="flex gap-2">
+                    <input className="input flex-1" placeholder="e.g. CM-0123" value={clAsset}
+                      onChange={e => setClAsset(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && loadFleetInfo(clAsset)} />
+                    <button onClick={() => loadFleetInfo(clAsset)} disabled={clLookingUp || !clAsset.trim()}
+                      className="btn-secondary px-3 text-sm disabled:opacity-50">
+                      {clLookingUp ? '...' : 'Load'}
+                    </button>
+                  </div>
+                  {clFleetInfo && (
+                    <p className="text-xs text-green-400 mt-1">{clFleetInfo.vehicle_type} · {(TYRE_POSITIONS[clFleetInfo.vehicle_type] || DEFAULT_POSITIONS).length} tyres</p>
+                  )}
+                </div>
+                <div>
+                  <label className="label">Site</label>
+                  <input className="input" placeholder="Site name" value={clSite}
+                    onChange={e => setClSite(e.target.value)} list="cl-sites" />
+                  <datalist id="cl-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
+                </div>
+                <div>
+                  <label className="label">Inspector</label>
+                  <input className="input" placeholder="Inspector name" value={clInspector}
+                    onChange={e => setClInspector(e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">Date</label>
+                  <input type="date" className="input" value={clDate} onChange={e => setClDate(e.target.value)} />
+                </div>
+              </div>
+
+              {clPositions.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-gray-300 border-b border-gray-700 pb-2">
+                    Tyre Positions ({clPositions.length})
+                  </h4>
+                  {clPositions.map((pos, i) => (
+                    <div key={pos.position} className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/40 flex-wrap">
+                      <div className="w-12 text-center text-sm font-mono font-bold text-green-400 flex-shrink-0">{pos.position}</div>
+                      <div className="flex-1 min-w-28">
+                        <p className="text-xs text-gray-500 mb-1">Pressure (PSI)</p>
+                        <input type="number" className="input py-1.5 text-sm" placeholder="PSI" value={pos.pressure}
+                          onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, pressure: e.target.value } : x))} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Condition</p>
+                        <div className="flex gap-1">
+                          {[['Good','✅'],['Wear','⚠️'],['Damage','❌']].map(([cond, emoji]) => (
+                            <button key={cond} onClick={() => setClPositions(p => p.map((x, j) => j === i ? { ...x, condition: cond } : x))}
+                              style={{ minWidth: 44, minHeight: 44 }}
+                              title={cond}
+                              className={`rounded-md text-lg border transition-all ${
+                                pos.condition === cond
+                                  ? cond === 'Good' ? 'bg-green-900/50 border-green-600' : cond === 'Wear' ? 'bg-yellow-900/50 border-yellow-600' : 'bg-red-900/50 border-red-600'
+                                  : 'bg-gray-800 border-gray-700 opacity-40 hover:opacity-70'
+                              }`}
+                            >{emoji}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-24">
+                        <p className="text-xs text-gray-500 mb-1">Tread (mm)</p>
+                        <input type="number" className="input py-1.5 text-sm" placeholder="mm" value={pos.treadDepth}
+                          onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, treadDepth: e.target.value } : x))} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {clPositions.length === 0 && clAsset.trim() && (
+                <p className="text-gray-500 text-sm text-center py-4">
+                  Click "Load" to auto-detect tyre positions for this vehicle, or enter asset number and press Enter.
+                </p>
+              )}
+
+              <div>
+                <label className="label">General Notes</label>
+                <textarea className="input h-20 resize-none" placeholder="General observations..."
+                  value={clNotes} onChange={e => setClNotes(e.target.value)} />
+              </div>
+
+              <button onClick={saveChecklist} disabled={clSaving || !clAsset.trim() || clPositions.length === 0}
+                className="btn-primary w-full disabled:opacity-50">
+                {clSaving ? 'Saving...' : 'Save Inspection'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Status filter pills, search, and table — hidden in checklist mode */}
+      {activeTab !== 'checklist' && <>
       <div className="flex flex-wrap gap-2">
         {[['all', 'All', 'bg-gray-800 text-gray-300 border-gray-700'],
           ['Overdue', 'Overdue', 'bg-red-900/30 text-red-400 border-red-700/50'],
@@ -374,6 +576,7 @@ export default function Inspections() {
           </tbody>
         </table>
       </div>
+      </>}
 
       {/* Add / Edit Modal */}
       {form !== null && (

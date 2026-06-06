@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES, COUNTRY_LABEL } from '../contexts/SettingsContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -8,10 +8,11 @@ import {
   ClipboardList, Search, Upload, Settings, LogOut,
   Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
   Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, Sparkles,
-  Sun, Moon, Truck, AlertOctagon, FileText,
+  Sun, Moon, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
+import TpLogo from '../assets/logo.svg'
 
 const NAV_GROUPS = [
   {
@@ -30,6 +31,7 @@ const NAV_GROUPS = [
       { to: '/fleet',        label: 'Fleet Analytics',    icon: GitBranch },
       { to: '/kpi',          label: 'KPI Scorecard',      icon: ClipboardCheck },
       { to: '/country-comp', label: 'Country Comparison', icon: Globe },
+      { to: '/comparison',   label: 'Comparison',         icon: GitCompare },
     ],
   },
   {
@@ -42,6 +44,7 @@ const NAV_GROUPS = [
       { to: '/accidents',    label: 'Accidents',          icon: AlertOctagon },
       { to: '/rca',          label: 'Root Cause',         icon: Search },
       { to: '/inspections',  label: 'Inspections',        icon: ClipboardCheck },
+      { to: '/gate-pass',    label: 'Gate Pass',          icon: ShieldCheck },
       { to: '/reports',      label: 'Reports',            icon: FileText },
     ],
   },
@@ -51,6 +54,7 @@ const NAV_GROUPS = [
       { to: '/alerts',          label: 'Alerts',           icon: Bell },
       { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle, adminOnly: true },
       { to: '/vehicle-history', label: 'Vehicle History',  icon: Car,           adminOnly: true },
+      { to: '/serial-tracker',  label: 'Serial Tracker',   icon: ScanLine },
       { to: '/ai',              label: 'Smart Analytics',  icon: Sparkles,      adminOnly: true },
     ],
   },
@@ -77,6 +81,7 @@ export default function Layout({ children }) {
   const { activeCountry, setActiveCountry } = useSettings()
   const { theme, toggleTheme }              = useTheme()
   const navigate     = useNavigate()
+  const location     = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [searchOpen, setSearchOpen]   = useState(false)
   const [query, setQuery]             = useState('')
@@ -85,6 +90,14 @@ export default function Layout({ children }) {
   const [alertCount, setAlertCount]   = useState(0)
   const searchRef   = useRef(null)
   const debounceRef = useRef(null)
+
+  useEffect(() => {
+    if (location.pathname === '/upload') {
+      setSidebarOpen(false)
+    } else if (window.innerWidth >= 1024) {
+      setSidebarOpen(true)
+    }
+  }, [location.pathname])
 
   useEffect(() => {
     async function fetchAlertCount() {
@@ -159,7 +172,7 @@ export default function Layout({ children }) {
 
         {/* Logo */}
         <div className={`flex items-center h-13 px-3 py-3 border-b border-white/5 flex-shrink-0 ${!sidebarOpen ? 'justify-center' : ''}`}>
-          {sidebarOpen && <div className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: '#15803d' }}>T</div>}
+          {sidebarOpen && <img src={TpLogo} alt="" style={{ width: 24, height: 24, flexShrink: 0 }} />}
           {sidebarOpen && <span className="ml-2.5 font-bold text-white tracking-tight">TyrePulse</span>}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -202,12 +215,22 @@ export default function Layout({ children }) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-1 px-2">
-          {NAV_GROUPS.map(({ label, items }) => (
+          {NAV_GROUPS.map(({ label, items }) => {
+            const visibleItems = items
+              .filter(item => !item.adminOnly || profile?.role === 'Admin')
+              .filter(item => {
+                if (profile?.role === 'Inspector') {
+                  return item.to === '/inspections' || item.to === '/settings'
+                }
+                return true
+              })
+            if (visibleItems.length === 0) return null
+            return (
             <div key={label} className="mb-0.5">
               {sidebarOpen && (
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700 px-2.5 pt-2.5 pb-1">{label}</p>
               )}
-              {items.filter(item => !item.adminOnly || profile?.role === 'Admin').map(({ to, label: lbl, icon: Icon, end }) => (
+              {visibleItems.map(({ to, label: lbl, icon: Icon, end }) => (
                 <NavLink
                   key={to} to={to} end={end}
                   title={!sidebarOpen ? lbl : undefined}
@@ -232,7 +255,8 @@ export default function Layout({ children }) {
                 </NavLink>
               ))}
             </div>
-          ))}
+          )
+          })}
 
           {/* Admin-only group */}
           {profile?.role === 'Admin' && (

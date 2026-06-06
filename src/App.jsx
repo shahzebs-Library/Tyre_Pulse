@@ -30,6 +30,9 @@ import AuditTrail from './pages/AuditTrail'
 import ResetPassword from './pages/ResetPassword'
 import Accidents from './pages/Accidents'
 import Reports from './pages/Reports'
+import GatePass from './pages/GatePass'
+import SerialTracker from './pages/SerialTracker'
+import Comparison from './pages/Comparison'
 
 export default function App() {
   return (
@@ -69,8 +72,11 @@ export default function App() {
                     <Route path="/audit"       element={<RoleRoute allowed={['Admin']}><AuditTrail /></RoleRoute>} />
                     <Route path="/settings"    element={<Settings />} />
                     <Route path="/users"       element={<RoleRoute allowed={['Admin']}><UserManagement /></RoleRoute>} />
-                    <Route path="/reports"     element={<Reports />} />
-                    <Route path="*"            element={<Navigate to="/" replace />} />
+                    <Route path="/reports"        element={<Reports />} />
+                    <Route path="/gate-pass"     element={<GatePass />} />
+                    <Route path="/serial-tracker" element={<SerialTracker />} />
+                    <Route path="/comparison"    element={<Comparison />} />
+                    <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>

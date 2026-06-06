@@ -5,7 +5,13 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { Bar } from 'react-chartjs-2'
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement,
+  Title, Tooltip as ChartTooltip, Legend,
+} from 'chart.js'
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, ChartTooltip, Legend)
 
 const STATUSES = [
   'Reported',
@@ -129,8 +135,31 @@ export default function Accidents() {
       const k = monthKey(r.incident_date)
       if (k && counts[k] !== undefined) counts[k]++
     })
-    return keys.map(k => ({ month: monthLabel(k), count: counts[k] }))
+    return {
+      labels: keys.map(k => monthLabel(k)),
+      datasets: [{
+        label: 'Incidents',
+        data: keys.map(k => counts[k]),
+        backgroundColor: 'rgba(22,163,74,0.7)',
+        borderColor: '#16a34a',
+        borderWidth: 1,
+        borderRadius: 3,
+      }],
+    }
   }, [records])
+
+  const chartOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { backgroundColor: '#1f2937', titleColor: '#fff', bodyColor: '#9ca3af', borderColor: '#374151', borderWidth: 1 },
+    },
+    scales: {
+      x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: '#1f2937' } },
+      y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: '#374151' }, beginAtZero: true },
+    },
+  }
 
   const statusCounts = useMemo(() => {
     const c = {}
@@ -305,19 +334,9 @@ export default function Accidents() {
       {/* Bar chart */}
       <div className="card">
         <p className="text-sm font-semibold text-gray-300 mb-3">Incidents per Month (last 12 months)</p>
-        <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: -20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis dataKey="month" tick={{ fill: '#9CA3AF', fontSize: 11 }} />
-            <YAxis tick={{ fill: '#9CA3AF', fontSize: 11 }} allowDecimals={false} />
-            <Tooltip
-              contentStyle={{ background: '#1F2937', border: '1px solid #374151', borderRadius: 6 }}
-              labelStyle={{ color: '#F9FAFB', fontSize: 12 }}
-              itemStyle={{ color: '#16a34a' }}
-            />
-            <Bar dataKey="count" fill="#16a34a" radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <div style={{ height: 160 }}>
+          <Bar data={chartData} options={chartOpts} />
+        </div>
       </div>
 
       {/* Status funnel */}

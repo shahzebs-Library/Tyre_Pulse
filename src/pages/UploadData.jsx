@@ -115,6 +115,10 @@ export default function UploadData() {
   // ── Duplicate detection state ────────────────────────────────────────────────
   const [dupes, setDupes]             = useState([])   // existing serial_no matches
   const [skipDupes, setSkipDupes]     = useState(true)
+  // Cross-user smart dedup
+  const [dupCheck, setDupCheck]       = useState(null) // { exact: [], conflicts: [], reupload: bool }
+  const [skipIds, setSkipIds]         = useState(new Set())
+  const [dupReview, setDupReview]     = useState(false)
 
   // ── Upload progress ──────────────────────────────────────────────────────────
   const [progress, setProgress]       = useState({ done: 0, total: 0 })
@@ -220,21 +224,48 @@ export default function UploadData() {
   }
 
   async function buildPreview() {
-    // Build partial records for preview
     const built = buildRows(headers, rows, mapping)
     setPreview(built.slice(0, 5))
+    setSkipIds(new Set())
+    setDupCheck(null)
 
-    // ── Duplicate detection: check serial_no values against DB ────────────────
     const serials = [...new Set(built.map(r => r.serial_no).filter(Boolean))]
-    if (serials.length > 0) {
+    if (serials.length > 0 && uploadType === 'tyres') {
       const BATCH = 500
       const existing = []
       for (let i = 0; i < serials.length; i += BATCH) {
-        const { data } = await supabase.from('tyre_records').select('serial_no').in('serial_no', serials.slice(i, i + BATCH))
+        const { data } = await supabase
+          .from('tyre_records')
+          .select('serial_no, asset_no, issue_date, id')
+          .in('serial_no', serials.slice(i, i + BATCH))
         existing.push(...(data ?? []))
       }
       const existingSet = new Set(existing.map(r => r.serial_no))
       setDupes([...existingSet])
+
+      // Smart cross-user dedup
+      if (existing.length > 0) {
+        const bySerial = {}
+        existing.forEach(e => { bySerial[e.serial_no] = e })
+
+        const exactDups = [], conflicts = []
+        built.forEach((row, idx) => {
+          if (!row.serial_no) return
+          const match = bySerial[row.serial_no]
+          if (!match) return
+          if (match.asset_no === row.asset_no && match.issue_date === row.issue_date) {
+            exactDups.push({ idx, row, existing: match })
+          } else if (match.asset_no && row.asset_no && match.asset_no !== row.asset_no) {
+            conflicts.push({ idx, row, existing: match })
+          }
+        })
+
+        const reupload = serials.length > 5 && exactDups.length / serials.length > 0.7
+
+        if (exactDups.length > 0 || conflicts.length > 0 || reupload) {
+          setDupCheck({ exact: exactDups, conflicts, reupload })
+        }
+      }
     } else {
       setDupes([])
     }
@@ -297,6 +328,11 @@ export default function UploadData() {
       uploaded_by: profile?.id,
       upload_batch_id: batchId,
     }))
+
+    // Filter out rows marked for skipping via smart dedup review
+    if (skipIds.size > 0) {
+      records = records.filter((_, idx) => !skipIds.has(idx))
+    }
 
     // Filter duplicates if requested
     if (skipDupes && dupes.length > 0) {
@@ -375,6 +411,7 @@ export default function UploadData() {
     setStep('idle'); setFileName(''); setHeaders([]); setRows([])
     setMapping({}); setPreview([]); setResult(null); setError('')
     setSavedMappingId(null); setMappingSource('guess'); setDupes([]); setSkipDupes(true)
+    setDupCheck(null); setSkipIds(new Set()); setDupReview(false)
     setUploadType('tyres'); setSheetOptions([])
     if (fileRef.current) fileRef.current.value = ''
   }
@@ -532,6 +569,91 @@ export default function UploadData() {
       {/* ── Preview ───────────────────────────────────────────────────────── */}
       {step === 'preview' && (
         <div className="space-y-4">
+          {/* Smart cross-user duplicate check results */}
+          {dupCheck && (
+            <div className="card border-yellow-600/40">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle size={18} className="text-yellow-400" />
+                <span className="font-semibold text-yellow-300">Duplicate Check Results</span>
+              </div>
+              {dupCheck.reupload && (
+                <p className="text-yellow-300 text-sm mb-2">
+                  This looks like data you have already uploaded — {dupCheck.exact.length} matching records found in the database.
+                </p>
+              )}
+              <div className="flex gap-4 text-sm mb-3">
+                {dupCheck.exact.length > 0 && (
+                  <span className="text-red-300">{dupCheck.exact.length} exact duplicate{dupCheck.exact.length !== 1 ? 's' : ''}</span>
+                )}
+                {dupCheck.conflicts.length > 0 && (
+                  <span className="text-orange-300">{dupCheck.conflicts.length} serial conflict{dupCheck.conflicts.length !== 1 ? 's' : ''} (same serial, different asset)</span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {dupCheck.exact.length > 0 && (
+                  <button className="btn-primary text-sm py-1.5 px-3"
+                    onClick={() => setSkipIds(new Set(dupCheck.exact.map(d => d.idx)))}>
+                    Skip duplicates ({dupCheck.exact.length})
+                  </button>
+                )}
+                {(dupCheck.exact.length > 0 || dupCheck.conflicts.length > 0) && (
+                  <button className="px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-gray-300 hover:text-white"
+                    onClick={() => setDupReview(true)}>
+                    Review individually
+                  </button>
+                )}
+                <button className="px-3 py-1.5 text-sm rounded-lg border border-gray-600 text-gray-400 hover:text-white"
+                  onClick={() => { setSkipIds(new Set()); setDupCheck(null) }}>
+                  Upload all anyway
+                </button>
+              </div>
+              {skipIds.size > 0 && (
+                <p className="text-xs text-green-400 mt-2">{skipIds.size} row{skipIds.size !== 1 ? 's' : ''} will be skipped on upload</p>
+              )}
+            </div>
+          )}
+
+          {/* Per-row review modal */}
+          {dupReview && dupCheck && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+              <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6">
+                <h3 className="text-lg font-bold text-white mb-4">Review Duplicates</h3>
+                <div className="space-y-3 mb-4">
+                  {[...dupCheck.exact, ...dupCheck.conflicts].map(({ idx, row, existing, type }) => (
+                    <div key={idx} className={`rounded-lg p-3 border ${skipIds.has(idx) ? 'border-red-800/50 bg-red-900/10 opacity-60' : 'border-gray-700 bg-gray-800/50'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="text-xs space-y-0.5">
+                          <p className="text-white font-mono font-semibold">Row {idx + 1}: {row.serial_no}</p>
+                          <p className="text-gray-400">
+                            {type === 'serial_conflict' ? (
+                              <span className="text-orange-400">Serial conflict: file has {row.asset_no}, DB has {existing.asset_no}</span>
+                            ) : (
+                              <span className="text-red-400">Exact duplicate (same serial + asset + date)</span>
+                            )}
+                          </p>
+                          <p className="text-gray-500">File: {row.asset_no} · {row.issue_date} | DB: {existing.asset_no} · {existing.issue_date}</p>
+                        </div>
+                        <div className="flex gap-1.5 flex-shrink-0">
+                          <button onClick={() => setSkipIds(s => { const n = new Set(s); n.add(idx); return n })}
+                            className="text-xs px-2 py-1 rounded bg-red-900/30 text-red-400 border border-red-800/50 hover:bg-red-900/50">
+                            Skip
+                          </button>
+                          <button onClick={() => setSkipIds(s => { const n = new Set(s); n.delete(idx); return n })}
+                            className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 border border-green-800/50 hover:bg-green-900/50">
+                            Keep
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setDupReview(false)} className="btn-primary flex-1">Done</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Duplicate warning */}
           {dupes.length > 0 && (
             <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-xl p-4">

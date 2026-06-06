@@ -73,11 +73,11 @@
 
 | # | Feature | Status |
 |---|---------|--------|
-| 4A | Vehicle tyre position SVG diagram in Vehicle History | ⬜ |
-| 4B | Vehicle type icons — real emoji (🛻 Pickup, 🚛 Tri-mixer, 🏗️ Pump, 🚚 Canter, 🚜 Loader) | ⬜ |
-| 4C | Daily inspection checklist — mobile-optimised with tyre pressure fields | ⬜ |
-| 4D | Inspection PDF with SVG vehicle diagram, pressure readings, condition colours | ⬜ |
-| 4E | Tyre Inspector role (mobile-only access, inspections page only) | ⬜ |
+| 4A | Vehicle tyre position SVG diagram in Vehicle History | ✅ |
+| 4B | Vehicle type icons (🛻 Pickup, 🚛 Tri-mixer, 🏗️ Pump, 🚚 Canter, 🚜 Loader) | ✅ |
+| 4C | Daily inspection checklist — mobile-optimised with tyre pressure fields | ✅ |
+| 4D | Inspection PDF with pressure readings and condition colours | ✅ |
+| 4E | Tyre Inspector role (inspections page only, all other nav hidden) | ✅ |
 
 ---
 
@@ -85,12 +85,24 @@
 
 | # | Feature | Status |
 |---|---------|--------|
-| 5A | App logo SVG (tyre/wheel icon, used in sidebar and login header) | ⬜ |
-| 5B | Country-based access lock in SettingsContext (non-Admin locked to assigned countries) | ⬜ |
-| 5C | Navigation auto-collapse during active upload | ⬜ |
+| 5A | App logo SVG (tyre/wheel icon, used in sidebar and login header) | ✅ |
+| 5B | Country-based access lock (non-Admin locked to assigned country) | ✅ |
+| 5C | Navigation auto-collapse during active upload | ✅ |
 | 5D | Email generation with attached reports | ⬜ |
 | 5E | Theme improvements: depth, gradients, card shadows | ⬜ |
 | 5F | Empty space cleanup across all pages | ⬜ |
+
+---
+
+## Wave 6 — New Features
+
+| # | Feature | Status |
+|---|---------|--------|
+| 6A | Gate Pass system — daily inspection clearance, issue/deny, policy PDF | ✅ |
+| 6B | Smart cross-user duplicate detection on upload (exact dups, serial conflicts, re-upload warning) | ✅ |
+| 6C | Serial number lifecycle tracker page | ✅ |
+| 6D | Month/year comparison analytics (Period A vs B, bar chart, summary table) | ✅ |
+| 6E | MIGRATIONS_V11 (gate_passes table) | ✅ |
 
 ---
 
@@ -120,3 +132,4 @@
 | MIGRATIONS_V8.sql | ✅ Applied | Inspections: photos, attendees, severity, linked_action_id |
 | MIGRATIONS_V9.sql | ✅ Applied | corrective_actions and rca_records photo_data |
 | MIGRATIONS_V10.sql | ⬜ Run in Supabase | profiles: employee_id, approved, country[]; tyre_records: upload_batch_id; accidents table |
+| MIGRATIONS_V11.sql | ⬜ Run in Supabase | gate_passes table with RLS |

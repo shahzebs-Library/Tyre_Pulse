@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import TpLogo from '../assets/logo.svg'
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -122,7 +123,7 @@ export default function Login() {
               border: '1px solid rgba(22,163,74,0.35)',
               boxShadow: '0 0 32px rgba(22,163,74,0.22), 0 0 8px rgba(22,163,74,0.08) inset',
             }}>
-            <span style={{ fontSize: 38 }}>🔄</span>
+            <img src={TpLogo} alt="TyrePulse" style={{ width: 48, height: 48 }} />
           </div>
           <h1 className="text-4xl font-bold text-white tracking-tight">TyrePulse</h1>
           <p className="text-gray-400 mt-2 text-sm tracking-wide">Tyre Intelligence Platform</p>

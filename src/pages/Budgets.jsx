@@ -18,6 +18,15 @@ const CURRENT_MONTH = new Date().getMonth() + 1
 
 const EMPTY_FORM = { site: '', monthly_budget: 25000, year: CURRENT_YEAR, month: CURRENT_MONTH }
 
+const STATUS_OPTIONS = ['Draft', 'Approved', 'Overspent', 'Closed']
+
+const STATUS_COLORS = {
+  Approved:  'text-green-400',
+  Overspent: 'text-red-400',
+  Draft:     'text-gray-400',
+  Closed:    'text-gray-500',
+}
+
 export default function Budgets() {
   const { profile }   = useAuth()
   const { appSettings, activeCountry } = useSettings()
@@ -275,16 +284,17 @@ export default function Budgets() {
           <div className="card p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr>{['Site', 'Budget (SAR)', 'Spent (SAR)', 'Remaining', 'Utilisation'].map(h => <th key={h} className="table-header">{h}</th>)}</tr></thead>
+                <thead><tr>{['Site', 'Budget (SAR)', 'Spent (SAR)', 'Remaining', 'Progress', 'Status'].map(h => <th key={h} className="table-header">{h}</th>)}</tr></thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={5} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                    <tr><td colSpan={6} className="text-center py-12 text-gray-500">Loading…</td></tr>
                   ) : budgets.length === 0 ? (
-                    <tr><td colSpan={5} className="text-center py-12 text-gray-500">No budgets for this period</td></tr>
+                    <tr><td colSpan={6} className="text-center py-12 text-gray-500">No budgets for this period</td></tr>
                   ) : budgets.map(b => {
                     const spent = getSpend(b.site, filterMonth)
                     const remaining = b.monthly_budget - spent
-                    const pct = b.monthly_budget > 0 ? Math.min(100, (spent / b.monthly_budget) * 100) : 0
+                    const rawPct = b.monthly_budget > 0 ? (spent / b.monthly_budget) * 100 : 0
+                    const pct = Math.min(rawPct, 100)
                     return (
                       <tr key={b.id} className="hover:bg-gray-800/30">
                         <td className="table-cell font-medium text-white">{b.site}</td>
@@ -293,11 +303,24 @@ export default function Budgets() {
                         <td className={`table-cell font-medium ${remaining < 0 ? 'text-red-400' : 'text-green-400'}`}>{remaining.toLocaleString()}</td>
                         <td className="table-cell">
                           <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full ${pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-yellow-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+                            <div className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: rawPct > 100 ? '#ef4444' : '#16a34a' }} />
                             </div>
-                            <span className={`text-xs font-medium ${pct >= 90 ? 'text-red-400' : pct >= 80 ? 'text-yellow-400' : 'text-gray-400'}`}>{pct.toFixed(0)}%</span>
+                            <span className={`text-xs font-medium ${rawPct >= 90 ? 'text-red-400' : rawPct >= 80 ? 'text-yellow-400' : 'text-gray-400'}`}>{rawPct.toFixed(0)}%</span>
                           </div>
+                        </td>
+                        <td className="table-cell">
+                          <select
+                            className={`text-xs bg-transparent border-0 cursor-pointer rounded px-1 py-0.5 focus:outline-none ${STATUS_COLORS[b.status] ?? 'text-gray-400'}`}
+                            value={b.status ?? 'Draft'}
+                            onChange={async e => {
+                              const newStatus = e.target.value
+                              await supabase.from('budgets').update({ status: newStatus }).eq('id', b.id)
+                              setBudgets(prev => prev.map(x => x.id === b.id ? { ...x, status: newStatus } : x))
+                            }}
+                          >
+                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
                         </td>
                       </tr>
                     )

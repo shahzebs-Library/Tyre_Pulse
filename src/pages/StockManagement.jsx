@@ -6,6 +6,12 @@ import { Plus, Save, X, History, FileText, Download } from 'lucide-react'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
+} from 'chart.js'
+import { Bar } from 'react-chartjs-2'
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 const STATUS_BADGE = {
   OK:       'bg-green-900/50 text-green-300 border-green-700/50',
@@ -19,6 +25,19 @@ const EMPTY_FORM = {
 
 const MOVEMENT_TYPES = ['In', 'Out', 'Adjustment', 'Initial', 'Reorder', 'Scrap']
 
+function todayStr() {
+  return new Date().toISOString().slice(0, 10)
+}
+function offsetDate(days) {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+function firstOfMonth() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
 export default function StockManagement() {
   const { profile } = useAuth()
   const { appSettings, activeCountry } = useSettings()
@@ -29,10 +48,17 @@ export default function StockManagement() {
   const [editId, setEditId]         = useState(null)
   const [saving, setSaving]         = useState(false)
   const [error, setError]           = useState('')
-  const [historyFor, setHistoryFor] = useState(null)   // stock_record row
+  const [historyFor, setHistoryFor] = useState(null)
   const [movements, setMovements]   = useState([])
   const [loadingMov, setLoadingMov] = useState(false)
-  const [adjForm, setAdjForm]       = useState(null)    // { qty_change, reason, movement_type }
+  const [adjForm, setAdjForm]       = useState(null)
+
+  // Timeline tab state
+  const [activeTab, setActiveTab]       = useState('stock')   // 'stock' | 'timeline'
+  const [tlFrom, setTlFrom]             = useState(offsetDate(-6))
+  const [tlTo, setTlTo]                 = useState(todayStr())
+  const [tlRecords, setTlRecords]       = useState([])
+  const [tlLoading, setTlLoading]       = useState(false)
 
   useEffect(() => { load() }, [activeCountry])
 
@@ -91,7 +117,6 @@ export default function StockManagement() {
       stockId = ins.id
     }
 
-    // Log movement if qty changed (or initial insert)
     const qtyChange = editId ? newQty - prevQty : newQty
     if (qtyChange !== 0 || !editId) {
       await supabase.from('stock_movements').insert({
@@ -112,7 +137,6 @@ export default function StockManagement() {
     setSaving(false)
   }
 
-  // Quick adjustment (change qty + log)
   async function saveAdjustment() {
     if (!adjForm || adjForm.qty_change === 0) return
     const rec      = historyFor
@@ -143,7 +167,6 @@ export default function StockManagement() {
 
     setAdjForm(null)
     await load()
-    // Refresh movements
     await openHistory({ ...rec, stock_qty: newQty })
     setSaving(false)
   }
@@ -160,6 +183,61 @@ export default function StockManagement() {
     setMovements(data || [])
     setLoadingMov(false)
   }
+
+  // ── Timeline data load ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (activeTab === 'timeline') loadTimeline()
+  }, [activeTab, tlFrom, tlTo, activeCountry])
+
+  async function loadTimeline() {
+    setTlLoading(true)
+    let q = supabase.from('tyre_records')
+      .select('issue_date, qty, site')
+      .gte('issue_date', tlFrom)
+      .lte('issue_date', tlTo)
+      .order('issue_date', { ascending: true })
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    const { data } = await q
+    setTlRecords(data ?? [])
+    setTlLoading(false)
+  }
+
+  // Group timeline records by date
+  const tlByDate = useMemo(() => {
+    const map = {}
+    ;(tlRecords ?? []).forEach(r => {
+      const d = r.issue_date?.slice(0, 10)
+      if (!d) return
+      if (!map[d]) map[d] = { in: 0, out: 0 }
+      const qty = r.qty ?? 1
+      // tyre_records are typically issues/fitments — count as "out"
+      map[d].out += qty
+    })
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
+  }, [tlRecords])
+
+  // Yesterday comparison
+  const todayKey     = todayStr()
+  const yesterdayKey = offsetDate(-1)
+  const todayIssues     = tlByDate.find(([d]) => d === todayKey)?.[1]?.out ?? 0
+  const yesterdayIssues = tlByDate.find(([d]) => d === yesterdayKey)?.[1]?.out ?? 0
+  const changePct = yesterdayIssues > 0
+    ? (((todayIssues - yesterdayIssues) / yesterdayIssues) * 100).toFixed(1)
+    : null
+
+  // Bar chart data
+  const tlChartData = useMemo(() => ({
+    labels: tlByDate.map(([d]) => d),
+    datasets: [{
+      label: 'Net Change (out)',
+      data: tlByDate.map(([, v]) => v.out - v.in),
+      backgroundColor: tlByDate.map(([, v]) => {
+        const net = v.out - v.in
+        return net > 0 ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)'
+      }),
+      borderRadius: 4,
+    }],
+  }), [tlByDate])
 
   // Reorder request PDF
   function generateReorderPdf(rec) {
@@ -195,7 +273,6 @@ export default function StockManagement() {
     doc.save(`reorder-${rec.site.replace(/\s+/g, '-')}-${Date.now()}.pdf`)
   }
 
-  // Exports
   function exportExcel() {
     const rows = records.map(r => ({
       Site:              r.site,
@@ -246,78 +323,216 @@ export default function StockManagement() {
         </div>
       </div>
 
-      {/* Status summary */}
-      <div className="flex gap-3">
-        {Object.entries(counts).map(([s, cnt]) => (
-          <span key={s} className={`text-xs px-3 py-1.5 rounded-full border font-medium ${STATUS_BADGE[s]}`}>
-            {cnt} {s}
-          </span>
+      {/* Tabs */}
+      <div className="flex gap-2">
+        {[['stock', 'Stock Levels'], ['timeline', 'Timeline']].map(([val, label]) => (
+          <button
+            key={val}
+            onClick={() => setActiveTab(val)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === val ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+          >
+            {label}
+          </button>
         ))}
       </div>
 
-      {/* Table */}
-      <div className="card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                {['Site', 'Description', 'Stock', 'Min', 'Critical', 'Reorder Qty', 'Status', 'Action', ''].map(h => (
-                  <th key={h} className="table-header">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={9} className="text-center py-12 text-gray-500">Loading…</td></tr>
-              ) : records.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-12 text-gray-500">No stock records yet</td></tr>
-              ) : records.map(r => {
-                const status = deriveStatus(r)
-                return (
-                  <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
-                    <td className="table-cell font-medium text-white">{r.site}</td>
-                    <td className="table-cell text-gray-300">{r.description ?? '—'}</td>
-                    <td className="table-cell">
-                      <span className={
-                        status === 'Critical' ? 'text-red-400 font-bold' :
-                        status === 'Low' ? 'text-yellow-400 font-semibold' : 'text-green-400 font-semibold'
-                      }>{r.stock_qty}</span>
-                    </td>
-                    <td className="table-cell text-gray-400">{r.min_level}</td>
-                    <td className="table-cell text-gray-400">{r.critical_level}</td>
-                    <td className="table-cell text-gray-400">{r.reorder_qty ?? 0}</td>
-                    <td className="table-cell">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BADGE[status]}`}>{status}</span>
-                    </td>
-                    <td className="table-cell text-gray-400 text-xs max-w-xs truncate">{r.management_action ?? '—'}</td>
-                    <td className="table-cell">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => startEdit(r)} className="text-gray-400 hover:text-blue-400 text-xs transition-colors">Edit</button>
-                        <button
-                          onClick={() => { openHistory(r); setAdjForm({ qty_change: 0, reason: '', movement_type: 'Adjustment', reference_no: '' }) }}
-                          className="text-gray-400 hover:text-purple-400 text-xs transition-colors"
-                          title="Movement history"
-                        >
-                          <History size={14} />
-                        </button>
-                        {status === 'Critical' && (
-                          <button
-                            onClick={() => generateReorderPdf(r)}
-                            title="Generate reorder PDF"
-                            className="text-gray-400 hover:text-orange-400 text-xs transition-colors"
-                          >
-                            <FileText size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
+      {/* ── STOCK LEVELS TAB ─────────────────────────────────────────────────── */}
+      {activeTab === 'stock' && (
+        <>
+          {/* Status summary */}
+          <div className="flex gap-3">
+            {Object.entries(counts).map(([s, cnt]) => (
+              <span key={s} className={`text-xs px-3 py-1.5 rounded-full border font-medium ${STATUS_BADGE[s]}`}>
+                {cnt} {s}
+              </span>
+            ))}
+          </div>
+
+          {/* Table */}
+          <div className="card p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr>
+                    {['Site', 'Description', 'Stock', 'Min', 'Critical', 'Reorder Qty', 'Status', 'Action', ''].map(h => (
+                      <th key={h} className="table-header">{h}</th>
+                    ))}
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr><td colSpan={9} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                  ) : records.length === 0 ? (
+                    <tr><td colSpan={9} className="text-center py-12 text-gray-500">No stock records yet</td></tr>
+                  ) : records.map(r => {
+                    const status = deriveStatus(r)
+                    return (
+                      <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
+                        <td className="table-cell font-medium text-white">{r.site}</td>
+                        <td className="table-cell text-gray-300">{r.description ?? '—'}</td>
+                        <td className="table-cell">
+                          <span className={
+                            status === 'Critical' ? 'text-red-400 font-bold' :
+                            status === 'Low' ? 'text-yellow-400 font-semibold' : 'text-green-400 font-semibold'
+                          }>{r.stock_qty}</span>
+                        </td>
+                        <td className="table-cell text-gray-400">{r.min_level}</td>
+                        <td className="table-cell text-gray-400">{r.critical_level}</td>
+                        <td className="table-cell text-gray-400">{r.reorder_qty ?? 0}</td>
+                        <td className="table-cell">
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BADGE[status]}`}>{status}</span>
+                        </td>
+                        <td className="table-cell text-gray-400 text-xs max-w-xs truncate">{r.management_action ?? '—'}</td>
+                        <td className="table-cell">
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => startEdit(r)} className="text-gray-400 hover:text-blue-400 text-xs transition-colors">Edit</button>
+                            <button
+                              onClick={() => { openHistory(r); setAdjForm({ qty_change: 0, reason: '', movement_type: 'Adjustment', reference_no: '' }) }}
+                              className="text-gray-400 hover:text-purple-400 text-xs transition-colors"
+                              title="Movement history"
+                            >
+                              <History size={14} />
+                            </button>
+                            {status === 'Critical' && (
+                              <button
+                                onClick={() => generateReorderPdf(r)}
+                                title="Generate reorder PDF"
+                                className="text-gray-400 hover:text-orange-400 text-xs transition-colors"
+                              >
+                                <FileText size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── TIMELINE TAB ──────────────────────────────────────────────────────── */}
+      {activeTab === 'timeline' && (
+        <div className="space-y-4">
+          {/* Comparison stat */}
+          <div className="card flex flex-wrap items-center gap-4">
+            <div className="text-sm text-gray-400">
+              <span className="font-medium text-white">Today:</span> {todayIssues} issues
+            </div>
+            <span className="text-gray-600">·</span>
+            <div className="text-sm text-gray-400">
+              <span className="font-medium text-white">Yesterday:</span> {yesterdayIssues} issues
+            </div>
+            <span className="text-gray-600">·</span>
+            <div className="text-sm">
+              <span className="text-gray-400">Change: </span>
+              {changePct === null ? (
+                <span className="text-gray-500">N/A</span>
+              ) : (
+                <span className={+changePct > 0 ? 'text-red-400 font-medium' : +changePct < 0 ? 'text-green-400 font-medium' : 'text-gray-400'}>
+                  {+changePct > 0 ? '+' : ''}{changePct}%
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Date range picker */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <label className="label text-xs whitespace-nowrap">From</label>
+              <input type="date" className="input w-40 text-sm" value={tlFrom} onChange={e => setTlFrom(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="label text-xs whitespace-nowrap">To</label>
+              <input type="date" className="input w-40 text-sm" value={tlTo} onChange={e => setTlTo(e.target.value)} />
+            </div>
+            {/* Quick chips */}
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { label: 'Today',       from: todayStr(),    to: todayStr() },
+                { label: 'Yesterday',   from: offsetDate(-1), to: offsetDate(-1) },
+                { label: 'Last 7 days', from: offsetDate(-6), to: todayStr() },
+                { label: 'Last 30 days',from: offsetDate(-29), to: todayStr() },
+                { label: 'This Month',  from: firstOfMonth(), to: todayStr() },
+              ].map(({ label, from, to }) => (
+                <button
+                  key={label}
+                  onClick={() => { setTlFrom(from); setTlTo(to) }}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                    tlFrom === from && tlTo === to
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Bar chart */}
+          {tlByDate.length > 0 && (
+            <div className="card">
+              <p className="text-sm text-gray-400 mb-3">Daily Issues (Net)</p>
+              <div style={{ height: 220 }}>
+                <Bar
+                  data={tlChartData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                      x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
+                      y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' }, beginAtZero: true },
+                    },
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Daily table */}
+          <div className="card p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr>
+                    {['Date', 'Items In', 'Items Out', 'Net Change'].map(h => (
+                      <th key={h} className="table-header">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tlLoading ? (
+                    <tr><td colSpan={4} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                  ) : tlByDate.length === 0 ? (
+                    <tr><td colSpan={4} className="text-center py-12 text-gray-500">No records in this period</td></tr>
+                  ) : tlByDate.map(([date, vals]) => {
+                    const net = vals.in - vals.out
+                    return (
+                      <tr key={date} className="hover:bg-gray-800/30 transition-colors">
+                        <td className="table-cell font-medium text-white">{date}</td>
+                        <td className="table-cell text-green-400">{vals.in}</td>
+                        <td className="table-cell text-red-400">{vals.out}</td>
+                        <td className="table-cell">
+                          <span className={`font-semibold ${net > 0 ? 'text-green-400' : net < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                            {net > 0 ? '+' : ''}{net}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Movement History Modal */}
       {historyFor && (

@@ -27,6 +27,7 @@ export default function FleetAnalytics() {
   const [sortBy, setSortBy]     = useState('count')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
+  const [siteFilter, setSiteFilter] = useState('')
 
   useEffect(() => {
     let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: false })
@@ -45,14 +46,21 @@ export default function FleetAnalytics() {
     return arr
   }, [assetMetrics, sortBy])
 
+  // Unique sites derived from raw records
+  const allSites = useMemo(() =>
+    [...new Set(records.map(r => r.site).filter(Boolean))].sort(),
+    [records]
+  )
+
   const filtered = useMemo(() => {
     return sorted.filter(a => {
       if (search && !a.assetNo.toLowerCase().includes(search.toLowerCase())) return false
       if (dateFrom && a.lastSeen && a.lastSeen < dateFrom) return false
       if (dateTo && a.lastSeen && a.lastSeen > dateTo) return false
+      if (siteFilter && !a.sites.includes(siteFilter)) return false
       return true
     })
-  }, [sorted, search, dateFrom, dateTo])
+  }, [sorted, search, dateFrom, dateTo, siteFilter])
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading fleet data…</div>
 
@@ -104,7 +112,7 @@ export default function FleetAnalytics() {
           </select>
         </div>
         <div className="flex flex-wrap gap-3 mb-4 items-center">
-          <span className="text-xs text-gray-500">Last-seen date:</span>
+          <span className="text-xs text-gray-400">Date range:</span>
           <input
             type="date"
             className="input w-40"
@@ -128,30 +136,20 @@ export default function FleetAnalytics() {
               Clear dates
             </button>
           )}
-        </div>
-        <div className="flex flex-wrap gap-3 mb-4 items-center">
-          <span className="text-xs text-gray-400">Last record date:</span>
-          <input
-            type="date"
-            className="input w-40"
-            value={dateFrom}
-            onChange={e => setDateFrom(e.target.value)}
-            placeholder="From"
-          />
-          <span className="text-gray-500 text-xs">to</span>
-          <input
-            type="date"
-            className="input w-40"
-            value={dateTo}
-            onChange={e => setDateTo(e.target.value)}
-            placeholder="To"
-          />
-          {(dateFrom || dateTo) && (
+          <select
+            className="input w-44"
+            value={siteFilter}
+            onChange={e => setSiteFilter(e.target.value)}
+          >
+            <option value="">All sites</option>
+            {allSites.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {siteFilter && (
             <button
+              onClick={() => setSiteFilter('')}
               className="text-xs text-gray-400 hover:text-white"
-              onClick={() => { setDateFrom(''); setDateTo('') }}
             >
-              Clear
+              Clear site
             </button>
           )}
         </div>

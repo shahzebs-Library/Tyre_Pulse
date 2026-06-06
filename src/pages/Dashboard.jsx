@@ -628,7 +628,7 @@ export default function Dashboard() {
 
         <div className="card text-center col-span-1">
           <div className="text-4xl font-bold mb-1 text-blue-400">
-            {tyreLife?.avgLifeDays != null ? tyreLife.avgLifeDays : '—'}
+            {tyreLife?.avgLifeDays != null ? tyreLife.avgLifeDays : 'N/A'}
           </div>
           <p className="text-gray-400 text-sm flex items-center justify-center gap-1">
             <Clock size={13} /> Avg Tyre Life (days)
@@ -789,7 +789,7 @@ export default function Dashboard() {
           <div className="h-52 flex items-center justify-center">
             {categoryData
               ? <Doughnut data={categoryData} options={NO_SCALE} />
-              : <p className="text-gray-500 text-sm">No classified records — run Data Cleaning to populate</p>}
+              : <p className="text-gray-500 text-sm">No classified records · run Data Cleaning to populate</p>}
           </div>
         </div>
       </div>
@@ -836,13 +836,13 @@ export default function Dashboard() {
                 <div key={r.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">
                   <div>
                     <Link to={`/vehicle-history?asset=${r.asset_no}`} className="text-sm text-white font-medium hover:text-green-400 transition-colors">
-                      {r.asset_no ?? '—'}
+                      {r.asset_no ?? 'N/A'}
                     </Link>
                     <p className="text-xs text-gray-400">{r.brand} · {r.site}</p>
                   </div>
                   <div className="text-right">
                     <span className={`badge ${riskBadge(r.risk_level)}`}>{r.risk_level ?? 'Unknown'}</span>
-                    <p className="text-xs text-gray-500 mt-1">{r.issue_date ?? '—'}</p>
+                    <p className="text-xs text-gray-500 mt-1">{r.issue_date ?? 'N/A'}</p>
                   </div>
                 </div>
               ))}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { useSettings } from '../contexts/SettingsContext'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import {
   bucketByMonth, forecastMonthly, linearRegression,
   computeMonthlyKpiActuals, sum,
@@ -44,6 +44,7 @@ export default function KpiScorecard() {
   const [loading, setLoading]   = useState(true)
   const [saving, setSaving]     = useState(false)
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear())
+  const [countryChip, setCountryChip] = useState('All')
 
   useEffect(() => {
     async function load() {
@@ -51,9 +52,9 @@ export default function KpiScorecard() {
       const cf = activeCountry !== 'All' ? activeCountry : null
       const flt = q => cf ? q.eq('country', cf) : q
       const [r, a, t] = await Promise.all([
-        flt(supabase.from('tyre_records').select('id,issue_date,risk_level,cost_per_tyre,qty,created_at').order('issue_date')),
-        flt(supabase.from('corrective_actions').select('id,due_date,status').neq('status', 'Closed')),
-        supabase.from('kpi_targets').select('*').eq('year', new Date().getFullYear()),
+        flt(supabase.from('tyre_records').select('id,issue_date,risk_level,cost_per_tyre,qty,created_at,country').order('issue_date')),
+        flt(supabase.from('corrective_actions').select('id,due_date,status,country').neq('status', 'Closed')),
+        supabase.from('kpi_targets').select('*').eq('year', yearFilter),
       ])
       setRecords(r.data || [])
       setActions(a.data || [])
@@ -68,7 +69,7 @@ export default function KpiScorecard() {
       setLoading(false)
     }
     load()
-  }, [activeCountry])
+  }, [activeCountry, yearFilter])
 
   // Build last 12 months axis
   const months = useMemo(() => {
@@ -81,9 +82,19 @@ export default function KpiScorecard() {
     return result
   }, [])
 
+  const filteredRecords = useMemo(() =>
+    countryChip === 'All' ? records : records.filter(r => r.country === countryChip),
+    [records, countryChip]
+  )
+
+  const filteredActions = useMemo(() =>
+    countryChip === 'All' ? actions : actions.filter(a => a.country === countryChip),
+    [actions, countryChip]
+  )
+
   const actuals = useMemo(() =>
-    months.map(m => computeMonthlyKpiActuals(records, actions, m, appSettings.cost_per_tyre)),
-    [records, actions, months, appSettings.cost_per_tyre]
+    months.map(m => computeMonthlyKpiActuals(filteredRecords, filteredActions, m, appSettings.cost_per_tyre)),
+    [filteredRecords, filteredActions, months, appSettings.cost_per_tyre]
   )
 
   // Cost trend with forecasts
@@ -225,6 +236,37 @@ export default function KpiScorecard() {
             </div>
           )
         }
+        </div>
+      </div>
+
+      {/* Filter row: year + country chips */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">Year:</span>
+          <select
+            className="input w-28 text-sm"
+            value={yearFilter}
+            onChange={e => setYearFilter(Number(e.target.value))}
+          >
+            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {['All', ...COUNTRIES].map(c => (
+            <button
+              key={c}
+              onClick={() => setCountryChip(c)}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                countryChip === c
+                  ? 'bg-blue-600 text-white border-blue-500'
+                  : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'
+              }`}
+            >
+              {c}
+            </button>
+          ))}
         </div>
       </div>
 

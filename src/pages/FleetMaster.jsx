@@ -37,6 +37,7 @@ const EMPTY_FORM = (country = 'KSA') => ({
 const UPLOAD_COL_MAP = {
   'Asset No':              'asset_no',
   'Fleet Number':          'fleet_number',
+  'Fleet No':              'fleet_number',
   'Make':                  'make',
   'Model':                 'model',
   'Vehicle Type':          'vehicle_type',
@@ -44,6 +45,7 @@ const UPLOAD_COL_MAP = {
   'Operator':              'operator_name',
   'Site':                  'site',
   'Country':               'country',
+  'Department':            'department',
   'Expected KM/Tyre':      'expected_km_per_tyre',
   'Min Days':              'min_days_between_changes',
   'Tyre Size':             'tyre_size',
@@ -336,6 +338,7 @@ export default function FleetMaster() {
     }
     setUploadResult({ upserted, failed })
     setUploadStep('done')
+    setPage(0)
     loadRecords()
     loadSites()
   }

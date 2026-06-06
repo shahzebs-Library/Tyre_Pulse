@@ -103,9 +103,7 @@ export default function Layout({ children }) {
   const debounceRef = useRef(null)
 
   useEffect(() => {
-    if (location.pathname === '/upload') {
-      setSidebarOpen(false)
-    } else if (window.innerWidth >= 1024) {
+    if (window.innerWidth >= 1024) {
       setSidebarOpen(true)
     }
   }, [location.pathname])
@@ -191,8 +189,8 @@ export default function Layout({ children }) {
           style={{ borderBottomColor: 'rgba(22,163,74,0.1)' }}>
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
             <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)', boxShadow: '0 0 14px rgba(22,163,74,0.5)' }}>
-              <img src={TpLogo} alt="" style={{ width: 16, height: 16, filter: 'brightness(0) invert(1)' }} />
+              style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.25)', boxShadow: '0 0 14px rgba(22,163,74,0.5)' }}>
+              <img src={TpLogo} alt="" style={{ width: 16, height: 16 }} />
             </div>
             <AnimatePresence>
               {sidebarOpen && (

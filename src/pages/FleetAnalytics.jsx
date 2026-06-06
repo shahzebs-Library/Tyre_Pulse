@@ -25,6 +25,8 @@ export default function FleetAnalytics() {
   const [search, setSearch]     = useState('')
   const [selected, setSelected] = useState(null)
   const [sortBy, setSortBy]     = useState('count')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo]     = useState('')
 
   useEffect(() => {
     let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: false })
@@ -43,10 +45,14 @@ export default function FleetAnalytics() {
     return arr
   }, [assetMetrics, sortBy])
 
-  const filtered = useMemo(() =>
-    sorted.filter(a => !search || a.assetNo.toLowerCase().includes(search.toLowerCase())),
-    [sorted, search]
-  )
+  const filtered = useMemo(() => {
+    return sorted.filter(a => {
+      if (search && !a.assetNo.toLowerCase().includes(search.toLowerCase())) return false
+      if (dateFrom && a.lastSeen && a.lastSeen < dateFrom) return false
+      if (dateTo && a.lastSeen && a.lastSeen > dateTo) return false
+      return true
+    })
+  }, [sorted, search, dateFrom, dateTo])
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading fleet data…</div>
 
@@ -83,7 +89,7 @@ export default function FleetAnalytics() {
 
       {/* Asset list */}
       <div className="card">
-        <div className="flex flex-wrap gap-3 mb-4">
+        <div className="flex flex-wrap gap-3 mb-3">
           <input
             className="input flex-1 min-w-48"
             placeholder="Search asset number…"
@@ -96,6 +102,58 @@ export default function FleetAnalytics() {
             <option value="risk">Sort: High Risk Count</option>
             <option value="freq">Sort: Failure Freq</option>
           </select>
+        </div>
+        <div className="flex flex-wrap gap-3 mb-4 items-center">
+          <span className="text-xs text-gray-500">Last-seen date:</span>
+          <input
+            type="date"
+            className="input w-40"
+            value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)}
+            placeholder="From"
+          />
+          <span className="text-gray-500 text-xs">to</span>
+          <input
+            type="date"
+            className="input w-40"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+            placeholder="To"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(''); setDateTo('') }}
+              className="text-xs text-gray-400 hover:text-white"
+            >
+              Clear dates
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-3 mb-4 items-center">
+          <span className="text-xs text-gray-400">Last record date:</span>
+          <input
+            type="date"
+            className="input w-40"
+            value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)}
+            placeholder="From"
+          />
+          <span className="text-gray-500 text-xs">to</span>
+          <input
+            type="date"
+            className="input w-40"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+            placeholder="To"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              className="text-xs text-gray-400 hover:text-white"
+              onClick={() => { setDateFrom(''); setDateTo('') }}
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -225,7 +283,7 @@ function AssetDrillDown({ asset, currency = 'SAR' }) {
         <div>
           <h3 className="text-white font-bold text-lg font-mono">{asset.assetNo}</h3>
           <p className="text-gray-400 text-sm mt-1">
-            {asset.count} records · {activeCurrency} {asset.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })} total
+            {asset.count} records · {currency} {asset.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })} total
             · active since {asset.firstSeen || '?'}
           </p>
         </div>

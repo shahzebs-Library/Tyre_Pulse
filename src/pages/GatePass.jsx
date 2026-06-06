@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { exportToPdf } from '../lib/exportUtils'
-import { ShieldCheck, ShieldClose, CheckCircle, XCircle, Printer, Clock } from 'lucide-react'
+import { exportToPdf, exportToExcel } from '../lib/exportUtils'
+import { ShieldCheck, ShieldClose, CheckCircle, XCircle, Printer, Clock, Download } from 'lucide-react'
 
 const STATUS_CONFIG = {
   Cleared: { color: 'text-green-400', bg: 'bg-green-900/30', border: 'border-green-700/50' },
@@ -26,6 +26,17 @@ export default function GatePass() {
   const [denialReason, setDenialReason] = useState('')
   const [showDenialInput, setShowDenialInput] = useState(false)
 
+  // Tab state: 'today' | 'history'
+  const [logTab, setLogTab] = useState('today')
+  const yesterday = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 1)
+    return d.toISOString().split('T')[0]
+  })()
+  const [historyDate, setHistoryDate] = useState(yesterday)
+  const [historyPasses, setHistoryPasses] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
   const today = new Date().toISOString().split('T')[0]
   const todayDisplay = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
@@ -45,6 +56,27 @@ export default function GatePass() {
     const { data } = await q
     setPasses(data || [])
   }
+
+  async function loadHistoryPasses(date) {
+    setHistoryLoading(true)
+    let q = supabase.from('gate_passes').select('*').eq('pass_date', date).order('created_at', { ascending: false })
+    if (siteFilter) q = q.eq('site', siteFilter)
+    const { data } = await q
+    setHistoryPasses(data || [])
+    setHistoryLoading(false)
+  }
+
+  function handleHistoryDateChange(date) {
+    setHistoryDate(date)
+    loadHistoryPasses(date)
+  }
+
+  // Load history when switching to history tab
+  useEffect(() => {
+    if (logTab === 'history') {
+      loadHistoryPasses(historyDate)
+    }
+  }, [logTab, siteFilter])
 
   async function checkClearance() {
     if (!assetSearch.trim()) return
@@ -93,9 +125,25 @@ export default function GatePass() {
     setIssuing(false)
   }
 
-  function printDailyLog() {
+  function formatPassesForExport(passArr) {
+    return passArr.map(p => ({
+      ...p,
+      created_at: new Date(p.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    }))
+  }
+
+  function exportDailyLogExcel(passArr, dateLabel) {
+    exportToExcel(
+      formatPassesForExport(passArr),
+      ['asset_no', 'site', 'status', 'pass_date', 'denial_reason', 'created_at'],
+      ['Asset No', 'Site', 'Status', 'Pass Date', 'Denial Reason', 'Time'],
+      `TyrePulse_GatePass_${dateLabel}`
+    )
+  }
+
+  function printDailyLog(passArr, dateLabel, dateDisplay) {
     exportToPdf(
-      passes,
+      passArr,
       [
         { key: 'asset_no',    header: 'Asset No' },
         { key: 'site',        header: 'Site' },
@@ -103,8 +151,8 @@ export default function GatePass() {
         { key: 'pass_date',   header: 'Date' },
         { key: 'denial_reason', header: 'Denial Reason' },
       ],
-      `Gate Pass Log: ${todayDisplay}`,
-      `TyrePulse_GatePass_${today}`,
+      `Gate Pass Log: ${dateDisplay}`,
+      `TyrePulse_GatePass_${dateLabel}`,
       'landscape'
     )
   }
@@ -136,6 +184,12 @@ export default function GatePass() {
   const cleared = useMemo(() => passes.filter(p => p.status === 'Cleared').length, [passes])
   const denied  = useMemo(() => passes.filter(p => p.status === 'Denied').length, [passes])
 
+  const activePassList = logTab === 'today' ? passes : historyPasses
+  const activeDateLabel = logTab === 'today' ? today : historyDate
+  const activeDateDisplay = logTab === 'today'
+    ? todayDisplay
+    : new Date(historyDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -147,7 +201,10 @@ export default function GatePass() {
           <p className="text-gray-400 text-sm mt-1">{todayDisplay}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button onClick={printDailyLog} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
+          <button onClick={() => exportDailyLogExcel(activePassList, activeDateLabel)} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
+            <Download size={14} /> Excel
+          </button>
+          <button onClick={() => printDailyLog(activePassList, activeDateLabel, activeDateDisplay)} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
             <Printer size={14} /> Daily Log PDF
           </button>
           <button onClick={printPolicy} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
@@ -254,13 +311,50 @@ export default function GatePass() {
         )}
       </div>
 
-      {/* Today's pass history */}
+      {/* Pass Log with Today / History tabs */}
       <div className="card">
-        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <Clock size={18} className="text-gray-400" /> Today's Pass Log
-        </h2>
-        {passes.length === 0 ? (
-          <p className="text-center text-gray-500 py-8">No gate passes recorded today</p>
+        {/* Tab row */}
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg">
+            {[['today', 'Today'], ['history', 'History']].map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setLogTab(key)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  logTab === key ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <Clock size={18} className="text-gray-400" />
+            {logTab === 'today' ? "Today's Pass Log" : 'Historical Pass Log'}
+          </h2>
+        </div>
+
+        {/* History date picker */}
+        {logTab === 'history' && (
+          <div className="mb-4">
+            <label className="label">Select Date</label>
+            <input
+              type="date"
+              className="input w-48"
+              value={historyDate}
+              max={yesterday}
+              onChange={e => handleHistoryDateChange(e.target.value)}
+            />
+          </div>
+        )}
+
+        {/* Table */}
+        {logTab === 'history' && historyLoading ? (
+          <p className="text-center text-gray-500 py-8">Loading...</p>
+        ) : activePassList.length === 0 ? (
+          <p className="text-center text-gray-500 py-8">
+            {logTab === 'today' ? 'No gate passes recorded today' : `No gate passes found for ${activeDateLabel}`}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -274,7 +368,7 @@ export default function GatePass() {
                 </tr>
               </thead>
               <tbody>
-                {passes.map(p => {
+                {activePassList.map(p => {
                   const cfg = STATUS_CONFIG[p.status] || STATUS_CONFIG.Pending
                   return (
                     <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">

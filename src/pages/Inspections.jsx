@@ -47,6 +47,49 @@ const EMPTY_FORM = {
 function isObservationType(t) { return OBSERVATION_TYPES.includes(t) }
 function isTrainingType(t)     { return TRAINING_TYPES.includes(t) }
 
+const CHECKLIST_LABELS = {
+  en: {
+    title: 'Daily Inspection Checklist',
+    asset: 'Asset Number',
+    km: 'Odometer (KM)',
+    hours: 'Engine Hours',
+    position: 'Position',
+    pressure: 'Pressure (PSI)',
+    condition: 'Condition',
+    tread: 'Tread Depth (mm)',
+    notes: 'Notes',
+    good: 'Good',
+    wear: 'Wear',
+    damage: 'Damage',
+    save: 'Save Checklist',
+    export: 'Export PDF',
+    inspector: 'Inspector',
+    site: 'Site',
+    vehicle_type: 'Vehicle Type',
+    no_asset: 'Enter asset number to load vehicle',
+  },
+  ar: {
+    title: 'قائمة الفحص اليومي',
+    asset: 'رقم الأصل',
+    km: 'عداد المسافة (كم)',
+    hours: 'ساعات المحرك',
+    position: 'الموضع',
+    pressure: 'الضغط (PSI)',
+    condition: 'الحالة',
+    tread: 'عمق المداس (مم)',
+    notes: 'ملاحظات',
+    good: 'جيد',
+    wear: 'تآكل',
+    damage: 'تلف',
+    save: 'حفظ القائمة',
+    export: 'تصدير PDF',
+    inspector: 'المفتش',
+    site: 'الموقع',
+    vehicle_type: 'نوع المركبة',
+    no_asset: 'أدخل رقم الأصل لتحميل المركبة',
+  },
+}
+
 export default function Inspections() {
   const { profile } = useAuth()
   const { activeCountry } = useSettings()
@@ -61,6 +104,9 @@ export default function Inspections() {
   const [activeTab, setActiveTab]       = useState('all')
   const [raisingAction, setRaisingAction] = useState(null)
   const fileRef = useRef(null)
+
+  // Language toggle for checklist tab
+  const [lang, setLang] = useState('en')
 
   // Checklist tab state
   const [clAsset, setClAsset]         = useState('')
@@ -341,7 +387,7 @@ export default function Inspections() {
       {activeTab === 'checklist' && (
         <div className="space-y-4">
           {clSaved ? (
-            <div className="card">
+            <div className="card" dir={lang === 'ar' ? 'rtl' : undefined}>
               <div className="flex items-center gap-3 mb-4">
                 <CheckSquare size={20} className="text-green-400" />
                 <h3 className="text-lg font-semibold text-white">Checklist Saved</h3>
@@ -351,7 +397,7 @@ export default function Inspections() {
               </p>
               <div className="flex gap-3">
                 <button onClick={exportChecklistPdf} className="btn-secondary flex items-center gap-2 text-sm">
-                  <FileText size={14} /> Export PDF
+                  <FileText size={14} /> {CHECKLIST_LABELS[lang].export}
                 </button>
                 <button onClick={() => { setClSaved(null); setClAsset(''); setClPositions([]); setClFleetInfo(null); setClNotes('') }}
                   className="btn-primary text-sm">
@@ -360,11 +406,33 @@ export default function Inspections() {
               </div>
             </div>
           ) : (
-            <div className="card space-y-4">
-              <h3 className="text-lg font-semibold text-white">Daily Tyre Inspection</h3>
+            <div
+              className={`card space-y-4${lang === 'ar' ? ' text-right' : ''}`}
+              dir={lang === 'ar' ? 'rtl' : undefined}
+            >
+              {/* Card header with language toggle */}
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-white">{CHECKLIST_LABELS[lang].title}</h3>
+                <div className="flex gap-1 p-0.5 bg-gray-800 rounded-lg">
+                  {['en', 'ar'].map(l => (
+                    <button
+                      key={l}
+                      onClick={() => setLang(l)}
+                      className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                        lang === l
+                          ? 'bg-green-600 text-white shadow'
+                          : 'text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      {l === 'en' ? 'EN' : 'AR'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Asset Number</label>
+                  <label className="label">{CHECKLIST_LABELS[lang].asset}</label>
                   <div className="flex gap-2">
                     <input className="input flex-1" placeholder="e.g. CM-0123" value={clAsset}
                       onChange={e => setClAsset(e.target.value)}
@@ -379,13 +447,13 @@ export default function Inspections() {
                   )}
                 </div>
                 <div>
-                  <label className="label">Site</label>
+                  <label className="label">{CHECKLIST_LABELS[lang].site}</label>
                   <input className="input" placeholder="Site name" value={clSite}
                     onChange={e => setClSite(e.target.value)} list="cl-sites" />
                   <datalist id="cl-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
                 </div>
                 <div>
-                  <label className="label">Inspector</label>
+                  <label className="label">{CHECKLIST_LABELS[lang].inspector}</label>
                   <input className="input" placeholder="Inspector name" value={clInspector}
                     onChange={e => setClInspector(e.target.value)} />
                 </div>
@@ -398,23 +466,23 @@ export default function Inspections() {
               {clPositions.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold text-gray-300 border-b border-gray-700 pb-2">
-                    Tyre Positions ({clPositions.length})
+                    {CHECKLIST_LABELS[lang].position} ({clPositions.length})
                   </h4>
                   {clPositions.map((pos, i) => (
                     <div key={pos.position} className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/40 flex-wrap">
                       <div className="w-12 text-center text-sm font-mono font-bold text-green-400 flex-shrink-0">{pos.position}</div>
                       <div className="flex-1 min-w-28">
-                        <p className="text-xs text-gray-500 mb-1">Pressure (PSI)</p>
+                        <p className="text-xs text-gray-500 mb-1">{CHECKLIST_LABELS[lang].pressure}</p>
                         <input type="number" className="input py-1.5 text-sm" placeholder="PSI" value={pos.pressure}
                           onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, pressure: e.target.value } : x))} />
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 mb-1">Condition</p>
+                        <p className="text-xs text-gray-500 mb-1">{CHECKLIST_LABELS[lang].condition}</p>
                         <div className="flex gap-1">
                           {[['Good','✅'],['Wear','⚠️'],['Damage','❌']].map(([cond, emoji]) => (
                             <button key={cond} onClick={() => setClPositions(p => p.map((x, j) => j === i ? { ...x, condition: cond } : x))}
                               style={{ minWidth: 44, minHeight: 44 }}
-                              title={cond}
+                              title={cond === 'Good' ? CHECKLIST_LABELS[lang].good : cond === 'Wear' ? CHECKLIST_LABELS[lang].wear : CHECKLIST_LABELS[lang].damage}
                               className={`rounded-md text-lg border transition-all ${
                                 pos.condition === cond
                                   ? cond === 'Good' ? 'bg-green-900/50 border-green-600' : cond === 'Wear' ? 'bg-yellow-900/50 border-yellow-600' : 'bg-red-900/50 border-red-600'
@@ -425,7 +493,7 @@ export default function Inspections() {
                         </div>
                       </div>
                       <div className="flex-1 min-w-24">
-                        <p className="text-xs text-gray-500 mb-1">Tread (mm)</p>
+                        <p className="text-xs text-gray-500 mb-1">{CHECKLIST_LABELS[lang].tread}</p>
                         <input type="number" className="input py-1.5 text-sm" placeholder="mm" value={pos.treadDepth}
                           onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, treadDepth: e.target.value } : x))} />
                       </div>
@@ -436,19 +504,19 @@ export default function Inspections() {
 
               {clPositions.length === 0 && clAsset.trim() && (
                 <p className="text-gray-500 text-sm text-center py-4">
-                  Click "Load" to auto-detect tyre positions for this vehicle, or enter asset number and press Enter.
+                  {CHECKLIST_LABELS[lang].no_asset}
                 </p>
               )}
 
               <div>
-                <label className="label">General Notes</label>
+                <label className="label">{CHECKLIST_LABELS[lang].notes}</label>
                 <textarea className="input h-20 resize-none" placeholder="General observations..."
                   value={clNotes} onChange={e => setClNotes(e.target.value)} />
               </div>
 
               <button onClick={saveChecklist} disabled={clSaving || !clAsset.trim() || clPositions.length === 0}
                 className="btn-primary w-full disabled:opacity-50">
-                {clSaving ? 'Saving...' : 'Save Inspection'}
+                {clSaving ? 'Saving...' : CHECKLIST_LABELS[lang].save}
               </button>
             </div>
           )}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES, COUNTRY_LABEL } from '../contexts/SettingsContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -168,50 +169,86 @@ export default function Layout({ children }) {
     <div className="flex h-screen overflow-hidden" style={{ background: 'transparent' }}>
 
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'w-60' : 'w-14'} flex-shrink-0 flex flex-col transition-all duration-200`}>
+      <motion.aside
+        className="flex-shrink-0 flex flex-col"
+        animate={{ width: sidebarOpen ? 236 : 52 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        style={{ overflow: 'hidden' }}
+      >
 
         {/* Logo */}
-        <div className={`flex items-center h-13 px-3 py-3 border-b border-white/5 flex-shrink-0 ${!sidebarOpen ? 'justify-center' : ''}`}>
-          {sidebarOpen && <img src={TpLogo} alt="" style={{ width: 24, height: 24, flexShrink: 0 }} />}
-          {sidebarOpen && <span className="ml-2.5 font-bold text-white tracking-tight">TyrePulse</span>}
+        <div className={`flex items-center h-13 px-3 py-3 border-b flex-shrink-0 ${!sidebarOpen ? 'justify-center' : ''}`}
+          style={{ borderBottomColor: 'rgba(22,163,74,0.1)' }}>
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)', boxShadow: '0 0 14px rgba(22,163,74,0.5)' }}>
+              <img src={TpLogo} alt="" style={{ width: 16, height: 16, filter: 'brightness(0) invert(1)' }} />
+            </div>
+            <AnimatePresence>
+              {sidebarOpen && (
+                <motion.span
+                  className="font-extrabold text-white tracking-tight text-sm whitespace-nowrap"
+                  style={{ background: 'linear-gradient(135deg,#fff 30%,#4ade80)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -6 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  TyrePulse
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </div>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-            className={`${sidebarOpen ? 'ml-auto' : ''} text-gray-700 hover:text-gray-400 transition-colors`}
+            className="text-gray-700 hover:text-green-400 transition-colors flex-shrink-0 p-1 rounded-md hover:bg-green-400/10"
           >
-            {sidebarOpen ? <X size={15} /> : <Menu size={15} />}
+            {sidebarOpen ? <X size={14} /> : <Menu size={14} />}
           </button>
         </div>
 
-        {sidebarOpen && (
-          <>
-            {/* Search */}
-            <div className="px-2.5 pt-2.5 pb-1">
-              <button
-                onClick={() => setSearchOpen(true)}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-gray-600 hover:text-gray-400 transition-colors text-xs"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
-              >
-                <Search size={12} />
-                <span className="flex-1 text-left">Search</span>
-                <kbd className="text-[10px] px-1 rounded text-gray-700" style={{ background: 'rgba(255,255,255,0.06)' }}>K</kbd>
-              </button>
-            </div>
-
-            {/* Country selector */}
-            <div className="px-2.5 pt-1.5 pb-1">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700 px-0.5 mb-1">Country</p>
-              <div className="flex gap-0.5 rounded-md p-0.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <button className={pillClass('All')} style={pillStyle('All')} onClick={() => setActiveCountry('All')}>All</button>
-                {COUNTRIES.map(c => (
-                  <button key={c} className={pillClass(c)} style={pillStyle(c)} onClick={() => setActiveCountry(c)}>
-                    {COUNTRY_LABEL[c]}
-                  </button>
-                ))}
+        <AnimatePresence>
+          {sidebarOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              style={{ overflow: 'hidden' }}
+            >
+              {/* Search */}
+              <div className="px-2.5 pt-2.5 pb-1">
+                <button
+                  onClick={() => setSearchOpen(true)}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-gray-600 hover:text-green-400 transition-all text-xs group"
+                  style={{ background: 'rgba(22,163,74,0.04)', border: '1px solid rgba(22,163,74,0.1)' }}
+                >
+                  <Search size={12} className="group-hover:text-green-400 transition-colors" />
+                  <span className="flex-1 text-left">Search</span>
+                  <kbd className="text-[10px] px-1.5 py-0.5 rounded text-gray-700 font-mono"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                    ⌘K
+                  </kbd>
+                </button>
               </div>
-            </div>
-          </>
-        )}
+
+              {/* Country selector */}
+              <div className="px-2.5 pt-1 pb-1">
+                <p className="nav-section px-0.5 pt-1.5 pb-1">Country</p>
+                <div className="flex gap-0.5 rounded-lg p-0.5"
+                  style={{ background: 'rgba(22,163,74,0.04)', border: '1px solid rgba(22,163,74,0.1)' }}>
+                  <button className={pillClass('All')} style={pillStyle('All')} onClick={() => setActiveCountry('All')}>All</button>
+                  {COUNTRIES.map(c => (
+                    <button key={c} className={pillClass(c)} style={pillStyle(c)} onClick={() => setActiveCountry(c)}>
+                      {COUNTRY_LABEL[c]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-1 px-2">
@@ -235,22 +272,38 @@ export default function Layout({ children }) {
                   key={to} to={to} end={end}
                   title={!sidebarOpen ? lbl : undefined}
                   className={({ isActive }) =>
-                    `flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors relative mb-0.5 ${
+                    `relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group ${
                       !sidebarOpen ? 'justify-center' : ''
                     } ${
                       isActive
-                        ? 'text-green-400 border border-green-600/20'
-                        : 'text-gray-600 hover:text-gray-300 border border-transparent'
+                        ? 'text-green-300'
+                        : 'text-gray-600 hover:text-gray-300'
                     }`
                   }
-                  style={({ isActive }) => isActive ? { backgroundColor: 'rgba(22,163,74,0.10)' } : {}}
+                  style={({ isActive }) => isActive ? {
+                    background: 'linear-gradient(135deg, rgba(22,163,74,0.14) 0%, rgba(22,163,74,0.07) 100%)',
+                    border: '1px solid rgba(22,163,74,0.22)',
+                    boxShadow: '0 0 14px rgba(22,163,74,0.1)'
+                  } : {
+                    border: '1px solid transparent',
+                  }}
                 >
-                  <Icon size={14} className="flex-shrink-0" />
-                  {sidebarOpen && <span className="truncate">{lbl}</span>}
-                  {to === '/alerts' && alertCount > 0 && (
-                    <span className={`${sidebarOpen ? 'ml-auto' : 'absolute -top-0.5 -right-0.5'} text-[10px] bg-red-600 text-white rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 font-bold`}>
-                      {alertCount > 9 ? '9+' : alertCount}
-                    </span>
+                  {({ isActive }) => (
+                    <>
+                      {/* active left bar */}
+                      {isActive && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] rounded-r-full"
+                          style={{ background: 'linear-gradient(180deg,#4ade80,#16a34a)', boxShadow: '0 0 8px rgba(74,222,128,0.8)' }} />
+                      )}
+                      <Icon size={14} className={`flex-shrink-0 transition-colors ${isActive ? 'text-green-400' : 'text-gray-600 group-hover:text-gray-300'}`} />
+                      {sidebarOpen && <span className="truncate">{lbl}</span>}
+                      {to === '/alerts' && alertCount > 0 && (
+                        <span className={`${sidebarOpen ? 'ml-auto' : 'absolute -top-0.5 -right-0.5'} text-[10px] bg-red-600 text-white rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 font-bold`}
+                          style={{ boxShadow: '0 0 8px rgba(239,68,68,0.6)' }}>
+                          {alertCount > 9 ? '9+' : alertCount}
+                        </span>
+                      )}
+                    </>
                   )}
                 </NavLink>
               ))}
@@ -268,51 +321,77 @@ export default function Layout({ children }) {
                 to="/users"
                 title={!sidebarOpen ? 'User Management' : undefined}
                 className={({ isActive }) =>
-                  `flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium transition-colors relative mb-0.5 ${
+                  `relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group ${
                     !sidebarOpen ? 'justify-center' : ''
-                  } ${
-                    isActive
-                      ? 'text-green-400 border border-green-600/20'
-                      : 'text-gray-600 hover:text-gray-300 border border-transparent'
-                  }`
+                  } ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-300'}`
                 }
-                style={({ isActive }) => isActive ? { backgroundColor: 'rgba(22,163,74,0.10)' } : {}}
+                style={({ isActive }) => isActive ? {
+                  background: 'linear-gradient(135deg, rgba(22,163,74,0.14) 0%, rgba(22,163,74,0.07) 100%)',
+                  border: '1px solid rgba(22,163,74,0.22)',
+                  boxShadow: '0 0 14px rgba(22,163,74,0.1)'
+                } : { border: '1px solid transparent' }}
               >
-                <Users size={14} className="flex-shrink-0" />
-                {sidebarOpen && <span className="truncate">User Management</span>}
+                {({ isActive }) => (
+                  <>
+                    {isActive && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] rounded-r-full"
+                        style={{ background: 'linear-gradient(180deg,#4ade80,#16a34a)', boxShadow: '0 0 8px rgba(74,222,128,0.8)' }} />
+                    )}
+                    <Users size={14} className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-600 group-hover:text-gray-300'}`} />
+                    {sidebarOpen && <span className="truncate">User Management</span>}
+                  </>
+                )}
               </NavLink>
             </div>
           )}
         </nav>
 
-        {/* User */}
-        <div className="border-t border-white/5 p-3 flex-shrink-0">
+        {/* User footer */}
+        <div className="flex-shrink-0 p-3" style={{ borderTop: '1px solid rgba(22,163,74,0.1)' }}>
           <div className={`flex items-center gap-2.5 ${!sidebarOpen ? 'flex-col' : ''}`}>
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ backgroundColor: '#15803d' }}>
-              {profile?.full_name?.[0] ?? profile?.username?.[0] ?? 'U'}
+            {/* avatar */}
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)', boxShadow: '0 0 10px rgba(22,163,74,0.4)' }}
+            >
+              {profile?.full_name?.[0]?.toUpperCase() ?? profile?.username?.[0]?.toUpperCase() ?? 'U'}
             </div>
-            {sidebarOpen && (
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-gray-300 truncate">{profile?.full_name ?? profile?.username ?? 'User'}</p>
-                <p className="text-[11px] text-gray-600 truncate">{profile?.role ?? 'Reporter'}</p>
-              </div>
-            )}
+
+            <AnimatePresence>
+              {sidebarOpen && (
+                <motion.div
+                  className="flex-1 min-w-0"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <p className="text-xs font-semibold text-gray-300 truncate leading-none">
+                    {profile?.full_name ?? profile?.username ?? 'User'}
+                  </p>
+                  <p className="text-[11px] mt-0.5 truncate leading-none"
+                    style={{ color: 'rgba(22,163,74,0.7)' }}>
+                    {profile?.role ?? 'Reporter'}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <button
               onClick={toggleTheme}
-              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              className="text-gray-700 hover:text-gray-400 transition-colors flex-shrink-0"
+              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              className="text-gray-700 hover:text-green-400 transition-colors flex-shrink-0 p-1 rounded-md hover:bg-green-400/10"
             >
-              {theme === 'dark'
-                ? <Sun size={14} />
-                : <Moon size={14} />
-              }
+              {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
             </button>
-            <button onClick={handleSignOut} title="Sign out" className="text-gray-700 hover:text-red-400 transition-colors flex-shrink-0">
-              <LogOut size={14} />
+            <button
+              onClick={handleSignOut}
+              title="Sign out"
+              className="text-gray-700 hover:text-red-400 transition-colors flex-shrink-0 p-1 rounded-md hover:bg-red-400/10"
+            >
+              <LogOut size={13} />
             </button>
           </div>
         </div>
-      </aside>
+      </motion.aside>
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
@@ -322,67 +401,91 @@ export default function Layout({ children }) {
       </main>
 
       {/* Search palette */}
-      {searchOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4"
-          style={{ background: 'rgba(0,0,0,0.75)' }}
-          onClick={() => { setSearchOpen(false); setQuery('') }}
-        >
-          <div
-            className="w-full max-w-xl overflow-hidden rounded-lg"
-            style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 16px 60px rgba(0,0,0,0.7)' }}
-            onClick={e => e.stopPropagation()}
+      <AnimatePresence>
+        {searchOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-start justify-center pt-[14vh] px-4"
+            style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            onClick={() => { setSearchOpen(false); setQuery('') }}
           >
-            <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <Search size={15} className="text-gray-600 flex-shrink-0" />
-              <input
-                ref={searchRef}
-                type="text"
-                className="flex-1 bg-transparent text-white placeholder-gray-600 focus:outline-none text-sm"
-                placeholder="Search tyres, actions, RCA, stock..."
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-              />
-              {searching && <span className="text-[11px] text-gray-600">Searching</span>}
-              <kbd
-                className="text-[11px] text-gray-600 px-1.5 py-0.5 rounded cursor-pointer"
-                style={{ background: 'rgba(255,255,255,0.06)' }}
-                onClick={() => { setSearchOpen(false); setQuery('') }}
-              >ESC</kbd>
-            </div>
+            <motion.div
+              className="w-full max-w-xl overflow-hidden"
+              style={{
+                background: 'linear-gradient(145deg, rgba(8,15,10,0.99) 0%, rgba(5,11,7,0.99) 100%)',
+                border: '1px solid rgba(22,163,74,0.25)',
+                borderRadius: 16,
+                boxShadow: '0 0 60px rgba(22,163,74,0.14), 0 24px 80px rgba(0,0,0,0.8)',
+              }}
+              initial={{ scale: 0.96, y: -12 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: -12 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* top edge glow */}
+              <div className="h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(22,163,74,0.6),transparent)' }} />
 
-            <div className="max-h-72 overflow-y-auto">
-              {query.length >= 2 && results.length === 0 && !searching && (
-                <p className="text-gray-600 text-sm text-center py-8">No results for &ldquo;{query}&rdquo;</p>
-              )}
-              {query.length < 2 && (
-                <p className="text-gray-700 text-xs text-center py-5">Type at least 2 characters</p>
-              )}
-              {results.map((r, i) => (
-                <button
-                  key={`${r.id}-${i}`}
-                  onClick={() => { navigate(r.route); setSearchOpen(false); setQuery('') }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-white/3 transition-colors"
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
-                >
-                  <span className="text-[11px] text-gray-600 rounded px-1.5 py-0.5 flex-shrink-0 min-w-[44px] text-center" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
-                    {r.label}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-gray-200 text-sm font-medium truncate">{r.primary}</p>
-                    {r.secondary && <p className="text-gray-600 text-xs truncate">{r.secondary}</p>}
-                  </div>
-                </button>
-              ))}
-            </div>
+              {/* input row */}
+              <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: '1px solid rgba(22,163,74,0.1)' }}>
+                <Search size={15} className="text-green-600 flex-shrink-0" />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  className="flex-1 bg-transparent text-white placeholder-gray-600 focus:outline-none text-sm"
+                  placeholder="Search tyres, actions, RCA, stock..."
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                />
+                {searching && <span className="text-[11px] text-gray-600 animate-pulse">Searching</span>}
+                <kbd
+                  className="text-[11px] text-gray-600 px-1.5 py-0.5 rounded cursor-pointer font-mono"
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+                  onClick={() => { setSearchOpen(false); setQuery('') }}
+                >ESC</kbd>
+              </div>
 
-            <div className="px-4 py-1.5 flex gap-4 text-[11px] text-gray-700" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <span>Enter to navigate</span>
-              <span>Esc to close</span>
-            </div>
-          </div>
-        </div>
-      )}
+              <div className="max-h-72 overflow-y-auto">
+                {query.length >= 2 && results.length === 0 && !searching && (
+                  <p className="text-gray-600 text-sm text-center py-10">No results for &ldquo;{query}&rdquo;</p>
+                )}
+                {query.length < 2 && (
+                  <p className="text-gray-700 text-xs text-center py-6">Type at least 2 characters to search</p>
+                )}
+                {results.map((r, i) => (
+                  <motion.button
+                    key={`${r.id}-${i}`}
+                    onClick={() => { navigate(r.route); setSearchOpen(false); setQuery('') }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all"
+                    style={{ borderBottom: '1px solid rgba(22,163,74,0.06)' }}
+                    whileHover={{ background: 'rgba(22,163,74,0.05)' }}
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.03 }}
+                  >
+                    <span className="text-[11px] font-semibold rounded-md px-2 py-0.5 flex-shrink-0 min-w-[44px] text-center"
+                      style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.2)', color: '#4ade80' }}>
+                      {r.label}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-gray-200 text-sm font-medium truncate">{r.primary}</p>
+                      {r.secondary && <p className="text-gray-600 text-xs truncate mt-0.5">{r.secondary}</p>}
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+
+              <div className="px-4 py-2 flex gap-4 text-[11px] text-gray-700" style={{ borderTop: '1px solid rgba(22,163,74,0.06)' }}>
+                <span>↩ navigate</span>
+                <span>Esc close</span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

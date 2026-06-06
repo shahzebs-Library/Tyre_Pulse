@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare } from 'lucide-react'
+import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -119,6 +120,8 @@ export default function Inspections() {
   const [clSaving, setClSaving]       = useState(false)
   const [clSaved, setClSaved]         = useState(null)
   const [clLookingUp, setClLookingUp] = useState(false)
+  const posRefs     = useRef({})
+  const [highlightPos, setHighlightPos] = useState(null)
 
   useEffect(() => {
     if (profile?.full_name && !clInspector) setClInspector(profile.full_name)
@@ -464,12 +467,47 @@ export default function Inspections() {
               </div>
 
               {clPositions.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-gray-300 border-b border-gray-700 pb-2">
+                <div className="space-y-4">
+                  {/* SVG Vehicle Diagram */}
+                  {clFleetInfo?.vehicle_type && (
+                    <div className="card flex flex-col items-center py-4" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                      <p className="text-xs text-gray-500 mb-3">Tap a tyre position to jump to it</p>
+                      <VehicleTyreDiagram
+                        vehicleType={clFleetInfo.vehicle_type}
+                        positions={clPositions.map(p => ({
+                          position: p.position,
+                          risk_level: p.condition === 'Good' && p.pressure ? 'Low'
+                            : p.condition === 'Wear' ? 'Medium'
+                            : p.condition === 'Damage' ? 'Critical'
+                            : null,
+                        }))}
+                        onPositionClick={({ position }) => {
+                          const el = posRefs.current[position]
+                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                          setHighlightPos(position)
+                          setTimeout(() => setHighlightPos(null), 2000)
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                  <h4 className="text-sm font-semibold text-gray-300 border-b border-gray-700 pb-2 mb-2">
                     {CHECKLIST_LABELS[lang].position} ({clPositions.length})
                   </h4>
                   {clPositions.map((pos, i) => (
-                    <div key={pos.position} className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/40 flex-wrap">
+                    <div
+                      key={pos.position}
+                      ref={el => { posRefs.current[pos.position] = el }}
+                      className="flex items-center gap-3 p-3 rounded-lg flex-wrap transition-all duration-300"
+                      style={{
+                        background: highlightPos === pos.position
+                          ? 'rgba(22,163,74,0.2)'
+                          : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${highlightPos === pos.position ? 'rgba(22,163,74,0.5)' : 'transparent'}`,
+                        marginBottom: 6,
+                      }}
+                    >
                       <div className="w-12 text-center text-sm font-mono font-bold text-green-400 flex-shrink-0">{pos.position}</div>
                       <div className="flex-1 min-w-28">
                         <p className="text-xs text-gray-500 mb-1">{CHECKLIST_LABELS[lang].pressure}</p>
@@ -497,8 +535,9 @@ export default function Inspections() {
                         <input type="number" className="input py-1.5 text-sm" placeholder="mm" value={pos.treadDepth}
                           onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, treadDepth: e.target.value } : x))} />
                       </div>
-                    </div>
+                      </div>
                   ))}
+                  </div>
                 </div>
               )}
 

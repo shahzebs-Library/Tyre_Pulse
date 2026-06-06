@@ -6,7 +6,45 @@ import { useSettings } from '../contexts/SettingsContext'
 import { batchClassify } from '../lib/tyreClassifier'
 import { logAuditEvent } from '../lib/auditLogger'
 import * as XLSX from 'xlsx'
-import { Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen, AlertTriangle, Package } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen, AlertTriangle, Package, ChevronRight, Layers, Table2, Eye, Rocket } from 'lucide-react'
+
+const STEPS = [
+  { key: 'idle',      icon: Upload,         label: 'Upload File' },
+  { key: 'sheets',   icon: Layers,          label: 'Select Sheets' },
+  { key: 'mapping',  icon: Table2,          label: 'Map Columns' },
+  { key: 'preview',  icon: Eye,             label: 'Preview & Check' },
+  { key: 'uploading',icon: Rocket,          label: 'Uploading' },
+  { key: 'done',     icon: CheckCircle,     label: 'Complete' },
+]
+
+function StepBar({ current }) {
+  const activeIdx = STEPS.findIndex(s => s.key === current)
+  return (
+    <div className="flex items-center gap-0 mb-8 overflow-x-auto pb-1">
+      {STEPS.map((s, i) => {
+        const Icon = s.icon
+        const done = i < activeIdx
+        const active = i === activeIdx
+        return (
+          <div key={s.key} className="flex items-center">
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              active  ? 'bg-green-900/40 text-green-300 border border-green-500/50' :
+              done    ? 'text-green-500 opacity-70' :
+                        'text-gray-600'
+            }`}>
+              <Icon size={13} />
+              <span className="hidden sm:inline">{s.label}</span>
+            </div>
+            {i < STEPS.length - 1 && (
+              <ChevronRight size={12} className={`mx-1 flex-shrink-0 ${i < activeIdx ? 'text-green-600' : 'text-gray-700'}`} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 const CANONICAL_FIELDS = [
   'sr', 'issue_date', 'description', 'brand', 'serial_no', 'qty',
@@ -416,68 +454,118 @@ export default function UploadData() {
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  const [dragging, setDragging] = useState(false)
+
+  function handleDrop(e) {
+    e.preventDefault()
+    setDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    handleFile({ target: { files: [file] } })
+  }
+
   return (
-    <div className="space-y-4 max-w-4xl">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Upload Data</h1>
-        <p className="text-gray-400 text-sm mt-1">Import tyre records from Excel or CSV — auto-classifies on insert</p>
+    <div className="space-y-4 w-full">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="page-title">Upload Data</h1>
+          <p className="text-gray-400 text-sm mt-1">Import tyre records from Excel or CSV · auto-classifies on insert</p>
+        </div>
       </div>
 
+      <StepBar current={step} />
+
       {/* ── Idle ──────────────────────────────────────────────────────────── */}
+      <AnimatePresence mode="wait">
       {step === 'idle' && (
-        <>
+        <motion.div key="idle" initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-10 }} transition={{ duration:0.25 }}>
           {/* Upload type selector */}
-          <div className="card mb-4">
-            <p className="text-sm font-medium text-gray-300 mb-3">What are you uploading?</p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { val: 'tyres', label: 'Tyre Records', desc: 'Issue records, replacements, costs' },
-                { val: 'fleet', label: 'Fleet / Vehicle Data', desc: 'Vehicle registry, asset specs' },
-                { val: 'stock', label: 'Stock Records', desc: 'Inventory items and stock levels', icon: <Package size={20} /> },
-                { val: 'auto', label: 'Auto-detect', desc: 'We will figure it out from column names' },
-              ].map(opt => (
-                <button
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            {[
+              { val: 'tyres', label: 'Tyre Records',       desc: 'Issue records, replacements, costs',   icon: FileSpreadsheet, color: 'green' },
+              { val: 'fleet', label: 'Fleet / Vehicle',    desc: 'Vehicle registry, asset specs',        icon: Package,         color: 'blue' },
+              { val: 'stock', label: 'Stock Records',      desc: 'Inventory items and stock levels',    icon: Layers,          color: 'purple' },
+              { val: 'auto',  label: 'Auto-detect',        desc: 'Figure it out from column names',     icon: Wand2,           color: 'yellow' },
+            ].map(opt => {
+              const Icon = opt.icon
+              const active = uploadType === opt.val
+              const colorMap = {
+                green:  { border: 'rgba(22,163,74,0.5)',  bg: 'rgba(22,163,74,0.1)',  text: 'text-green-300',  icon: 'text-green-400' },
+                blue:   { border: 'rgba(59,130,246,0.5)', bg: 'rgba(59,130,246,0.1)', text: 'text-blue-300',   icon: 'text-blue-400' },
+                purple: { border: 'rgba(168,85,247,0.5)', bg: 'rgba(168,85,247,0.1)', text: 'text-purple-300', icon: 'text-purple-400' },
+                yellow: { border: 'rgba(234,179,8,0.5)',  bg: 'rgba(234,179,8,0.08)', text: 'text-yellow-300', icon: 'text-yellow-400' },
+              }
+              const c = colorMap[opt.color]
+              return (
+                <motion.button
                   key={opt.val}
                   onClick={() => setUploadType(opt.val)}
-                  className={`flex-1 min-w-[140px] px-4 py-3 rounded-lg border text-left transition-colors ${
-                    uploadType === opt.val
-                      ? 'border-green-500/60 bg-green-900/20 text-green-300'
-                      : 'border-white/10 text-gray-400 hover:border-white/20'
-                  }`}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="card text-left transition-all duration-150 cursor-pointer"
+                  style={active ? { borderColor: c.border, background: c.bg, boxShadow: `0 0 20px ${c.border}` } : {}}
                 >
-                  {opt.icon && <div className="mb-1 opacity-70">{opt.icon}</div>}
-                  <p className="text-sm font-medium">{opt.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
-                </button>
-              ))}
-            </div>
+                  <Icon size={22} className={`mb-2 ${active ? c.icon : 'text-gray-600'}`} />
+                  <p className={`text-sm font-semibold ${active ? c.text : 'text-gray-300'}`}>{opt.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 leading-snug">{opt.desc}</p>
+                </motion.button>
+              )
+            })}
           </div>
 
-          {uploadType === 'fleet' && (
-            <div className="card mb-4 border-yellow-700/40 bg-yellow-900/10">
+          {uploadType === 'fleet' ? (
+            <motion.div initial={{ opacity:0, scale:0.98 }} animate={{ opacity:1, scale:1 }} className="card border-yellow-700/40 bg-yellow-900/10 mb-6">
               <div className="flex items-start gap-3">
-                <span className="text-yellow-400 text-lg">&#9888;</span>
+                <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-yellow-300">Fleet / Vehicle Data</p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    To upload vehicle/fleet data, use the <strong className="text-white">Fleet Master</strong> page which has a dedicated vehicle import with the correct column mapping.
-                  </p>
+                  <p className="text-sm font-semibold text-yellow-300">Fleet data has a dedicated upload</p>
+                  <p className="text-sm text-gray-400 mt-1">Use Fleet Master for vehicle imports — it has the correct column mapping and validation.</p>
                   <a href="/fleet-master" className="inline-block mt-2 text-sm text-green-400 underline hover:text-green-300">Go to Fleet Master &rarr;</a>
                 </div>
               </div>
-            </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              className="relative overflow-hidden rounded-2xl cursor-pointer transition-all duration-200"
+              style={{
+                border: `2px dashed ${dragging ? 'rgba(22,163,74,0.7)' : 'rgba(255,255,255,0.1)'}`,
+                background: dragging ? 'rgba(22,163,74,0.07)' : 'rgba(255,255,255,0.02)',
+                boxShadow: dragging ? '0 0 40px rgba(22,163,74,0.2)' : 'none',
+              }}
+              onClick={() => fileRef.current?.click()}
+              onDragOver={e => { e.preventDefault(); setDragging(true) }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={handleDrop}
+              whileHover={{ borderColor: 'rgba(22,163,74,0.4)', background: 'rgba(22,163,74,0.04)' }}
+            >
+              <div className="py-20 flex flex-col items-center justify-center gap-4">
+                <motion.div
+                  animate={dragging ? { scale: 1.15, rotate: [-5, 5, -5, 0] } : { scale: 1, rotate: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="w-20 h-20 rounded-2xl flex items-center justify-center"
+                  style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.3)', boxShadow: '0 0 30px rgba(22,163,74,0.15)' }}
+                >
+                  <Upload size={36} className="text-green-400" />
+                </motion.div>
+                <div className="text-center">
+                  <p className="text-xl font-semibold text-white mb-1">
+                    {dragging ? 'Drop to upload' : 'Drop your Excel or CSV file here'}
+                  </p>
+                  <p className="text-gray-500 text-sm">or click to browse · .xlsx, .xls, .csv supported</p>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-gray-600">
+                  <span className="px-2 py-1 bg-gray-800/60 rounded">.xlsx</span>
+                  <span className="px-2 py-1 bg-gray-800/60 rounded">.xls</span>
+                  <span className="px-2 py-1 bg-gray-800/60 rounded">.csv</span>
+                </div>
+              </div>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
+              {error && <p className="text-red-400 text-sm text-center pb-4">{error}</p>}
+            </motion.div>
           )}
-
-          <div className="card border-2 border-dashed border-gray-700 hover:border-blue-600 transition-colors cursor-pointer text-center py-16"
-            onClick={() => fileRef.current?.click()}>
-            <Upload size={40} className="text-gray-500 mx-auto mb-4" />
-            <p className="text-lg font-medium text-white mb-1">Drop your Excel or CSV file here</p>
-            <p className="text-sm text-gray-400">or click to browse — .xlsx, .xls, .csv supported</p>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
-            {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
-          </div>
-        </>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* ── Sheets picker ─────────────────────────────────────────────────── */}
       {step === 'sheets' && (
@@ -711,29 +799,50 @@ export default function UploadData() {
 
       {/* ── Uploading ─────────────────────────────────────────────────────── */}
       {step === 'uploading' && (
-        <div className="card text-center py-16">
-          <div className="animate-spin h-10 w-10 rounded-full border-2 border-gray-700 border-t-blue-500 mx-auto mb-4" />
-          <p className="text-white font-medium">Uploading & auto-classifying…</p>
+        <motion.div key="uploading" initial={{ opacity:0 }} animate={{ opacity:1 }} className="card text-center py-20">
+          <div className="relative w-16 h-16 mx-auto mb-6">
+            <div className="absolute inset-0 rounded-full border-2 border-gray-700" />
+            <div className="absolute inset-0 rounded-full border-2 border-green-500 border-t-transparent animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Rocket size={20} className="text-green-400" />
+            </div>
+          </div>
+          <p className="text-white text-lg font-semibold mb-1">Uploading & classifying</p>
+          <p className="text-gray-500 text-sm mb-6">Auto-classifying records with the Smart Engine</p>
           {progress.total > 0 && (
-            <div className="mt-4 max-w-xs mx-auto">
-              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+            <div className="max-w-sm mx-auto">
+              <div className="flex justify-between text-xs text-gray-500 mb-2">
+                <span>{progress.done.toLocaleString()} rows processed</span>
+                <span>{Math.round((progress.done / progress.total) * 100)}%</span>
               </div>
-              <p className="text-gray-500 text-xs mt-1">{progress.done.toLocaleString()} / {progress.total.toLocaleString()}</p>
+              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ background: 'linear-gradient(90deg, #16a34a, #4ade80)' }}
+                  animate={{ width: `${(progress.done / progress.total) * 100}%` }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
+              <p className="text-gray-600 text-xs mt-2">{progress.total.toLocaleString()} total records</p>
             </div>
           )}
-        </div>
+        </motion.div>
       )}
 
       {/* ── Done ──────────────────────────────────────────────────────────── */}
       {step === 'done' && result && (
-        <div className="card">
-          <div className="flex items-center gap-3 mb-5">
-            <CheckCircle size={24} className="text-green-400" />
-            <h2 className="text-lg font-semibold text-white">Upload Complete</h2>
+        <motion.div key="done" initial={{ opacity:0, scale:0.97 }} animate={{ opacity:1, scale:1 }} className="card">
+          <div className="flex items-center gap-3 mb-6">
+            <motion.div initial={{ scale:0 }} animate={{ scale:1 }} transition={{ type:'spring', stiffness:300, delay:0.1 }}>
+              <CheckCircle size={32} className="text-green-400" style={{ filter: 'drop-shadow(0 0 12px rgba(74,222,128,0.6))' }} />
+            </motion.div>
+            <div>
+              <h2 className="text-xl font-bold text-white">Upload Complete</h2>
+              <p className="text-gray-500 text-sm">Records imported and classified successfully</p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <Tile label="Records Added"     value={result.added}               color="green" />
             <Tile label="Auto-Classified"   value={result.autoClassifiedCount} color="blue" />
             <Tile label="Need Review"       value={result.needsReviewCount}    color="yellow" />
@@ -763,7 +872,7 @@ export default function UploadData() {
           )}
 
           <button onClick={reset} className="btn-secondary">Upload Another File</button>
-        </div>
+        </motion.div>
       )}
     </div>
   )

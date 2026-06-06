@@ -48,10 +48,10 @@
     font-variant-numeric: tabular-nums;
   }
 
-  ::-webkit-scrollbar          { width: 4px; height: 4px; }
-  ::-webkit-scrollbar-track    { background: transparent; }
-  ::-webkit-scrollbar-thumb    { background: rgba(22,163,74,0.22); border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(22,163,74,0.45); }
+  ::-webkit-scrollbar          { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track    { background: rgba(22,163,74,0.05); }
+  ::-webkit-scrollbar-thumb    { background: rgba(22,163,74,0.3); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(22,163,74,0.6); }
 
   ::selection { background: rgba(22,163,74,0.3); color: #fff; }
 }
@@ -113,7 +113,7 @@
       inset 0 1px 0 rgba(22,163,74,0.08),
       0 0 35px rgba(22,163,74,0.09),
       0 8px 30px rgba(0,0,0,0.5);
-    transform: translateY(-1px);
+    transform: translateY(-1px) perspective(700px) rotateX(0.8deg);
   }
 
   /* accent card — green top border */
@@ -151,7 +151,7 @@
   .card-stat:hover {
     border-color: rgba(22,163,74,0.42);
     box-shadow: 0 0 45px rgba(22,163,74,0.13), 0 10px 35px rgba(0,0,0,0.55);
-    transform: translateY(-2px);
+    transform: translateY(-2px) perspective(700px) rotateX(1deg);
   }
 
   /* ── Buttons ──────────────────────────────────────────────────────────── */
@@ -161,6 +161,7 @@
            transition-all duration-200
            focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:ring-offset-0
            disabled:opacity-40 disabled:cursor-not-allowed;
+    letter-spacing: 0.01em;
     background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
     box-shadow:
       0 0 22px rgba(22,163,74,0.28),
@@ -186,6 +187,7 @@
            font-medium py-2 px-4 rounded-lg text-sm
            transition-all duration-200
            focus:outline-none focus:ring-1 focus:ring-white/15;
+    letter-spacing: 0.01em;
     background: rgba(255,255,255,0.035);
     border: 1px solid rgba(255,255,255,0.08);
     color: #9ca3af;
@@ -251,7 +253,7 @@
   }
   .table-cell {
     @apply px-3 py-2.5 text-sm;
-    color: #c8d4cc;
+    color: #d1d5db;
     border-bottom: 1px solid rgba(255,255,255,0.03);
     transition: background .15s ease;
   }
@@ -260,7 +262,7 @@
   /* ── Badge ────────────────────────────────────────────────────────────── */
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
   }
 
   /* ── Typography ───────────────────────────────────────────────────────── */
@@ -361,12 +363,12 @@ aside {
 }
 
 .nav-section {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.09em;
-  color: rgba(22,163,74,0.28);
-  padding: 0.7rem 0.85rem 0.2rem;
+  color: rgba(74,222,128,0.45);
+  padding: 1.2rem 0.85rem 0.2rem;
 }
 
 /* ── Login ───────────────────────────────────────────────────────────────── */

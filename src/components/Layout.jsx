@@ -93,9 +93,7 @@ export default function Layout({ children }) {
   const debounceRef = useRef(null)
 
   useEffect(() => {
-    if (location.pathname === '/upload') {
-      setSidebarOpen(false)
-    } else if (window.innerWidth >= 1024) {
+    if (window.innerWidth >= 1024) {
       setSidebarOpen(true)
     }
   }, [location.pathname])
@@ -181,8 +179,8 @@ export default function Layout({ children }) {
           style={{ borderBottomColor: 'rgba(22,163,74,0.1)' }}>
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
             <div className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)', boxShadow: '0 0 14px rgba(22,163,74,0.5)' }}>
-              <img src={TpLogo} alt="" style={{ width: 16, height: 16, filter: 'brightness(0) invert(1)' }} />
+              style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.25)', boxShadow: '0 0 14px rgba(22,163,74,0.5)' }}>
+              <img src={TpLogo} alt="" style={{ width: 16, height: 16 }} />
             </div>
             <AnimatePresence>
               {sidebarOpen && (
@@ -265,7 +263,7 @@ export default function Layout({ children }) {
             return (
             <div key={label} className="mb-0.5">
               {sidebarOpen && (
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700 px-2.5 pt-2.5 pb-1">{label}</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-700 px-2.5 pt-5 pb-1">{label}</p>
               )}
               {visibleItems.map(({ to, label: lbl, icon: Icon, end }) => (
                 <NavLink
@@ -315,7 +313,7 @@ export default function Layout({ children }) {
           {profile?.role === 'Admin' && (
             <div className="mb-0.5">
               {sidebarOpen && (
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-700 px-2.5 pt-2.5 pb-1">Admin</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-700 px-2.5 pt-5 pb-1">Admin</p>
               )}
               <NavLink
                 to="/users"

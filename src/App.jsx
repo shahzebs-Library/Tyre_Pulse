@@ -43,6 +43,7 @@ import FleetIntelligence from './pages/FleetIntelligence'
 import AdvancedAnalytics from './pages/AdvancedAnalytics'
 import ExecutiveReport from './pages/ExecutiveReport'
 import ForecastingEngine from './pages/ForecastingEngine'
+import ContinuousImprovement from './pages/ContinuousImprovement'
 
 export default function App() {
   return (
@@ -96,6 +97,7 @@ export default function App() {
                     <Route path="/advanced-analytics"    element={<AdvancedAnalytics />} />
                     <Route path="/executive-report"      element={<ExecutiveReport />} />
                     <Route path="/forecasting"           element={<ForecastingEngine />} />
+                    <Route path="/continuous-improvement" element={<ContinuousImprovement />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

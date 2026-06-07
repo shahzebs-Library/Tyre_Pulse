@@ -4,6 +4,62 @@
 
 ---
 
+## Next Session — Continue Building
+
+Pick these up in priority order. All are independent — run agents in parallel.
+
+### 1. Settings — KPI Targets + Alert Thresholds (HIGH)
+File: `src/pages/Settings.jsx` (389 lines — needs additions)
+
+Add two new cards:
+- **KPI Targets Editor**: load from `kpi_targets` table, 5 editable fields (max_monthly_cost, max_high_risk_pct, target_records_per_month, max_overdue_actions, max_avg_cost_per_tyre), upsert on save per country/month/year
+- **Alert Thresholds**: stored in `app_settings` table as key=`alert_thresholds`, fields: stock critical %, budget warning %, budget critical %, days overdue before alert, high risk tyre % threshold
+- Admin-only editing; non-Admin sees read-only view
+
+### 2. KPI Scorecard — Site Breakdown + Target Management (HIGH)
+File: `src/pages/KpiScorecard.jsx` (447 lines)
+
+Add:
+- **Site breakdown tab**: same 5 KPIs shown per site as a comparison table with red/green colouring
+- **Target management inline**: editable target fields directly on the scorecard (not just in Settings)
+- **Performance alerts**: amber/red banner when any metric exceeds its target by >20%
+- **YoY comparison**: toggle to show this month vs same month last year
+
+### 3. VehicleHistory — Predictive Replacement + Recommendations (HIGH)
+File: `src/pages/VehicleHistory.jsx` (1152 lines)
+
+Add:
+- **Replacement forecast card**: based on average CPK and current km, estimate months until each tyre position needs replacing
+- **Action recommendations panel**: "Top 3 tyres to replace this month" based on age, CPK, risk level
+- **Cost projection**: estimated replacement cost over next 3 months for this asset
+- **Tyre health score per position**: 0-100 score combining age, risk, CPK
+
+### 4. StockManagement — Consumption Velocity + Inter-site Transfer (MEDIUM)
+File: `src/pages/StockManagement.jsx` (688 lines)
+
+Add:
+- **Consumption velocity**: average tyres used per month per site (last 3 months), shown as sparkline or trend chip
+- **Days of stock remaining**: current qty / monthly velocity = estimated days until stockout
+- **Inter-site transfer form**: move stock from site A to site B, inserts two stock_movement rows (Out + In)
+- **Reorder suggestion**: auto-calculate how many to reorder based on reorder_qty and current levels
+
+### 5. Reports Builder — Scheduled + Enhanced (MEDIUM)
+File: `src/pages/Reports.jsx` (462 lines)
+
+Add:
+- **Vehicle History report type** (currently missing): pulls per-asset tyre records grouped by asset
+- **Save report config**: store report settings in localStorage so user doesn't re-configure each time
+- **Preview improvements**: show full preview (not just 10 rows), with pagination
+- **Print button**: opens browser print dialog on the preview table
+
+---
+
+## Branch for next session
+Work on: `claude/test-coverage-analysis-YsbTg`
+After completing items, merge to `main` and push.
+
+---
+
 ## Hosting
 
 | Layer | Platform | Notes |

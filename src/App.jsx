@@ -38,6 +38,8 @@ import PositionIntelligence from './pages/PositionIntelligence'
 import InspectionIntelligence from './pages/InspectionIntelligence'
 import RootCauseEngine from './pages/RootCauseEngine'
 import PredictiveMaintenance from './pages/PredictiveMaintenance'
+import VendorIntelligence from './pages/VendorIntelligence'
+import FleetIntelligence from './pages/FleetIntelligence'
 
 export default function App() {
   return (
@@ -86,6 +88,8 @@ export default function App() {
                     <Route path="/inspection-intelligence" element={<InspectionIntelligence />} />
                     <Route path="/root-cause"              element={<RootCauseEngine />} />
                     <Route path="/predictive-maintenance"  element={<PredictiveMaintenance />} />
+                    <Route path="/vendor-intelligence"    element={<VendorIntelligence />} />
+                    <Route path="/fleet-intelligence"     element={<FleetIntelligence />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

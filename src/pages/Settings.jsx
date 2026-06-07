@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { Save, User, Settings2, Bell, Database, Info } from 'lucide-react'
+import { Save, User, Settings2, Bell, Database, Info, Target } from 'lucide-react'
 
 const ROLE_BADGE = {
   Admin:   'bg-purple-900/50 text-purple-300 border border-purple-700/50',
@@ -14,6 +14,38 @@ const ROLE_BADGE = {
 const DATE_FORMATS = ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD']
 const CURRENCIES   = ['SAR', 'AED', 'EGP', 'USD']
 
+const KPI_FIELDS = [
+  { key: 'max_monthly_cost',       label: 'Max Monthly Cost',       type: 'number', step: 1000, min: 0 },
+  { key: 'max_high_risk_pct',      label: 'Max High Risk %',        type: 'number', step: 1,    min: 0, max: 100 },
+  { key: 'target_records_per_month', label: 'Min Records / Month',  type: 'number', step: 1,    min: 0 },
+  { key: 'max_overdue_actions',    label: 'Max Overdue Actions',     type: 'number', step: 1,    min: 0 },
+  { key: 'max_avg_cost_per_tyre',  label: 'Max Avg Cost / Tyre',    type: 'number', step: 100,  min: 0 },
+]
+
+const KPI_DEFAULTS = {
+  max_monthly_cost: '',
+  max_high_risk_pct: '',
+  target_records_per_month: '',
+  max_overdue_actions: '',
+  max_avg_cost_per_tyre: '',
+}
+
+const ALERT_THRESHOLD_DEFAULTS = {
+  stock_critical_pct:  10,
+  budget_warning_pct:  80,
+  budget_critical_pct: 100,
+  days_overdue_alert:  7,
+  high_risk_tyre_pct:  25,
+}
+
+const ALERT_THRESHOLD_FIELDS = [
+  { key: 'stock_critical_pct',  label: 'Stock Critical % of Min Level', step: 1, min: 0, max: 100 },
+  { key: 'budget_warning_pct',  label: 'Budget Warning Threshold %',    step: 1, min: 0, max: 100 },
+  { key: 'budget_critical_pct', label: 'Budget Critical Threshold %',   step: 1, min: 0, max: 200 },
+  { key: 'days_overdue_alert',  label: 'Days Overdue Before Alert',      step: 1, min: 0 },
+  { key: 'high_risk_tyre_pct',  label: 'High Risk Tyre % Alert',         step: 1, min: 0, max: 100 },
+]
+
 function getInitials(name) {
   if (!name) return '?'
   return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -22,6 +54,8 @@ function getInitials(name) {
 export default function Settings() {
   const { profile, user } = useAuth()
   const { appSettings: globalSettings, refreshSettings, setActiveCountry, activeCountry } = useSettings()
+  const isAdmin = profile?.role === 'Admin'
+  const currentYear = new Date().getFullYear()
 
   const [appSettings, setAppSettings] = useState({ cost_per_tyre: 1200, company_name: '', currency: 'SAR' })
   const [profileForm, setProfileForm]  = useState({ full_name: '', username: '' })
@@ -37,12 +71,24 @@ export default function Settings() {
   const [prefCurrency, setPrefCurrency] = useState(() => localStorage.getItem('prefCurrency') ?? 'SAR')
   const [prefCountry, setPrefCountry]  = useState(() => activeCountry)
 
-  // Alert thresholds — stored in localStorage (could be Supabase profiles later)
+  // Alert thresholds — 3 legacy localStorage fields
   const [highRiskPct, setHighRiskPct]      = useState(() => Number(localStorage.getItem('thresh_highRisk') ?? 25))
   const [critCostThresh, setCritCostThresh] = useState(() => Number(localStorage.getItem('thresh_critCost') ?? 50000))
   const [lowTreadMm, setLowTreadMm]        = useState(() => Number(localStorage.getItem('thresh_lowTread') ?? 2))
 
-  useEffect(() => { loadSettings(); loadUploadHistory() }, [])
+  // Alert thresholds — 5 new fields persisted to app_settings
+  const [alertThresholds, setAlertThresholds] = useState(ALERT_THRESHOLD_DEFAULTS)
+  const [savingThresholds, setSavingThresholds] = useState(false)
+  const [threshMsg, setThreshMsg] = useState('')
+
+  // KPI Targets
+  const [kpiTargets, setKpiTargets]         = useState(KPI_DEFAULTS)
+  const [draftKpiTargets, setDraftKpiTargets] = useState(KPI_DEFAULTS)
+  const [editingKpi, setEditingKpi]         = useState(false)
+  const [savingKpi, setSavingKpi]           = useState(false)
+  const [kpiMsg, setKpiMsg]                 = useState('')
+
+  useEffect(() => { loadSettings(); loadUploadHistory(); loadKpiTargets(); loadAlertThresholds() }, [])
   useEffect(() => { setAppSettings(s => ({ ...s, ...globalSettings })) }, [globalSettings])
   useEffect(() => {
     if (profile) setProfileForm({ full_name: profile.full_name ?? '', username: profile.username ?? '' })
@@ -64,6 +110,39 @@ export default function Settings() {
       .order('uploaded_at', { ascending: false })
       .limit(3)
     setUploadHistory(data ?? [])
+  }
+
+  async function loadKpiTargets() {
+    const { data } = await supabase
+      .from('kpi_targets')
+      .select('*')
+      .eq('year', currentYear)
+    if (data && data.length > 0) {
+      const mapped = { ...KPI_DEFAULTS }
+      data.forEach(row => {
+        if (mapped.hasOwnProperty(row.metric)) {
+          mapped[row.metric] = row.target_value ?? ''
+        }
+      })
+      setKpiTargets(mapped)
+      setDraftKpiTargets(mapped)
+    }
+  }
+
+  async function loadAlertThresholds() {
+    const { data } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'alert_thresholds')
+      .single()
+    if (data?.value) {
+      try {
+        const parsed = JSON.parse(data.value)
+        setAlertThresholds(prev => ({ ...ALERT_THRESHOLD_DEFAULTS, ...prev, ...parsed }))
+      } catch {
+        // keep defaults
+      }
+    }
   }
 
   async function saveAppSettings(e) {
@@ -118,13 +197,61 @@ export default function Settings() {
     setActiveCountry(val)
   }
 
-  function saveThresholds(e) {
+  async function saveThresholds(e) {
     e.preventDefault()
+    setSavingThresholds(true)
+    setThreshMsg('')
+
+    // Save legacy fields to localStorage (backwards compat)
     localStorage.setItem('thresh_highRisk', highRiskPct)
     localStorage.setItem('thresh_critCost', critCostThresh)
     localStorage.setItem('thresh_lowTread', lowTreadMm)
-    setAppMsg('Thresholds saved')
-    setTimeout(() => setAppMsg(''), 3000)
+
+    // Save new fields to app_settings
+    const { error } = await supabase.from('app_settings').upsert(
+      { key: 'alert_thresholds', value: JSON.stringify(alertThresholds), updated_by: profile?.id },
+      { onConflict: 'key' }
+    )
+
+    setThreshMsg(error ? 'Save failed: ' + error.message : 'Thresholds saved')
+    setSavingThresholds(false)
+    setTimeout(() => setThreshMsg(''), 3000)
+  }
+
+  async function saveKpiTargets(e) {
+    e.preventDefault()
+    setSavingKpi(true)
+    setKpiMsg('')
+
+    const upserts = KPI_FIELDS.map(f => ({
+      metric: f.key,
+      target_value: draftKpiTargets[f.key] === '' ? null : Number(draftKpiTargets[f.key]),
+      year: currentYear,
+      month: null,
+      site: null,
+      region: 'Global',
+      created_by: profile?.id,
+    }))
+
+    const { error } = await supabase
+      .from('kpi_targets')
+      .upsert(upserts, { onConflict: 'metric,year,month,site' })
+
+    if (error) {
+      setKpiMsg('Save failed: ' + error.message)
+    } else {
+      setKpiTargets(draftKpiTargets)
+      setEditingKpi(false)
+      setKpiMsg('KPI targets saved')
+    }
+    setSavingKpi(false)
+    setTimeout(() => setKpiMsg(''), 3000)
+  }
+
+  function cancelKpiEdit() {
+    setDraftKpiTargets(kpiTargets)
+    setEditingKpi(false)
+    setKpiMsg('')
   }
 
   const initials = getInitials(profileForm.full_name || profile?.full_name)
@@ -299,52 +426,188 @@ export default function Settings() {
         {/* Column 3 — Alert Thresholds */}
         <div className="card space-y-4">
           <h2 className="text-base font-semibold text-white flex items-center gap-2"><Bell size={16} /> Alert Thresholds</h2>
-          <p className="text-xs text-gray-500">These values control when risk alerts are triggered. Stored locally on this device.</p>
+          <p className="text-xs text-gray-500">
+            Controls when risk alerts are triggered. Legacy fields stored locally; extended thresholds synced to database.
+          </p>
 
-          <form onSubmit={saveThresholds} className="space-y-3">
-            <div>
-              <label className="label">High Risk Threshold (%)</label>
-              <input
-                type="number"
-                className="input"
-                value={highRiskPct}
-                onChange={e => setHighRiskPct(Number(e.target.value))}
-                min={0}
-                max={100}
-                step={1}
-              />
-              <p className="text-xs text-gray-500 mt-1">Flag tyres with risk score above this %</p>
+          {isAdmin ? (
+            <form onSubmit={saveThresholds} className="space-y-3">
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Legacy Thresholds</p>
+              <div>
+                <label className="label">High Risk Threshold (%)</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={highRiskPct}
+                  onChange={e => setHighRiskPct(Number(e.target.value))}
+                  min={0}
+                  max={100}
+                  step={1}
+                />
+                <p className="text-xs text-gray-500 mt-1">Flag tyres with risk score above this %</p>
+              </div>
+              <div>
+                <label className="label">Critical Cost Threshold</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={critCostThresh}
+                  onChange={e => setCritCostThresh(Number(e.target.value))}
+                  min={0}
+                  step={1000}
+                />
+                <p className="text-xs text-gray-500 mt-1">Alert when total repair cost exceeds this value</p>
+              </div>
+              <div>
+                <label className="label">Low Tread Depth (mm)</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={lowTreadMm}
+                  onChange={e => setLowTreadMm(Number(e.target.value))}
+                  min={0}
+                  max={20}
+                  step={0.5}
+                />
+                <p className="text-xs text-gray-500 mt-1">Warn when tread depth falls below this value</p>
+              </div>
+
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide pt-2">Extended Thresholds</p>
+              {ALERT_THRESHOLD_FIELDS.map(f => (
+                <div key={f.key}>
+                  <label className="label">{f.label}</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={alertThresholds[f.key]}
+                    onChange={e => setAlertThresholds(prev => ({ ...prev, [f.key]: Number(e.target.value) }))}
+                    min={f.min ?? 0}
+                    max={f.max}
+                    step={f.step}
+                  />
+                </div>
+              ))}
+
+              <div className="flex items-center gap-3 pt-1">
+                <button type="submit" disabled={savingThresholds} className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
+                  <Save size={14} /> {savingThresholds ? 'Saving…' : 'Save Thresholds'}
+                </button>
+                {threshMsg && (
+                  <span className={`text-sm ${threshMsg.includes('failed') ? 'text-red-400' : 'text-green-400'}`}>
+                    {threshMsg}
+                  </span>
+                )}
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Legacy Thresholds</p>
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-gray-800">
+                  <tr>
+                    <td className="py-1.5 text-gray-400">High Risk Threshold</td>
+                    <td className="py-1.5 text-white text-right">{highRiskPct}%</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 text-gray-400">Critical Cost Threshold</td>
+                    <td className="py-1.5 text-white text-right">{critCostThresh.toLocaleString()}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 text-gray-400">Low Tread Depth</td>
+                    <td className="py-1.5 text-white text-right">{lowTreadMm} mm</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide pt-2">Extended Thresholds</p>
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-gray-800">
+                  {ALERT_THRESHOLD_FIELDS.map(f => (
+                    <tr key={f.key}>
+                      <td className="py-1.5 text-gray-400">{f.label}</td>
+                      <td className="py-1.5 text-white text-right">{alertThresholds[f.key]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div>
-              <label className="label">Critical Cost Threshold</label>
-              <input
-                type="number"
-                className="input"
-                value={critCostThresh}
-                onChange={e => setCritCostThresh(Number(e.target.value))}
-                min={0}
-                step={1000}
-              />
-              <p className="text-xs text-gray-500 mt-1">Alert when total repair cost exceeds this value</p>
-            </div>
-            <div>
-              <label className="label">Low Tread Depth (mm)</label>
-              <input
-                type="number"
-                className="input"
-                value={lowTreadMm}
-                onChange={e => setLowTreadMm(Number(e.target.value))}
-                min={0}
-                max={20}
-                step={0.5}
-              />
-              <p className="text-xs text-gray-500 mt-1">Warn when tread depth falls below this value</p>
-            </div>
-            <button type="submit" className="btn-primary flex items-center gap-2 text-sm">
-              <Save size={14} /> Save Thresholds
-            </button>
-          </form>
+          )}
         </div>
+      </div>
+
+      {/* KPI Targets Editor */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <Target size={16} /> KPI Targets — {currentYear}
+          </h2>
+          {isAdmin && !editingKpi && (
+            <button
+              type="button"
+              onClick={() => { setDraftKpiTargets(kpiTargets); setEditingKpi(true) }}
+              className="btn-secondary text-sm"
+            >
+              Edit Targets
+            </button>
+          )}
+        </div>
+
+        {isAdmin && editingKpi ? (
+          <form onSubmit={saveKpiTargets} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {KPI_FIELDS.map(f => (
+                <div key={f.key}>
+                  <label className="label">{f.label}</label>
+                  <input
+                    type={f.type}
+                    className="input"
+                    value={draftKpiTargets[f.key]}
+                    onChange={e => setDraftKpiTargets(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    min={f.min}
+                    max={f.max}
+                    step={f.step}
+                    placeholder="No target set"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button type="submit" disabled={savingKpi} className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
+                <Save size={14} /> {savingKpi ? 'Saving…' : 'Save KPI Targets'}
+              </button>
+              <button type="button" onClick={cancelKpiEdit} className="btn-secondary text-sm">
+                Cancel
+              </button>
+              {kpiMsg && (
+                <span className={`text-sm ${kpiMsg.includes('failed') ? 'text-red-400' : 'text-green-400'}`}>
+                  {kpiMsg}
+                </span>
+              )}
+            </div>
+          </form>
+        ) : (
+          <div>
+            {kpiMsg && !editingKpi && (
+              <p className="text-green-400 text-sm mb-3">{kpiMsg}</p>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {KPI_FIELDS.map(f => {
+                const val = kpiTargets[f.key]
+                return (
+                  <div key={f.key} className="bg-gray-800/50 rounded-lg px-4 py-3 flex items-center justify-between">
+                    <span className="text-gray-400 text-sm">{f.label}</span>
+                    <span className="text-white font-medium text-sm">
+                      {val === '' || val === null || val === undefined ? (
+                        <span className="text-gray-600 text-xs italic">Not set</span>
+                      ) : (
+                        Number(val).toLocaleString()
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Data Management */}

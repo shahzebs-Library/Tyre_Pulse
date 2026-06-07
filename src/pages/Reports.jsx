@@ -1,19 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
-import { FileText, ChevronRight, Download, ArrowLeft } from 'lucide-react'
+import { FileText, ChevronRight, Download, ArrowLeft, Printer } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const REPORT_TYPES = [
-  { id: 'Vehicle History',       desc: 'All tyre changes per vehicle',          table: 'tyre_records' },
-  { id: 'Cost Analysis',         desc: 'Spend grouped by site and brand',        table: 'tyre_records (aggregated)' },
-  { id: 'Risk Summary',          desc: 'High and Critical risk records',         table: 'tyre_records filtered' },
-  { id: 'Inspection Report',     desc: 'All inspections with findings',          table: 'inspections' },
-  { id: 'Tyre Replacement Log',  desc: 'Chronological replacement list',         table: 'tyre_records ordered by date' },
+  { id: 'Vehicle History',       desc: 'All tyre changes per vehicle, grouped by asset',  table: 'tyre_records' },
+  { id: 'Cost Analysis',         desc: 'Spend grouped by site and brand',                  table: 'tyre_records (aggregated)' },
+  { id: 'Risk Summary',          desc: 'High and Critical risk records',                   table: 'tyre_records filtered' },
+  { id: 'Inspection Report',     desc: 'All inspections with findings',                    table: 'inspections' },
+  { id: 'Tyre Replacement Log',  desc: 'Chronological replacement list',                   table: 'tyre_records ordered by date' },
 ]
 
 const REPORT_COLUMNS = {
-  'Vehicle History':      ['issue_date','asset_no','brand','description','serial_no','site','country','cost','risk_level','remarks'],
+  'Vehicle History':      ['asset_no','site','country','count','total_cost','avg_cost','brands','last_date','high_risk_count'],
   'Cost Analysis':        ['site','brand','count','total_cost','avg_cost','country'],
   'Risk Summary':         ['issue_date','asset_no','brand','serial_no','site','risk_level','description'],
   'Inspection Report':    ['inspection_date','asset_no','inspection_type','site','findings','inspector','status'],
@@ -26,10 +26,12 @@ const COLUMN_LABELS = {
   remarks: 'Remarks', count: 'Count', total_cost: 'Total Cost', avg_cost: 'Avg Cost',
   inspection_date: 'Inspection Date', inspection_type: 'Inspection Type', findings: 'Findings',
   inspector: 'Inspector', status: 'Status', qty: 'Qty',
+  brands: 'Brands Used', last_date: 'Last Date', high_risk_count: 'High Risk Count',
 }
 
 const RISK_LEVELS = ['High', 'Critical']
 const COUNTRIES   = ['Saudi Arabia', 'UAE', 'Bahrain', 'Kuwait', 'Oman', 'Qatar']
+const PAGE_SIZE   = 100
 
 function applyShortcut(label, setDateFrom, setDateTo, setDateShortcut) {
   const now = new Date()
@@ -65,10 +67,14 @@ export default function Reports() {
   const [filterRiskLevels, setFilterRiskLevels] = useState([...RISK_LEVELS])
   const [filterInspType, setFilterInspType] = useState('')
   const [selectedCols, setSelectedCols] = useState([])
-  const [previewRows, setPreviewRows] = useState([])
   const [allRows, setAllRows]         = useState([])
   const [loading, setLoading]         = useState(false)
   const [siteSuggestions, setSiteSuggestions] = useState([])
+  const [previewPage, setPreviewPage] = useState(1)
+  const [configRestored, setConfigRestored] = useState(false)
+
+  const previewRows = allRows.slice((previewPage - 1) * PAGE_SIZE, previewPage * PAGE_SIZE)
+  const totalPages  = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE))
 
   useEffect(() => {
     applyShortcut('This Month', setDateFrom, setDateTo, setDateShortcut)
@@ -85,10 +91,44 @@ export default function Reports() {
     loadSites()
   }, [])
 
+  // Reset preview page when data changes
+  useEffect(() => {
+    setPreviewPage(1)
+  }, [allRows])
+
   function selectType(type) {
     setReportType(type)
-    setSelectedCols(REPORT_COLUMNS[type] ?? [])
+    setConfigRestored(false)
+
+    const saved = localStorage.getItem('report_config_' + type)
+    if (saved) {
+      try {
+        const cfg = JSON.parse(saved)
+        if (cfg.dateFrom)         setDateFrom(cfg.dateFrom)
+        if (cfg.dateTo)           setDateTo(cfg.dateTo)
+        if (cfg.dateShortcut)     setDateShortcut(cfg.dateShortcut)
+        if (cfg.filterSite !== undefined)    setFilterSite(cfg.filterSite)
+        if (cfg.filterCountry !== undefined) setFilterCountry(cfg.filterCountry)
+        if (cfg.filterAsset !== undefined)   setFilterAsset(cfg.filterAsset)
+        if (cfg.filterBrand !== undefined)   setFilterBrand(cfg.filterBrand)
+        if (Array.isArray(cfg.filterRiskLevels)) setFilterRiskLevels(cfg.filterRiskLevels)
+        if (cfg.filterInspType !== undefined) setFilterInspType(cfg.filterInspType)
+        if (Array.isArray(cfg.selectedCols)) setSelectedCols(cfg.selectedCols)
+        else setSelectedCols(REPORT_COLUMNS[type] ?? [])
+        setConfigRestored(true)
+      } catch {
+        setSelectedCols(REPORT_COLUMNS[type] ?? [])
+      }
+    } else {
+      setSelectedCols(REPORT_COLUMNS[type] ?? [])
+    }
+
     setStep('config')
+  }
+
+  function clearSavedConfig() {
+    localStorage.removeItem('report_config_' + reportType)
+    setConfigRestored(false)
   }
 
   function toggleCol(col) {
@@ -104,6 +144,12 @@ export default function Reports() {
   }
 
   const runQuery = useCallback(async () => {
+    // Persist config to localStorage
+    localStorage.setItem(
+      'report_config_' + reportType,
+      JSON.stringify({ dateFrom, dateTo, dateShortcut, filterSite, filterCountry, filterAsset, filterBrand, filterRiskLevels, filterInspType, selectedCols })
+    )
+
     setLoading(true)
     try {
       let rows = []
@@ -116,7 +162,7 @@ export default function Reports() {
         if (filterCountry)    q = q.eq('country', filterCountry)
         if (filterInspType)   q = q.eq('inspection_type', filterInspType)
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-        const { data } = await q.order('inspection_date', { ascending: false }).limit(1000)
+        const { data } = await q.order('inspection_date', { ascending: false }).limit(5000)
         rows = data ?? []
       } else {
         let q = supabase.from('tyre_records').select(
@@ -137,15 +183,44 @@ export default function Reports() {
         if (reportType === 'Risk Summary')
           q = q.in('risk_level', filterRiskLevels.length ? filterRiskLevels : RISK_LEVELS)
 
-        if (reportType === 'Tyre Replacement Log')
-          q = q.order('issue_date', { ascending: false })
-        else
-          q = q.order('issue_date', { ascending: false })
+        q = q.order('issue_date', { ascending: false })
 
-        const { data } = await q.limit(1000)
+        const { data } = await q.limit(5000)
         const raw = data ?? []
 
-        if (reportType === 'Cost Analysis') {
+        if (reportType === 'Vehicle History') {
+          const grouped = {}
+          raw.forEach(r => {
+            const key = r.asset_no ?? 'Unknown'
+            if (!grouped[key]) grouped[key] = {
+              asset_no: key,
+              site: r.site ?? '',
+              country: r.country ?? '',
+              count: 0,
+              total_cost: 0,
+              brands: new Set(),
+              last_date: '',
+              risk_levels: [],
+            }
+            grouped[key].count += 1
+            grouped[key].total_cost += (r.cost_per_tyre ?? 0) * (r.qty ?? 1)
+            if (r.brand) grouped[key].brands.add(r.brand)
+            if (!grouped[key].last_date || r.issue_date > grouped[key].last_date)
+              grouped[key].last_date = r.issue_date
+            if (r.risk_level) grouped[key].risk_levels.push(r.risk_level)
+          })
+          rows = Object.values(grouped).map(g => ({
+            asset_no:        g.asset_no,
+            site:            g.site,
+            country:         g.country,
+            count:           g.count,
+            total_cost:      Math.round(g.total_cost),
+            avg_cost:        g.count > 0 ? Math.round(g.total_cost / g.count) : 0,
+            brands:          [...g.brands].join(', '),
+            last_date:       g.last_date,
+            high_risk_count: g.risk_levels.filter(r => r === 'High' || r === 'Critical').length,
+          })).sort((a, b) => b.total_cost - a.total_cost)
+        } else if (reportType === 'Cost Analysis') {
           const grouped = {}
           raw.forEach(r => {
             const key = `${r.site ?? ''}|${r.brand ?? ''}`
@@ -155,7 +230,7 @@ export default function Reports() {
           })
           rows = Object.values(grouped).map(g => ({
             ...g,
-            avg_cost: g.count > 0 ? Math.round(g.total_cost / g.count) : 0,
+            avg_cost:   g.count > 0 ? Math.round(g.total_cost / g.count) : 0,
             total_cost: Math.round(g.total_cost),
           })).sort((a, b) => b.total_cost - a.total_cost)
         } else {
@@ -167,12 +242,11 @@ export default function Reports() {
       }
 
       setAllRows(rows)
-      setPreviewRows(rows.slice(0, 50))
     } finally {
       setLoading(false)
     }
   }, [reportType, dateFrom, dateTo, filterSite, filterCountry, filterAsset, filterBrand,
-      filterRiskLevels, filterInspType, activeCountry])
+      filterRiskLevels, filterInspType, activeCountry, selectedCols, dateShortcut])
 
   function handleExcel() {
     const activeCols = (REPORT_COLUMNS[reportType] ?? []).filter(c => selectedCols.includes(c))
@@ -195,7 +269,26 @@ export default function Reports() {
     )
   }
 
+  function handlePrint() {
+    const printContent = document.querySelector('#report-preview-table')
+    if (!printContent) { window.print(); return }
+    const win = window.open('', '_blank')
+    win.document.write(
+      `<html><head><title>TyrePulse Report · ${reportType}</title>` +
+      `<style>body{font-family:sans-serif;margin:16px}h2{margin-bottom:12px;font-size:14px}` +
+      `table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 8px;font-size:12px}` +
+      `th{background:#f0f0f0;font-weight:600;text-align:left}</style></head>` +
+      `<body><h2>TyrePulse · ${reportType} · ${new Date().toLocaleDateString()}</h2>` +
+      `${printContent.outerHTML}</body></html>`
+    )
+    win.document.close()
+    win.print()
+  }
+
   const displayCols = (REPORT_COLUMNS[reportType] ?? []).filter(c => selectedCols.includes(c))
+
+  const rangeStart = allRows.length === 0 ? 0 : (previewPage - 1) * PAGE_SIZE + 1
+  const rangeEnd   = Math.min(previewPage * PAGE_SIZE, allRows.length)
 
   return (
     <div className="space-y-6">
@@ -253,6 +346,20 @@ export default function Reports() {
       {/* Step 2: Filters + Column picker */}
       {step === 'config' && (
         <div className="space-y-5">
+          {/* Saved config banner */}
+          {configRestored && (
+            <div className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm"
+              style={{ background: 'rgba(22,163,74,0.10)', border: '1px solid rgba(22,163,74,0.25)' }}>
+              <span className="text-green-400 font-medium">Saved config restored</span>
+              <button
+                onClick={clearSavedConfig}
+                className="ml-auto text-xs text-gray-400 hover:text-white underline underline-offset-2 transition-colors"
+              >
+                Clear saved config
+              </button>
+            </div>
+          )}
+
           <div className="card space-y-4">
             <h2 className="text-base font-semibold text-white">Filters · {reportType}</h2>
 
@@ -263,7 +370,7 @@ export default function Reports() {
                 {['This Month', 'Last 3 Months', 'This Year', 'Custom'].map(lbl => (
                   <button
                     key={lbl}
-                    onClick={() => lbl !== 'Custom' && applyShortcut(lbl, setDateFrom, setDateTo, setDateShortcut) || setDateShortcut('Custom')}
+                    onClick={() => lbl !== 'Custom' ? applyShortcut(lbl, setDateFrom, setDateTo, setDateShortcut) : setDateShortcut('Custom')}
                     className={`px-3 py-1 rounded text-xs font-medium border transition-colors ${
                       dateShortcut === lbl
                         ? 'border-green-600 text-green-400'
@@ -399,18 +506,23 @@ export default function Reports() {
             <button onClick={handlePdf} className="btn-secondary flex items-center gap-1.5">
               <Download size={14} className="text-red-400" /> Export PDF
             </button>
+            <button onClick={handlePrint} className="btn-secondary flex items-center gap-1.5">
+              <Printer size={14} className="text-blue-400" /> Print
+            </button>
           </div>
 
           {loading ? (
             <div className="flex items-center justify-center h-40 text-gray-400">Running report…</div>
           ) : (
             <>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm text-gray-400">
                   Total records: <span className="text-white font-semibold">{allRows.length.toLocaleString()}</span>
                 </span>
-                {allRows.length > 50 && (
-                  <span className="text-xs text-gray-500">Showing first 50 rows in preview</span>
+                {allRows.length > PAGE_SIZE && (
+                  <span className="text-xs text-gray-500">
+                    Showing {rangeStart}–{rangeEnd} of {allRows.length.toLocaleString()} records
+                  </span>
                 )}
               </div>
 
@@ -419,39 +531,69 @@ export default function Reports() {
                   No records found for the selected filters.
                 </div>
               ) : (
-                <div className="card overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr>
-                        {displayCols.map(col => (
-                          <th key={col} className="table-header text-left whitespace-nowrap">
-                            {COLUMN_LABELS[col] ?? col}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {previewRows.map((row, i) => (
-                        <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/20">
+                <>
+                  <div className="card overflow-x-auto">
+                    <table id="report-preview-table" className="w-full text-sm">
+                      <thead>
+                        <tr>
                           {displayCols.map(col => (
-                            <td key={col} className="table-cell whitespace-nowrap max-w-48 truncate">
-                              {col === 'risk_level' && row[col] ? (
-                                <span className={`badge text-xs ${
-                                  row[col] === 'Critical' ? 'bg-red-900/50 text-red-300' :
-                                  row[col] === 'High' ? 'bg-orange-900/50 text-orange-300' :
-                                  row[col] === 'Medium' ? 'bg-yellow-900/50 text-yellow-300' :
-                                  'bg-green-900/50 text-green-300'
-                                }`}>{row[col]}</span>
-                              ) : (
-                                row[col] ?? '—'
-                              )}
-                            </td>
+                            <th key={col} className="table-header text-left whitespace-nowrap">
+                              {COLUMN_LABELS[col] ?? col}
+                            </th>
                           ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {previewRows.map((row, i) => (
+                          <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/20">
+                            {displayCols.map(col => (
+                              <td key={col} className="table-cell whitespace-nowrap max-w-48 truncate">
+                                {col === 'risk_level' && row[col] ? (
+                                  <span className={`badge text-xs ${
+                                    row[col] === 'Critical' ? 'bg-red-900/50 text-red-300' :
+                                    row[col] === 'High' ? 'bg-orange-900/50 text-orange-300' :
+                                    row[col] === 'Medium' ? 'bg-yellow-900/50 text-yellow-300' :
+                                    'bg-green-900/50 text-green-300'
+                                  }`}>{row[col]}</span>
+                                ) : (
+                                  row[col] ?? '—'
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination controls */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <span className="text-xs text-gray-500">
+                        Showing {rangeStart}–{rangeEnd} of {allRows.length.toLocaleString()} records
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setPreviewPage(p => Math.max(1, p - 1))}
+                          disabled={previewPage === 1}
+                          className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Prev
+                        </button>
+                        <span className="text-sm text-gray-400 px-1">
+                          Page {previewPage} of {totalPages}
+                        </span>
+                        <button
+                          onClick={() => setPreviewPage(p => Math.min(totalPages, p + 1))}
+                          disabled={previewPage === totalPages}
+                          className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}

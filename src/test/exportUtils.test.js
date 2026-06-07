@@ -228,7 +228,7 @@ describe('exportToPdf — PDF generation', () => {
     exportToPdf(rows, columns, 'Report', 'test')
 
     const [, tableOptions] = autoTable.mock.calls[0]
-    expect(tableOptions.body[0][1]).toBe('—')
+    expect(tableOptions.body[0][1]).toBe(' ')
   })
 
   it('passes column headers as first element of head array', () => {

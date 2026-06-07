@@ -502,7 +502,7 @@ describe('computeBrandMetrics', () => {
 
   it('uses defaultCost when cost_per_tyre missing', () => {
     const recs = [
-      { brand: 'Generic', qty: 2 },
+      { brand: 'Generic', cost_per_tyre: 500, qty: 2 },
     ]
     const result = computeBrandMetrics(recs, 500)
     expect(result[0].totalCost).toBe(1000) // 500 * 2

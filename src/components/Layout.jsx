@@ -12,6 +12,7 @@ import {
   Sun, Moon, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare,
   ChevronDown, ChevronRight,
   Cpu, MapPin, Activity, GitMerge, CalendarClock, Trophy, BarChartBig, Microscope,
+  TrendingUp, BookOpen,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -62,6 +63,8 @@ const NAV_GROUPS = [
       { to: '/vendor-intelligence',     label: 'Vendor Intelligence',     icon: Trophy },
       { to: '/fleet-intelligence',      label: 'Fleet Intelligence',      icon: BarChartBig },
       { to: '/advanced-analytics',      label: 'Advanced Analytics',      icon: Microscope },
+      { to: '/executive-report',        label: 'Executive Report',        icon: BookOpen },
+      { to: '/forecasting',             label: 'Forecasting Engine',      icon: TrendingUp },
       { to: '/alerts',          label: 'Alerts',           icon: Bell },
       { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle, adminOnly: true },
       { to: '/vehicle-history', label: 'Vehicle History',  icon: Car,           adminOnly: true },

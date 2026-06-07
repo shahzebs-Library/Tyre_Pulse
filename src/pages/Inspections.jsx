@@ -5,6 +5,8 @@ import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare } from 'lucide-react'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -285,20 +287,217 @@ export default function Inspections() {
 
   function exportChecklistPdf() {
     if (!clSaved) return
-    let tyreData = []
-    try { tyreData = JSON.parse(clSaved.findings || '[]') } catch { tyreData = [] }
-    exportToPdf(
-      tyreData,
-      [
-        { key: 'position', header: 'Position' },
-        { key: 'pressure', header: 'Pressure (PSI)' },
-        { key: 'condition', header: 'Condition' },
-        { key: 'treadDepth', header: 'Tread (mm)' },
-      ],
-      `Daily Tyre Inspection: ${clSaved.asset_no} · ${clSaved.scheduled_date}`,
-      `TyrePulse_Checklist_${clSaved.asset_no}`,
-      'landscape'
+    const tyreData = clPositions.length > 0 ? clPositions
+      : (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })()
+
+    const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const pw     = doc.internal.pageSize.width
+    const ph     = doc.internal.pageSize.height
+    const mx     = 14
+
+    // ── Header band ────────────────────────────────────────────────────────────
+    doc.setFillColor(21, 128, 61)
+    doc.rect(0, 0, pw, 20, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(13)
+    doc.setFont('helvetica', 'bold')
+    doc.text('TYREPULSE', mx, 9)
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Daily Tyre Inspection Report', mx, 16)
+    doc.text(
+      `Generated: ${new Date().toLocaleDateString('en-GB')}`,
+      pw - mx, 16, { align: 'right' }
     )
+
+    // ── Asset info grid ─────────────────────────────────────────────────────────
+    let y = 28
+    const infoItems = [
+      ['Asset No',       clAsset || clSaved.asset_no || 'n/a'],
+      ['Vehicle Type',   clFleetInfo?.vehicle_type || 'n/a'],
+      ['Site',           clSite || clSaved.site || 'n/a'],
+      ['Inspector',      clInspector || clSaved.inspector || 'n/a'],
+      ['Date',           clDate || clSaved.scheduled_date || 'n/a'],
+      ['Tyre Count',     String(tyreData.length)],
+    ]
+    const colW = (pw - mx * 2) / 3
+    infoItems.forEach(([label, value], i) => {
+      const col = i % 3
+      const row = Math.floor(i / 3)
+      const ix  = mx + col * colW
+      const iy  = y + row * 12
+      doc.setFontSize(7)
+      doc.setTextColor(107, 114, 128)
+      doc.setFont('helvetica', 'normal')
+      doc.text(label, ix, iy)
+      doc.setFontSize(9)
+      doc.setTextColor(31, 41, 55)
+      doc.setFont('helvetica', 'bold')
+      doc.text(String(value), ix, iy + 5)
+    })
+    y += 30
+
+    // ── Vehicle diagram ─────────────────────────────────────────────────────────
+    // Separate positions into left / right columns
+    const isLeft  = pos => /^FL|^RL|RLI|RLO/.test(pos)
+    const isRight = pos => /^FR|^RR|RRI|RRO/.test(pos)
+    const lefts   = tyreData.filter(p => isLeft(p.position))
+    const rights  = tyreData.filter(p => isRight(p.position))
+    const rowCount = Math.max(lefts.length, rights.length, 1)
+
+    const diagW  = 100
+    const diagX  = (pw - diagW) / 2
+    const rowGap = 14
+    const r      = 5.5    // tyre circle radius mm
+    const bodyW  = 30
+    const bodyX  = diagX + (diagW - bodyW) / 2
+    const diagH  = rowCount * rowGap + 8
+
+    // Vehicle body
+    doc.setFillColor(30, 41, 59)
+    doc.setDrawColor(75, 85, 99)
+    doc.setLineWidth(0.5)
+    doc.rect(bodyX, y, bodyW, diagH, 'FD')
+
+    // Vehicle type label
+    doc.setTextColor(107, 114, 128)
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'normal')
+    doc.text(clFleetInfo?.vehicle_type || 'Vehicle', pw / 2, y - 2, { align: 'center' })
+
+    function drawTyre(cx, cy, condition, pressure, label) {
+      if (condition === 'Good')       { doc.setFillColor(22, 163, 74) }
+      else if (condition === 'Wear')  { doc.setFillColor(202, 138, 4) }
+      else if (condition === 'Damage'){ doc.setFillColor(220, 38, 38) }
+      else                            { doc.setFillColor(55, 65, 81)  }
+      doc.setDrawColor(200, 200, 200)
+      doc.setLineWidth(0.3)
+      doc.circle(cx, cy, r, 'FD')
+      doc.setTextColor(255, 255, 255)
+      doc.setFont('helvetica', 'bold')
+      if (pressure) {
+        doc.setFontSize(5)
+        doc.text(String(pressure), cx, cy + 0.8, { align: 'center' })
+        doc.setFontSize(4)
+        doc.setFont('helvetica', 'normal')
+        doc.text(label, cx, cy + 4, { align: 'center' })
+      } else {
+        doc.setFontSize(5)
+        doc.text(label, cx, cy + 1, { align: 'center' })
+      }
+    }
+
+    for (let i = 0; i < rowCount; i++) {
+      const rowY = y + 6 + i * rowGap
+      // Axle line
+      doc.setDrawColor(75, 85, 99)
+      doc.setLineWidth(0.4)
+      doc.line(bodyX, rowY, bodyX + bodyW, rowY)
+      // Left tyre
+      if (lefts[i]) {
+        const cx = diagX + r + 4
+        drawTyre(cx, rowY, lefts[i].condition, lefts[i].pressure, lefts[i].position)
+      }
+      // Right tyre
+      if (rights[i]) {
+        const cx = diagX + diagW - r - 4
+        drawTyre(cx, rowY, rights[i].condition, rights[i].pressure, rights[i].position)
+      }
+    }
+
+    // Colour legend
+    const legendY = y + diagH + 5
+    const legendItems = [
+      { color: [22, 163, 74],  label: 'Good'    },
+      { color: [202, 138, 4],  label: 'Wear'    },
+      { color: [220, 38, 38],  label: 'Damage'  },
+      { color: [55, 65, 81],   label: 'No data' },
+    ]
+    let lx = mx
+    legendItems.forEach(({ color, label }) => {
+      doc.setFillColor(...color)
+      doc.circle(lx + 2, legendY, 2, 'F')
+      doc.setTextColor(107, 114, 128)
+      doc.setFontSize(7)
+      doc.setFont('helvetica', 'normal')
+      doc.text(label, lx + 5.5, legendY + 1)
+      lx += 26
+    })
+
+    y = legendY + 8
+
+    // ── Tyre data table ─────────────────────────────────────────────────────────
+    autoTable(doc, {
+      startY: y,
+      head: [['Position', 'Pressure (PSI)', 'Condition', 'Tread Depth (mm)']],
+      body: tyreData.map(row => [
+        row.position || 'n/a',
+        row.pressure ? `${row.pressure} PSI` : 'n/a',
+        row.condition || 'n/a',
+        row.treadDepth ? `${row.treadDepth} mm` : 'n/a',
+      ]),
+      margin:      { left: mx, right: mx },
+      theme:       'grid',
+      styles:      { fontSize: 8, cellPadding: 2.5 },
+      headStyles:  { fillColor: [21, 128, 61], textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      didParseCell(data) {
+        if (data.section !== 'body' || data.column.index !== 2) return
+        const cond = String(data.cell.raw)
+        if (cond === 'Good')   { data.cell.styles.fillColor = [220, 252, 231]; data.cell.styles.textColor = [21, 128, 61]  }
+        if (cond === 'Wear')   { data.cell.styles.fillColor = [254, 249, 195]; data.cell.styles.textColor = [161, 98, 7]   }
+        if (cond === 'Damage') { data.cell.styles.fillColor = [254, 226, 226]; data.cell.styles.textColor = [185, 28, 28]  }
+      },
+    })
+
+    // ── Notes ───────────────────────────────────────────────────────────────────
+    let finalY = doc.lastAutoTable?.finalY ?? (y + 40)
+    finalY += 8
+
+    if (clNotes) {
+      doc.setTextColor(31, 41, 55)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Notes:', mx, finalY)
+      finalY += 5
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      const lines = doc.splitTextToSize(clNotes, pw - mx * 2)
+      doc.text(lines, mx, finalY)
+      finalY += lines.length * 4.5 + 6
+    }
+
+    // ── Signature line ──────────────────────────────────────────────────────────
+    if (finalY + 25 < ph - 15) {
+      finalY += 4
+      doc.setDrawColor(156, 163, 175)
+      doc.setLineWidth(0.5)
+      doc.line(mx, finalY + 10, mx + 65, finalY + 10)
+      doc.line(mx + 75, finalY + 10, mx + 140, finalY + 10)
+      doc.setTextColor(107, 114, 128)
+      doc.setFontSize(7.5)
+      doc.setFont('helvetica', 'normal')
+      doc.text('Inspector Signature', mx, finalY + 15)
+      doc.text(`Name: ${clInspector || '________________'}`, mx + 75, finalY + 15)
+    }
+
+    // ── Footer on every page ────────────────────────────────────────────────────
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i)
+      doc.setFillColor(249, 250, 251)
+      doc.rect(0, ph - 10, pw, 10, 'F')
+      doc.setTextColor(156, 163, 175)
+      doc.setFontSize(7)
+      doc.setFont('helvetica', 'normal')
+      doc.text(
+        `Confidential · For Internal Use Only  |  ${clDate || clSaved.scheduled_date || 'n/a'}  |  Inspector: ${clInspector || 'n/a'}  |  Asset: ${clAsset || clSaved.asset_no || 'n/a'}`,
+        pw / 2, ph - 4, { align: 'center' }
+      )
+      doc.text(`${i} / ${totalPages}`, pw - mx, ph - 4, { align: 'right' })
+    }
+
+    doc.save(`TyrePulse_Checklist_${clAsset || clSaved.asset_no || 'report'}.pdf`)
   }
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading…</div>

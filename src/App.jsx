@@ -40,6 +40,7 @@ import RootCauseEngine from './pages/RootCauseEngine'
 import PredictiveMaintenance from './pages/PredictiveMaintenance'
 import VendorIntelligence from './pages/VendorIntelligence'
 import FleetIntelligence from './pages/FleetIntelligence'
+import AdvancedAnalytics from './pages/AdvancedAnalytics'
 
 export default function App() {
   return (
@@ -90,6 +91,7 @@ export default function App() {
                     <Route path="/predictive-maintenance"  element={<PredictiveMaintenance />} />
                     <Route path="/vendor-intelligence"    element={<VendorIntelligence />} />
                     <Route path="/fleet-intelligence"     element={<FleetIntelligence />} />
+                    <Route path="/advanced-analytics"    element={<AdvancedAnalytics />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

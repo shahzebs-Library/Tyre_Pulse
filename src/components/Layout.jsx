@@ -71,6 +71,50 @@ const NAV_GROUPS = [
   },
 ]
 
+function shouldShowNavItem(item, profile) {
+  if (profile?.role === 'Inspector') {
+    return item.to === '/inspections' || item.to === '/settings'
+  }
+  if (item.adminOnly) return profile?.role === 'Admin'
+  return true
+}
+
+function roleBadgeClass(role) {
+  switch (role) {
+    case 'Admin':     return 'bg-red-900/50 text-red-300 text-xs px-2 py-0.5 rounded-full'
+    case 'Manager':   return 'bg-orange-900/50 text-orange-300 text-xs px-2 py-0.5 rounded-full'
+    case 'Inspector': return 'bg-purple-900/50 text-purple-300 text-xs px-2 py-0.5 rounded-full'
+    case 'Director':  return 'bg-blue-900/50 text-blue-300 text-xs px-2 py-0.5 rounded-full'
+    case 'Tyre Man':  return 'bg-teal-900/50 text-teal-300 text-xs px-2 py-0.5 rounded-full'
+    default:          return 'bg-gray-800 text-gray-400 text-xs px-2 py-0.5 rounded-full'
+  }
+}
+
+function TyreManShell({ children }) {
+  const { signOut, profile } = useAuth()
+  return (
+    <div className="min-h-screen bg-gray-950 flex flex-col">
+      {/* Slim top bar */}
+      <header className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <img src={TpLogo} className="w-7 h-7" alt="TyrePulse" />
+          <span className="font-semibold text-white text-sm">TyrePulse</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400">{profile?.full_name}</span>
+          <button onClick={signOut} className="text-gray-400 hover:text-red-400 text-xs transition-colors">
+            Sign out
+          </button>
+        </div>
+      </header>
+      {/* Content fills remaining height */}
+      <main className="flex-1 overflow-auto p-3">
+        {children}
+      </main>
+    </div>
+  )
+}
+
 const SEARCH_TABLES = [
   { table: 'tyre_records',       fields: ['serial_no','asset_no','brand','site','description'],  label: 'Tyre',   route: '/tyres' },
   { table: 'corrective_actions', fields: ['title','site','assigned_to','asset_no'],              label: 'Action', route: '/actions' },
@@ -173,6 +217,10 @@ export default function Layout({ children }) {
 
   const pillStyle = (c) => activeCountry === c ? { backgroundColor: '#15803d' } : {}
 
+  if (profile?.role === 'Tyre Man') {
+    return <TyreManShell>{children}</TyreManShell>
+  }
+
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'transparent' }}>
 
@@ -241,19 +289,21 @@ export default function Layout({ children }) {
                 </button>
               </div>
 
-              {/* Country selector */}
-              <div className="px-2.5 pt-1 pb-1">
-                <p className="nav-section px-0.5 pt-1.5 pb-1">Country</p>
-                <div className="flex gap-0.5 rounded-lg p-0.5"
-                  style={{ background: 'rgba(22,163,74,0.04)', border: '1px solid rgba(22,163,74,0.1)' }}>
-                  <button className={pillClass('All')} style={pillStyle('All')} onClick={() => setActiveCountry('All')}>All</button>
-                  {COUNTRIES.map(c => (
-                    <button key={c} className={pillClass(c)} style={pillStyle(c)} onClick={() => setActiveCountry(c)}>
-                      {COUNTRY_LABEL[c]}
-                    </button>
-                  ))}
+              {/* Country selector — hidden for non-Admins who have a fixed country */}
+              {(profile?.role === 'Admin' || !profile?.country || profile.country.length === 0) && (
+                <div className="px-2.5 pt-1 pb-1">
+                  <p className="nav-section px-0.5 pt-1.5 pb-1">Country</p>
+                  <div className="flex gap-0.5 rounded-lg p-0.5"
+                    style={{ background: 'rgba(22,163,74,0.04)', border: '1px solid rgba(22,163,74,0.1)' }}>
+                    <button className={pillClass('All')} style={pillStyle('All')} onClick={() => setActiveCountry('All')}>All</button>
+                    {COUNTRIES.map(c => (
+                      <button key={c} className={pillClass(c)} style={pillStyle(c)} onClick={() => setActiveCountry(c)}>
+                        {COUNTRY_LABEL[c]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -261,14 +311,7 @@ export default function Layout({ children }) {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-1 px-2">
           {NAV_GROUPS.map(({ label, items }) => {
-            const visibleItems = items
-              .filter(item => !item.adminOnly || profile?.role === 'Admin')
-              .filter(item => {
-                if (profile?.role === 'Inspector') {
-                  return item.to === '/inspections' || item.to === '/settings'
-                }
-                return true
-              })
+            const visibleItems = items.filter(item => shouldShowNavItem(item, profile))
             if (visibleItems.length === 0) return null
             const isCollapsed = collapsedGroups.has(label)
             return (
@@ -424,13 +467,16 @@ export default function Layout({ children }) {
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   transition={{ duration: 0.15 }}
                 >
-                  <p className="text-xs font-semibold text-gray-300 truncate leading-none">
-                    {profile?.full_name ?? profile?.username ?? 'User'}
-                  </p>
-                  <p className="text-[11px] mt-0.5 truncate leading-none"
-                    style={{ color: 'rgba(22,163,74,0.7)' }}>
-                    {profile?.role ?? 'Reporter'}
-                  </p>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="text-xs font-semibold text-gray-300 truncate leading-none">
+                      {profile?.full_name ?? profile?.username ?? 'User'}
+                    </p>
+                    {profile?.role && (
+                      <span className={`flex-shrink-0 leading-none ${roleBadgeClass(profile.role)}`}>
+                        {profile.role}
+                      </span>
+                    )}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

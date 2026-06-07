@@ -33,6 +33,9 @@ import Reports from './pages/Reports'
 import GatePass from './pages/GatePass'
 import SerialTracker from './pages/SerialTracker'
 import Comparison from './pages/Comparison'
+import EngineeringKpi from './pages/EngineeringKpi'
+import PositionIntelligence from './pages/PositionIntelligence'
+import InspectionIntelligence from './pages/InspectionIntelligence'
 
 export default function App() {
   return (
@@ -76,6 +79,9 @@ export default function App() {
                     <Route path="/gate-pass"     element={<GatePass />} />
                     <Route path="/serial-tracker" element={<SerialTracker />} />
                     <Route path="/comparison"    element={<Comparison />} />
+                    <Route path="/kpi-engine"              element={<EngineeringKpi />} />
+                    <Route path="/position-intelligence"   element={<PositionIntelligence />} />
+                    <Route path="/inspection-intelligence" element={<InspectionIntelligence />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

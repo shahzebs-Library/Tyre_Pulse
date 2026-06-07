@@ -11,6 +11,7 @@ import {
   Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, Sparkles,
   Sun, Moon, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare,
   ChevronDown, ChevronRight,
+  Cpu, MapPin, Activity,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -53,6 +54,9 @@ const NAV_GROUPS = [
   {
     label: 'Intelligence',
     items: [
+      { to: '/kpi-engine',              label: 'Engineering KPIs',        icon: Cpu },
+      { to: '/position-intelligence',   label: 'Position Intelligence',   icon: MapPin },
+      { to: '/inspection-intelligence', label: 'Inspection Intelligence', icon: Activity },
       { to: '/alerts',          label: 'Alerts',           icon: Bell },
       { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle, adminOnly: true },
       { to: '/vehicle-history', label: 'Vehicle History',  icon: Car,           adminOnly: true },

@@ -606,3 +606,185 @@ describe('detectAnomalies — combined scenario', () => {
     expect(types.has(ANOMALY_TYPES.SERIAL_REUSE)).toBe(true)
   })
 })
+
+// ── Edge cases: single record ─────────────────────────────────────────────────
+
+describe('detectAnomalies — single record edge cases', () => {
+  it('single record with missing asset_no does not crash', () => {
+    const records = [makeRecord({ asset_no: null, id: 'single-no-asset' })]
+    expect(() => detectAnomalies(records)).not.toThrow()
+    const result = detectAnomalies(records)
+    expect(Array.isArray(result)).toBe(true)
+  })
+
+  it('single record with missing serial_no does not crash', () => {
+    const records = [makeRecord({ serial_no: null, id: 'single-no-serial' })]
+    expect(() => detectAnomalies(records)).not.toThrow()
+  })
+
+  it('single record with missing issue_date does not crash', () => {
+    const records = [makeRecord({ issue_date: null, id: 'single-no-date' })]
+    expect(() => detectAnomalies(records)).not.toThrow()
+  })
+
+  it('single record with all fields null does not crash', () => {
+    const records = [{
+      id: 'all-null',
+      asset_no: null,
+      serial_no: null,
+      issue_date: null,
+      cost_per_tyre: null,
+      qty: null,
+      risk_level: null,
+      brand: null,
+      site: null,
+    }]
+    expect(() => detectAnomalies(records)).not.toThrow()
+    const result = detectAnomalies(records)
+    expect(Array.isArray(result)).toBe(true)
+  })
+
+  it('single record generates no SHORT_INTERVAL, SERIAL_REUSE, DUPLICATE_ENTRY, or RAPID_RECURRENCE anomalies', () => {
+    const records = [makeRecord({ id: 'only-one' })]
+    const result = detectAnomalies(records)
+    const badTypes = [
+      ANOMALY_TYPES.SHORT_INTERVAL,
+      ANOMALY_TYPES.SERIAL_REUSE,
+      ANOMALY_TYPES.DUPLICATE_ENTRY,
+      ANOMALY_TYPES.RAPID_RECURRENCE,
+    ]
+    badTypes.forEach(type => {
+      expect(result.filter(a => a.type === type)).toHaveLength(0)
+    })
+  })
+})
+
+// ── Edge cases: all-zero costs ────────────────────────────────────────────────
+
+describe('detectAnomalies — all-zero costs', () => {
+  it('no COST_SPIKE when all records have cost_per_tyre = 0', () => {
+    const records = Array.from({ length: 5 }, (_, i) =>
+      makeRecord({ id: `zero-${i}`, cost_per_tyre: 0, serial_no: `SN-z${i}` })
+    )
+    const result = detectAnomalies(records)
+    expect(result.filter(a => a.type === ANOMALY_TYPES.COST_SPIKE)).toHaveLength(0)
+  })
+
+  it('no COST_SPIKE when all costs are null', () => {
+    const records = Array.from({ length: 5 }, (_, i) =>
+      makeRecord({ id: `null-cost-${i}`, cost_per_tyre: null, serial_no: `SN-nc${i}` })
+    )
+    const result = detectAnomalies(records)
+    expect(result.filter(a => a.type === ANOMALY_TYPES.COST_SPIKE)).toHaveLength(0)
+  })
+
+  it('no COST_SPIKE when all costs are identical (stdDev = 0)', () => {
+    const records = Array.from({ length: 6 }, (_, i) =>
+      makeRecord({ id: `ident-${i}`, cost_per_tyre: 750, serial_no: `SN-id${i}` })
+    )
+    const result = detectAnomalies(records)
+    expect(result.filter(a => a.type === ANOMALY_TYPES.COST_SPIKE)).toHaveLength(0)
+  })
+})
+
+// ── Edge cases: records missing fields ────────────────────────────────────────
+
+describe('detectAnomalies — records with missing fields', () => {
+  it('handles records with missing brand gracefully', () => {
+    const records = [
+      makeRecord({ asset_no: 'TRK-X', id: 'miss-brand-1', issue_date: '2024-06-01', brand: null, serial_no: 'SN-mb1' }),
+      makeRecord({ asset_no: 'TRK-X', id: 'miss-brand-2', issue_date: '2024-06-03', brand: undefined, serial_no: 'SN-mb2' }),
+    ]
+    expect(() => detectAnomalies(records)).not.toThrow()
+    const result = detectAnomalies(records)
+    const si = result.find(a => a.type === ANOMALY_TYPES.SHORT_INTERVAL && a.asset_no === 'TRK-X')
+    expect(si).toBeDefined()
+    expect(si.detail).toContain('unknown brand')
+  })
+
+  it('handles records with missing site gracefully', () => {
+    const records = [
+      makeRecord({ asset_no: 'TRK-Y', id: 'miss-site-1', issue_date: '2024-07-01', site: null, serial_no: 'SN-ms1' }),
+      makeRecord({ asset_no: 'TRK-Y', id: 'miss-site-2', issue_date: '2024-07-03', site: null, serial_no: 'SN-ms2' }),
+    ]
+    expect(() => detectAnomalies(records)).not.toThrow()
+  })
+
+  it('handles records with zero qty — falls back to 1 for same-day-burst count', () => {
+    const records = [
+      makeRecord({ asset_no: 'TRK-Z', id: 'zero-qty-1', issue_date: '2024-08-01', qty: 0, serial_no: 'SN-zq1' }),
+      makeRecord({ asset_no: 'TRK-Z', id: 'zero-qty-2', issue_date: '2024-08-01', qty: 0, serial_no: 'SN-zq2' }),
+    ]
+    expect(() => detectAnomalies(records)).not.toThrow()
+  })
+
+  it('handles mixed valid and invalid records without crashing', () => {
+    const records = [
+      makeRecord({ id: 'valid-1', asset_no: 'TRK-V', issue_date: '2024-06-01', serial_no: 'SN-v1' }),
+      { id: 'bad-1', asset_no: undefined, serial_no: undefined, issue_date: undefined, cost_per_tyre: undefined },
+      makeRecord({ id: 'valid-2', asset_no: 'TRK-V', issue_date: '2024-06-04', serial_no: 'SN-v2' }),
+    ]
+    expect(() => detectAnomalies(records)).not.toThrow()
+    const result = detectAnomalies(records)
+    const si = result.find(a => a.type === ANOMALY_TYPES.SHORT_INTERVAL && a.asset_no === 'TRK-V')
+    expect(si).toBeDefined()
+  })
+})
+
+// ── Edge cases: duplicate serial numbers ─────────────────────────────────────
+
+describe('detectAnomalies — duplicate serial number edge cases', () => {
+  it('empty string serial_no is NOT flagged as serial reuse', () => {
+    const records = [
+      makeRecord({ asset_no: 'TRK-A', id: 'empty-sn-1', serial_no: '', issue_date: '2024-01-01' }),
+      makeRecord({ asset_no: 'TRK-B', id: 'empty-sn-2', serial_no: '', issue_date: '2024-02-01' }),
+    ]
+    const result = detectAnomalies(records)
+    const sr = result.filter(a => a.type === ANOMALY_TYPES.SERIAL_REUSE)
+    expect(sr).toHaveLength(0)
+  })
+
+  it('serial reuse detected across 4 different assets', () => {
+    const records = ['TRK-R1', 'TRK-R2', 'TRK-R3', 'TRK-R4'].map((asset, i) =>
+      makeRecord({ asset_no: asset, id: `reuse-${i}`, serial_no: 'REUSED-4', issue_date: `2024-0${i + 1}-01` })
+    )
+    const result = detectAnomalies(records)
+    const sr = result.find(a => a.type === ANOMALY_TYPES.SERIAL_REUSE && a.serial === 'REUSED-4')
+    expect(sr).toBeDefined()
+    expect(sr.assets).toHaveLength(4)
+  })
+
+  it('two different serials reused across different assets generate separate anomalies', () => {
+    const records = [
+      makeRecord({ asset_no: 'A1', id: 'ds-1', serial_no: 'SERIAL-X', issue_date: '2024-01-01' }),
+      makeRecord({ asset_no: 'A2', id: 'ds-2', serial_no: 'SERIAL-X', issue_date: '2024-02-01' }),
+      makeRecord({ asset_no: 'B1', id: 'ds-3', serial_no: 'SERIAL-Y', issue_date: '2024-01-01' }),
+      makeRecord({ asset_no: 'B2', id: 'ds-4', serial_no: 'SERIAL-Y', issue_date: '2024-02-01' }),
+    ]
+    const result = detectAnomalies(records)
+    const sr = result.filter(a => a.type === ANOMALY_TYPES.SERIAL_REUSE)
+    expect(sr).toHaveLength(2)
+    const serials = sr.map(a => a.serial).sort()
+    expect(serials).toEqual(['SERIAL-X', 'SERIAL-Y'])
+  })
+
+  it('duplicate entry requires all three fields — different dates means no duplicate', () => {
+    const records = [
+      makeRecord({ asset_no: 'TRK-Q', id: 'nd-1', serial_no: 'SN-Q', issue_date: '2024-05-01' }),
+      makeRecord({ asset_no: 'TRK-Q', id: 'nd-2', serial_no: 'SN-Q', issue_date: '2024-06-01' }),
+    ]
+    const result = detectAnomalies(records)
+    const dup = result.filter(a => a.type === ANOMALY_TYPES.DUPLICATE_ENTRY)
+    expect(dup).toHaveLength(0)
+  })
+
+  it('exact duplicate with 4 records shows count of 4', () => {
+    const records = Array.from({ length: 4 }, (_, i) =>
+      makeRecord({ asset_no: 'TRK-QUAD', id: `quad-${i}`, serial_no: 'SN-QUAD', issue_date: '2024-06-01' })
+    )
+    const result = detectAnomalies(records)
+    const dup = result.find(a => a.type === ANOMALY_TYPES.DUPLICATE_ENTRY)
+    expect(dup).toBeDefined()
+    expect(dup.count).toBe(4)
+  })
+})

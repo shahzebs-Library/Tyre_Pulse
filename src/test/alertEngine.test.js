@@ -680,3 +680,295 @@ describe('countAlertsBySeverity', () => {
     expect(counts.total).toBe(3)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ALERT_TYPES extended — VEHICLE_INACTIVE, HIGH_CPK, DATA_QUALITY
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ALERT_TYPES extended constants', () => {
+  it('ALERT_TYPES includes VEHICLE_INACTIVE', () => {
+    expect(ALERT_TYPES.VEHICLE_INACTIVE).toBe('VEHICLE_INACTIVE')
+  })
+
+  it('ALERT_TYPES includes HIGH_CPK', () => {
+    expect(ALERT_TYPES.HIGH_CPK).toBe('HIGH_CPK')
+  })
+
+  it('ALERT_TYPES includes DATA_QUALITY', () => {
+    expect(ALERT_TYPES.DATA_QUALITY).toBe('DATA_QUALITY')
+  })
+
+  it('ALERT_TYPE_LABELS has entries for VEHICLE_INACTIVE, HIGH_CPK, DATA_QUALITY', () => {
+    expect(ALERT_TYPE_LABELS[ALERT_TYPES.VEHICLE_INACTIVE]).toBeTruthy()
+    expect(ALERT_TYPE_LABELS[ALERT_TYPES.HIGH_CPK]).toBeTruthy()
+    expect(ALERT_TYPE_LABELS[ALERT_TYPES.DATA_QUALITY]).toBeTruthy()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// detectAlerts — VEHICLE_INACTIVE alerts
+// ─────────────────────────────────────────────────────────────────────────────
+describe('detectAlerts — VEHICLE_INACTIVE', () => {
+  function makeTyreRecord(assetNo, daysAgo, site = 'Site A') {
+    const d = new Date()
+    d.setDate(d.getDate() - daysAgo)
+    return {
+      id: `tr-${assetNo}-${daysAgo}`,
+      asset_no: assetNo,
+      site,
+      issue_date: d.toISOString().split('T')[0],
+      cost_per_tyre: 800,
+      km_at_fitment: 0,
+      km_at_removal: 0,
+      category: 'Normal',
+    }
+  }
+
+  it('generates MEDIUM severity for vehicle inactive 90-179 days', async () => {
+    const supabase = makeSupabaseMock({
+      tyreRecords: [makeTyreRecord('TRK-01', 100)],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const inactive = alerts.find(a => a.type === ALERT_TYPES.VEHICLE_INACTIVE)
+    expect(inactive).toBeDefined()
+    expect(inactive.severity).toBe(SEVERITY.MEDIUM)
+    expect(inactive.title).toContain('TRK-01')
+  })
+
+  it('generates HIGH severity for vehicle inactive 180+ days', async () => {
+    const supabase = makeSupabaseMock({
+      tyreRecords: [makeTyreRecord('TRK-02', 200)],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const inactive = alerts.find(a => a.type === ALERT_TYPES.VEHICLE_INACTIVE)
+    expect(inactive).toBeDefined()
+    expect(inactive.severity).toBe(SEVERITY.HIGH)
+  })
+
+  it('does NOT generate alert for vehicle active within 90 days', async () => {
+    const supabase = makeSupabaseMock({
+      tyreRecords: [makeTyreRecord('TRK-03', 30)],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const inactive = alerts.filter(a => a.type === ALERT_TYPES.VEHICLE_INACTIVE)
+    expect(inactive).toHaveLength(0)
+  })
+
+  it('uses the most recent record for each asset when determining last activity', async () => {
+    const supabase = makeSupabaseMock({
+      tyreRecords: [
+        makeTyreRecord('TRK-04', 200),  // old record
+        makeTyreRecord('TRK-04', 20),   // recent record — should override
+      ],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const inactive = alerts.filter(a => a.type === ALERT_TYPES.VEHICLE_INACTIVE)
+    expect(inactive).toHaveLength(0)
+  })
+
+  it('inactive alert message contains days-since count', async () => {
+    const supabase = makeSupabaseMock({
+      tyreRecords: [makeTyreRecord('TRK-05', 95)],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const inactive = alerts.find(a => a.type === ALERT_TYPES.VEHICLE_INACTIVE)
+    expect(inactive).toBeDefined()
+    expect(inactive.message).toMatch(/\d+ days/)
+  })
+
+  it('skips tyre records missing asset_no or issue_date', async () => {
+    const supabase = makeSupabaseMock({
+      tyreRecords: [
+        { id: 'tr-no-asset', asset_no: null, site: 'Site A', issue_date: '2000-01-01', cost_per_tyre: 0, km_at_fitment: 0, km_at_removal: 0, category: '' },
+        { id: 'tr-no-date', asset_no: 'TRK-06', site: 'Site A', issue_date: null, cost_per_tyre: 0, km_at_fitment: 0, km_at_removal: 0, category: '' },
+      ],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const inactive = alerts.filter(a => a.type === ALERT_TYPES.VEHICLE_INACTIVE)
+    expect(inactive).toHaveLength(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// detectAlerts — HIGH_CPK alerts
+// ─────────────────────────────────────────────────────────────────────────────
+describe('detectAlerts — HIGH_CPK', () => {
+  function makeCpkRecord(assetNo, costPerTyre, kmFitment, kmRemoval, index = 0) {
+    return {
+      id: `cpk-${assetNo}-${index}`,
+      asset_no: assetNo,
+      site: 'Site A',
+      issue_date: '2024-06-01',
+      cost_per_tyre: costPerTyre,
+      km_at_fitment: kmFitment,
+      km_at_removal: kmRemoval,
+      category: 'Normal',
+    }
+  }
+
+  it('does NOT generate HIGH_CPK alert with fewer than 5 valid CPK records', async () => {
+    const supabase = makeSupabaseMock({
+      tyreRecords: [
+        makeCpkRecord('TRK-A', 500, 0, 10000, 0),
+        makeCpkRecord('TRK-A', 500, 10000, 20000, 1),
+      ],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const cpkAlerts = alerts.filter(a => a.type === ALERT_TYPES.HIGH_CPK)
+    expect(cpkAlerts).toHaveLength(0)
+  })
+
+  it('generates HIGH_CPK alert for asset with significantly above-fleet-average CPK', async () => {
+    // Fleet of 8 vehicles at low CPK (0.05 SAR/km), plus one extreme outlier
+    const fleetRecords = Array.from({ length: 8 }, (_, i) =>
+      makeCpkRecord(`FLEET-${i}`, 500, 0, 10000, i)   // CPK = 500/10000 = 0.05
+    )
+    // Outlier: CPK = 5000/1000 = 5.0 — 100x fleet avg, well above 2.5x threshold
+    const outlierA = makeCpkRecord('OUTLIER', 5000, 0, 1000, 0)
+    const outlierB = makeCpkRecord('OUTLIER', 5000, 1000, 2000, 1)
+
+    const supabase = makeSupabaseMock({
+      tyreRecords: [...fleetRecords, outlierA, outlierB],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const cpkAlerts = alerts.filter(a => a.type === ALERT_TYPES.HIGH_CPK)
+    expect(cpkAlerts.length).toBeGreaterThanOrEqual(1)
+    const outlierAlert = cpkAlerts.find(a => a.title.includes('OUTLIER'))
+    expect(outlierAlert).toBeDefined()
+  })
+
+  it('HIGH_CPK alert message contains fleet average and asset average', async () => {
+    const fleetRecords = Array.from({ length: 8 }, (_, i) =>
+      makeCpkRecord(`FLEET-${i}`, 500, 0, 10000, i)
+    )
+    const outlierA = makeCpkRecord('OUTLIER-MSG', 5000, 0, 1000, 0)
+    const outlierB = makeCpkRecord('OUTLIER-MSG', 5000, 1000, 2000, 1)
+
+    const supabase = makeSupabaseMock({
+      tyreRecords: [...fleetRecords, outlierA, outlierB],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const cpkAlert = alerts.find(a => a.type === ALERT_TYPES.HIGH_CPK && a.title.includes('OUTLIER-MSG'))
+    expect(cpkAlert).toBeDefined()
+    expect(cpkAlert.message).toContain('CPK')
+    expect(cpkAlert.message).toContain('fleet average')
+  })
+
+  it('requires at least 2 records per asset for HIGH_CPK detection', async () => {
+    // 6 fleet records at baseline CPK, but outlier asset has only 1 record
+    const fleetRecords = Array.from({ length: 6 }, (_, i) =>
+      makeCpkRecord(`FLEET-${i}`, 500, 0, 10000, i)
+    )
+    const singleOutlier = makeCpkRecord('SINGLE-ASSET', 9999, 0, 100, 0)
+
+    const supabase = makeSupabaseMock({
+      tyreRecords: [...fleetRecords, singleOutlier],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const cpkAlerts = alerts.filter(a => a.type === ALERT_TYPES.HIGH_CPK && a.title.includes('SINGLE-ASSET'))
+    expect(cpkAlerts).toHaveLength(0)
+  })
+
+  it('skips records where km_at_removal <= km_at_fitment', async () => {
+    const supabase = makeSupabaseMock({
+      tyreRecords: Array.from({ length: 6 }, (_, i) =>
+        makeCpkRecord(`BAD-KM-${i}`, 500, 5000, 3000, i)  // removal < fitment — invalid
+      ),
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const cpkAlerts = alerts.filter(a => a.type === ALERT_TYPES.HIGH_CPK)
+    expect(cpkAlerts).toHaveLength(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// detectAlerts — DATA_QUALITY alerts
+// ─────────────────────────────────────────────────────────────────────────────
+describe('detectAlerts — DATA_QUALITY', () => {
+  function makeQualityRecord(overrides = {}, index = 0) {
+    return {
+      id: `dq-${index}`,
+      asset_no: `TRK-${index}`,
+      site: 'Site A',
+      issue_date: '2024-06-01',
+      cost_per_tyre: 800,
+      km_at_fitment: 0,
+      km_at_removal: 10000,
+      category: 'Normal',
+      ...overrides,
+    }
+  }
+
+  it('generates DATA_QUALITY alert when more than 30% of records have no cost', async () => {
+    // 7 records with no cost, 3 with cost — missing cost rate = 70% > 30% threshold
+    const noCostRecords = Array.from({ length: 7 }, (_, i) =>
+      makeQualityRecord({ cost_per_tyre: 0 }, i)
+    )
+    const withCostRecords = Array.from({ length: 3 }, (_, i) =>
+      makeQualityRecord({ cost_per_tyre: 800 }, 100 + i)
+    )
+    const supabase = makeSupabaseMock({
+      tyreRecords: [...noCostRecords, ...withCostRecords],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const dqAlert = alerts.find(a => a.type === ALERT_TYPES.DATA_QUALITY && a.title.includes('Missing Cost'))
+    expect(dqAlert).toBeDefined()
+  })
+
+  it('generates HIGH severity DATA_QUALITY alert when more than 60% of records have no cost', async () => {
+    const noCostRecords = Array.from({ length: 7 }, (_, i) =>
+      makeQualityRecord({ cost_per_tyre: 0 }, i)
+    )
+    const withCostRecords = Array.from({ length: 3 }, (_, i) =>
+      makeQualityRecord({ cost_per_tyre: 800 }, 100 + i)
+    )
+    const supabase = makeSupabaseMock({
+      tyreRecords: [...noCostRecords, ...withCostRecords],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const dqAlert = alerts.find(a => a.type === ALERT_TYPES.DATA_QUALITY && a.title.includes('Missing Cost'))
+    expect(dqAlert).toBeDefined()
+    expect(dqAlert.severity).toBe(SEVERITY.HIGH)
+  })
+
+  it('generates DATA_QUALITY alert when more than 40% of records are unclassified', async () => {
+    // 5 unclassified out of 10 = 50% > 40% threshold
+    const unclassifiedRecords = Array.from({ length: 5 }, (_, i) =>
+      makeQualityRecord({ cost_per_tyre: 800, category: 'Unclassified' }, i)
+    )
+    const classifiedRecords = Array.from({ length: 5 }, (_, i) =>
+      makeQualityRecord({ cost_per_tyre: 800, category: 'Normal' }, 100 + i)
+    )
+    const supabase = makeSupabaseMock({
+      tyreRecords: [...unclassifiedRecords, ...classifiedRecords],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const dqAlert = alerts.find(a => a.type === ALERT_TYPES.DATA_QUALITY && a.title.includes('Unclassified'))
+    expect(dqAlert).toBeDefined()
+  })
+
+  it('does NOT generate DATA_QUALITY alert when data quality is acceptable', async () => {
+    const goodRecords = Array.from({ length: 10 }, (_, i) =>
+      makeQualityRecord({ cost_per_tyre: 800, category: 'Normal', km_at_fitment: i * 1000, km_at_removal: (i + 1) * 1000 }, i)
+    )
+    const supabase = makeSupabaseMock({ tyreRecords: goodRecords })
+    const alerts = await detectAlerts(supabase, null)
+    const dqAlerts = alerts.filter(a => a.type === ALERT_TYPES.DATA_QUALITY)
+    expect(dqAlerts).toHaveLength(0)
+  })
+
+  it('DATA_QUALITY alert message contains the record count', async () => {
+    const noCostRecords = Array.from({ length: 8 }, (_, i) =>
+      makeQualityRecord({ cost_per_tyre: 0 }, i)
+    )
+    const withCostRecords = Array.from({ length: 2 }, (_, i) =>
+      makeQualityRecord({ cost_per_tyre: 800 }, 100 + i)
+    )
+    const supabase = makeSupabaseMock({
+      tyreRecords: [...noCostRecords, ...withCostRecords],
+    })
+    const alerts = await detectAlerts(supabase, null)
+    const dqAlert = alerts.find(a => a.type === ALERT_TYPES.DATA_QUALITY && a.title.includes('Missing Cost'))
+    expect(dqAlert).toBeDefined()
+    expect(dqAlert.message).toContain('10')
+  })
+})

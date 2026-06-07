@@ -277,10 +277,7 @@ export default function AiAnalytics() {
             Smart Analytics features require an Analytics API key. Add{' '}
             <code className="bg-yellow-900/40 px-1 rounded text-yellow-300">VITE_ANALYTICS_API_KEY=your_key</code>{' '}
             to your <code className="bg-yellow-900/40 px-1 rounded text-yellow-300">.env.local</code> file.
-            Get a key at{' '}
-            <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" className="underline text-yellow-300 hover:text-yellow-200">
-              console.anthropic.com
-            </a>
+            Get your API key from your analytics provider.
           </p>
         </div>
       )}

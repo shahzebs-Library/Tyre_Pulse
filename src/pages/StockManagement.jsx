@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { Plus, Save, X, History, FileText, Download } from 'lucide-react'
+import { Plus, Save, X, History, FileText, Download, ArrowLeftRight } from 'lucide-react'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -53,12 +53,21 @@ export default function StockManagement() {
   const [loadingMov, setLoadingMov] = useState(false)
   const [adjForm, setAdjForm]       = useState(null)
 
+  // Velocity state
+  const [velocityMap, setVelocityMap] = useState({})
+
   // Timeline tab state
-  const [activeTab, setActiveTab]       = useState('stock')   // 'stock' | 'timeline'
+  const [activeTab, setActiveTab]       = useState('stock')
   const [tlFrom, setTlFrom]             = useState(offsetDate(-6))
   const [tlTo, setTlTo]                 = useState(todayStr())
   const [tlRecords, setTlRecords]       = useState([])
   const [tlLoading, setTlLoading]       = useState(false)
+
+  // Transfer tab state
+  const [transferForm, setTransferForm] = useState({ fromSite: '', toSite: '', qty: 1, notes: '' })
+  const [transferring, setTransferring] = useState(false)
+  const [transferMsg, setTransferMsg]   = useState('')
+  const [transferError, setTransferError] = useState('')
 
   useEffect(() => { load() }, [activeCountry])
 
@@ -66,8 +75,39 @@ export default function StockManagement() {
     setLoading(true)
     let q = supabase.from('stock_records').select('*').order('site')
     if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    const { data } = await q
-    setRecords(data ?? [])
+    const { data: stockData } = await q
+    const stockRecords = stockData ?? []
+    setRecords(stockRecords)
+
+    // Load velocity data from tyre_records (last 3 months)
+    const threeMonthsAgo = new Date()
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+    const { data: velData } = await supabase
+      .from('tyre_records')
+      .select('site, qty, issue_date')
+      .gte('issue_date', threeMonthsAgo.toISOString().slice(0, 10))
+
+    // Group by site and sum qty
+    const siteQtyMap = {}
+    ;(velData ?? []).forEach(row => {
+      const site = row.site
+      if (!site) return
+      if (!siteQtyMap[site]) siteQtyMap[site] = 0
+      siteQtyMap[site] += (row.qty ?? 1)
+    })
+
+    // Build velocityMap keyed by stock record id
+    const vMap = {}
+    stockRecords.forEach(r => {
+      const totalQty = siteQtyMap[r.site] ?? 0
+      const avgPerMonth = +(totalQty / 3).toFixed(2)
+      const daysRemaining = avgPerMonth > 0
+        ? Math.round((r.stock_qty / avgPerMonth) * 30)
+        : null
+      vMap[r.id] = { avgPerMonth, daysRemaining }
+    })
+    setVelocityMap(vMap)
+
     setLoading(false)
   }
 
@@ -184,6 +224,88 @@ export default function StockManagement() {
     setLoadingMov(false)
   }
 
+  // ── Inter-site Transfer ─────────────────────────────────────────────────────
+  async function submitTransfer(e) {
+    e.preventDefault()
+    setTransferError('')
+    setTransferMsg('')
+
+    const { fromSite, toSite, qty, notes } = transferForm
+    const transferQty = +qty
+
+    if (!fromSite || !toSite) { setTransferError('Select both From and To sites.'); return }
+    if (fromSite === toSite)  { setTransferError('From and To sites must be different.'); return }
+    if (transferQty < 1)      { setTransferError('Quantity must be at least 1.'); return }
+
+    const fromRecord = records.find(r => r.site === fromSite)
+    const toRecord   = records.find(r => r.site === toSite)
+
+    if (!fromRecord) { setTransferError(`No stock record found for site: ${fromSite}`); return }
+    if (!toRecord)   { setTransferError(`No stock record found for site: ${toSite}`); return }
+    if (transferQty > fromRecord.stock_qty) {
+      setTransferError(`Insufficient stock at ${fromSite}. Available: ${fromRecord.stock_qty}`)
+      return
+    }
+
+    setTransferring(true)
+
+    const reasonOut = `Transfer to ${toSite}${notes ? ': ' + notes : ''}`
+    const reasonIn  = `Transfer from ${fromSite}${notes ? ': ' + notes : ''}`
+
+    const [movOut, movIn] = await Promise.all([
+      supabase.from('stock_movements').insert({
+        stock_id:      fromRecord.id,
+        site:          fromSite,
+        movement_type: 'Out',
+        qty_before:    fromRecord.stock_qty,
+        qty_change:    -transferQty,
+        qty_after:     fromRecord.stock_qty - transferQty,
+        reason:        reasonOut,
+        created_by:    profile?.id ?? null,
+      }),
+      supabase.from('stock_movements').insert({
+        stock_id:      toRecord.id,
+        site:          toSite,
+        movement_type: 'In',
+        qty_before:    toRecord.stock_qty,
+        qty_change:    transferQty,
+        qty_after:     toRecord.stock_qty + transferQty,
+        reason:        reasonIn,
+        created_by:    profile?.id ?? null,
+      }),
+    ])
+
+    if (movOut.error || movIn.error) {
+      setTransferError(movOut.error?.message || movIn.error?.message || 'Failed to log movements.')
+      setTransferring(false)
+      return
+    }
+
+    const [updFrom, updTo] = await Promise.all([
+      supabase.from('stock_records').update({
+        stock_qty:  fromRecord.stock_qty - transferQty,
+        updated_by: profile?.id,
+        updated_at: new Date().toISOString(),
+      }).eq('id', fromRecord.id),
+      supabase.from('stock_records').update({
+        stock_qty:  toRecord.stock_qty + transferQty,
+        updated_by: profile?.id,
+        updated_at: new Date().toISOString(),
+      }).eq('id', toRecord.id),
+    ])
+
+    if (updFrom.error || updTo.error) {
+      setTransferError(updFrom.error?.message || updTo.error?.message || 'Failed to update stock quantities.')
+      setTransferring(false)
+      return
+    }
+
+    setTransferMsg(`Successfully transferred ${transferQty} units from ${fromSite} to ${toSite}.`)
+    setTransferForm({ fromSite: '', toSite: '', qty: 1, notes: '' })
+    setTransferring(false)
+    await load()
+  }
+
   // ── Timeline data load ──────────────────────────────────────────────────────
   useEffect(() => {
     if (activeTab === 'timeline') loadTimeline()
@@ -210,7 +332,6 @@ export default function StockManagement() {
       if (!d) return
       if (!map[d]) map[d] = { in: 0, out: 0 }
       const qty = r.qty ?? 1
-      // tyre_records are typically issues/fitments — count as "out"
       map[d].out += qty
     })
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
@@ -303,6 +424,13 @@ export default function StockManagement() {
 
   const sites = useMemo(() => [...new Set(records.map(r => r.site).filter(Boolean))].sort(), [records])
 
+  // Tabs: show Transfer only if >= 2 sites
+  const tabs = useMemo(() => {
+    const base = [['stock', 'Stock Levels'], ['timeline', 'Timeline']]
+    if (sites.length >= 2) return [['stock', 'Stock Levels'], ['transfer', 'Transfer'], ['timeline', 'Timeline']]
+    return base
+  }, [sites])
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -325,7 +453,7 @@ export default function StockManagement() {
 
       {/* Tabs */}
       <div className="flex gap-2">
-        {[['stock', 'Stock Levels'], ['timeline', 'Timeline']].map(([val, label]) => (
+        {tabs.map(([val, label]) => (
           <button
             key={val}
             onClick={() => setActiveTab(val)}
@@ -356,18 +484,34 @@ export default function StockManagement() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    {['Site', 'Description', 'Stock', 'Min', 'Critical', 'Reorder Qty', 'Status', 'Action', ''].map(h => (
+                    {['Site', 'Description', 'Stock', 'Min', 'Critical', 'Reorder Qty', 'Status', 'Velocity', 'Days Left', 'Action', ''].map(h => (
                       <th key={h} className="table-header">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={9} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                    <tr><td colSpan={11} className="text-center py-12 text-gray-500">Loading…</td></tr>
                   ) : records.length === 0 ? (
-                    <tr><td colSpan={9} className="text-center py-12 text-gray-500">No stock records yet</td></tr>
+                    <tr><td colSpan={11} className="text-center py-12 text-gray-500">No stock records yet</td></tr>
                   ) : records.map(r => {
                     const status = deriveStatus(r)
+                    const vel    = velocityMap[r.id]
+                    const avg    = vel?.avgPerMonth ?? 0
+                    const days   = vel?.daysRemaining ?? null
+
+                    const reorderSuggestion = vel && days !== null && days < 30
+                      ? Math.max(0, (r.reorder_qty && r.reorder_qty > 0)
+                          ? r.reorder_qty
+                          : (r.min_level * 2) - r.stock_qty)
+                      : null
+
+                    const daysColor = days === null
+                      ? 'text-gray-500'
+                      : days > 30 ? 'text-green-400 font-semibold'
+                      : days >= 10 ? 'text-yellow-400 font-semibold'
+                      : 'text-red-400 font-bold'
+
                     return (
                       <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
                         <td className="table-cell font-medium text-white">{r.site}</td>
@@ -384,7 +528,28 @@ export default function StockManagement() {
                         <td className="table-cell">
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BADGE[status]}`}>{status}</span>
                         </td>
-                        <td className="table-cell text-gray-400 text-xs max-w-xs truncate">{r.management_action ?? '—'}</td>
+                        <td className="table-cell">
+                          <span className={avg > 0 ? 'text-gray-300 text-xs' : 'text-gray-600 text-xs'}>
+                            {avg > 0 ? `${avg}/mo` : '—'}
+                          </span>
+                        </td>
+                        <td className="table-cell">
+                          <span className={`text-xs ${daysColor}`}>
+                            {days === null ? '∞' : `${days}d`}
+                          </span>
+                        </td>
+                        <td className="table-cell text-gray-400 text-xs max-w-xs">
+                          <div className="flex flex-col gap-1">
+                            {r.management_action ? (
+                              <span className="truncate">{r.management_action}</span>
+                            ) : <span className="text-gray-600">—</span>}
+                            {reorderSuggestion !== null && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-900/40 text-amber-300 border border-amber-700/50 whitespace-nowrap">
+                                Reorder: {reorderSuggestion}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="table-cell">
                           <div className="flex items-center gap-1.5">
                             <button onClick={() => startEdit(r)} className="text-gray-400 hover:text-blue-400 text-xs transition-colors">Edit</button>
@@ -414,6 +579,161 @@ export default function StockManagement() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ── TRANSFER TAB ──────────────────────────────────────────────────────── */}
+      {activeTab === 'transfer' && (
+        <div className="max-w-lg">
+          <div className="card space-y-5">
+            <div className="flex items-center gap-2 mb-1">
+              <ArrowLeftRight size={18} className="text-blue-400" />
+              <h2 className="text-base font-semibold text-white">Inter-Site Stock Transfer</h2>
+            </div>
+            <p className="text-gray-400 text-sm -mt-3">Move stock between sites. Both movement records and stock quantities will be updated.</p>
+
+            {transferMsg && (
+              <div className="bg-green-900/30 border border-green-700 text-green-300 rounded-lg px-4 py-3 text-sm">
+                {transferMsg}
+              </div>
+            )}
+            {transferError && (
+              <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">
+                {transferError}
+              </div>
+            )}
+
+            <form onSubmit={submitTransfer} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">From Site *</label>
+                  <select
+                    className="input"
+                    value={transferForm.fromSite}
+                    onChange={e => {
+                      const fromSite = e.target.value
+                      setTransferError('')
+                      setTransferMsg('')
+                      // Auto-fill description from first matching record
+                      const matchRec = records.find(r => r.site === fromSite)
+                      setTransferForm(f => ({
+                        ...f,
+                        fromSite,
+                        toSite: f.toSite === fromSite ? '' : f.toSite,
+                        qty: 1,
+                      }))
+                    }}
+                    required
+                  >
+                    <option value="">— Select —</option>
+                    {sites.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  {transferForm.fromSite && (() => {
+                    const rec = records.find(r => r.site === transferForm.fromSite)
+                    return rec ? (
+                      <p className="text-xs text-gray-500 mt-1">Available: <span className="text-gray-300 font-medium">{rec.stock_qty}</span> units</p>
+                    ) : null
+                  })()}
+                </div>
+                <div>
+                  <label className="label">To Site *</label>
+                  <select
+                    className="input"
+                    value={transferForm.toSite}
+                    onChange={e => {
+                      setTransferError('')
+                      setTransferMsg('')
+                      setTransferForm(f => ({ ...f, toSite: e.target.value }))
+                    }}
+                    required
+                  >
+                    <option value="">— Select —</option>
+                    {sites.filter(s => s !== transferForm.fromSite).map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  {transferForm.toSite && (() => {
+                    const rec = records.find(r => r.site === transferForm.toSite)
+                    return rec ? (
+                      <p className="text-xs text-gray-500 mt-1">Current: <span className="text-gray-300 font-medium">{rec.stock_qty}</span> units</p>
+                    ) : null
+                  })()}
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Quantity *</label>
+                <input
+                  type="number"
+                  className="input"
+                  min={1}
+                  max={records.find(r => r.site === transferForm.fromSite)?.stock_qty ?? undefined}
+                  value={transferForm.qty}
+                  onChange={e => {
+                    setTransferError('')
+                    setTransferForm(f => ({ ...f, qty: +e.target.value }))
+                  }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="label">Notes</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Optional transfer reason or reference"
+                  value={transferForm.notes}
+                  onChange={e => setTransferForm(f => ({ ...f, notes: e.target.value }))}
+                />
+              </div>
+
+              {/* Transfer preview */}
+              {transferForm.fromSite && transferForm.toSite && transferForm.qty > 0 && (
+                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-xs text-gray-400 space-y-1">
+                  <p className="text-gray-300 font-medium text-xs mb-2">Transfer Preview</p>
+                  {(() => {
+                    const from = records.find(r => r.site === transferForm.fromSite)
+                    const to   = records.find(r => r.site === transferForm.toSite)
+                    const qty  = +transferForm.qty
+                    return (
+                      <>
+                        <div className="flex justify-between">
+                          <span>{transferForm.fromSite}</span>
+                          <span>
+                            <span className="text-gray-500">{from?.stock_qty ?? '?'}</span>
+                            <span className="text-gray-600 mx-1">→</span>
+                            <span className={from && from.stock_qty - qty < from.critical_level ? 'text-red-400' : 'text-green-400'}>
+                              {from ? from.stock_qty - qty : '?'}
+                            </span>
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>{transferForm.toSite}</span>
+                          <span>
+                            <span className="text-gray-500">{to?.stock_qty ?? '?'}</span>
+                            <span className="text-gray-600 mx-1">→</span>
+                            <span className="text-green-400">{to ? to.stock_qty + qty : '?'}</span>
+                          </span>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={transferring || !transferForm.fromSite || !transferForm.toSite || transferForm.qty < 1}
+                className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <ArrowLeftRight size={16} />
+                {transferring ? 'Transferring…' : 'Transfer Stock'}
+              </button>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* ── TIMELINE TAB ──────────────────────────────────────────────────────── */}

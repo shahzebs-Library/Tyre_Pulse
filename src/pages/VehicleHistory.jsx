@@ -9,7 +9,7 @@ import {
   Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
-import { Search, AlertTriangle, X, FileText, Car } from 'lucide-react'
+import { Search, AlertTriangle, X, FileText, Car, TrendingUp } from 'lucide-react'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
@@ -215,7 +215,7 @@ function getFlagMeta(type) {
 
 // ── Detail Panel Tabs ─────────────────────────────────────────────────────────
 
-const DETAIL_TABS = ['Timeline', 'Analysis', 'Red Flags', 'Related Records']
+const DETAIL_TABS = ['Timeline', 'Analysis', 'Red Flags', 'Related Records', 'Forecast']
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main page component
@@ -771,17 +771,18 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-800 gap-1">
+      <div className="flex border-b border-gray-800 gap-1 flex-wrap">
         {DETAIL_TABS.map((t, i) => (
           <button
             key={t}
             onClick={() => setActiveTab(i)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
               activeTab === i
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-gray-400 hover:text-white'
             }`}
           >
+            {t === 'Forecast' && <TrendingUp size={13} />}
             {t}
             {t === 'Red Flags' && row.allFlags.length > 0 && (
               <span className="ml-1.5 text-xs bg-red-600 text-white rounded-full px-1.5 py-0.5 font-bold">
@@ -828,6 +829,17 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
           actions={relatedActions}
           rca={relatedRca}
           inspections={relatedInspections}
+        />
+      )}
+
+      {/* Tab: Forecast */}
+      {activeTab === 4 && (
+        <ForecastTab
+          row={row}
+          tyrePositions={tyrePositions}
+          currency={currency}
+          defaultCost={defaultCost}
+          fleetRecord={fleetRecord}
         />
       )}
     </div>
@@ -1147,6 +1159,350 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab: Forecast
+// ─────────────────────────────────────────────────────────────────────────────
+
+function computeHealthScore(position) {
+  let score = 100
+
+  // Risk level deduction
+  const riskDeductions = { Critical: -40, High: -25, Medium: -10, Low: 0 }
+  score += riskDeductions[position.risk_level] ?? 0
+
+  // Age deduction: each 30 days past 180 days = -5, capped at -30
+  if (position.issue_date) {
+    const daysSince = Math.floor((Date.now() - new Date(position.issue_date).getTime()) / (1000 * 60 * 60 * 24))
+    if (daysSince > 180) {
+      const periodsOver = Math.floor((daysSince - 180) / 30)
+      score += Math.max(-30, periodsOver * -5)
+    }
+  }
+
+  return Math.max(0, Math.min(100, score))
+}
+
+function healthScoreColor(score) {
+  if (score <= 25) return { bar: 'bg-red-500', text: 'text-red-400', border: 'border-red-700/50', bg: 'bg-red-900/20' }
+  if (score <= 50) return { bar: 'bg-orange-500', text: 'text-orange-400', border: 'border-orange-700/50', bg: 'bg-orange-900/20' }
+  if (score <= 75) return { bar: 'bg-yellow-500', text: 'text-yellow-400', border: 'border-yellow-700/50', bg: 'bg-yellow-900/20' }
+  return { bar: 'bg-green-500', text: 'text-green-400', border: 'border-green-700/50', bg: 'bg-green-900/20' }
+}
+
+function urgencyFromHealth(score) {
+  if (score < 25) return { label: 'Urgent', cls: 'bg-red-900/50 text-red-300 border-red-700/50' }
+  if (score <= 50) return { label: 'Soon', cls: 'bg-orange-900/50 text-orange-300 border-orange-700/50' }
+  return { label: 'Monitor', cls: 'bg-blue-900/40 text-blue-300 border-blue-700/40' }
+}
+
+function replacementReason(position, healthScore) {
+  if (position.risk_level === 'Critical') return 'Critical risk level — immediate replacement required'
+  if (position.risk_level === 'High') return 'High risk level — schedule replacement soon'
+  if (healthScore < 25) return 'Health score critically low — tyre nearing end of life'
+  if (healthScore <= 50) return 'Declining health — plan replacement within 2 months'
+  return 'Monitor condition — no immediate action required'
+}
+
+function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord }) {
+  // Derive avgKm from records with km data
+  const kmValues = row.records
+    .map(r => (r.km_at_removal != null && r.km_at_fitment != null)
+      ? +r.km_at_removal - +r.km_at_fitment : null)
+    .filter(v => v !== null && v > 0)
+  const avgKm = kmValues.length
+    ? Math.round(kmValues.reduce((s, v) => s + v, 0) / kmValues.length)
+    : null
+
+  const spanMonths = row.spanMonths > 0 ? row.spanMonths : null
+  const avgMonthlyKm = avgKm !== null && spanMonths ? avgKm / spanMonths : null
+
+  const expectedKmPerTyre = fleetRecord?.expected_km_per_tyre
+    ? +fleetRecord.expected_km_per_tyre
+    : 60000
+
+  // Per-position health scores
+  const positionScores = tyrePositions.map(p => ({
+    ...p,
+    healthScore: computeHealthScore(p),
+  }))
+
+  // Monthly cost average
+  const avgMonthlyCost = spanMonths && row.totalCost > 0
+    ? Math.round(row.totalCost / spanMonths)
+    : null
+
+  const monthlyBudget = fleetRecord?.monthly_tyre_budget
+    ? +fleetRecord.monthly_tyre_budget
+    : null
+
+  // Top 3 action recommendations
+  const actionItems = positionScores
+    .map(p => {
+      const flagCount = row.allFlags.filter(f =>
+        f.records?.some(r => r.position === p.position)
+      ).length
+      const priorityScore = (100 - p.healthScore) + flagCount * 10
+      return { ...p, priorityScore, flagCount }
+    })
+    .sort((a, b) => b.priorityScore - a.priorityScore)
+    .slice(0, 3)
+
+  const hasPositions = positionScores.length > 0
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Section 1: Tyre Health Score ─────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp size={15} className="text-blue-400" />
+          <p className="text-sm font-semibold text-gray-200">Tyre Health Score by Position</p>
+        </div>
+
+        {!hasPositions ? (
+          <div className="rounded-lg border border-gray-700/40 bg-gray-800/20 p-6 text-center text-gray-500 text-sm">
+            No tyre position data available. Ensure tyre records include position information.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {positionScores.map(p => {
+              const colors = healthScoreColor(p.healthScore)
+              return (
+                <div
+                  key={p.position}
+                  className={`rounded-lg border p-4 ${colors.border} ${colors.bg}`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <span className="font-mono text-sm font-semibold text-gray-200">{p.position}</span>
+                      {p.brand && (
+                        <span className="ml-2 text-xs text-gray-500">{p.brand}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {p.risk_level && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${riskBadgeClass(p.risk_level)}`}>
+                          {p.risk_level}
+                        </span>
+                      )}
+                      <span className={`text-lg font-bold ${colors.text}`}>{p.healthScore}</span>
+                    </div>
+                  </div>
+                  {/* Health bar */}
+                  <div className="h-2 rounded-full bg-gray-700/50 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${colors.bar}`}
+                      style={{ width: `${p.healthScore}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[10px] text-gray-600">0</span>
+                    <span className={`text-[10px] font-medium ${colors.text}`}>{p.healthScore}/100</span>
+                    <span className="text-[10px] text-gray-600">100</span>
+                  </div>
+                  {p.issue_date && (
+                    <p className="text-[10px] text-gray-600 mt-1.5">Last recorded: {p.issue_date}</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 2: Replacement Forecast ──────────────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp size={15} className="text-purple-400" />
+          <p className="text-sm font-semibold text-gray-200">Replacement Forecast by Position</p>
+        </div>
+
+        {!hasPositions ? (
+          <div className="rounded-lg border border-gray-700/40 bg-gray-800/20 p-6 text-center text-gray-500 text-sm">
+            No position data available for replacement forecasting.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {positionScores.map(p => {
+              let forecastText = null
+              let forecastClass = 'text-gray-400'
+              let isDueSoon = false
+
+              if (avgMonthlyKm && avgMonthlyKm > 0 && avgKm !== null) {
+                const remaining = expectedKmPerTyre - avgKm
+                const monthsRemaining = remaining > 0 ? Math.round(remaining / avgMonthlyKm) : 0
+                isDueSoon = monthsRemaining < 2
+                forecastText = isDueSoon
+                  ? 'Due soon — replacement recommended'
+                  : `Est. ${monthsRemaining} month${monthsRemaining !== 1 ? 's' : ''} remaining`
+                forecastClass = isDueSoon ? 'text-red-400' : monthsRemaining <= 3 ? 'text-orange-400' : 'text-green-400'
+              } else if (row.avgDays) {
+                const daysSinceIssue = p.issue_date
+                  ? Math.floor((Date.now() - new Date(p.issue_date).getTime()) / (1000 * 60 * 60 * 24))
+                  : null
+                if (daysSinceIssue !== null) {
+                  const daysLeft = row.avgDays - daysSinceIssue
+                  const monthsLeft = Math.round(daysLeft / 30)
+                  isDueSoon = daysLeft < 60
+                  forecastText = isDueSoon
+                    ? 'Due soon — based on avg replacement interval'
+                    : `Est. ${Math.max(0, monthsLeft)} month${monthsLeft !== 1 ? 's' : ''} remaining (interval-based)`
+                  forecastClass = isDueSoon ? 'text-red-400' : monthsLeft <= 2 ? 'text-orange-400' : 'text-blue-400'
+                } else {
+                  forecastText = 'Insufficient data for forecast'
+                  forecastClass = 'text-gray-500'
+                }
+              } else {
+                forecastText = 'No km or interval data — unable to forecast'
+                forecastClass = 'text-gray-500'
+              }
+
+              return (
+                <div
+                  key={p.position}
+                  className={`flex items-center justify-between rounded-lg px-4 py-3 border ${
+                    isDueSoon
+                      ? 'bg-red-950/20 border-red-800/40'
+                      : 'bg-gray-800/30 border-gray-700/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-sm text-gray-300 w-20">{p.position}</span>
+                    {p.brand && <span className="text-xs text-gray-500">{p.brand}</span>}
+                    {p.serial_no && (
+                      <span className="text-[10px] font-mono text-gray-600">{p.serial_no}</span>
+                    )}
+                  </div>
+                  <span className={`text-xs font-medium ${forecastClass}`}>{forecastText}</span>
+                </div>
+              )
+            })}
+            <p className="text-[10px] text-gray-600 mt-2 pl-1">
+              Expected km/tyre: {expectedKmPerTyre.toLocaleString()} km
+              {fleetRecord?.expected_km_per_tyre ? ' (from Fleet Master)' : ' (default)'}
+              {avgMonthlyKm ? ` · Avg monthly km: ${Math.round(avgMonthlyKm).toLocaleString()}` : ''}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 3: Top 3 Action Recommendations ───────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <AlertTriangle size={15} className="text-orange-400" />
+          <p className="text-sm font-semibold text-gray-200">Top Action Recommendations</p>
+        </div>
+
+        {actionItems.length === 0 ? (
+          <div className="rounded-lg border border-green-700/30 bg-green-900/10 p-5 text-center">
+            <p className="text-green-400 text-sm">All tyre positions are within acceptable health ranges.</p>
+            <p className="text-gray-500 text-xs mt-1">No immediate action required based on available data.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {actionItems.map((p, idx) => {
+              const urgency = urgencyFromHealth(p.healthScore)
+              const reason = replacementReason(p, p.healthScore)
+              return (
+                <div
+                  key={p.position}
+                  className="flex items-start gap-4 rounded-lg border border-gray-700/40 bg-gray-800/30 px-4 py-3"
+                >
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-700 text-gray-300 text-xs font-bold flex items-center justify-center mt-0.5">
+                    {idx + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-sm font-medium text-gray-200">
+                        {p.position}{p.brand ? ` · ${p.brand}` : ''}
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${urgency.cls}`}>
+                        {urgency.label}
+                      </span>
+                      <span className={`text-[10px] font-medium ${healthScoreColor(p.healthScore).text}`}>
+                        Health: {p.healthScore}/100
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400">{reason}</p>
+                    {p.flagCount > 0 && (
+                      <p className="text-[10px] text-orange-400 mt-0.5">{p.flagCount} associated red flag{p.flagCount !== 1 ? 's' : ''}</p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 4: 3-Month Cost Projection ───────────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp size={15} className="text-green-400" />
+          <p className="text-sm font-semibold text-gray-200">3-Month Cost Projection</p>
+        </div>
+
+        {avgMonthlyCost === null ? (
+          <div className="rounded-lg border border-gray-700/40 bg-gray-800/20 p-6 text-center text-gray-500 text-sm">
+            Insufficient historical data to project costs. At least one month of spend history required.
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-4 mb-3">
+              {[1, 2, 3].map(offset => {
+                const projectedDate = new Date()
+                projectedDate.setMonth(projectedDate.getMonth() + offset)
+                const monthLabel = projectedDate.toLocaleString('default', { month: 'short', year: 'numeric' })
+                const isOverBudget = monthlyBudget !== null && avgMonthlyCost > monthlyBudget
+                return (
+                  <div
+                    key={offset}
+                    className={`rounded-lg border p-4 text-center ${
+                      isOverBudget
+                        ? 'bg-red-950/20 border-red-800/40'
+                        : 'bg-gray-800/30 border-gray-700/40'
+                    }`}
+                  >
+                    <p className="text-xs text-gray-500 mb-1">{monthLabel}</p>
+                    <p className={`text-lg font-bold ${isOverBudget ? 'text-red-400' : 'text-green-400'}`}>
+                      {currency} {avgMonthlyCost.toLocaleString()}
+                    </p>
+                    {monthlyBudget !== null && (
+                      <p className={`text-[10px] mt-1 font-medium ${isOverBudget ? 'text-red-500' : 'text-green-500'}`}>
+                        {isOverBudget
+                          ? `Over budget by ${(avgMonthlyCost - monthlyBudget).toLocaleString()}`
+                          : `Within budget`
+                        }
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <div className="rounded-lg border border-gray-700/30 bg-gray-800/20 px-4 py-3">
+              <p className="text-xs text-gray-400">
+                Based on historical average of{' '}
+                <span className="text-white font-semibold">{currency} {avgMonthlyCost.toLocaleString()}</span>
+                {' '}per month over {Math.round(spanMonths)} month{Math.round(spanMonths) !== 1 ? 's' : ''}.
+                {monthlyBudget !== null && (
+                  <span className="ml-1">
+                    Fleet Master budget:{' '}
+                    <span className={`font-semibold ${avgMonthlyCost > monthlyBudget ? 'text-red-400' : 'text-green-400'}`}>
+                      {currency} {monthlyBudget.toLocaleString()}
+                    </span>
+                    /month.
+                  </span>
+                )}
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+
     </div>
   )
 }

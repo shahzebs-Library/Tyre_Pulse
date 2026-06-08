@@ -1,0 +1,1585 @@
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Chart as ChartJS,
+  ArcElement, Tooltip, Legend,
+} from 'chart.js'
+import { Doughnut } from 'react-chartjs-2'
+import {
+  ClipboardList, Plus, Search, Filter, Download, Upload,
+  FileText, FileSpreadsheet, Edit2, Trash2, X, Save,
+  CheckCircle, AlertTriangle, AlertOctagon, HelpCircle,
+  ChevronLeft, ChevronRight, Tag, Gauge, Layers, Shield,
+  RefreshCw, History, Zap, Truck, Info, BarChart3,
+  ClipboardCheck, Wrench, BookOpen,
+} from 'lucide-react'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import * as XLSX from 'xlsx'
+const uuidv4 = () => crypto.randomUUID()
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
+
+ChartJS.register(ArcElement, Tooltip, Legend)
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 25
+
+const POSITIONS = ['Steer', 'Drive', 'Trailer', 'Lift Axle', 'Tag Axle', 'All Positions']
+const VEHICLE_TYPES_COMMON = ['Rigid Truck', 'Mixer', 'Tipper', 'Semi-Trailer', 'Tanker', 'Flat Bed', 'Crane', 'Bus', 'Pickup', 'Other']
+const SPEED_INDICES = ['J','K','L','M','N','P','Q','R','S','T','U','H','V','W','Y']
+
+const SMART_DEFAULTS = [
+  {
+    vehicle_type: 'Rigid Truck',
+    position: 'Steer',
+    approved_sizes: ['315/80R22.5', '295/80R22.5'],
+    approved_brands: ['Michelin', 'Bridgestone', 'Continental'],
+    min_load_index: 154,
+    min_speed_index: 'M',
+    recommended_pressure: 120,
+    min_tread_depth: 3,
+    notes: 'Industry standard steer axle fitment for rigid trucks',
+  },
+  {
+    vehicle_type: 'Rigid Truck',
+    position: 'Drive',
+    approved_sizes: ['315/80R22.5', '11R22.5'],
+    approved_brands: ['Michelin', 'Goodyear', 'Bridgestone'],
+    min_load_index: 156,
+    min_speed_index: 'L',
+    recommended_pressure: 110,
+    min_tread_depth: 3,
+    notes: 'Drive axle — dual fitment. Deep traction pattern recommended',
+  },
+  {
+    vehicle_type: 'Semi-Trailer',
+    position: 'Trailer',
+    approved_sizes: ['385/65R22.5', '445/65R22.5'],
+    approved_brands: ['Michelin', 'Goodyear', 'Continental', 'Pirelli'],
+    min_load_index: 160,
+    min_speed_index: 'K',
+    recommended_pressure: 100,
+    min_tread_depth: 2,
+    notes: 'Wide base trailer fitment. Monitor for irregular wear',
+  },
+  {
+    vehicle_type: 'Mixer',
+    position: 'Steer',
+    approved_sizes: ['315/80R22.5', '295/80R22.5'],
+    approved_brands: ['Michelin', 'Bridgestone', 'Dunlop'],
+    min_load_index: 154,
+    min_speed_index: 'M',
+    recommended_pressure: 115,
+    min_tread_depth: 3,
+    notes: 'Mixer steer — higher payload consideration',
+  },
+  {
+    vehicle_type: 'Tipper',
+    position: 'Drive',
+    approved_sizes: ['315/80R22.5', '13R22.5'],
+    approved_brands: ['Michelin', 'Goodyear', 'BKT'],
+    min_load_index: 158,
+    min_speed_index: 'L',
+    recommended_pressure: 110,
+    min_tread_depth: 4,
+    notes: 'Tipper drive — aggressive pattern for off-road conditions',
+  },
+  {
+    vehicle_type: 'Bus',
+    position: 'Steer',
+    approved_sizes: ['295/80R22.5', '275/70R22.5'],
+    approved_brands: ['Michelin', 'Bridgestone', 'Continental'],
+    min_load_index: 152,
+    min_speed_index: 'N',
+    recommended_pressure: 110,
+    min_tread_depth: 3,
+    notes: 'Passenger comfort and wet grip priority',
+  },
+]
+
+const STATUS_CONFIG = {
+  Approved:            { label: 'Approved',           color: 'text-green-400',  bg: 'bg-green-900/20 border-green-800',  icon: CheckCircle },
+  'Non-Standard Size': { label: 'Non-Standard Size',  color: 'text-orange-400', bg: 'bg-orange-900/20 border-orange-800', icon: AlertTriangle },
+  'Non-Approved Brand':{ label: 'Non-Approved Brand', color: 'text-orange-400', bg: 'bg-orange-900/20 border-orange-800', icon: AlertTriangle },
+  'Multiple Violations':{ label: 'Multiple Violations', color: 'text-red-400', bg: 'bg-red-900/20 border-red-800',    icon: AlertOctagon },
+  'No Spec Defined':   { label: 'No Spec Defined',    color: 'text-gray-400',   bg: 'bg-gray-800 border-gray-700',        icon: HelpCircle },
+}
+
+const DOUGHNUT_COLORS = ['#22c55e', '#f97316', '#f59e0b', '#6b7280', '#ef4444']
+
+const CHART_OPTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'right',
+      labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 }, padding: 12 },
+    },
+    tooltip: {
+      backgroundColor: '#111827',
+      borderColor: '#374151',
+      borderWidth: 1,
+      titleColor: '#f9fafb',
+      bodyColor: '#d1d5db',
+    },
+  },
+}
+
+// ── localStorage helpers ───────────────────────────────────────────────────────
+
+function loadSpecs() {
+  try { return JSON.parse(localStorage.getItem('tp_tyre_specs') || '[]') } catch { return [] }
+}
+function saveSpecs(specs) {
+  localStorage.setItem('tp_tyre_specs', JSON.stringify(specs))
+}
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem('tp_spec_history') || '[]') } catch { return [] }
+}
+function saveHistory(history) {
+  localStorage.setItem('tp_spec_history', JSON.stringify(history.slice(-100)))
+}
+function addHistoryEvent(action, user, specObj, changedField = null, oldVal = null, newVal = null) {
+  const history = loadHistory()
+  history.push({
+    id: uuidv4(),
+    date: new Date().toISOString(),
+    action,
+    user: user || 'Unknown',
+    vehicle_type: specObj?.vehicle_type || '',
+    position: specObj?.position || '',
+    changed_field: changedField || '',
+    old_value: oldVal != null ? String(oldVal) : '',
+    new_value: newVal != null ? String(newVal) : '',
+  })
+  saveHistory(history)
+}
+
+// ── Tag input component ────────────────────────────────────────────────────────
+
+function TagInput({ values = [], onChange, placeholder }) {
+  const [input, setInput] = useState('')
+  const ref = useRef()
+
+  function add() {
+    const v = input.trim().toUpperCase()
+    if (v && !values.includes(v)) onChange([...values, v])
+    setInput('')
+  }
+
+  function remove(v) {
+    onChange(values.filter(x => x !== v))
+  }
+
+  return (
+    <div
+      className="min-h-[40px] bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 flex flex-wrap gap-1 cursor-text focus-within:border-blue-500 transition-colors"
+      onClick={() => ref.current?.focus()}
+    >
+      {values.map(v => (
+        <span key={v} className="flex items-center gap-1 bg-blue-900/40 text-blue-300 text-xs px-2 py-0.5 rounded-full border border-blue-700">
+          {v}
+          <button type="button" onClick={() => remove(v)} className="text-blue-400 hover:text-red-400 transition-colors">
+            <X size={10} />
+          </button>
+        </span>
+      ))}
+      <input
+        ref={ref}
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add() } }}
+        onBlur={add}
+        placeholder={values.length === 0 ? placeholder : ''}
+        className="flex-1 min-w-[80px] bg-transparent text-white text-sm outline-none placeholder-gray-600"
+      />
+    </div>
+  )
+}
+
+// ── Brand tag input (preserves case) ──────────────────────────────────────────
+
+function BrandTagInput({ values = [], onChange, placeholder }) {
+  const [input, setInput] = useState('')
+  const ref = useRef()
+
+  function add() {
+    const v = input.trim()
+    if (v && !values.includes(v)) onChange([...values, v])
+    setInput('')
+  }
+
+  function remove(v) {
+    onChange(values.filter(x => x !== v))
+  }
+
+  return (
+    <div
+      className="min-h-[40px] bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 flex flex-wrap gap-1 cursor-text focus-within:border-blue-500 transition-colors"
+      onClick={() => ref.current?.focus()}
+    >
+      {values.map(v => (
+        <span key={v} className="flex items-center gap-1 bg-purple-900/40 text-purple-300 text-xs px-2 py-0.5 rounded-full border border-purple-700">
+          {v}
+          <button type="button" onClick={() => remove(v)} className="text-purple-400 hover:text-red-400 transition-colors">
+            <X size={10} />
+          </button>
+        </span>
+      ))}
+      <input
+        ref={ref}
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add() } }}
+        onBlur={add}
+        placeholder={values.length === 0 ? placeholder : ''}
+        className="flex-1 min-w-[80px] bg-transparent text-white text-sm outline-none placeholder-gray-600"
+      />
+    </div>
+  )
+}
+
+// ── KPI Card ──────────────────────────────────────────────────────────────────
+
+function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', loading }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start gap-4"
+    >
+      <div className={`p-2.5 rounded-lg bg-gray-800 ${color}`}>
+        <Icon size={20} />
+      </div>
+      <div>
+        <p className="text-gray-400 text-xs mb-1">{label}</p>
+        {loading ? (
+          <div className="h-7 w-16 bg-gray-800 rounded animate-pulse" />
+        ) : (
+          <p className={`text-2xl font-bold ${color}`}>{value}</p>
+        )}
+        {sub && <p className="text-gray-500 text-xs mt-0.5">{sub}</p>}
+      </div>
+    </motion.div>
+  )
+}
+
+// ── Spec Form Modal ────────────────────────────────────────────────────────────
+
+function SpecFormModal({ spec, onClose, onSave, isAdmin }) {
+  const [form, setForm] = useState(spec ?? {
+    vehicle_type: '',
+    position: 'Steer',
+    approved_sizes: [],
+    approved_brands: [],
+    min_load_index: '',
+    min_speed_index: '',
+    recommended_pressure: '',
+    min_tread_depth: '',
+    notes: '',
+  })
+  const [error, setError] = useState('')
+
+  function set(field, val) { setForm(prev => ({ ...prev, [field]: val })) }
+
+  function validate() {
+    if (!form.vehicle_type.trim()) return 'Vehicle Type is required'
+    if (!form.position) return 'Position is required'
+    if (form.approved_sizes.length === 0) return 'At least one approved size is required'
+    if (form.approved_brands.length === 0) return 'At least one approved brand is required'
+    return null
+  }
+
+  function submit(e) {
+    e.preventDefault()
+    const err = validate()
+    if (err) { setError(err); return }
+    onSave(form)
+  }
+
+  if (!isAdmin) return null
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+        onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      >
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        >
+          <div className="flex items-center justify-between p-6 border-b border-gray-800">
+            <h3 className="text-white font-semibold text-lg">
+              {spec?.id ? 'Edit Specification' : 'Add Specification'}
+            </h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+
+          <form onSubmit={submit} className="p-6 space-y-5">
+            {error && (
+              <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
+                <AlertTriangle size={14} /> {error}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-gray-400 text-xs mb-1.5 block">Vehicle Type *</label>
+                <div className="relative">
+                  <input
+                    list="vehicle-types-list"
+                    value={form.vehicle_type}
+                    onChange={e => set('vehicle_type', e.target.value)}
+                    placeholder="e.g. Rigid Truck"
+                    className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                  />
+                  <datalist id="vehicle-types-list">
+                    {VEHICLE_TYPES_COMMON.map(v => <option key={v} value={v} />)}
+                  </datalist>
+                </div>
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1.5 block">Position *</label>
+                <select
+                  value={form.position}
+                  onChange={e => set('position', e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                >
+                  {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-gray-400 text-xs mb-1.5 block">
+                Approved Sizes * <span className="text-gray-600">(press Enter or comma to add)</span>
+              </label>
+              <TagInput
+                values={form.approved_sizes}
+                onChange={v => set('approved_sizes', v)}
+                placeholder="e.g. 315/80R22.5"
+              />
+            </div>
+
+            <div>
+              <label className="text-gray-400 text-xs mb-1.5 block">
+                Approved Brands * <span className="text-gray-600">(press Enter or comma to add)</span>
+              </label>
+              <BrandTagInput
+                values={form.approved_brands}
+                onChange={v => set('approved_brands', v)}
+                placeholder="e.g. Michelin"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-gray-400 text-xs mb-1.5 block">Min Load Index</label>
+                <input
+                  type="number"
+                  value={form.min_load_index}
+                  onChange={e => set('min_load_index', e.target.value)}
+                  placeholder="e.g. 154"
+                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1.5 block">Min Speed Index</label>
+                <select
+                  value={form.min_speed_index}
+                  onChange={e => set('min_speed_index', e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                >
+                  <option value="">Select...</option>
+                  {SPEED_INDICES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1.5 block">Recommended Pressure (PSI)</label>
+                <input
+                  type="number"
+                  value={form.recommended_pressure}
+                  onChange={e => set('recommended_pressure', e.target.value)}
+                  placeholder="e.g. 120"
+                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1.5 block">Min Tread Depth (mm)</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={form.min_tread_depth}
+                  onChange={e => set('min_tread_depth', e.target.value)}
+                  placeholder="e.g. 3"
+                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-gray-400 text-xs mb-1.5 block">Notes</label>
+              <textarea
+                value={form.notes}
+                onChange={e => set('notes', e.target.value)}
+                rows={3}
+                placeholder="Engineering notes, compliance requirements..."
+                className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none resize-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2 rounded-lg transition-colors"
+              >
+                <Save size={14} />
+                {spec?.id ? 'Update Specification' : 'Save Specification'}
+              </button>
+            </div>
+          </form>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
+// ── Delete Confirm Modal ───────────────────────────────────────────────────────
+
+function DeleteConfirmModal({ spec, onClose, onConfirm }) {
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+        onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      >
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          className="bg-gray-900 border border-red-800 rounded-2xl w-full max-w-md p-6"
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-red-900/30 rounded-lg">
+              <Trash2 size={18} className="text-red-400" />
+            </div>
+            <h3 className="text-white font-semibold">Delete Specification</h3>
+          </div>
+          <p className="text-gray-400 text-sm mb-2">
+            Delete <span className="text-white font-medium">{spec?.vehicle_type} — {spec?.position}</span>?
+          </p>
+          <p className="text-gray-500 text-xs mb-6">This action cannot be undone. Compliance records will show "No Spec Defined" for affected vehicles.</p>
+          <div className="flex justify-end gap-3">
+            <button onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors">Cancel</button>
+            <button onClick={onConfirm} className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white text-sm px-4 py-2 rounded-lg transition-colors">
+              <Trash2 size={14} /> Delete
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
+// ── Raise Work Order Modal ─────────────────────────────────────────────────────
+
+function RaiseWorkOrderModal({ asset, violations, onClose }) {
+  const [done, setDone] = useState(false)
+
+  function submit(e) {
+    e.preventDefault()
+    const existing = JSON.parse(localStorage.getItem('tp_work_orders') || '[]')
+    const wo = {
+      id: uuidv4(),
+      wo_number: `WO-SPEC-${Date.now()}`,
+      asset_no: asset.asset_no,
+      site: asset.site,
+      type: 'Tyre Change',
+      priority: 'High',
+      status: 'Open',
+      description: `Non-conforming tyre fitment detected. ${violations.join('; ')}`,
+      created_at: new Date().toISOString(),
+      source: 'Spec Compliance',
+    }
+    localStorage.setItem('tp_work_orders', JSON.stringify([wo, ...existing]))
+    setDone(true)
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+        onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      >
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg p-6"
+        >
+          {done ? (
+            <div className="text-center py-4">
+              <CheckCircle size={40} className="text-green-400 mx-auto mb-3" />
+              <p className="text-white font-medium mb-1">Work Order Raised</p>
+              <p className="text-gray-400 text-sm">A high-priority work order has been created for {asset.asset_no}.</p>
+              <button onClick={onClose} className="mt-4 bg-gray-800 hover:bg-gray-700 text-white text-sm px-5 py-2 rounded-lg transition-colors">Close</button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-orange-900/30 rounded-lg">
+                  <Wrench size={18} className="text-orange-400" />
+                </div>
+                <h3 className="text-white font-semibold">Raise Work Order</h3>
+              </div>
+              <p className="text-gray-400 text-sm mb-2">Asset: <span className="text-white">{asset.asset_no}</span> — Site: <span className="text-white">{asset.site}</span></p>
+              <div className="bg-gray-800 rounded-lg p-3 mb-4 space-y-1">
+                {violations.map((v, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs text-orange-300">
+                    <AlertTriangle size={11} /> {v}
+                  </div>
+                ))}
+              </div>
+              <form onSubmit={submit} className="flex justify-end gap-3">
+                <button type="button" onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors">Cancel</button>
+                <button type="submit" className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white text-sm px-5 py-2 rounded-lg transition-colors">
+                  <Wrench size={14} /> Create Work Order
+                </button>
+              </form>
+            </>
+          )}
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────────
+
+export default function TyreSpecifications() {
+  const { profile } = useAuth()
+  const { activeCountry } = useSettings()
+  const isAdmin = profile?.role === 'Admin'
+
+  const [activeTab, setActiveTab] = useState('library')
+  const [specs, setSpecs] = useState([])
+  const [tyreRecords, setTyreRecords] = useState([])
+  const [fleetMaster, setFleetMaster] = useState([])
+  const [loadingRecords, setLoadingRecords] = useState(true)
+  const [history, setHistory] = useState([])
+
+  // library filters
+  const [libSearch, setLibSearch] = useState('')
+  const [libTypeFilter, setLibTypeFilter] = useState('')
+  const [libPosFilter, setLibPosFilter] = useState('')
+
+  // compliance filters / pagination
+  const [compSearch, setCompSearch] = useState('')
+  const [compSiteFilter, setCompSiteFilter] = useState('')
+  const [compTypeFilter, setCompTypeFilter] = useState('')
+  const [compStatusFilter, setCompStatusFilter] = useState('')
+  const [compPage, setCompPage] = useState(0)
+
+  // modals
+  const [showSpecModal, setShowSpecModal] = useState(false)
+  const [editingSpec, setEditingSpec] = useState(null)
+  const [deletingSpec, setDeletingSpec] = useState(null)
+  const [workOrderAsset, setWorkOrderAsset] = useState(null)
+  const [importError, setImportError] = useState('')
+  const importRef = useRef()
+
+  // ── Load data ────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    setSpecs(loadSpecs())
+    setHistory(loadHistory())
+    fetchLiveData()
+  }, [activeCountry])
+
+  async function fetchLiveData() {
+    setLoadingRecords(true)
+    try {
+      let q = supabase.from('tyre_records').select('id, asset_no, serial_number, position, brand, size, site, country, issue_date, risk_level')
+      if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
+      const { data: tr } = await q.order('issue_date', { ascending: false })
+      setTyreRecords(tr ?? [])
+
+      const { data: fm } = await supabase.from('fleet_master').select('id, asset_no, vehicle_type, make, model, site, country').catch(() => ({ data: null }))
+      setFleetMaster(fm ?? [])
+    } catch {
+      setTyreRecords([])
+    } finally {
+      setLoadingRecords(false)
+    }
+  }
+
+  // ── Derive vehicle type from asset number prefix when fleet_master unavailable ─
+
+  function deriveVehicleType(assetNo) {
+    if (!assetNo) return null
+    const fm = fleetMaster.find(f => f.asset_no === assetNo)
+    if (fm?.vehicle_type) return fm.vehicle_type
+    // prefix heuristics
+    const prefix = String(assetNo).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)
+    const map = {
+      MIX: 'Mixer', TIP: 'Tipper', RIG: 'Rigid Truck', SEM: 'Semi-Trailer',
+      TAN: 'Tanker', FLT: 'Flat Bed', CRN: 'Crane', BUS: 'Bus', TRK: 'Rigid Truck',
+    }
+    for (const [k, v] of Object.entries(map)) {
+      if (prefix.startsWith(k)) return v
+    }
+    return null
+  }
+
+  // ── Compliance analysis ────────────────────────────────────────────────────────
+
+  const complianceData = useMemo(() => {
+    return tyreRecords.map(tr => {
+      const vehicleType = deriveVehicleType(tr.asset_no)
+      const position = normalizePosition(tr.position)
+      const fm = fleetMaster.find(f => f.asset_no === tr.asset_no)
+      const site = tr.site || fm?.site || ''
+
+      const matchingSpec = specs.find(s =>
+        s.vehicle_type === vehicleType &&
+        (s.position === position || s.position === 'All Positions')
+      )
+
+      if (!vehicleType || !matchingSpec) {
+        return { ...tr, vehicleType, site, specStatus: 'No Spec Defined', violations: [] }
+      }
+
+      const sizeOk = matchingSpec.approved_sizes.some(s => normalizeSize(s) === normalizeSize(tr.size))
+      const brandOk = matchingSpec.approved_brands.some(b => b.toLowerCase() === (tr.brand || '').toLowerCase())
+
+      const violations = []
+      if (!sizeOk) violations.push(`Non-standard size: ${tr.size || 'Unknown'} (approved: ${matchingSpec.approved_sizes.join(', ')})`)
+      if (!brandOk) violations.push(`Non-approved brand: ${tr.brand || 'Unknown'} (approved: ${matchingSpec.approved_brands.join(', ')})`)
+
+      let specStatus
+      if (violations.length === 0) specStatus = 'Approved'
+      else if (violations.length >= 2) specStatus = 'Multiple Violations'
+      else if (!sizeOk) specStatus = 'Non-Standard Size'
+      else specStatus = 'Non-Approved Brand'
+
+      return { ...tr, vehicleType, site, specStatus, violations, matchingSpec }
+    })
+  }, [tyreRecords, specs, fleetMaster])
+
+  function normalizePosition(pos) {
+    if (!pos) return ''
+    const p = pos.toLowerCase()
+    if (p.includes('steer')) return 'Steer'
+    if (p.includes('drive')) return 'Drive'
+    if (p.includes('trail')) return 'Trailer'
+    if (p.includes('lift')) return 'Lift Axle'
+    if (p.includes('tag')) return 'Tag Axle'
+    return pos
+  }
+
+  function normalizeSize(size) {
+    return (size || '').replace(/\s/g, '').toUpperCase()
+  }
+
+  // ── KPIs ──────────────────────────────────────────────────────────────────────
+
+  const kpis = useMemo(() => {
+    const total = complianceData.length
+    const approved = complianceData.filter(r => r.specStatus === 'Approved').length
+    const nonConforming = complianceData.filter(r => r.specStatus !== 'Approved' && r.specStatus !== 'No Spec Defined').length
+    const vehicleTypesCovered = new Set(specs.map(s => s.vehicle_type)).size
+    const complianceRate = total > 0 ? Math.round((approved / total) * 100) : 0
+    return { total, approved, nonConforming, vehicleTypesCovered, complianceRate }
+  }, [complianceData, specs])
+
+  // ── Filtered library ──────────────────────────────────────────────────────────
+
+  const filteredSpecs = useMemo(() => {
+    return specs.filter(s => {
+      const matchSearch = !libSearch || s.vehicle_type.toLowerCase().includes(libSearch.toLowerCase()) || s.position.toLowerCase().includes(libSearch.toLowerCase()) || s.approved_sizes.some(x => x.toLowerCase().includes(libSearch.toLowerCase())) || s.approved_brands.some(x => x.toLowerCase().includes(libSearch.toLowerCase()))
+      const matchType = !libTypeFilter || s.vehicle_type === libTypeFilter
+      const matchPos = !libPosFilter || s.position === libPosFilter
+      return matchSearch && matchType && matchPos
+    })
+  }, [specs, libSearch, libTypeFilter, libPosFilter])
+
+  // ── Filtered compliance ────────────────────────────────────────────────────────
+
+  const filteredCompliance = useMemo(() => {
+    return complianceData.filter(r => {
+      const matchSearch = !compSearch || r.asset_no?.toLowerCase().includes(compSearch.toLowerCase()) || r.vehicleType?.toLowerCase().includes(compSearch.toLowerCase())
+      const matchSite = !compSiteFilter || r.site === compSiteFilter
+      const matchType = !compTypeFilter || r.vehicleType === compTypeFilter
+      const matchStatus = !compStatusFilter || r.specStatus === compStatusFilter
+      return matchSearch && matchSite && matchType && matchStatus
+    })
+  }, [complianceData, compSearch, compSiteFilter, compTypeFilter, compStatusFilter])
+
+  const compliancePage = useMemo(() => {
+    return filteredCompliance.slice(compPage * PAGE_SIZE, (compPage + 1) * PAGE_SIZE)
+  }, [filteredCompliance, compPage])
+
+  const complianceTotalPages = Math.ceil(filteredCompliance.length / PAGE_SIZE)
+
+  // ── Non-conformance grouped by asset ──────────────────────────────────────────
+
+  const nonConformanceByAsset = useMemo(() => {
+    const map = {}
+    complianceData.filter(r => r.specStatus !== 'Approved' && r.specStatus !== 'No Spec Defined').forEach(r => {
+      if (!map[r.asset_no]) {
+        map[r.asset_no] = { asset_no: r.asset_no, site: r.site, vehicleType: r.vehicleType, violations: [], violationTypes: new Set() }
+      }
+      map[r.asset_no].violations.push(...r.violations)
+      map[r.asset_no].violationTypes.add(r.specStatus)
+    })
+    return Object.values(map)
+      .map(v => ({ ...v, violationTypes: [...v.violationTypes] }))
+      .sort((a, b) => b.violations.length - a.violations.length)
+  }, [complianceData])
+
+  // ── Doughnut data ─────────────────────────────────────────────────────────────
+
+  const doughnutData = useMemo(() => {
+    const counts = {
+      Approved: 0, 'Non-Standard Size': 0, 'Non-Approved Brand': 0, 'Multiple Violations': 0, 'No Spec Defined': 0,
+    }
+    complianceData.forEach(r => { if (counts[r.specStatus] !== undefined) counts[r.specStatus]++ })
+    const labels = Object.keys(counts).filter(k => counts[k] > 0)
+    return {
+      labels,
+      datasets: [{
+        data: labels.map(l => counts[l]),
+        backgroundColor: labels.map((l, i) => DOUGHNUT_COLORS[Object.keys(counts).indexOf(l)] + 'cc'),
+        borderColor: labels.map((l, i) => DOUGHNUT_COLORS[Object.keys(counts).indexOf(l)]),
+        borderWidth: 1,
+      }],
+    }
+  }, [complianceData])
+
+  // ── Site options for filter ────────────────────────────────────────────────────
+
+  const siteOptions = useMemo(() => [...new Set(tyreRecords.map(r => r.site).filter(Boolean))].sort(), [tyreRecords])
+  const typeOptions = useMemo(() => [...new Set(specs.map(s => s.vehicle_type).filter(Boolean))].sort(), [specs])
+  const libTypeOptions = useMemo(() => [...new Set(specs.map(s => s.vehicle_type).filter(Boolean))].sort(), [specs])
+
+  // ── CRUD operations ───────────────────────────────────────────────────────────
+
+  function handleSaveSpec(form) {
+    const existing = specs.find(s => s.id === editingSpec?.id)
+    const now = new Date().toISOString()
+
+    if (existing) {
+      const updated = specs.map(s => s.id === existing.id ? { ...s, ...form, updated_at: now } : s)
+      saveSpecs(updated)
+      setSpecs(updated)
+      addHistoryEvent('Edit', profile?.email, form, 'Spec Update', JSON.stringify(existing), JSON.stringify(form))
+    } else {
+      const newSpec = { ...form, id: uuidv4(), created_at: now, updated_at: now }
+      const updated = [...specs, newSpec]
+      saveSpecs(updated)
+      setSpecs(updated)
+      addHistoryEvent('Add', profile?.email, form)
+    }
+
+    setShowSpecModal(false)
+    setEditingSpec(null)
+    setHistory(loadHistory())
+  }
+
+  function handleDeleteSpec() {
+    const updated = specs.filter(s => s.id !== deletingSpec.id)
+    saveSpecs(updated)
+    setSpecs(updated)
+    addHistoryEvent('Delete', profile?.email, deletingSpec)
+    setDeletingSpec(null)
+    setHistory(loadHistory())
+  }
+
+  function importQuickDefault(def) {
+    const existing = specs.find(s =>
+      s.vehicle_type === def.vehicle_type && s.position === def.position
+    )
+    if (existing) return
+    const now = new Date().toISOString()
+    const newSpec = { ...def, id: uuidv4(), created_at: now, updated_at: now }
+    const updated = [...specs, newSpec]
+    saveSpecs(updated)
+    setSpecs(updated)
+    addHistoryEvent('Quick Setup Import', profile?.email, newSpec)
+    setHistory(loadHistory())
+  }
+
+  // ── Import from Excel ─────────────────────────────────────────────────────────
+
+  function handleImportFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportError('')
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const wb = XLSX.read(ev.target.result, { type: 'binary' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const rows = XLSX.utils.sheet_to_json(ws)
+        const now = new Date().toISOString()
+        const imported = []
+        rows.forEach(row => {
+          const vt = row['Vehicle Type'] || row['vehicle_type']
+          const pos = row['Position'] || row['position']
+          if (!vt || !pos) return
+          const sizes = String(row['Approved Sizes'] || row['approved_sizes'] || '').split(',').map(s => s.trim()).filter(Boolean)
+          const brands = String(row['Approved Brands'] || row['approved_brands'] || '').split(',').map(s => s.trim()).filter(Boolean)
+          imported.push({
+            id: uuidv4(),
+            vehicle_type: String(vt).trim(),
+            position: String(pos).trim(),
+            approved_sizes: sizes,
+            approved_brands: brands,
+            min_load_index: Number(row['Min Load Index'] || row['min_load_index'] || 0) || '',
+            min_speed_index: String(row['Min Speed Index'] || row['min_speed_index'] || ''),
+            recommended_pressure: Number(row['Recommended Pressure'] || row['recommended_pressure'] || 0) || '',
+            min_tread_depth: Number(row['Min Tread Depth'] || row['min_tread_depth'] || 0) || '',
+            notes: String(row['Notes'] || row['notes'] || ''),
+            created_at: now,
+            updated_at: now,
+          })
+        })
+        if (imported.length === 0) { setImportError('No valid rows found. Check column headers.'); return }
+        const updated = [...specs, ...imported]
+        saveSpecs(updated)
+        setSpecs(updated)
+        addHistoryEvent('Import', profile?.email, { vehicle_type: `${imported.length} specs`, position: 'Bulk Import' })
+        setHistory(loadHistory())
+      } catch {
+        setImportError('Failed to parse file. Ensure it is a valid .xlsx file.')
+      }
+    }
+    reader.readAsBinaryString(file)
+    e.target.value = ''
+  }
+
+  // ── Export specs to Excel ─────────────────────────────────────────────────────
+
+  function exportSpecsExcel() {
+    const rows = specs.map(s => ({
+      'Vehicle Type': s.vehicle_type,
+      'Position': s.position,
+      'Approved Sizes': s.approved_sizes.join(', '),
+      'Approved Brands': s.approved_brands.join(', '),
+      'Min Load Index': s.min_load_index,
+      'Min Speed Index': s.min_speed_index,
+      'Recommended Pressure': s.recommended_pressure,
+      'Min Tread Depth': s.min_tread_depth,
+      'Notes': s.notes,
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Tyre Specs')
+    XLSX.writeFile(wb, 'TyrePulse_Specifications.xlsx')
+  }
+
+  // ── Export compliance PDF ─────────────────────────────────────────────────────
+
+  function exportCompliancePdf() {
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+    doc.setFillColor(22, 101, 52)
+    doc.rect(0, 0, doc.internal.pageSize.width, 22, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.text('TYREPULSE · Fleet Compliance Report', 14, 10)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Tyre Specification Compliance · Generated: ${new Date().toLocaleDateString('en-GB')}`, 14, 17)
+    doc.setTextColor(150, 150, 150)
+    doc.setFontSize(8)
+    doc.text(`${filteredCompliance.length} fitments analysed`, doc.internal.pageSize.width - 14, 17, { align: 'right' })
+
+    const statusColors = {
+      Approved: [20, 83, 45],
+      'Non-Standard Size': [124, 45, 18],
+      'Non-Approved Brand': [113, 63, 18],
+      'Multiple Violations': [127, 29, 29],
+      'No Spec Defined': [75, 85, 99],
+    }
+
+    autoTable(doc, {
+      startY: 26,
+      head: [['Asset No', 'Vehicle Type', 'Position', 'Fitted Size', 'Fitted Brand', 'Site', 'Spec Status']],
+      body: filteredCompliance.slice(0, 500).map(r => [
+        r.asset_no || '', r.vehicleType || 'Unknown', normalizePosition(r.position), r.size || '', r.brand || '', r.site || '', r.specStatus,
+      ]),
+      styles: { fontSize: 8, cellPadding: 2.5, textColor: [30, 30, 30] },
+      headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 0: { cellWidth: 28 }, 1: { cellWidth: 32 }, 2: { cellWidth: 24 }, 3: { cellWidth: 32 }, 4: { cellWidth: 28 }, 5: { cellWidth: 28 }, 6: { cellWidth: 38 } },
+      margin: { left: 14, right: 14 },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 6) {
+          const color = statusColors[data.cell.raw]
+          if (color) { data.cell.styles.fillColor = color; data.cell.styles.textColor = [255, 255, 255] }
+        }
+      },
+      didDrawPage: (data) => {
+        const pageH = doc.internal.pageSize.height
+        doc.setFontSize(7)
+        doc.setTextColor(107, 114, 128)
+        doc.text('Confidential · Internal Use Only | TyrePulse', 14, pageH - 6)
+        doc.text(`Page ${data.pageNumber}`, doc.internal.pageSize.width - 14, pageH - 6, { align: 'right' })
+      },
+    })
+    doc.save('TyrePulse_Compliance_Report.pdf')
+  }
+
+  // ── Tabs ───────────────────────────────────────────────────────────────────────
+
+  const TABS = [
+    { id: 'library',     label: 'Specification Library', icon: BookOpen },
+    { id: 'compliance',  label: 'Fleet Compliance',      icon: ClipboardCheck },
+    { id: 'violations',  label: 'Non-Conformance',       icon: AlertOctagon },
+    { id: 'defaults',    label: 'Quick Setup',           icon: Zap },
+    { id: 'history',     label: 'Audit Trail',           icon: History },
+  ]
+
+  // ── Render ─────────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="space-y-6">
+
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Shield size={24} className="text-blue-400" />
+            Tyre Specification Manager
+          </h1>
+          <p className="text-gray-400 text-sm mt-0.5">Define approved fitments, track compliance, and flag non-conforming tyres</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => { setEditingSpec(null); setShowSpecModal(true) }}
+            disabled={!isAdmin}
+            title={!isAdmin ? 'Admin access required' : ''}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-2 rounded-lg transition-colors"
+          >
+            <Plus size={15} /> Add Specification
+          </button>
+          <button
+            onClick={() => importRef.current?.click()}
+            disabled={!isAdmin}
+            title={!isAdmin ? 'Admin access required' : ''}
+            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+          >
+            <Upload size={14} /> Import
+          </button>
+          <input ref={importRef} type="file" accept=".xlsx,.xls" onChange={handleImportFile} className="hidden" />
+          <button
+            onClick={exportSpecsExcel}
+            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+          >
+            <FileSpreadsheet size={14} /> Export
+          </button>
+          <button
+            onClick={exportCompliancePdf}
+            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+          >
+            <FileText size={14} /> PDF Report
+          </button>
+          <button
+            onClick={fetchLiveData}
+            disabled={loadingRecords}
+            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+          >
+            <RefreshCw size={14} className={loadingRecords ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {importError && (
+        <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
+          <AlertTriangle size={14} /> {importError}
+          <button onClick={() => setImportError('')} className="ml-auto"><X size={14} /></button>
+        </div>
+      )}
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard icon={ClipboardList} label="Total Spec Profiles" value={specs.length} color="text-blue-400" loading={false} sub={`${typeOptions.length} vehicle types`} />
+        <KpiCard icon={Shield} label="Fleet Compliance Rate" value={`${kpis.complianceRate}%`} color={kpis.complianceRate >= 80 ? 'text-green-400' : kpis.complianceRate >= 60 ? 'text-yellow-400' : 'text-red-400'} loading={loadingRecords} sub={`${kpis.approved} of ${kpis.total} fitments`} />
+        <KpiCard icon={AlertOctagon} label="Non-Conforming Fitments" value={kpis.nonConforming} color={kpis.nonConforming === 0 ? 'text-green-400' : 'text-orange-400'} loading={loadingRecords} sub="size or brand violations" />
+        <KpiCard icon={Truck} label="Vehicle Types Covered" value={kpis.vehicleTypesCovered} color="text-purple-400" loading={false} sub={`${specs.length} total spec entries`} />
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-900 rounded-xl p-1 border border-gray-800 overflow-x-auto">
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+          >
+            <tab.icon size={14} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab: Specification Library ────────────────────────────────────────── */}
+      <AnimatePresence mode="wait">
+        {activeTab === 'library' && (
+          <motion.div key="library" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+
+            {/* Filters */}
+            <div className="flex flex-wrap gap-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input
+                  value={libSearch}
+                  onChange={e => setLibSearch(e.target.value)}
+                  placeholder="Search specs..."
+                  className="w-full pl-9 pr-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none"
+                />
+              </div>
+              <select
+                value={libTypeFilter}
+                onChange={e => setLibTypeFilter(e.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-blue-500 outline-none"
+              >
+                <option value="">All Vehicle Types</option>
+                {libTypeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <select
+                value={libPosFilter}
+                onChange={e => setLibPosFilter(e.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-blue-500 outline-none"
+              >
+                <option value="">All Positions</option>
+                {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+
+            {/* Spec Cards */}
+            {filteredSpecs.length === 0 ? (
+              <div className="bg-gray-900 border border-gray-800 rounded-xl py-16 text-center">
+                <ClipboardList size={40} className="text-gray-700 mx-auto mb-3" />
+                <p className="text-gray-400 font-medium mb-1">No Specification Profiles</p>
+                <p className="text-gray-600 text-sm mb-4">
+                  {specs.length === 0 ? 'Get started by adding your first tyre specification or using Quick Setup.' : 'No specs match the current filters.'}
+                </p>
+                {isAdmin && specs.length === 0 && (
+                  <button onClick={() => setActiveTab('defaults')} className="text-blue-400 hover:text-blue-300 text-sm underline">
+                    View Quick Setup defaults →
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                {filteredSpecs.map((spec, idx) => (
+                  <motion.div
+                    key={spec.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-colors"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <Truck size={13} className="text-blue-400" />
+                          <span className="text-white font-medium text-sm">{spec.vehicle_type}</span>
+                        </div>
+                        <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{spec.position}</span>
+                      </div>
+                      {isAdmin && (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => { setEditingSpec(spec); setShowSpecModal(true) }}
+                            className="p-1.5 text-gray-500 hover:text-blue-400 hover:bg-blue-900/20 rounded-lg transition-colors"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => setDeletingSpec(spec)}
+                            className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <div>
+                        <p className="text-gray-500 text-xs mb-1 flex items-center gap-1"><Tag size={10} /> Approved Sizes</p>
+                        <div className="flex flex-wrap gap-1">
+                          {spec.approved_sizes.map(s => (
+                            <span key={s} className="text-xs bg-blue-900/30 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 text-xs mb-1 flex items-center gap-1"><Shield size={10} /> Approved Brands</p>
+                        <div className="flex flex-wrap gap-1">
+                          {spec.approved_brands.map(b => (
+                            <span key={b} className="text-xs bg-purple-900/30 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full">{b}</span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-800">
+                        {spec.recommended_pressure ? (
+                          <div className="text-center">
+                            <p className="text-gray-500 text-xs">PSI</p>
+                            <p className="text-white text-sm font-semibold">{spec.recommended_pressure}</p>
+                          </div>
+                        ) : null}
+                        {spec.min_tread_depth ? (
+                          <div className="text-center">
+                            <p className="text-gray-500 text-xs">Min Tread</p>
+                            <p className="text-white text-sm font-semibold">{spec.min_tread_depth}mm</p>
+                          </div>
+                        ) : null}
+                        {spec.min_load_index ? (
+                          <div className="text-center">
+                            <p className="text-gray-500 text-xs">Load Idx</p>
+                            <p className="text-white text-sm font-semibold">{spec.min_load_index}{spec.min_speed_index}</p>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {spec.notes && (
+                        <p className="text-gray-500 text-xs border-t border-gray-800 pt-2 line-clamp-2">{spec.notes}</p>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* ── Tab: Fleet Compliance ───────────────────────────────────────────── */}
+        {activeTab === 'compliance' && (
+          <motion.div key="compliance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+
+            {/* Chart + Summary */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col">
+                <p className="text-gray-400 text-sm font-medium mb-3 flex items-center gap-2"><BarChart3 size={14} /> Compliance Breakdown</p>
+                <div className="flex-1 min-h-[180px]">
+                  {complianceData.length > 0 ? (
+                    <Doughnut data={doughnutData} options={CHART_OPTS} />
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-gray-600 text-sm">No data</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3 content-start">
+                {Object.entries({
+                  Approved: complianceData.filter(r => r.specStatus === 'Approved').length,
+                  'Non-Standard Size': complianceData.filter(r => r.specStatus === 'Non-Standard Size').length,
+                  'Non-Approved Brand': complianceData.filter(r => r.specStatus === 'Non-Approved Brand').length,
+                  'Multiple Violations': complianceData.filter(r => r.specStatus === 'Multiple Violations').length,
+                  'No Spec Defined': complianceData.filter(r => r.specStatus === 'No Spec Defined').length,
+                }).map(([status, count]) => {
+                  const cfg = STATUS_CONFIG[status]
+                  const Icon = cfg.icon
+                  const pct = complianceData.length > 0 ? Math.round((count / complianceData.length) * 100) : 0
+                  return (
+                    <div key={status} className={`bg-gray-900 border rounded-xl p-3 ${cfg.bg}`}>
+                      <div className={`flex items-center gap-1.5 mb-1 ${cfg.color}`}>
+                        <Icon size={13} />
+                        <span className="text-xs font-medium">{status}</span>
+                      </div>
+                      <p className={`text-2xl font-bold ${cfg.color}`}>{count}</p>
+                      <p className="text-gray-500 text-xs">{pct}% of fleet</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Compliance Table Filters */}
+            <div className="flex flex-wrap gap-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input
+                  value={compSearch}
+                  onChange={e => { setCompSearch(e.target.value); setCompPage(0) }}
+                  placeholder="Search asset or vehicle type..."
+                  className="w-full pl-9 pr-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none"
+                />
+              </div>
+              <select value={compSiteFilter} onChange={e => { setCompSiteFilter(e.target.value); setCompPage(0) }} className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-blue-500 outline-none">
+                <option value="">All Sites</option>
+                {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select value={compTypeFilter} onChange={e => { setCompTypeFilter(e.target.value); setCompPage(0) }} className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-blue-500 outline-none">
+                <option value="">All Vehicle Types</option>
+                {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <select value={compStatusFilter} onChange={e => { setCompStatusFilter(e.target.value); setCompPage(0) }} className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-blue-500 outline-none">
+                <option value="">All Statuses</option>
+                {Object.keys(STATUS_CONFIG).map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            {/* Compliance Table */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              {loadingRecords ? (
+                <div className="py-16 text-center">
+                  <RefreshCw size={24} className="animate-spin text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-500 text-sm">Loading fleet data...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-800">
+                          {['Asset No', 'Vehicle Type', 'Position', 'Fitted Size', 'Fitted Brand', 'Site', 'Spec Status', 'Action'].map(h => (
+                            <th key={h} className="px-4 py-3 text-left text-xs text-gray-500 font-medium">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {compliancePage.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-12 text-center text-gray-500 text-sm">No records match filters</td>
+                          </tr>
+                        ) : (
+                          compliancePage.map((row, i) => {
+                            const cfg = STATUS_CONFIG[row.specStatus]
+                            const Icon = cfg.icon
+                            return (
+                              <motion.tr
+                                key={`${row.id}-${i}`}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: i * 0.01 }}
+                                className="border-b border-gray-800 hover:bg-gray-800/40 transition-colors"
+                              >
+                                <td className="px-4 py-3 text-white text-sm font-mono">{row.asset_no || '—'}</td>
+                                <td className="px-4 py-3 text-gray-300 text-sm">{row.vehicleType || <span className="text-gray-600">Unknown</span>}</td>
+                                <td className="px-4 py-3 text-gray-300 text-sm">{normalizePosition(row.position) || '—'}</td>
+                                <td className="px-4 py-3 text-gray-300 text-sm font-mono">{row.size || '—'}</td>
+                                <td className="px-4 py-3 text-gray-300 text-sm">{row.brand || '—'}</td>
+                                <td className="px-4 py-3 text-gray-400 text-sm">{row.site || '—'}</td>
+                                <td className="px-4 py-3">
+                                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
+                                    <Icon size={10} /> {cfg.label}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  {(row.specStatus !== 'Approved' && row.specStatus !== 'No Spec Defined') && isAdmin && (
+                                    <button
+                                      onClick={() => setWorkOrderAsset({ asset_no: row.asset_no, site: row.site, violations: row.violations })}
+                                      className="text-xs text-orange-400 hover:text-orange-300 underline whitespace-nowrap"
+                                    >
+                                      Raise WO
+                                    </button>
+                                  )}
+                                </td>
+                              </motion.tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination */}
+                  {complianceTotalPages > 1 && (
+                    <div className="px-4 py-3 border-t border-gray-800 flex items-center justify-between">
+                      <p className="text-gray-500 text-xs">
+                        Showing {compPage * PAGE_SIZE + 1}–{Math.min((compPage + 1) * PAGE_SIZE, filteredCompliance.length)} of {filteredCompliance.length}
+                      </p>
+                      <div className="flex gap-1">
+                        <button onClick={() => setCompPage(p => Math.max(0, p - 1))} disabled={compPage === 0} className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 transition-colors">
+                          <ChevronLeft size={15} />
+                        </button>
+                        {Array.from({ length: Math.min(complianceTotalPages, 7) }, (_, i) => {
+                          const pg = complianceTotalPages <= 7 ? i : compPage <= 3 ? i : compPage >= complianceTotalPages - 4 ? complianceTotalPages - 7 + i : compPage - 3 + i
+                          return (
+                            <button key={pg} onClick={() => setCompPage(pg)} className={`w-7 h-7 rounded text-xs transition-colors ${compPage === pg ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>{pg + 1}</button>
+                          )
+                        })}
+                        <button onClick={() => setCompPage(p => Math.min(complianceTotalPages - 1, p + 1))} disabled={compPage >= complianceTotalPages - 1} className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 transition-colors">
+                          <ChevronRight size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Tab: Non-Conformance ────────────────────────────────────────────── */}
+        {activeTab === 'violations' && (
+          <motion.div key="violations" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                <p className="text-white font-medium text-sm flex items-center gap-2">
+                  <AlertOctagon size={15} className="text-red-400" />
+                  Non-Conformance Report — Grouped by Asset
+                </p>
+                <span className="text-gray-500 text-xs">{nonConformanceByAsset.length} vehicles with violations</span>
+              </div>
+
+              {loadingRecords ? (
+                <div className="py-12 text-center">
+                  <RefreshCw size={24} className="animate-spin text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-500 text-sm">Analysing fleet...</p>
+                </div>
+              ) : nonConformanceByAsset.length === 0 ? (
+                <div className="py-16 text-center">
+                  <CheckCircle size={40} className="text-green-500 mx-auto mb-3" />
+                  <p className="text-white font-medium mb-1">Full Compliance</p>
+                  <p className="text-gray-500 text-sm">No non-conforming fitments detected across the fleet.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        {['Rank', 'Asset No', 'Site', 'Vehicle Type', 'Violations', 'Violation Types', 'Recommended Action', 'Action'].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-xs text-gray-500 font-medium">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {nonConformanceByAsset.map((a, i) => (
+                        <motion.tr
+                          key={a.asset_no}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: i * 0.02 }}
+                          className="border-b border-gray-800 hover:bg-gray-800/40 transition-colors"
+                        >
+                          <td className="px-4 py-3">
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? 'bg-red-900 text-red-300' : 'bg-gray-800 text-gray-400'}`}>{i + 1}</span>
+                          </td>
+                          <td className="px-4 py-3 text-white font-mono text-sm">{a.asset_no}</td>
+                          <td className="px-4 py-3 text-gray-400 text-sm">{a.site || '—'}</td>
+                          <td className="px-4 py-3 text-gray-300 text-sm">{a.vehicleType || 'Unknown'}</td>
+                          <td className="px-4 py-3">
+                            <span className={`text-sm font-bold ${a.violations.length >= 3 ? 'text-red-400' : 'text-orange-400'}`}>{a.violations.length}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-1">
+                              {a.violationTypes.map(v => (
+                                <span key={v} className="text-xs bg-red-900/30 text-red-300 border border-red-800 px-2 py-0.5 rounded-full">{v}</span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-gray-400 text-xs max-w-[180px]">
+                            Replace non-approved fitments with spec-compliant tyres during next scheduled change
+                          </td>
+                          <td className="px-4 py-3">
+                            {isAdmin && (
+                              <button
+                                onClick={() => setWorkOrderAsset({ asset_no: a.asset_no, site: a.site, violations: a.violations })}
+                                className="flex items-center gap-1 bg-orange-900/30 hover:bg-orange-900/50 text-orange-400 text-xs px-3 py-1.5 rounded-lg border border-orange-800 transition-colors"
+                              >
+                                <Wrench size={11} /> Raise WO
+                              </button>
+                            )}
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Tab: Quick Setup ────────────────────────────────────────────────── */}
+        {activeTab === 'defaults' && (
+          <motion.div key="defaults" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+
+            <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-start gap-3">
+              <Info size={16} className="text-blue-400 mt-0.5 shrink-0" />
+              <p className="text-gray-300 text-sm">
+                Industry-standard tyre specification defaults. Click <strong>Import</strong> to add any profile to your specification library. Already-imported specs are greyed out.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {SMART_DEFAULTS.map((def, i) => {
+                const alreadyImported = specs.some(s => s.vehicle_type === def.vehicle_type && s.position === def.position)
+                return (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className={`bg-gray-900 border rounded-xl p-4 transition-colors ${alreadyImported ? 'border-gray-800 opacity-50' : 'border-gray-700 hover:border-blue-700'}`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <Zap size={13} className="text-yellow-400" />
+                          <span className="text-white font-medium text-sm">{def.vehicle_type}</span>
+                        </div>
+                        <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{def.position}</span>
+                      </div>
+                      {alreadyImported ? (
+                        <span className="flex items-center gap-1 text-xs text-green-400 bg-green-900/20 border border-green-800 px-2 py-1 rounded-lg">
+                          <CheckCircle size={10} /> Imported
+                        </span>
+                      ) : (
+                        isAdmin && (
+                          <button
+                            onClick={() => importQuickDefault(def)}
+                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            <Plus size={11} /> Import
+                          </button>
+                        )
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-gray-500 text-xs mb-1">Approved Sizes</p>
+                        <div className="flex flex-wrap gap-1">
+                          {def.approved_sizes.map(s => <span key={s} className="text-xs bg-blue-900/30 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full">{s}</span>)}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-gray-500 text-xs mb-1">Approved Brands</p>
+                        <div className="flex flex-wrap gap-1">
+                          {def.approved_brands.map(b => <span key={b} className="text-xs bg-purple-900/30 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full">{b}</span>)}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-800">
+                        <div className="text-center">
+                          <p className="text-gray-500 text-xs">PSI</p>
+                          <p className="text-white text-sm font-semibold">{def.recommended_pressure}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-gray-500 text-xs">Min Tread</p>
+                          <p className="text-white text-sm font-semibold">{def.min_tread_depth}mm</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-gray-500 text-xs">Load/Speed</p>
+                          <p className="text-white text-sm font-semibold">{def.min_load_index}{def.min_speed_index}</p>
+                        </div>
+                      </div>
+                      <p className="text-gray-600 text-xs pt-1">{def.notes}</p>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Tab: Audit Trail ────────────────────────────────────────────────── */}
+        {activeTab === 'history' && (
+          <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                <p className="text-white font-medium text-sm flex items-center gap-2">
+                  <History size={15} className="text-blue-400" />
+                  Specification Change History
+                </p>
+                <span className="text-gray-500 text-xs">Last {Math.min(history.length, 100)} events</span>
+              </div>
+
+              {history.length === 0 ? (
+                <div className="py-16 text-center">
+                  <History size={40} className="text-gray-700 mx-auto mb-3" />
+                  <p className="text-gray-400 font-medium mb-1">No History Yet</p>
+                  <p className="text-gray-600 text-sm">Changes to specifications will be tracked here.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        {['Date', 'Action', 'User', 'Vehicle Type', 'Position', 'Changed Field', 'Old Value', 'New Value'].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-xs text-gray-500 font-medium">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...history].reverse().map((event, i) => {
+                        const actionColor = event.action === 'Add' || event.action === 'Quick Setup Import' || event.action === 'Import' ? 'text-green-400' :
+                          event.action === 'Edit' ? 'text-blue-400' : 'text-red-400'
+                        return (
+                          <tr key={event.id} className="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                            <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{new Date(event.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                            <td className="px-4 py-2.5"><span className={`text-xs font-medium ${actionColor}`}>{event.action}</span></td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs max-w-[120px] truncate">{event.user}</td>
+                            <td className="px-4 py-2.5 text-gray-300 text-xs">{event.vehicle_type}</td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs">{event.position}</td>
+                            <td className="px-4 py-2.5 text-gray-500 text-xs">{event.changed_field || '—'}</td>
+                            <td className="px-4 py-2.5 text-gray-600 text-xs max-w-[120px] truncate">{event.old_value || '—'}</td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs max-w-[120px] truncate">{event.new_value || '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modals */}
+      {showSpecModal && (
+        <SpecFormModal
+          spec={editingSpec}
+          onClose={() => { setShowSpecModal(false); setEditingSpec(null) }}
+          onSave={handleSaveSpec}
+          isAdmin={isAdmin}
+        />
+      )}
+
+      {deletingSpec && (
+        <DeleteConfirmModal
+          spec={deletingSpec}
+          onClose={() => setDeletingSpec(null)}
+          onConfirm={handleDeleteSpec}
+        />
+      )}
+
+      {workOrderAsset && (
+        <RaiseWorkOrderModal
+          asset={workOrderAsset}
+          violations={workOrderAsset.violations}
+          onClose={() => setWorkOrderAsset(null)}
+        />
+      )}
+    </div>
+  )
+}

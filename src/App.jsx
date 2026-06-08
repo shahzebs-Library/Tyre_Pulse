@@ -59,6 +59,15 @@ import BudgetPlanner from './pages/BudgetPlanner'
 import FleetHealthBoard from './pages/FleetHealthBoard'
 import TyreLifecycle from './pages/TyreLifecycle'
 import WorkshopManagement from './pages/WorkshopManagement'
+import PressureIntelligence from './pages/PressureIntelligence'
+import SupplierManagement from './pages/SupplierManagement'
+import FuelEfficiency from './pages/FuelEfficiency'
+import DailyOps from './pages/DailyOps'
+import RotationSchedule from './pages/RotationSchedule'
+import KpiCommandCenter from './pages/KpiCommandCenter'
+import RecallTracker from './pages/RecallTracker'
+import TyreExchange from './pages/TyreExchange'
+import TyreSpecifications from './pages/TyreSpecifications'
 
 export default function App() {
   return (
@@ -128,6 +137,15 @@ export default function App() {
                     <Route path="/fleet-health"      element={<FleetHealthBoard />} />
                     <Route path="/tyre-lifecycle"    element={<TyreLifecycle />} />
                     <Route path="/workshop"          element={<WorkshopManagement />} />
+                    <Route path="/pressure-intel"   element={<PressureIntelligence />} />
+                    <Route path="/suppliers"        element={<SupplierManagement />} />
+                    <Route path="/fuel-efficiency"  element={<FuelEfficiency />} />
+                    <Route path="/daily-ops"        element={<DailyOps />} />
+                    <Route path="/rotation"         element={<RotationSchedule />} />
+                    <Route path="/kpi-command"      element={<KpiCommandCenter />} />
+                    <Route path="/recall-tracker"   element={<RecallTracker />} />
+                    <Route path="/tyre-exchange"    element={<TyreExchange />} />
+                    <Route path="/tyre-specs"       element={<TyreSpecifications />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

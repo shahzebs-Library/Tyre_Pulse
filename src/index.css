@@ -409,6 +409,10 @@ html.light {
   --text-muted: #64748b;
 }
 
+html.light #root {
+  background: #f1f5f1;
+}
+
 html.light body {
   background-color: #f0f5f1;
   background-image:
@@ -538,6 +542,84 @@ html.light td              { color: #374151 !important; }
 html.light .text-green-400 { color: #16a34a !important; }
 html.light .text-green-300 { color: #22c55e !important; }
 html.light .bg-green-900\/40 { background-color: rgba(22,163,74,0.1) !important; }
+
+/* additional light theme overrides for all pages */
+html.light .bg-gray-950\/50,
+html.light .bg-gray-950\/80,
+html.light .bg-gray-950\/90 { background-color: rgba(241,245,249,0.95) !important; }
+html.light .bg-gray-900\/50,
+html.light .bg-gray-900\/80,
+html.light .bg-gray-900\/90 { background-color: rgba(241,245,249,0.9) !important; }
+html.light .bg-gray-800\/30 { background-color: rgba(255,255,255,0.8) !important; }
+
+/* dividers and subtle borders */
+html.light .divide-gray-800 > * + * { border-color: rgba(22,163,74,0.1) !important; }
+html.light .divide-gray-700 > * + * { border-color: rgba(22,163,74,0.14) !important; }
+
+/* text overrides for all pages */
+html.light .text-slate-300  { color: #334155 !important; }
+html.light .text-slate-400  { color: #64748b !important; }
+html.light .text-slate-500  { color: #94a3b8 !important; }
+
+/* ring/shadow colors */
+html.light .ring-gray-700 { --tw-ring-color: rgba(22,163,74,0.14) !important; }
+
+/* nav active link */
+html.light a.text-green-400 { color: #16a34a !important; }
+html.light a.bg-green-900\/40 { background-color: rgba(22,163,74,0.12) !important; }
+html.light a[aria-current="page"] { background-color: rgba(22,163,74,0.12) !important; }
+
+/* modal/drawer overlays */
+html.light .bg-black\/50,
+html.light .bg-black\/60,
+html.light .bg-black\/70,
+html.light .bg-black\/80 { background-color: rgba(15,23,42,0.4) !important; }
+
+/* chart canvas — no override needed (chart.js reads its container color) */
+
+/* scroll panels */
+html.light [class*="overflow-y-auto"]::-webkit-scrollbar-track { background: rgba(22,163,74,0.03); }
+
+/* invert icon on light */
+html.light .invert-on-light { filter: invert(1); }
+
+/* gradient text adjustment */
+html.light [class*="from-white"] { --tw-gradient-from: #0f172a; }
+
+/* Make sure inputs have visible text */
+html.light input, html.light select, html.light textarea {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  border-color: rgba(22,163,74,0.2) !important;
+}
+html.light input::placeholder, html.light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Drawers and modals */
+html.light .fixed.inset-0 > div[class*="bg-gray"] {
+  background-color: #ffffff !important;
+}
+
+/* Badge bg adjustments in light mode */
+html.light .bg-red-900\/20    { background-color: rgba(239,68,68,0.12) !important; }
+html.light .bg-orange-900\/20 { background-color: rgba(234,88,12,0.1) !important; }
+html.light .bg-yellow-900\/20 { background-color: rgba(202,138,4,0.1) !important; }
+html.light .bg-blue-900\/20   { background-color: rgba(37,99,235,0.1) !important; }
+html.light .bg-purple-900\/20 { background-color: rgba(126,34,206,0.1) !important; }
+html.light .bg-teal-900\/20   { background-color: rgba(13,148,136,0.1) !important; }
+
+html.light .text-red-400    { color: #dc2626 !important; }
+html.light .text-orange-400 { color: #ea580c !important; }
+html.light .text-yellow-400 { color: #ca8a04 !important; }
+html.light .text-blue-400   { color: #2563eb !important; }
+html.light .text-purple-400 { color: #9333ea !important; }
+html.light .text-teal-400   { color: #0d9488 !important; }
+html.light .text-cyan-400   { color: #0891b2 !important; }
+html.light .text-indigo-400 { color: #4f46e5 !important; }
+
+/* Table stripe fix */
+html.light tbody tr:nth-child(even) { background-color: rgba(22,163,74,0.02) !important; }
 
 /* ── Wave 5E: Theme depth — gradients, shadows, refined dark palette ── */
 

@@ -12,7 +12,7 @@ import {
   Sun, Moon, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare,
   ChevronDown, ChevronRight,
   Cpu, MapPin, Activity, GitMerge, CalendarClock, Trophy, BarChartBig, Microscope, Bot,
-  TrendingUp, BookOpen, Zap, Database,
+  TrendingUp, BookOpen, Zap, Database, Wrench,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -50,6 +50,7 @@ const NAV_GROUPS = [
       { to: '/accidents',    label: 'Accidents',          icon: AlertOctagon },
       { to: '/rca',          label: 'Root Cause',         icon: Search },
       { to: '/inspections',  label: 'Inspections',        icon: ClipboardCheck },
+      { to: '/work-orders',  label: 'Work Orders',        icon: Wrench },
       { to: '/gate-pass',    label: 'Gate Pass',          icon: ShieldCheck },
       { to: '/reports',      label: 'Reports',            icon: FileText },
     ],

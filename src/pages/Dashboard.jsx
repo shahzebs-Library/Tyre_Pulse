@@ -809,7 +809,7 @@ export default function Dashboard() {
                     y: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: GRID },
                   },
                 }} />
-              : <p className="text-gray-500 text-sm">No asset data</p>}
+              : <EmptyState compact icon="database" title="No asset data" description="No cost data available for asset ranking." />}
           </div>
         </div>
         <div className="card">
@@ -823,7 +823,7 @@ export default function Dashboard() {
                     y: { ticks: { color: '#9ca3af' }, grid: GRID },
                   },
                 }} />
-              : <p className="text-gray-500 text-sm">No data</p>}
+              : <EmptyState compact icon="database" title="No site data" description="No spend data available for site ranking." />}
           </div>
         </div>
       </div>
@@ -832,7 +832,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
           <h2 className="text-base font-semibold text-white mb-4">Recent Tyre Records</h2>
-          {recentRecords.length === 0 ? <p className="text-gray-500 text-sm">No records yet</p> : (
+          {recentRecords.length === 0 ? <EmptyState compact icon="database" title="No records yet" description="Upload tyre data to see recent activity." /> : (
             <div className="space-y-2">
               {recentRecords.map(r => (
                 <div key={r.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">
@@ -854,7 +854,7 @@ export default function Dashboard() {
 
         <div className="card">
           <h2 className="text-base font-semibold text-white mb-4">Open Corrective Actions</h2>
-          {openActions.length === 0 ? <p className="text-gray-500 text-sm">No open actions</p> : (
+          {openActions.length === 0 ? <EmptyState compact icon="search" title="No open actions" description="All corrective actions are resolved." /> : (
             <div className="space-y-2">
               {openActions.map(a => (
                 <div key={a.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">

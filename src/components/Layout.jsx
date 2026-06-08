@@ -13,6 +13,7 @@ import {
   ChevronDown, ChevronRight,
   Cpu, MapPin, Activity, GitMerge, CalendarClock, Trophy, BarChartBig, Microscope, Bot,
   TrendingUp, BookOpen, Zap, Database, Wrench, Calendar,
+  Target, ShoppingCart,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -72,6 +73,8 @@ const NAV_GROUPS = [
       { to: '/executive-report',        label: 'Executive Report',        icon: BookOpen },
       { to: '/forecasting',             label: 'Forecasting Engine',      icon: TrendingUp },
       { to: '/cost-center',            label: 'Cost Center',             icon: DollarSign },
+      { to: '/benchmark',              label: 'Performance Benchmark',   icon: Target },
+      { to: '/procurement',            label: 'Procurement',             icon: ShoppingCart },
       { to: '/continuous-improvement',  label: 'Continuous Improvement',  icon: Zap },
       { to: '/erp-sync',                label: 'ERP Sync',                icon: Database },
       { to: '/maintenance-calendar',    label: 'Maintenance Calendar',    icon: Calendar },

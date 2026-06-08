@@ -538,3 +538,28 @@ html.light td              { color: #374151 !important; }
 html.light .text-green-400 { color: #16a34a !important; }
 html.light .text-green-300 { color: #22c55e !important; }
 html.light .bg-green-900\/40 { background-color: rgba(22,163,74,0.1) !important; }
+
+/* ── Wave 5E: Theme depth — gradients, shadows, refined dark palette ── */
+
+/* Page gradient background */
+#root {
+  background: linear-gradient(135deg, #0a0f1a 0%, #0d1321 50%, #0a0f1a 100%);
+  min-height: 100vh;
+}
+
+/* Stat card variant — supplemental depth override */
+.card-stat {
+  background: linear-gradient(145deg, rgba(10,20,12,0.97) 0%, rgba(6,12,8,0.99) 100%);
+}
+
+/* Sidebar gradient — supplemental override for .sidebar class if used */
+.sidebar {
+  background: linear-gradient(180deg, #080d18 0%, #0a1020 60%, #070b16 100%);
+  border-right: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Risk badges */
+.badge-critical { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); border-radius: 9999px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+.badge-high     { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); border-radius: 9999px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+.badge-medium   { background: rgba(99,102,241,0.15);  color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); border-radius: 9999px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+.badge-low      { background: rgba(16,185,129,0.15);  color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); border-radius: 9999px; padding: 2px 8px; font-size: 11px; font-weight: 600; }

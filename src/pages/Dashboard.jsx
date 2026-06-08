@@ -21,6 +21,8 @@ import {
   Bell, Upload, ClipboardCheck, Maximize2,
 } from 'lucide-react'
 import { ChartModal } from '../components/ChartModal'
+import EmptyState from '../components/EmptyState'
+import LoadingState from '../components/LoadingState'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
@@ -473,7 +475,7 @@ export default function Dashboard() {
   const TrendIcon = riskTrend?.delta > 0 ? TrendingUp : riskTrend?.delta < 0 ? TrendingDown : Minus
   const trendCol  = riskTrend?.delta > 0 ? 'text-red-400' : riskTrend?.delta < 0 ? 'text-green-400' : 'text-gray-500'
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 rounded-full border-2 border-gray-700 border-t-blue-500" /></div>
+  if (loading) return <LoadingState message="Loading dashboard…" />
 
   return (
     <div className="space-y-6">
@@ -683,7 +685,7 @@ export default function Dashboard() {
         <div className="card">
           <h2 className="text-base font-semibold text-white mb-4">Brand Breakdown</h2>
           <div className="h-56 flex items-center justify-center">
-            {brandData ? <Doughnut data={brandData} options={NO_SCALE} /> : <p className="text-gray-500 text-sm">No data</p>}
+            {brandData ? <Doughnut data={brandData} options={NO_SCALE} /> : <EmptyState compact icon="database" title="No brand data" description="Upload tyre records to see brand breakdown." />}
           </div>
         </div>
       </div>
@@ -789,7 +791,7 @@ export default function Dashboard() {
           <div className="h-52 flex items-center justify-center">
             {categoryData
               ? <Doughnut data={categoryData} options={NO_SCALE} />
-              : <p className="text-gray-500 text-sm">No classified records · run Data Cleaning to populate</p>}
+              : <EmptyState compact icon="filter" title="No classified records" description="Run Data Cleaning to populate failure categories." />}
           </div>
         </div>
       </div>

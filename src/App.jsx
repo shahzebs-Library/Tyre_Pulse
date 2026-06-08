@@ -53,6 +53,12 @@ import SafetyCompliance from './pages/SafetyCompliance'
 import CostCenter from './pages/CostCenter'
 import PerformanceBenchmark from './pages/PerformanceBenchmark'
 import Procurement from './pages/Procurement'
+import TyreSizeAnalysis from './pages/TyreSizeAnalysis'
+import DowntimeTracker from './pages/DowntimeTracker'
+import BudgetPlanner from './pages/BudgetPlanner'
+import FleetHealthBoard from './pages/FleetHealthBoard'
+import TyreLifecycle from './pages/TyreLifecycle'
+import WorkshopManagement from './pages/WorkshopManagement'
 
 export default function App() {
   return (
@@ -116,6 +122,12 @@ export default function App() {
                     <Route path="/cost-center"       element={<CostCenter />} />
                     <Route path="/benchmark"         element={<PerformanceBenchmark />} />
                     <Route path="/procurement"       element={<Procurement />} />
+                    <Route path="/tyre-size"         element={<TyreSizeAnalysis />} />
+                    <Route path="/downtime"          element={<DowntimeTracker />} />
+                    <Route path="/budget-planner"    element={<BudgetPlanner />} />
+                    <Route path="/fleet-health"      element={<FleetHealthBoard />} />
+                    <Route path="/tyre-lifecycle"    element={<TyreLifecycle />} />
+                    <Route path="/workshop"          element={<WorkshopManagement />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

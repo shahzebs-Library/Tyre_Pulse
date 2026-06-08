@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { Save, User, Settings2, Bell, Database, Info, Target } from 'lucide-react'
+import { Save, User, Settings2, Bell, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play } from 'lucide-react'
+import { sendReportEmail } from '../lib/emailService'
 
 const ROLE_BADGE = {
   Admin:   'bg-purple-900/50 text-purple-300 border border-purple-700/50',
@@ -46,6 +47,46 @@ const ALERT_THRESHOLD_FIELDS = [
   { key: 'high_risk_tyre_pct',  label: 'High Risk Tyre % Alert',         step: 1, min: 0, max: 100 },
 ]
 
+const REPORT_NAMES = [
+  'Fleet Summary',
+  'KPI Report',
+  'Vendor Intelligence',
+  'Executive Report',
+  'Forecasting',
+  'Work Orders Summary',
+]
+
+const SCHEDULE_FREQUENCIES = ['Daily', 'Weekly', 'Monthly']
+
+const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+const DAYS_OF_MONTH = Array.from({ length: 28 }, (_, i) => i + 1)
+
+const REPORT_FORMATS = ['PDF', 'Excel', 'Both']
+
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
+  const h = String(i).padStart(2, '0')
+  return `${h}:00`
+})
+
+const EMPTY_SCHEDULE = {
+  id: null,
+  reportName: REPORT_NAMES[0],
+  frequency: 'Daily',
+  dayOfWeek: 'Monday',
+  dayOfMonth: 1,
+  time: '06:00',
+  recipients: '',
+  format: 'PDF',
+  active: true,
+}
+
+function getScheduleLabel(schedule) {
+  if (schedule.frequency === 'Daily') return `Daily at ${schedule.time}`
+  if (schedule.frequency === 'Weekly') return `Weekly · ${schedule.dayOfWeek} at ${schedule.time}`
+  return `Monthly · Day ${schedule.dayOfMonth} at ${schedule.time}`
+}
+
 function getInitials(name) {
   if (!name) return '?'
   return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -87,6 +128,20 @@ export default function Settings() {
   const [editingKpi, setEditingKpi]         = useState(false)
   const [savingKpi, setSavingKpi]           = useState(false)
   const [kpiMsg, setKpiMsg]                 = useState('')
+
+  // Scheduled Reports — persisted to localStorage
+  const [schedules, setSchedules] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('tp_scheduled_reports') || '[]') }
+    catch { return [] }
+  })
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newSchedule, setNewSchedule] = useState({ ...EMPTY_SCHEDULE })
+  const [sendingTest, setSendingTest] = useState(null) // schedule id
+  const [testMsg, setTestMsg] = useState({}) // { [id]: string }
+
+  useEffect(() => {
+    localStorage.setItem('tp_scheduled_reports', JSON.stringify(schedules))
+  }, [schedules])
 
   useEffect(() => { loadSettings(); loadUploadHistory(); loadKpiTargets(); loadAlertThresholds() }, [])
   useEffect(() => { setAppSettings(s => ({ ...s, ...globalSettings })) }, [globalSettings])
@@ -252,6 +307,50 @@ export default function Settings() {
     setDraftKpiTargets(kpiTargets)
     setEditingKpi(false)
     setKpiMsg('')
+  }
+
+  function addSchedule() {
+    if (!newSchedule.recipients.trim()) return
+    const entry = { ...newSchedule, id: Date.now().toString() }
+    setSchedules(prev => [...prev, entry])
+    setNewSchedule({ ...EMPTY_SCHEDULE })
+    setShowAddForm(false)
+  }
+
+  function deleteSchedule(id) {
+    setSchedules(prev => prev.filter(s => s.id !== id))
+    setTestMsg(prev => { const n = { ...prev }; delete n[id]; return n })
+  }
+
+  function toggleScheduleActive(id) {
+    setSchedules(prev => prev.map(s => s.id === id ? { ...s, active: !s.active } : s))
+  }
+
+  async function handleTestSend(schedule) {
+    setSendingTest(schedule.id)
+    setTestMsg(prev => ({ ...prev, [schedule.id]: '' }))
+    try {
+      const recipients = schedule.recipients.split(',').map(e => e.trim()).filter(Boolean)
+      if (recipients.length === 0) throw new Error('No valid recipients')
+      await sendReportEmail({
+        to: recipients,
+        subject: `[Test] TyrePulse ${schedule.reportName} — ${getScheduleLabel(schedule)}`,
+        bodyHtml: `<p style="font-family:Arial,sans-serif;color:#1e293b;">
+          <strong>Test Delivery</strong><br><br>
+          This is a test send for your scheduled report:<br><br>
+          <strong>Report:</strong> ${schedule.reportName}<br>
+          <strong>Schedule:</strong> ${getScheduleLabel(schedule)}<br>
+          <strong>Format:</strong> ${schedule.format}<br><br>
+          Automated delivery requires a cron service or Supabase Edge Function with pg_cron.
+        </p>`,
+      })
+      setTestMsg(prev => ({ ...prev, [schedule.id]: 'Test sent successfully' }))
+    } catch (err) {
+      setTestMsg(prev => ({ ...prev, [schedule.id]: `Failed: ${err.message}` }))
+    } finally {
+      setSendingTest(null)
+      setTimeout(() => setTestMsg(prev => { const n = { ...prev }; delete n[schedule.id]; return n }), 4000)
+    }
   }
 
   const initials = getInitials(profileForm.full_name || profile?.full_name)
@@ -637,6 +736,205 @@ export default function Settings() {
             View Full History
           </Link>
         </div>
+      </div>
+
+      {/* Scheduled Reports */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <Clock size={16} /> Scheduled Reports
+          </h2>
+          <button
+            type="button"
+            onClick={() => { setShowAddForm(v => !v); setNewSchedule({ ...EMPTY_SCHEDULE }) }}
+            className="btn-primary text-sm flex items-center gap-2"
+          >
+            <Plus size={14} /> Add Schedule
+          </button>
+        </div>
+
+        {/* Info panel */}
+        <div className="flex items-start gap-3 bg-blue-950/40 border border-blue-800/40 rounded-lg px-4 py-3 mb-5">
+          <Calendar size={16} className="text-blue-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-blue-300 leading-relaxed">
+            Schedules are stored locally. To enable automated delivery, connect a cron service or
+            Supabase Edge Function with <code className="font-mono bg-blue-900/40 px-1 rounded">pg_cron</code>.
+            Use <strong>Test Send</strong> to verify recipients immediately.
+          </p>
+        </div>
+
+        {/* Add form */}
+        {showAddForm && (
+          <div className="bg-gray-800/60 border border-gray-700/60 rounded-xl p-4 mb-5 space-y-4">
+            <p className="text-xs font-semibold text-gray-300 uppercase tracking-wider">New Schedule</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="label">Report Name</label>
+                <select className="input" value={newSchedule.reportName}
+                  onChange={e => setNewSchedule(s => ({ ...s, reportName: e.target.value }))}>
+                  {REPORT_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Frequency</label>
+                <select className="input" value={newSchedule.frequency}
+                  onChange={e => setNewSchedule(s => ({ ...s, frequency: e.target.value }))}>
+                  {SCHEDULE_FREQUENCIES.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+              {newSchedule.frequency === 'Weekly' && (
+                <div>
+                  <label className="label">Day of Week</label>
+                  <select className="input" value={newSchedule.dayOfWeek}
+                    onChange={e => setNewSchedule(s => ({ ...s, dayOfWeek: e.target.value }))}>
+                    {DAYS_OF_WEEK.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+              )}
+              {newSchedule.frequency === 'Monthly' && (
+                <div>
+                  <label className="label">Day of Month</label>
+                  <select className="input" value={newSchedule.dayOfMonth}
+                    onChange={e => setNewSchedule(s => ({ ...s, dayOfMonth: Number(e.target.value) }))}>
+                    {DAYS_OF_MONTH.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="label">Time</label>
+                <select className="input" value={newSchedule.time}
+                  onChange={e => setNewSchedule(s => ({ ...s, time: e.target.value }))}>
+                  {HOUR_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Format</label>
+                <select className="input" value={newSchedule.format}
+                  onChange={e => setNewSchedule(s => ({ ...s, format: e.target.value }))}>
+                  {REPORT_FORMATS.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+              <div className={newSchedule.frequency === 'Daily' ? 'sm:col-span-2 lg:col-span-1' : ''}>
+                <label className="label flex items-center gap-1"><Mail size={12} /> Recipients</label>
+                <input
+                  className="input"
+                  placeholder="email1@co.com, email2@co.com"
+                  value={newSchedule.recipients}
+                  onChange={e => setNewSchedule(s => ({ ...s, recipients: e.target.value }))}
+                />
+                <p className="text-xs text-gray-500 mt-1">Comma-separated email addresses</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={addSchedule}
+                disabled={!newSchedule.recipients.trim()}
+                className="btn-primary text-sm flex items-center gap-2 disabled:opacity-40"
+              >
+                <Plus size={14} /> Save Schedule
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddForm(false)}
+                className="btn-secondary text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Schedules table */}
+        {schedules.length === 0 ? (
+          <div className="text-center py-10 border border-dashed border-gray-700 rounded-xl">
+            <Clock size={28} className="text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-500 text-sm">No scheduled reports configured</p>
+            <p className="text-gray-600 text-xs mt-1">Click Add Schedule to get started</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-700/60">
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Report</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Schedule</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Format</th>
+                  <th className="text-left py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Recipients</th>
+                  <th className="text-center py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Status</th>
+                  <th className="text-right py-2 px-3 text-gray-400 font-medium text-xs uppercase tracking-wide">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800/60">
+                {schedules.map(schedule => (
+                  <tr key={schedule.id} className="hover:bg-gray-800/30 transition-colors group">
+                    <td className="py-3 px-3">
+                      <span className="text-white font-medium">{schedule.reportName}</span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="text-gray-300">{getScheduleLabel(schedule)}</span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 border border-gray-700">
+                        {schedule.format}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 max-w-xs">
+                      <span className="text-gray-400 text-xs truncate block">
+                        {schedule.recipients || <span className="italic text-gray-600">No recipients</span>}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => toggleScheduleActive(schedule.id)}
+                        title={schedule.active ? 'Pause schedule' : 'Activate schedule'}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                          schedule.active ? 'bg-green-600' : 'bg-gray-600'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                            schedule.active ? 'translate-x-4' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                      <span className={`block text-xs mt-0.5 ${schedule.active ? 'text-green-400' : 'text-gray-500'}`}>
+                        {schedule.active ? 'Active' : 'Paused'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {testMsg[schedule.id] && (
+                          <span className={`text-xs ${testMsg[schedule.id].startsWith('Failed') ? 'text-red-400' : 'text-green-400'}`}>
+                            {testMsg[schedule.id]}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleTestSend(schedule)}
+                          disabled={sendingTest === schedule.id}
+                          title="Send test email now"
+                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-blue-900/40 text-blue-400 border border-blue-800/50 hover:bg-blue-800/50 transition-colors disabled:opacity-40"
+                        >
+                          <Play size={11} /> {sendingTest === schedule.id ? 'Sending…' : 'Test Send'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteSchedule(schedule.id)}
+                          title="Delete schedule"
+                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-red-900/30 text-red-400 border border-red-800/40 hover:bg-red-900/50 transition-colors"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* About */}

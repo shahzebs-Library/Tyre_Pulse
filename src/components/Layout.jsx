@@ -19,6 +19,7 @@ import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
 import TpLogo from '../assets/logo.svg'
 import InstallPwaPrompt from './InstallPwaPrompt'
 import NotificationCenter from './NotificationCenter'
+import GlobalSearch from './GlobalSearch'
 
 const NAV_GROUPS = [
   {
@@ -152,6 +153,7 @@ export default function Layout({ children }) {
   const [query, setQuery]                   = useState('')
   const [results, setResults]               = useState([])
   const [searching, setSearching]           = useState(false)
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const [alertCount, setAlertCount]         = useState(0)
 
   function toggleGroup(label) {
@@ -190,8 +192,8 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     function onKeyDown(e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setSearchOpen(v => !v) }
-      if (e.key === 'Escape') { setSearchOpen(false); setQuery('') }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setGlobalSearchOpen(v => !v) }
+      if (e.key === 'Escape') { setGlobalSearchOpen(false); setSearchOpen(false); setQuery('') }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -294,7 +296,7 @@ export default function Layout({ children }) {
               {/* Search */}
               <div className="px-2.5 pt-2.5 pb-1">
                 <button
-                  onClick={() => setSearchOpen(true)}
+                  onClick={() => setGlobalSearchOpen(true)}
                   className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-gray-600 hover:text-green-400 transition-all text-xs group"
                   style={{ background: 'rgba(22,163,74,0.04)', border: '1px solid rgba(22,163,74,0.1)' }}
                 >
@@ -527,6 +529,9 @@ export default function Layout({ children }) {
 
       {/* PWA install prompt */}
       <InstallPwaPrompt />
+
+      {/* Global search modal (Cmd/Ctrl+K) */}
+      <GlobalSearch isOpen={globalSearchOpen} onClose={() => setGlobalSearchOpen(false)} />
 
       {/* Search palette */}
       <AnimatePresence>

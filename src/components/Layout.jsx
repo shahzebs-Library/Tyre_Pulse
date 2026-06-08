@@ -71,6 +71,7 @@ const NAV_GROUPS = [
       { to: '/ai-command-center',       label: 'AI Command Center',       icon: Bot },
       { to: '/executive-report',        label: 'Executive Report',        icon: BookOpen },
       { to: '/forecasting',             label: 'Forecasting Engine',      icon: TrendingUp },
+      { to: '/cost-center',            label: 'Cost Center',             icon: DollarSign },
       { to: '/continuous-improvement',  label: 'Continuous Improvement',  icon: Zap },
       { to: '/erp-sync',                label: 'ERP Sync',                icon: Database },
       { to: '/maintenance-calendar',    label: 'Maintenance Calendar',    icon: Calendar },

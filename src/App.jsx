@@ -50,6 +50,7 @@ import WorkOrders from './pages/WorkOrders'
 import MaintenanceCalendar from './pages/MaintenanceCalendar'
 import DriverManagement from './pages/DriverManagement'
 import SafetyCompliance from './pages/SafetyCompliance'
+import CostCenter from './pages/CostCenter'
 
 export default function App() {
   return (
@@ -110,6 +111,7 @@ export default function App() {
                     <Route path="/maintenance-calendar" element={<MaintenanceCalendar />} />
                     <Route path="/driver-management" element={<DriverManagement />} />
                     <Route path="/safety-compliance" element={<SafetyCompliance />} />
+                    <Route path="/cost-center"       element={<CostCenter />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

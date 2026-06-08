@@ -15,6 +15,7 @@ import {
   TrendingUp, BookOpen, Zap, Database, Wrench, Calendar,
   Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
+  Recycle, Radio, PackagePlus,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -58,6 +59,8 @@ const NAV_GROUPS = [
       { to: '/warranty',            label: 'Warranty Tracker',    icon: ShieldCheck },
       { to: '/work-orders',         label: 'Work Orders',         icon: Wrench },
       { to: '/gate-pass',           label: 'Gate Pass',           icon: ShieldCheck },
+      { to: '/scrap',               label: 'Scrap Management',    icon: FileWarning },
+      { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
       { to: '/reports',             label: 'Reports',             icon: FileText },
     ],
   },
@@ -98,6 +101,9 @@ const NAV_GROUPS = [
       { to: '/erp-sync',                label: 'ERP Sync',                icon: Database },
       { to: '/maintenance-calendar',    label: 'Maintenance Calendar',    icon: Calendar },
       { to: '/safety-compliance',       label: 'Safety & Compliance',     icon: ShieldCheck },
+      { to: '/live-fleet',             label: 'Live Fleet Status',        icon: Radio },
+      { to: '/compliance',             label: 'Compliance Dashboard',     icon: Shield },
+      { to: '/retread',                label: 'Retread Management',       icon: Recycle },
       { to: '/alerts',          label: 'Alerts',           icon: Bell },
       { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle, adminOnly: true },
       { to: '/vehicle-history', label: 'Vehicle History',  icon: Car,           adminOnly: true },

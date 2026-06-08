@@ -71,6 +71,11 @@ import TyreExchange from './pages/TyreExchange'
 import TyreSpecifications from './pages/TyreSpecifications'
 import AssetManagement from './pages/AssetManagement'
 import InspectionPlanner from './pages/InspectionPlanner'
+import RetreadManagement from './pages/RetreadManagement'
+import LiveFleetStatus from './pages/LiveFleetStatus'
+import ComplianceDashboard from './pages/ComplianceDashboard'
+import TyreScrapManagement from './pages/TyreScrapManagement'
+import StockReplenishment from './pages/StockReplenishment'
 
 export default function App() {
   return (
@@ -152,6 +157,11 @@ export default function App() {
                     <Route path="/tyre-specs"       element={<TyreSpecifications />} />
                     <Route path="/assets"              element={<AssetManagement />} />
                     <Route path="/inspection-planner" element={<InspectionPlanner />} />
+                    <Route path="/retread"             element={<RetreadManagement />} />
+                    <Route path="/live-fleet"          element={<LiveFleetStatus />} />
+                    <Route path="/compliance"          element={<ComplianceDashboard />} />
+                    <Route path="/scrap"               element={<TyreScrapManagement />} />
+                    <Route path="/stock-replenishment" element={<StockReplenishment />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

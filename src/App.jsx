@@ -66,8 +66,11 @@ import DailyOps from './pages/DailyOps'
 import RotationSchedule from './pages/RotationSchedule'
 import KpiCommandCenter from './pages/KpiCommandCenter'
 import RecallTracker from './pages/RecallTracker'
+import WarrantyTracker from './pages/WarrantyTracker'
 import TyreExchange from './pages/TyreExchange'
 import TyreSpecifications from './pages/TyreSpecifications'
+import AssetManagement from './pages/AssetManagement'
+import InspectionPlanner from './pages/InspectionPlanner'
 
 export default function App() {
   return (
@@ -144,8 +147,11 @@ export default function App() {
                     <Route path="/rotation"         element={<RotationSchedule />} />
                     <Route path="/kpi-command"      element={<KpiCommandCenter />} />
                     <Route path="/recall-tracker"   element={<RecallTracker />} />
+                    <Route path="/warranty"         element={<WarrantyTracker />} />
                     <Route path="/tyre-exchange"    element={<TyreExchange />} />
                     <Route path="/tyre-specs"       element={<TyreSpecifications />} />
+                    <Route path="/assets"              element={<AssetManagement />} />
+                    <Route path="/inspection-planner" element={<InspectionPlanner />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

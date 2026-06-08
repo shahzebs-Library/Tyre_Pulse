@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -417,13 +419,11 @@ export default function Accidents() {
     <div className="space-y-4">
       {/* Page header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <AlertOctagon size={22} className="text-orange-400" />
-            Accidents &amp; Incidents
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">{records.length} total incidents</p>
-        </div>
+        <PageHeader
+          title="Accidents & Incidents"
+          subtitle={`${records.length} total incidents`}
+          icon={AlertOctagon}
+        />
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => exportToExcel(filtered, exportCols, exportHeaders, 'TyrePulse_Accidents')}

@@ -3,6 +3,8 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { ScanLine, Search, Download, FileText, Upload } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 
 export default function SerialTracker() {
   const [activeTab, setActiveTab] = useState('single') // 'single' | 'bulk'

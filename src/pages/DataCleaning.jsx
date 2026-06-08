@@ -8,6 +8,8 @@ import {
   ShieldAlert, AlertTriangle, BarChart2, Gauge, ClipboardList, Truck,
   Activity, ChevronDown, ChevronUp, Edit2, Hash, Layers, CheckCircle2,
 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 
 const PAGE_SIZE = 50
 
@@ -784,12 +786,11 @@ export default function DataCleaning() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Wand2 size={22} className="text-green-400" /> Data Cleaning Engine
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">Rule-based auto-classification + Quality Intelligence — zero AI tokens required</p>
-        </div>
+        <PageHeader
+          title="Data Cleaning Engine"
+          subtitle="Rule-based auto-classification + Quality Intelligence — zero AI tokens required"
+          icon={Wand2}
+        />
         <div className="flex gap-3">
           <div className="card py-2 px-4 text-center">
             <p className="text-xl font-bold text-yellow-400">{stats.pending.toLocaleString()}</p>

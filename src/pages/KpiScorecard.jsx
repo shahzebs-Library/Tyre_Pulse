@@ -7,7 +7,9 @@ import {
   computeMonthlyKpiActuals, sum,
 } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { Download, FileText, AlertTriangle, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Download, FileText, AlertTriangle, ToggleLeft, ToggleRight, Target } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement,
   Filler, Title, Tooltip, Legend,

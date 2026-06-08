@@ -2,7 +2,9 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { Plus, Save, X, Download, FileText } from 'lucide-react'
+import { Plus, Save, X, Download, FileText, PiggyBank } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement,
@@ -234,10 +236,11 @@ export default function Budgets() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Budgets</h1>
-          <p className="text-gray-400 text-sm mt-1">Monthly budget vs actual spending</p>
-        </div>
+        <PageHeader
+          title="Budgets"
+          subtitle="Monthly budget vs actual spending"
+          icon={PiggyBank}
+        />
         <div className="flex gap-2">
           <button onClick={exportExcel} className="btn-secondary text-xs flex items-center gap-1.5">
             <Download size={14} /> Excel

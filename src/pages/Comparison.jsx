@@ -7,6 +7,7 @@ import {
 } from 'chart.js'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { GitCompare, Download, FileText } from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -143,12 +144,11 @@ export default function Comparison() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <GitCompare size={22} className="text-green-400" /> Period Comparison
-        </h1>
-        <p className="text-gray-400 text-sm mt-1">Compare tyre replacements or costs across two time periods</p>
-      </div>
+      <PageHeader
+        title="Period Comparison"
+        subtitle="Compare tyre replacements or costs across two time periods"
+        icon={GitCompare}
+      />
 
       {/* Period selectors */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

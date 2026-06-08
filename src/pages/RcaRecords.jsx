@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Plus, Save, X, Search, Download, FileText, Camera, GitBranch } from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const CONTRIBUTING_FACTOR_OPTIONS = [
@@ -193,8 +194,11 @@ export default function RcaRecords() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Root Cause Analysis</h1>
-          <p className="text-gray-400 text-sm mt-1">{records.length} RCA records</p>
+          <PageHeader
+            title="Root Cause Analysis"
+            subtitle={`${records.length} RCA records`}
+            icon={GitBranch}
+          />
         </div>
         <div className="flex gap-2">
           <button

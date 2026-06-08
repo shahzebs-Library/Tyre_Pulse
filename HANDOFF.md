@@ -1,17 +1,17 @@
 # TyrePulse — Developer Handoff
 **Branch:** `claude/handoff-setup-gZAHb`
 **Last updated:** June 2026
-**Session summary:** Waves 8-23 fully implemented and pushed
+**Session summary:** Waves 8-23 + Wave 5D/5E/5F + Edge Functions + PWA Icons + ERP Sync + Realtime Notifications fully implemented and pushed
 
 ---
 
 ## Next Session — Priority Order
 
-1. **PWA icons** — generate icon set at `/public/icons/icon-{72,96,128,144,152,192,384,512}x{size}.png` from the logo SVG
-2. **Edge Functions** — create `supabase/functions/generate-embedding/index.ts` and `supabase/functions/chat-ai/index.ts`
-3. **Wave 5 polish** — email generation (5D), theme gradients (5E), empty state cleanup (5F)
-4. **ERP sync** — read-only ERP integration endpoints
-5. **Supabase Realtime** — push notifications for new Critical risk tyres
+1. **Work Orders page** — `/work-orders` (new operational page for workshop job tracking)
+2. **Scheduled Reports** — Add to Settings: schedule weekly/monthly email reports
+3. **Global Search** — Cross-page search modal (tyres, vehicles, inspections)
+4. **Apply migrations V12-V15** — User must run in Supabase SQL Editor
+5. **Wire EmailReportModal** into ForecastingEngine, VendorIntelligence, FleetIntelligence
 
 ---
 
@@ -32,12 +32,13 @@
 |----------|-------|---------|
 | `generate-embedding` | `{ text, model }` | Proxy OpenAI text-embedding-3-small |
 | `chat-ai` | `{ system, user, model }` | Proxy Claude API for 4 AI agents |
+| `send-email` | `{ to, subject, body, attachmentBase64? }` | Resend API email delivery |
 
-Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
+Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
 
 ---
 
-## What Was Built (Waves 8-23)
+## What Was Built (All Sessions)
 
 ### New Pages
 | Route | File | Wave |
@@ -54,6 +55,7 @@ Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | `/forecasting` | ForecastingEngine.jsx | 18 |
 | `/continuous-improvement` | ContinuousImprovement.jsx | 19 |
 | `/ai-command-center` | AiCommandCenter.jsx | 21 |
+| `/erp-sync` | ErpSync.jsx | 23+ |
 
 ### New Libraries
 | File | Purpose |
@@ -65,6 +67,21 @@ Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | `src/lib/agents/` | analystAgent, tyreEngineerAgent, qaDataAgent, plannerAgent |
 | `src/lib/auditLogger.js` | audit_log_v2 convenience wrappers |
 | `src/lib/performanceMonitor.js` | Query timing + slow query detection |
+| `src/lib/emailService.js` | PDF generation + email delivery via Resend |
+
+### New Components
+| File | Purpose |
+|------|---------|
+| `src/components/EmptyState.jsx` | Reusable empty state with icon/action |
+| `src/components/LoadingState.jsx` | Spinner with message + fullPage mode |
+| `src/components/InstallPwaPrompt.jsx` | PWA install to home screen banner |
+| `src/components/EmailReportModal.jsx` | Multi-recipient email modal with PDF attachment |
+| `src/components/NotificationCenter.jsx` | Realtime bell icon + dropdown notifications |
+
+### New Hooks
+| File | Purpose |
+|------|---------|
+| `src/hooks/useRealtimeAlerts.js` | Supabase Realtime subscription for Critical tyres |
 
 ### Enhanced Pages
 | File | Enhancement | Wave |
@@ -74,7 +91,10 @@ Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | `KpiScorecard.jsx` | Site breakdown + YoY toggle + alerts | 7 |
 | `VehicleHistory.jsx` | Forecast tab with health scores | 7 |
 | `StockManagement.jsx` | Velocity + days remaining + transfer | 7 |
-| `Reports.jsx` | Pagination + print + save config | 7 |
+| `Reports.jsx` | Pagination + print + save config + email | 7 + 5D |
+| `ExecutiveReport.jsx` | Email button wired | 5D |
+| `EngineeringKpi.jsx` | Email button wired | 5D |
+| `Dashboard.jsx` | EmptyState + LoadingState components | 5F |
 
 ### Infrastructure
 | File | Purpose |
@@ -85,7 +105,11 @@ Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 | `MIGRATIONS_V15.sql` | Enterprise schema (orgs, audit, archive) |
 | `public/manifest.json` | PWA manifest |
 | `public/sw.js` | Service worker (cache-first) |
-| `src/components/InstallPwaPrompt.jsx` | Install to home screen banner |
+| `public/icons/icon-{72..512}x{size}.png` | PWA icon set (8 sizes) |
+| `supabase/functions/chat-ai/index.ts` | Anthropic API proxy |
+| `supabase/functions/generate-embedding/index.ts` | OpenAI embeddings proxy |
+| `supabase/functions/send-email/index.ts` | Resend email proxy |
+| `src/index.css` | Theme depth: gradients, card shadows, dark palette |
 
 ---
 
@@ -95,7 +119,11 @@ Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 - **ragService.js** provides 5-min cached retrieval — use `getCached/setCache` in all AI agents
 - **auditLogger.js** is non-throwing — safe to call anywhere
 - **performanceMonitor.js** `timedQuery()` should wrap all Supabase queries in production
+- **emailService.js** — `generateReportPdf()` returns base64, `sendReportEmail()` calls `send-email` Edge Function
+- **useRealtimeAlerts.js** — subscribes to `tyre_records` + `alerts` channels, ring buffer of 50, persists to localStorage
+- **NotificationCenter.jsx** — bell icon with unread count badge, framer-motion dropdown
 - All 12 new Intelligence pages follow the same pattern: Supabase load on mount → useMemo computed → Chart.js charts → Excel/PDF export
+- **agents/index.js** uses Anthropic SDK directly (`dangerouslyAllowBrowser: true`, `VITE_ANTHROPIC_API_KEY`)
 
 ---
 
@@ -104,8 +132,9 @@ Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 ```
 TyrePulse
 ├── src/
-│   ├── pages/          30+ pages
-│   ├── components/     Layout, ProtectedRoute, InstallPwaPrompt, …
+│   ├── pages/          31+ pages
+│   ├── components/     Layout, ProtectedRoute, InstallPwaPrompt, EmailReportModal, NotificationCenter, …
+│   ├── hooks/          useRealtimeAlerts
 │   ├── lib/
 │   │   ├── kpiEngine.js          KPI computations
 │   │   ├── ragService.js         RAG retrieval
@@ -116,10 +145,18 @@ TyrePulse
 │   │   ├── auditLogger.js        Audit trail
 │   │   ├── alertEngine.js        Alert detection
 │   │   ├── exportUtils.js        Excel/PDF export
+│   │   ├── emailService.js       Email delivery
 │   │   └── performanceMonitor.js Query timing
 │   └── contexts/       AuthContext, SettingsContext, ThemeContext
 ├── public/
 │   ├── manifest.json   PWA manifest
-│   └── sw.js           Service worker
+│   ├── sw.js           Service worker
+│   └── icons/          8 PWA icon sizes (72–512px)
+├── supabase/
+│   ├── config.toml
+│   └── functions/
+│       ├── chat-ai/
+│       ├── generate-embedding/
+│       └── send-email/
 └── MIGRATIONS_V*.sql   Database migrations
 ```

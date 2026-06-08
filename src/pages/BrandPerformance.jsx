@@ -7,7 +7,9 @@ import {
   PointElement, Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
-import { Maximize2, X } from 'lucide-react'
+import { Maximize2, X, BarChart2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import { ChartModal } from '../components/ChartModal'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
@@ -122,11 +124,11 @@ export default function BrandPerformance() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Brand Performance</h1>
-        <p className="text-gray-400 text-sm mt-1">Failure rates, avg life, cost and ranking by brand</p>
-      </div>
+      <PageHeader
+        title="Brand Performance"
+        subtitle="Failure rates, avg life, cost and ranking by brand"
+        icon={BarChart2}
+      />
 
       {/* Filter bar */}
       <div className="card space-y-3">

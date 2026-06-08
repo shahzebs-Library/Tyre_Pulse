@@ -6,6 +6,8 @@ import {
   Activity, LayoutGrid, ChevronDown, Eye, EyeOff, UserCheck, UserX,
   AlertTriangle, Globe, Calendar, Hash, X
 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -446,18 +448,11 @@ export default function UserManagement() {
   return (
     <div className="space-y-5">
 
-      {/* Page header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Users size={22} className="text-green-400" />
-            User Management
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Manage roles, country access, and account approvals
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="User Management"
+        subtitle="Manage roles, country access, and account approvals"
+        icon={Users}
+      />
 
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

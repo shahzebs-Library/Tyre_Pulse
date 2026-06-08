@@ -2,7 +2,9 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { Plus, Save, X, CheckCircle, Clock, AlertCircle, Download, FileText, Camera } from 'lucide-react'
+import { Plus, Save, X, CheckCircle, Clock, AlertCircle, Download, FileText, Camera, ClipboardCheck } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const STATUS_ICON = {
@@ -141,18 +143,13 @@ export default function CorrectiveActions() {
 
   return (
     <div className="space-y-4">
+      <PageHeader
+        title="Corrective Actions"
+        subtitle={`${actions.length} total${overdueCount > 0 ? ` · ${overdueCount} overdue` : ''}`}
+        icon={ClipboardCheck}
+      />
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Corrective Actions</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            {actions.length} total
-            {overdueCount > 0 && (
-              <span className="ml-2 text-xs px-2 py-0.5 bg-red-900/40 text-red-400 border border-red-700/50 rounded-full">
-                {overdueCount} overdue
-              </span>
-            )}
-          </p>
-        </div>
+        <div />
         <div className="flex gap-2">
           <button
             onClick={() => exportToExcel(

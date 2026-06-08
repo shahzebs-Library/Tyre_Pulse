@@ -940,3 +940,18 @@ html.light .fixed.inset-0 > div[class*="bg-gray"] { background-color: #ffffff !i
   .shadow-card      { box-shadow: var(--shadow-card); }
   .shadow-glow      { box-shadow: var(--shadow-glow); }
 }
+
+/* ─── Global Page Section Enhancement ────────────────────────────────────── */
+/* Apply subtle upgrades to common gray backgrounds throughout app */
+@layer utilities {
+  /* Heading sizes */
+  h1 { letter-spacing: -0.025em; }
+  h2 { letter-spacing: -0.02em; }
+  h3 { letter-spacing: -0.015em; }
+
+  /* Smooth all color transitions on interactive elements */
+  button, a, [role="button"] {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 150ms;
+  }
+}

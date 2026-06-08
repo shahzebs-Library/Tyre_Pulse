@@ -6,6 +6,8 @@ import { logAuditEvent } from '../lib/auditLogger'
 import {
   FileSpreadsheet, ChevronLeft, ChevronRight, ClipboardList, RefreshCw,
 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 
 const PAGE_SIZE = 50
 
@@ -213,15 +215,11 @@ export default function AuditTrail() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ClipboardList size={22} className="text-blue-400" /> Audit Trail
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">Full history of uploads and user activity</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Audit Trail"
+        subtitle="Full history of uploads and user activity"
+        icon={ClipboardList}
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

@@ -2,7 +2,9 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { Plus, Save, X, History, FileText, Download, ArrowLeftRight } from 'lucide-react'
+import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -433,11 +435,13 @@ export default function StockManagement() {
 
   return (
     <div className="space-y-4">
+      <PageHeader
+        title="Stock Management"
+        subtitle={`${records.length} sites tracked`}
+        icon={Package}
+      />
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Stock Management</h1>
-          <p className="text-gray-400 text-sm mt-1">{records.length} sites tracked</p>
-        </div>
+        <div />
         <div className="flex gap-2">
           <button onClick={exportExcel} className="btn-secondary text-xs flex items-center gap-1.5">
             <Download size={14} /> Excel

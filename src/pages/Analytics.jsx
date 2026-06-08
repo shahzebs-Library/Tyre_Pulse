@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -10,8 +11,9 @@ import {
   PointElement, ArcElement, Title, Tooltip, Legend, Filler,
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
-import { Maximize2, X } from 'lucide-react'
+import { Maximize2, X, BarChart2 } from 'lucide-react'
 import { ChartModal } from '../components/ChartModal'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend, Filler)
@@ -141,13 +143,11 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Analytics</h1>
-          <p className="text-gray-400 text-sm mt-1">Cost, trend and breakdown analysis</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Analytics"
+        subtitle="Cost, trend and breakdown analysis"
+        icon={BarChart2}
+      />
 
       {/* Filter bar */}
       <div className="card space-y-3">
@@ -239,20 +239,28 @@ export default function Analytics() {
           { label: `Total Cost (${activeCurrency})`, value: `${activeCurrency} ${totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`, color: 'text-green-400' },
           { label: 'Sites Active', value: siteMetrics.length, color: 'text-purple-400' },
           { label: 'Brands Tracked', value: brandMetrics.length, color: 'text-yellow-400' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="card text-center">
+        ].map(({ label, value, color }, i) => (
+          <motion.div
+            key={label}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="card text-center"
+          >
             <p className={`text-2xl font-bold ${color}`}>{value}</p>
-            <p className="text-gray-400 text-sm mt-1">{label}</p>
-          </div>
+            <p className="text-muted text-sm mt-1">{label}</p>
+          </motion.div>
         ))}
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-800 gap-1">
+      <div className="flex border-b border-[var(--border-dim)] gap-1">
         {TABS.map((t, i) => (
           <button key={t} onClick={() => setActiveTab(i)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === i ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all duration-200 -mb-px ${
+              activeTab === i
+                ? 'border-brand-bright text-brand-bright'
+                : 'border-transparent text-muted hover:text-white'
             }`}>
             {t}
           </button>

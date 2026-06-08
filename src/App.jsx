@@ -41,6 +41,7 @@ import PredictiveMaintenance from './pages/PredictiveMaintenance'
 import VendorIntelligence from './pages/VendorIntelligence'
 import FleetIntelligence from './pages/FleetIntelligence'
 import AdvancedAnalytics from './pages/AdvancedAnalytics'
+import AiCommandCenter from './pages/AiCommandCenter'
 import ExecutiveReport from './pages/ExecutiveReport'
 import ForecastingEngine from './pages/ForecastingEngine'
 import ContinuousImprovement from './pages/ContinuousImprovement'
@@ -95,6 +96,7 @@ export default function App() {
                     <Route path="/vendor-intelligence"    element={<VendorIntelligence />} />
                     <Route path="/fleet-intelligence"     element={<FleetIntelligence />} />
                     <Route path="/advanced-analytics"    element={<AdvancedAnalytics />} />
+                    <Route path="/ai-command-center"     element={<AiCommandCenter />} />
                     <Route path="/executive-report"      element={<ExecutiveReport />} />
                     <Route path="/forecasting"           element={<ForecastingEngine />} />
                     <Route path="/continuous-improvement" element={<ContinuousImprovement />} />

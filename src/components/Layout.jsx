@@ -11,7 +11,7 @@ import {
   Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, Sparkles,
   Sun, Moon, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare,
   ChevronDown, ChevronRight,
-  Cpu, MapPin, Activity, GitMerge, CalendarClock, Trophy, BarChartBig, Microscope,
+  Cpu, MapPin, Activity, GitMerge, CalendarClock, Trophy, BarChartBig, Microscope, Bot,
   TrendingUp, BookOpen, Zap,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -63,6 +63,7 @@ const NAV_GROUPS = [
       { to: '/vendor-intelligence',     label: 'Vendor Intelligence',     icon: Trophy },
       { to: '/fleet-intelligence',      label: 'Fleet Intelligence',      icon: BarChartBig },
       { to: '/advanced-analytics',      label: 'Advanced Analytics',      icon: Microscope },
+      { to: '/ai-command-center',       label: 'AI Command Center',       icon: Bot },
       { to: '/executive-report',        label: 'Executive Report',        icon: BookOpen },
       { to: '/forecasting',             label: 'Forecasting Engine',      icon: TrendingUp },
       { to: '/continuous-improvement',  label: 'Continuous Improvement',  icon: Zap },

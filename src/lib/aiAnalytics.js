@@ -1,15 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { supabase } from './supabase'
 
-function getClient() {
-  const key = import.meta.env.VITE_ANTHROPIC_API_KEY
-  if (!key) throw new Error('VITE_ANTHROPIC_API_KEY is not set')
-  return new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true })
-}
-
-export async function askAI(question, dataContext) {
-  const client = getClient()
-
-  const system = `You are TyrePulse Smart Analytics, an analytics assistant for a fleet tyre management platform.
+const AI_SYSTEM = `You are TyrePulse Smart Analytics, an analytics assistant for a fleet tyre management platform.
 You receive pre-aggregated tyre fleet statistics and answer questions about them.
 Respond ONLY with valid JSON matching this exact structure — no markdown, no explanation outside the JSON:
 {
@@ -26,17 +17,19 @@ Respond ONLY with valid JSON matching this exact structure — no markdown, no e
   "exportTitle": "string"
 }
 Set chartData to null if chartType is "none". Set tableHeaders/tableRows to null if no table is relevant.
-Currency is SAR. Keep table rows to 15 max.`
+Currency is ZAR. Keep table rows to 15 max.`
 
-  const msg = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1500,
-    system,
-    messages: [{ role: 'user', content: `Question: ${question}\n\nData:\n${JSON.stringify(dataContext, null, 2)}` }],
+export async function askAI(question, dataContext) {
+  const { data, error } = await supabase.functions.invoke('chat-ai', {
+    body: {
+      system: AI_SYSTEM,
+      user: `Question: ${question}\n\nData:\n${JSON.stringify(dataContext, null, 2)}`,
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1500,
+    },
   })
-
-  const raw = msg.content[0].text.trim()
-  // Strip markdown fences if present
+  if (error) throw error
+  const raw = (data?.content ?? '').trim()
   const clean = raw.replace(/^```json\n?/, '').replace(/\n?```$/, '')
   return JSON.parse(clean)
 }

@@ -1,20 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // agents/index.js — Agent registry and shared AI caller
-// Uses Anthropic SDK directly (same pattern as aiAnalytics.js).
-// Falls back gracefully when API key is not configured.
+// Routes all AI calls through the `chat-ai` Supabase Edge Function.
+// API keys live server-side only — never exposed in the browser bundle.
 // ─────────────────────────────────────────────────────────────────────────────
-import Anthropic from '@anthropic-ai/sdk'
+import { supabase } from '../supabase'
 
 export { runAnalystAgent }      from './analystAgent'
 export { runTyreEngineerAgent } from './tyreEngineerAgent'
 export { runQaDataAgent }       from './qaDataAgent'
 export { runPlannerAgent }      from './plannerAgent'
-
-function getAnthropicClient() {
-  const key = import.meta.env.VITE_ANTHROPIC_API_KEY
-  if (!key) throw new Error('VITE_ANTHROPIC_API_KEY is not set')
-  return new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true })
-}
 
 export async function callAiEdgeFunction(
   systemPrompt,
@@ -23,20 +17,14 @@ export async function callAiEdgeFunction(
   maxTokens = 1500
 ) {
   try {
-    const client = getAnthropicClient()
-    const msg = await client.messages.create({
-      model,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
+    const { data, error } = await supabase.functions.invoke('chat-ai', {
+      body: { system: systemPrompt, user: userPrompt, model, max_tokens: maxTokens },
     })
-    return msg.content[0]?.text ?? 'No response generated.'
+    if (error) throw error
+    return data?.content ?? 'No response generated.'
   } catch (err) {
     console.error('[callAiEdgeFunction] Error:', err)
-    if (err.message?.includes('VITE_ANTHROPIC_API_KEY')) {
-      return 'AI features require VITE_ANTHROPIC_API_KEY to be configured in your environment.'
-    }
-    return 'Unable to generate AI response. Please try again.'
+    return 'Unable to generate AI response. Please ensure the chat-ai Edge Function is deployed.'
   }
 }
 

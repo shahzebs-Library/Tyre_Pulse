@@ -65,6 +65,7 @@ const NAV_GROUPS = [
       { to: '/root-cause',              label: 'Root Cause Engine',       icon: GitMerge },
       { to: '/predictive-maintenance',  label: 'Predictive Maintenance',  icon: CalendarClock },
       { to: '/vendor-intelligence',     label: 'Vendor Intelligence',     icon: Trophy },
+      { to: '/driver-management',       label: 'Driver Intelligence',     icon: Users },
       { to: '/fleet-intelligence',      label: 'Fleet Intelligence',      icon: BarChartBig },
       { to: '/advanced-analytics',      label: 'Advanced Analytics',      icon: Microscope },
       { to: '/ai-command-center',       label: 'AI Command Center',       icon: Bot },

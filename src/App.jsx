@@ -48,6 +48,7 @@ import ContinuousImprovement from './pages/ContinuousImprovement'
 import ErpSync from './pages/ErpSync'
 import WorkOrders from './pages/WorkOrders'
 import MaintenanceCalendar from './pages/MaintenanceCalendar'
+import DriverManagement from './pages/DriverManagement'
 
 export default function App() {
   return (
@@ -106,6 +107,7 @@ export default function App() {
                     <Route path="/erp-sync"              element={<ErpSync />} />
                     <Route path="/work-orders"           element={<WorkOrders />} />
                     <Route path="/maintenance-calendar" element={<MaintenanceCalendar />} />
+                    <Route path="/driver-management" element={<DriverManagement />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

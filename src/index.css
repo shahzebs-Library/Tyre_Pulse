@@ -913,3 +913,30 @@ html.light [class*="overflow-y-auto"]::-webkit-scrollbar-track { background: rgb
 html.light [class*="from-white"] { --tw-gradient-from: #0f172a; }
 html.light .invert-on-light { filter: invert(1); }
 html.light .fixed.inset-0 > div[class*="bg-gray"] { background-color: #ffffff !important; }
+
+/* ─── Design System Utility Extensions ─────────────────────────────────────── */
+@layer utilities {
+  /* Surface backgrounds */
+  .bg-surface-0  { background-color: var(--surface-0); }
+  .bg-surface-1  { background-color: var(--surface-1); }
+  .bg-surface-2  { background-color: var(--surface-2); }
+  .bg-surface-3  { background-color: var(--surface-3); }
+
+  /* Brand utilities */
+  .bg-brand         { background-color: var(--brand); }
+  .bg-brand-subtle  { background-color: var(--brand-subtle); }
+  .bg-brand-halo    { background-color: var(--brand-halo); }
+  .text-brand       { color: var(--brand); }
+  .text-brand-bright { color: var(--brand-bright); }
+  .border-brand     { border-color: var(--brand); }
+
+  /* Text utilities */
+  .text-muted       { color: var(--text-muted); }
+  .text-dim         { color: var(--text-dim); }
+  .text-secondary   { color: var(--text-secondary); }
+
+  /* Shadow utilities */
+  .shadow-float     { box-shadow: var(--shadow-float); }
+  .shadow-card      { box-shadow: var(--shadow-card); }
+  .shadow-glow      { box-shadow: var(--shadow-glow); }
+}

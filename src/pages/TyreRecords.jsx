@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -6,16 +7,20 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
 import {
   Search, ChevronLeft, ChevronRight, Eye, FileSpreadsheet,
-  FileText, Plus, Edit2, Trash2, Save, X, Check, AlertTriangle
+  FileText, Plus, Edit2, Trash2, Save, X, Check, AlertTriangle,
+  CircleDot, Loader2,
 } from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
+import FilterBar from '../components/ui/FilterBar'
+import { cn } from '../lib/cn'
 
 const PAGE_SIZE = 25
 
-const RISK_BADGE = {
-  Critical: 'bg-red-900/50 text-red-300',
-  High: 'bg-orange-900/50 text-orange-300',
-  Medium: 'bg-yellow-900/50 text-yellow-300',
-  Low: 'bg-green-900/50 text-green-300',
+const RISK_STYLE = {
+  Critical: 'bg-red-500/15 text-red-300 border-red-500/25',
+  High:     'bg-orange-500/15 text-orange-300 border-orange-500/25',
+  Medium:   'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
+  Low:      'bg-green-500/15 text-green-300 border-green-500/25',
 }
 
 const EMPTY_FORM = (defaultCost = 1200, country = 'KSA') => ({
@@ -31,7 +36,6 @@ export default function TyreRecords() {
   const { profile } = useAuth()
   const { appSettings, activeCountry, activeCurrency } = useSettings()
 
-  // ── data ────────────────────────────────────────────────────────────────────
   const [records, setRecords]         = useState([])
   const [total, setTotal]             = useState(0)
   const [page, setPage]               = useState(0)
@@ -39,18 +43,15 @@ export default function TyreRecords() {
   const [sites, setSites]             = useState([])
   const [brands, setBrands]           = useState([])
 
-  // ── filters ─────────────────────────────────────────────────────────────────
   const [search, setSearch]           = useState('')
   const [siteFilter, setSiteFilter]   = useState('')
   const [brandFilter, setBrandFilter] = useState('')
   const [riskFilter, setRiskFilter]   = useState('')
 
-  // ── selection ────────────────────────────────────────────────────────────────
   const [selected, setSelected]       = useState(new Set())
 
-  // ── modals ───────────────────────────────────────────────────────────────────
   const [detailRecord, setDetailRecord]   = useState(null)
-  const [editRecord, setEditRecord]       = useState(null)   // null = closed, {} = new, {...} = editing
+  const [editRecord, setEditRecord]       = useState(null)
   const [showBulkEdit, setShowBulkEdit]   = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [saving, setSaving]               = useState(false)
@@ -58,7 +59,6 @@ export default function TyreRecords() {
   const [form, setForm]                   = useState(() => EMPTY_FORM())
   const [bulkForm, setBulkForm]           = useState(EMPTY_BULK)
 
-  // ── load ────────────────────────────────────────────────────────────────────
   useEffect(() => { loadFilters() }, [])
   useEffect(() => { loadRecords() }, [page, search, siteFilter, brandFilter, riskFilter, activeCountry])
 
@@ -93,8 +93,6 @@ export default function TyreRecords() {
   }, [page, search, siteFilter, brandFilter, riskFilter, activeCountry])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
-
-  // ── selection helpers ────────────────────────────────────────────────────────
   const allOnPageSelected = records.length > 0 && records.every(r => selected.has(r.id))
 
   function toggleSelectAll() {
@@ -109,7 +107,6 @@ export default function TyreRecords() {
     setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
 
-  // ── add / edit ───────────────────────────────────────────────────────────────
   function openAdd() {
     setForm(EMPTY_FORM(appSettings.cost_per_tyre, activeCountry !== 'All' ? activeCountry : 'KSA'))
     setEditRecord({})
@@ -155,24 +152,22 @@ export default function TyreRecords() {
     setSaving(false)
   }
 
-  // ── bulk edit ────────────────────────────────────────────────────────────────
   async function saveBulkEdit(e) {
     e.preventDefault()
     setSaving(true)
     const patch = {}
-    if (bulkForm.site)         patch.site         = bulkForm.site
-    if (bulkForm.brand)        patch.brand        = bulkForm.brand
+    if (bulkForm.site)          patch.site          = bulkForm.site
+    if (bulkForm.brand)         patch.brand         = bulkForm.brand
     if (bulkForm.cost_per_tyre) patch.cost_per_tyre = +bulkForm.cost_per_tyre
-    if (bulkForm.risk_level)   patch.risk_level   = bulkForm.risk_level
-    if (bulkForm.category)     patch.category     = bulkForm.category
+    if (bulkForm.risk_level)    patch.risk_level    = bulkForm.risk_level
+    if (bulkForm.category)      patch.category      = bulkForm.category
 
     if (Object.keys(patch).length === 0) { setSaving(false); setShowBulkEdit(false); return }
 
     const ids = [...selected]
     const BATCH = 200
     for (let i = 0; i < ids.length; i += BATCH) {
-      const batch = ids.slice(i, i + BATCH)
-      await supabase.from('tyre_records').update(patch).in('id', batch)
+      await supabase.from('tyre_records').update(patch).in('id', ids.slice(i, i + BATCH))
     }
     setShowBulkEdit(false)
     setBulkForm(EMPTY_BULK)
@@ -181,7 +176,6 @@ export default function TyreRecords() {
     setSaving(false)
   }
 
-  // ── delete ───────────────────────────────────────────────────────────────────
   async function deleteSelected() {
     setSaving(true)
     const ids = [...selected]
@@ -196,27 +190,26 @@ export default function TyreRecords() {
     setSaving(false)
   }
 
-  // ── export ───────────────────────────────────────────────────────────────────
   const EXPORT_COLS = [
-    { key: 'issue_date', header: 'Date', width: 22 },
-    { key: 'asset_no', header: 'Asset No', width: 26 },
-    { key: 'serial_no', header: 'Serial No', width: 30 },
-    { key: 'brand', header: 'Brand', width: 24 },
-    { key: 'site', header: 'Site', width: 28 },
-    { key: 'mis_number', header: 'MIS No', width: 24 },
-    { key: 'job_card', header: 'Job Card', width: 24 },
-    { key: 'category', header: 'Category', width: 30 },
-    { key: 'risk_level', header: 'Risk Level', width: 20 },
+    { key: 'issue_date',    header: 'Date',                  width: 22 },
+    { key: 'asset_no',      header: 'Asset No',              width: 26 },
+    { key: 'serial_no',     header: 'Serial No',             width: 30 },
+    { key: 'brand',         header: 'Brand',                 width: 24 },
+    { key: 'site',          header: 'Site',                  width: 28 },
+    { key: 'mis_number',    header: 'MIS No',                width: 24 },
+    { key: 'job_card',      header: 'Job Card',              width: 24 },
+    { key: 'category',      header: 'Category',              width: 30 },
+    { key: 'risk_level',    header: 'Risk Level',            width: 20 },
     { key: 'cost_per_tyre', header: `Cost (${activeCurrency})`, width: 20 },
-    { key: 'remarks_cleaned', header: 'Remarks', width: 40 },
+    { key: 'remarks_cleaned', header: 'Remarks',             width: 40 },
   ]
 
   async function fetchAll() {
     let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: false })
-    if (search) q = q.or(`asset_no.ilike.%${search}%,serial_no.ilike.%${search}%,mis_number.ilike.%${search}%,job_card.ilike.%${search}%`)
-    if (siteFilter) q = q.eq('site', siteFilter)
+    if (search)      q = q.or(`asset_no.ilike.%${search}%,serial_no.ilike.%${search}%,mis_number.ilike.%${search}%,job_card.ilike.%${search}%`)
+    if (siteFilter)  q = q.eq('site', siteFilter)
     if (brandFilter) q = q.eq('brand', brandFilter)
-    if (riskFilter) q = q.eq('risk_level', riskFilter)
+    if (riskFilter)  q = q.eq('risk_level', riskFilter)
     if (activeCountry !== 'All') q = q.eq('country', activeCountry)
     const { data } = await q
     return data ?? []
@@ -225,142 +218,222 @@ export default function TyreRecords() {
   function F(field) { return e => setForm(f => ({ ...f, [field]: e.target.value })) }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Tyre Records</h1>
-          <p className="text-gray-400 text-sm mt-1">{total.toLocaleString()} total records</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm">
-            <Plus size={15} /> New Record
-          </button>
-          <button onClick={async () => exportToExcel(await fetchAll(), EXPORT_COLS.map(c => c.key), EXPORT_COLS.map(c => c.header), `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`, 'Tyre Records')} className="btn-secondary flex items-center gap-2 text-sm">
-            <FileSpreadsheet size={15} className="text-green-400" /> Excel
-          </button>
-          <button onClick={async () => exportToPdf(await fetchAll(), EXPORT_COLS, `Tyre Records · ${total.toLocaleString()} records`, `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`)} className="btn-secondary flex items-center gap-2 text-sm">
-            <FileText size={15} className="text-red-400" /> PDF
-          </button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="card">
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-48">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input className="input pl-9" placeholder="Search asset, serial, MIS, job card…" value={search}
-              onChange={e => { setSearch(e.target.value); setPage(0) }} />
+    <div className="space-y-5">
+      <PageHeader
+        title="Tyre Records"
+        subtitle={`${total.toLocaleString()} total records`}
+        icon={CircleDot}
+        actions={
+          <div className="flex gap-2">
+            <button
+              onClick={async () => exportToExcel(await fetchAll(), EXPORT_COLS.map(c => c.key), EXPORT_COLS.map(c => c.header), `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`, 'Tyre Records')}
+              className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5"
+            >
+              <FileSpreadsheet size={14} className="text-green-400" /> Excel
+            </button>
+            <button
+              onClick={async () => exportToPdf(await fetchAll(), EXPORT_COLS, `Tyre Records · ${total.toLocaleString()} records`, `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`)}
+              className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5"
+            >
+              <FileText size={14} className="text-red-400" /> PDF
+            </button>
+            <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm px-4">
+              <Plus size={15} /> New Record
+            </button>
           </div>
-          <select className="input w-auto min-w-36" value={siteFilter} onChange={e => { setSiteFilter(e.target.value); setPage(0) }}>
-            <option value="">All Sites</option>
-            {sites.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select className="input w-auto min-w-36" value={brandFilter} onChange={e => { setBrandFilter(e.target.value); setPage(0) }}>
-            <option value="">All Brands</option>
-            {brands.map(b => <option key={b} value={b}>{b}</option>)}
-          </select>
-          <select className="input w-auto min-w-36" value={riskFilter} onChange={e => { setRiskFilter(e.target.value); setPage(0) }}>
-            <option value="">All Risk Levels</option>
-            {['Critical', 'High', 'Medium', 'Low'].map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </div>
-      </div>
+        }
+      />
+
+      <FilterBar
+        search={search}
+        onSearch={v => { setSearch(v); setPage(0) }}
+        placeholder="Search asset, serial, MIS, job card…"
+        selects={[
+          { value: siteFilter,  onChange: v => { setSiteFilter(v); setPage(0) },  placeholder: 'All Sites',       options: sites.map(s  => ({ value: s, label: s })) },
+          { value: brandFilter, onChange: v => { setBrandFilter(v); setPage(0) }, placeholder: 'All Brands',      options: brands.map(b => ({ value: b, label: b })) },
+          { value: riskFilter,  onChange: v => { setRiskFilter(v); setPage(0) },  placeholder: 'All Risk Levels', options: ['Critical','High','Medium','Low'].map(r => ({ value: r, label: r })) },
+        ]}
+      />
 
       {/* Table */}
-      <div className="card p-0 overflow-hidden">
+      <div className="rounded-2xl border border-[var(--border-dim)] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full text-sm">
             <thead>
-              <tr>
-                <th className="table-header w-10">
-                  <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
-                    checked={allOnPageSelected} onChange={toggleSelectAll} />
+              <tr className="bg-surface-2 border-b border-[var(--border-dim)]">
+                <th className="px-4 py-3 w-10">
+                  <div
+                    onClick={toggleSelectAll}
+                    className={cn(
+                      'w-4 h-4 rounded border transition-all flex items-center justify-center cursor-pointer',
+                      allOnPageSelected ? 'bg-brand border-brand' : 'border-[var(--border-dim)] hover:border-brand/40'
+                    )}
+                  >
+                    {allOnPageSelected && <Check size={10} className="text-white" />}
+                  </div>
                 </th>
-                {['Date', 'Asset No', 'Serial No', 'Brand', 'Site', 'MIS No', 'Job Card', 'Risk', 'Cost', 'CPK', ''].map(h => (
-                  <th key={h} className="table-header">{h}</th>
+                {['Date','Asset No','Serial No','Brand','Site','MIS No','Job Card','Risk','Cost','CPK',''].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr><td colSpan={12} className="text-center py-12 text-gray-500">Loading…</td></tr>
-              ) : records.length === 0 ? (
-                <tr><td colSpan={12} className="text-center py-12 text-gray-500">No records found</td></tr>
-              ) : records.map(r => (
-                <tr key={r.id} className={`transition-colors ${selected.has(r.id) ? 'bg-blue-950/30' : 'hover:bg-gray-800/30'}`}>
-                  <td className="table-cell">
-                    <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
-                      checked={selected.has(r.id)} onChange={() => toggleRow(r.id)} />
-                  </td>
-                  <td className="table-cell text-gray-400">{r.issue_date ?? '—'}</td>
-                  <td className="table-cell font-medium text-white">{r.asset_no ?? '—'}</td>
-                  <td className="table-cell">{r.serial_no ?? '—'}</td>
-                  <td className="table-cell">{r.brand ?? '—'}</td>
-                  <td className="table-cell">{r.site ?? '—'}</td>
-                  <td className="table-cell">{r.mis_number ?? '—'}</td>
-                  <td className="table-cell">{r.job_card ?? '—'}</td>
-                  <td className="table-cell">
-                    {r.risk_level ? <span className={`badge ${RISK_BADGE[r.risk_level] ?? 'bg-gray-800 text-gray-400'}`}>{r.risk_level}</span> : '—'}
-                  </td>
-                  <td className="table-cell">{activeCurrency} {(r.cost_per_tyre ?? appSettings.cost_per_tyre).toLocaleString()}</td>
-                  <td className="table-cell text-gray-400 text-xs">
-                    {r.km_at_fitment && r.km_at_removal && r.km_at_removal > r.km_at_fitment
+              <AnimatePresence mode="wait">
+                {loading ? (
+                  <motion.tr key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <td colSpan={12} className="py-16 text-center">
+                      <div className="flex flex-col items-center gap-3 text-muted">
+                        <Loader2 className="w-5 h-5 animate-spin text-brand" />
+                        <span className="text-sm">Loading records…</span>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ) : records.length === 0 ? (
+                  <motion.tr key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <td colSpan={12} className="py-16 text-center">
+                      <div className="flex flex-col items-center gap-3 text-muted">
+                        <CircleDot className="w-8 h-8 opacity-20" />
+                        <span className="text-sm">No records found</span>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ) : (
+                  records.map((r, i) => {
+                    const isSelected = selected.has(r.id)
+                    const cpk = r.km_at_fitment && r.km_at_removal && r.km_at_removal > r.km_at_fitment
                       ? ((r.cost_per_tyre ?? appSettings.cost_per_tyre) / (r.km_at_removal - r.km_at_fitment)).toFixed(3)
-                      : <span className="text-gray-700">N/A</span>}
-                  </td>
-                  <td className="table-cell">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setDetailRecord(r)} className="text-gray-400 hover:text-blue-400 transition-colors" title="View"><Eye size={15} /></button>
-                      <button onClick={() => openEdit(r)} className="text-gray-400 hover:text-yellow-400 transition-colors" title="Edit"><Edit2 size={15} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                      : null
+                    return (
+                      <motion.tr
+                        key={r.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: i * 0.012, duration: 0.2 }}
+                        className={cn(
+                          'border-b border-[var(--border-subtle)] transition-colors cursor-default',
+                          isSelected ? 'bg-[rgba(22,163,74,0.06)]' : 'bg-surface-0 hover:bg-surface-1'
+                        )}
+                      >
+                        <td className="px-4 py-3" onClick={() => toggleRow(r.id)}>
+                          <div className={cn(
+                            'w-4 h-4 rounded border transition-all flex items-center justify-center cursor-pointer',
+                            isSelected ? 'bg-brand border-brand' : 'border-[var(--border-dim)] hover:border-brand/40'
+                          )}>
+                            {isSelected && <Check size={10} className="text-white" />}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-muted text-xs tabular-nums">{r.issue_date ?? '—'}</td>
+                        <td className="px-4 py-3 font-semibold text-white">{r.asset_no ?? '—'}</td>
+                        <td className="px-4 py-3 text-gray-400 text-xs font-mono">{r.serial_no ?? '—'}</td>
+                        <td className="px-4 py-3 text-gray-300">{r.brand ?? '—'}</td>
+                        <td className="px-4 py-3 text-gray-400">{r.site ?? '—'}</td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{r.mis_number ?? '—'}</td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{r.job_card ?? '—'}</td>
+                        <td className="px-4 py-3">
+                          {r.risk_level
+                            ? <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium border', RISK_STYLE[r.risk_level] ?? 'bg-surface-3 text-muted border-[var(--border-dim)]')}>{r.risk_level}</span>
+                            : <span className="text-muted">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-gray-300 text-xs tabular-nums">
+                          {activeCurrency} {(r.cost_per_tyre ?? appSettings.cost_per_tyre).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-xs tabular-nums">
+                          {cpk
+                            ? <span className="text-brand-bright">{cpk}</span>
+                            : <span className="text-muted">N/A</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setDetailRecord(r)}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-brand-bright hover:bg-[rgba(22,163,74,0.10)] transition-all"
+                            >
+                              <Eye size={14} />
+                            </button>
+                            <button
+                              onClick={() => openEdit(r)}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-yellow-400 hover:bg-yellow-500/10 transition-all"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    )
+                  })
+                )}
+              </AnimatePresence>
             </tbody>
           </table>
         </div>
 
+        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-            <p className="text-sm text-gray-400">
-              Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()}
+          <div className="flex items-center justify-between px-4 py-3 bg-surface-1 border-t border-[var(--border-dim)]">
+            <p className="text-xs text-muted">
+              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()} records
             </p>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40"><ChevronLeft size={16} /></button>
-              <span className="text-sm text-gray-400">Page {page + 1} of {totalPages}</span>
-              <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="btn-secondary py-1.5 px-3 disabled:opacity-40"><ChevronRight size={16} /></button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-surface-3 disabled:opacity-30 transition-all"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-xs text-muted px-2">{page + 1} / {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-surface-3 disabled:opacity-30 transition-all"
+              >
+                <ChevronRight size={14} />
+              </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* ── Bulk action bar ─────────────────────────────────────────────────── */}
-      {selected.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-gray-800 border border-gray-600 rounded-xl shadow-2xl px-5 py-3 flex items-center gap-4">
-          <span className="text-white font-medium">{selected.size} selected</span>
-          <div className="w-px h-5 bg-gray-600" />
-          <button onClick={() => { setBulkForm(EMPTY_BULK); setShowBulkEdit(true) }}
-            className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors">
-            <Edit2 size={14} /> Bulk Edit
-          </button>
-          <button onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center gap-1.5 text-sm text-red-400 hover:text-red-300 transition-colors">
-            <Trash2 size={14} /> Delete
-          </button>
-          <button onClick={() => setSelected(new Set())}
-            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
-            <X size={14} /> Clear
-          </button>
-        </div>
-      )}
+      {/* Bulk action bar */}
+      <AnimatePresence>
+        {selected.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 rounded-2xl bg-surface-3/95 backdrop-blur-xl border border-[var(--border-bright)] shadow-float"
+          >
+            <span className="text-white font-semibold text-sm">{selected.size} selected</span>
+            <div className="w-px h-4 bg-[var(--border-dim)]" />
+            <button
+              onClick={() => { setBulkForm(EMPTY_BULK); setShowBulkEdit(true) }}
+              className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-200 transition-colors"
+            >
+              <Edit2 size={14} /> Bulk Edit
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-1.5 text-sm text-red-400 hover:text-red-300 transition-colors"
+            >
+              <Trash2 size={14} /> Delete
+            </button>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="flex items-center gap-1.5 text-sm text-muted hover:text-white transition-colors"
+            >
+              <X size={14} /> Clear
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* ── Detail modal ────────────────────────────────────────────────────── */}
+      {/* Detail modal */}
       {detailRecord && (
         <Modal title="Record Detail" onClose={() => setDetailRecord(null)}>
           <dl className="grid grid-cols-2 gap-3 text-sm">
-            {[['Asset No', detailRecord.asset_no], ['Serial No', detailRecord.serial_no],
+            {[
+              ['Asset No', detailRecord.asset_no], ['Serial No', detailRecord.serial_no],
               ['Brand', detailRecord.brand], ['Site', detailRecord.site],
               ['Issue Date', detailRecord.issue_date], ['MIS Number', detailRecord.mis_number],
               ['Job Card', detailRecord.job_card], ['Qty', detailRecord.qty],
@@ -369,36 +442,40 @@ export default function TyreRecords() {
               ['Description', detailRecord.description], ['Remarks', detailRecord.remarks],
             ].filter(([, v]) => v).map(([k, v]) => (
               <div key={k} className={k === 'Description' || k === 'Remarks' ? 'col-span-2' : ''}>
-                <dt className="text-gray-500">{k}</dt>
-                <dd className="text-gray-200 font-medium">{v}</dd>
+                <dt className="text-muted text-xs mb-0.5">{k}</dt>
+                <dd className="text-white font-medium">{v}</dd>
               </div>
             ))}
           </dl>
           {detailRecord.extra_fields && Object.keys(detailRecord.extra_fields).length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-800">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Additional Fields (from upload)</p>
+            <div className="mt-4 pt-4 border-t border-[var(--border-dim)]">
+              <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Additional Fields</p>
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 {Object.entries(detailRecord.extra_fields).map(([k, v]) => (
                   <div key={k}>
-                    <dt className="text-gray-500 text-xs">{k}</dt>
+                    <dt className="text-muted text-xs">{k}</dt>
                     <dd className="text-gray-300 mt-0.5">{v}</dd>
                   </div>
                 ))}
               </dl>
             </div>
           )}
-          <div className="flex gap-2 mt-4 pt-4 border-t border-gray-800">
+          <div className="flex gap-2 mt-4 pt-4 border-t border-[var(--border-dim)]">
             <button onClick={() => { openEdit(detailRecord); setDetailRecord(null) }} className="btn-secondary flex items-center gap-2 text-sm">
-              <Edit2 size={14} /> Edit
+              <Edit2 size={14} /> Edit Record
             </button>
           </div>
         </Modal>
       )}
 
-      {/* ── Add / Edit modal ─────────────────────────────────────────────────── */}
+      {/* Add / Edit modal */}
       {editRecord !== null && (
         <Modal title={editRecord.id ? 'Edit Record' : 'New Tyre Record'} onClose={() => setEditRecord(null)} wide>
-          {formError && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{formError}</div>}
+          {formError && (
+            <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/25 text-red-300 rounded-xl px-4 py-2.5 mb-4 text-sm">
+              <AlertTriangle size={14} className="shrink-0" /> {formError}
+            </div>
+          )}
           <form onSubmit={saveRecord} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div><label className="label">Issue Date</label><input type="date" className="input" value={form.issue_date} onChange={F('issue_date')} /></div>
@@ -458,7 +535,8 @@ export default function TyreRecords() {
             </div>
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                <Save size={15} /> {saving ? 'Saving…' : 'Save'}
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {saving ? 'Saving…' : 'Save Record'}
               </button>
               <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">Cancel</button>
             </div>
@@ -466,23 +544,23 @@ export default function TyreRecords() {
         </Modal>
       )}
 
-      {/* ── Bulk edit modal ──────────────────────────────────────────────────── */}
+      {/* Bulk edit modal */}
       {showBulkEdit && (
         <Modal title={`Bulk Edit · ${selected.size} records`} onClose={() => setShowBulkEdit(false)}>
-          <p className="text-sm text-gray-400 mb-4">Leave a field blank to keep existing values unchanged.</p>
+          <p className="text-sm text-muted mb-4">Leave blank to keep existing values unchanged.</p>
           <form onSubmit={saveBulkEdit} className="space-y-3">
             <div>
               <label className="label">Change Site</label>
-              <input className="input" list="site-list-bulk" value={bulkForm.site} onChange={e => setBulkForm(f => ({ ...f, site: e.target.value }))} placeholder="Leave blank to keep existing" />
+              <input className="input" list="site-list-bulk" value={bulkForm.site} onChange={e => setBulkForm(f => ({ ...f, site: e.target.value }))} placeholder="Leave blank to keep" />
               <datalist id="site-list-bulk">{sites.map(s => <option key={s} value={s} />)}</datalist>
             </div>
             <div>
               <label className="label">Change Brand</label>
-              <input className="input" list="brand-list-bulk" value={bulkForm.brand} onChange={e => setBulkForm(f => ({ ...f, brand: e.target.value }))} placeholder="Leave blank to keep existing" />
+              <input className="input" list="brand-list-bulk" value={bulkForm.brand} onChange={e => setBulkForm(f => ({ ...f, brand: e.target.value }))} placeholder="Leave blank to keep" />
               <datalist id="brand-list-bulk">{brands.map(b => <option key={b} value={b} />)}</datalist>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><label className="label">Cost (SAR)</label><input type="number" className="input" value={bulkForm.cost_per_tyre} onChange={e => setBulkForm(f => ({ ...f, cost_per_tyre: e.target.value }))} placeholder="—" min={0} /></div>
+              <div><label className="label">Cost</label><input type="number" className="input" value={bulkForm.cost_per_tyre} onChange={e => setBulkForm(f => ({ ...f, cost_per_tyre: e.target.value }))} placeholder="—" min={0} /></div>
               <div>
                 <label className="label">Risk Level</label>
                 <select className="input" value={bulkForm.risk_level} onChange={e => setBulkForm(f => ({ ...f, risk_level: e.target.value }))}>
@@ -500,7 +578,8 @@ export default function TyreRecords() {
             </div>
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                <Save size={15} /> {saving ? 'Updating…' : `Update ${selected.size} Records`}
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                {saving ? 'Updating…' : `Update ${selected.size} Records`}
               </button>
               <button type="button" onClick={() => setShowBulkEdit(false)} className="btn-secondary">Cancel</button>
             </div>
@@ -508,19 +587,20 @@ export default function TyreRecords() {
         </Modal>
       )}
 
-      {/* ── Delete confirmation ──────────────────────────────────────────────── */}
+      {/* Delete confirmation */}
       {showDeleteConfirm && (
-        <Modal title="Delete Records" onClose={() => setShowDeleteConfirm(false)}>
-          <div className="flex gap-3 mb-4">
-            <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+        <Modal title="Confirm Delete" onClose={() => setShowDeleteConfirm(false)}>
+          <div className="flex gap-3 mb-5 p-4 rounded-xl bg-red-500/8 border border-red-500/20">
+            <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-white font-medium">Delete {selected.size} record{selected.size !== 1 ? 's' : ''}?</p>
-              <p className="text-gray-400 text-sm mt-1">This action is permanent and cannot be undone. The records will be removed from the database.</p>
+              <p className="text-white font-semibold">Delete {selected.size} record{selected.size !== 1 ? 's' : ''}?</p>
+              <p className="text-muted text-sm mt-1">This action is permanent and cannot be undone.</p>
             </div>
           </div>
           <div className="flex gap-3">
-            <button onClick={deleteSelected} disabled={saving} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-              <Trash2 size={15} /> {saving ? 'Deleting…' : `Delete ${selected.size} Records`}
+            <button onClick={deleteSelected} disabled={saving} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {saving ? 'Deleting…' : `Delete ${selected.size} Records`}
             </button>
             <button onClick={() => setShowDeleteConfirm(false)} className="btn-secondary">Cancel</button>
           </div>
@@ -530,17 +610,37 @@ export default function TyreRecords() {
   )
 }
 
-// ── Shared modal shell ─────────────────────────────────────────────────────────
 function Modal({ title, onClose, children, wide = false }) {
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={onClose}>
-      <div className={`bg-gray-900 border border-gray-700 rounded-xl w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} p-6 my-4`} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18} /></button>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        className={cn(
+          'bg-surface-1 border border-[var(--border-dim)] rounded-2xl w-full p-6 my-4 shadow-float',
+          wide ? 'max-w-2xl' : 'max-w-lg'
+        )}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-bold text-white">{title}</h2>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-surface-3 transition-all"
+          >
+            <X size={15} />
+          </button>
         </div>
         {children}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

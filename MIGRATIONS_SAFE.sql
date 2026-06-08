@@ -201,7 +201,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_v2_user    ON audit_log_v2 (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_v2_table   ON audit_log_v2 (table_name);
 CREATE INDEX IF NOT EXISTS idx_audit_v2_created ON audit_log_v2 (created_at DESC);
 
--- Performance indexes on tyre_records
+-- Performance indexes on tyre_records (only on columns guaranteed to exist)
 CREATE INDEX IF NOT EXISTS idx_tyre_asset_date
   ON tyre_records (asset_no, issue_date DESC);
 CREATE INDEX IF NOT EXISTS idx_tyre_site_date
@@ -210,8 +210,7 @@ CREATE INDEX IF NOT EXISTS idx_tyre_risk_date
   ON tyre_records (risk_level, issue_date DESC);
 CREATE INDEX IF NOT EXISTS idx_tyre_country_date
   ON tyre_records (country, issue_date DESC);
-CREATE INDEX IF NOT EXISTS idx_tyre_serial
-  ON tyre_records (serial_number);
+-- NOTE: idx_tyre_serial intentionally moved below after serial_number column is added
 CREATE INDEX IF NOT EXISTS idx_tyre_brand
   ON tyre_records (brand);
 CREATE INDEX IF NOT EXISTS idx_tyre_active
@@ -318,6 +317,19 @@ SELECT _add_col_if_missing('tyre_records', 'driver_name',       'text');
 SELECT _add_col_if_missing('tyre_records', 'reason_for_removal','text');
 SELECT _add_col_if_missing('tyre_records', 'serial_number',     'text');
 SELECT _add_col_if_missing('tyre_records', 'asset_no',          'text');
+
+-- serial_number index created here, after the column is guaranteed to exist
+CREATE INDEX IF NOT EXISTS idx_tyre_serial
+  ON tyre_records (serial_number);
+
+-- inspections — drop restrictive CHECK constraint and add missing columns safely
+-- The old CHECK only allowed ('Routine','Pressure','Visual','Full','Pre-Trip'),
+-- but the app also uses Site Observation, Safety Training, Training Session, Daily Checklist
+ALTER TABLE inspections DROP CONSTRAINT IF EXISTS inspections_inspection_type_check;
+SELECT _add_col_if_missing('inspections', 'country',   'text');
+SELECT _add_col_if_missing('inspections', 'severity',  'text');
+SELECT _add_col_if_missing('inspections', 'photo_data','text');
+SELECT _add_col_if_missing('inspections', 'attendees', 'text');
 
 -- inspections — add missing columns safely
 CREATE TABLE IF NOT EXISTS inspections (

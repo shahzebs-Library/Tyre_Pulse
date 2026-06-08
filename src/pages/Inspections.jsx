@@ -100,6 +100,7 @@ export default function Inspections() {
   const [loading, setLoading]   = useState(true)
   const [form, setForm]         = useState(null)
   const [saving, setSaving]     = useState(false)
+  const [saveError, setSaveError] = useState(null)
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterSite, setFilterSite]     = useState('all')
   const [search, setSearch]             = useState('')
@@ -121,6 +122,7 @@ export default function Inspections() {
   const [clNotes, setClNotes]         = useState('')
   const [clSaving, setClSaving]       = useState(false)
   const [clSaved, setClSaved]         = useState(null)
+  const [clError, setClError]         = useState(null)
   const [clLookingUp, setClLookingUp] = useState(false)
   const posRefs     = useRef({})
   const [highlightPos, setHighlightPos] = useState(null)
@@ -202,6 +204,7 @@ export default function Inspections() {
     if (!form.site?.trim()) return
     if (!form.scheduled_date) return
     setSaving(true)
+    setSaveError(null)
     const payload = { ...form, created_by: profile?.id ?? null }
     delete payload.id
 
@@ -211,7 +214,12 @@ export default function Inspections() {
     } else {
       ;({ error } = await supabase.from('inspections').insert(payload))
     }
-    if (!error) { setForm(null); await load() }
+    if (error) {
+      setSaveError(error.message || 'Save failed. If this persists, run MIGRATIONS_SAFE.sql to update the inspections table schema.')
+    } else {
+      setForm(null)
+      await load()
+    }
     setSaving(false)
   }
 
@@ -266,9 +274,10 @@ export default function Inspections() {
   async function saveChecklist() {
     if (!clAsset.trim() || clPositions.length === 0) return
     setClSaving(true)
+    setClError(null)
     const payload = {
       title: `Daily Tyre Checklist: ${clAsset} (${clDate})`,
-      inspection_type: 'Daily Checklist',
+      inspection_type: 'Routine',
       site: clSite,
       asset_no: clAsset.trim(),
       scheduled_date: clDate,
@@ -281,7 +290,12 @@ export default function Inspections() {
       created_by: profile?.id ?? null,
     }
     const { data, error } = await supabase.from('inspections').insert(payload).select().single()
-    if (!error) { setClSaved(data); await load() }
+    if (error) {
+      setClError(error.message || 'Save failed — please try again.')
+    } else {
+      setClSaved(data)
+      await load()
+    }
     setClSaving(false)
   }
 
@@ -752,6 +766,11 @@ export default function Inspections() {
                   value={clNotes} onChange={e => setClNotes(e.target.value)} />
               </div>
 
+              {clError && (
+                <div className="p-3 rounded-lg bg-red-900/30 border border-red-700 text-red-300 text-sm">
+                  {clError}
+                </div>
+              )}
               <button onClick={saveChecklist} disabled={clSaving || !clAsset.trim() || clPositions.length === 0}
                 className="btn-primary w-full disabled:opacity-50">
                 {clSaving ? 'Saving...' : CHECKLIST_LABELS[lang].save}
@@ -1019,8 +1038,13 @@ export default function Inspections() {
               </div>
             )}
           </div>
-          <div className="flex gap-3 mt-6">
-            <button onClick={() => setForm(null)} className="btn-secondary flex-1">Cancel</button>
+          {saveError && (
+            <div className="mt-4 p-3 rounded-lg bg-red-900/30 border border-red-700 text-red-300 text-sm">
+              {saveError}
+            </div>
+          )}
+          <div className="flex gap-3 mt-4">
+            <button onClick={() => { setForm(null); setSaveError(null) }} className="btn-secondary flex-1">Cancel</button>
             <button onClick={save}
               disabled={saving || !form.title?.trim() || !form.site?.trim() || !form.scheduled_date}
               className="btn-primary flex-1 disabled:opacity-50">

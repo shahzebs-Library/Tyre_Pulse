@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { FileText, ChevronRight, Download, ArrowLeft, Printer } from 'lucide-react'
+import { FileText, ChevronRight, Download, ArrowLeft, Printer, Mail } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import EmailReportModal from '../components/EmailReportModal'
 
 const REPORT_TYPES = [
   { id: 'Vehicle History',       desc: 'All tyre changes per vehicle, grouped by asset',  table: 'tyre_records' },
@@ -72,6 +73,7 @@ export default function Reports() {
   const [siteSuggestions, setSiteSuggestions] = useState([])
   const [previewPage, setPreviewPage] = useState(1)
   const [configRestored, setConfigRestored] = useState(false)
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
 
   const previewRows = allRows.slice((previewPage - 1) * PAGE_SIZE, previewPage * PAGE_SIZE)
   const totalPages  = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE))
@@ -509,6 +511,12 @@ export default function Reports() {
             <button onClick={handlePrint} className="btn-secondary flex items-center gap-1.5">
               <Printer size={14} className="text-blue-400" /> Print
             </button>
+            <button
+              onClick={() => setEmailModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <Mail size={16} />Email Report
+            </button>
           </div>
 
           {loading ? (
@@ -599,6 +607,23 @@ export default function Reports() {
           )}
         </div>
       )}
+
+      <EmailReportModal
+        isOpen={emailModalOpen}
+        onClose={() => setEmailModalOpen(false)}
+        reportTitle={reportType ? `${reportType} Report` : 'Custom Report'}
+        pdfColumns={displayCols.map(c => COLUMN_LABELS[c] ?? c)}
+        pdfRows={allRows.slice(0, 500).map(row => displayCols.map(c => row[c] ?? ''))}
+        kpiSummary={{
+          'Report Type':    reportType || '—',
+          'Total Records':  allRows.length.toLocaleString(),
+          'Date From':      dateFrom || '—',
+          'Date To':        dateTo || '—',
+          'Site Filter':    filterSite || 'All',
+          'Country Filter': filterCountry || 'All',
+        }}
+        period={dateShortcut || (dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'All Time')}
+      />
     </div>
   )
 }

@@ -18,12 +18,13 @@ import {
   ShieldAlert, DollarSign, BarChart2, Target,
   Zap, CheckCircle, XCircle, Clock, Activity,
   Building2, Wrench, Star, AlertOctagon,
-  ChevronRight, Award, Package, Users,
+  ChevronRight, Award, Package, Users, Mail,
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import EmailReportModal from '../components/EmailReportModal'
 import {
   computeAllKpis,
   computeCostTrend,
@@ -279,6 +280,7 @@ export default function ExecutiveReport() {
   const [error,       setError]       = useState(null)
   const [period,      setPeriod]      = useState('quarter')
   const [exporting,   setExporting]   = useState(false)
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
 
   // Chart refs for PDF export
   const costTrendRef    = useRef(null)
@@ -1148,6 +1150,12 @@ export default function ExecutiveReport() {
                 }
                 Export PDF
               </button>
+              <button
+                onClick={() => setEmailModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                <Mail size={16} />Email Report
+              </button>
             </div>
           </div>
         </div>
@@ -1804,6 +1812,25 @@ export default function ExecutiveReport() {
         </motion.div>
 
       </div>
+
+      <EmailReportModal
+        isOpen={emailModalOpen}
+        onClose={() => setEmailModalOpen(false)}
+        reportTitle="Executive Fleet Report"
+        pdfColumns={['Site', 'Critical', 'High', 'Medium', 'Low', 'Total', 'Risk Score']}
+        pdfRows={riskMatrix.map(r => [r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2)])}
+        kpiSummary={{
+          'Fleet Avg CPK':          fmtCpk(kpis.cpk.fleetAvgCpk, currency),
+          'Total Period Spend':     fmtCurrency(totalSpend, currency),
+          'Projected Annual':       fmtCurrency(projectedAnnual, currency),
+          'Failure Rate':           fmtPct(kpis.failureRate.failureRate * 100),
+          'Inspection Compliance':  fmtPct(kpis.inspectionCompliance.compliancePct),
+          'Fleet Availability':     fmtPct(kpis.fleetAvailability.availabilityPct),
+          'Scrap Rate':             fmtPct(kpis.scrapRate.scrapRate * 100),
+          'Savings Opportunity':    fmtCurrency(savingsOpportunity, currency),
+        }}
+        period={PERIODS.find(p => p.key === period)?.label || 'Quarter'}
+      />
     </div>
   )
 }

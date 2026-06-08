@@ -16,8 +16,9 @@ import {
 import { Bar, Line } from 'react-chartjs-2'
 import {
   Cpu, Download, FileText, TrendingUp, TrendingDown, Minus,
-  AlertTriangle, CheckCircle, XCircle, Info,
+  AlertTriangle, CheckCircle, XCircle, Info, Mail,
 } from 'lucide-react'
+import EmailReportModal from '../components/EmailReportModal'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -187,6 +188,7 @@ export default function EngineeringKpi() {
   const [fleetSize,   setFleetSize]   = useState(0)
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState(null)
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
 
   // Sites list for select
   const sites = useMemo(() =>
@@ -794,6 +796,12 @@ export default function EngineeringKpi() {
           >
             <FileText size={14} /> PDF
           </button>
+          <button
+            onClick={() => setEmailModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <Mail size={16} />Email Report
+          </button>
         </div>
       </div>
 
@@ -1190,6 +1198,34 @@ export default function EngineeringKpi() {
             </div>
           </div>
         </>
+      )}
+
+      {kpis && (
+        <EmailReportModal
+          isOpen={emailModalOpen}
+          onClose={() => setEmailModalOpen(false)}
+          reportTitle="Engineering KPI Report"
+          pdfColumns={['Brand', 'Avg CPK', 'Failure %', 'Avg Life (km)', 'Scrap %', 'Score']}
+          pdfRows={brandScorecard.map(b => [
+            b.brand,
+            b.avgCpk > 0 ? b.avgCpk.toFixed(4) : 'N/A',
+            `${(b.failureRate * 100).toFixed(1)}%`,
+            b.avgLifeKm != null && b.avgLifeKm > 0 ? `${Math.round(b.avgLifeKm).toLocaleString()} km` : 'N/A',
+            `${(b.scrapRate * 100).toFixed(1)}%`,
+            b.score.toFixed(2),
+          ])}
+          kpiSummary={{
+            'Fleet CPK':              kpis.cpk.validCount > 0 ? `${activeCurrency} ${kpis.cpk.fleetAvgCpk.toFixed(4)}/km` : 'N/A',
+            'Avg Tyre Life':          kpis.avgTyreLife.validCount > 0 ? `${Math.round(kpis.avgTyreLife.avgKm).toLocaleString()} km` : 'N/A',
+            'Failure Rate':           `${(kpis.failureRate.failureRate * 100).toFixed(1)}%`,
+            'Inspection Compliance':  `${kpis.inspectionCompliance.compliancePct.toFixed(1)}%`,
+            'Fleet Availability':     `${kpis.fleetAvailability.availabilityPct.toFixed(1)}%`,
+            'Scrap Rate':             `${(kpis.scrapRate.scrapRate * 100).toFixed(1)}%`,
+            'Cost Trend':             kpis.costTrend.trend.charAt(0).toUpperCase() + kpis.costTrend.trend.slice(1),
+            'Downtime Hours':         `${kpis.downtimeImpact.totalDowntimeHours.toLocaleString()} hrs`,
+          }}
+          period={dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'All Time'}
+        />
       )}
     </div>
   )

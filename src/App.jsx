@@ -47,6 +47,7 @@ import ForecastingEngine from './pages/ForecastingEngine'
 import ContinuousImprovement from './pages/ContinuousImprovement'
 import ErpSync from './pages/ErpSync'
 import WorkOrders from './pages/WorkOrders'
+import MaintenanceCalendar from './pages/MaintenanceCalendar'
 
 export default function App() {
   return (
@@ -104,6 +105,7 @@ export default function App() {
                     <Route path="/continuous-improvement" element={<ContinuousImprovement />} />
                     <Route path="/erp-sync"              element={<ErpSync />} />
                     <Route path="/work-orders"           element={<WorkOrders />} />
+                    <Route path="/maintenance-calendar" element={<MaintenanceCalendar />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

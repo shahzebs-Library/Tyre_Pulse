@@ -45,6 +45,7 @@ import AiCommandCenter from './pages/AiCommandCenter'
 import ExecutiveReport from './pages/ExecutiveReport'
 import ForecastingEngine from './pages/ForecastingEngine'
 import ContinuousImprovement from './pages/ContinuousImprovement'
+import ErpSync from './pages/ErpSync'
 
 export default function App() {
   return (
@@ -100,6 +101,7 @@ export default function App() {
                     <Route path="/executive-report"      element={<ExecutiveReport />} />
                     <Route path="/forecasting"           element={<ForecastingEngine />} />
                     <Route path="/continuous-improvement" element={<ContinuousImprovement />} />
+                    <Route path="/erp-sync"              element={<ErpSync />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

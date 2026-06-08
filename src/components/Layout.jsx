@@ -12,7 +12,7 @@ import {
   Sun, Moon, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare,
   ChevronDown, ChevronRight,
   Cpu, MapPin, Activity, GitMerge, CalendarClock, Trophy, BarChartBig, Microscope, Bot,
-  TrendingUp, BookOpen, Zap,
+  TrendingUp, BookOpen, Zap, Database,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -69,6 +69,7 @@ const NAV_GROUPS = [
       { to: '/executive-report',        label: 'Executive Report',        icon: BookOpen },
       { to: '/forecasting',             label: 'Forecasting Engine',      icon: TrendingUp },
       { to: '/continuous-improvement',  label: 'Continuous Improvement',  icon: Zap },
+      { to: '/erp-sync',                label: 'ERP Sync',                icon: Database },
       { to: '/alerts',          label: 'Alerts',           icon: Bell },
       { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle, adminOnly: true },
       { to: '/vehicle-history', label: 'Vehicle History',  icon: Car,           adminOnly: true },

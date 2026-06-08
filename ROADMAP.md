@@ -24,11 +24,14 @@
 | Metric | Status |
 |--------|--------|
 | Build | ✅ 0 errors |
-| Tests | ✅ 369 passing, 0 failures |
 | Auth + RBAC | ✅ RLS, role-based routes, idle timeout |
-| Migrations applied | V1–V11 |
+| Migrations ready | V1–V15 (V12-V15 require manual apply in Supabase) |
 | Hosting | Vercel (auto-deploy on push to `main`) |
-| Database | Supabase PostgreSQL + Auth + Storage |
+| Database | Supabase PostgreSQL + Auth + Storage + pgvector |
+| Intelligence pages | ✅ 12 new pages (Waves 8-21) |
+| PWA | ✅ Manifest + service worker + install prompt |
+| AI System | ✅ 4-agent router + AiCommandCenter |
+| RAG | ✅ pgvector schema + knowledge base + retrieval |
 
 ---
 

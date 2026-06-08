@@ -18,6 +18,7 @@ import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
 import TpLogo from '../assets/logo.svg'
 import InstallPwaPrompt from './InstallPwaPrompt'
+import NotificationCenter from './NotificationCenter'
 
 const NAV_GROUPS = [
   {
@@ -503,6 +504,7 @@ export default function Layout({ children }) {
             >
               {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
             </button>
+            <NotificationCenter />
             <button
               onClick={handleSignOut}
               title="Sign out"

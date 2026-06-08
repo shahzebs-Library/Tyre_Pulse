@@ -1,17 +1,17 @@
 # TyrePulse — Developer Handoff
 **Branch:** `claude/handoff-setup-gZAHb`
 **Last updated:** June 2026
-**Session summary:** Waves 8-23 + Wave 5D/5E/5F + Edge Functions + PWA Icons + ERP Sync + Realtime Notifications fully implemented and pushed
+**Build status:** ✅ Clean — 2252 modules, 0 errors
 
 ---
 
 ## Next Session — Priority Order
 
-1. **Work Orders page** — `/work-orders` (new operational page for workshop job tracking)
-2. **Scheduled Reports** — Add to Settings: schedule weekly/monthly email reports
-3. **Global Search** — Cross-page search modal (tyres, vehicles, inspections)
-4. **Apply migrations V12-V15** — User must run in Supabase SQL Editor
-5. **Wire EmailReportModal** into ForecastingEngine, VendorIntelligence, FleetIntelligence
+1. **Cost Center page** — `/cost-center` (multi-dimensional cost analysis by site/brand/vehicle/month)
+2. **Procurement Management page** — `/procurement` (purchase orders, vendor orders, budget tracking)
+3. **Apply migrations V12-V16** — User must run in Supabase SQL Editor
+4. **Supabase Realtime tables** — Enable Realtime on `tyre_records` + `alerts` tables in Supabase Dashboard
+5. **Deploy Edge Functions** — `supabase functions deploy chat-ai`, `generate-embedding`, `send-email`
 
 ---
 
@@ -23,140 +23,133 @@
 | `MIGRATIONS_V13.sql` | pgvector, knowledge_documents, embedding tables |
 | `MIGRATIONS_V14.sql` | Seed SOP/policy knowledge documents |
 | `MIGRATIONS_V15.sql` | organisations, audit_log_v2, performance indexes, archive |
+| `MIGRATIONS_V16.sql` | work_orders table with generate_work_order_no() function |
 
 ---
 
-## Supabase Edge Functions Required
+## Supabase Edge Functions
 
-| Function | Input | Purpose |
-|----------|-------|---------|
-| `generate-embedding` | `{ text, model }` | Proxy OpenAI text-embedding-3-small |
-| `chat-ai` | `{ system, user, model }` | Proxy Claude API for 4 AI agents |
-| `send-email` | `{ to, subject, body, attachmentBase64? }` | Resend API email delivery |
+| Function | Status | Input | Purpose |
+|----------|--------|-------|---------|
+| `chat-ai` | Created | `{ system, user, model }` | Anthropic API proxy |
+| `generate-embedding` | Created | `{ text, model }` | OpenAI embeddings proxy |
+| `send-email` | Created | `{ to, subject, body, ... }` | Resend API email delivery |
 
 Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
 
+Deploy: `supabase functions deploy chat-ai --project-ref <your-ref>`
+
 ---
 
-## What Was Built (All Sessions)
+## All Pages Built (Complete Route List)
 
-### New Pages
-| Route | File | Wave |
-|-------|------|------|
-| `/kpi-engine` | EngineeringKpi.jsx | 8 |
-| `/inspection-intelligence` | InspectionIntelligence.jsx | 9 |
-| `/position-intelligence` | PositionIntelligence.jsx | 10 |
-| `/root-cause` | RootCauseEngine.jsx | 11 |
-| `/predictive-maintenance` | PredictiveMaintenance.jsx | 12 |
-| `/vendor-intelligence` | VendorIntelligence.jsx | 13 |
-| `/fleet-intelligence` | FleetIntelligence.jsx | 14 |
-| `/advanced-analytics` | AdvancedAnalytics.jsx | 15 |
-| `/executive-report` | ExecutiveReport.jsx | 17 |
-| `/forecasting` | ForecastingEngine.jsx | 18 |
-| `/continuous-improvement` | ContinuousImprovement.jsx | 19 |
-| `/ai-command-center` | AiCommandCenter.jsx | 21 |
-| `/erp-sync` | ErpSync.jsx | 23+ |
+| Route | File | Category |
+|-------|------|----------|
+| `/` | Dashboard.jsx | Overview |
+| `/tyres` | TyreRecords.jsx | Operations |
+| `/analytics` | Analytics.jsx | Analytics |
+| `/brand-perf` | BrandPerformance.jsx | Analytics |
+| `/site-comp` | SiteComparison.jsx | Analytics |
+| `/fleet` | FleetAnalytics.jsx | Analytics |
+| `/kpi` | KpiScorecard.jsx | Analytics |
+| `/country-comp` | CountryComparison.jsx | Analytics |
+| `/comparison` | Comparison.jsx | Analytics |
+| `/fleet-master` | FleetMaster.jsx | Operations |
+| `/stock` | StockManagement.jsx | Operations |
+| `/budgets` | Budgets.jsx | Operations |
+| `/actions` | CorrectiveActions.jsx | Operations |
+| `/accidents` | Accidents.jsx | Operations |
+| `/rca` | RcaRecords.jsx | Operations |
+| `/inspections` | Inspections.jsx | Operations |
+| `/work-orders` | WorkOrders.jsx | Operations |
+| `/gate-pass` | GatePass.jsx | Operations |
+| `/reports` | Reports.jsx | Operations |
+| `/kpi-engine` | EngineeringKpi.jsx | Intelligence |
+| `/position-intelligence` | PositionIntelligence.jsx | Intelligence |
+| `/inspection-intelligence` | InspectionIntelligence.jsx | Intelligence |
+| `/root-cause` | RootCauseEngine.jsx | Intelligence |
+| `/predictive-maintenance` | PredictiveMaintenance.jsx | Intelligence |
+| `/vendor-intelligence` | VendorIntelligence.jsx | Intelligence |
+| `/driver-management` | DriverManagement.jsx | Intelligence |
+| `/fleet-intelligence` | FleetIntelligence.jsx | Intelligence |
+| `/advanced-analytics` | AdvancedAnalytics.jsx | Intelligence |
+| `/ai-command-center` | AiCommandCenter.jsx | Intelligence |
+| `/executive-report` | ExecutiveReport.jsx | Intelligence |
+| `/forecasting` | ForecastingEngine.jsx | Intelligence |
+| `/continuous-improvement` | ContinuousImprovement.jsx | Intelligence |
+| `/erp-sync` | ErpSync.jsx | Intelligence |
+| `/maintenance-calendar` | MaintenanceCalendar.jsx | Intelligence |
+| `/safety-compliance` | SafetyCompliance.jsx | Intelligence |
+| `/alerts` | Alerts.jsx | Intelligence |
+| `/anomalies` | Anomalies.jsx | Admin |
+| `/vehicle-history` | VehicleHistory.jsx | Admin |
+| `/serial-tracker` | SerialTracker.jsx | Intelligence |
+| `/ai` | AiAnalytics.jsx | Admin |
+| `/cleaning` | DataCleaning.jsx | Data |
+| `/upload` | UploadData.jsx | Data |
+| `/audit` | AuditTrail.jsx | Admin |
+| `/settings` | Settings.jsx | Data |
+| `/users` | UserManagement.jsx | Admin |
 
-### New Libraries
+---
+
+## Key Libraries and Utilities
+
 | File | Purpose |
 |------|---------|
-| `src/lib/kpiEngine.js` | 18 pure KPI computation functions |
-| `src/lib/ragService.js` | RAG retrieval + context assembly + cache |
+| `src/lib/kpiEngine.js` | 18 pure KPI computations |
+| `src/lib/ragService.js` | RAG retrieval + 5-min cache |
 | `src/lib/embeddingService.js` | Batch embedding generation |
 | `src/lib/aiRouter.js` | Query classification → agent routing |
 | `src/lib/agents/` | analystAgent, tyreEngineerAgent, qaDataAgent, plannerAgent |
-| `src/lib/auditLogger.js` | audit_log_v2 convenience wrappers |
-| `src/lib/performanceMonitor.js` | Query timing + slow query detection |
-| `src/lib/emailService.js` | PDF generation + email delivery via Resend |
+| `src/lib/auditLogger.js` | Non-throwing audit_log_v2 wrapper |
+| `src/lib/alertEngine.js` | Alert detection (velocity, CPK, data quality) |
+| `src/lib/emailService.js` | PDF generation + Resend email delivery |
+| `src/lib/performanceMonitor.js` | Query timing, slow query detection |
+| `src/lib/exportUtils.js` | Excel/PDF export utilities |
+| `src/lib/analyticsEngine.js` | Legacy analytics (CPK, trends) |
 
-### New Components
+## Key Components
+
 | File | Purpose |
 |------|---------|
-| `src/components/EmptyState.jsx` | Reusable empty state with icon/action |
-| `src/components/LoadingState.jsx` | Spinner with message + fullPage mode |
-| `src/components/InstallPwaPrompt.jsx` | PWA install to home screen banner |
-| `src/components/EmailReportModal.jsx` | Multi-recipient email modal with PDF attachment |
+| `src/components/Layout.jsx` | Main sidebar nav with NAV_GROUPS, GlobalSearch, NotificationCenter |
+| `src/components/GlobalSearch.jsx` | Cmd/Ctrl+K search modal across all data |
 | `src/components/NotificationCenter.jsx` | Realtime bell icon + dropdown notifications |
+| `src/components/EmailReportModal.jsx` | Multi-recipient email with PDF attachment |
+| `src/components/EmptyState.jsx` | Reusable empty state UI |
+| `src/components/LoadingState.jsx` | Spinner with message/fullPage mode |
+| `src/components/InstallPwaPrompt.jsx` | PWA install banner |
 
-### New Hooks
+## Key Hooks
+
 | File | Purpose |
 |------|---------|
-| `src/hooks/useRealtimeAlerts.js` | Supabase Realtime subscription for Critical tyres |
-
-### Enhanced Pages
-| File | Enhancement | Wave |
-|------|-------------|------|
-| `DataCleaning.jsx` | 7 quality checks + Data Quality Score | 16 |
-| `Settings.jsx` | KPI targets editor + alert thresholds | 7 |
-| `KpiScorecard.jsx` | Site breakdown + YoY toggle + alerts | 7 |
-| `VehicleHistory.jsx` | Forecast tab with health scores | 7 |
-| `StockManagement.jsx` | Velocity + days remaining + transfer | 7 |
-| `Reports.jsx` | Pagination + print + save config + email | 7 + 5D |
-| `ExecutiveReport.jsx` | Email button wired | 5D |
-| `EngineeringKpi.jsx` | Email button wired | 5D |
-| `Dashboard.jsx` | EmptyState + LoadingState components | 5F |
-
-### Infrastructure
-| File | Purpose |
-|------|---------|
-| `MIGRATIONS_V12.sql` | app_settings table |
-| `MIGRATIONS_V13.sql` | pgvector + embedding tables |
-| `MIGRATIONS_V14.sql` | Knowledge base seed data |
-| `MIGRATIONS_V15.sql` | Enterprise schema (orgs, audit, archive) |
-| `public/manifest.json` | PWA manifest |
-| `public/sw.js` | Service worker (cache-first) |
-| `public/icons/icon-{72..512}x{size}.png` | PWA icon set (8 sizes) |
-| `supabase/functions/chat-ai/index.ts` | Anthropic API proxy |
-| `supabase/functions/generate-embedding/index.ts` | OpenAI embeddings proxy |
-| `supabase/functions/send-email/index.ts` | Resend email proxy |
-| `src/index.css` | Theme depth: gradients, card shadows, dark palette |
+| `src/hooks/useRealtimeAlerts.js` | Supabase Realtime subscription for Critical tyres + 50-item ring buffer |
 
 ---
 
 ## Architecture Notes
 
-- **kpiEngine.js** is the single source of truth for all KPI computations
-- **ragService.js** provides 5-min cached retrieval — use `getCached/setCache` in all AI agents
-- **auditLogger.js** is non-throwing — safe to call anywhere
-- **performanceMonitor.js** `timedQuery()` should wrap all Supabase queries in production
-- **emailService.js** — `generateReportPdf()` returns base64, `sendReportEmail()` calls `send-email` Edge Function
-- **useRealtimeAlerts.js** — subscribes to `tyre_records` + `alerts` channels, ring buffer of 50, persists to localStorage
-- **NotificationCenter.jsx** — bell icon with unread count badge, framer-motion dropdown
-- All 12 new Intelligence pages follow the same pattern: Supabase load on mount → useMemo computed → Chart.js charts → Excel/PDF export
-- **agents/index.js** uses Anthropic SDK directly (`dangerouslyAllowBrowser: true`, `VITE_ANTHROPIC_API_KEY`)
+- **Anthropic SDK** used directly in `agents/index.js` (`dangerouslyAllowBrowser: true`, `VITE_ANTHROPIC_API_KEY`)
+- **EmailReportModal** wired into: ExecutiveReport, EngineeringKpi, Reports, ForecastingEngine, VendorIntelligence, FleetIntelligence
+- **NotificationCenter** in Layout sidebar footer — subscribes to `tyre_records` + `alerts` via Supabase Realtime
+- **GlobalSearch** in Layout — searches tyres, vehicles, inspections, work orders, stock + nav shortcuts
+- All new intelligence pages follow: Supabase load on mount → useMemo computed → Chart.js → Excel/PDF export
+- Build: `npm run build` → 2252 modules, 0 errors, ~975KB gzip
 
 ---
 
-## Project Architecture
+## Infrastructure
 
-```
-TyrePulse
-├── src/
-│   ├── pages/          31+ pages
-│   ├── components/     Layout, ProtectedRoute, InstallPwaPrompt, EmailReportModal, NotificationCenter, …
-│   ├── hooks/          useRealtimeAlerts
-│   ├── lib/
-│   │   ├── kpiEngine.js          KPI computations
-│   │   ├── ragService.js         RAG retrieval
-│   │   ├── embeddingService.js   Embeddings
-│   │   ├── aiRouter.js           Agent routing
-│   │   ├── agents/               4 AI agents
-│   │   ├── analyticsEngine.js    Legacy analytics
-│   │   ├── auditLogger.js        Audit trail
-│   │   ├── alertEngine.js        Alert detection
-│   │   ├── exportUtils.js        Excel/PDF export
-│   │   ├── emailService.js       Email delivery
-│   │   └── performanceMonitor.js Query timing
-│   └── contexts/       AuthContext, SettingsContext, ThemeContext
-├── public/
-│   ├── manifest.json   PWA manifest
-│   ├── sw.js           Service worker
-│   └── icons/          8 PWA icon sizes (72–512px)
-├── supabase/
-│   ├── config.toml
-│   └── functions/
-│       ├── chat-ai/
-│       ├── generate-embedding/
-│       └── send-email/
-└── MIGRATIONS_V*.sql   Database migrations
-```
+| File | Purpose |
+|------|---------|
+| `public/manifest.json` | PWA manifest (8 icons, 4 shortcuts) |
+| `public/sw.js` | Service worker (cache-first) |
+| `public/icons/icon-{72..512}x{size}.png` | PWA icon set (8 sizes, dark theme) |
+| `supabase/config.toml` | Supabase project config |
+| `supabase/functions/chat-ai/` | Anthropic API proxy |
+| `supabase/functions/generate-embedding/` | OpenAI embeddings proxy |
+| `supabase/functions/send-email/` | Resend email proxy |
+| `src/index.css` | Theme depth: gradients, card shadows, custom scrollbar |
+| `MIGRATIONS_V12-V16.sql` | Database migrations |

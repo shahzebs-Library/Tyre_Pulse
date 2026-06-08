@@ -251,29 +251,53 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
     'FD'
   )
 
-  // Tyres
+  // Tyres — realistic: black rubber outer + coloured risk rim
   tyres.forEach(t => {
     const risk = tc[t.id]?.risk ?? 'none'
     const [r, g, b] = _RISK_RGB[risk] ?? _RISK_RGB.none
+    const tx = originX + t.x * scale
+    const ty = originY + t.y * scale
+    const tw = t.w * scale
+    const th = t.h * scale
+    const rx = Math.max(0.4, t.rx * scale * 0.4)
+    const cx = tx + tw / 2
+    const cy = ty + th / 2
+
+    // Black rubber outer
+    doc.setFillColor(18, 18, 24)
+    doc.setDrawColor(55, 65, 81)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(tx, ty, tw, th, rx, rx, 'FD')
+
+    // Tread grooves (horizontal lines)
+    doc.setDrawColor(35, 35, 45)
+    doc.setLineWidth(0.4)
+    const numGrooves = 3
+    for (let i = 1; i <= numGrooves; i++) {
+      const ly = ty + (th / (numGrooves + 1)) * i
+      doc.line(tx + 0.8, ly, tx + tw - 0.8, ly)
+    }
+
+    // Coloured risk rim (ellipse approximated as roundedRect)
     doc.setFillColor(r, g, b)
     doc.setDrawColor(Math.max(0, r - 40), Math.max(0, g - 40), Math.max(0, b - 40))
-    doc.roundedRect(
-      originX + t.x * scale,
-      originY + t.y * scale,
-      t.w * scale,
-      t.h * scale,
-      Math.max(0.3, t.rx * scale * 0.4),
-      Math.max(0.3, t.rx * scale * 0.4),
-      'FD'
-    )
+    doc.setLineWidth(0.2)
+    const rimW = tw * 0.55
+    const rimH = th * 0.55
+    doc.roundedRect(cx - rimW / 2, cy - rimH / 2, rimW, rimH, rimW * 0.4, rimH * 0.4, 'FD')
+
+    // Centre bolt
+    doc.setFillColor(18, 18, 24)
+    const boltR = Math.min(tw, th) * 0.08
+    doc.circle(cx, cy, boltR, 'F')
 
     // Label
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(Math.max(3, t.w < 20 ? 3.5 : 4.5))
     doc.text(
       t.label,
-      originX + (t.x + t.w / 2) * scale,
-      originY + (t.y + t.h / 2) * scale,
+      cx,
+      cy,
       { align: 'center', baseline: 'middle' }
     )
   })

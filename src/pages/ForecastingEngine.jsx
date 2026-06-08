@@ -4,8 +4,9 @@ import {
   TrendingUp, TrendingDown, Minus, Calendar, Download,
   FileSpreadsheet, FileText, AlertTriangle, Package,
   DollarSign, BarChart2, Activity, Target, ChevronUp,
-  ChevronDown, MapPin, Tag, Layers
+  ChevronDown, MapPin, Tag, Layers, Mail
 } from 'lucide-react'
+import EmailReportModal from '../components/EmailReportModal'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, Title, Tooltip, Legend, Filler
@@ -194,6 +195,7 @@ export default function ForecastingEngine() {
   const [error, setError] = useState(null)
   const [horizon, setHorizon] = useState(12)
   const [siteFilter, setSiteFilter] = useState('all')
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
 
   // ── Data loading ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -720,6 +722,13 @@ export default function ForecastingEngine() {
             <FileText className="w-4 h-4" />
             PDF
           </button>
+          <button
+            onClick={() => setEmailModalOpen(true)}
+            className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-1.5 transition-colors"
+          >
+            <Mail className="w-4 h-4" />
+            Email Report
+          </button>
         </div>
       </div>
 
@@ -1158,6 +1167,28 @@ export default function ForecastingEngine() {
         </div>
       </motion.div>
 
+      <EmailReportModal
+        isOpen={emailModalOpen}
+        onClose={() => setEmailModalOpen(false)}
+        reportTitle="Forecasting Engine Report"
+        pdfColumns={['Brand', 'Last 12mo Actual', 'Next 3mo Forecast', 'Next 12mo Forecast', 'Est. Cost 12mo']}
+        pdfRows={brandForecast.map(b => [
+          b.brand,
+          fmtNum(b.actual12),
+          fmtNum(b.forecast3),
+          fmtNum(b.forecast12),
+          fmtCurrency(b.estCost12, activeCurrency, true),
+        ])}
+        kpiSummary={{
+          '12-Mo Demand Forecast': fmtNum(annualDemandForecast),
+          '12-Mo Budget Forecast': fmtCurrency(annualBudgetForecast, activeCurrency, true),
+          'Monthly Avg Demand': fmtNum(monthlyAvgDemand, 1),
+          'Monthly Avg Budget': fmtCurrency(monthlyAvgBudget, activeCurrency, true),
+          'Model Confidence': forecastAccuracy != null ? `${forecastAccuracy}%` : '—',
+          'Recommended Annual Budget': fmtCurrency(recommendedAnnualBudget, activeCurrency, true),
+        }}
+        period={`Horizon: Next ${horizon} Months`}
+      />
     </div>
   )
 }

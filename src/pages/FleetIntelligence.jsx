@@ -12,8 +12,9 @@ import {
   TrendingUp, TrendingDown, DollarSign, Clock, Activity,
   Filter, RefreshCw, ChevronLeft, ChevronRight, ChevronUp,
   ChevronDown, ExternalLink, Award, Zap, Target, BarChart2,
-  Shield, Search,
+  Shield, Search, Mail,
 } from 'lucide-react'
+import EmailReportModal from '../components/EmailReportModal'
 import { supabase } from '../lib/supabase'
 import {
   computeFleetAvailability,
@@ -364,6 +365,7 @@ export default function FleetIntelligence() {
   const [fleetMasterAvail, setFleetMasterAvail] = useState(true)
 
   const [datePreset, setDatePreset]   = useState('1yr')
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
   const [siteFilter, setSiteFilter]   = useState('all')
   const [typeFilter, setTypeFilter]   = useState('all')
   const [availFilter, setAvailFilter] = useState('all')
@@ -1042,6 +1044,12 @@ export default function FleetIntelligence() {
           >
             <FileText size={14} />PDF
           </button>
+          <button
+            onClick={() => setEmailModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm transition-colors text-gray-300 font-medium"
+          >
+            <Mail size={14} />Email Report
+          </button>
         </div>
       </div>
 
@@ -1507,6 +1515,36 @@ export default function FleetIntelligence() {
         </motion.div>
       </div>
 
+      <EmailReportModal
+        isOpen={emailModalOpen}
+        onClose={() => setEmailModalOpen(false)}
+        reportTitle="Fleet Management Intelligence Report"
+        pdfColumns={['Asset No', 'Site', 'Type', 'Changes', 'Total Cost', 'Avg CPK', 'High Risk', 'Status']}
+        pdfRows={vehicleMetrics
+          .sort((a, b) => b.total_tyre_cost - a.total_tyre_cost)
+          .slice(0, 20)
+          .map(v => [
+            v.asset_no,
+            v.site,
+            v.vehicle_type,
+            String(v.total_tyre_changes),
+            fmtCurrency(v.total_tyre_cost, activeCurrency),
+            fmtCpk(v.avg_cpk),
+            String(v.high_risk_count),
+            v.availability_status,
+          ])}
+        kpiSummary={{
+          'Fleet Size': fmt(fleetAggs.fleet_size),
+          'Fleet Availability': `${fleetAggs.availability_pct.toFixed(1)}%`,
+          'Available Vehicles': fmt(fleetAggs.available_count),
+          'Total Downtime Hours': `${fmt(fleetAggs.total_downtime_hours)} hrs`,
+          'Monthly Fleet Tyre Cost': fmtCurrency(fleetAggs.monthly_fleet_cost, activeCurrency),
+          'Fleet Avg CPK': fleetAggs.fleetAvgCpk != null ? fmtCpk(fleetAggs.fleetAvgCpk) : '—',
+          'Avg Cost per Vehicle': fmtCurrency(fleetAggs.avg_cost_per_vehicle, activeCurrency),
+          'Potential Annual Savings': fmtCurrency(benchmarks.annualSavings, activeCurrency),
+        }}
+        period={`Date Range: ${datePreset}`}
+      />
     </div>
   )
 }

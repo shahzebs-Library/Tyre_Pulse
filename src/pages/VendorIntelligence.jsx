@@ -14,8 +14,9 @@ import {
   Trophy, Download, FileText, AlertTriangle, CheckCircle,
   TrendingUp, TrendingDown, RefreshCw, Building2, Package,
   Star, Award, Medal, BarChart3, Target, ChevronUp, ChevronDown,
-  Minus, ShieldAlert, Wrench, DollarSign, Activity, Zap,
+  Minus, ShieldAlert, Wrench, DollarSign, Activity, Zap, Mail,
 } from 'lucide-react'
+import EmailReportModal from '../components/EmailReportModal'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -209,6 +210,7 @@ export default function VendorIntelligence() {
 
   // UI state
   const [activeSection, setActiveSection] = useState('vendors')
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
   const [sortCol, setSortCol] = useState('score')
   const [sortDir, setSortDir] = useState('desc')
   const [workshopSortCol, setWorkshopSortCol] = useState('score')
@@ -728,6 +730,12 @@ export default function VendorIntelligence() {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
           >
             <FileText size={13} /> PDF
+          </button>
+          <button
+            onClick={() => setEmailModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
+          >
+            <Mail size={13} /> Email Report
           </button>
         </div>
       </div>
@@ -1680,6 +1688,33 @@ export default function VendorIntelligence() {
         </div>
       </div>
 
+      <EmailReportModal
+        isOpen={emailModalOpen}
+        onClose={() => setEmailModalOpen(false)}
+        reportTitle="Vendor & Workshop Intelligence Report"
+        pdfColumns={['Rank', 'Brand', 'Records', 'Avg CPK', 'Avg Life', 'Failure Rate', 'Scrap Rate', 'Score']}
+        pdfRows={sortedVendors.map(v => [
+          String(v.rank),
+          v.brand,
+          String(v.count),
+          v.avgCpk != null ? fmtCpk(v.avgCpk, activeCurrency) : 'N/A',
+          fmtKm(v.avgLifeKm),
+          fmtPct(v.failureRate),
+          fmtPct(v.scrapRate),
+          v.displayScore.toFixed(0),
+        ])}
+        kpiSummary={{
+          'Total Brands Tracked': String(enrichedVendors.length),
+          'Best Value Brand': execSummary.bestBrand?.brand ?? '—',
+          'Best Brand CPK': execSummary.bestBrand?.avgCpk != null ? fmtCpk(execSummary.bestBrand.avgCpk, activeCurrency) : '—',
+          'Highest Cost Brand': execSummary.worstBrand?.brand ?? '—',
+          'Total Fleet Investment': fmtCurrency(execSummary.totalFleetInvestment, activeCurrency),
+          'Potential Annual Saving': execSummary.estAnnualSaving > 0 ? fmtCurrency(execSummary.estAnnualSaving, activeCurrency) : '—',
+          'Best Performing Site': execSummary.bestSite?.site ?? '—',
+          'Total Records Analysed': String(filteredRecords.length),
+        }}
+        period={`Period: ${datePreset}`}
+      />
     </div>
   )
 }

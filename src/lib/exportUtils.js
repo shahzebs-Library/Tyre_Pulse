@@ -148,6 +148,291 @@ export function exportToPdf(rows, columns, title, filename = 'report', orientati
   doc.save(`${filename}.pdf`)
 }
 
+// ── Inspection Detail PDF ──────────────────────────────────────────────────────
+const _TYRE_LAYOUTS = {
+  Pickup: {
+    body: { x: 60, y: 40, w: 80, h: 200, rx: 8 },
+    tyres: [
+      { id: 'FL', x: 35,  y: 55,  w: 22, h: 38, rx: 4, label: 'FL' },
+      { id: 'FR', x: 143, y: 55,  w: 22, h: 38, rx: 4, label: 'FR' },
+      { id: 'RL', x: 35,  y: 185, w: 22, h: 38, rx: 4, label: 'RL' },
+      { id: 'RR', x: 143, y: 185, w: 22, h: 38, rx: 4, label: 'RR' },
+    ],
+  },
+  'Wheel loader': {
+    body: { x: 60, y: 40, w: 80, h: 200, rx: 8 },
+    tyres: [
+      { id: 'FL', x: 30,  y: 55,  w: 28, h: 44, rx: 5, label: 'FL' },
+      { id: 'FR', x: 142, y: 55,  w: 28, h: 44, rx: 5, label: 'FR' },
+      { id: 'RL', x: 30,  y: 185, w: 28, h: 44, rx: 5, label: 'RL' },
+      { id: 'RR', x: 142, y: 185, w: 28, h: 44, rx: 5, label: 'RR' },
+    ],
+  },
+  'Skid loader': {
+    body: { x: 60, y: 40, w: 80, h: 200, rx: 8 },
+    tyres: [
+      { id: 'FL', x: 30,  y: 55,  w: 28, h: 44, rx: 5, label: 'FL' },
+      { id: 'FR', x: 142, y: 55,  w: 28, h: 44, rx: 5, label: 'FR' },
+      { id: 'RL', x: 30,  y: 185, w: 28, h: 44, rx: 5, label: 'RL' },
+      { id: 'RR', x: 142, y: 185, w: 28, h: 44, rx: 5, label: 'RR' },
+    ],
+  },
+  Canter: {
+    body: { x: 60, y: 30, w: 80, h: 240, rx: 8 },
+    tyres: [
+      { id: 'FL',  x: 35,  y: 45,  w: 22, h: 36, rx: 4, label: 'FL'  },
+      { id: 'FR',  x: 143, y: 45,  w: 22, h: 36, rx: 4, label: 'FR'  },
+      { id: 'RLo', x: 22,  y: 175, w: 20, h: 34, rx: 3, label: 'RLo' },
+      { id: 'RLi', x: 44,  y: 175, w: 20, h: 34, rx: 3, label: 'RLi' },
+      { id: 'RRi', x: 136, y: 175, w: 20, h: 34, rx: 3, label: 'RRi' },
+      { id: 'RRo', x: 158, y: 175, w: 20, h: 34, rx: 3, label: 'RRo' },
+    ],
+  },
+  'Tri-mixer': {
+    body: { x: 55, y: 20, w: 90, h: 290, rx: 8 },
+    tyres: [
+      { id: 'F1L',  x: 28,  y: 30,  w: 22, h: 34, rx: 4, label: 'F1L'  },
+      { id: 'F1R',  x: 150, y: 30,  w: 22, h: 34, rx: 4, label: 'F1R'  },
+      { id: 'F2L',  x: 28,  y: 80,  w: 22, h: 34, rx: 4, label: 'F2L'  },
+      { id: 'F2R',  x: 150, y: 80,  w: 22, h: 34, rx: 4, label: 'F2R'  },
+      { id: 'R1Lo', x: 16,  y: 170, w: 18, h: 32, rx: 3, label: 'R1Lo' },
+      { id: 'R1Li', x: 36,  y: 170, w: 18, h: 32, rx: 3, label: 'R1Li' },
+      { id: 'R1Ri', x: 146, y: 170, w: 18, h: 32, rx: 3, label: 'R1Ri' },
+      { id: 'R1Ro', x: 166, y: 170, w: 18, h: 32, rx: 3, label: 'R1Ro' },
+      { id: 'R2Lo', x: 16,  y: 215, w: 18, h: 32, rx: 3, label: 'R2Lo' },
+      { id: 'R2Li', x: 36,  y: 215, w: 18, h: 32, rx: 3, label: 'R2Li' },
+      { id: 'R2Ri', x: 146, y: 215, w: 18, h: 32, rx: 3, label: 'R2Ri' },
+      { id: 'R2Ro', x: 166, y: 215, w: 18, h: 32, rx: 3, label: 'R2Ro' },
+    ],
+  },
+  'Concrete pump': {
+    body: { x: 55, y: 20, w: 90, h: 310, rx: 8 },
+    tyres: [
+      { id: 'FL',   x: 28,  y: 30,  w: 22, h: 34, rx: 4, label: 'FL'   },
+      { id: 'FR',   x: 150, y: 30,  w: 22, h: 34, rx: 4, label: 'FR'   },
+      { id: 'R1Lo', x: 16,  y: 130, w: 18, h: 30, rx: 3, label: 'R1Lo' },
+      { id: 'R1Li', x: 36,  y: 130, w: 18, h: 30, rx: 3, label: 'R1Li' },
+      { id: 'R1Ri', x: 146, y: 130, w: 18, h: 30, rx: 3, label: 'R1Ri' },
+      { id: 'R1Ro', x: 166, y: 130, w: 18, h: 30, rx: 3, label: 'R1Ro' },
+      { id: 'R2Lo', x: 16,  y: 175, w: 18, h: 30, rx: 3, label: 'R2Lo' },
+      { id: 'R2Li', x: 36,  y: 175, w: 18, h: 30, rx: 3, label: 'R2Li' },
+      { id: 'R2Ri', x: 146, y: 175, w: 18, h: 30, rx: 3, label: 'R2Ri' },
+      { id: 'R2Ro', x: 166, y: 175, w: 18, h: 30, rx: 3, label: 'R2Ro' },
+      { id: 'R3Lo', x: 16,  y: 220, w: 18, h: 30, rx: 3, label: 'R3Lo' },
+      { id: 'R3Li', x: 36,  y: 220, w: 18, h: 30, rx: 3, label: 'R3Li' },
+      { id: 'R3Ri', x: 146, y: 220, w: 18, h: 30, rx: 3, label: 'R3Ri' },
+      { id: 'R3Ro', x: 166, y: 220, w: 18, h: 30, rx: 3, label: 'R3Ro' },
+    ],
+  },
+}
+
+const _RISK_RGB = {
+  good:     [34,  197, 94],
+  warning:  [234, 179, 8],
+  critical: [239, 68,  68],
+  none:     [75,  85,  99],
+}
+
+function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) {
+  const { body, tyres } = layout
+  const tc = tyreConditions || {}
+
+  // Vehicle body
+  doc.setFillColor(31, 41, 55)
+  doc.setDrawColor(55, 65, 81)
+  doc.setLineWidth(0.3)
+  doc.roundedRect(
+    originX + body.x * scale,
+    originY + body.y * scale,
+    body.w * scale,
+    body.h * scale,
+    Math.max(0.5, body.rx * scale * 0.4),
+    Math.max(0.5, body.rx * scale * 0.4),
+    'FD'
+  )
+
+  // Tyres
+  tyres.forEach(t => {
+    const risk = tc[t.id]?.risk ?? 'none'
+    const [r, g, b] = _RISK_RGB[risk] ?? _RISK_RGB.none
+    doc.setFillColor(r, g, b)
+    doc.setDrawColor(Math.max(0, r - 40), Math.max(0, g - 40), Math.max(0, b - 40))
+    doc.roundedRect(
+      originX + t.x * scale,
+      originY + t.y * scale,
+      t.w * scale,
+      t.h * scale,
+      Math.max(0.3, t.rx * scale * 0.4),
+      Math.max(0.3, t.rx * scale * 0.4),
+      'FD'
+    )
+
+    // Label
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(Math.max(3, t.w < 20 ? 3.5 : 4.5))
+    doc.text(
+      t.label,
+      originX + (t.x + t.w / 2) * scale,
+      originY + (t.y + t.h / 2) * scale,
+      { align: 'center', baseline: 'middle' }
+    )
+  })
+}
+
+/**
+ * Export a single inspection record as a detailed PDF with tyre diagram.
+ * @param {Object} row - inspection record (includes vehicle_type, tyre_conditions)
+ */
+export function exportInspectionDetailPdf(row) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pageW = doc.internal.pageSize.width  // 210
+  const pageH = doc.internal.pageSize.height // 297
+
+  // Green header band
+  doc.setFillColor(22, 101, 52)
+  doc.rect(0, 0, pageW, 22, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.text('TYREPULSE · Tyre Intelligence Platform', 14, 10)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Inspection Report', 14, 17)
+  doc.setFontSize(8)
+  doc.setTextColor(180, 220, 180)
+  doc.text(`Generated: ${nowStr()}`, pageW - 14, 17, { align: 'right' })
+
+  // Section: Inspection Details
+  let y = 30
+  const label = (txt) => { doc.setFontSize(7); doc.setTextColor(120, 120, 120); doc.setFont('helvetica', 'normal'); doc.text(txt, 14, y) }
+  const value = (txt, x = 14, yOff = 4.5) => { doc.setFontSize(9); doc.setTextColor(20, 20, 20); doc.setFont('helvetica', 'bold'); doc.text(String(txt || '—'), x, y + yOff) }
+
+  label('Title')
+  value(row.title)
+  y += 10
+
+  // Two-column info grid
+  const col2 = 115
+  const fields = [
+    [['Type', row.inspection_type], ['Status', row.status]],
+    [['Site', row.site], ['Date', row.scheduled_date]],
+    [['Asset No', row.asset_no || '—'], ['Severity', row.severity || '—']],
+    [['Inspector', row.inspector || row.attendees || '—'], ['Vehicle', row.vehicle_type || '—']],
+  ]
+  fields.forEach(([left, right]) => {
+    label(left[0])
+    doc.setFontSize(7); doc.setTextColor(120, 120, 120); doc.text(right[0], col2, y)
+    value(left[1])
+    doc.setFontSize(9); doc.setTextColor(20, 20, 20); doc.setFont('helvetica', 'bold'); doc.text(String(right[1] || '—'), col2, y + 4.5)
+    y += 10
+  })
+
+  // Tyre diagram
+  const layout = row.vehicle_type ? _TYRE_LAYOUTS[row.vehicle_type] : null
+  if (layout) {
+    y += 4
+    doc.setFontSize(8)
+    doc.setTextColor(60, 60, 60)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Tyre Condition Diagram', 14, y)
+    y += 5
+
+    // Scale diagram to fit ~70mm wide, centred on left half of page
+    const diagramW = 70
+    const scale = diagramW / 200
+    const bodyBottom = layout.body.y + layout.body.h
+    const diagramH = bodyBottom * scale + 8
+    const originX = 14
+    const originY = y
+
+    // Light background box
+    doc.setFillColor(245, 247, 250)
+    doc.setDrawColor(200, 200, 200)
+    doc.setLineWidth(0.2)
+    doc.roundedRect(originX - 3, originY - 3, diagramW + 6, diagramH + 6, 2, 2, 'FD')
+
+    _drawTyreDiagram(doc, layout, row.tyre_conditions, originX, originY, scale)
+
+    // Legend — beside the diagram
+    const legendX = originX + diagramW + 12
+    let legendY = originY + 10
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(60, 60, 60)
+    doc.text('Legend', legendX, legendY)
+    legendY += 5
+    const legendItems = [['Good', _RISK_RGB.good], ['Warning', _RISK_RGB.warning], ['Critical', _RISK_RGB.critical], ['No data', _RISK_RGB.none]]
+    legendItems.forEach(([lbl, rgb]) => {
+      doc.setFillColor(...rgb)
+      doc.roundedRect(legendX, legendY - 2.5, 4, 4, 0.5, 0.5, 'F')
+      doc.setFontSize(7)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(40, 40, 40)
+      doc.text(lbl, legendX + 6, legendY + 0.5)
+      legendY += 7
+    })
+
+    // Tyre condition table (if any set)
+    const conditions = Object.entries(row.tyre_conditions || {})
+    if (conditions.length > 0) {
+      legendY += 4
+      doc.setFontSize(7)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(60, 60, 60)
+      doc.text('Tyre Details', legendX, legendY)
+      legendY += 4
+      conditions.forEach(([tyreId, data]) => {
+        doc.setFontSize(6.5)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(40, 40, 40)
+        const psi = data.pressure ? ` · ${data.pressure} PSI` : ''
+        doc.text(`${tyreId}: ${data.risk ?? 'none'}${psi}`, legendX, legendY)
+        legendY += 5
+      })
+    }
+
+    y = originY + diagramH + 8
+  }
+
+  // Findings
+  if (row.findings) {
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(60, 60, 60)
+    doc.text('Findings', 14, y)
+    y += 4
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(30, 30, 30)
+    const lines = doc.splitTextToSize(row.findings, pageW - 28)
+    doc.text(lines, 14, y)
+    y += lines.length * 4.5 + 4
+  }
+
+  // Notes
+  if (row.notes) {
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(60, 60, 60)
+    doc.text('Notes', 14, y)
+    y += 4
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(30, 30, 30)
+    const lines = doc.splitTextToSize(row.notes, pageW - 28)
+    doc.text(lines, 14, y)
+  }
+
+  // Footer
+  doc.setFontSize(7)
+  doc.setTextColor(107, 114, 128)
+  doc.text('Confidential · Internal Use Only | TyrePulse', 14, pageH - 6)
+  doc.text('Page 1', pageW - 14, pageH - 6, { align: 'right' })
+
+  const safeTitle = (row.title || 'inspection').replace(/[^a-z0-9]/gi, '_')
+  doc.save(`TyrePulse_Inspection_${safeTitle}.pdf`)
+}
+
 // ── PowerPoint Export ──────────────────────────────────────────────────────────
 /**
  * Generate a management summary PowerPoint report.

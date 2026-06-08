@@ -74,6 +74,7 @@ const NAV_GROUPS = [
       { to: '/continuous-improvement',  label: 'Continuous Improvement',  icon: Zap },
       { to: '/erp-sync',                label: 'ERP Sync',                icon: Database },
       { to: '/maintenance-calendar',    label: 'Maintenance Calendar',    icon: Calendar },
+      { to: '/safety-compliance',       label: 'Safety & Compliance',     icon: ShieldCheck },
       { to: '/alerts',          label: 'Alerts',           icon: Bell },
       { to: '/anomalies',       label: 'Anomaly Scan',     icon: AlertTriangle, adminOnly: true },
       { to: '/vehicle-history', label: 'Vehicle History',  icon: Car,           adminOnly: true },

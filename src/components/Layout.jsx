@@ -17,6 +17,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
 import TpLogo from '../assets/logo.svg'
+import InstallPwaPrompt from './InstallPwaPrompt'
 
 const NAV_GROUPS = [
   {
@@ -519,6 +520,9 @@ export default function Layout({ children }) {
           {children}
         </div>
       </main>
+
+      {/* PWA install prompt */}
+      <InstallPwaPrompt />
 
       {/* Search palette */}
       <AnimatePresence>

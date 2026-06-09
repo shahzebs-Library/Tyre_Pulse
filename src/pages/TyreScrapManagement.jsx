@@ -20,6 +20,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -668,20 +669,14 @@ export default function TyreScrapManagement() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 md:p-6 space-y-5">
+    <div className="space-y-6">
 
-      {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Trash2 className="text-red-400" size={26} />
-            Tyre Scrap Management
-          </h1>
-          <p className="text-gray-400 text-sm mt-0.5">
-            End-of-life tyre tracking · scrap rate analysis · disposal records · retread opportunity
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+      <PageHeader
+        title="Tyre Scrap Management"
+        subtitle="Record and analyse tyre scrap events and root causes"
+        icon={Trash2}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={exportDisposalPdf}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
@@ -701,8 +696,9 @@ export default function TyreScrapManagement() {
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* ── Error banner ── */}
       <AnimatePresence>

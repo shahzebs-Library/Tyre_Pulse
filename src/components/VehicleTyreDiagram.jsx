@@ -208,7 +208,7 @@ function PickupBody() {
       <rect x="72" y="15" width="56" height="7" rx="2" fill="#111827" />
       {[0,1,2,3,4].map(i => (
         <line key={i} x1={79 + i*11} y1="15" x2={79 + i*11} y2="22"
-          stroke="#374151" strokeWidth="0.8" key={i} />
+          stroke="#374151" strokeWidth="0.8" />
       ))}
 
       {/* Headlights */}

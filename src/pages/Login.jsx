@@ -1,23 +1,31 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2, Loader2, AtSign, Hash, User } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
 import TpLogo from '../assets/logo.svg'
 import { cn } from '../lib/cn'
+
+const ID_MODES = [
+  { value: 'email',    label: 'Email',       icon: Mail,    placeholder: 'you@example.com',  type: 'email' },
+  { value: 'username', label: 'Username',    icon: AtSign,  placeholder: 'your_username',    type: 'text' },
+  { value: 'empid',   label: 'Employee ID',  icon: Hash,    placeholder: 'e.g. EMP-1042',    type: 'text' },
+]
 
 export default function Login() {
   const { signIn } = useAuth()
   const navigate   = useNavigate()
 
   const [tab, setTab]             = useState('login')
-  const [email, setEmail]         = useState('')
+  const [idMode, setIdMode]       = useState('email')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword]   = useState('')
   const [confirm, setConfirm]     = useState('')
   const [fullName, setFullName]   = useState('')
-  const [username, setUsername]   = useState('')
+  const [signupUsername, setSignupUsername] = useState('')
   const [employeeId, setEmployeeId] = useState('')
+  const [signupEmail, setSignupEmail] = useState('')
   const [error, setError]         = useState('')
   const [loading, setLoading]     = useState(false)
   const [signupDone, setSignupDone] = useState(false)
@@ -36,11 +44,13 @@ export default function Login() {
     if (sessionExpired) localStorage.removeItem('tp_session_expired')
   }, [])
 
+  const currentMode = ID_MODES.find(m => m.value === idMode)
+
   async function handleLogin(e) {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const err = await signIn(email, password)
+    const err = await signIn(identifier, password)
     if (err) { setError(err.message); setLoading(false) }
     else navigate('/')
   }
@@ -48,18 +58,18 @@ export default function Login() {
   async function handleSignup(e) {
     e.preventDefault()
     setError('')
-    if (password !== confirm)  { setError('Passwords do not match'); return }
-    if (password.length < 6)   { setError('Password must be at least 6 characters'); return }
-    if (!username.trim())      { setError('Username is required'); return }
+    if (password !== confirm)       { setError('Passwords do not match'); return }
+    if (password.length < 6)        { setError('Password must be at least 6 characters'); return }
+    if (!signupUsername.trim())     { setError('Username is required'); return }
     setLoading(true)
 
-    const { data, error: authErr } = await supabase.auth.signUp({ email, password })
+    const { data, error: authErr } = await supabase.auth.signUp({ email: signupEmail, password })
     if (authErr) { setError(authErr.message); setLoading(false); return }
 
     if (data?.user) {
       const { error: profileErr } = await supabase.from('profiles').insert({
         id:          data.user.id,
-        username:    username.trim(),
+        username:    signupUsername.trim(),
         full_name:   fullName.trim() || null,
         employee_id: employeeId.trim() || null,
         role:        'Reporter',
@@ -93,6 +103,12 @@ export default function Login() {
     setSignupDone(false)
     setForgotMode(false)
     setForgotSent(false)
+  }
+
+  function switchIdMode(val) {
+    setIdMode(val)
+    setIdentifier('')
+    setError('')
   }
 
   return (
@@ -209,13 +225,57 @@ export default function Login() {
           {/* Sign In */}
           {tab === 'login' && !forgotMode && (
             <form onSubmit={handleLogin} className="space-y-4">
+              {/* Identifier mode selector */}
               <div>
-                <label className="label">Email address</label>
-                <input
-                  type="email" className="input" placeholder="you@example.com"
-                  value={email} onChange={e => setEmail(e.target.value)} required autoFocus
-                />
+                <label className="label mb-1.5">Sign in with</label>
+                <div className="flex gap-1.5 p-1 rounded-xl bg-[rgba(255,255,255,0.04)] border border-[var(--border-dim)]">
+                  {ID_MODES.map(({ value, label, icon: Icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => switchIdMode(value)}
+                      className={cn(
+                        'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
+                        idMode === value
+                          ? 'bg-brand-subtle text-brand-bright border border-brand-600/30 shadow-sm'
+                          : 'text-muted hover:text-white'
+                      )}
+                    >
+                      <Icon size={12} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* Identifier input */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={idMode}
+                  initial={{ opacity: 0, x: 6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -6 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <label className="label">{currentMode.label}</label>
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none">
+                      <currentMode.icon size={15} />
+                    </div>
+                    <input
+                      type={currentMode.type}
+                      className="input pl-9"
+                      placeholder={currentMode.placeholder}
+                      value={identifier}
+                      onChange={e => setIdentifier(e.target.value)}
+                      required
+                      autoFocus
+                      autoComplete={idMode === 'email' ? 'email' : 'off'}
+                    />
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+
               <div className="relative">
                 <label className="label">Password</label>
                 <input
@@ -233,7 +293,7 @@ export default function Login() {
               <div className="flex justify-end -mt-1">
                 <button
                   type="button"
-                  onClick={() => { setForgotMode(true); setForgotEmail(email); setError('') }}
+                  onClick={() => { setForgotMode(true); setForgotEmail(idMode === 'email' ? identifier : ''); setError('') }}
                   className="text-xs text-muted hover:text-brand-bright transition-colors"
                 >
                   Forgot password?
@@ -301,7 +361,7 @@ export default function Login() {
                 </div>
                 <div>
                   <label className="label">Username *</label>
-                  <input className="input" placeholder="username" value={username} onChange={e => setUsername(e.target.value)} required />
+                  <input className="input" placeholder="username" value={signupUsername} onChange={e => setSignupUsername(e.target.value)} required />
                 </div>
               </div>
               <div>
@@ -310,7 +370,7 @@ export default function Login() {
               </div>
               <div>
                 <label className="label">Email *</label>
-                <input type="email" className="input" placeholder="you@company.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                <input type="email" className="input" placeholder="you@company.com" value={signupEmail} onChange={e => setSignupEmail(e.target.value)} required />
               </div>
               <div className="relative">
                 <label className="label">Password *</label>

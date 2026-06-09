@@ -30,6 +30,7 @@ RETURNS TEXT LANGUAGE sql STABLE SECURITY DEFINER AS $$
 $$;
 
 -- Lookup user email by UUID (multi-identifier login)
+DROP FUNCTION IF EXISTS get_user_email_by_id(uuid);
 CREATE OR REPLACE FUNCTION get_user_email_by_id(p_id uuid)
 RETURNS text LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_email text;

@@ -36,15 +36,19 @@ const ALL_TYPES = [...INSPECTION_TYPES, ...OBSERVATION_TYPES, ...TRAINING_TYPES]
 const STATUSES = ['Scheduled', 'In Progress', 'Done', 'Overdue', 'Cancelled']
 const SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
 
+// Keys must match what vehicle_fleet.vehicle_type stores in the DB (case-insensitive resolved via normVT)
 const TYRE_POSITIONS = {
-  'Pickup':        ['FL', 'FR', 'RL', 'RR'],
-  'Wheel Loader':  ['FL', 'FR', 'RL', 'RR'],
-  'Skid Loader':   ['FL', 'FR', 'RL', 'RR'],
-  'Canter':        ['FL', 'FR', 'RLO', 'RLI', 'RRO', 'RRI'],
-  'Tri-mixer':     ['FL1', 'FL2', 'FR1', 'FR2', 'RL1', 'RL2', 'RL3', 'RL4', 'RR1', 'RR2', 'RR3', 'RR4'],
-  'Concrete Pump': ['FL1', 'FL2', 'FR1', 'FR2', 'RL1', 'RL2', 'RL3', 'RL4', 'RR1', 'RR2', 'RR3', 'RR4', 'RL5', 'RR5'],
+  'pickup':        ['FL', 'FR', 'RL', 'RR'],
+  'wheel loader':  ['FL', 'FR', 'RL', 'RR'],
+  'skid loader':   ['FL', 'FR', 'RL', 'RR'],
+  'canter':        ['FL', 'FR', 'RLO', 'RLI', 'RRI', 'RRO'],
+  'tri-mixer':     ['FL1', 'FR1', 'FL2', 'FR2', 'RLO3', 'RLI3', 'RRI3', 'RRO3', 'RLO4', 'RLI4', 'RRI4', 'RRO4'],
+  'concrete pump': ['FL1', 'FR1', 'RLO2', 'RLI2', 'RRI2', 'RRO2', 'RLO3', 'RLI3', 'RRI3', 'RRO3', 'RLO4', 'RLI4', 'RRI4', 'RRO4'],
 }
 const DEFAULT_POSITIONS = ['FL', 'FR', 'RL', 'RR']
+
+// Normalise vehicle type for position lookup (matches VehicleTyreDiagram.jsx)
+function normVT(vt) { return (vt || '').toLowerCase().trim() }
 
 const EMPTY_FORM = {
   title: '', inspection_type: 'Routine', site: '', asset_no: '', tyre_serial: '',
@@ -282,7 +286,7 @@ export default function Inspections() {
     const { data } = await supabase.from('vehicle_fleet').select('vehicle_type, asset_no, site').eq('asset_no', assetNo.trim()).maybeSingle()
     if (data) {
       setClFleetInfo(data)
-      const positions = TYRE_POSITIONS[data.vehicle_type] || DEFAULT_POSITIONS
+      const positions = TYRE_POSITIONS[normVT(data.vehicle_type)] || DEFAULT_POSITIONS
       setClPositions(positions.map(pos => ({ position: pos, pressure: '', condition: 'Good', treadDepth: '' })))
       if (data.site && !clSite) setClSite(data.site)
     } else {
@@ -667,7 +671,7 @@ export default function Inspections() {
                     </div>
                   )}
                   {clFleetInfo && (
-                    <p className="text-xs text-green-400 mt-1">{clFleetInfo.vehicle_type} · {(TYRE_POSITIONS[clFleetInfo.vehicle_type] || DEFAULT_POSITIONS).length} tyres</p>
+                    <p className="text-xs text-green-400 mt-1">{clFleetInfo.vehicle_type} · {(TYRE_POSITIONS[normVT(clFleetInfo.vehicle_type)] || DEFAULT_POSITIONS).length} tyres</p>
                   )}
                 </div>
                 <div>

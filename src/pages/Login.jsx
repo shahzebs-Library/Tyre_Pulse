@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2,
-  Loader2, AtSign, Hash, Zap,
+  Loader2, AtSign, Hash, Zap, Sun, Moon,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { supabase } from '../lib/supabase'
 import TpLogo from '../assets/logo.svg'
 import { cn } from '../lib/cn'
@@ -270,6 +271,7 @@ function Particle({ style }) {
 
 export default function Login() {
   const { signIn } = useAuth()
+  const { isDark, toggleTheme } = useTheme()
   const navigate   = useNavigate()
 
   const [tab, setTab]                   = useState('login')
@@ -379,6 +381,51 @@ export default function Login() {
         position: 'relative',
         overflow: 'hidden',
       }}>
+
+        {/* Theme toggle — fixed top-right */}
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.4, duration: 0.3 }}
+          onClick={toggleTheme}
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          style={{
+            position: 'fixed', top: 18, right: 18, zIndex: 100,
+            width: 44, height: 44, borderRadius: 12,
+            background: isDark ? 'rgba(22,163,74,0.12)' : 'rgba(22,163,74,0.15)',
+            border: `1px solid ${isDark ? 'rgba(22,163,74,0.3)' : 'rgba(22,163,74,0.4)'}`,
+            color: isDark ? '#4ade80' : '#15803d',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: isDark
+              ? '0 4px 20px rgba(0,0,0,0.4), 0 0 12px rgba(22,163,74,0.15)'
+              : '0 4px 20px rgba(0,0,0,0.12), 0 0 12px rgba(22,163,74,0.2)',
+            backdropFilter: 'blur(12px)',
+            transition: 'all 0.25s',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'scale(1.1) rotate(15deg)'
+            e.currentTarget.style.boxShadow = '0 6px 24px rgba(0,0,0,0.4), 0 0 20px rgba(22,163,74,0.35)'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = 'scale(1) rotate(0deg)'
+            e.currentTarget.style.boxShadow = isDark
+              ? '0 4px 20px rgba(0,0,0,0.4), 0 0 12px rgba(22,163,74,0.15)'
+              : '0 4px 20px rgba(0,0,0,0.12), 0 0 12px rgba(22,163,74,0.2)'
+          }}
+        >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={isDark ? 'moon' : 'sun'}
+              initial={{ rotate: -90, opacity: 0, scale: 0.5 }}
+              animate={{ rotate: 0, opacity: 1, scale: 1 }}
+              exit={{ rotate: 90, opacity: 0, scale: 0.5 }}
+              transition={{ duration: 0.2 }}
+            >
+              {isDark ? <Moon size={18} /> : <Sun size={18} />}
+            </motion.div>
+          </AnimatePresence>
+        </motion.button>
 
         {/* Animated grid */}
         <div style={{

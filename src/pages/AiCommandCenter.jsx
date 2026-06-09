@@ -739,7 +739,6 @@ export default function AiCommandCenter() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
 
       {/* ── Agent cards row ── */}
       <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b border-gray-800/50">

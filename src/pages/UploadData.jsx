@@ -8,6 +8,7 @@ import { logAuditEvent } from '../lib/auditLogger'
 import * as XLSX from 'xlsx'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen, AlertTriangle, Package, ChevronRight, Layers, Table2, Eye, Rocket } from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
 
 const STEPS = [
   { key: 'idle',      icon: Upload,         label: 'Upload File' },
@@ -465,13 +466,12 @@ export default function UploadData() {
   }
 
   return (
-    <div className="space-y-4 w-full">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="page-title">Upload Data</h1>
-          <p className="text-gray-400 text-sm mt-1">Import tyre records from Excel or CSV · auto-classifies on insert</p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Upload Data"
+        subtitle="Import tyre and fleet data from Excel or CSV files"
+        icon={Upload}
+      />
 
       <StepBar current={step} />
 

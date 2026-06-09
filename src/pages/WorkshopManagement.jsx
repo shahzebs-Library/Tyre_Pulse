@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import PageHeader from '../components/ui/PageHeader'
 import {
   Wrench, ClipboardList, Clock, CheckCircle, DollarSign, AlertTriangle,
   TrendingUp, TrendingDown, Search, Filter, X, Download, RefreshCw,
@@ -728,21 +729,12 @@ export default function WorkshopManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      {/* Header */}
-      <div className="bg-gray-900 border-b border-gray-800 px-6 py-5">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
-              <Wrench className="w-5 h-5 text-blue-400" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-white">Workshop Management</h1>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {loading ? 'Loading…' : `${orders.length.toLocaleString()} work orders · ${siteOptions.length} sites`}
-              </p>
-            </div>
-          </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Workshop Management"
+        subtitle="Track workshop productivity, repairs, and turnaround time"
+        icon={Wrench}
+        actions={
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={fetchData}
@@ -767,10 +759,10 @@ export default function WorkshopManagement() {
               Excel
             </button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="p-6 space-y-6">
+      <div className="space-y-6">
         {/* Filters */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <div className="flex flex-wrap gap-3">

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import PageHeader from '../components/ui/PageHeader'
 import {
   Building2, Star, TrendingUp, TrendingDown, Minus, Award, AlertTriangle,
   CheckCircle, Clock, Search, Filter, Download, FileText, FileSpreadsheet,
@@ -883,28 +884,25 @@ export default function SupplierManagement() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-950 p-4 md:p-6 space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Building2 className="text-blue-400" size={24} />
-            Supplier Management
-          </h1>
-          <p className="text-gray-500 text-sm mt-0.5">Performance intelligence, procurement analysis & contract tracking</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm rounded-lg">
-            <RefreshCw size={13} /> Refresh
-          </button>
-          <button onClick={handleExcelExport} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-sm rounded-lg">
-            <FileSpreadsheet size={13} /> Excel
-          </button>
-          <button onClick={handlePdfExport} className="flex items-center gap-1.5 px-3 py-2 bg-blue-700 hover:bg-blue-600 text-white text-sm rounded-lg">
-            <FileText size={13} /> PDF
-          </button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Supplier Management"
+        subtitle="Manage suppliers, contracts, and vendor performance"
+        icon={Building2}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm rounded-lg">
+              <RefreshCw size={13} /> Refresh
+            </button>
+            <button onClick={handleExcelExport} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-sm rounded-lg">
+              <FileSpreadsheet size={13} /> Excel
+            </button>
+            <button onClick={handlePdfExport} className="flex items-center gap-1.5 px-3 py-2 bg-blue-700 hover:bg-blue-600 text-white text-sm rounded-lg">
+              <FileText size={13} /> PDF
+            </button>
+          </div>
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">

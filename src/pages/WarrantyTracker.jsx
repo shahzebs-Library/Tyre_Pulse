@@ -21,6 +21,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -685,15 +686,12 @@ export default function WarrantyTracker() {
   const tabs = ['Claims', 'Brand Analysis', 'Failure Analysis', 'Credit Recovery', 'ROI Calculator']
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 md:p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ShieldCheck size={24} className="text-blue-400" />
-            Warranty &amp; Claims Tracker
-          </h1>
-          <p className="text-gray-400 text-sm mt-0.5">Manage tyre warranty claims, credit recovery, and supplier performance</p>
-        </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Warranty & Claims Tracker"
+        subtitle="Track tyre warranties, claims, and supplier accountability"
+        icon={ShieldCheck}
+        actions={
         <div className="flex gap-2">
           <button
             onClick={exportPDF}
@@ -714,7 +712,8 @@ export default function WarrantyTracker() {
             <Plus size={14} /> Add Claim
           </button>
         </div>
-      </div>
+        }
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiCard icon={ShieldCheck} label="Total Claims" value={kpis.total} color="text-blue-400" />

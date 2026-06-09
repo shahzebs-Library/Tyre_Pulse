@@ -16,6 +16,14 @@ const STYLES = `
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+@keyframes tp-spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes tp-spin-rev {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
 @keyframes tp-pulse-glow {
   0%,100% { box-shadow: 0 0 30px rgba(22,163,74,0.35), 0 0 60px rgba(22,163,74,0.15), inset 0 0 20px rgba(22,163,74,0.08); }
   50%      { box-shadow: 0 0 50px rgba(22,163,74,0.55), 0 0 100px rgba(22,163,74,0.25), inset 0 0 30px rgba(22,163,74,0.12); }
@@ -53,50 +61,25 @@ const STYLES = `
   100% { transform: translateY(-120px) translateX(30px) scale(0); opacity: 0; }
 }
 
-.tp-border-glow {
-  position: relative;
-  border-radius: 20px;
-}
-.tp-border-glow::before {
-  content: '';
-  position: absolute;
-  inset: -1.5px;
-  border-radius: 21px;
-  background: conic-gradient(
-    from var(--angle, 0deg),
-    transparent 0deg,
-    rgba(22,163,74,0.9) 60deg,
-    rgba(74,222,128,1) 120deg,
-    rgba(22,163,74,0.9) 180deg,
-    transparent 220deg,
-    transparent 360deg
-  );
-  animation: tp-spin 3s linear infinite;
-  z-index: 0;
-}
-.tp-border-glow::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 23px;
-  background: conic-gradient(
-    from calc(var(--angle, 0deg) + 180deg),
-    transparent 0deg,
-    rgba(22,163,74,0.3) 60deg,
-    rgba(74,222,128,0.5) 120deg,
-    rgba(22,163,74,0.3) 180deg,
-    transparent 220deg,
-    transparent 360deg
-  );
-  animation: tp-spin 3s linear infinite;
-  filter: blur(8px);
-  z-index: 0;
-}
 .tp-card-inner {
   position: relative;
   z-index: 1;
   border-radius: 18px;
   overflow: hidden;
+  border: 1px solid rgba(22,163,74,0.18);
+  box-shadow: 0 0 0 1px rgba(74,222,128,0.06), 0 24px 80px rgba(0,0,0,0.7), 0 0 60px rgba(22,163,74,0.08);
+}
+.tp-tyre-spin {
+  animation: tp-spin 4s linear infinite;
+  transform-origin: center;
+}
+.tp-tyre-spin-slow {
+  animation: tp-spin-slow 7s linear infinite;
+  transform-origin: center;
+}
+.tp-tyre-spin-rev {
+  animation: tp-spin-rev 5s linear infinite;
+  transform-origin: center;
 }
 .tp-input-focus:focus {
   border-color: rgba(22,163,74,0.7) !important;
@@ -127,6 +110,147 @@ const ID_MODES = [
   { value: 'username', label: 'Username',    icon: AtSign,  placeholder: 'your_username',   type: 'text' },
   { value: 'empid',   label: 'Employee ID',  icon: Hash,    placeholder: 'EMP-1042',        type: 'text' },
 ]
+
+/* ── Spinning Tyre SVG ───────────────────────────────────────────────────── */
+function SpinningTyre({ size = 180, opacity = 1, glowColor = 'rgba(22,163,74,0.5)', spinDuration = '5s', reverse = false }) {
+  const cx = size / 2
+  const R  = size / 2        // outer rubber
+  const r1 = R * 0.78        // inner rubber / rim outer
+  const r2 = R * 0.60        // rim inner
+  const r3 = R * 0.18        // hub
+  const spokes = 6
+  const treads = 28
+
+  return (
+    <svg
+      width={size} height={size} viewBox={`0 0 ${size} ${size}`}
+      style={{ display:'block', filter:`drop-shadow(0 0 18px ${glowColor}) drop-shadow(0 0 6px ${glowColor})`, opacity }}
+    >
+      <defs>
+        {/* Rubber gradient */}
+        <radialGradient id={`rub-${size}`} cx="50%" cy="35%" r="60%">
+          <stop offset="0%"   stopColor="#2a2a2a"/>
+          <stop offset="60%"  stopColor="#111"/>
+          <stop offset="100%" stopColor="#080808"/>
+        </radialGradient>
+        {/* Rim gradient */}
+        <radialGradient id={`rim-${size}`} cx="40%" cy="30%" r="70%">
+          <stop offset="0%"   stopColor="#4ade80" stopOpacity="0.9"/>
+          <stop offset="35%"  stopColor="#16a34a" stopOpacity="0.8"/>
+          <stop offset="70%"  stopColor="#064e20" stopOpacity="0.9"/>
+          <stop offset="100%" stopColor="#022010" stopOpacity="1"/>
+        </radialGradient>
+        {/* Hub gradient */}
+        <radialGradient id={`hub-${size}`} cx="40%" cy="30%" r="70%">
+          <stop offset="0%"   stopColor="#86efac"/>
+          <stop offset="50%"  stopColor="#4ade80"/>
+          <stop offset="100%" stopColor="#16a34a"/>
+        </radialGradient>
+        {/* Sidewall sheen */}
+        <radialGradient id={`sheen-${size}`} cx="30%" cy="25%" r="55%">
+          <stop offset="0%"   stopColor="rgba(255,255,255,0.12)"/>
+          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+        </radialGradient>
+      </defs>
+
+      {/* Spinning group */}
+      <g style={{ animation: `${reverse ? 'tp-spin-rev' : 'tp-spin'} ${spinDuration} linear infinite`, transformOrigin: `${cx}px ${cx}px` }}>
+
+        {/* Outer rubber ring */}
+        <circle cx={cx} cy={cx} r={R - 1} fill={`url(#rub-${size})`}/>
+
+        {/* Tread blocks around the circumference */}
+        {Array.from({ length: treads }).map((_, i) => {
+          const angle  = (i / treads) * 360
+          const angle2 = ((i + 0.6) / treads) * 360
+          const rad    = (a) => (a * Math.PI) / 180
+          const outerR = R - 1
+          const innerR = r1 + 2
+          const x1 = cx + outerR * Math.cos(rad(angle))
+          const y1 = cx + outerR * Math.sin(rad(angle))
+          const x2 = cx + outerR * Math.cos(rad(angle2))
+          const y2 = cx + outerR * Math.sin(rad(angle2))
+          const x3 = cx + innerR * Math.cos(rad(angle2))
+          const y3 = cx + innerR * Math.sin(rad(angle2))
+          const x4 = cx + innerR * Math.cos(rad(angle))
+          const y4 = cx + innerR * Math.sin(rad(angle))
+          return (
+            <path
+              key={i}
+              d={`M${x1},${y1} A${outerR},${outerR} 0 0,1 ${x2},${y2} L${x3},${y3} A${innerR},${innerR} 0 0,0 ${x4},${y4} Z`}
+              fill={i % 2 === 0 ? 'rgba(74,222,128,0.18)' : 'rgba(0,0,0,0.4)'}
+              stroke="rgba(74,222,128,0.08)"
+              strokeWidth="0.5"
+            />
+          )
+        })}
+
+        {/* Sidewall sheen */}
+        <circle cx={cx} cy={cx} r={R - 1} fill={`url(#sheen-${size})`}/>
+
+        {/* Sidewall ring */}
+        <circle cx={cx} cy={cx} r={r1} fill={`url(#rim-${size})`}/>
+
+        {/* Rim shadow ring */}
+        <circle cx={cx} cy={cx} r={r1 + 1} fill="none" stroke="rgba(0,0,0,0.8)" strokeWidth="3"/>
+
+        {/* Spokes */}
+        {Array.from({ length: spokes }).map((_, i) => {
+          const angle = (i / spokes) * 360
+          const rad   = (angle * Math.PI) / 180
+          const spokeW = r1 * 0.14
+          const x1 = cx + r3 * 1.1 * Math.cos(rad)
+          const y1 = cx + r3 * 1.1 * Math.sin(rad)
+          const x2 = cx + r2 * 0.95 * Math.cos(rad)
+          const y2 = cx + r2 * 0.95 * Math.sin(rad)
+          const perpRad = rad + Math.PI / 2
+          return (
+            <g key={i}>
+              <polygon
+                points={`
+                  ${x1 + spokeW * 0.6 * Math.cos(perpRad)},${y1 + spokeW * 0.6 * Math.sin(perpRad)}
+                  ${x1 - spokeW * 0.6 * Math.cos(perpRad)},${y1 - spokeW * 0.6 * Math.sin(perpRad)}
+                  ${x2 - spokeW * 0.35 * Math.cos(perpRad)},${y2 - spokeW * 0.35 * Math.sin(perpRad)}
+                  ${x2 + spokeW * 0.35 * Math.cos(perpRad)},${y2 + spokeW * 0.35 * Math.sin(perpRad)}
+                `}
+                fill="rgba(74,222,128,0.7)"
+                stroke="rgba(134,239,172,0.4)"
+                strokeWidth="0.5"
+              />
+              {/* Spoke highlight */}
+              <line
+                x1={x1 + spokeW * 0.2 * Math.cos(perpRad)}
+                y1={y1 + spokeW * 0.2 * Math.sin(perpRad)}
+                x2={x2 + spokeW * 0.2 * Math.cos(perpRad)}
+                y2={y2 + spokeW * 0.2 * Math.sin(perpRad)}
+                stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeLinecap="round"
+              />
+            </g>
+          )
+        })}
+
+        {/* Rim inner ring */}
+        <circle cx={cx} cy={cx} r={r2} fill="rgba(2,16,8,0.95)" stroke="rgba(74,222,128,0.3)" strokeWidth="1.5"/>
+
+        {/* Brake disc texture */}
+        {Array.from({ length: 12 }).map((_, i) => {
+          const a = (i / 12) * 360 * Math.PI / 180
+          return <line key={i}
+            x1={cx + (r3 + 2) * Math.cos(a)} y1={cx + (r3 + 2) * Math.sin(a)}
+            x2={cx + r2 * 0.85 * Math.cos(a)} y2={cx + r2 * 0.85 * Math.sin(a)}
+            stroke="rgba(22,163,74,0.12)" strokeWidth="1"
+          />
+        })}
+
+        {/* Hub cap */}
+        <circle cx={cx} cy={cx} r={r3 + 2} fill="rgba(4,20,10,0.98)" stroke="rgba(74,222,128,0.5)" strokeWidth="1.5"/>
+        <circle cx={cx} cy={cx} r={r3} fill={`url(#hub-${size})`}/>
+        <circle cx={cx} cy={cx} r={r3 * 0.55} fill="rgba(2,10,5,0.9)"/>
+        <circle cx={cx - r3 * 0.15} cy={cx - r3 * 0.15} r={r3 * 0.18} fill="rgba(255,255,255,0.25)"/>
+      </g>
+    </svg>
+  )
+}
 
 /* ── Particle component ──────────────────────────────────────────────────── */
 function Particle({ style }) {
@@ -304,6 +428,11 @@ export default function Login() {
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           style={{ position:'relative', width:'100%', maxWidth:420, zIndex:10 }}
         >
+          {/* Top decorative tyre (small, centered above brand) */}
+          <div style={{ display:'flex', justifyContent:'center', marginBottom:8 }}>
+            <SpinningTyre size={72} opacity={0.7} glowColor="rgba(22,163,74,0.6)" spinDuration="3s"/>
+          </div>
+
           {/* Brand header */}
           <div style={{ textAlign:'center', marginBottom: 32 }}>
             <motion.div
@@ -374,12 +503,29 @@ export default function Login() {
             )}
           </AnimatePresence>
 
-          {/* Glowing rotating border card */}
-          <div className="tp-border-glow">
+          {/* Decorative tyres — left & right of the card */}
+          <div style={{ position:'relative' }}>
+            {/* Left tyre — partially visible */}
+            <div style={{
+              position:'absolute', left:-90, top:'50%', transform:'translateY(-50%)',
+              pointerEvents:'none', zIndex:0,
+            }}>
+              <SpinningTyre size={200} opacity={0.55} glowColor="rgba(22,163,74,0.4)" spinDuration="6s"/>
+            </div>
+            {/* Right tyre — partially visible */}
+            <div style={{
+              position:'absolute', right:-90, top:'50%', transform:'translateY(-50%)',
+              pointerEvents:'none', zIndex:0,
+            }}>
+              <SpinningTyre size={200} opacity={0.55} glowColor="rgba(22,163,74,0.4)" spinDuration="8s" reverse/>
+            </div>
+
+            {/* Card */}
             <div className="tp-card-inner" style={{
               background: 'rgba(4,12,7,0.92)',
               backdropFilter: 'blur(24px)',
               padding: '28px 28px',
+              position:'relative', zIndex:1,
             }}>
 
               {/* Inner top glow stripe */}
@@ -734,8 +880,8 @@ export default function Login() {
                   }}>Back to Sign In</button>
                 </motion.div>
               )}
-            </div>
-          </div>
+            </div>{/* end tp-card-inner */}
+          </div>{/* end tyre wrapper */}
 
           {/* Footer */}
           <motion.p

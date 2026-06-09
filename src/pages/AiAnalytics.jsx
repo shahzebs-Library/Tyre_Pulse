@@ -10,6 +10,7 @@ import {
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import { Sparkles, Download, FileText, ChevronRight } from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend, Filler)
@@ -258,16 +259,11 @@ export default function AiAnalytics() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Sparkles size={22} className="text-green-400" />
-          Smart Analytics
-        </h1>
-        <p className="text-gray-400 text-sm mt-1">
-          Ask questions in plain language · get charts, tables, and written insights powered by Smart Engine
-        </p>
-      </div>
+      <PageHeader
+        title="Smart Analytics"
+        subtitle="Ask questions in plain language · get charts, tables, and written insights powered by Smart Engine"
+        icon={Sparkles}
+      />
 
       {/* API key warning */}
       {!hasApiKey && (

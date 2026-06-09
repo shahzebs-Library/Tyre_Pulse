@@ -7,7 +7,9 @@ import {
   computeMonthlyKpiActuals, sum,
 } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { Download, FileText, AlertTriangle, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Download, FileText, AlertTriangle, ToggleLeft, ToggleRight, Target } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement,
   Filler, Title, Tooltip, Legend,
@@ -308,10 +310,11 @@ export default function KpiScorecard() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">KPI Scorecard</h1>
-          <p className="text-gray-400 text-sm mt-1">Monthly targets vs actuals with regression forecasting</p>
-        </div>
+        <PageHeader
+          title="KPI Scorecard"
+          subtitle="Monthly targets vs actuals with regression forecasting"
+          icon={Target}
+        />
         <div className="flex flex-wrap items-center gap-2">
           {/* YoY toggle */}
           <button

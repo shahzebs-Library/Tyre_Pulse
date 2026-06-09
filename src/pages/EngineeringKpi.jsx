@@ -18,6 +18,8 @@ import {
   Cpu, Download, FileText, TrendingUp, TrendingDown, Minus,
   AlertTriangle, CheckCircle, XCircle, Info, Mail,
 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import EmailReportModal from '../components/EmailReportModal'
 
 ChartJS.register(
@@ -769,18 +771,11 @@ export default function EngineeringKpi() {
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-4">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-blue-900/30 border border-blue-700/40 mt-0.5">
-            <Cpu size={20} className="text-blue-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Engineering KPI Dashboard</h1>
-            <p className="text-gray-400 text-sm mt-0.5">
-              17 tyre engineering KPIs computed automatically from fleet data
-              {records.length > 0 && <span className="ml-2 text-gray-500">— {records.length.toLocaleString()} records</span>}
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          title="Engineering KPI Dashboard"
+          subtitle={`17 tyre engineering KPIs computed automatically from fleet data${records.length > 0 ? ` — ${records.length.toLocaleString()} records` : ''}`}
+          icon={Cpu}
+        />
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleExcelExport}

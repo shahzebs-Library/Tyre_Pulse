@@ -20,6 +20,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -634,20 +635,14 @@ export default function RetreadManagement() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 md:p-6 space-y-5">
+    <div className="space-y-6">
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Recycle className="text-purple-400" size={26} />
-            Retread Management
-          </h1>
-          <p className="text-gray-400 text-sm mt-0.5">
-            Retread lifecycle tracking, vendor performance, CPK comparison &amp; ROI analysis
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+      <PageHeader
+        title="Retread Management"
+        subtitle="Manage retread casings, suppliers, and performance metrics"
+        icon={Recycle}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={loadData}
             disabled={loading}
@@ -667,8 +662,9 @@ export default function RetreadManagement() {
           >
             <FileSpreadsheet size={14} /> Excel
           </button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Country/Site filter bar */}
       <div className="flex flex-wrap items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">

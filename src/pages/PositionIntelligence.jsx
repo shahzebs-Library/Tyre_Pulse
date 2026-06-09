@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import PageHeader from '../components/ui/PageHeader'
 import {
   MapPin, Download, FileText, AlertTriangle, CheckCircle,
   TrendingUp, TrendingDown, Minus, ChevronDown, RefreshCw,
@@ -518,27 +519,21 @@ export default function PositionIntelligence() {
   return (
     <div className="space-y-6 pb-10">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <MapPin className="text-green-400" size={22} />
-            <h1 className="text-xl font-bold text-white">Tyre Position Intelligence</h1>
+      <PageHeader
+        title="Tyre Position Intelligence"
+        subtitle="Performance analysis by axle position — fastest wear, highest cost, failure-prone positions"
+        icon={MapPin}
+        actions={
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary text-xs flex items-center gap-1" onClick={handleExcelExport}>
+              <Download size={14} /> Excel
+            </button>
+            <button className="btn-secondary text-xs flex items-center gap-1" onClick={handlePdfExport}>
+              <FileText size={14} /> PDF
+            </button>
           </div>
-          <p className="text-sm text-gray-400 max-w-xl">
-            Performance analysis by axle position — fastest wear, highest cost, failure-prone positions
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className="btn-secondary text-xs flex items-center gap-1" onClick={handleExcelExport}>
-            <Download size={14} /> Excel
-          </button>
-          <button className="btn-secondary text-xs flex items-center gap-1" onClick={handlePdfExport}>
-            <FileText size={14} /> PDF
-          </button>
-        </div>
-      </div>
-
+        }
+      />
       {/* ── Filters ────────────────────────────────────────────────────────── */}
       <div className="card flex flex-wrap items-center gap-3">
         {/* Country chips */}

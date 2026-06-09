@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -417,13 +419,11 @@ export default function Accidents() {
     <div className="space-y-4">
       {/* Page header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <AlertOctagon size={22} className="text-orange-400" />
-            Accidents &amp; Incidents
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">{records.length} total incidents</p>
-        </div>
+        <PageHeader
+          title="Accidents & Incidents"
+          subtitle={`${records.length} total incidents`}
+          icon={AlertOctagon}
+        />
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => exportToExcel(filtered, exportCols, exportHeaders, 'TyrePulse_Accidents')}
@@ -476,22 +476,30 @@ export default function Accidents() {
         <>
           {/* Stats row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="card text-center">
-              <p className="text-2xl font-bold text-white">{stats.total}</p>
-              <p className="text-xs text-gray-400 mt-1">Total Incidents</p>
-            </div>
-            <div className="card text-center">
-              <p className="text-2xl font-bold text-orange-400">{stats.open}</p>
-              <p className="text-xs text-gray-400 mt-1">Open</p>
-            </div>
-            <div className="card text-center">
-              <p className="text-2xl font-bold text-red-400">{stats.insur}</p>
-              <p className="text-xs text-gray-400 mt-1">Insurance Claims</p>
-            </div>
-            <div className="card text-center">
-              <p className="text-2xl font-bold text-green-400">{fmtCurrency(stats.cost)}</p>
-              <p className="text-xs text-gray-400 mt-1">Total Repair Cost</p>
-            </div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+              <div className="card text-center">
+                <p className="text-2xl font-bold text-white">{stats.total}</p>
+                <p className="text-xs text-gray-400 mt-1">Total Incidents</p>
+              </div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+              <div className="card text-center">
+                <p className="text-2xl font-bold text-orange-400">{stats.open}</p>
+                <p className="text-xs text-gray-400 mt-1">Open</p>
+              </div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 2 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+              <div className="card text-center">
+                <p className="text-2xl font-bold text-red-400">{stats.insur}</p>
+                <p className="text-xs text-gray-400 mt-1">Insurance Claims</p>
+              </div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 3 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+              <div className="card text-center">
+                <p className="text-2xl font-bold text-green-400">{fmtCurrency(stats.cost)}</p>
+                <p className="text-xs text-gray-400 mt-1">Total Repair Cost</p>
+              </div>
+            </motion.div>
           </div>
 
           {/* Bar chart */}

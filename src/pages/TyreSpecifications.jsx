@@ -16,6 +16,7 @@ import {
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
+import PageHeader from '../components/ui/PageHeader'
 const uuidv4 = () => crypto.randomUUID()
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -966,54 +967,51 @@ export default function TyreSpecifications() {
   return (
     <div className="space-y-6">
 
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Shield size={24} className="text-blue-400" />
-            Tyre Specification Manager
-          </h1>
-          <p className="text-gray-400 text-sm mt-0.5">Define approved fitments, track compliance, and flag non-conforming tyres</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => { setEditingSpec(null); setShowSpecModal(true) }}
-            disabled={!isAdmin}
-            title={!isAdmin ? 'Admin access required' : ''}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-2 rounded-lg transition-colors"
-          >
-            <Plus size={15} /> Add Specification
-          </button>
-          <button
-            onClick={() => importRef.current?.click()}
-            disabled={!isAdmin}
-            title={!isAdmin ? 'Admin access required' : ''}
-            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
-          >
-            <Upload size={14} /> Import
-          </button>
-          <input ref={importRef} type="file" accept=".xlsx,.xls" onChange={handleImportFile} className="hidden" />
-          <button
-            onClick={exportSpecsExcel}
-            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
-          >
-            <FileSpreadsheet size={14} /> Export
-          </button>
-          <button
-            onClick={exportCompliancePdf}
-            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
-          >
-            <FileText size={14} /> PDF Report
-          </button>
-          <button
-            onClick={fetchLiveData}
-            disabled={loadingRecords}
-            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
-          >
-            <RefreshCw size={14} className={loadingRecords ? 'animate-spin' : ''} />
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Tyre Specification Manager"
+        subtitle="Define approved fitments, track compliance, and flag non-conforming tyres"
+        icon={Shield}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => { setEditingSpec(null); setShowSpecModal(true) }}
+              disabled={!isAdmin}
+              title={!isAdmin ? 'Admin access required' : ''}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-2 rounded-lg transition-colors"
+            >
+              <Plus size={15} /> Add Specification
+            </button>
+            <button
+              onClick={() => importRef.current?.click()}
+              disabled={!isAdmin}
+              title={!isAdmin ? 'Admin access required' : ''}
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+            >
+              <Upload size={14} /> Import
+            </button>
+            <input ref={importRef} type="file" accept=".xlsx,.xls" onChange={handleImportFile} className="hidden" />
+            <button
+              onClick={exportSpecsExcel}
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+            >
+              <FileSpreadsheet size={14} /> Export
+            </button>
+            <button
+              onClick={exportCompliancePdf}
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+            >
+              <FileText size={14} /> PDF Report
+            </button>
+            <button
+              onClick={fetchLiveData}
+              disabled={loadingRecords}
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+            >
+              <RefreshCw size={14} className={loadingRecords ? 'animate-spin' : ''} />
+            </button>
+          </div>
+        }
+      />
 
       {importError && (
         <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">

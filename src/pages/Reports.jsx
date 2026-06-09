@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { FileText, ChevronRight, Download, ArrowLeft, Printer, Mail } from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -294,28 +296,31 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <FileText size={22} className="text-green-400" />
-        <div>
-          <h1 className="text-2xl font-bold text-white">Custom Reports</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Build, filter and export tailored reports</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Custom Reports"
+        subtitle="Build, filter and export tailored reports"
+        icon={FileText}
+      />
 
       {/* Step indicator */}
       <div className="flex items-center gap-2 text-sm">
         {['type', 'config', 'preview'].map((s, i) => (
           <div key={s} className="flex items-center gap-2">
-            {i > 0 && <ChevronRight size={14} className="text-gray-600" />}
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-              step === s
-                ? 'bg-green-900/40 text-green-400 border border-green-700/40'
-                : ['type','config','preview'].indexOf(step) > i
-                  ? 'text-gray-400'
-                  : 'text-gray-600'
-            }`}>
+            {i > 0 && <ChevronRight size={14} className="text-muted" />}
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: i * 0.06 }}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                step === s
+                  ? 'bg-brand-subtle text-brand-bright border-[rgba(22,163,74,0.25)]'
+                  : ['type','config','preview'].indexOf(step) > i
+                    ? 'text-muted border-[var(--border-dim)]'
+                    : 'text-dim border-transparent'
+              }`}
+            >
               {i + 1}. {s === 'type' ? 'Select Type' : s === 'config' ? 'Configure' : 'Preview & Export'}
-            </span>
+            </motion.span>
           </div>
         ))}
       </div>

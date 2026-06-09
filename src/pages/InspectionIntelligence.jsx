@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import PageHeader from '../components/ui/PageHeader'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -657,25 +659,19 @@ export default function InspectionIntelligence() {
     <div className="space-y-6 pb-10">
 
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <ClipboardCheck size={22} className="text-indigo-400" />
-            <h1 className="text-xl font-bold text-white">Inspection Intelligence</h1>
-          </div>
-          <p className="text-sm text-gray-400">
-            Compliance monitoring, quality scoring, and anomaly detection across all inspections
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+      <PageHeader
+        title="Inspection Intelligence"
+        subtitle="Compliance monitoring, quality scoring, and anomaly detection across all inspections"
+        icon={ClipboardCheck}
+        actions={<>
           <button onClick={handleExcelExport} className="btn-secondary flex items-center gap-1.5 text-sm">
             <Download size={14} /> Excel
           </button>
           <button onClick={handlePdfExport} className="btn-secondary flex items-center gap-1.5 text-sm">
             <FileText size={14} /> PDF
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── Filters ── */}
       <div className="card p-4">

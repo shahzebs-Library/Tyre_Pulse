@@ -21,6 +21,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -556,42 +557,37 @@ export default function RecallTracker() {
   }, [activeRecalls, matchTyresForRecall])
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 md:p-6 space-y-5">
+    <div className="space-y-6">
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ShieldAlert className="text-red-400" size={26} />
-            Tyre Recall &amp; Batch Quality Tracker
-          </h1>
-          <p className="text-gray-400 text-sm mt-0.5">
-            Monitor manufacturer recalls, quality alerts &amp; suspicious batch failures across the fleet
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={exportPdf}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
-          >
-            <FileText size={14} /> PDF
-          </button>
-          <button
-            onClick={exportExcel}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
-          >
-            <FileSpreadsheet size={14} /> Excel
-          </button>
-          {isAdmin && (
+      <PageHeader
+        title="Tyre Recall & Batch Quality Tracker"
+        subtitle="Monitor tyre recalls, batch defects, and quality alerts"
+        icon={ShieldAlert}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={openAdd}
-              className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-semibold text-white transition"
+              onClick={exportPdf}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
             >
-              <Plus size={14} /> Add Recall
+              <FileText size={14} /> PDF
             </button>
-          )}
-        </div>
-      </div>
+            <button
+              onClick={exportExcel}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
+            >
+              <FileSpreadsheet size={14} /> Excel
+            </button>
+            {isAdmin && (
+              <button
+                onClick={openAdd}
+                className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-semibold text-white transition"
+              >
+                <Plus size={14} /> Add Recall
+              </button>
+            )}
+          </div>
+        }
+      />
 
       {/* Active Recall Alert Banner */}
       <AnimatePresence>

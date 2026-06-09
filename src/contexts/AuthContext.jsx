@@ -8,8 +8,8 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // Idle timeout — sign out after 60 minutes of inactivity
-  const IDLE_MS = 60 * 60 * 1000
+  // Idle timeout — sign out after 30 minutes of inactivity
+  const IDLE_MS = 30 * 60 * 1000
   useEffect(() => {
     function resetTimer() {
       localStorage.setItem('tp_last_activity', Date.now().toString())
@@ -21,16 +21,17 @@ export function AuthProvider({ children }) {
         localStorage.setItem('tp_session_expired', '1')
       }
     }
-    // Track activity
     window.addEventListener('mousemove', resetTimer)
     window.addEventListener('keydown', resetTimer)
     window.addEventListener('click', resetTimer)
-    resetTimer() // initialise on mount
-    const interval = setInterval(checkIdle, 60_000) // check every minute
+    window.addEventListener('touchstart', resetTimer)
+    resetTimer()
+    const interval = setInterval(checkIdle, 30_000) // check every 30 seconds
     return () => {
       window.removeEventListener('mousemove', resetTimer)
       window.removeEventListener('keydown', resetTimer)
       window.removeEventListener('click', resetTimer)
+      window.removeEventListener('touchstart', resetTimer)
       clearInterval(interval)
     }
   }, [])
@@ -57,7 +58,35 @@ export function AuthProvider({ children }) {
     setLoading(false)
   }
 
-  async function signIn(email, password) {
+  async function signIn(identifier, password) {
+    let email = identifier.trim()
+
+    // If not an email format, look up by username or employee_id
+    if (!email.includes('@')) {
+      const { data: profiles, error: lookupErr } = await supabase
+        .from('profiles')
+        .select('id, username, employee_id')
+        .or(`username.eq.${email},employee_id.eq.${email}`)
+        .limit(1)
+
+      if (lookupErr) return lookupErr
+      if (!profiles?.length) return { message: 'No account found with that username or Employee ID.' }
+
+      // Fetch email from auth.users via the profile id
+      const { data: userData, error: userErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', profiles[0].id)
+        .single()
+      if (userErr) return userErr
+
+      // Use RPC to get email by user id (safe server-side lookup)
+      const { data: emailRow, error: emailErr } = await supabase
+        .rpc('get_user_email_by_id', { user_id: profiles[0].id })
+      if (emailErr || !emailRow) return { message: 'Unable to resolve account. Please use your email address.' }
+      email = emailRow
+    }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     return error
   }

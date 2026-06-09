@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, countBy, sum } from '../lib/analyticsEngine'
@@ -11,6 +12,7 @@ import {
 import { Bar, Doughnut } from 'react-chartjs-2'
 import { Search, AlertTriangle, X, FileText, Car, TrendingUp } from 'lucide-react'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -392,15 +394,11 @@ export default function VehicleHistory() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Car size={22} className="text-blue-400" /> Vehicle Asset History
-        </h1>
-        <p className="text-gray-400 text-sm mt-1">
-          Per-vehicle replacement history, misuse risk scoring, and red flag detection
-        </p>
-      </div>
+      <PageHeader
+        title="Vehicle Asset History"
+        subtitle="Per-vehicle replacement history, misuse risk scoring, and red flag detection"
+        icon={Car}
+      />
 
       {/* Summary strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -413,11 +411,17 @@ export default function VehicleHistory() {
             value: `${activeCurrency} ${Math.round(vehicleRows.reduce((s, r) => s + r.totalCost, 0)).toLocaleString()}`,
             color: 'text-green-400',
           },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="card text-center">
+        ].map(({ label, value, color }, i) => (
+          <motion.div
+            key={label}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="card text-center"
+          >
             <p className={`text-2xl font-bold ${color}`}>{value}</p>
-            <p className="text-gray-400 text-sm mt-1">{label}</p>
-          </div>
+            <p className="text-muted text-sm mt-1">{label}</p>
+          </motion.div>
         ))}
       </div>
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -991,49 +992,43 @@ export default function ComplianceDashboard() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 space-y-5">
+    <div className="space-y-5">
 
-      {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <ShieldCheck size={20} className="text-green-400" />
-            Compliance Dashboard
-          </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Legal & safety compliance — tread depth, pressure, inspection schedules & audit certificates
-            {lastRefresh && ` · Last refresh: ${lastRefresh.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={fetchData}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 text-xs hover:bg-gray-700 transition-colors"
-          >
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
-          <button
-            onClick={() => setShowEmailModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900/40 border border-blue-700/50 text-blue-300 text-xs hover:bg-blue-900/60 transition-colors"
-          >
-            <Mail size={12} /> Share Report
-          </button>
-          <button
-            onClick={exportExcel}
-            disabled={loading || !tyreRecords.length}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-900/40 border border-green-700/50 text-green-300 text-xs hover:bg-green-900/60 transition-colors disabled:opacity-40"
-          >
-            <Download size={12} /> Excel
-          </button>
-          <button
-            onClick={exportCertificatePdf}
-            disabled={loading || !tyreRecords.length}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-900/40 border border-amber-700/50 text-amber-300 text-xs hover:bg-amber-900/60 transition-colors disabled:opacity-40"
-          >
-            <Award size={12} /> Export Certificate
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Compliance Dashboard"
+        subtitle={`Legal & safety compliance — tread depth, pressure, inspection schedules & audit certificates${lastRefresh ? ` · Last refresh: ${lastRefresh.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+        icon={ShieldCheck}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={fetchData}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 text-xs hover:bg-gray-700 transition-colors"
+            >
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
+            </button>
+            <button
+              onClick={() => setShowEmailModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900/40 border border-blue-700/50 text-blue-300 text-xs hover:bg-blue-900/60 transition-colors"
+            >
+              <Mail size={12} /> Share Report
+            </button>
+            <button
+              onClick={exportExcel}
+              disabled={loading || !tyreRecords.length}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-900/40 border border-green-700/50 text-green-300 text-xs hover:bg-green-900/60 transition-colors disabled:opacity-40"
+            >
+              <Download size={12} /> Excel
+            </button>
+            <button
+              onClick={exportCertificatePdf}
+              disabled={loading || !tyreRecords.length}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-900/40 border border-amber-700/50 text-amber-300 text-xs hover:bg-amber-900/60 transition-colors disabled:opacity-40"
+            >
+              <Award size={12} /> Export Certificate
+            </button>
+          </div>
+        }
+      />
 
       {/* ── Filters ── */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">

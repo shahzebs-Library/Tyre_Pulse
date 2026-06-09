@@ -11,6 +11,7 @@ import {
   ClipboardList, Cpu, Zap, Filter, X, User, Bot, Sparkles,
   TrendingUp, TrendingDown, Minus, Clock, Database,
 } from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
 import { supabase } from '../lib/supabase'
 import { classifyQuery, AGENT_TYPES, AGENT_LABELS, AGENT_COLORS, AGENT_DESCRIPTIONS } from '../lib/aiRouter'
 import { runAnalystAgent } from '../lib/agents/analystAgent'
@@ -633,21 +634,12 @@ export default function AiCommandCenter() {
   }, [assets, selectedSite])
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
-
-      {/* ── Header ── */}
-      <div className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm px-4 sm:px-6 py-4 flex-shrink-0">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-lg">
-              <Brain className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-white leading-none">AI Command Center</h1>
-              <p className="text-xs text-gray-400 mt-0.5">Multi-agent fleet intelligence — Analyst · Engineer · QA · Planner</p>
-            </div>
-          </div>
-
+    <div className="space-y-6">
+      <PageHeader
+        title="AI Command Center"
+        subtitle="Multi-agent fleet intelligence — Analyst · Engineer · QA · Planner"
+        icon={Brain}
+        actions={
           <div className="flex items-center gap-2 flex-shrink-0">
             {dataLoading ? (
               <span className="flex items-center gap-1.5 text-xs text-gray-500">
@@ -688,9 +680,10 @@ export default function AiCommandCenter() {
               </>
             )}
           </div>
-        </div>
+        }
+      />
 
-        {/* Context filter panel */}
+      {/* Context filter panel */}
         <AnimatePresence>
           {showFilters && (
             <motion.div
@@ -746,7 +739,6 @@ export default function AiCommandCenter() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
 
       {/* ── Agent cards row ── */}
       <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b border-gray-800/50">

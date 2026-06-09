@@ -19,6 +19,7 @@ import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -548,19 +549,13 @@ export default function FuelEfficiency() {
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4 md:p-6 space-y-6">
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Fuel className="w-7 h-7 text-amber-400" />
-            Tyre &amp; Fuel Efficiency Intelligence
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Quantify fuel loss from tyre condition · scientific impact modelling · savings calculator
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title="Tyre & Fuel Efficiency Intelligence"
+        subtitle="Quantify fuel loss from tyre condition · scientific impact modelling · savings calculator"
+        icon={Fuel}
+        actions={<>
           {lastRefresh && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-muted">
               Updated {lastRefresh.toLocaleTimeString()}
             </span>
           )}
@@ -586,8 +581,8 @@ export default function FuelEfficiency() {
             <FileSpreadsheet className="w-4 h-4" />
             Excel
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── Error ─────────────────────────────────────────────────────────── */}
       {error && (

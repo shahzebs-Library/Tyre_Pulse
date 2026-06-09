@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { computeCountryMetrics, sum } from '../lib/analyticsEngine'
 import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText } from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   Title, Tooltip, Legend,
@@ -176,8 +177,11 @@ export default function CountryComparison() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="page-title flex items-center gap-2"><Globe size={20} className="text-blue-400" /> Country Comparison</h1>
-          <p className="text-gray-500 text-sm mt-0.5">KPI breakdown across {availableCountries.join(', ')}</p>
+          <PageHeader
+            title="Country Comparison"
+            subtitle={`KPI breakdown across ${availableCountries.join(', ')}`}
+            icon={Globe}
+          />
         </div>
         <div className="flex gap-2">
           <button

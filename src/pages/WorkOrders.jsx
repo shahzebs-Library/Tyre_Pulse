@@ -21,6 +21,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -467,30 +468,23 @@ export default function WorkOrders() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-900/40 border border-blue-700 flex items-center justify-center">
-            <Wrench size={20} className="text-blue-400" />
+    <div className="space-y-6">
+      <PageHeader
+        title="Work Orders"
+        subtitle={`Workshop job card management — ${orders.length} total`}
+        icon={Wrench}
+        onRefresh={load}
+        actions={
+          <div className="flex items-center gap-2">
+            <button onClick={exportExcel} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
+              <FileSpreadsheet size={14} /> Excel
+            </button>
+            <button onClick={openNew} className="btn-primary flex items-center gap-2 text-sm px-4">
+              <Plus size={15} /> New Work Order
+            </button>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Work Orders</h1>
-            <p className="text-gray-400 text-sm">Workshop job card management — {orders.length} total</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={load} className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors">
-            <RefreshCw size={16} />
-          </button>
-          <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors">
-            <FileSpreadsheet size={16} />Excel
-          </button>
-          <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">
-            <Plus size={16} />New Work Order
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {error && (
         <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">

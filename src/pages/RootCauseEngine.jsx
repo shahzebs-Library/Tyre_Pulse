@@ -13,6 +13,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { useSettings } from '../contexts/SettingsContext'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -645,38 +646,30 @@ export default function RootCauseEngine() {
     : '0.0'
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 md:p-6 space-y-6">
-
-      {/* ── Header ── */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="p-2 bg-red-900/30 rounded-lg border border-red-800/40 mt-0.5">
-            <AlertOctagon size={22} className="text-red-400" />
+    <div className="space-y-6">
+      <PageHeader
+        title="Root Cause Intelligence Engine"
+        subtitle="Rule-based classification of 14 engineering root causes across the fleet"
+        icon={AlertOctagon}
+        actions={
+          <div className="flex gap-2">
+            <button
+              onClick={handleExcelExport}
+              className="flex items-center gap-2 px-3 py-2 bg-green-900/40 border border-green-700/50 text-green-400 rounded-lg text-sm hover:bg-green-900/60 transition-colors"
+            >
+              <Download size={15} />
+              Excel
+            </button>
+            <button
+              onClick={handlePdfExport}
+              className="flex items-center gap-2 px-3 py-2 bg-red-900/40 border border-red-700/50 text-red-400 rounded-lg text-sm hover:bg-red-900/60 transition-colors"
+            >
+              <FileText size={15} />
+              PDF
+            </button>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Root Cause Intelligence Engine</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Rule-based classification of 14 engineering root causes across the fleet
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <button
-            onClick={handleExcelExport}
-            className="flex items-center gap-2 px-3 py-2 bg-green-900/40 border border-green-700/50 text-green-400 rounded-lg text-sm hover:bg-green-900/60 transition-colors"
-          >
-            <Download size={15} />
-            Excel
-          </button>
-          <button
-            onClick={handlePdfExport}
-            className="flex items-center gap-2 px-3 py-2 bg-red-900/40 border border-red-700/50 text-red-400 rounded-lg text-sm hover:bg-red-900/60 transition-colors"
-          >
-            <FileText size={15} />
-            PDF
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Filters ── */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">

@@ -18,6 +18,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 
 ChartJS.register(
@@ -715,23 +716,11 @@ export default function LiveFleetStatus() {
     <div className="space-y-5">
 
       {/* ── Page Header ── */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Radio size={20} className="text-green-400" />
-            Live Fleet Status
-          </h1>
-          <p className="text-gray-400 text-sm mt-0.5">
-            Morning briefing — real-time vehicle & tyre health
-            {lastUpdated && (
-              <span className="ml-2 text-gray-600">
-                · Updated {lastUpdated.toLocaleTimeString()}
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Auto-refresh toggle */}
+      <PageHeader
+        title="Live Fleet Status"
+        subtitle={`Morning briefing — real-time vehicle & tyre health${lastUpdated ? ` · Updated ${lastUpdated.toLocaleTimeString()}` : ''}`}
+        icon={Radio}
+        actions={<>
           <button
             onClick={() => setAutoRefresh(v => !v)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-colors ${
@@ -744,16 +733,12 @@ export default function LiveFleetStatus() {
             Auto-refresh
             {autoRefresh && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-ping" />}
           </button>
-
-          {/* Export */}
           <button
             onClick={() => exportFleetStatus(filtered, alertsData)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-800 text-gray-400 hover:text-white text-xs transition-colors"
           >
             <Download size={13} /> Export
           </button>
-
-          {/* Refresh */}
           <button
             onClick={() => load(true)}
             disabled={refreshing}
@@ -762,8 +747,8 @@ export default function LiveFleetStatus() {
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
             Refresh
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── KPI Status Bar ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">

@@ -15,6 +15,7 @@ import { Bar, Line } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -687,18 +688,11 @@ export default function ForecastingEngine() {
     <div className="space-y-6 p-4 md:p-6">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-blue-400" />
-            <h1 className="text-xl font-bold text-white">Forecasting Engine</h1>
-          </div>
-          <p className="text-sm text-gray-400 mt-1">
-            12-month demand, budget, and inventory forecasts to support proactive planning
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Site filter */}
+      <PageHeader
+        title="Forecasting Engine"
+        subtitle="12-month demand, budget, and inventory forecasts to support proactive planning"
+        icon={TrendingUp}
+        actions={<>
           <select
             value={siteFilter}
             onChange={e => setSiteFilter(e.target.value)}
@@ -729,8 +723,8 @@ export default function ForecastingEngine() {
             <Mail className="w-4 h-4" />
             Email Report
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── Horizon selector ──────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">

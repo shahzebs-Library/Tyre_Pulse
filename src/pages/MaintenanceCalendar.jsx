@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
+import PageHeader from '../components/ui/PageHeader'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DAY_NAMES    = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -393,25 +394,11 @@ export default function MaintenanceCalendar() {
     <div className="min-h-screen bg-gray-950 space-y-5 pb-10">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-green-900/40 border border-green-700 flex items-center justify-center">
-            <Calendar size={20} className="text-green-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Maintenance Calendar</h1>
-            <p className="text-gray-400 text-sm">
-              Unified view of work orders and tyre alerts ·{' '}
-              <span className="text-green-400">{filteredEvents.length} events</span>
-              {lastRefresh && (
-                <span className="text-gray-600 ml-2">
-                  · Updated {lastRefresh.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Maintenance Calendar"
+        subtitle={`Unified view of work orders and tyre alerts · ${filteredEvents.length} events${lastRefresh ? ` · Updated ${lastRefresh.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+        icon={Calendar}
+        actions={<>
           <button
             onClick={() => setShowFilters(v => !v)}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
@@ -430,8 +417,8 @@ export default function MaintenanceCalendar() {
           >
             <RefreshCw size={16} />
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── Error banner ────────────────────────────────────────────────────── */}
       {error && (

@@ -8,6 +8,8 @@ import {
   Search, Plus, Edit2, Trash2, Save, X, AlertTriangle,
   FileSpreadsheet, Download, Upload, Truck, ChevronLeft, ChevronRight
 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 
 const PAGE_SIZE = 25
 
@@ -359,14 +361,13 @@ export default function FleetMaster() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      <PageHeader
+        title="Fleet Master"
+        subtitle={`${total.toLocaleString()} vehicles registered`}
+        icon={Truck}
+      />
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Truck size={22} className="text-green-400" /> Fleet Master
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">{total.toLocaleString()} vehicles registered</p>
-        </div>
+        <div />
         <div className="flex gap-2 flex-wrap">
           <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm">
             <Plus size={15} /> Add Vehicle

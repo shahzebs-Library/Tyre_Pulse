@@ -11,6 +11,7 @@ import {
 } from 'chart.js'
 import { Doughnut } from 'react-chartjs-2'
 import * as XLSX from 'xlsx'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -356,19 +357,12 @@ export default function ErpSync() {
       className="space-y-6"
     >
       {/* ── Page Header ────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Database size={20} className="text-green-400" />
-            <h1 className="text-xl font-bold text-white tracking-tight">ERP Sync Hub</h1>
-            <span className="text-[11px] bg-blue-900/40 text-blue-300 border border-blue-700/40 px-2 py-0.5 rounded-full font-semibold ml-1">Read-Only</span>
-          </div>
-          <p className="text-sm text-gray-500">Monitor ERP data pipelines, field mappings, and sync health in real time.</p>
-        </div>
-
-        {/* Manual Sync Controls */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Filters */}
+      <PageHeader
+        title="ERP Sync Hub"
+        subtitle="Monitor ERP data pipelines, field mappings, and sync health in real time."
+        icon={Database}
+        badge="Read-Only"
+        actions={<>
           <div className="flex items-center gap-1.5 bg-gray-900/60 border border-gray-800 rounded-lg px-2.5 py-1.5">
             <Filter size={12} className="text-gray-500" />
             <select
@@ -396,8 +390,6 @@ export default function ErpSync() {
               <option value="30d">Last 30 days</option>
             </select>
           </div>
-
-          {/* Sync buttons (disabled, read-only) */}
           <div className="relative group">
             <button disabled className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800/60 text-gray-600 border border-gray-700/40 cursor-not-allowed">
               <Zap size={13} /> Trigger Full Sync
@@ -421,8 +413,8 @@ export default function ErpSync() {
           >
             <Download size={13} /> Download Log
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── Sync Statistics ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

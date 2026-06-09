@@ -14,6 +14,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement,
@@ -360,23 +361,21 @@ export default function TyreLifecycle() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Tyre Lifecycle Tracker</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Full lifecycle from fitment → service → retread → scrap · {filtered.length} records
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handlePdfExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors">
-            <FileText size={14} /> PDF
-          </button>
-          <button onClick={handleExcelExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors">
-            <FileSpreadsheet size={14} /> Excel
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Tyre Lifecycle Tracker"
+        subtitle="Full lifecycle visibility from fitment to retirement"
+        icon={Activity}
+        actions={
+          <div className="flex items-center gap-2">
+            <button onClick={handlePdfExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors">
+              <FileText size={14} /> PDF
+            </button>
+            <button onClick={handleExcelExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors">
+              <FileSpreadsheet size={14} /> Excel
+            </button>
+          </div>
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">

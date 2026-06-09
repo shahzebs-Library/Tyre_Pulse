@@ -6,7 +6,9 @@ import {
   ANOMALY_TYPES, ANOMALY_TYPE_LABELS, ANOMALY_TYPE_DESC,
 } from '../lib/anomalyEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { Download, FileText, Search } from 'lucide-react'
+import { Download, FileText, Search, AlertTriangle } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 
 const SEVERITY_STYLE = {
   critical:  { badge: 'bg-red-500/15 text-red-200 border-red-500/40',       icon: '🔴', label: 'Critical' },
@@ -180,12 +182,11 @@ export default function Anomalies() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Anomaly Detection</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Detect short intervals, same-day bursts, rapid recurrence, cost spikes and duplicates
-          </p>
-        </div>
+        <PageHeader
+          title="Anomaly Detection"
+          subtitle="Detect short intervals, same-day bursts, rapid recurrence, cost spikes and duplicates"
+          icon={AlertTriangle}
+        />
         <div className="flex gap-2">
           {dismissed.size > 0 && (
             <button onClick={clearDismissed} className="btn-secondary text-xs px-3">

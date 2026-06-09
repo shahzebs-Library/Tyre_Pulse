@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -34,15 +36,19 @@ const ALL_TYPES = [...INSPECTION_TYPES, ...OBSERVATION_TYPES, ...TRAINING_TYPES]
 const STATUSES = ['Scheduled', 'In Progress', 'Done', 'Overdue', 'Cancelled']
 const SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
 
+// Keys must match what vehicle_fleet.vehicle_type stores in the DB (case-insensitive resolved via normVT)
 const TYRE_POSITIONS = {
-  'Pickup':        ['FL', 'FR', 'RL', 'RR'],
-  'Wheel Loader':  ['FL', 'FR', 'RL', 'RR'],
-  'Skid Loader':   ['FL', 'FR', 'RL', 'RR'],
-  'Canter':        ['FL', 'FR', 'RLO', 'RLI', 'RRO', 'RRI'],
-  'Tri-mixer':     ['FL1', 'FL2', 'FR1', 'FR2', 'RL1', 'RL2', 'RL3', 'RL4', 'RR1', 'RR2', 'RR3', 'RR4'],
-  'Concrete Pump': ['FL1', 'FL2', 'FR1', 'FR2', 'RL1', 'RL2', 'RL3', 'RL4', 'RR1', 'RR2', 'RR3', 'RR4', 'RL5', 'RR5'],
+  'pickup':        ['FL', 'FR', 'RL', 'RR'],
+  'wheel loader':  ['FL', 'FR', 'RL', 'RR'],
+  'skid loader':   ['FL', 'FR', 'RL', 'RR'],
+  'canter':        ['FL', 'FR', 'RLO', 'RLI', 'RRI', 'RRO'],
+  'tri-mixer':     ['FL1', 'FR1', 'FL2', 'FR2', 'RLO3', 'RLI3', 'RRI3', 'RRO3', 'RLO4', 'RLI4', 'RRI4', 'RRO4'],
+  'concrete pump': ['FL1', 'FR1', 'RLO2', 'RLI2', 'RRI2', 'RRO2', 'RLO3', 'RLI3', 'RRI3', 'RRO3', 'RLO4', 'RLI4', 'RRI4', 'RRO4'],
 }
 const DEFAULT_POSITIONS = ['FL', 'FR', 'RL', 'RR']
+
+// Normalise vehicle type for position lookup (matches VehicleTyreDiagram.jsx)
+function normVT(vt) { return (vt || '').toLowerCase().trim() }
 
 const EMPTY_FORM = {
   title: '', inspection_type: 'Routine', site: '', asset_no: '', tyre_serial: '',
@@ -130,10 +136,24 @@ export default function Inspections() {
   const [clError, setClError]         = useState(null)
   const [clLookingUp, setClLookingUp] = useState(false)
   const posRefs     = useRef({})
+  const diagramRef  = useRef(null)
   const [highlightPos, setHighlightPos] = useState(null)
 
+  // Master data from fleet
+  const [masterSites, setMasterSites]   = useState([])
+  const [masterAssets, setMasterAssets] = useState([])
+
   useEffect(() => {
-    if (profile?.full_name && !clInspector) setClInspector(profile.full_name)
+    supabase.from('vehicle_fleet').select('site, asset_no, vehicle_type').then(({ data }) => {
+      if (!data) return
+      setMasterSites([...new Set(data.map(r => r.site).filter(Boolean))].sort())
+      setMasterAssets(data.filter(r => r.asset_no).sort((a, b) => a.asset_no.localeCompare(b.asset_no)))
+    })
+  }, [])
+
+  useEffect(() => {
+    const name = profile?.full_name || profile?.username || ''
+    if (name && !clInspector) setClInspector(name)
   }, [profile])
 
   async function load() {
@@ -266,7 +286,7 @@ export default function Inspections() {
     const { data } = await supabase.from('vehicle_fleet').select('vehicle_type, asset_no, site').eq('asset_no', assetNo.trim()).maybeSingle()
     if (data) {
       setClFleetInfo(data)
-      const positions = TYRE_POSITIONS[data.vehicle_type] || DEFAULT_POSITIONS
+      const positions = TYRE_POSITIONS[normVT(data.vehicle_type)] || DEFAULT_POSITIONS
       setClPositions(positions.map(pos => ({ position: pos, pressure: '', condition: 'Good', treadDepth: '' })))
       if (data.site && !clSite) setClSite(data.site)
     } else {
@@ -281,7 +301,7 @@ export default function Inspections() {
     setClSaving(true)
     setClError(null)
     const payload = {
-      title: `Daily Tyre Checklist: ${clAsset} (${clDate})`,
+      title: `Daily Tyre Inspection — ${clSite || clAsset} — ${clDate}`,
       inspection_type: 'Routine',
       site: clSite,
       asset_no: clAsset.trim(),
@@ -289,7 +309,9 @@ export default function Inspections() {
       status: 'Done',
       completed_date: clDate,
       inspector: clInspector,
-      findings: JSON.stringify(clPositions),
+      tyre_conditions: clPositions,
+      vehicle_type: clFleetInfo?.vehicle_type || null,
+      findings: clNotes || null,
       notes: clNotes,
       country: activeCountry !== 'All' ? activeCountry : null,
       created_by: profile?.id ?? null,
@@ -304,10 +326,10 @@ export default function Inspections() {
     setClSaving(false)
   }
 
-  function exportChecklistPdf() {
+  async function exportChecklistPdf() {
     if (!clSaved) return
     const tyreData = clPositions.length > 0 ? clPositions
-      : (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })()
+      : (clSaved.tyre_conditions || (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })())
 
     const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const pw     = doc.internal.pageSize.width
@@ -333,7 +355,7 @@ export default function Inspections() {
     let y = 28
     const infoItems = [
       ['Asset No',       clAsset || clSaved.asset_no || 'n/a'],
-      ['Vehicle Type',   clFleetInfo?.vehicle_type || 'n/a'],
+      ['Vehicle Type',   clFleetInfo?.vehicle_type || clSaved.vehicle_type || 'n/a'],
       ['Site',           clSite || clSaved.site || 'n/a'],
       ['Inspector',      clInspector || clSaved.inspector || 'n/a'],
       ['Date',           clDate || clSaved.scheduled_date || 'n/a'],
@@ -356,76 +378,43 @@ export default function Inspections() {
     })
     y += 30
 
-    // ── Vehicle diagram ─────────────────────────────────────────────────────────
-    // Separate positions into left / right columns
-    const isLeft  = pos => /^FL|^RL|RLI|RLO/.test(pos)
-    const isRight = pos => /^FR|^RR|RRI|RRO/.test(pos)
-    const lefts   = tyreData.filter(p => isLeft(p.position))
-    const rights  = tyreData.filter(p => isRight(p.position))
-    const rowCount = Math.max(lefts.length, rights.length, 1)
-
-    const diagW  = 100
-    const diagX  = (pw - diagW) / 2
-    const rowGap = 14
-    const r      = 5.5    // tyre circle radius mm
-    const bodyW  = 30
-    const bodyX  = diagX + (diagW - bodyW) / 2
-    const diagH  = rowCount * rowGap + 8
-
-    // Vehicle body
-    doc.setFillColor(30, 41, 59)
-    doc.setDrawColor(75, 85, 99)
-    doc.setLineWidth(0.5)
-    doc.rect(bodyX, y, bodyW, diagH, 'FD')
-
-    // Vehicle type label
-    doc.setTextColor(107, 114, 128)
-    doc.setFontSize(7)
-    doc.setFont('helvetica', 'normal')
-    doc.text(clFleetInfo?.vehicle_type || 'Vehicle', pw / 2, y - 2, { align: 'center' })
-
-    function drawTyre(cx, cy, condition, pressure, label) {
-      if (condition === 'Good')       { doc.setFillColor(22, 163, 74) }
-      else if (condition === 'Wear')  { doc.setFillColor(202, 138, 4) }
-      else if (condition === 'Damage'){ doc.setFillColor(220, 38, 38) }
-      else                            { doc.setFillColor(55, 65, 81)  }
-      doc.setDrawColor(200, 200, 200)
-      doc.setLineWidth(0.3)
-      doc.circle(cx, cy, r, 'FD')
-      doc.setTextColor(255, 255, 255)
-      doc.setFont('helvetica', 'bold')
-      if (pressure) {
-        doc.setFontSize(5)
-        doc.text(String(pressure), cx, cy + 0.8, { align: 'center' })
-        doc.setFontSize(4)
-        doc.setFont('helvetica', 'normal')
-        doc.text(label, cx, cy + 4, { align: 'center' })
-      } else {
-        doc.setFontSize(5)
-        doc.text(label, cx, cy + 1, { align: 'center' })
-      }
-    }
-
-    for (let i = 0; i < rowCount; i++) {
-      const rowY = y + 6 + i * rowGap
-      // Axle line
-      doc.setDrawColor(75, 85, 99)
-      doc.setLineWidth(0.4)
-      doc.line(bodyX, rowY, bodyX + bodyW, rowY)
-      // Left tyre
-      if (lefts[i]) {
-        const cx = diagX + r + 4
-        drawTyre(cx, rowY, lefts[i].condition, lefts[i].pressure, lefts[i].position)
-      }
-      // Right tyre
-      if (rights[i]) {
-        const cx = diagX + diagW - r - 4
-        drawTyre(cx, rowY, rights[i].condition, rights[i].pressure, rights[i].position)
-      }
+    // ── Vehicle diagram — capture actual SVG rendered in the DOM ───────────────
+    const svgEl = diagramRef.current?.querySelector('svg')
+    if (svgEl) {
+      try {
+        const svgStr  = new XMLSerializer().serializeToString(svgEl)
+        const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' })
+        const url     = URL.createObjectURL(svgBlob)
+        await new Promise((resolve) => {
+          const img    = new Image()
+          img.onload   = () => {
+            const scale   = 2
+            const canvas  = document.createElement('canvas')
+            const svgW    = svgEl.viewBox?.baseVal?.width  || svgEl.clientWidth  || 400
+            const svgH    = svgEl.viewBox?.baseVal?.height || svgEl.clientHeight || 300
+            canvas.width  = svgW * scale
+            canvas.height = svgH * scale
+            const ctx = canvas.getContext('2d')
+            ctx.scale(scale, scale)
+            ctx.fillStyle = '#0a1628'
+            ctx.fillRect(0, 0, svgW, svgH)
+            ctx.drawImage(img, 0, 0, svgW, svgH)
+            URL.revokeObjectURL(url)
+            const imgData = canvas.toDataURL('image/png')
+            const diagW   = pw - mx * 2
+            const diagH   = diagW * svgH / svgW
+            doc.addImage(imgData, 'PNG', mx, y, diagW, diagH)
+            y += diagH + 6
+            resolve()
+          }
+          img.onerror = () => { URL.revokeObjectURL(url); resolve() }
+          img.src = url
+        })
+      } catch (_) { /* fall through to table if SVG capture fails */ }
     }
 
     // Colour legend
-    const legendY = y + diagH + 5
+    const legendY = y
     const legendItems = [
       { color: [22, 163, 74],  label: 'Good'    },
       { color: [202, 138, 4],  label: 'Wear'    },
@@ -535,53 +524,53 @@ export default function Inspections() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Inspections & Observations</h1>
-          <p className="text-gray-400 text-sm mt-1">Schedule inspections, record site observations and track training</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => exportToExcel(
-              filtered,
-              ['inspection_type','title','site','asset_no','scheduled_date','status','severity','inspector','attendees','findings'],
-              ['Type','Title','Site','Asset No','Date','Status','Severity','Inspector','Attendees','Findings'],
-              'TyrePulse_Inspections'
-            )}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <Download size={14}/> Excel
-          </button>
-          <button
-            onClick={() => exportToPdf(
-              filtered,
-              [
-                {key:'inspection_type',header:'Type'},
-                {key:'title',header:'Title'},
-                {key:'site',header:'Site'},
-                {key:'asset_no',header:'Asset'},
-                {key:'scheduled_date',header:'Date'},
-                {key:'status',header:'Status'},
-                {key:'severity',header:'Severity'},
-                {key:'inspector',header:'Inspector'},
-              ],
-              'Inspections & Observations',
-              'TyrePulse_Inspections',
-              'landscape'
-            )}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <FileText size={14}/> PDF
-          </button>
-          <button
-            className="btn-primary text-sm"
-            onClick={() => setForm({ ...EMPTY_FORM, inspection_type: defaultType })}
-          >
-            + Add Record
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Inspections & Observations"
+        subtitle="Schedule inspections, record site observations and track training"
+        icon={ClipboardList}
+        actions={
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => exportToExcel(
+                filtered,
+                ['inspection_type','title','site','asset_no','scheduled_date','status','severity','inspector','attendees','findings'],
+                ['Type','Title','Site','Asset No','Date','Status','Severity','Inspector','Attendees','Findings'],
+                'TyrePulse_Inspections'
+              )}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <Download size={14}/> Excel
+            </button>
+            <button
+              onClick={() => exportToPdf(
+                filtered,
+                [
+                  {key:'inspection_type',header:'Type'},
+                  {key:'title',header:'Title'},
+                  {key:'site',header:'Site'},
+                  {key:'asset_no',header:'Asset'},
+                  {key:'scheduled_date',header:'Date'},
+                  {key:'status',header:'Status'},
+                  {key:'severity',header:'Severity'},
+                  {key:'inspector',header:'Inspector'},
+                ],
+                'Inspections & Observations',
+                'TyrePulse_Inspections',
+                'landscape'
+              )}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <FileText size={14}/> PDF
+            </button>
+            <button
+              className="btn-primary text-sm"
+              onClick={() => setForm({ ...EMPTY_FORM, inspection_type: defaultType })}
+            >
+              + Add Record
+            </button>
+          </div>
+        }
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg w-fit flex-wrap">
@@ -654,23 +643,48 @@ export default function Inspections() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="label">{CHECKLIST_LABELS[lang].asset}</label>
-                  <div className="flex gap-2">
-                    <input className="input flex-1" placeholder="e.g. CM-0123" value={clAsset}
-                      onChange={e => setClAsset(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && loadFleetInfo(clAsset)} />
-                    <button onClick={() => loadFleetInfo(clAsset)} disabled={clLookingUp || !clAsset.trim()}
-                      className="btn-secondary px-3 text-sm disabled:opacity-50">
-                      {clLookingUp ? '...' : 'Load'}
-                    </button>
-                  </div>
+                  {masterAssets.length > 0 ? (
+                    <select
+                      className="input"
+                      value={clAsset}
+                      onChange={e => {
+                        setClAsset(e.target.value)
+                        if (e.target.value) loadFleetInfo(e.target.value)
+                      }}
+                    >
+                      <option value="">Select asset…</option>
+                      {masterAssets.map(a => (
+                        <option key={a.asset_no} value={a.asset_no}>
+                          {a.asset_no}{a.vehicle_type ? ` — ${a.vehicle_type}` : ''}{a.site ? ` (${a.site})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input className="input flex-1" placeholder="e.g. CM-0123" value={clAsset}
+                        onChange={e => setClAsset(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && loadFleetInfo(clAsset)} />
+                      <button onClick={() => loadFleetInfo(clAsset)} disabled={clLookingUp || !clAsset.trim()}
+                        className="btn-secondary px-3 text-sm disabled:opacity-50">
+                        {clLookingUp ? '...' : 'Load'}
+                      </button>
+                    </div>
+                  )}
                   {clFleetInfo && (
-                    <p className="text-xs text-green-400 mt-1">{clFleetInfo.vehicle_type} · {(TYRE_POSITIONS[clFleetInfo.vehicle_type] || DEFAULT_POSITIONS).length} tyres</p>
+                    <p className="text-xs text-green-400 mt-1">{clFleetInfo.vehicle_type} · {(TYRE_POSITIONS[normVT(clFleetInfo.vehicle_type)] || DEFAULT_POSITIONS).length} tyres</p>
                   )}
                 </div>
                 <div>
                   <label className="label">{CHECKLIST_LABELS[lang].site}</label>
-                  <input className="input" placeholder="Site name" value={clSite}
-                    onChange={e => setClSite(e.target.value)} list="cl-sites" />
+                  {masterSites.length > 0 ? (
+                    <select className="input" value={clSite} onChange={e => setClSite(e.target.value)}>
+                      <option value="">Select site…</option>
+                      {masterSites.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  ) : (
+                    <input className="input" placeholder="Site name" value={clSite}
+                      onChange={e => setClSite(e.target.value)} list="cl-sites" />
+                  )}
                   <datalist id="cl-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
                 </div>
                 <div>
@@ -688,7 +702,7 @@ export default function Inspections() {
                 <div className="space-y-4">
                   {/* SVG Vehicle Diagram */}
                   {clFleetInfo?.vehicle_type && (
-                    <div className="card flex flex-col items-center py-4" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                    <div ref={diagramRef} className="card flex flex-col items-center py-4" style={{ background: 'rgba(0,0,0,0.2)' }}>
                       <p className="text-xs text-gray-500 mb-3">Tap a tyre position to jump to it</p>
                       <VehicleTyreDiagram
                         vehicleType={clFleetInfo.vehicle_type}

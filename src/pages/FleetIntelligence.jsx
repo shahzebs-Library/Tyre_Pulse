@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import EmailReportModal from '../components/EmailReportModal'
 import { supabase } from '../lib/supabase'
+import PageHeader from '../components/ui/PageHeader'
 import {
   computeFleetAvailability,
   computeVehicleDowntimeImpact,
@@ -1007,19 +1008,11 @@ export default function FleetIntelligence() {
     <div className="min-h-screen bg-gray-900 text-gray-100 p-4 md:p-6 space-y-6">
 
       {/* ── 1. Header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-blue-600/20 rounded-xl border border-blue-600/30">
-            <Truck className="text-blue-400" size={24} />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Fleet Management Intelligence</h1>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Fleet availability, downtime, asset utilisation and operating cost intelligence
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+      <PageHeader
+        title="Fleet Management Intelligence"
+        subtitle="Fleet availability, downtime, asset utilisation and operating cost intelligence"
+        icon={Truck}
+        actions={<>
           {!fleetMasterAvail && (
             <span className="text-xs text-amber-400 border border-amber-800/40 bg-amber-900/20 px-2 py-1 rounded-lg">
               Fleet master unavailable
@@ -1050,8 +1043,8 @@ export default function FleetIntelligence() {
           >
             <Mail size={14} />Email Report
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── 2. Filters ─────────────────────────────────────────────────────── */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">

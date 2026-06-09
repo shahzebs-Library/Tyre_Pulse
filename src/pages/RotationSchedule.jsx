@@ -22,6 +22,7 @@ import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -932,20 +933,12 @@ export default function RotationSchedule() {
   const noData = !analytics || analytics.total === 0
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-
-        {/* ── Header ──────────────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <RotateCcw size={24} className="text-green-400" />
-              Rotation Compliance Tracker
-            </h1>
-            <p className="text-sm text-gray-400 mt-1">
-              Monitor tyre rotation schedules, detect missed rotations, and quantify cost impact
-            </p>
-          </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Rotation Compliance Tracker"
+        subtitle="Schedule and monitor tyre rotation compliance across fleet"
+        icon={RotateCcw}
+        actions={
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={fetchData}
@@ -969,7 +962,8 @@ export default function RotationSchedule() {
               <Download size={14} /> PDF Report
             </button>
           </div>
-        </div>
+        }
+      />
 
         {/* ── Interval Config ──────────────────────────────────────────────── */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
@@ -1644,7 +1638,6 @@ export default function RotationSchedule() {
             </AnimatePresence>
           </>
         )}
-      </div>
 
       {/* ── Drawers / Modals ─────────────────────────────────────────────────── */}
       {drawerVehicle && (

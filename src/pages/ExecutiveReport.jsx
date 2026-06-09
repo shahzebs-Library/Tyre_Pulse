@@ -32,6 +32,7 @@ import {
   computeFailureRate,
 } from '../lib/kpiEngine'
 import { useSettings } from '../contexts/SettingsContext'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -1097,18 +1098,11 @@ export default function ExecutiveReport() {
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800 no-print">
         <div className="max-w-screen-2xl mx-auto px-4 py-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-                <FileText className="w-5 h-5 text-emerald-400" />
-              </div>
-              <div>
-                <h1 className="text-base font-bold text-white leading-tight">Executive Intelligence Report</h1>
-                <p className="text-xs text-gray-400">{companyName} · Generated {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Period selector */}
+          <PageHeader
+            title="Executive Intelligence Report"
+            subtitle={`${companyName} · Generated ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}`}
+            icon={FileText}
+            actions={<>
               <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1">
                 {PERIODS.map(p => (
                   <button
@@ -1124,7 +1118,6 @@ export default function ExecutiveReport() {
                   </button>
                 ))}
               </div>
-              {/* Export buttons */}
               <button
                 onClick={exportExcel}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium transition-all border border-gray-700"
@@ -1156,8 +1149,8 @@ export default function ExecutiveReport() {
               >
                 <Mail size={16} />Email Report
               </button>
-            </div>
-          </div>
+            </>}
+          />
         </div>
       </div>
 

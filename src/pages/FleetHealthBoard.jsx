@@ -18,6 +18,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -494,30 +495,21 @@ export default function FleetHealthBoard() {
     <div className="space-y-6">
 
       {/* ── Header ── */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Activity size={22} className="text-green-400" />
-            Fleet Health Board
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Real-time tyre health status across all vehicles
-            {lastUpdated && (
-              <span className="ml-2 text-gray-600">
-                · Updated {lastUpdated.toLocaleTimeString()}
-              </span>
-            )}
-          </p>
-        </div>
-        <button
-          onClick={() => load(true)}
-          disabled={refreshing}
-          className="btn-secondary flex items-center gap-2 text-sm"
-        >
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-          Refresh
-        </button>
-      </div>
+      <PageHeader
+        title="Fleet Health Board"
+        subtitle={`Real-time tyre health status across all vehicles${lastUpdated ? ` · Updated ${lastUpdated.toLocaleTimeString()}` : ''}`}
+        icon={Activity}
+        actions={
+          <button
+            onClick={() => load(true)}
+            disabled={refreshing}
+            className="btn-secondary flex items-center gap-2 text-sm"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        }
+      />
 
       {/* ── KPI Bar ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

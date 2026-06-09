@@ -3,7 +3,9 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeSiteMetrics, buildSiteRadar, bucketByMonth } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { Download, FileText, Maximize2 } from 'lucide-react'
+import { Download, FileText, Maximize2, GitMerge } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import {
   Chart as ChartJS, RadialLinearScale, PointElement, LineElement,
   Filler, Tooltip, Legend, CategoryScale, LinearScale, BarElement,
@@ -165,44 +167,40 @@ export default function SiteComparison() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Site Comparison</h1>
-          <p className="text-gray-400 text-sm mt-1">Head-to-head performance across sites</p>
-        </div>
-        <div className="flex gap-2">
-          {(() => {
-            const SITE_COLS = [
-              { key: 'site', header: 'Site' },
-              { key: 'count', header: 'Records' },
-              { key: 'totalCost', header: 'Total Cost' },
-              { key: 'avgCost', header: 'Avg Cost' },
-              { key: 'highRiskCount', header: 'High Risk' },
-              { key: 'highRiskPct', header: 'High Risk %' },
-              { key: 'topBrand', header: 'Top Brand' },
-              { key: 'topCategory', header: 'Top Category' },
-            ]
-            const exportData = allMetrics
-            return (
-              <>
-                <button
-                  onClick={() => exportToExcel(exportData, SITE_COLS.map(c => c.key), SITE_COLS.map(c => c.header), 'TyrePulse_SiteComparison')}
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-                >
-                  <Download size={14} /> Excel
-                </button>
-                <button
-                  onClick={() => exportToPdf(exportData, SITE_COLS, 'Site Comparison', 'TyrePulse_SiteComparison', 'landscape')}
-                  className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-                >
-                  <FileText size={14} /> PDF
-                </button>
-              </>
-            )
-          })()}
-        </div>
-      </div>
+      <PageHeader
+        title="Site Comparison"
+        subtitle="Head-to-head performance across sites"
+        icon={GitMerge}
+        actions={(() => {
+          const SITE_COLS = [
+            { key: 'site', header: 'Site' },
+            { key: 'count', header: 'Records' },
+            { key: 'totalCost', header: 'Total Cost' },
+            { key: 'avgCost', header: 'Avg Cost' },
+            { key: 'highRiskCount', header: 'High Risk' },
+            { key: 'highRiskPct', header: 'High Risk %' },
+            { key: 'topBrand', header: 'Top Brand' },
+            { key: 'topCategory', header: 'Top Category' },
+          ]
+          const exportData = allMetrics
+          return (
+            <div className="flex gap-2">
+              <button
+                onClick={() => exportToExcel(exportData, SITE_COLS.map(c => c.key), SITE_COLS.map(c => c.header), 'TyrePulse_SiteComparison')}
+                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              >
+                <Download size={14} /> Excel
+              </button>
+              <button
+                onClick={() => exportToPdf(exportData, SITE_COLS, 'Site Comparison', 'TyrePulse_SiteComparison', 'landscape')}
+                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              >
+                <FileText size={14} /> PDF
+              </button>
+            </div>
+          )
+        })()}
+      />
 
       {/* Filter bar + site selector */}
       <div className="card space-y-4">

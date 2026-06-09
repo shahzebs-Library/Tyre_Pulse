@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { ShieldCheck, ShieldClose, CheckCircle, XCircle, Printer, Clock, Download } from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
 
 const STATUS_CONFIG = {
   Cleared: { color: 'text-green-400', bg: 'bg-green-900/30', border: 'border-green-700/50' },
@@ -195,10 +196,11 @@ export default function GatePass() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ShieldCheck size={24} className="text-green-400" /> Gate Pass
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">{todayDisplay}</p>
+          <PageHeader
+            title="Gate Pass"
+            subtitle={todayDisplay}
+            icon={ShieldCheck}
+          />
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => exportDailyLogExcel(activePassList, activeDateLabel)} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">

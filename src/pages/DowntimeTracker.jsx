@@ -15,6 +15,7 @@ import {
   CheckCircle2, XCircle, AlertCircle, BarChart2, Maximize2,
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
+import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -779,15 +780,14 @@ export default function DowntimeTracker() {
   return (
     <div className="space-y-6 pb-10">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Fleet Downtime & Availability</h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {hasWorkOrders ? 'Actual work order data' : 'Estimated from tyre removal events'}
-            {!hasWorkOrders && <span className="ml-2 px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-[10px] rounded font-semibold">ESTIMATED</span>}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Fleet Downtime & Availability"
+        subtitle={<>
+          {hasWorkOrders ? 'Actual work order data' : 'Estimated from tyre removal events'}
+          {!hasWorkOrders && <span className="ml-2 px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-[10px] rounded font-semibold">ESTIMATED</span>}
+        </>}
+        icon={AlertTriangle}
+        actions={<>
           <button
             onClick={() => load(true)}
             disabled={refreshing}
@@ -808,8 +808,8 @@ export default function DowntimeTracker() {
           >
             <FileSpreadsheet size={13} />Excel
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Filters */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">

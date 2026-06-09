@@ -292,6 +292,7 @@ export default function Inspections() {
       completed_date: clDate,
       inspector: clInspector,
       tyre_conditions: clPositions,
+      vehicle_type: clFleetInfo?.vehicle_type || null,
       findings: clNotes || null,
       notes: clNotes,
       country: activeCountry !== 'All' ? activeCountry : null,

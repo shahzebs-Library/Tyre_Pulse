@@ -865,6 +865,366 @@ function WheelLoaderBody() {
   );
 }
 
+// ── 6. BUS — white staff/transit bus with green GCC stripe ───────────────────
+// 6 tyres: 2 front single + 4 rear dual  (like a full-size coach)
+function BusBody() {
+  return (
+    <g filter="url(#bodyShadow)">
+      <defs>
+        <radialGradient id="busRoof" cx="48%" cy="38%" r="58%">
+          <stop offset="0%"   stopColor="#ffffff" />
+          <stop offset="55%"  stopColor="#f1f5f9" />
+          <stop offset="100%" stopColor="#cbd5e1" />
+        </radialGradient>
+        <linearGradient id="busStripe" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stopColor="#004d26" />
+          <stop offset="30%"  stopColor="#006C35" />
+          <stop offset="50%"  stopColor="#00A850" />
+          <stop offset="70%"  stopColor="#006C35" />
+          <stop offset="100%" stopColor="#004d26" />
+        </linearGradient>
+        <linearGradient id="busWindow" x1="0%" y1="0%" x2="60%" y2="100%">
+          <stop offset="0%"   stopColor="#bfdbfe" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.5" />
+        </linearGradient>
+      </defs>
+
+      <ellipse cx="100" cy="340" rx="86" ry="10" fill="rgba(0,0,0,0.25)" />
+
+      {/* === MAIN BODY — wide rectangular coach === */}
+      <path d="M 52,20 Q 40,20 38,34 L 36,290 Q 36,305 52,308 L 148,308 Q 164,305 164,290 L 164,34 Q 162,20 148,20 Z"
+        fill="url(#busRoof)" />
+
+      {/* === FRONT === */}
+      {/* Front bumper */}
+      <rect x="38" y="10" width="124" height="14" rx="5" fill="url(#chrome)" />
+      {/* Destination board (black) */}
+      <rect x="54" y="12" width="92" height="7" rx="2" fill="#0f172a" />
+      <text x="100" y="17.5" textAnchor="middle" fontSize="4" fill="#fde047" fontWeight="700">STAFF BUS · GCC</text>
+      {/* Headlights */}
+      <rect x="38" y="12" width="18" height="11" rx="3" fill="url(#headlight)" />
+      <rect x="144" y="12" width="18" height="11" rx="3" fill="url(#headlight)" />
+      {/* Green DRL */}
+      <rect x="40" y="23" width="120" height="3" rx="1" fill="#00A850" opacity="0.9" />
+      {/* Front windshield — wide panoramic */}
+      <path d="M 42,26 L 158,26 L 155,48 L 45,48 Z" fill="url(#glassGrad)" />
+      <path d="M 46,27 L 120,27 L 118,40 L 48,40 Z" fill="url(#glassReflect)" opacity="0.5" />
+      {/* Wiper */}
+      <line x1="60" y1="46" x2="96" y2="30" stroke="#475569" strokeWidth="0.8" opacity="0.6" />
+      <line x1="140" y1="46" x2="104" y2="30" stroke="#475569" strokeWidth="0.8" opacity="0.6" />
+
+      {/* === GREEN STRIPE — runs full length === */}
+      <rect x="36" y="130" width="128" height="14" fill="url(#busStripe)" />
+      <text x="100" y="139.5" textAnchor="middle" fontSize="4.5" fontWeight="800"
+        fill="white" letterSpacing="0.8">GREEN CONCRETE COMPANY</text>
+
+      {/* === SIDE WINDOWS — left column (visible top-down as thin strips) === */}
+      {/* Left side windows */}
+      {[0,1,2,3,4,5].map(i => (
+        <rect key={i} x="36" y={55 + i * 38} width="8" height="26" rx="2"
+          fill="url(#busWindow)" opacity="0.85" />
+      ))}
+      {/* Right side windows */}
+      {[0,1,2,3,4,5].map(i => (
+        <rect key={i+6} x="156" y={55 + i * 38} width="8" height="26" rx="2"
+          fill="url(#busWindow)" opacity="0.85" />
+      ))}
+
+      {/* === INTERIOR — seats visible from top === */}
+      <rect x="44" y="50" width="112" height="248" rx="3" fill="#f8fafc" opacity="0.15" />
+      {/* Seat rows — left aisle */}
+      {[0,1,2,3,4,5,6,7,8].map(i => (
+        <g key={i}>
+          <rect x="46" y={56 + i * 27} width="22" height="16" rx="3" fill="#e2e8f0" opacity="0.5" />
+          <rect x="132" y={56 + i * 27} width="22" height="16" rx="3" fill="#e2e8f0" opacity="0.5" />
+        </g>
+      ))}
+      {/* Aisle centre line */}
+      <line x1="100" y1="50" x2="100" y2="295" stroke="#cbd5e1" strokeWidth="0.5"
+        strokeDasharray="4 4" opacity="0.4" />
+
+      {/* === FRONT DOOR === */}
+      <rect x="36" y="54" width="10" height="30" rx="2" fill="#006C35" opacity="0.7" />
+      <rect x="38" y="56" width="6" height="26" rx="1" fill="#00A850" opacity="0.4" />
+
+      {/* === REAR === */}
+      {/* Rear window */}
+      <path d="M 44,292 L 156,292 L 154,306 L 46,306 Z" fill="url(#glassGrad)" opacity="0.8" />
+      <path d="M 48,293 L 110,293 L 108,302 L 50,302 Z" fill="url(#glassReflect)" opacity="0.4" />
+      {/* Rear bumper */}
+      <rect x="38" y="306" width="124" height="10" rx="4" fill="url(#chrome)" />
+      <rect x="40" y="307" width="28" height="7" rx="2" fill="url(#brakeLight)" />
+      <rect x="132" y="307" width="28" height="7" rx="2" fill="url(#brakeLight)" />
+      {/* Exhaust */}
+      <circle cx="42" cy="303" r="4" fill="#374151" stroke="#1f2937" strokeWidth="1" />
+      <circle cx="42" cy="303" r="2" fill="#111827" />
+
+      {/* Mirrors — large coach mirrors */}
+      <rect x="16" y="30" width="20" height="10" rx="3" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="0.8" />
+      <rect x="164" y="30" width="20" height="10" rx="3" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="0.8" />
+    </g>
+  );
+}
+
+// ── 7. TATA — blue Tata Prima heavy truck ─────────────────────────────────────
+// Tata brand: deep blue #003087, accent blue #0072CE, silver trim
+// 6 tyres: 2 front single + 4 rear dual
+function TataBody() {
+  return (
+    <g filter="url(#bodyShadow)">
+      <defs>
+        <radialGradient id="tataCab" cx="48%" cy="35%" r="60%">
+          <stop offset="0%"   stopColor="#4d8fd1" />
+          <stop offset="40%"  stopColor="#0072CE" />
+          <stop offset="80%"  stopColor="#003087" />
+          <stop offset="100%" stopColor="#001f5b" />
+        </radialGradient>
+        <linearGradient id="tataHood" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stopColor="#001f5b" />
+          <stop offset="30%"  stopColor="#0072CE" />
+          <stop offset="50%"  stopColor="#4d8fd1" />
+          <stop offset="70%"  stopColor="#0072CE" />
+          <stop offset="100%" stopColor="#001f5b" />
+        </linearGradient>
+        <linearGradient id="tataCargo" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stopColor="#cbd5e1" />
+          <stop offset="15%"  stopColor="#f1f5f9" />
+          <stop offset="50%"  stopColor="#ffffff" />
+          <stop offset="85%"  stopColor="#f1f5f9" />
+          <stop offset="100%" stopColor="#cbd5e1" />
+        </linearGradient>
+        <linearGradient id="tataStripe" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stopColor="#001f5b" />
+          <stop offset="30%"  stopColor="#003087" />
+          <stop offset="50%"  stopColor="#0072CE" />
+          <stop offset="70%"  stopColor="#003087" />
+          <stop offset="100%" stopColor="#001f5b" />
+        </linearGradient>
+      </defs>
+
+      <ellipse cx="100" cy="298" rx="80" ry="10" fill="rgba(0,0,0,0.28)" />
+
+      {/* === CAB — Tata Prima style, blue === */}
+      <path d="M 68,14 Q 56,14 55,27 L 53,112 L 53,128 L 147,128 L 147,112 L 145,27 Q 144,14 132,14 Z"
+        fill="url(#tataCab)" />
+
+      {/* Front bumper — heavy chrome + bull bar */}
+      <rect x="56" y="5" width="88" height="13" rx="4" fill="url(#chrome)" />
+      {/* Bull bar crossbar */}
+      <rect x="60" y="8" width="80" height="4" rx="2" fill="#94a3b8" />
+      {/* Vertical bull bar tubes */}
+      <rect x="75" y="5" width="4" height="13" rx="1" fill="#94a3b8" />
+      <rect x="121" y="5" width="4" height="13" rx="1" fill="#94a3b8" />
+      {/* Fog lights */}
+      <rect x="58" y="7" width="14" height="9" rx="2" fill="url(#headlight)" opacity="0.8" />
+      <rect x="128" y="7" width="14" height="9" rx="2" fill="url(#headlight)" opacity="0.8" />
+
+      {/* Main headlights */}
+      <rect x="55" y="8" width="26" height="13" rx="3" fill="url(#headlight)" />
+      <rect x="119" y="8" width="26" height="13" rx="3" fill="url(#headlight)" />
+      {/* Blue DRL strip */}
+      <rect x="57" y="18" width="86" height="3" rx="1" fill="#0072CE" opacity="0.95" />
+
+      {/* Hood */}
+      <rect x="58" y="21" width="84" height="46" rx="4" fill="url(#tataHood)" />
+      <line x1="100" y1="23" x2="100" y2="66" stroke="#4d8fd1" strokeWidth="1.2" opacity="0.6" />
+      {/* Hood vents */}
+      {[0,1,2,3].map(i => (
+        <rect key={i} x="68" y={28 + i * 8} width="64" height="4" rx="2"
+          fill="#001f5b" opacity="0.5" />
+      ))}
+
+      {/* TATA logo on hood */}
+      <rect x="84" y="40" width="32" height="14" rx="3" fill="#001f5b" opacity="0.85" />
+      <text x="100" y="50" textAnchor="middle" fontSize="8" fontWeight="900"
+        fill="#ffffff" letterSpacing="1">TATA</text>
+
+      {/* Windshield */}
+      <path d="M 61,67 L 139,67 L 135,85 L 65,85 Z" fill="url(#glassGrad)" />
+      <path d="M 66,68 L 112,68 L 109,78 L 69,78 Z" fill="url(#glassReflect)" opacity="0.5" />
+      <line x1="76" y1="83" x2="97" y2="69" stroke="#1e293b" strokeWidth="0.8" opacity="0.6" />
+      <line x1="124" y1="83" x2="103" y2="69" stroke="#1e293b" strokeWidth="0.8" opacity="0.6" />
+
+      {/* Cab interior */}
+      <rect x="57" y="85" width="86" height="40" rx="3" fill="#003087" opacity="0.7" />
+      <rect x="64" y="89" width="18" height="14" rx="3" fill="#001f5b" />
+      <rect x="118" y="89" width="18" height="14" rx="3" fill="#001f5b" />
+      <circle cx="80" cy="114" r="8" fill="none" stroke="#001f5b" strokeWidth="2.5" />
+      <circle cx="80" cy="114" r="2.5" fill="#001f5b" />
+
+      {/* Blue stripe on cab bottom */}
+      <rect x="57" y="120" width="86" height="9" fill="url(#tataStripe)" />
+      <text x="100" y="126.5" textAnchor="middle" fontSize="4" fontWeight="800"
+        fill="white" letterSpacing="0.4">TATA PRIMA · HEAVY DUTY</text>
+
+      {/* === CHASSIS === */}
+      <rect x="67" y="129" width="11" height="158" fill="#334155" />
+      <rect x="122" y="129" width="11" height="158" fill="#334155" />
+      {[0,1,2].map(i => (
+        <rect key={i} x="67" y={145 + i * 45} width="66" height="6" fill="#475569" />
+      ))}
+
+      {/* === CARGO BOX — white with blue stripe === */}
+      <rect x="57" y="129" width="86" height="152" rx="3" fill="url(#tataCargo)" />
+      {/* Blue side stripes */}
+      <rect x="57" y="129" width="5" height="152" fill="#003087" opacity="0.8" rx="1" />
+      <rect x="138" y="129" width="5" height="152" fill="#003087" opacity="0.8" rx="1" />
+      {/* Cargo ribs */}
+      {[0,1,2,3,4].map(i => (
+        <line key={i} x1="59" y1={148 + i * 27} x2="141" y2={148 + i * 27}
+          stroke="#94a3b8" strokeWidth="0.8" opacity="0.5" />
+      ))}
+
+      {/* Rear bumper */}
+      <rect x="58" y="281" width="84" height="11" rx="3" fill="url(#chrome)" />
+      <rect x="60" y="282" width="22" height="7" rx="2" fill="url(#brakeLight)" />
+      <rect x="118" y="282" width="22" height="7" rx="2" fill="url(#brakeLight)" />
+      {/* Blue rear strip */}
+      <rect x="84" y="283" width="32" height="5" rx="2" fill="#003087" opacity="0.7" />
+
+      {/* Exhaust */}
+      <circle cx="55" cy="268" r="3.5" fill="#374151" stroke="#1f2937" strokeWidth="0.8" />
+      <circle cx="55" cy="268" r="1.8" fill="#111827" />
+
+      {/* Mirrors — Tata Prima style */}
+      <rect x="37" y="54" width="17" height="10" rx="3" fill="#0072CE" stroke="#003087" strokeWidth="0.8" />
+      <rect x="146" y="54" width="17" height="10" rx="3" fill="#0072CE" stroke="#003087" strokeWidth="0.8" />
+    </g>
+  );
+}
+
+// ── 8. ASHOK LEYLAND — red/white AL heavy truck ───────────────────────────────
+// AL brand: dark red #C41E3A, accent #E8192C, silver/white body
+// 6 tyres: 2 front single + 4 rear dual
+function AshokLeylandBody() {
+  return (
+    <g filter="url(#bodyShadow)">
+      <defs>
+        <radialGradient id="alCab" cx="48%" cy="35%" r="60%">
+          <stop offset="0%"   stopColor="#ffffff" />
+          <stop offset="45%"  stopColor="#f1f5f9" />
+          <stop offset="100%" stopColor="#cbd5e1" />
+        </radialGradient>
+        <linearGradient id="alHood" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stopColor="#94a3b8" />
+          <stop offset="30%"  stopColor="#e2e8f0" />
+          <stop offset="50%"  stopColor="#ffffff" />
+          <stop offset="70%"  stopColor="#e2e8f0" />
+          <stop offset="100%" stopColor="#94a3b8" />
+        </linearGradient>
+        <linearGradient id="alStripe" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stopColor="#7f0d1c" />
+          <stop offset="30%"  stopColor="#C41E3A" />
+          <stop offset="50%"  stopColor="#E8192C" />
+          <stop offset="70%"  stopColor="#C41E3A" />
+          <stop offset="100%" stopColor="#7f0d1c" />
+        </linearGradient>
+        <linearGradient id="alCargo" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stopColor="#cbd5e1" />
+          <stop offset="15%"  stopColor="#f1f5f9" />
+          <stop offset="50%"  stopColor="#ffffff" />
+          <stop offset="85%"  stopColor="#f1f5f9" />
+          <stop offset="100%" stopColor="#cbd5e1" />
+        </linearGradient>
+        <radialGradient id="alBadge" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"   stopColor="#E8192C" />
+          <stop offset="100%" stopColor="#7f0d1c" />
+        </radialGradient>
+      </defs>
+
+      <ellipse cx="100" cy="298" rx="80" ry="10" fill="rgba(0,0,0,0.28)" />
+
+      {/* === CAB — white === */}
+      <path d="M 68,14 Q 56,14 55,27 L 53,112 L 53,128 L 147,128 L 147,112 L 145,27 Q 144,14 132,14 Z"
+        fill="url(#alCab)" />
+
+      {/* Front bumper — red AL style */}
+      <rect x="56" y="5" width="88" height="13" rx="4" fill="url(#alStripe)" />
+      {/* Chrome over-rider */}
+      <rect x="62" y="7" width="76" height="7" rx="3" fill="url(#chrome)" />
+
+      {/* Headlights — round style (AL signature) */}
+      <ellipse cx="66" cy="12" rx="12" ry="9" fill="url(#headlight)" />
+      <ellipse cx="134" cy="12" rx="12" ry="9" fill="url(#headlight)" />
+      <ellipse cx="66" cy="12" rx="7" ry="5.5" fill="#fde047" opacity="0.7" />
+      <ellipse cx="134" cy="12" rx="7" ry="5.5" fill="#fde047" opacity="0.7" />
+      {/* Red DRL accent */}
+      <rect x="57" y="20" width="86" height="2.5" rx="1" fill="#E8192C" opacity="0.9" />
+
+      {/* Hood — white */}
+      <rect x="58" y="23" width="84" height="44" rx="4" fill="url(#alHood)" />
+      <line x1="100" y1="25" x2="100" y2="66" stroke="#e2e8f0" strokeWidth="1" opacity="0.8" />
+      {[0,1,2].map(i => (
+        <rect key={i} x="70" y={30 + i * 10} width="60" height="4" rx="2"
+          fill="#e2e8f0" opacity="0.6" />
+      ))}
+
+      {/* AL Badge on hood — circular logo */}
+      <circle cx="100" cy="44" r="12" fill="url(#alBadge)" />
+      <circle cx="100" cy="44" r="12" fill="none" stroke="#fca5a5" strokeWidth="0.8" />
+      {/* AL text */}
+      <text x="100" y="41" textAnchor="middle" fontSize="6" fontWeight="900"
+        fill="white" letterSpacing="0.5">AL</text>
+      <text x="100" y="51" textAnchor="middle" fontSize="2.8" fill="#fca5a5"
+        letterSpacing="0.2" fontWeight="600">ASHOK LEYLAND</text>
+
+      {/* Windshield */}
+      <path d="M 61,67 L 139,67 L 135,85 L 65,85 Z" fill="url(#glassGrad)" />
+      <path d="M 66,68 L 112,68 L 109,78 L 69,78 Z" fill="url(#glassReflect)" opacity="0.5" />
+      <line x1="76" y1="83" x2="97" y2="69" stroke="#475569" strokeWidth="0.8" opacity="0.6" />
+      <line x1="124" y1="83" x2="103" y2="69" stroke="#475569" strokeWidth="0.8" opacity="0.6" />
+
+      {/* Cab interior */}
+      <rect x="57" y="85" width="86" height="40" rx="3" fill="#e2e8f0" />
+      <rect x="64" y="89" width="18" height="14" rx="3" fill="#cbd5e1" />
+      <rect x="118" y="89" width="18" height="14" rx="3" fill="#cbd5e1" />
+      <circle cx="80" cy="114" r="8" fill="none" stroke="#334155" strokeWidth="2.5" />
+      <circle cx="80" cy="114" r="2.5" fill="#334155" />
+
+      {/* Red AL brand stripe on cab bottom */}
+      <rect x="57" y="120" width="86" height="9" fill="url(#alStripe)" />
+      <text x="100" y="126.5" textAnchor="middle" fontSize="4" fontWeight="800"
+        fill="white" letterSpacing="0.4">ASHOK LEYLAND · ECOMET</text>
+
+      {/* === CHASSIS === */}
+      <rect x="67" y="129" width="11" height="158" fill="#334155" />
+      <rect x="122" y="129" width="11" height="158" fill="#334155" />
+      {[0,1,2].map(i => (
+        <rect key={i} x="67" y={145 + i * 45} width="66" height="6" fill="#475569" />
+      ))}
+
+      {/* === CARGO BOX — white with red stripes === */}
+      <rect x="57" y="129" width="86" height="152" rx="3" fill="url(#alCargo)" />
+      {/* Red side stripes */}
+      <rect x="57" y="129" width="5" height="152" fill="#C41E3A" opacity="0.8" rx="1" />
+      <rect x="138" y="129" width="5" height="152" fill="#C41E3A" opacity="0.8" rx="1" />
+      {/* Cargo ribs */}
+      {[0,1,2,3,4].map(i => (
+        <line key={i} x1="59" y1={148 + i * 27} x2="141" y2={148 + i * 27}
+          stroke="#94a3b8" strokeWidth="0.8" opacity="0.5" />
+      ))}
+      {/* AL badge on cargo body */}
+      <circle cx="100" cy="200" r="14" fill="url(#alBadge)" opacity="0.9" />
+      <circle cx="100" cy="200" r="14" fill="none" stroke="#fca5a5" strokeWidth="0.8" />
+      <text x="100" y="197" textAnchor="middle" fontSize="7" fontWeight="900" fill="white">AL</text>
+      <text x="100" y="207" textAnchor="middle" fontSize="3" fill="#fca5a5" letterSpacing="0.2">ASHOK LEYLAND</text>
+
+      {/* Rear bumper */}
+      <rect x="58" y="281" width="84" height="11" rx="3" fill="url(#alStripe)" />
+      <rect x="60" y="282" width="22" height="7" rx="2" fill="url(#brakeLight)" />
+      <rect x="118" y="282" width="22" height="7" rx="2" fill="url(#brakeLight)" />
+
+      {/* Exhaust */}
+      <circle cx="55" cy="268" r="3.5" fill="#374151" stroke="#1f2937" strokeWidth="0.8" />
+      <circle cx="55" cy="268" r="1.8" fill="#111827" />
+
+      {/* Mirrors — white */}
+      <rect x="37" y="54" width="17" height="10" rx="3" fill="#e2e8f0" stroke="#C41E3A" strokeWidth="1" />
+      <rect x="146" y="54" width="17" height="10" rx="3" fill="#e2e8f0" stroke="#C41E3A" strokeWidth="1" />
+    </g>
+  );
+}
+
 // ── Layout definitions ─────────────────────────────────────────────────────────
 const LAYOUTS = {
   Pickup: {
@@ -925,6 +1285,42 @@ const LAYOUTS = {
       { id: 'R2Li', x: 35,  y: 218, w: 19, h: 35, label: 'R2Li' },
       { id: 'R2Ri', x: 146, y: 218, w: 19, h: 35, label: 'R2Ri' },
       { id: 'R2Ro', x: 167, y: 218, w: 19, h: 35, label: 'R2Ro' },
+    ],
+  },
+  Bus: {
+    emoji: '🚌', viewH: 330,
+    Body: BusBody,
+    tyres: [
+      { id: 'FL',  x: 14,  y: 38,  w: 22, h: 42, label: 'FL'  },
+      { id: 'FR',  x: 164, y: 38,  w: 22, h: 42, label: 'FR'  },
+      { id: 'RLo', x: 0,   y: 192, w: 20, h: 38, label: 'RLo' },
+      { id: 'RLi', x: 22,  y: 192, w: 20, h: 38, label: 'RLi' },
+      { id: 'RRi', x: 158, y: 192, w: 20, h: 38, label: 'RRi' },
+      { id: 'RRo', x: 180, y: 192, w: 20, h: 38, label: 'RRo' },
+    ],
+  },
+  Tata: {
+    emoji: '🚛', viewH: 305,
+    Body: TataBody,
+    tyres: [
+      { id: 'FL',  x: 31,  y: 32,  w: 22, h: 40, label: 'FL'  },
+      { id: 'FR',  x: 147, y: 32,  w: 22, h: 40, label: 'FR'  },
+      { id: 'RLo', x: 16,  y: 178, w: 20, h: 36, label: 'RLo' },
+      { id: 'RLi', x: 38,  y: 178, w: 20, h: 36, label: 'RLi' },
+      { id: 'RRi', x: 142, y: 178, w: 20, h: 36, label: 'RRi' },
+      { id: 'RRo', x: 164, y: 178, w: 20, h: 36, label: 'RRo' },
+    ],
+  },
+  'Ashok Leyland': {
+    emoji: '🚚', viewH: 305,
+    Body: AshokLeylandBody,
+    tyres: [
+      { id: 'FL',  x: 31,  y: 32,  w: 22, h: 40, label: 'FL'  },
+      { id: 'FR',  x: 147, y: 32,  w: 22, h: 40, label: 'FR'  },
+      { id: 'RLo', x: 16,  y: 178, w: 20, h: 36, label: 'RLo' },
+      { id: 'RLi', x: 38,  y: 178, w: 20, h: 36, label: 'RLi' },
+      { id: 'RRi', x: 142, y: 178, w: 20, h: 36, label: 'RRi' },
+      { id: 'RRo', x: 164, y: 178, w: 20, h: 36, label: 'RRo' },
     ],
   },
   'Concrete pump': {

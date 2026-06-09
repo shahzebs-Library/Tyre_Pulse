@@ -21,6 +21,7 @@ import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
+import PageHeader from '../components/ui/PageHeader'
 import { computeAllKpis, computeCpkByBrand } from '../lib/kpiEngine'
 
 ChartJS.register(
@@ -416,17 +417,11 @@ export default function PerformanceBenchmark() {
   return (
     <div className="min-h-screen bg-gray-950 p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-900/40 border border-purple-700 flex items-center justify-center">
-            <Target size={20} className="text-purple-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Performance Benchmarking</h1>
-            <p className="text-gray-400 text-sm">Fleet performance vs industry standards — {filtered.length} tyre records</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Performance Benchmarking"
+        subtitle={`Fleet performance vs industry standards — ${filtered.length} tyre records`}
+        icon={Target}
+        actions={<>
           <select value={period} onChange={e => setPeriod(e.target.value)}
             className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none">
             <option value="90d">Last 90 Days</option>
@@ -441,8 +436,8 @@ export default function PerformanceBenchmark() {
           <button onClick={load} className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors"><RefreshCw size={16} /></button>
           <button onClick={exportPdf} className="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors"><FileText size={16} />PDF</button>
           <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors"><FileSpreadsheet size={16} />Excel</button>
-        </div>
-      </div>
+        </>}
+      />
 
       {error && <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 text-sm">{error}</div>}
 

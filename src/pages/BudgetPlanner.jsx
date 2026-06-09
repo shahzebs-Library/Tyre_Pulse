@@ -12,6 +12,7 @@ import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
+import PageHeader from '../components/ui/PageHeader'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, CheckCircle,
   ChevronDown, ChevronUp, Download, RefreshCw, Loader2, FileSpreadsheet,
@@ -717,16 +718,11 @@ export default function BudgetPlanner() {
     <div className="space-y-6 pb-10">
 
       {/* ── Header ── */}
-      <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <DollarSign className="w-7 h-7 text-blue-400" />
-            Annual Budget Planner
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">What-if modeling · Actual vs Budget · Site allocation · Scenario analysis</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Year Selector */}
+      <PageHeader
+        title="Annual Budget Planner"
+        subtitle="What-if modeling · Actual vs Budget · Site allocation · Scenario analysis"
+        icon={DollarSign}
+        actions={<>
           <div className="flex items-center gap-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5">
             <Calendar className="w-4 h-4 text-blue-400" />
             <select
@@ -758,8 +754,8 @@ export default function BudgetPlanner() {
             <FileSpreadsheet className="w-4 h-4" />
             Excel
           </button>
-        </div>
-      </motion.div>
+        </>}
+      />
 
       {/* ── Status Bar ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }}

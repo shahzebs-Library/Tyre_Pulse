@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import PageHeader from '../components/ui/PageHeader'
 import {
   User, Users, TrendingUp, TrendingDown, Award, AlertTriangle,
   BarChart2, Download, FileText, FileSpreadsheet, Search, Filter,
@@ -750,20 +751,11 @@ export default function DriverManagement() {
     <div className="space-y-6">
 
       {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'rgba(22,163,74,0.15)', border: '1px solid rgba(22,163,74,0.3)' }}>
-              <Users size={14} className="text-green-400" />
-            </div>
-            <h1 className="text-xl font-bold text-white">Driver Intelligence</h1>
-          </div>
-          <p className="text-sm text-gray-600 ml-9.5">
-            CPK ranking, failure analysis and tyre cost impact by driver
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Driver Intelligence"
+        subtitle="CPK ranking, failure analysis and tyre cost impact by driver"
+        icon={Users}
+        actions={<>
           <button
             onClick={load}
             className="p-2 rounded-lg text-gray-500 hover:text-green-400 transition-colors hover:bg-green-400/10"
@@ -785,8 +777,8 @@ export default function DriverManagement() {
           >
             <FileText size={13} /> PDF
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── KPI Cards ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

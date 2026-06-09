@@ -14,6 +14,7 @@ import { Bar, Line, Doughnut, Scatter } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import PageHeader from '../components/ui/PageHeader'
 import {
   mean, stdDev, sum, groupBy, bucketByMonth, rollingAverage,
   linearRegression, computeSiteMetrics, computeBrandMetrics,
@@ -660,17 +661,11 @@ export default function AdvancedAnalytics() {
     <div className="min-h-screen bg-gray-950 text-white">
       {/* Page Header */}
       <div className="px-6 pt-6 pb-4 border-b border-gray-800">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-white flex items-center gap-2">
-              <BarChart2 size={22} className="text-blue-400" />
-              Advanced Analytics
-            </h1>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {fmt(filtered.length)} records · {uniqueSites.length} sites
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+        <PageHeader
+          title="Advanced Analytics"
+          subtitle={`${fmt(filtered.length)} records · ${uniqueSites.length} sites`}
+          icon={BarChart2}
+          actions={<>
             <button
               onClick={handleExportExcel}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
@@ -685,8 +680,8 @@ export default function AdvancedAnalytics() {
               <Download size={13} />
               PDF
             </button>
-          </div>
-        </div>
+          </>}
+        />
 
         {/* Global Filters */}
         <div className="flex flex-wrap items-center gap-2 mt-4">

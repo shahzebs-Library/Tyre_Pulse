@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import PageHeader from '../components/ui/PageHeader'
 import {
   DollarSign, TrendingUp, TrendingDown, BarChart2, PieChart, Target,
   AlertTriangle, Award, ArrowUpRight, ArrowDownRight, Minus, Download,
@@ -543,17 +544,11 @@ export default function CostCenter() {
     >
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <DollarSign className="text-green-400" size={24} />
-            Cost Center
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">Multi-dimensional tyre cost analysis &amp; optimization intelligence</p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Period presets */}
+      <PageHeader
+        title="Cost Center"
+        subtitle="Multi-dimensional tyre cost analysis & optimization intelligence"
+        icon={DollarSign}
+        actions={<>
           <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-900 border border-gray-800">
             {PERIOD_PRESETS.map(p => (
               <button
@@ -569,8 +564,6 @@ export default function CostCenter() {
               </button>
             ))}
           </div>
-
-          {/* Custom range */}
           <input
             type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPreset('custom') }}
             className="text-xs bg-gray-900 border border-gray-700 text-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600"
@@ -580,8 +573,6 @@ export default function CostCenter() {
             type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPreset('custom') }}
             className="text-xs bg-gray-900 border border-gray-700 text-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-600"
           />
-
-          {/* Refresh */}
           <button
             onClick={fetchData}
             disabled={loading}
@@ -589,8 +580,6 @@ export default function CostCenter() {
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           </button>
-
-          {/* Export */}
           <button
             onClick={handleExcelExport}
             disabled={exporting}
@@ -607,8 +596,8 @@ export default function CostCenter() {
             <FileText size={13} />
             PDF
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── Error ──────────────────────────────────────────────────────────── */}
       {error && (

@@ -18,6 +18,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -483,16 +484,11 @@ ${siteActivity.map(([s, c]) => `<tr><td>${s}</td><td>${c}</td></tr>`).join('')}
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
 
       {/* Header + Navigator */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}
-        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <CalendarDays size={22} className="text-green-400" />
-            Daily Ops
-          </h1>
-          <p className="text-sm text-gray-400 mt-0.5">{fmtDisp(selectedDate)}</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+      <PageHeader
+        title="Daily Ops"
+        subtitle={fmtDisp(selectedDate)}
+        icon={CalendarDays}
+        actions={<>
           <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-gray-600 transition-colors">
             <ChevronLeft size={16} />
           </button>
@@ -514,8 +510,8 @@ ${siteActivity.map(([s, c]) => `<tr><td>${s}</td><td>${c}</td></tr>`).join('')}
           <button onClick={printBriefing} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-900/30 border border-green-700/50 text-green-300 text-sm font-medium hover:bg-green-900/50 transition-colors">
             <Printer size={14} /> Print Briefing
           </button>
-        </div>
-      </motion.div>
+        </>}
+      />
 
       {loading && (
         <div className="flex items-center justify-center py-20">

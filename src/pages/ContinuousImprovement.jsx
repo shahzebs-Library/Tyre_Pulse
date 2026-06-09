@@ -15,6 +15,7 @@ import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -1127,21 +1128,11 @@ export default function ContinuousImprovement() {
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4 md:p-6 space-y-6">
 
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-600/30">
-            <Zap size={20} className="text-blue-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-100">Continuous Improvement</h1>
-            <p className="text-xs text-gray-500 mt-0.5 max-w-xl">
-              Systematic identification and tracking of cost reduction, reliability, and process improvement opportunities
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Period selector */}
+      <PageHeader
+        title="Continuous Improvement"
+        subtitle="Systematic identification and tracking of cost reduction, reliability, and process improvement opportunities"
+        icon={Zap}
+        actions={<>
           {['3mo','6mo','1yr'].map(p => (
             <button
               key={p}
@@ -1155,7 +1146,6 @@ export default function ContinuousImprovement() {
               {p === '3mo' ? 'Last 3 Mo' : p === '6mo' ? 'Last 6 Mo' : 'Last 12 Mo'}
             </button>
           ))}
-
           <button
             onClick={handleExcelExport}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium transition-colors"
@@ -1168,8 +1158,8 @@ export default function ContinuousImprovement() {
           >
             <FileText size={13} /> PDF
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {error && (
         <div className="bg-red-950/50 border border-red-700/50 rounded-xl p-4 flex items-center gap-3 text-red-300 text-sm">

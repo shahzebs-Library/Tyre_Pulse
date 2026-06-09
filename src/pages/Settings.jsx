@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Save, User, Settings2, Bell, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import { sendReportEmail } from '../lib/emailService'
 
 const ROLE_BADGE = {
@@ -358,10 +360,11 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-gray-400 text-sm mt-1">Manage your profile, preferences and alert thresholds</p>
-      </div>
+      <PageHeader
+        title="Settings"
+        subtitle="Manage your profile, preferences and alert thresholds"
+        icon={Settings2}
+      />
 
       {/* 3-column grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

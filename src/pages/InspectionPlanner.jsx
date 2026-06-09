@@ -15,6 +15,7 @@ import { Bar } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import PageHeader from '../components/ui/PageHeader'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
@@ -895,17 +896,11 @@ export default function InspectionPlanner() {
   return (
     <div className="min-h-screen bg-gray-950 text-white p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <ClipboardList size={22} className="text-blue-400" />
-            Inspection Planner & Scheduler
-          </h1>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {distinctAssets.length} assets · {overdueQueue.length} overdue · {schedule.filter(s => s.status === 'Scheduled').length} upcoming
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
+      <PageHeader
+        title="Inspection Planner & Scheduler"
+        subtitle={`${distinctAssets.length} assets · ${overdueQueue.length} overdue · ${schedule.filter(s => s.status === 'Scheduled').length} upcoming`}
+        icon={ClipboardList}
+        actions={<>
           <button
             onClick={fetchData}
             disabled={refreshing}
@@ -934,8 +929,8 @@ export default function InspectionPlanner() {
           >
             <Plus size={14} />Schedule
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Interval Config */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">

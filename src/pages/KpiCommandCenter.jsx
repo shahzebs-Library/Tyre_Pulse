@@ -19,6 +19,7 @@ import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
+import PageHeader from '../components/ui/PageHeader'
 import {
   computeCpkFleet, computeAvgTyreLife, computeFailureRate,
   computeScrapRate, computePressureCompliance, computeInspectionCompliance,
@@ -866,21 +867,11 @@ export default function KpiCommandCenter() {
     <div className="min-h-screen bg-gray-950 p-4 md:p-6 space-y-5">
 
       {/* Header */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-900/40 border border-blue-700 flex items-center justify-center">
-            <Command size={20} className="text-blue-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">KPI Command Center</h1>
-            <p className="text-gray-400 text-sm">
-              Real-time fleet performance intelligence — {records.length.toLocaleString()} tyre records
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Period presets */}
+      <PageHeader
+        title="KPI Command Center"
+        subtitle={`Real-time fleet performance intelligence — ${records.length.toLocaleString()} tyre records`}
+        icon={Command}
+        actions={<>
           <div className="flex items-center bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
             {PERIOD_PRESETS.map(p => (
               <button
@@ -932,8 +923,8 @@ export default function KpiCommandCenter() {
             className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-xs rounded-lg transition-colors">
             <Download size={14} />Excel
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {error && (
         <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 text-sm flex items-center gap-2">

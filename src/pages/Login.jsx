@@ -181,7 +181,7 @@ export default function Login() {
                   className={cn(
                     'flex-1 py-3 text-sm font-semibold border-b-2 transition-all duration-200 -mb-px',
                     tab === val
-                      ? 'border-brand-600-bright text-brand-bright'
+                      ? 'border-brand-400 text-brand-bright'
                       : 'border-transparent text-muted hover:text-white'
                   )}
                 >

@@ -19,6 +19,7 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -852,17 +853,11 @@ export default function AssetManagement() {
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-              <Truck className="w-7 h-7 text-blue-400" />
-              Asset Management
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Fleet registry · tyre profiling · health scoring · operational intelligence
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
+        <PageHeader
+          title="Asset Management"
+          subtitle="Fleet registry · tyre profiling · health scoring · operational intelligence"
+          icon={Truck}
+          actions={<>
             <button onClick={() => setRefreshKey(k => k + 1)}
               className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors border border-gray-700">
               <RefreshCw className="w-4 h-4" />
@@ -881,8 +876,8 @@ export default function AssetManagement() {
                 <Plus className="w-4 h-4" /> Add Asset
               </button>
             )}
-          </div>
-        </div>
+          </>}
+        />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">

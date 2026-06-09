@@ -11,6 +11,7 @@ import {
   Download, FileText, Filter, X, ChevronLeft, ChevronRight, Search,
   RefreshCw, BarChart3, Thermometer, Users, Building2, Info, Eye,
 } from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
@@ -826,35 +827,21 @@ export default function PressureIntelligence() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4 space-y-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Gauge size={20} className="text-blue-400" />
-            Pressure Intelligence
-          </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Deep pressure monitoring, anomaly detection & compliance tracking
-            {enriched.length > 0 && ` · ${enriched.length.toLocaleString()} readings`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={exportExcel}
-            disabled={enriched.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-900/40 border border-green-700/50 text-green-300 text-xs hover:bg-green-900/60 transition-colors disabled:opacity-40"
-          >
-            <Download size={13} /> Excel
-          </button>
-          <button
-            onClick={exportPdf}
-            disabled={enriched.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-900/40 border border-red-700/50 text-red-300 text-xs hover:bg-red-900/60 transition-colors disabled:opacity-40"
-          >
-            <FileText size={13} /> PDF
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Pressure Intelligence"
+        subtitle={`Deep pressure monitoring, anomaly detection & compliance tracking${enriched.length > 0 ? ` · ${enriched.length.toLocaleString()} readings` : ''}`}
+        icon={Gauge}
+        actions={
+          <div className="flex items-center gap-2">
+            <button onClick={exportExcel} disabled={enriched.length === 0} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40">
+              <Download size={13} /> Excel
+            </button>
+            <button onClick={exportPdf} disabled={enriched.length === 0} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40">
+              <FileText size={13} /> PDF
+            </button>
+          </div>
+        }
+      />
 
       {/* Filters */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">

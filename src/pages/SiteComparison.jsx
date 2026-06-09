@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeSiteMetrics, buildSiteRadar, bucketByMonth } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { Download, FileText, Maximize2, GitCompareArrows } from 'lucide-react'
+import { Download, FileText, Maximize2, GitMerge } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import {
@@ -170,7 +170,7 @@ export default function SiteComparison() {
       <PageHeader
         title="Site Comparison"
         subtitle="Head-to-head performance across sites"
-        icon={GitCompareArrows}
+        icon={GitMerge}
         actions={(() => {
           const SITE_COLS = [
             { key: 'site', header: 'Site' },

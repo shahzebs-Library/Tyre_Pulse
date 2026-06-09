@@ -1638,7 +1638,6 @@ export default function RotationSchedule() {
             </AnimatePresence>
           </>
         )}
-      </div>
 
       {/* ── Drawers / Modals ─────────────────────────────────────────────────── */}
       {drawerVehicle && (

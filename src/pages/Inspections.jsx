@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare } from 'lucide-react'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import jsPDF from 'jspdf'
@@ -22,6 +22,9 @@ const SEV_CONFIG = {
   High:     { color: 'text-orange-400', bg: 'bg-orange-900/20', border: 'border-orange-700/40' },
   Critical: { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-700/40' },
 }
+
+const VEHICLE_TYPES = ['Pickup', 'Canter', 'Tri-mixer', 'Concrete pump', 'Wheel loader', 'Skid loader', 'Bus', 'Tata', 'Ashok Leyland']
+const RISK_LEVELS   = ['good', 'warning', 'critical', 'none']
 
 const INSPECTION_TYPES   = ['Routine', 'Pressure', 'Visual', 'Full', 'Pre-Trip']
 const OBSERVATION_TYPES  = ['Site Observation']
@@ -45,6 +48,7 @@ const EMPTY_FORM = {
   title: '', inspection_type: 'Routine', site: '', asset_no: '', tyre_serial: '',
   scheduled_date: '', status: 'Scheduled', findings: '', inspector: '', notes: '',
   attendees: '', severity: 'Medium', photo_data: null,
+  vehicle_type: '', tyre_conditions: {},
 }
 
 function isObservationType(t) { return OBSERVATION_TYPES.includes(t) }
@@ -107,6 +111,7 @@ export default function Inspections() {
   const [deleteId, setDeleteId]         = useState(null)
   const [activeTab, setActiveTab]       = useState('all')
   const [raisingAction, setRaisingAction] = useState(null)
+  const [selectedTyre, setSelectedTyre]   = useState(null)
   const fileRef = useRef(null)
 
   // Language toggle for checklist tab
@@ -882,9 +887,14 @@ export default function Inspections() {
                           Action ✓
                         </span>
                       )}
-                      <button onClick={() => setForm({ ...r })}
+                      <button onClick={() => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} })}
                         className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors">
                         Edit
+                      </button>
+                      <button onClick={() => exportInspectionDetailPdf(r)}
+                        className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
+                        title="Export detailed PDF with tyre diagram">
+                        <FileText size={11} className="inline" />
                       </button>
                       <button onClick={() => setDeleteId(r.id)}
                         className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-800/50 transition-colors">
@@ -979,6 +989,74 @@ export default function Inspections() {
                 </div>
               )}
             </div>
+
+            {/* Tyre diagram — inspections only */}
+            {!isObservationType(form.inspection_type) && !isTrainingType(form.inspection_type) && (
+              <div>
+                <label className="label">Vehicle Type</label>
+                <select className="input mb-3" value={form.vehicle_type || ''}
+                  onChange={e => { setForm(f => ({ ...f, vehicle_type: e.target.value, tyre_conditions: {} })); setSelectedTyre(null) }}>
+                  <option value="">— select to show tyre diagram —</option>
+                  {VEHICLE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+
+                {form.vehicle_type && (
+                  <div className="bg-gray-800/60 rounded-xl p-4 border border-gray-700/50">
+                    <p className="text-xs text-gray-400 mb-3">Click a tyre to set its condition.</p>
+                    <VehicleTyreDiagram
+                      vehicleType={form.vehicle_type}
+                      tyreData={form.tyre_conditions || {}}
+                      onTyreClick={(id) => setSelectedTyre(id === selectedTyre ? null : id)}
+                      width={180}
+                    />
+
+                    {selectedTyre && (
+                      <div className="mt-4 p-3 bg-gray-900 rounded-lg border border-gray-700">
+                        <p className="text-xs font-semibold text-white mb-2">Tyre: {selectedTyre}</p>
+                        <div className="flex gap-2 flex-wrap mb-2">
+                          {RISK_LEVELS.map(r => (
+                            <button
+                              key={r}
+                              type="button"
+                              onClick={() => setForm(f => ({
+                                ...f,
+                                tyre_conditions: {
+                                  ...f.tyre_conditions,
+                                  [selectedTyre]: { ...(f.tyre_conditions?.[selectedTyre] ?? {}), risk: r },
+                                },
+                              }))}
+                              className={`text-xs px-2.5 py-1 rounded border capitalize transition-all ${
+                                (form.tyre_conditions?.[selectedTyre]?.risk ?? 'none') === r
+                                  ? r === 'good'     ? 'bg-green-600 border-green-500 text-white'
+                                  : r === 'warning'  ? 'bg-yellow-600 border-yellow-500 text-white'
+                                  : r === 'critical' ? 'bg-red-600 border-red-500 text-white'
+                                  :                    'bg-gray-600 border-gray-500 text-white'
+                                  : 'bg-gray-800 border-gray-600 text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              {r === 'none' ? 'No data' : r}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="number"
+                          className="input text-xs py-1"
+                          placeholder="Pressure (PSI)"
+                          value={form.tyre_conditions?.[selectedTyre]?.pressure ?? ''}
+                          onChange={e => setForm(f => ({
+                            ...f,
+                            tyre_conditions: {
+                              ...f.tyre_conditions,
+                              [selectedTyre]: { ...(f.tyre_conditions?.[selectedTyre] ?? {}), pressure: e.target.value },
+                            },
+                          }))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {isTrainingType(form.inspection_type) ? (
               <div>

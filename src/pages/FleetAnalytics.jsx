@@ -72,10 +72,11 @@ export default function FleetAnalytics() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Fleet Analytics</h1>
-        <p className="text-gray-400 text-sm mt-1">Per-asset history, cost, failure frequency and tyre lifecycle</p>
-      </div>
+      <PageHeader
+        title="Fleet Analytics"
+        subtitle="Per-asset history, cost, failure frequency and tyre lifecycle"
+        icon={BarChart2}
+      />
 
       {/* Summary row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -90,11 +91,13 @@ export default function FleetAnalytics() {
               ? `${activeCurrency} ${Math.round(assetMetrics.reduce((s, a) => s + a.totalCost, 0) / assetMetrics.length).toLocaleString()}`
               : '—',
             color: 'text-green-400' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="card text-center">
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
-            <p className="text-gray-400 text-sm mt-1">{label}</p>
-          </div>
+        ].map(({ label, value, color }, i) => (
+          <motion.div key={label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+            <div className="card text-center">
+              <p className={`text-2xl font-bold ${color}`}>{value}</p>
+              <p className="text-gray-400 text-sm mt-1">{label}</p>
+            </div>
+          </motion.div>
         ))}
       </div>
 

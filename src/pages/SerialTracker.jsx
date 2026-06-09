@@ -209,12 +209,11 @@ export default function SerialTracker() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <ScanLine size={22} className="text-green-400" /> Serial Tracker
-        </h1>
-        <p className="text-gray-400 text-sm mt-1">Track a tyre's complete service history by serial number</p>
-      </div>
+      <PageHeader
+        title="Serial Tracker"
+        subtitle="Track a tyre's complete service history by serial number"
+        icon={ScanLine}
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg w-fit">

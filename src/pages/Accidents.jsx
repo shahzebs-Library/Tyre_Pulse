@@ -476,22 +476,30 @@ export default function Accidents() {
         <>
           {/* Stats row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="card text-center">
-              <p className="text-2xl font-bold text-white">{stats.total}</p>
-              <p className="text-xs text-gray-400 mt-1">Total Incidents</p>
-            </div>
-            <div className="card text-center">
-              <p className="text-2xl font-bold text-orange-400">{stats.open}</p>
-              <p className="text-xs text-gray-400 mt-1">Open</p>
-            </div>
-            <div className="card text-center">
-              <p className="text-2xl font-bold text-red-400">{stats.insur}</p>
-              <p className="text-xs text-gray-400 mt-1">Insurance Claims</p>
-            </div>
-            <div className="card text-center">
-              <p className="text-2xl font-bold text-green-400">{fmtCurrency(stats.cost)}</p>
-              <p className="text-xs text-gray-400 mt-1">Total Repair Cost</p>
-            </div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+              <div className="card text-center">
+                <p className="text-2xl font-bold text-white">{stats.total}</p>
+                <p className="text-xs text-gray-400 mt-1">Total Incidents</p>
+              </div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+              <div className="card text-center">
+                <p className="text-2xl font-bold text-orange-400">{stats.open}</p>
+                <p className="text-xs text-gray-400 mt-1">Open</p>
+              </div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 2 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+              <div className="card text-center">
+                <p className="text-2xl font-bold text-red-400">{stats.insur}</p>
+                <p className="text-xs text-gray-400 mt-1">Insurance Claims</p>
+              </div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 3 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
+              <div className="card text-center">
+                <p className="text-2xl font-bold text-green-400">{fmtCurrency(stats.cost)}</p>
+                <p className="text-xs text-gray-400 mt-1">Total Repair Cost</p>
+              </div>
+            </motion.div>
           </div>
 
           {/* Bar chart */}

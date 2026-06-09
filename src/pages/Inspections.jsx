@@ -291,7 +291,8 @@ export default function Inspections() {
       status: 'Done',
       completed_date: clDate,
       inspector: clInspector,
-      findings: JSON.stringify(clPositions),
+      tyre_conditions: clPositions,
+      findings: clNotes || null,
       notes: clNotes,
       country: activeCountry !== 'All' ? activeCountry : null,
       created_by: profile?.id ?? null,
@@ -309,7 +310,7 @@ export default function Inspections() {
   function exportChecklistPdf() {
     if (!clSaved) return
     const tyreData = clPositions.length > 0 ? clPositions
-      : (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })()
+      : (clSaved.tyre_conditions || (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })())
 
     const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const pw     = doc.internal.pageSize.width

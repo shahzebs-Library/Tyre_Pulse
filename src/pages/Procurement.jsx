@@ -22,6 +22,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -570,31 +571,25 @@ export default function Procurement() {
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-950 p-6 space-y-6">
-
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-900/40 border border-orange-700 flex items-center justify-center">
-            <ShoppingCart size={20} className="text-orange-400" />
+    <div className="space-y-6">
+      <PageHeader
+        title="Procurement"
+        subtitle={`Purchase order management — ${orders.length} total orders`}
+        icon={ShoppingCart}
+        actions={
+          <div className="flex items-center gap-2">
+            <button onClick={load} className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors" title="Refresh">
+              <RefreshCw size={16} />
+            </button>
+            <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors">
+              <FileSpreadsheet size={16} />Excel
+            </button>
+            <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-lg transition-colors">
+              <Plus size={16} />New PO
+            </button>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Procurement</h1>
-            <p className="text-gray-400 text-sm">Purchase order management — {orders.length} total orders</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={load} className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors" title="Refresh">
-            <RefreshCw size={16} />
-          </button>
-          <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors">
-            <FileSpreadsheet size={16} />Excel
-          </button>
-          <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-lg transition-colors">
-            <Plus size={16} />New PO
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Error ──────────────────────────────────────────────────────────── */}
       {error && (

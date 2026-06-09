@@ -21,6 +21,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -555,68 +556,54 @@ export default function StockReplenishment() {
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-950 p-6 space-y-6">
-
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-900/40 border border-emerald-700 flex items-center justify-center">
-            <Package size={20} className="text-emerald-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Stock Replenishment</h1>
-            <p className="text-gray-400 text-sm">
-              Procurement intelligence — {stockData.length} SKUs tracked
-              {lastSync && (
-                <span className="ml-2 text-gray-600">
-                  · Synced {lastSync.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
-                </span>
+    <div className="space-y-6">
+      <PageHeader
+        title="Stock Replenishment"
+        subtitle={`Procurement intelligence — ${stockData.length} SKUs tracked${lastSync ? ` · Synced ${lastSync.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+        icon={Package}
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              {leadTimeEdit ? (
+                <>
+                  <input
+                    type="number" min="1" max="365"
+                    value={leadTimeInput}
+                    onChange={e => setLeadTimeInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && saveLeadTime()}
+                    className="w-16 px-2 py-1.5 bg-gray-800 border border-emerald-600 rounded-lg text-white text-sm focus:outline-none"
+                    autoFocus
+                  />
+                  <span className="text-gray-400 text-xs">days</span>
+                  <button onClick={saveLeadTime} className="px-2 py-1.5 bg-emerald-700 text-white text-xs rounded-lg">
+                    <CheckCircle size={13} />
+                  </button>
+                  <button onClick={() => setLeadTimeEdit(false)} className="px-2 py-1.5 bg-gray-700 text-gray-300 text-xs rounded-lg">
+                    <X size={13} />
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => { setLeadTimeEdit(true); setLeadTimeInput(leadTimeDays.toString()) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg hover:border-emerald-600 transition-colors"
+                  title="Edit lead time"
+                >
+                  <Clock size={13} className="text-emerald-400" />
+                  Lead: {leadTimeDays}d
+                  <Edit2 size={11} className="text-gray-600" />
+                </button>
               )}
-            </p>
+            </div>
+            <button
+              onClick={load}
+              className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw size={16} />
+            </button>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Lead time editor */}
-          <div className="flex items-center gap-1">
-            {leadTimeEdit ? (
-              <>
-                <input
-                  type="number" min="1" max="365"
-                  value={leadTimeInput}
-                  onChange={e => setLeadTimeInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && saveLeadTime()}
-                  className="w-16 px-2 py-1.5 bg-gray-800 border border-emerald-600 rounded-lg text-white text-sm focus:outline-none"
-                  autoFocus
-                />
-                <span className="text-gray-400 text-xs">days</span>
-                <button onClick={saveLeadTime} className="px-2 py-1.5 bg-emerald-700 text-white text-xs rounded-lg">
-                  <CheckCircle size={13} />
-                </button>
-                <button onClick={() => setLeadTimeEdit(false)} className="px-2 py-1.5 bg-gray-700 text-gray-300 text-xs rounded-lg">
-                  <X size={13} />
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => { setLeadTimeEdit(true); setLeadTimeInput(leadTimeDays.toString()) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg hover:border-emerald-600 transition-colors"
-                title="Edit lead time"
-              >
-                <Clock size={13} className="text-emerald-400" />
-                Lead: {leadTimeDays}d
-                <Edit2 size={11} className="text-gray-600" />
-              </button>
-            )}
-          </div>
-          <button
-            onClick={load}
-            className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw size={16} />
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Error ────────────────────────────────────────────────────────────── */}
       {error && (

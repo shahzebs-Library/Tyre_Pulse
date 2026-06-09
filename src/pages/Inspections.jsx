@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare } from 'lucide-react'
+import { motion } from 'framer-motion'
+import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -535,53 +537,53 @@ export default function Inspections() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Inspections & Observations</h1>
-          <p className="text-gray-400 text-sm mt-1">Schedule inspections, record site observations and track training</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => exportToExcel(
-              filtered,
-              ['inspection_type','title','site','asset_no','scheduled_date','status','severity','inspector','attendees','findings'],
-              ['Type','Title','Site','Asset No','Date','Status','Severity','Inspector','Attendees','Findings'],
-              'TyrePulse_Inspections'
-            )}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <Download size={14}/> Excel
-          </button>
-          <button
-            onClick={() => exportToPdf(
-              filtered,
-              [
-                {key:'inspection_type',header:'Type'},
-                {key:'title',header:'Title'},
-                {key:'site',header:'Site'},
-                {key:'asset_no',header:'Asset'},
-                {key:'scheduled_date',header:'Date'},
-                {key:'status',header:'Status'},
-                {key:'severity',header:'Severity'},
-                {key:'inspector',header:'Inspector'},
-              ],
-              'Inspections & Observations',
-              'TyrePulse_Inspections',
-              'landscape'
-            )}
-            className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-          >
-            <FileText size={14}/> PDF
-          </button>
-          <button
-            className="btn-primary text-sm"
-            onClick={() => setForm({ ...EMPTY_FORM, inspection_type: defaultType })}
-          >
-            + Add Record
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Inspections & Observations"
+        subtitle="Schedule inspections, record site observations and track training"
+        icon={ClipboardList}
+        actions={
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => exportToExcel(
+                filtered,
+                ['inspection_type','title','site','asset_no','scheduled_date','status','severity','inspector','attendees','findings'],
+                ['Type','Title','Site','Asset No','Date','Status','Severity','Inspector','Attendees','Findings'],
+                'TyrePulse_Inspections'
+              )}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <Download size={14}/> Excel
+            </button>
+            <button
+              onClick={() => exportToPdf(
+                filtered,
+                [
+                  {key:'inspection_type',header:'Type'},
+                  {key:'title',header:'Title'},
+                  {key:'site',header:'Site'},
+                  {key:'asset_no',header:'Asset'},
+                  {key:'scheduled_date',header:'Date'},
+                  {key:'status',header:'Status'},
+                  {key:'severity',header:'Severity'},
+                  {key:'inspector',header:'Inspector'},
+                ],
+                'Inspections & Observations',
+                'TyrePulse_Inspections',
+                'landscape'
+              )}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <FileText size={14}/> PDF
+            </button>
+            <button
+              className="btn-primary text-sm"
+              onClick={() => setForm({ ...EMPTY_FORM, inspection_type: defaultType })}
+            >
+              + Add Record
+            </button>
+          </div>
+        }
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg w-fit flex-wrap">

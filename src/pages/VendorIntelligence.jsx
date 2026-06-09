@@ -17,6 +17,7 @@ import {
   Minus, ShieldAlert, Wrench, DollarSign, Activity, Zap, Mail,
 } from 'lucide-react'
 import EmailReportModal from '../components/EmailReportModal'
+import PageHeader from '../components/ui/PageHeader'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -707,38 +708,33 @@ export default function VendorIntelligence() {
   return (
     <div className="space-y-6 pb-10">
 
-      {/* ─── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Trophy className="text-yellow-400" size={22} />
-            <h1 className="text-xl font-bold text-white">Vendor &amp; Workshop Intelligence</h1>
+      <PageHeader
+        title="Vendor & Workshop Intelligence"
+        subtitle="Objective performance ranking for tyre brands and workshop sites — cost efficiency, reliability, and procurement intelligence"
+        icon={Trophy}
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExcelExport}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
+            >
+              <Download size={13} /> Excel
+            </button>
+            <button
+              onClick={handlePdfExport}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
+            >
+              <FileText size={13} /> PDF
+            </button>
+            <button
+              onClick={() => setEmailModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
+            >
+              <Mail size={13} /> Email Report
+            </button>
           </div>
-          <p className="text-sm text-gray-400 max-w-xl">
-            Objective performance ranking for tyre brands and workshop sites — cost efficiency, reliability, and procurement intelligence
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExcelExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
-          >
-            <Download size={13} /> Excel
-          </button>
-          <button
-            onClick={handlePdfExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
-          >
-            <FileText size={13} /> PDF
-          </button>
-          <button
-            onClick={() => setEmailModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
-          >
-            <Mail size={13} /> Email Report
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ─── Filters ─────────────────────────────────────────────────────────── */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-wrap items-center gap-3">

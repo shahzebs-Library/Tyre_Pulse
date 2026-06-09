@@ -24,6 +24,10 @@ import InstallPwaPrompt from './InstallPwaPrompt'
 import NotificationCenter from './NotificationCenter'
 import GlobalSearch from './GlobalSearch'
 
+// Roles that have access to restricted nav groups
+const INTELLIGENCE_ROLES = ['Admin']
+const ANALYTICS_ROLES    = ['Admin', 'Manager', 'Director']
+
 const NAV_GROUPS = [
   {
     label: 'Overview',
@@ -34,6 +38,7 @@ const NAV_GROUPS = [
   },
   {
     label: 'Analytics',
+    groupRoles: ANALYTICS_ROLES,
     items: [
       { to: '/analytics',    label: 'Analytics',          icon: BarChart2 },
       { to: '/brand-perf',   label: 'Brand Performance',  icon: Shield },
@@ -66,6 +71,7 @@ const NAV_GROUPS = [
   },
   {
     label: 'Intelligence',
+    groupRoles: INTELLIGENCE_ROLES,
     items: [
       { to: '/kpi-engine',              label: 'Engineering KPIs',        icon: Cpu },
       { to: '/kpi-command',            label: 'KPI Command Center',      icon: LayoutGrid },
@@ -121,6 +127,11 @@ const NAV_GROUPS = [
     ],
   },
 ]
+
+function shouldShowGroup(group, profile) {
+  if (!group.groupRoles) return true
+  return group.groupRoles.includes(profile?.role)
+}
 
 function shouldShowNavItem(item, profile) {
   if (profile?.role === 'Inspector') {
@@ -413,7 +424,9 @@ export default function Layout({ children }) {
 
         {/* ── Nav ────────────────────────────────────────────────────────────── */}
         <nav className="flex-1 overflow-y-auto py-1.5 px-2" style={{ scrollbarWidth: 'thin' }}>
-          {NAV_GROUPS.map(({ label, items }) => {
+          {NAV_GROUPS.map((group) => {
+            const { label, items } = group
+            if (!shouldShowGroup(group, profile)) return null
             const visibleItems = items.filter(item => shouldShowNavItem(item, profile))
             if (visibleItems.length === 0) return null
             const isCollapsed = collapsedGroups.has(label)

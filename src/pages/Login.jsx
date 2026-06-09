@@ -169,7 +169,7 @@ export default function Login() {
               className="flex items-center gap-2 px-4 py-3 rounded-xl mb-4 text-sm text-yellow-300 bg-yellow-500/10 border border-yellow-500/25"
             >
               <AlertCircle size={14} className="shrink-0" />
-              Session expired after inactivity. Please sign in again.
+              Session expired after 30 minutes of inactivity. Please sign in again.
             </motion.div>
           )}
         </AnimatePresence>

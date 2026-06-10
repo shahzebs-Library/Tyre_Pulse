@@ -7,9 +7,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLanguage, Language } from '../../contexts/LanguageContext'
+
+const LANG_OPTIONS: { code: Language; label: string }[] = [
+  { code: 'en', label: 'EN' },
+  { code: 'ar', label: 'ع' },
+  { code: 'ur', label: 'اردو' },
+]
 
 export default function LoginScreen() {
   const { signIn } = useAuth()
+  const { t, language, setLanguage, isRTL } = useLanguage()
+
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -18,7 +27,7 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     if (!identifier.trim() || !password) {
-      setError('Please enter your login and password.')
+      setError(t('login.errorRequired'))
       return
     }
     setError(null)
@@ -26,12 +35,14 @@ export default function LoginScreen() {
     try {
       const { error: signInError } = await signIn(identifier, password)
       if (signInError) {
-        setError(signInError.message ?? 'Login failed. Please check your credentials.')
+        setError(signInError.message ?? t('login.errorFailed'))
       }
     } finally {
       setLoading(false)
     }
   }
+
+  const textAlign = isRTL ? 'right' : 'left'
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -50,33 +61,47 @@ export default function LoginScreen() {
               <Text style={styles.logoEmoji}>🔧</Text>
             </View>
             <Text style={styles.appName}>TyrePulse</Text>
-            <Text style={styles.appSubtitle}>Inspector App</Text>
+            <Text style={styles.appSubtitle}>{t('login.appSubtitle')}</Text>
           </View>
 
           {/* Card */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Sign In</Text>
-            <Text style={styles.cardSubtitle}>
-              Use your email, username, or Employee ID
-            </Text>
+            {/* Language toggle */}
+            <View style={styles.langRow}>
+              {LANG_OPTIONS.map(opt => (
+                <TouchableOpacity
+                  key={opt.code}
+                  style={[styles.langBtn, language === opt.code && styles.langBtnActive]}
+                  onPress={() => setLanguage(opt.code)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.langBtnText, language === opt.code && styles.langBtnTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.cardTitle, { textAlign }]}>{t('login.cardTitle')}</Text>
+            <Text style={[styles.cardSubtitle, { textAlign }]}>{t('login.cardSubtitle')}</Text>
 
             {error && (
               <View style={styles.errorBox}>
                 <Ionicons name="alert-circle-outline" size={16} color="#dc2626" />
-                <Text style={styles.errorText}>{error}</Text>
+                <Text style={[styles.errorText, { textAlign }]}>{error}</Text>
               </View>
             )}
 
             {/* Identifier */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Email / Username / Employee ID</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={[styles.fieldLabel, { textAlign }]}>{t('login.identifierLabel')}</Text>
+              <View style={[styles.inputWrapper, isRTL && styles.inputWrapperRTL]}>
                 <Ionicons name="person-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { textAlign }]}
                   value={identifier}
                   onChangeText={v => { setIdentifier(v); setError(null) }}
-                  placeholder="Enter email, username, or ID"
+                  placeholder={t('login.identifierPlaceholder')}
                   placeholderTextColor="#94a3b8"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -88,14 +113,14 @@ export default function LoginScreen() {
 
             {/* Password */}
             <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Password</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={[styles.fieldLabel, { textAlign }]}>{t('login.passwordLabel')}</Text>
+              <View style={[styles.inputWrapper, isRTL && styles.inputWrapperRTL]}>
                 <Ionicons name="lock-closed-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
                 <TextInput
-                  style={[styles.input, { flex: 1 }]}
+                  style={[styles.input, { flex: 1, textAlign }]}
                   value={password}
                   onChangeText={v => { setPassword(v); setError(null) }}
-                  placeholder="Enter password"
+                  placeholder={t('login.passwordPlaceholder')}
                   placeholderTextColor="#94a3b8"
                   secureTextEntry={!showPassword}
                   autoComplete="password"
@@ -123,17 +148,15 @@ export default function LoginScreen() {
                 ? <ActivityIndicator size="small" color="#fff" />
                 : (
                   <>
-                    <Text style={styles.loginBtnText}>Sign In</Text>
-                    <Ionicons name="arrow-forward" size={18} color="#fff" />
+                    <Text style={styles.loginBtnText}>{t('login.signIn')}</Text>
+                    <Ionicons name={isRTL ? 'arrow-back' : 'arrow-forward'} size={18} color="#fff" />
                   </>
                 )
               }
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.footer}>
-            TyrePulse Fleet Intelligence · Tyre Man Portal
-          </Text>
+          <Text style={styles.footer}>{t('login.tagline')}</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -149,7 +172,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
-    gap: 0,
   },
   logoArea: {
     alignItems: 'center',
@@ -171,9 +193,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
   },
-  logoEmoji: {
-    fontSize: 34,
-  },
+  logoEmoji: { fontSize: 34 },
   appName: {
     fontSize: 28,
     fontWeight: '800',
@@ -198,6 +218,36 @@ const styles = StyleSheet.create({
     elevation: 4,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.06)',
+  },
+  langRow: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    marginBottom: 4,
+  },
+  langBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    minWidth: 52,
+    alignItems: 'center',
+  },
+  langBtnActive: {
+    backgroundColor: '#16a34a',
+    borderColor: '#16a34a',
+  },
+  langBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  langBtnTextActive: {
+    color: '#fff',
   },
   cardTitle: {
     fontSize: 22,
@@ -225,9 +275,7 @@ const styles = StyleSheet.create({
     color: '#dc2626',
     fontWeight: '500',
   },
-  fieldGroup: {
-    gap: 8,
-  },
+  fieldGroup: { gap: 8 },
   fieldLabel: {
     fontSize: 12,
     fontWeight: '600',
@@ -244,18 +292,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
   },
-  inputIcon: {
-    marginRight: 8,
+  inputWrapperRTL: {
+    flexDirection: 'row-reverse',
   },
+  inputIcon: { marginRight: 8 },
   input: {
     flex: 1,
     height: 48,
     fontSize: 15,
     color: '#0f172a',
   },
-  eyeBtn: {
-    padding: 4,
-  },
+  eyeBtn: { padding: 4 },
   loginBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -271,14 +318,8 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  loginBtnDisabled: {
-    opacity: 0.7,
-  },
-  loginBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  loginBtnDisabled: { opacity: 0.7 },
+  loginBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   footer: {
     textAlign: 'center',
     fontSize: 12,

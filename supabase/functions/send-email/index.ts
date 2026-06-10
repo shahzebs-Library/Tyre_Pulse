@@ -80,7 +80,7 @@ serve(async (req) => {
       const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
       if (supabaseUrl && supabaseServiceKey) {
         const client = createClient(supabaseUrl, supabaseServiceKey)
-        await client.from('audit_logs').insert({
+        await client.from('audit_log').insert({
           action: 'email_report_sent',
           details: {
             to: recipients,

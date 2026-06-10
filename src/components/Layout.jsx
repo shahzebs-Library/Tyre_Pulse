@@ -154,11 +154,10 @@ function roleBadgeClass(role) {
 }
 
 const TYRE_MAN_TABS = [
-  { to: '/',            label: 'Home',    icon: LayoutDashboard, end: true },
-  { to: '/scan',        label: 'Scan',    icon: ScanLine },
-  { to: '/inspections', label: 'Inspect', icon: ClipboardCheck },
-  { to: '/alerts',      label: 'Alerts',  icon: Bell },
-  { to: '/settings',    label: 'Profile', icon: Settings },
+  { to: '/scan',        label: 'Scan',      icon: ScanLine },
+  { to: '/inspections', label: 'Checklist', icon: ClipboardCheck },
+  { to: '/alerts',      label: 'Alerts',    icon: Bell },
+  { to: '/settings',    label: 'Profile',   icon: Settings },
 ]
 
 function TyreManShell({ children, alertCount }) {

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { Save, User, Settings2, Bell, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play } from 'lucide-react'
+import { Save, User, Settings2, Bell, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { sendReportEmail } from '../lib/emailService'
@@ -97,7 +97,8 @@ function getInitials(name) {
 export default function Settings() {
   const { profile, user } = useAuth()
   const { appSettings: globalSettings, refreshSettings, setActiveCountry, activeCountry } = useSettings()
-  const isAdmin = profile?.role === 'Admin'
+  const isAdmin    = profile?.role === 'Admin'
+  const isTyreMan  = profile?.role === 'Tyre Man'
   const currentYear = new Date().getFullYear()
 
   const [appSettings, setAppSettings] = useState({ cost_per_tyre: 1200, company_name: '', currency: 'SAR' })
@@ -140,6 +141,12 @@ export default function Settings() {
   const [newSchedule, setNewSchedule] = useState({ ...EMPTY_SCHEDULE })
   const [sendingTest, setSendingTest] = useState(null) // schedule id
   const [testMsg, setTestMsg] = useState({}) // { [id]: string }
+
+  // Password change (TyreMan)
+  const [pwNew, setPwNew]         = useState('')
+  const [pwConfirm, setPwConfirm] = useState('')
+  const [savingPw, setSavingPw]   = useState(false)
+  const [pwMsg, setPwMsg]         = useState('')
 
   useEffect(() => {
     localStorage.setItem('tp_scheduled_reports', JSON.stringify(schedules))
@@ -355,8 +362,147 @@ export default function Settings() {
     }
   }
 
+  async function handlePasswordChange(e) {
+    e.preventDefault()
+    if (pwNew.length < 6)           { setPwMsg('Minimum 6 characters required'); return }
+    if (pwNew !== pwConfirm)        { setPwMsg('Passwords do not match'); return }
+    setSavingPw(true)
+    setPwMsg('')
+    const { error } = await supabase.auth.updateUser({ password: pwNew })
+    if (error) {
+      setPwMsg(error.message)
+    } else {
+      setPwMsg('Password updated successfully')
+      setPwNew('')
+      setPwConfirm('')
+    }
+    setSavingPw(false)
+    setTimeout(() => setPwMsg(''), 4000)
+  }
+
   const initials = getInitials(profileForm.full_name || profile?.full_name)
   const role     = profile?.role ?? 'Viewer'
+
+  // ── TyreMan: simplified profile-only view ──────────────────────────────────
+  if (isTyreMan) {
+    return (
+      <div className="space-y-5">
+        <PageHeader
+          title="Profile & Settings"
+          subtitle="Manage your account and password"
+          icon={Settings2}
+        />
+
+        {/* Profile */}
+        <div className="card space-y-4">
+          <h2 className="text-base font-semibold text-white flex items-center gap-2"><User size={16} /> Profile</h2>
+          <div className="flex items-center gap-4 py-2">
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold text-white flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' }}
+            >
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <p className="text-white font-medium text-sm truncate">{profileForm.full_name || profile?.username || 'No name set'}</p>
+              <p className="text-gray-400 text-xs mt-0.5 truncate">{user?.email}</p>
+              <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-teal-900/40 text-teal-300 border border-teal-700/30">
+                Tyre Man
+              </span>
+            </div>
+          </div>
+          <form onSubmit={saveProfile} className="space-y-3">
+            <div>
+              <label className="label">Display Name</label>
+              <input
+                className="input"
+                value={profileForm.full_name}
+                onChange={e => setProfileForm(f => ({ ...f, full_name: e.target.value }))}
+                placeholder="Your full name"
+              />
+            </div>
+            <div>
+              <label className="label">Username</label>
+              <input
+                className="input"
+                value={profileForm.username}
+                onChange={e => setProfileForm(f => ({ ...f, username: e.target.value }))}
+                placeholder="username"
+              />
+            </div>
+            <div className="flex items-center gap-3 pt-1">
+              <button type="submit" disabled={savingProfile}
+                className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
+                <Save size={14} /> {savingProfile ? 'Saving…' : 'Save Profile'}
+              </button>
+              {profileMsg && (
+                <span className={`text-sm ${profileMsg.toLowerCase().includes('error') ? 'text-red-400' : 'text-green-400'}`}>
+                  {profileMsg}
+                </span>
+              )}
+            </div>
+          </form>
+        </div>
+
+        {/* Change Password */}
+        <div className="card space-y-4">
+          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <Lock size={16} className="text-green-400" /> Change Password
+          </h2>
+          <form onSubmit={handlePasswordChange} className="space-y-3">
+            <div>
+              <label className="label">New Password</label>
+              <input
+                type="password"
+                className="input"
+                value={pwNew}
+                onChange={e => setPwNew(e.target.value)}
+                placeholder="Min 6 characters"
+                autoComplete="new-password"
+              />
+            </div>
+            <div>
+              <label className="label">Confirm Password</label>
+              <input
+                type="password"
+                className="input"
+                value={pwConfirm}
+                onChange={e => setPwConfirm(e.target.value)}
+                placeholder="Repeat new password"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="submit"
+                disabled={savingPw || !pwNew || !pwConfirm}
+                className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm"
+              >
+                <Save size={14} /> {savingPw ? 'Updating…' : 'Update Password'}
+              </button>
+              {pwMsg && (
+                <span className={`text-sm ${
+                  pwMsg.includes('success') ? 'text-green-400' : 'text-red-400'
+                }`}>
+                  {pwMsg}
+                </span>
+              )}
+            </div>
+          </form>
+        </div>
+
+        {/* About */}
+        <div className="card">
+          <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-3"><Info size={16} /> About</h2>
+          <div className="space-y-1 text-sm text-gray-400">
+            <p><span className="text-gray-500">App:</span> <span className="text-white font-medium">TyrePulse</span></p>
+            <p><span className="text-gray-500">Version:</span> <span className="text-white font-medium">v2.5.0</span></p>
+            <p><span className="text-gray-500">Support:</span> Contact your fleet manager</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

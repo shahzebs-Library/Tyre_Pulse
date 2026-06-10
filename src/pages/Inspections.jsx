@@ -104,8 +104,9 @@ const CHECKLIST_LABELS = {
 }
 
 export default function Inspections() {
-  const { profile } = useAuth()
+  const { profile, loading: authLoading } = useAuth()
   const { activeCountry } = useSettings()
+  const isTyreMan = profile?.role === 'Tyre Man'
   const [rows, setRows]         = useState([])
   const [loading, setLoading]   = useState(true)
   const [form, setForm]         = useState(null)
@@ -116,6 +117,8 @@ export default function Inspections() {
   const [search, setSearch]             = useState('')
   const [deleteId, setDeleteId]         = useState(null)
   const [activeTab, setActiveTab]       = useState('all')
+  // Lock TyreMan to checklist tab
+  useEffect(() => { if (isTyreMan) setActiveTab('checklist') }, [isTyreMan])
   const [raisingAction, setRaisingAction] = useState(null)
   const [selectedTyre, setSelectedTyre]   = useState(null)
   const fileRef = useRef(null)
@@ -160,6 +163,7 @@ export default function Inspections() {
     setLoading(true)
     let q = supabase.from('inspections').select('*').order('scheduled_date', { ascending: false })
     if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    if (profile?.role === 'Tyre Man' && profile?.id) q = q.eq('created_by', profile.id)
     const { data } = await q
     const today = new Date().toISOString().split('T')[0]
     const enriched = (data || []).map(r => ({
@@ -171,7 +175,10 @@ export default function Inspections() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [activeCountry])
+  useEffect(() => {
+    if (authLoading) return
+    load()
+  }, [activeCountry, authLoading, isTyreMan])
 
   const sites = useMemo(() => [...new Set(rows.map(r => r.site).filter(Boolean))].sort(), [rows])
 
@@ -310,7 +317,7 @@ export default function Inspections() {
       completed_date: clDate,
       inspector: clInspector,
       tyre_conditions: clPositions,
-      vehicle_type: clFleetInfo?.vehicle_type || null,
+      vehicle_type: clFleetInfo?.vehicle_type || (clPositions.length > 0 ? 'Pickup' : null),
       findings: clNotes || null,
       notes: clNotes,
       country: activeCountry !== 'All' ? activeCountry : null,
@@ -508,7 +515,7 @@ export default function Inspections() {
     doc.save(`TyrePulse_Checklist_${clAsset || clSaved.asset_no || 'report'}.pdf`)
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading…</div>
+  if (loading || authLoading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading…</div>
 
   const tabConfig = [
     { key: 'all',          label: 'All',          icon: null,            count: counts.all },
@@ -525,10 +532,10 @@ export default function Inspections() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Inspections & Observations"
-        subtitle="Schedule inspections, record site observations and track training"
+        title={isTyreMan ? 'Daily Tyre Checklist' : 'Inspections & Observations'}
+        subtitle={isTyreMan ? 'Record daily tyre inspections for your assigned vehicles' : 'Schedule inspections, record site observations and track training'}
         icon={ClipboardList}
-        actions={
+        actions={isTyreMan ? null : (
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => exportToExcel(
@@ -569,11 +576,11 @@ export default function Inspections() {
               + Add Record
             </button>
           </div>
-        }
+        )}
       />
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg w-fit flex-wrap">
+      {/* Tabs — hidden for TyreMan (locked to checklist) */}
+      {!isTyreMan && <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg w-fit flex-wrap">
         {tabConfig.map(({ key, label, icon: Icon, count }) => (
           <button
             key={key}
@@ -591,7 +598,7 @@ export default function Inspections() {
             </span>
           </button>
         ))}
-      </div>
+      </div>}
 
       {/* Checklist tab content */}
       {activeTab === 'checklist' && (
@@ -700,28 +707,26 @@ export default function Inspections() {
 
               {clPositions.length > 0 && (
                 <div className="space-y-4">
-                  {/* SVG Vehicle Diagram */}
-                  {clFleetInfo?.vehicle_type && (
-                    <div ref={diagramRef} className="card flex flex-col items-center py-4" style={{ background: 'rgba(0,0,0,0.2)' }}>
-                      <p className="text-xs text-gray-500 mb-3">Tap a tyre position to jump to it</p>
-                      <VehicleTyreDiagram
-                        vehicleType={clFleetInfo.vehicle_type}
-                        positions={clPositions.map(p => ({
-                          position: p.position,
-                          risk_level: p.condition === 'Good' && p.pressure ? 'Low'
-                            : p.condition === 'Wear' ? 'Medium'
-                            : p.condition === 'Damage' ? 'Critical'
-                            : null,
-                        }))}
-                        onPositionClick={({ position }) => {
-                          const el = posRefs.current[position]
-                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                          setHighlightPos(position)
-                          setTimeout(() => setHighlightPos(null), 2000)
-                        }}
-                      />
-                    </div>
-                  )}
+                  {/* SVG Vehicle Diagram — always rendered when positions exist */}
+                  <div ref={diagramRef} className="card flex flex-col items-center py-4" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                    <p className="text-xs text-gray-500 mb-3">Tap a tyre position to jump to it</p>
+                    <VehicleTyreDiagram
+                      vehicleType={clFleetInfo?.vehicle_type || 'Pickup'}
+                      positions={clPositions.map(p => ({
+                        position: p.position,
+                        risk_level: p.condition === 'Good' && p.pressure ? 'Low'
+                          : p.condition === 'Wear' ? 'Medium'
+                          : p.condition === 'Damage' ? 'Critical'
+                          : null,
+                      }))}
+                      onPositionClick={({ position }) => {
+                        const el = posRefs.current[position]
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        setHighlightPos(position)
+                        setTimeout(() => setHighlightPos(null), 2000)
+                      }}
+                    />
+                  </div>
 
                   <div>
                   <h4 className="text-sm font-semibold text-gray-300 border-b border-gray-700 pb-2 mb-2">

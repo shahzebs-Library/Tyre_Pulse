@@ -1,0 +1,541 @@
+import { useState, useEffect, useCallback } from 'react'
+import {
+  View, Text, ScrollView, TextInput, TouchableOpacity,
+  StyleSheet, Alert, ActivityIndicator, StatusBar, Platform,
+  KeyboardAvoidingView,
+} from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
+import { useAuth } from '../../../contexts/AuthContext'
+import { supabase } from '../../../lib/supabase'
+import { enqueueInspection } from '../../../lib/offlineQueue'
+import TyrePositionCard from '../../../components/TyrePositionCard'
+import {
+  VehicleFleet, TyrePositionData,
+  getPositionsForVehicle, emptyTyrePosition,
+} from '../../../lib/types'
+
+type Step = 'header' | 'tyres' | 'submit'
+
+export default function NewInspectionScreen() {
+  const { profile } = useAuth()
+  const router = useRouter()
+
+  // Step state
+  const [step, setStep] = useState<Step>('header')
+
+  // Header fields
+  const [sites, setSites] = useState<string[]>([])
+  const [vehicles, setVehicles] = useState<VehicleFleet[]>([])
+  const [filteredVehicles, setFilteredVehicles] = useState<VehicleFleet[]>([])
+  const [selectedSite, setSelectedSite] = useState(profile?.site ?? '')
+  const [selectedVehicle, setSelectedVehicle] = useState<VehicleFleet | null>(null)
+  const [odometer, setOdometer] = useState('')
+  const [headerNotes, setHeaderNotes] = useState('')
+  const [loadingVehicles, setLoadingVehicles] = useState(false)
+
+  // Tyre data
+  const [positions, setPositions] = useState<string[]>([])
+  const [tyreData, setTyreData] = useState<Record<string, TyrePositionData>>({})
+
+  // Submit state
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    loadSites()
+  }, [])
+
+  useEffect(() => {
+    if (selectedSite) loadVehicles(selectedSite)
+  }, [selectedSite])
+
+  useEffect(() => {
+    if (selectedVehicle) {
+      const pos = getPositionsForVehicle(selectedVehicle.vehicle_type)
+      setPositions(pos)
+      const initialData: Record<string, TyrePositionData> = {}
+      pos.forEach(p => { initialData[p] = emptyTyrePosition(p) })
+      setTyreData(initialData)
+    }
+  }, [selectedVehicle])
+
+  async function loadSites() {
+    const { data } = await supabase
+      .from('vehicle_fleet')
+      .select('site')
+      .order('site')
+    if (data) {
+      const unique = [...new Set(data.map(r => r.site).filter(Boolean))] as string[]
+      setSites(unique)
+    }
+  }
+
+  async function loadVehicles(site: string) {
+    setLoadingVehicles(true)
+    const { data } = await supabase
+      .from('vehicle_fleet')
+      .select('id, site, asset_number, vehicle_type, make, model')
+      .eq('site', site)
+      .order('asset_number')
+    if (data) {
+      setVehicles(data)
+      setFilteredVehicles(data)
+    }
+    setLoadingVehicles(false)
+  }
+
+  function handleTyreUpdate(position: string, data: TyrePositionData) {
+    setTyreData(prev => ({ ...prev, [position]: data }))
+  }
+
+  function validateHeader(): boolean {
+    if (!selectedSite) { Alert.alert('Required', 'Please select a site.'); return false }
+    if (!selectedVehicle) { Alert.alert('Required', 'Please select a vehicle.'); return false }
+    return true
+  }
+
+  async function handleSubmit() {
+    if (submitting) return
+    setSubmitting(true)
+
+    const inspectionDate = new Date().toISOString().split('T')[0]
+    const payload = {
+      title: `Daily Tyre Inspection — ${selectedSite} — ${inspectionDate}`,
+      site: selectedSite,
+      asset_number: selectedVehicle!.asset_number,
+      vehicle_type: selectedVehicle!.vehicle_type,
+      inspector_name: profile?.full_name ?? profile?.username ?? 'Inspector',
+      inspector_id: profile?.id ?? '',
+      inspection_date: inspectionDate,
+      inspection_type: 'Daily Checklist',
+      odometer: odometer,
+      tyre_conditions: tyreData,
+      notes: headerNotes,
+      status: 'submitted' as const,
+    }
+
+    try {
+      // Try live submit first
+      const { error } = await supabase.from('inspections').insert(payload)
+      if (error) throw error
+      setStep('submit')
+    } catch {
+      // Queue offline
+      await enqueueInspection(payload)
+      setStep('submit')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── Step: HEADER ───────────────────────────────────────────────────────────
+  if (step === 'header') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          {/* Nav */}
+          <View style={styles.nav}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
+              <Ionicons name="arrow-back" size={22} color="#0f172a" />
+            </TouchableOpacity>
+            <Text style={styles.navTitle}>New Inspection</Text>
+            <View style={styles.stepPills}>
+              <View style={[styles.stepPill, styles.stepPillActive]}><Text style={styles.stepPillTextActive}>1</Text></View>
+              <View style={styles.stepPill}><Text style={styles.stepPillText}>2</Text></View>
+            </View>
+          </View>
+
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <Text style={styles.stepTitle}>Inspection Details</Text>
+
+            {/* Site */}
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Site *</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                <View style={styles.chipRow}>
+                  {sites.map(s => (
+                    <TouchableOpacity
+                      key={s}
+                      style={[styles.chip, selectedSite === s && styles.chipActive]}
+                      onPress={() => { setSelectedSite(s); setSelectedVehicle(null) }}
+                    >
+                      <Text style={[styles.chipText, selectedSite === s && styles.chipTextActive]}>{s}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Vehicle */}
+            {selectedSite ? (
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Vehicle / Asset *</Text>
+                {loadingVehicles ? (
+                  <ActivityIndicator size="small" color="#16a34a" style={{ marginTop: 8 }} />
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                    <View style={styles.chipRow}>
+                      {filteredVehicles.map(v => (
+                        <TouchableOpacity
+                          key={v.id}
+                          style={[styles.chip, selectedVehicle?.id === v.id && styles.chipActive]}
+                          onPress={() => setSelectedVehicle(v)}
+                        >
+                          <Text style={[styles.chipText, selectedVehicle?.id === v.id && styles.chipTextActive]}>
+                            {v.asset_number}
+                          </Text>
+                          <Text style={[styles.chipSub, selectedVehicle?.id === v.id && { color: 'rgba(255,255,255,0.7)' }]}>
+                            {v.vehicle_type}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
+              </View>
+            ) : null}
+
+            {/* Selected vehicle info */}
+            {selectedVehicle && (
+              <View style={styles.vehicleInfo}>
+                <Ionicons name="bus-outline" size={18} color="#16a34a" />
+                <Text style={styles.vehicleInfoText}>
+                  {selectedVehicle.asset_number} · {selectedVehicle.vehicle_type}
+                  {selectedVehicle.make ? ` · ${selectedVehicle.make}` : ''}
+                </Text>
+                <Text style={styles.vehiclePositionCount}>
+                  {getPositionsForVehicle(selectedVehicle.vehicle_type).length} tyres
+                </Text>
+              </View>
+            )}
+
+            {/* Inspector (read-only) */}
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Inspector</Text>
+              <View style={styles.readonlyField}>
+                <Ionicons name="person-circle-outline" size={18} color="#16a34a" />
+                <Text style={styles.readonlyText}>
+                  {profile?.full_name ?? profile?.username ?? 'Unknown'}
+                  {profile?.employee_id ? `  ·  ID: ${profile.employee_id}` : ''}
+                </Text>
+              </View>
+            </View>
+
+            {/* Date (read-only) */}
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Inspection Date</Text>
+              <View style={styles.readonlyField}>
+                <Ionicons name="calendar-outline" size={18} color="#16a34a" />
+                <Text style={styles.readonlyText}>
+                  {new Date().toLocaleDateString('en-GB', {
+                    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                  })}
+                </Text>
+              </View>
+            </View>
+
+            {/* Odometer */}
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Odometer (km)</Text>
+              <TextInput
+                style={styles.input}
+                value={odometer}
+                onChangeText={setOdometer}
+                placeholder="e.g. 125000"
+                placeholderTextColor="#94a3b8"
+                keyboardType="numeric"
+              />
+            </View>
+
+            {/* Notes */}
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>General Notes</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={headerNotes}
+                onChangeText={setHeaderNotes}
+                placeholder="Any general observations…"
+                placeholderTextColor="#94a3b8"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.nextBtn, (!selectedSite || !selectedVehicle) && styles.nextBtnDisabled]}
+              onPress={() => validateHeader() && setStep('tyres')}
+              disabled={!selectedSite || !selectedVehicle}
+            >
+              <Text style={styles.nextBtnText}>Next: Tyre Inspection</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    )
+  }
+
+  // ── Step: TYRES ────────────────────────────────────────────────────────────
+  if (step === 'tyres') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+        {/* Nav */}
+        <View style={styles.nav}>
+          <TouchableOpacity onPress={() => setStep('header')} style={styles.navBack}>
+            <Ionicons name="arrow-back" size={22} color="#0f172a" />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.navTitle}>Tyre Positions</Text>
+            <Text style={styles.navSubtitle}>
+              {selectedVehicle?.asset_number} · {selectedSite}
+            </Text>
+          </View>
+          <View style={styles.stepPills}>
+            <View style={styles.stepPill}><Text style={styles.stepPillText}>1</Text></View>
+            <View style={[styles.stepPill, styles.stepPillActive]}><Text style={styles.stepPillTextActive}>2</Text></View>
+          </View>
+        </View>
+
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          <View style={styles.positionHint}>
+            <Ionicons name="information-circle-outline" size={15} color="#64748b" />
+            <Text style={styles.positionHintText}>
+              Tap each position to expand and record readings. Tap photo icon to capture tyre image.
+            </Text>
+          </View>
+
+          {positions.map(pos => (
+            <TyrePositionCard
+              key={pos}
+              data={tyreData[pos] ?? emptyTyrePosition(pos)}
+              onChange={data => handleTyreUpdate(pos, data)}
+            />
+          ))}
+
+          <TouchableOpacity
+            style={[styles.nextBtn, submitting && styles.nextBtnDisabled]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting
+              ? <ActivityIndicator size="small" color="#fff" />
+              : (
+                <>
+                  <Ionicons name="cloud-upload-outline" size={18} color="#fff" />
+                  <Text style={styles.nextBtnText}>Submit Inspection</Text>
+                </>
+              )
+            }
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    )
+  }
+
+  // ── Step: SUBMIT / SUCCESS ─────────────────────────────────────────────────
+  return (
+    <SafeAreaView style={[styles.safe, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+      <View style={styles.successIcon}>
+        <Ionicons name="checkmark-circle" size={64} color="#16a34a" />
+      </View>
+      <Text style={styles.successTitle}>Inspection Submitted</Text>
+      <Text style={styles.successSubtitle}>
+        {selectedVehicle?.asset_number} · {selectedSite}
+        {'\n'}
+        {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+      </Text>
+      <Text style={styles.successNote}>
+        If you were offline, the inspection is queued and will sync automatically when connected.
+      </Text>
+      <TouchableOpacity
+        style={[styles.nextBtn, { marginTop: 24, minWidth: 200 }]}
+        onPress={() => {
+          setStep('header')
+          setSelectedVehicle(null)
+          setOdometer('')
+          setHeaderNotes('')
+          setTyreData({})
+          router.replace('/(app)')
+        }}
+      >
+        <Ionicons name="home-outline" size={18} color="#fff" />
+        <Text style={styles.nextBtnText}>Back to Home</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.outlineBtn, { marginTop: 10 }]}
+        onPress={() => {
+          setStep('header')
+          setSelectedVehicle(null)
+          setOdometer('')
+          setHeaderNotes('')
+          setTyreData({})
+        }}
+      >
+        <Ionicons name="add-circle-outline" size={18} color="#16a34a" />
+        <Text style={styles.outlineBtnText}>New Inspection</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
+  )
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#f0f5f1' },
+  scroll: { flex: 1 },
+  content: { padding: 16, paddingBottom: 48, gap: 16 },
+  nav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.07)',
+    gap: 12,
+  },
+  navBack: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', flex: 1 },
+  navSubtitle: { fontSize: 11, color: '#64748b', marginTop: 1 },
+  stepPills: { flexDirection: 'row', gap: 6 },
+  stepPill: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepPillActive: { backgroundColor: '#16a34a' },
+  stepPillText: { fontSize: 12, fontWeight: '700', color: '#94a3b8' },
+  stepPillTextActive: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  stepTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
+  field: { gap: 0 },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  chipRow: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    minWidth: 60,
+  },
+  chipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
+  chipText: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
+  chipTextActive: { color: '#fff' },
+  chipSub: { fontSize: 10, color: '#94a3b8', marginTop: 1 },
+  vehicleInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(22,163,74,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(22,163,74,0.2)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  vehicleInfoText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#15803d' },
+  vehiclePositionCount: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#16a34a',
+    backgroundColor: 'rgba(22,163,74,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  readonlyField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  readonlyText: { fontSize: 14, color: '#0f172a', flex: 1 },
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: '#0f172a',
+  },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  nextBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#16a34a',
+    borderRadius: 14,
+    height: 52,
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+    marginTop: 8,
+  },
+  nextBtnDisabled: { opacity: 0.5 },
+  nextBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  outlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: '#16a34a',
+    borderRadius: 14,
+    height: 48,
+    minWidth: 200,
+  },
+  outlineBtnText: { color: '#16a34a', fontSize: 15, fontWeight: '600' },
+  positionHint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: 'rgba(100,116,139,0.06)',
+    borderRadius: 10,
+    padding: 12,
+  },
+  positionHintText: { flex: 1, fontSize: 12, color: '#64748b', lineHeight: 18 },
+  successIcon: {
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 40,
+    backgroundColor: 'rgba(22,163,74,0.1)',
+  },
+  successTitle: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  successSubtitle: {
+    fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 22, marginBottom: 8,
+  },
+  successNote: {
+    fontSize: 12,
+    color: '#94a3b8',
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 280,
+    marginTop: 4,
+  },
+})

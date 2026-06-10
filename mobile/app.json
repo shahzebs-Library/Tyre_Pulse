@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "TyrePulse Inspector",
+    "slug": "tyrepulse-inspector",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f0f5f1"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.shahzebrahman.tyrepulseinspector"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#16a34a"
+      },
+      "package": "com.shahzebrahman.tyrepulseinspector",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "TyrePulse needs camera access to photograph tyres during inspections."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TyrePulse needs photo access to attach images to tyre inspections."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "scheme": "tyrepulse-inspector",
+    "newArchEnabled": true
+  }
+}

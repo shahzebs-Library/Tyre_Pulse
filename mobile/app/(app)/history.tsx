@@ -1,0 +1,219 @@
+import { useEffect, useState, useCallback } from 'react'
+import {
+  View, Text, FlatList, StyleSheet, TouchableOpacity,
+  RefreshControl, StatusBar, ActivityIndicator,
+} from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { Ionicons } from '@expo/vector-icons'
+import { supabase } from '../../lib/supabase'
+import { getQueue, syncQueue } from '../../lib/offlineQueue'
+import { useAuth } from '../../contexts/AuthContext'
+import SyncBanner from '../../components/SyncBanner'
+
+interface HistoryItem {
+  id: string
+  title: string
+  site: string
+  asset_number: string
+  inspection_date: string
+  sync_status: 'synced' | 'pending' | 'failed'
+  isOffline?: boolean
+  tyre_count?: number
+}
+
+export default function HistoryScreen() {
+  const { profile } = useAuth()
+  const [items, setItems] = useState<HistoryItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const load = useCallback(async () => {
+    const queue = await getQueue()
+    const offlineItems: HistoryItem[] = queue.map(item => ({
+      id: item.id,
+      title: item.payload.title,
+      site: item.payload.site,
+      asset_number: item.payload.asset_number,
+      inspection_date: item.payload.inspection_date,
+      sync_status: item.sync_status,
+      isOffline: true,
+      tyre_count: Object.keys(item.payload.tyre_conditions ?? {}).length,
+    }))
+
+    const { data: dbItems } = await supabase
+      .from('inspections')
+      .select('id, title, site, asset_number, inspection_date, tyre_conditions')
+      .eq('inspector_id', profile?.id)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    const syncedItems: HistoryItem[] = (dbItems ?? []).map(i => ({
+      id: i.id,
+      title: i.title,
+      site: i.site,
+      asset_number: i.asset_number,
+      inspection_date: i.inspection_date,
+      sync_status: 'synced',
+      tyre_count: Object.keys(i.tyre_conditions ?? {}).length,
+    }))
+
+    // Offline items first, then synced
+    setItems([...offlineItems, ...syncedItems])
+    setLoading(false)
+  }, [profile?.id])
+
+  useEffect(() => { load() }, [load])
+
+  async function onRefresh() {
+    setRefreshing(true)
+    await syncQueue()
+    await load()
+    setRefreshing(false)
+  }
+
+  const STATUS_COLORS = {
+    synced:  { bg: 'rgba(22,163,74,0.08)',  text: '#15803d',  icon: 'cloud-done-outline' },
+    pending: { bg: 'rgba(245,158,11,0.08)', text: '#b45309',  icon: 'cloud-upload-outline' },
+    failed:  { bg: 'rgba(239,68,68,0.08)',  text: '#dc2626',  icon: 'cloud-offline-outline' },
+  } as const
+
+  function renderItem({ item }: { item: HistoryItem }) {
+    const status = STATUS_COLORS[item.sync_status]
+    const formattedDate = item.inspection_date
+      ? new Date(item.inspection_date + 'T00:00:00').toLocaleDateString('en-GB', {
+          day: 'numeric', month: 'short', year: 'numeric',
+        })
+      : '—'
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardLeft}>
+          <View style={styles.cardIcon}>
+            <Ionicons name="document-text-outline" size={20} color="#16a34a" />
+          </View>
+        </View>
+        <View style={styles.cardBody}>
+          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+          <View style={styles.metaRow}>
+            <Ionicons name="location-outline" size={12} color="#94a3b8" />
+            <Text style={styles.metaText}>{item.site}</Text>
+            <Text style={styles.metaDot}>·</Text>
+            <Ionicons name="bus-outline" size={12} color="#94a3b8" />
+            <Text style={styles.metaText}>{item.asset_number}</Text>
+          </View>
+          <View style={styles.metaRow}>
+            <Ionicons name="calendar-outline" size={12} color="#94a3b8" />
+            <Text style={styles.metaText}>{formattedDate}</Text>
+            {item.tyre_count ? (
+              <>
+                <Text style={styles.metaDot}>·</Text>
+                <Ionicons name="ellipse-outline" size={12} color="#94a3b8" />
+                <Text style={styles.metaText}>{item.tyre_count} tyres</Text>
+              </>
+            ) : null}
+          </View>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+          <Ionicons name={status.icon as any} size={13} color={status.text} />
+          <Text style={[styles.statusText, { color: status.text }]}>
+            {item.sync_status === 'synced' ? 'Synced'
+              : item.sync_status === 'pending' ? 'Pending'
+              : 'Failed'}
+          </Text>
+        </View>
+      </View>
+    )
+  }
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Inspection History</Text>
+        <Text style={styles.headerSub}>{items.length} records</Text>
+      </View>
+      <SyncBanner />
+      {loading ? (
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#16a34a" />
+        </View>
+      ) : (
+        <FlatList
+          data={items}
+          keyExtractor={i => i.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />
+          }
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Ionicons name="time-outline" size={52} color="#cbd5e1" />
+              <Text style={styles.emptyTitle}>No history yet</Text>
+              <Text style={styles.emptyText}>Submitted inspections will appear here</Text>
+            </View>
+          }
+        />
+      )}
+    </SafeAreaView>
+  )
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#f0f5f1' },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.07)',
+  },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
+  headerSub: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
+  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  list: { padding: 16, gap: 10, paddingBottom: 40 },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardLeft: {},
+  cardIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(22,163,74,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardBody: { flex: 1, gap: 4 },
+  cardTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaText: { fontSize: 11, color: '#94a3b8' },
+  metaDot: { fontSize: 11, color: '#cbd5e1' },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  statusText: { fontSize: 10, fontWeight: '700' },
+  empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#94a3b8' },
+  emptyText: { fontSize: 13, color: '#cbd5e1', textAlign: 'center' },
+})

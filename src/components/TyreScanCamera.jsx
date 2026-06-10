@@ -58,11 +58,11 @@ export default function TyreScanCamera({ onClose, onResult }) {
       if (tyreData) {
         setResult({ serial, tyre: tyreData, fleet: null })
       } else {
-        // Secondary: asset/vehicle QR lookup
+        // Secondary: asset/vehicle QR lookup — try asset_no and registration_no
         const { data: fleetData } = await supabase
           .from('vehicle_fleet')
           .select('asset_no,vehicle_type,site,registration_no')
-          .ilike('asset_no', serial)
+          .or(`asset_no.ilike.${serial},registration_no.ilike.${serial}`)
           .limit(1)
           .maybeSingle()
         setResult({ serial, tyre: null, fleet: fleetData ?? null })
@@ -327,13 +327,14 @@ export default function TyreScanCamera({ onClose, onResult }) {
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
             >
               <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                Tyre Serial Number
+                Vehicle / Asset Number
               </label>
+              <p className="text-[10px] text-gray-600">Enter asset no., registration no., or tyre serial</p>
               <input
                 type="text"
                 value={manualSerial}
                 onChange={e => setManualSerial(e.target.value.toUpperCase())}
-                placeholder="e.g. TP-2024-001234"
+                placeholder="e.g. CM-0123 or REG-456"
                 className="w-full bg-transparent text-white placeholder-gray-700 focus:outline-none text-base font-mono caret-green-400"
                 autoFocus
                 autoCapitalize="characters"
@@ -349,7 +350,7 @@ export default function TyreScanCamera({ onClose, onResult }) {
               style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', boxShadow: '0 0 20px rgba(22,163,74,0.3)' }}
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              Look Up Serial
+              Look Up
             </button>
           </form>
         )}

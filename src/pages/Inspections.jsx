@@ -71,6 +71,8 @@ const CHECKLIST_LABELS = {
     pressure: 'Pressure (PSI)',
     condition: 'Condition',
     tread: 'Tread Depth (mm)',
+    serial: 'Serial No',
+    serial_hint: 'optional',
     notes: 'Notes',
     good: 'Good',
     wear: 'Wear',
@@ -91,6 +93,8 @@ const CHECKLIST_LABELS = {
     pressure: 'الضغط (PSI)',
     condition: 'الحالة',
     tread: 'عمق المداس (مم)',
+    serial: 'الرقم التسلسلي',
+    serial_hint: 'اختياري',
     notes: 'ملاحظات',
     good: 'جيد',
     wear: 'تآكل',
@@ -308,11 +312,11 @@ export default function Inspections() {
     if (data) {
       setClFleetInfo(data)
       const positions = TYRE_POSITIONS[normVT(data.vehicle_type)] || DEFAULT_POSITIONS
-      setClPositions(positions.map(pos => ({ position: pos, pressure: '', condition: 'Good', treadDepth: '' })))
+      setClPositions(positions.map(pos => ({ position: pos, serialNo: '', pressure: '', condition: 'Good', treadDepth: '' })))
       if (data.site && !clSite) setClSite(data.site)
     } else {
       setClFleetInfo(null)
-      setClPositions(DEFAULT_POSITIONS.map(pos => ({ position: pos, pressure: '', condition: 'Good', treadDepth: '' })))
+      setClPositions(DEFAULT_POSITIONS.map(pos => ({ position: pos, serialNo: '', pressure: '', condition: 'Good', treadDepth: '' })))
     }
     setClLookingUp(false)
   }
@@ -458,9 +462,10 @@ export default function Inspections() {
     // ── Tyre data table ─────────────────────────────────────────────────────────
     autoTable(doc, {
       startY: y,
-      head: [['Position', 'Pressure (PSI)', 'Condition', 'Tread Depth (mm)']],
+      head: [['Position', 'Serial No', 'Pressure (PSI)', 'Condition', 'Tread (mm)']],
       body: tyreData.map(row => [
         row.position || 'n/a',
+        row.serialNo || '—',
         row.pressure ? `${row.pressure} PSI` : 'n/a',
         row.condition || 'n/a',
         row.treadDepth ? `${row.treadDepth} mm` : 'n/a',
@@ -470,8 +475,9 @@ export default function Inspections() {
       styles:      { fontSize: 8, cellPadding: 2.5 },
       headStyles:  { fillColor: [21, 128, 61], textColor: [255, 255, 255], fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 1: { font: 'courier', fontSize: 7 } },
       didParseCell(data) {
-        if (data.section !== 'body' || data.column.index !== 2) return
+        if (data.section !== 'body' || data.column.index !== 3) return
         const cond = String(data.cell.raw)
         if (cond === 'Good')   { data.cell.styles.fillColor = [220, 252, 231]; data.cell.styles.textColor = [21, 128, 61]  }
         if (cond === 'Wear')   { data.cell.styles.fillColor = [254, 249, 195]; data.cell.styles.textColor = [161, 98, 7]   }
@@ -760,6 +766,15 @@ export default function Inspections() {
                       }}
                     >
                       <div className="w-12 text-center text-sm font-mono font-bold text-green-400 flex-shrink-0">{pos.position}</div>
+                      <div className="flex-1 min-w-28">
+                        <p className="text-xs text-gray-500 mb-1">
+                          {CHECKLIST_LABELS[lang].serial}
+                          <span className="text-gray-600 ml-1">({CHECKLIST_LABELS[lang].serial_hint})</span>
+                        </p>
+                        <input type="text" className="input py-1.5 text-sm font-mono" placeholder="Serial no." value={pos.serialNo || ''}
+                          onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, serialNo: e.target.value } : x))}
+                          autoCapitalize="characters" autoCorrect="off" spellCheck={false} />
+                      </div>
                       <div className="flex-1 min-w-28">
                         <p className="text-xs text-gray-500 mb-1">{CHECKLIST_LABELS[lang].pressure}</p>
                         <input type="number" className="input py-1.5 text-sm" placeholder="PSI" value={pos.pressure}

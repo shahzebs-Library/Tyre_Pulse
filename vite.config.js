@@ -144,6 +144,22 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+          // Supabase REST POST (inspection saves) — Background Sync offline queue
+          {
+            urlPattern: ({ url, request }) =>
+              url.hostname.includes('supabase.co') &&
+              url.pathname.startsWith('/rest/') &&
+              request.method === 'POST',
+            handler: 'NetworkOnly',
+            options: {
+              backgroundSync: {
+                name: 'inspection-sync',
+                options: {
+                  maxRetentionTime: 24 * 60, // 24 hours in minutes
+                },
+              },
+            },
+          },
         ],
       },
       // Disable SW in development to avoid interference with hot reload

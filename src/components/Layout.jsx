@@ -19,6 +19,8 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
+import { syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
+import { useWakeLock } from '../hooks/useWakeLock'
 import TpLogo from '../assets/logo.svg'
 import InstallPwaPrompt from './InstallPwaPrompt'
 import NotificationCenter from './NotificationCenter'
@@ -163,11 +165,39 @@ const TYRE_MAN_TABS = [
 
 function TyreManShell({ children, alertCount }) {
   const { signOut, profile } = useAuth()
+  const location = useLocation()
+  const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
+  const [pendingCount, setPendingCount] = useState(0)
 
   // Force light theme for the TyreMan mobile shell
   useEffect(() => {
     document.documentElement.classList.remove('dark')
     document.documentElement.classList.add('light')
+  }, [])
+
+  // Acquire wake lock while on inspections checklist
+  useEffect(() => {
+    const onInspections = location.pathname === '/inspections'
+    if (onInspections) {
+      acquireWakeLock()
+    } else {
+      releaseWakeLock()
+    }
+    return () => releaseWakeLock()
+  }, [location.pathname, acquireWakeLock, releaseWakeLock])
+
+  // Sync offline queue when coming back online
+  useEffect(() => {
+    async function syncAndCount() {
+      if (navigator.onLine) {
+        await syncPendingInspections(supabase)
+      }
+      const count = await getPendingCount()
+      setPendingCount(count)
+    }
+    syncAndCount()
+    window.addEventListener('online', syncAndCount)
+    return () => window.removeEventListener('online', syncAndCount)
   }, [])
 
   return (
@@ -204,7 +234,16 @@ function TyreManShell({ children, alertCount }) {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs max-w-[120px] truncate" style={{ color: '#6b7280' }}>
+          {pendingCount > 0 && (
+            <span
+              className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+              style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}
+              title={`${pendingCount} inspection${pendingCount !== 1 ? 's' : ''} queued offline`}
+            >
+              ⏳ {pendingCount}
+            </span>
+          )}
+          <span className="text-xs max-w-[100px] truncate" style={{ color: '#6b7280' }}>
             {profile?.full_name}
           </span>
           <button

@@ -4,12 +4,14 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
-import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X } from 'lucide-react'
+import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { useWakeLock, vibrate, shareOrCopy } from '../hooks/useWakeLock'
+import { enqueueInspection, syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -159,8 +161,48 @@ export default function Inspections() {
   const [clSaved, setClSaved]         = useState(null)
   const [clError, setClError]         = useState(null)
   const [clLookingUp, setClLookingUp] = useState(false)
+  const [clOffline, setClOffline]     = useState(false)
+  const [pendingCount, setPendingCount] = useState(0)
   const diagramRef     = useRef(null)
   const [clSelectedPos, setClSelectedPos] = useState(null)
+
+  // PWA — Screen Wake Lock during inspection
+  const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
+
+  // Geolocation auto-site detection (best-effort)
+  const geoAttempted = useRef(false)
+
+  useEffect(() => {
+    if (activeTab !== 'checklist' || geoAttempted.current) return
+    geoAttempted.current = true
+    if (!navigator.geolocation || masterSites.length === 0) return
+    navigator.geolocation.getCurrentPosition(
+      () => { /* future: match to nearest site from geo coordinates */ },
+      () => { /* permission denied — ignore */ },
+      { timeout: 6000, maximumAge: 60000 }
+    )
+  }, [activeTab, masterSites])
+
+  // Acquire wake lock when checklist tab is active with positions loaded
+  useEffect(() => {
+    if (activeTab === 'checklist' && clPositions.length > 0) {
+      acquireWakeLock()
+    } else {
+      releaseWakeLock()
+    }
+    return () => releaseWakeLock()
+  }, [activeTab, clPositions.length, acquireWakeLock, releaseWakeLock])
+
+  // Sync offline queue when tab becomes active
+  useEffect(() => {
+    if (activeTab !== 'checklist') return
+    async function syncAndCount() {
+      if (navigator.onLine) await syncPendingInspections(supabase)
+      const count = await getPendingCount()
+      setPendingCount(count)
+    }
+    syncAndCount()
+  }, [activeTab])
 
   // Master data from fleet
   const [masterSites, setMasterSites]   = useState([])
@@ -340,6 +382,7 @@ export default function Inspections() {
     if (!clAsset.trim() || clPositions.length === 0) return
     setClSaving(true)
     setClError(null)
+    setClOffline(false)
     const payload = {
       title: `Daily Tyre Inspection — ${clSite || clAsset} — ${clDate}`,
       inspection_type: 'Routine',
@@ -356,11 +399,31 @@ export default function Inspections() {
       country: activeCountry !== 'All' ? activeCountry : null,
       created_by: profile?.id ?? null,
     }
+
+    // Vibrate on save attempt (success signal pattern)
+    vibrate([50, 30, 50])
+
     const { data, error } = await supabase.from('inspections').insert(payload).select().single()
     if (error) {
-      setClError(error.message || 'Save failed — please try again.')
+      if (!navigator.onLine || error.message?.includes('fetch')) {
+        // Offline — enqueue for later sync
+        try {
+          await enqueueInspection(payload)
+          setClOffline(true)
+          setClSaved({ ...payload, id: `offline-${Date.now()}`, asset_no: payload.asset_no, scheduled_date: payload.scheduled_date })
+          const count = await getPendingCount()
+          setPendingCount(count)
+          vibrate([100, 50, 100, 50, 200])
+        } catch {
+          setClError('Failed to queue offline. Please try again.')
+        }
+      } else {
+        setClError(error.message || 'Save failed — please try again.')
+        vibrate(300)
+      }
     } else {
       setClSaved(data)
+      vibrate([80, 30, 80, 30, 200])
       await load()
     }
     setClSaving(false)
@@ -637,19 +700,48 @@ export default function Inspections() {
       {activeTab === 'checklist' && (
         <div className="space-y-4">
           {clSaved ? (
-            <div className="card" dir={lang === 'ar' ? 'rtl' : undefined}>
+            <div
+              className="card"
+              dir={lang === 'ar' ? 'rtl' : undefined}
+              style={{ background: clOffline ? '#fffbeb' : undefined, borderColor: clOffline ? '#fde68a' : undefined }}
+            >
               <div className="flex items-center gap-3 mb-4">
-                <CheckSquare size={20} className="text-green-400" />
-                <h3 className="text-lg font-semibold text-white">Checklist Saved</h3>
+                {clOffline
+                  ? <WifiOff size={20} style={{ color: '#d97706' }} />
+                  : <CheckSquare size={20} className="text-green-400" />
+                }
+                <h3 className="text-lg font-semibold" style={{ color: clOffline ? '#92400e' : undefined }}>
+                  {clOffline ? 'Saved Offline — Will Sync' : 'Checklist Saved'}
+                </h3>
               </div>
+              {clOffline && (
+                <p className="text-sm mb-3 rounded-lg px-3 py-2" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+                  No connection detected. Inspection queued and will sync automatically when you're back online.
+                </p>
+              )}
               <p className="text-gray-400 text-sm mb-4">
-                Inspection for <span className="text-white font-mono">{clSaved.asset_no}</span> on {clSaved.scheduled_date} has been saved.
+                Inspection for <span className="text-white font-mono">{clSaved.asset_no}</span> on {clSaved.scheduled_date}{clOffline ? ' is queued for upload.' : ' has been saved.'}
               </p>
-              <div className="flex gap-3">
-                <button onClick={exportChecklistPdf} className="btn-secondary flex items-center gap-2 text-sm">
-                  <FileText size={14} /> {CHECKLIST_LABELS[lang].export}
-                </button>
-                <button onClick={() => { setClSaved(null); setClAsset(''); setClPositions([]); setClFleetInfo(null); setClNotes('') }}
+              <div className="flex gap-3 flex-wrap">
+                {!clOffline && (
+                  <button onClick={exportChecklistPdf} className="btn-secondary flex items-center gap-2 text-sm">
+                    <FileText size={14} /> {CHECKLIST_LABELS[lang].export}
+                  </button>
+                )}
+                {!clOffline && navigator.share && (
+                  <button
+                    onClick={async () => {
+                      await shareOrCopy({
+                        title: `TyrePulse Inspection — ${clSaved.asset_no}`,
+                        text: `Daily tyre inspection for ${clSaved.asset_no} on ${clSaved.scheduled_date} completed. ${clPositions.filter(p => p.condition === 'Puncture' || p.condition === 'Damage').length} critical tyre(s) flagged.`,
+                      })
+                    }}
+                    className="btn-secondary flex items-center gap-2 text-sm"
+                  >
+                    <Share2 size={14} /> Share
+                  </button>
+                )}
+                <button onClick={() => { setClSaved(null); setClOffline(false); setClAsset(''); setClPositions([]); setClFleetInfo(null); setClNotes('') }}
                   className="btn-primary text-sm">
                   New Checklist
                 </button>
@@ -660,6 +752,17 @@ export default function Inspections() {
               className={`card space-y-4${lang === 'ar' ? ' text-right' : ''}`}
               dir={lang === 'ar' ? 'rtl' : undefined}
             >
+              {/* Offline queue banner */}
+              {pendingCount > 0 && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm"
+                  style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e' }}>
+                  <WifiOff size={14} />
+                  <span>
+                    {pendingCount} offline inspection{pendingCount !== 1 ? 's' : ''} queued — will sync when connected.
+                  </span>
+                </div>
+              )}
+
               {/* Card header with language toggle */}
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-white">{CHECKLIST_LABELS[lang].title}</h3>
@@ -1257,6 +1360,15 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
   const isPuncture = pos.condition === 'Puncture'
   const showPunctureAlert = isPuncture
 
+  function handleConditionSelect(cond) {
+    onUpdate('condition', cond)
+    if (cond === 'Puncture' || cond === 'Damage') {
+      vibrate([100, 50, 100, 50, 200]) // double buzz for critical
+    } else {
+      vibrate(40) // light tap for good/wear
+    }
+  }
+
   const nextLabel = isLast
     ? allFilled ? '✓ All Done' : `Fill ${unfilledCount} More →`
     : 'Next →'
@@ -1329,7 +1441,7 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
               return (
                 <button
                   key={cond}
-                  onClick={() => onUpdate('condition', cond)}
+                  onClick={() => handleConditionSelect(cond)}
                   className="py-3 rounded-2xl flex flex-col items-center gap-1.5 transition-all active:scale-95"
                   style={{
                     background:   on ? activeBg : '#f9fafb',

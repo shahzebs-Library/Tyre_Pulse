@@ -312,7 +312,19 @@ export async function detectAlerts(supabase, country = null) {
 
   // Sort by severity then date
   const ORDER = { critical: 0, high: 1, medium: 2, info: 3 }
-  return alerts.sort((a, b) => (ORDER[a.severity] ?? 4) - (ORDER[b.severity] ?? 4))
+  const sorted = alerts.sort((a, b) => (ORDER[a.severity] ?? 4) - (ORDER[b.severity] ?? 4))
+
+  // Update app badge with critical+high count (PWA Badging API)
+  const badgeCount = sorted.filter(a => a.severity === 'critical' || a.severity === 'high').length
+  if ('setAppBadge' in navigator) {
+    try {
+      badgeCount > 0
+        ? navigator.setAppBadge(Math.min(badgeCount, 99)).catch(() => {})
+        : navigator.clearAppBadge().catch(() => {})
+    } catch { /* ignore */ }
+  }
+
+  return sorted
 }
 
 /**

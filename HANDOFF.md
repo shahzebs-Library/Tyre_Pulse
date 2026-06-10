@@ -1,170 +1,184 @@
 # TyrePulse — Developer Handoff
-**Branch:** `claude/handoff-setup-gZAHb`
 **Last updated:** June 2026
-**Build status:** ✅ Clean — 2174 modules, 0 errors
+**Branch:** `main` (all work merged)
+**Build status:** ✅ Clean — 2179 modules, 0 errors
 
 ---
 
-## ⚠️ SYSTEM CHECK IN PROGRESS
-User is manually verifying pages. Do NOT build new pages until system check is complete.
-Next session should focus on: fixing any broken pages the user identifies during testing.
+## What Was Done This Session
+
+### 1. Multi-Identifier Login
+- Login now accepts **Email**, **Username**, or **Employee ID**
+- Animated 3-way mode selector on the login screen
+- `AuthContext.signIn()` resolves username/employee_id → email via `profiles` table lookup + `get_user_email_by_id` RPC before calling Supabase auth
+
+### 2. RBAC Tightened
+- **Intelligence section** (40+ pages) — **Admin only**
+- **Analytics section** (7 pages) — **Admin + Manager + Director**
+- `shouldShowGroup()` in `Layout.jsx` hides entire nav group if role doesn't qualify
+- All routes in `App.jsx` wrapped with the appropriate `<RoleRoute allowed={[...]}>` 
+- `RoleRoute` access-denied screen now shows the user's current role
+
+### 3. 30-Minute Session Timeout
+- Idle timeout: 60 min → **30 min**
+- Check interval: 60 s → **30 s**
+- **Touch events** now tracked alongside mouse/keyboard (mobile support)
+- Session-expired banner on login page updated to reference 30 minutes
+
+### 4. Admin Approval Gate
+- New signups set `approved: false` in profile insert
+- `ProtectedRoute` blocks any profile where `approved === false`
+- `null` / `undefined` treated as legacy-approved (existing accounts unaffected)
+
+### 5. Inspection Checklist — Full Overhaul
+- **Title** auto-generated: `Daily Tyre Inspection — {site} — {date}`
+- **Site** — dropdown populated from `vehicle_fleet.site` (falls back to free-text)
+- **Asset** — dropdown from `vehicle_fleet.asset_no` with vehicle type hint; selecting auto-loads fleet info
+- **Inspector** — auto-filled from `profile.full_name || profile.username`
+- **`tyre_conditions`** (JSONB) and **`vehicle_type`** (text) now saved to `inspections`
+
+### 6. Inspection PDF — Real SVG Capture
+- `exportChecklistPdf` is async
+- Captures the live `VehicleTyreDiagram` SVG via `XMLSerializer` → Blob → Canvas → PNG
+- 2× scale for retina quality; dark background fills canvas before drawing
+- Falls through gracefully to table-only if SVG is not mounted
+
+### 7. Vehicle Diagram — Position ID Alignment
+- Root cause: `TYRE_POSITIONS` in `Inspections.jsx` used different IDs (`RL1`, `RL2`…) than `VehicleTyreDiagram.jsx` (`RLO3`, `RLI3`…)
+- Secondary cause: vehicle type casing mismatch (`'Wheel Loader'` vs `'Wheel loader'`)
+- **Fix:** `VehicleTyreDiagram` now normalises `vehicleType` to lowercase (`getLayout` uses `.toLowerCase().trim()`)
+- **Fix:** `TYRE_POSITIONS` keys are now lowercase; `normVT()` helper normalises at lookup time
+- Canonical position IDs now consistent in both files:
+  - Pickup/Wheel loader/Skid loader: `FL FR RL RR`
+  - Canter: `FL FR RLO RLI RRI RRO`
+  - Tri-mixer: `FL1 FR1 FL2 FR2 RLO3 RLI3 RRI3 RRO3 RLO4 RLI4 RRI4 RRO4`
+  - Concrete pump: `FL1 FR1 RLO2 RLI2 RRI2 RRO2 RLO3 RLI3 RRI3 RRO3 RLO4 RLI4 RRI4 RRO4`
+
+### 8. PageHeader Applied to All Pages
+All 50+ pages upgraded with the shared `PageHeader` component (`src/components/ui/PageHeader.jsx`). Build errors from orphan `</div>` tags and missing icons were resolved.
+
+### 9. Build Errors Fixed
+| File | Error | Fix |
+|------|-------|-----|
+| `AiCommandCenter.jsx` | Orphan `</div>` after PageHeader upgrade | Removed |
+| `RotationSchedule.jsx` | Orphan `</div>` after PageHeader upgrade | Removed |
+| `SiteComparison.jsx` | `GitCompareArrows` not in lucide-react v0.263.1 | Replaced with `GitMerge` |
 
 ---
 
-## Bugs Fixed This Session
+## Supabase — Required One-Time SQL
 
-| Issue | Root Cause | Fix Applied |
-|-------|-----------|-------------|
-| SQL serial_number error when running MIGRATIONS_SAFE.sql | `idx_tyre_serial` index was created at line 214 before `serial_number` column added at line 319 | Moved index to after `_add_col_if_missing` call |
-| Checklist save silently fails, PDF button does nothing | `inspection_type: 'Daily Checklist'` violated DB CHECK constraint `('Routine','Pressure','Visual','Full','Pre-Trip')`; error was swallowed | Changed to `inspection_type: 'Routine'`; added visible error display in both checklist and main form |
-| Main form also fails for 'Site Observation' / 'Safety Training' / 'Training Session' types | Same CHECK constraint | `MIGRATIONS_SAFE.sql` now drops the constraint; also added missing columns: `country`, `severity`, `photo_data`, `attendees` |
+Run in Supabase SQL Editor (all idempotent):
 
----
-
-## How to Fix the Inspections Table (Run Once in Supabase SQL Editor)
-
-The MIGRATIONS_SAFE.sql file now includes the fix. Just re-run it — all statements are idempotent.
-
-Key lines it will execute:
 ```sql
-ALTER TABLE inspections DROP CONSTRAINT IF EXISTS inspections_inspection_type_check;
--- adds: country, severity, photo_data, attendees columns
+-- Checklist columns on inspections
+ALTER TABLE inspections ADD COLUMN IF NOT EXISTS tyre_conditions jsonb;
+CREATE INDEX IF NOT EXISTS idx_inspections_tyre_conditions ON inspections USING gin(tyre_conditions);
+ALTER TABLE inspections ADD COLUMN IF NOT EXISTS vehicle_type text;
+CREATE INDEX IF NOT EXISTS idx_inspections_vehicle_type ON inspections (vehicle_type);
+
+-- Multi-identifier login
+CREATE OR REPLACE FUNCTION get_user_email_by_id(user_id uuid)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_email text;
+BEGIN
+  SELECT email INTO v_email FROM auth.users WHERE id = user_id;
+  RETURN v_email;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION get_user_email_by_id(uuid) TO authenticated;
+CREATE INDEX IF NOT EXISTS profiles_employee_id_idx ON profiles (employee_id);
+CREATE INDEX IF NOT EXISTS profiles_username_idx ON profiles (username);
 ```
 
 ---
 
-## All Pages Built (73 total — Complete Route List)
+## Architecture Reference
 
-### Overview
-| Route | File |
-|-------|------|
-| `/` | Dashboard.jsx |
+### Auth & RBAC
 
-### Analytics (9 pages)
-| Route | File |
-|-------|------|
-| `/analytics` | Analytics.jsx |
-| `/brand-perf` | BrandPerformance.jsx |
-| `/site-comp` | SiteComparison.jsx |
-| `/fleet` | FleetAnalytics.jsx |
-| `/kpi` | KpiScorecard.jsx |
-| `/country-comp` | CountryComparison.jsx |
-| `/comparison` | Comparison.jsx |
-| `/ai` | AiAnalytics.jsx (Admin) |
-| `/advanced-analytics` | AdvancedAnalytics.jsx |
+| Role | Intelligence | Analytics | Operations | Admin pages |
+|------|-------------|-----------|------------|-------------|
+| Admin | ✅ | ✅ | ✅ | ✅ |
+| Manager | ❌ | ✅ | ✅ | ❌ |
+| Director | ❌ | ✅ | ✅ | ❌ |
+| Tyre Man | ❌ | ❌ | ✅ | ❌ |
+| Inspector | ❌ | ❌ | Inspections + Settings only | ❌ |
+| Reporter | ❌ | ❌ | ✅ | ❌ |
 
-### Operations (17 pages)
-| Route | File |
-|-------|------|
-| `/tyres` | TyreRecords.jsx |
-| `/fleet-master` | FleetMaster.jsx |
-| `/assets` | AssetManagement.jsx |
-| `/stock` | StockManagement.jsx |
-| `/stock-replenishment` | StockReplenishment.jsx |
-| `/budgets` | Budgets.jsx |
-| `/actions` | CorrectiveActions.jsx |
-| `/accidents` | Accidents.jsx |
-| `/rca` | RcaRecords.jsx |
-| `/inspections` | Inspections.jsx |
-| `/inspection-planner` | InspectionPlanner.jsx |
-| `/work-orders` | WorkOrders.jsx |
-| `/gate-pass` | GatePass.jsx |
-| `/reports` | Reports.jsx |
-| `/warranty` | WarrantyTracker.jsx |
-| `/scrap` | TyreScrapManagement.jsx |
-| `/retread` | RetreadManagement.jsx |
+RBAC is enforced at two levels:
+1. **Sidebar** — `shouldShowGroup()` in `Layout.jsx` hides the entire group
+2. **Route** — `<RoleRoute allowed={[...]}>` in `App.jsx` shows access-denied if navigated directly
 
-### Intelligence (36 pages)
-| Route | File |
-|-------|------|
-| `/kpi-engine` | EngineeringKpi.jsx |
-| `/kpi-command` | KpiCommandCenter.jsx |
-| `/position-intelligence` | PositionIntelligence.jsx |
-| `/pressure-intel` | PressureIntelligence.jsx |
-| `/inspection-intelligence` | InspectionIntelligence.jsx |
-| `/root-cause` | RootCauseEngine.jsx |
-| `/predictive-maintenance` | PredictiveMaintenance.jsx |
-| `/vendor-intelligence` | VendorIntelligence.jsx |
-| `/driver-management` | DriverManagement.jsx |
-| `/fleet-intelligence` | FleetIntelligence.jsx |
-| `/fleet-health` | FleetHealthBoard.jsx |
-| `/live-fleet` | LiveFleetStatus.jsx |
-| `/compliance` | ComplianceDashboard.jsx |
-| `/ai-command-center` | AiCommandCenter.jsx |
-| `/executive-report` | ExecutiveReport.jsx |
-| `/forecasting` | ForecastingEngine.jsx |
-| `/continuous-improvement` | ContinuousImprovement.jsx |
-| `/erp-sync` | ErpSync.jsx |
-| `/maintenance-calendar` | MaintenanceCalendar.jsx |
-| `/safety-compliance` | SafetyCompliance.jsx |
-| `/cost-center` | CostCenter.jsx |
-| `/benchmark` | PerformanceBenchmark.jsx |
-| `/procurement` | Procurement.jsx |
-| `/suppliers` | SupplierManagement.jsx |
-| `/tyre-size` | TyreSizeAnalysis.jsx |
-| `/tyre-lifecycle` | TyreLifecycle.jsx |
-| `/tyre-exchange` | TyreExchange.jsx |
-| `/tyre-specs` | TyreSpecifications.jsx |
-| `/rotation` | RotationSchedule.jsx |
-| `/recall-tracker` | RecallTracker.jsx |
-| `/fuel-efficiency` | FuelEfficiency.jsx |
-| `/workshop` | WorkshopManagement.jsx |
-| `/downtime` | DowntimeTracker.jsx |
-| `/budget-planner` | BudgetPlanner.jsx |
-| `/daily-ops` | DailyOps.jsx |
-| `/alerts` | Alerts.jsx |
+### Session
 
-### Admin (5 pages)
-| Route | File |
-|-------|------|
-| `/anomalies` | Anomalies.jsx |
-| `/vehicle-history` | VehicleHistory.jsx |
-| `/serial-tracker` | SerialTracker.jsx |
-| `/audit` | AuditTrail.jsx |
-| `/users` | UserManagement.jsx |
+```
+Idle timeout:    30 minutes
+Check interval:  30 seconds
+Events tracked:  mousemove, keydown, click, touchstart
+Storage key:     tp_last_activity (localStorage)
+Expiry flag:     tp_session_expired = '1' → banner shown on login
+```
 
-### Data (4 pages)
-| Route | File |
-|-------|------|
-| `/cleaning` | DataCleaning.jsx |
-| `/upload` | UploadData.jsx |
-| `/settings` | Settings.jsx |
-| `/inspection-planner` | InspectionPlanner.jsx |
+### Login Identifier Resolution
+
+```
+User enters identifier
+  └─ includes '@' → treat as email directly
+  └─ no '@' → query profiles WHERE username = ? OR employee_id = ?
+                └─ found → call get_user_email_by_id(profile.id) RPC
+                └─ not found → show "No account found" error
+```
+
+### Vehicle Diagram
+
+```
+vehicle_type from DB (any case)
+  └─ normVT() → lowercase trim
+  └─ TYRE_POSITIONS[normVT] → position array (or DEFAULT_POSITIONS)
+  └─ VehicleTyreDiagram receives vehicleType prop → getLayout normalises internally
+  └─ position IDs are identical in both TYRE_POSITIONS and VehicleTyreDiagram layout
+```
 
 ---
 
-## Migrations to Run (in order in Supabase SQL Editor)
+## All Pages (73 total)
 
-**RECOMMENDED: Just run `MIGRATIONS_SAFE.sql` — it's fully idempotent and includes everything.**
+### Overview (2)
+`/` Dashboard · `/tyres` TyreRecords
 
-Individual files if needed:
-| File | Purpose | Status |
-|------|---------|--------|
-| `SUPABASE_SCHEMA.sql` | Core tables | Required first run |
-| `MIGRATIONS.sql` | Phase 2 tables | Required |
-| `BACKEND_RLS.sql` | Role-based policies | Required |
-| `MIGRATIONS_V2.sql` | Multi-country + CPK columns | Required |
-| `MASTER_ENGINE.sql` | Data normalisation triggers + views | Required |
-| `MIGRATIONS_V3.sql` | extra_fields jsonb | Required |
-| `MIGRATIONS_V4.sql` | RCA country column | Required |
-| `MIGRATIONS_SAFE.sql` | **All V10-V17 + bug fixes** | ✅ Run this |
+### Analytics — Admin + Manager + Director (7)
+`/analytics` · `/brand-perf` · `/site-comp` · `/fleet` · `/kpi` · `/country-comp` · `/comparison`
 
----
+### Operations — All roles (17)
+`/fleet-master` · `/assets` · `/stock` · `/stock-replenishment` · `/budgets` · `/actions` · `/accidents` · `/rca` · `/inspections` · `/inspection-planner` · `/work-orders` · `/gate-pass` · `/reports` · `/warranty` · `/scrap` · `/retread` · `/alerts`
 
-## Supabase Edge Functions
+### Intelligence — Admin only (36)
+`/kpi-engine` · `/kpi-command` · `/position-intelligence` · `/pressure-intel` · `/inspection-intelligence` · `/root-cause` · `/predictive-maintenance` · `/vendor-intelligence` · `/driver-management` · `/fleet-intelligence` · `/fleet-health` · `/live-fleet` · `/compliance` · `/ai-command-center` · `/executive-report` · `/forecasting` · `/continuous-improvement` · `/erp-sync` · `/maintenance-calendar` · `/safety-compliance` · `/cost-center` · `/benchmark` · `/procurement` · `/suppliers` · `/tyre-size` · `/tyre-lifecycle` · `/tyre-exchange` · `/tyre-specs` · `/rotation` · `/recall-tracker` · `/fuel-efficiency` · `/workshop` · `/downtime` · `/budget-planner` · `/daily-ops` · `/advanced-analytics`
 
-| Function | Input | Purpose |
-|----------|-------|---------|
-| `chat-ai` | `{ system, user, model }` | Anthropic API proxy |
-| `generate-embedding` | `{ text, model }` | OpenAI embeddings proxy |
-| `send-email` | `{ to, subject, body }` | Resend API email delivery |
+### Admin only (5)
+`/anomalies` · `/vehicle-history` · `/ai` · `/serial-tracker` · `/audit`
 
-Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
-Deploy: `supabase functions deploy chat-ai --project-ref <your-ref>`
+### Data (3)
+`/cleaning` (Admin) · `/users` (Admin) · `/upload` (All) · `/settings` (All)
 
 ---
 
-## Key Libraries and Utilities
+## Key Files Changed This Session
+
+| File | What Changed |
+|------|-------------|
+| `src/contexts/AuthContext.jsx` | 30-min timeout, touch events, multi-identifier signIn |
+| `src/components/ProtectedRoute.jsx` | RoleRoute improved; approval check comment clarified |
+| `src/components/Layout.jsx` | `groupRoles` + `shouldShowGroup()` + INTELLIGENCE_ROLES/ANALYTICS_ROLES constants |
+| `src/App.jsx` | All Intelligence routes → `RoleRoute(['Admin'])`, Analytics → `RoleRoute(['Admin','Manager','Director'])` |
+| `src/pages/Login.jsx` | 3-way ID mode selector, `identifier` state, session expiry banner text |
+| `src/pages/Inspections.jsx` | Checklist overhaul — dropdown inputs, normVT, PDF async SVG capture, tyre_conditions/vehicle_type save |
+| `src/components/VehicleTyreDiagram.jsx` | Case-insensitive getLayout, correct position IDs for all vehicle types |
+
+---
+
+## Key Libraries & Utilities
 
 | File | Purpose |
 |------|---------|
@@ -176,50 +190,46 @@ Deploy: `supabase functions deploy chat-ai --project-ref <your-ref>`
 | `src/lib/auditLogger.js` | Non-throwing audit_log_v2 wrapper |
 | `src/lib/alertEngine.js` | Alert detection (velocity, CPK, data quality) |
 | `src/lib/emailService.js` | PDF generation + Resend email delivery |
-| `src/lib/performanceMonitor.js` | Query timing, slow query detection |
 | `src/lib/exportUtils.js` | Excel/PDF export utilities |
-| `src/lib/analyticsEngine.js` | Legacy analytics (CPK, trends) |
-
-## Key Components
-
-| File | Purpose |
-|------|---------|
-| `src/components/Layout.jsx` | Main sidebar nav with NAV_GROUPS, GlobalSearch, NotificationCenter |
+| `src/components/ui/PageHeader.jsx` | Shared page header with title, subtitle, icon, actions |
+| `src/components/Layout.jsx` | Main sidebar nav, GlobalSearch, NotificationCenter |
 | `src/components/GlobalSearch.jsx` | Cmd/Ctrl+K search modal across all data |
-| `src/components/NotificationCenter.jsx` | Realtime bell icon + dropdown notifications |
-| `src/components/EmailReportModal.jsx` | Multi-recipient email with PDF attachment |
-| `src/components/EmptyState.jsx` | Reusable empty state UI |
-| `src/components/LoadingState.jsx` | Spinner with message/fullPage mode |
-| `src/components/InstallPwaPrompt.jsx` | PWA install banner |
-
-## Key Hooks
-
-| File | Purpose |
-|------|---------|
-| `src/hooks/useRealtimeAlerts.js` | Supabase Realtime subscription for Critical tyres + 50-item ring buffer |
+| `src/components/VehicleTyreDiagram.jsx` | SVG vehicle layout with clickable tyre positions |
 
 ---
 
 ## Architecture Notes
 
 - **Anthropic API key** — calls go through `supabase.functions.invoke('chat-ai')` — never exposed client-side
-- **EmailReportModal** wired into: ExecutiveReport, EngineeringKpi, Reports, ForecastingEngine, VendorIntelligence, FleetIntelligence
-- **NotificationCenter** in Layout sidebar footer — subscribes to `tyre_records` + `alerts` via Supabase Realtime
-- **GlobalSearch** in Layout — searches tyres, vehicles, inspections, work orders, stock + nav shortcuts
-- All intelligence pages: Supabase load on mount → useMemo computed → Chart.js → Excel/PDF export
-- **uuid** package NOT installed — use `crypto.randomUUID()` everywhere
-- Build: `npm run build` → 2174 modules, 0 errors, ~1159KB gzip (chunk size warnings expected)
+- **uuid** — NOT installed. Use `crypto.randomUUID()` everywhere
+- **lucide-react** is v0.263.1 — many newer icons don't exist. Check before using
+- **Build** — `npm run build` → 2179 modules, 0 errors, ~1170KB gzip. Chunk size warnings are expected and non-blocking
+- **Supabase RLS** — enabled on all tables. Profile lookup for multi-identifier login requires the `get_user_email_by_id` SECURITY DEFINER RPC
+- All intelligence pages follow the same pattern: load on mount → useMemo computed → Chart.js visuals → Excel/PDF export
 
 ---
 
-## Infrastructure
+## Supabase Edge Functions
 
-| File | Purpose |
-|------|---------|
-| `public/manifest.json` | PWA manifest (8 icons, 4 shortcuts) |
-| `public/sw.js` | Service worker (cache-first) |
-| `supabase/config.toml` | Supabase project config |
-| `supabase/functions/chat-ai/` | Anthropic API proxy |
-| `supabase/functions/generate-embedding/` | OpenAI embeddings proxy |
-| `supabase/functions/send-email/` | Resend email proxy |
-| `src/index.css` | Theme depth: gradients, card shadows, custom scrollbar |
+| Function | Input | Purpose |
+|----------|-------|---------|
+| `chat-ai` | `{ system, user, model }` | Anthropic API proxy |
+| `generate-embedding` | `{ text, model }` | OpenAI embeddings proxy |
+| `send-email` | `{ to, subject, body }` | Resend API email delivery |
+
+Env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
+Deploy: `supabase functions deploy chat-ai --project-ref <your-ref>`
+
+---
+
+## Next Session Priorities
+
+1. **RAG document ingestion** — SOP/policy PDF upload pipeline
+2. **AI cost monitor** — token usage dashboard per day/month
+3. **Offline PWA** — service worker sync queue for inspections without internet
+4. **Scheduled reports** — monthly email of executive PDF
+5. **QR/barcode scanner** — tyre serial scan on checklist (mobile)
+
+---
+
+*TyrePulse v6.0 · Readymix Concrete Company · Shahzeb Rahman © 2026*

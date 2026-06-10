@@ -25,7 +25,7 @@
 | Build | ✅ 0 errors — 2179 modules |
 | Pages | ✅ 73 pages registered and routed |
 | Auth + RBAC | ✅ Role-based routes, 30-min idle timeout, admin approval gate |
-| Login | ✅ Email / Username / Employee ID — all three modes |
+| Login | ✅ Email / Username / Employee ID — all three modes — premium animated UI |
 | Intelligence RBAC | ✅ Admin only — sidebar hidden + route guarded |
 | Analytics RBAC | ✅ Admin + Manager + Director only |
 | Vehicle Diagram | ✅ Case-insensitive, position IDs consistent across checklist + diagram |
@@ -53,6 +53,7 @@
 | Build error — SiteComparison.jsx | `GitCompareArrows` not in lucide-react v0.263.1 | ✅ Replaced with `GitMerge` |
 | Vehicle diagram not matching checklist | Position ID mismatch (`RL1` vs `RLO3`) + casing mismatch | ✅ Fixed |
 | Login accepts only email | No username/Employee ID support | ✅ Multi-identifier login added |
+| Login page visual | Generic form — no brand identity | ✅ Premium animated truck tyre SVG, glow pulse, particle effects, theme toggle |
 
 ---
 

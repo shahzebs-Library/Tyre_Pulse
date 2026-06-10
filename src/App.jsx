@@ -7,13 +7,6 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import LoadingSpinner from './components/LoadingSpinner'
-
-function HomeRoute() {
-  const { profile, loading } = useAuth()
-  if (loading) return <LoadingSpinner />
-  if (profile?.role === 'Tyre Man') return <Navigate to="/inspections" replace />
-  return <Dashboard />
-}
 import TyreRecords from './pages/TyreRecords'
 import StockManagement from './pages/StockManagement'
 import Budgets from './pages/Budgets'
@@ -88,6 +81,13 @@ import StockReplenishment from './pages/StockReplenishment'
 import TyreScan from './pages/TyreScan'
 import QrLabels from './pages/QrLabels'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt'
+
+function HomeRoute() {
+  const { profile, loading } = useAuth()
+  if (loading) return <LoadingSpinner />
+  if (profile?.role === 'Tyre Man') return <Navigate to="/inspections" replace />
+  return <Dashboard />
+}
 
 export default function App() {
   return (

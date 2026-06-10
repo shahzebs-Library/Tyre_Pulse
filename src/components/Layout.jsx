@@ -171,8 +171,15 @@ function TyreManShell({ children, alertCount }) {
 
   // Force light theme for the TyreMan mobile shell
   useEffect(() => {
+    const prev = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
     document.documentElement.classList.remove('dark')
     document.documentElement.classList.add('light')
+    return () => {
+      // Restore previous theme when TyreMan shell unmounts (e.g. logout)
+      const saved = localStorage.getItem('tyrepulse-theme') || prev
+      document.documentElement.classList.remove('dark', 'light')
+      document.documentElement.classList.add(saved)
+    }
   }, [])
 
   // Acquire wake lock while on inspections checklist

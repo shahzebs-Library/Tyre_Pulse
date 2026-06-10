@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -10,6 +10,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { supabase } from '../lib/supabase'
 import TpLogo from '../assets/logo.svg'
+import { useLoginScene, PHASES } from '../state/loginScene'
+
+/* 3D Truck MCU — lazy so the R3F/three chunk never blocks first paint and the
+   login form is usable instantly even on slow connections or WebGL-less devices. */
+const TruckScene = lazy(() => import('../three/TruckScene'))
 
 /* ── CSS injected once ────────────────────────────────────────────────────── */
 const STYLES = `
@@ -208,6 +213,14 @@ export default function Login() {
   const [focusedField, setFocusedField] = useState(null)
   const [isOnline, setIsOnline]       = useState(navigator.onLine)
 
+  // ── 3D Truck MCU bindings ───────────────────────────────────────────────
+  const setPhase   = useLoginScene(s => s.setPhase)
+  const pokeTyping = useLoginScene(s => s.pokeTyping)
+  const resetScene = useLoginScene(s => s.reset)
+  // Resolve the time-of-day once per mount (stable env profile for the scene).
+  const sceneHour  = useMemo(() => new Date().getHours(), [])
+  useEffect(() => () => resetScene(), [resetScene])
+
   // Track network status
   useEffect(() => {
     const on  = () => setIsOnline(true)
@@ -225,9 +238,16 @@ export default function Login() {
   async function handleLogin(e) {
     e.preventDefault()
     if (!isOnline) { setError('No internet connection. Please check your network.'); return }
-    setError(''); setLoading(true)
+    setError(''); setLoading(true); setPhase(PHASES.LOADING)
     const err = await signIn(identifier, password)
-    if (err) { setError(err.message); setLoading(false) } else navigate('/')
+    if (err) {
+      setError(err.message); setLoading(false); setPhase(PHASES.ERROR)
+    } else {
+      // Truck accelerates (success) then zoom-throughs into the dashboard.
+      setPhase(PHASES.SUCCESS)
+      setTimeout(() => setPhase(PHASES.TRANSITION), 520)
+      setTimeout(() => navigate('/'), 1050)
+    }
   }
 
   async function handleSignup(e) {
@@ -291,6 +311,17 @@ export default function Login() {
       {/* Force dark on login page regardless of stored theme */}
       <div style={{ minHeight:'100vh', display:'flex', background:'#060e08', position:'relative', overflow:'hidden' }}>
 
+        {/* ── 3D Truck MCU (state-driven background) ──────────────────────── */}
+        <Suspense fallback={null}>
+          <TruckScene hour={sceneHour} />
+        </Suspense>
+
+        {/* Vignette seating the truck behind the UI (keeps form text crisp) */}
+        <div style={{
+          position:'fixed', inset:0, zIndex:1, pointerEvents:'none',
+          background:'radial-gradient(ellipse 70% 80% at 78% 50%, rgba(3,9,6,0.78) 0%, rgba(3,9,6,0.35) 40%, transparent 70%), linear-gradient(0deg, rgba(3,9,6,0.55), transparent 45%)',
+        }}/>
+
         {/* ── Background layers ──────────────────────────────────────────── */}
         {/* Deep radial glow */}
         <div style={{
@@ -351,6 +382,7 @@ export default function Login() {
           padding:'60px 56px',
           flex:'0 0 48%',
           position:'relative',
+          zIndex:2,
         }}
           className="lg-panel">
 
@@ -411,6 +443,7 @@ export default function Login() {
           alignItems:'center', justifyContent:'center',
           padding:'24px 20px',
           minHeight:'100vh',
+          position:'relative', zIndex:2,
         }}>
 
           {/* Mobile-only brand */}
@@ -567,7 +600,7 @@ export default function Login() {
                           style={{ ...inputStyle('id'), paddingLeft:40 }}
                           placeholder={currentMode.placeholder}
                           value={identifier}
-                          onChange={e => setIdentifier(e.target.value)}
+                          onChange={e => { setIdentifier(e.target.value); pokeTyping() }}
                           onFocus={() => setFocusedField('id')}
                           onBlur={() => setFocusedField(null)}
                           required autoFocus autoComplete="username"
@@ -595,7 +628,7 @@ export default function Login() {
                         style={{ ...inputStyle('pw'), paddingRight:44 }}
                         placeholder="••••••••"
                         value={password}
-                        onChange={e => setPassword(e.target.value)}
+                        onChange={e => { setPassword(e.target.value); pokeTyping() }}
                         onFocus={() => setFocusedField('pw')}
                         onBlur={() => setFocusedField(null)}
                         required autoComplete="current-password"

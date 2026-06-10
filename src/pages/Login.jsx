@@ -316,10 +316,11 @@ export default function Login() {
           <TruckScene hour={sceneHour} />
         </Suspense>
 
-        {/* Vignette seating the truck behind the UI (keeps form text crisp) */}
+        {/* Vignette seating the truck behind the UI (keeps form text crisp).
+            Concentrated behind the form (right) so the truck stays vivid on the left. */}
         <div style={{
           position:'fixed', inset:0, zIndex:1, pointerEvents:'none',
-          background:'radial-gradient(ellipse 70% 80% at 78% 50%, rgba(3,9,6,0.78) 0%, rgba(3,9,6,0.35) 40%, transparent 70%), linear-gradient(0deg, rgba(3,9,6,0.55), transparent 45%)',
+          background:'radial-gradient(ellipse 55% 75% at 82% 50%, rgba(3,9,6,0.6) 0%, rgba(3,9,6,0.18) 45%, transparent 72%), linear-gradient(0deg, rgba(3,9,6,0.4), transparent 55%)',
         }}/>
 
         {/* ── Background layers ──────────────────────────────────────────── */}

@@ -111,7 +111,7 @@ export default function TruckScene({ hour }) {
         shadows={shadows}
         dpr={dpr}
         gl={{ antialias: quality === 'high', powerPreference: 'high-performance', alpha: true }}
-        camera={{ position: [-6.2, 2.1, 7.6], fov: 42, near: 0.1, far: 100 }}
+        camera={{ position: [-5.4, 1.9, 6.8], fov: 42, near: 0.1, far: 100 }}
         frameloop="always"
       >
         <Suspense fallback={null}>

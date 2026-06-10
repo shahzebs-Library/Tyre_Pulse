@@ -12,18 +12,23 @@ export default function SceneEnvironment({ env, motionRef }) {
   const sun = useRef()
   const ambient = useRef()
   const fill = useRef()
+  const key = useRef()
 
-  // Fog + background follow the resolved period.
+  // Light fog for depth only. Background stays transparent so the canvas
+  // composites over the page's designed gradient/grid instead of flat-filling
+  // the viewport with a solid colour.
   useMemo(() => {
-    scene.fog = new THREE.Fog(env.fog.color, env.fog.near, env.fog.far)
-    scene.background = new THREE.Color(env.sky)
+    scene.fog = new THREE.Fog(env.fog.color, 16, 46)
+    scene.background = null
   }, [scene, env])
 
   useFrame(() => {
     const b = motionRef.current.brightness
-    if (sun.current) sun.current.intensity = env.sun.intensity * b
-    if (ambient.current) ambient.current.intensity = env.ambient.intensity * b
-    if (fill.current) fill.current.intensity = 0.6 * env.glow * b
+    // Floor the time-of-day lights so the hero truck always reads, even at night.
+    if (sun.current) sun.current.intensity = (0.5 + env.sun.intensity) * b
+    if (ambient.current) ambient.current.intensity = (0.45 + env.ambient.intensity) * b
+    if (fill.current) fill.current.intensity = (0.9 + 0.8 * env.glow) * b
+    if (key.current) key.current.intensity = 1.5 * b
   })
 
   // Moving ground stripes to imply travel without translating the truck.
@@ -57,13 +62,25 @@ export default function SceneEnvironment({ env, motionRef }) {
         shadow-camera-top={10}
         shadow-camera-bottom={-10}
       />
+      {/* Constant hero key light from camera side — keeps the truck legible
+          regardless of time of day; mood/colour still shift with the period. */}
+      <spotLight
+        ref={key}
+        color="#eafff3"
+        intensity={1.5}
+        position={[-5, 5, 8]}
+        angle={0.7}
+        penumbra={0.8}
+        distance={30}
+        castShadow
+      />
       {/* Brand green rim/fill light from behind — intensifies at night via glow. */}
       <pointLight
         ref={fill}
         color={BRAND.greenLight}
-        intensity={0.6 * env.glow}
+        intensity={1.2}
         position={[3, 1.5, -3]}
-        distance={18}
+        distance={20}
       />
 
       {/* Ground */}

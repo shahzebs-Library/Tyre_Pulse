@@ -9,8 +9,8 @@ import { useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
-const BASE_POS = new THREE.Vector3(-6.2, 2.1, 7.6)
-const BASE_TARGET = new THREE.Vector3(0.2, 0.1, 0)
+const BASE_POS = new THREE.Vector3(-5.4, 1.9, 6.8)
+const BASE_TARGET = new THREE.Vector3(0.1, 0.25, 0)
 
 export default function CameraRig({ motionRef }) {
   const { camera } = useThree()

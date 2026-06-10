@@ -163,47 +163,54 @@ const TYRE_MAN_TABS = [
 
 function TyreManShell({ children, alertCount }) {
   const { signOut, profile } = useAuth()
-  return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)' }}>
 
-      {/* Fixed top header */}
+  // Force light theme for the TyreMan mobile shell
+  useEffect(() => {
+    document.documentElement.classList.remove('dark')
+    document.documentElement.classList.add('light')
+  }, [])
+
+  return (
+    <div
+      className="min-h-screen flex flex-col"
+      style={{ background: '#f0f5f1' }}
+    >
+      {/* Fixed top header — light */}
       <header
         className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4"
         style={{
           height: 'calc(52px + env(safe-area-inset-top))',
           paddingTop: 'env(safe-area-inset-top)',
-          background: 'rgba(3,8,5,0.97)',
-          borderBottom: '1px solid rgba(22,163,74,0.12)',
+          background: 'rgba(255,255,255,0.97)',
+          borderBottom: '1px solid rgba(22,163,74,0.15)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          boxShadow: '0 1px 20px rgba(0,0,0,0.4)',
+          boxShadow: '0 1px 12px rgba(0,0,0,0.06)',
         }}
       >
         <div className="flex items-center gap-2.5">
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.25)' }}
+            style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.22)' }}
           >
             <img src={TpLogo} alt="" className="w-4 h-4" />
           </div>
           <span
             className="font-extrabold text-sm tracking-tight"
-            style={{
-              background: 'linear-gradient(135deg, #ffffff 25%, #86efac 75%, #4ade80 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
+            style={{ color: '#166534' }}
           >
             TyrePulse
           </span>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 max-w-[120px] truncate">{profile?.full_name}</span>
+          <span className="text-xs max-w-[120px] truncate" style={{ color: '#6b7280' }}>
+            {profile?.full_name}
+          </span>
           <button
             onClick={signOut}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+            style={{ color: '#9ca3af' }}
             aria-label="Sign out"
           >
             <LogOut size={14} />
@@ -222,17 +229,17 @@ function TyreManShell({ children, alertCount }) {
         {children}
       </main>
 
-      {/* Fixed bottom tab bar */}
+      {/* Fixed bottom tab bar — light */}
       <nav
         className="fixed bottom-0 left-0 right-0 z-30"
         aria-label="Tyre Man navigation"
         style={{
-          background: 'rgba(3,8,5,0.97)',
-          borderTop: '1px solid rgba(22,163,74,0.14)',
+          background: 'rgba(255,255,255,0.97)',
+          borderTop: '1px solid rgba(22,163,74,0.15)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           paddingBottom: 'env(safe-area-inset-bottom)',
-          boxShadow: '0 -4px 30px rgba(0,0,0,0.6)',
+          boxShadow: '0 -2px 16px rgba(0,0,0,0.06)',
         }}
       >
         <div className="flex items-stretch h-[54px]">
@@ -241,10 +248,10 @@ function TyreManShell({ children, alertCount }) {
               key={to}
               to={to}
               end={end}
-              className={({ isActive }) =>
-                `flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:opacity-70
-                 ${isActive ? 'text-green-400' : 'text-gray-600'}`
-              }
+              style={({ isActive }) => ({
+                color: isActive ? '#16a34a' : '#9ca3af',
+              })}
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:opacity-60"
             >
               {({ isActive }) => (
                 <>
@@ -252,8 +259,8 @@ function TyreManShell({ children, alertCount }) {
                     <Icon size={20} strokeWidth={isActive ? 2.2 : 1.7} />
                     {to === '/alerts' && alertCount > 0 && (
                       <span
-                        className="absolute -top-1.5 -right-2 min-w-[15px] h-[15px] flex items-center justify-center text-[9px] font-bold bg-red-600 text-white rounded-full px-0.5"
-                        style={{ boxShadow: '0 0 8px rgba(239,68,68,0.7)' }}
+                        className="absolute -top-1.5 -right-2 min-w-[15px] h-[15px] flex items-center justify-center text-[9px] font-bold bg-red-500 text-white rounded-full px-0.5"
+                        style={{ boxShadow: '0 0 6px rgba(239,68,68,0.5)' }}
                       >
                         {alertCount > 9 ? '9+' : alertCount}
                       </span>

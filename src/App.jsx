@@ -2,9 +2,18 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { SettingsProvider } from './contexts/SettingsContext'
 import ProtectedRoute, { RoleRoute } from './components/ProtectedRoute'
+import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import LoadingSpinner from './components/LoadingSpinner'
+
+function HomeRoute() {
+  const { profile, loading } = useAuth()
+  if (loading) return <LoadingSpinner />
+  if (profile?.role === 'Tyre Man') return <Navigate to="/inspections" replace />
+  return <Dashboard />
+}
 import TyreRecords from './pages/TyreRecords'
 import StockManagement from './pages/StockManagement'
 import Budgets from './pages/Budgets'
@@ -95,7 +104,7 @@ export default function App() {
               <ProtectedRoute>
                 <Layout>
                   <Routes>
-                    <Route path="/"            element={<Dashboard />} />
+                    <Route path="/"            element={<HomeRoute />} />
                     <Route path="/tyres"       element={<TyreRecords />} />
                     {/* ── Analytics (Admin + Manager + Director) ── */}
                     <Route path="/analytics"    element={<RoleRoute allowed={['Admin','Manager','Director']}><Analytics /></RoleRoute>} />

@@ -6,14 +6,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLanguage, Language } from '../../contexts/LanguageContext'
 import { getPendingCount, syncQueue, retryFailed, clearSynced, getQueue } from '../../lib/offlineQueue'
+
+const LANG_OPTIONS: { code: Language; labelKey: string }[] = [
+  { code: 'en', labelKey: 'language.english' },
+  { code: 'ar', labelKey: 'language.arabic' },
+  { code: 'ur', labelKey: 'language.urdu' },
+]
 
 export default function ProfileScreen() {
   const { profile, signOut } = useAuth()
+  const { t, language, setLanguage, isRTL } = useLanguage()
   const [pending, setPending] = useState(0)
   const [syncing, setSyncing] = useState(false)
   const [queueTotal, setQueueTotal] = useState(0)
   const [loggingOut, setLoggingOut] = useState(false)
+
+  const textAlign = isRTL ? 'right' : 'left'
 
   async function load() {
     const count = await getPendingCount()
@@ -30,10 +40,9 @@ export default function ProfileScreen() {
       await retryFailed()
       const { synced, failed } = await syncQueue()
       await load()
-      Alert.alert(
-        'Sync Complete',
-        `${synced} inspection${synced !== 1 ? 's' : ''} uploaded.${failed > 0 ? ` ${failed} failed — check connection.` : ''}`,
-      )
+      const uploadedLabel = synced !== 1 ? t('profile.uploadsPlural') : t('profile.uploaded')
+      const failedSuffix = failed > 0 ? ` ${failed} ${t('profile.syncFailed')}` : ''
+      Alert.alert(t('profile.syncCompleteTitle'), `${synced} ${uploadedLabel}${failedSuffix}`)
     } finally {
       setSyncing(false)
     }
@@ -41,12 +50,12 @@ export default function ProfileScreen() {
 
   async function handleClearSynced() {
     Alert.alert(
-      'Clear Synced Records',
-      'Remove already-synced records from the offline queue? This does NOT delete them from the server.',
+      t('profile.clearTitle'),
+      t('profile.clearMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Clear', style: 'destructive',
+          text: t('profile.clearConfirm'), style: 'destructive',
           onPress: async () => { await clearSynced(); load() },
         },
       ]
@@ -55,12 +64,12 @@ export default function ProfileScreen() {
 
   async function handleLogout() {
     Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
+      t('profile.signOutTitle'),
+      t('profile.signOutMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Sign Out', style: 'destructive',
+          text: t('profile.signOut'), style: 'destructive',
           onPress: async () => {
             setLoggingOut(true)
             await signOut()
@@ -70,29 +79,28 @@ export default function ProfileScreen() {
     )
   }
 
-  const roleLabel: Record<string, string> = {
-    admin: 'Administrator',
-    manager: 'Manager',
-    director: 'Director',
-    inspector: 'Inspector',
-    tyre_man: 'Tyre Man',
-  }
-
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+
         {/* Profile card */}
-        <View style={styles.profileCard}>
+        <View style={[styles.profileCard, isRTL && styles.profileCardRTL]}>
           <View style={styles.avatar}>
             <Text style={styles.avatarInitial}>
               {profile?.full_name?.[0]?.toUpperCase() ?? profile?.username?.[0]?.toUpperCase() ?? '?'}
             </Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.name}>{profile?.full_name ?? profile?.username ?? 'Inspector'}</Text>
+            <Text style={[styles.name, { textAlign }]}>
+              {profile?.full_name ?? profile?.username ?? t('tabs.profile')}
+            </Text>
             <View style={styles.roleBadge}>
-              <Text style={styles.roleText}>{roleLabel[profile?.role ?? ''] ?? profile?.role}</Text>
+              <Text style={styles.roleText}>
+                {t(`profile.roles.${profile?.role ?? ''}`) !== `profile.roles.${profile?.role ?? ''}`
+                  ? t(`profile.roles.${profile?.role ?? ''}`)
+                  : profile?.role ?? ''}
+              </Text>
             </View>
           </View>
         </View>
@@ -100,40 +108,65 @@ export default function ProfileScreen() {
         {/* Details */}
         <View style={styles.section}>
           {profile?.employee_id && (
-            <View style={styles.detailRow}>
+            <View style={[styles.detailRow, isRTL && styles.detailRowRTL]}>
               <Ionicons name="id-card-outline" size={16} color="#64748b" />
-              <Text style={styles.detailLabel}>Employee ID</Text>
-              <Text style={styles.detailValue}>{profile.employee_id}</Text>
+              <Text style={[styles.detailLabel, { textAlign }]}>{t('profile.employeeId')}</Text>
+              <Text style={[styles.detailValue, { textAlign }]}>{profile.employee_id}</Text>
             </View>
           )}
           {profile?.site && (
-            <View style={styles.detailRow}>
+            <View style={[styles.detailRow, isRTL && styles.detailRowRTL]}>
               <Ionicons name="location-outline" size={16} color="#64748b" />
-              <Text style={styles.detailLabel}>Assigned Site</Text>
-              <Text style={styles.detailValue}>{profile.site}</Text>
+              <Text style={[styles.detailLabel, { textAlign }]}>{t('profile.assignedSite')}</Text>
+              <Text style={[styles.detailValue, { textAlign }]}>{profile.site}</Text>
             </View>
           )}
           {profile?.country && (
-            <View style={styles.detailRow}>
+            <View style={[styles.detailRow, isRTL && styles.detailRowRTL]}>
               <Ionicons name="globe-outline" size={16} color="#64748b" />
-              <Text style={styles.detailLabel}>Country</Text>
-              <Text style={styles.detailValue}>{profile.country}</Text>
+              <Text style={[styles.detailLabel, { textAlign }]}>{t('profile.country')}</Text>
+              <Text style={[styles.detailValue, { textAlign }]}>{profile.country}</Text>
             </View>
           )}
         </View>
 
+        {/* Language section */}
+        <Text style={[styles.sectionTitle, { textAlign }]}>{t('language.sectionTitle')}</Text>
+        <View style={styles.section}>
+          {LANG_OPTIONS.map((opt, idx) => (
+            <TouchableOpacity
+              key={opt.code}
+              style={[
+                styles.langRow,
+                isRTL && styles.langRowRTL,
+                idx < LANG_OPTIONS.length - 1 && styles.langRowBorder,
+                language === opt.code && styles.langRowActive,
+              ]}
+              onPress={() => setLanguage(opt.code)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.langLabel, language === opt.code && styles.langLabelActive]}>
+                {t(opt.labelKey)}
+              </Text>
+              {language === opt.code && (
+                <Ionicons name="checkmark-circle" size={20} color="#16a34a" />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Sync section */}
-        <Text style={styles.sectionTitle}>Offline Queue</Text>
+        <Text style={[styles.sectionTitle, { textAlign }]}>{t('profile.offlineQueue')}</Text>
         <View style={styles.section}>
           <View style={styles.syncStats}>
             <View style={styles.syncStat}>
               <Text style={[styles.syncStatNum, pending > 0 && { color: '#d97706' }]}>{pending}</Text>
-              <Text style={styles.syncStatLabel}>Pending</Text>
+              <Text style={styles.syncStatLabel}>{t('profile.pending')}</Text>
             </View>
             <View style={styles.syncStatDivider} />
             <View style={styles.syncStat}>
               <Text style={styles.syncStatNum}>{queueTotal}</Text>
-              <Text style={styles.syncStatLabel}>Total Queued</Text>
+              <Text style={styles.syncStatLabel}>{t('profile.totalQueued')}</Text>
             </View>
           </View>
 
@@ -147,18 +180,18 @@ export default function ProfileScreen() {
               : <Ionicons name="cloud-upload-outline" size={18} color="#16a34a" />
             }
             <Text style={styles.actionBtnText}>
-              {syncing ? 'Syncing…' : 'Sync Now'}
+              {syncing ? t('profile.syncing') : t('profile.syncNow')}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.ghostBtn} onPress={handleClearSynced}>
             <Ionicons name="trash-outline" size={16} color="#94a3b8" />
-            <Text style={styles.ghostBtnText}>Clear synced records</Text>
+            <Text style={styles.ghostBtnText}>{t('profile.clearSynced')}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Sign out */}
-        <Text style={styles.sectionTitle}>Account</Text>
+        {/* Account / Sign out */}
+        <Text style={[styles.sectionTitle, { textAlign }]}>{t('profile.account')}</Text>
         <View style={styles.section}>
           <TouchableOpacity
             style={[styles.signOutBtn, loggingOut && styles.actionBtnDisabled]}
@@ -169,11 +202,11 @@ export default function ProfileScreen() {
               ? <ActivityIndicator size="small" color="#dc2626" />
               : <Ionicons name="log-out-outline" size={18} color="#dc2626" />
             }
-            <Text style={styles.signOutText}>Sign Out</Text>
+            <Text style={styles.signOutText}>{t('profile.signOut')}</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.version}>TyrePulse Inspector v1.0.0</Text>
+        <Text style={styles.version}>{t('profile.version')}</Text>
       </ScrollView>
     </SafeAreaView>
   )
@@ -198,6 +231,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 3,
   },
+  profileCardRTL: { flexDirection: 'row-reverse' },
   avatar: {
     width: 56,
     height: 56,
@@ -246,8 +280,26 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
   },
+  detailRowRTL: { flexDirection: 'row-reverse' },
   detailLabel: { fontSize: 13, color: '#64748b', flex: 1 },
   detailValue: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
+  langRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+  },
+  langRowRTL: { flexDirection: 'row-reverse' },
+  langRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  langRowActive: {
+    backgroundColor: 'rgba(22,163,74,0.04)',
+  },
+  langLabel: { fontSize: 15, color: '#0f172a', fontWeight: '500' },
+  langLabelActive: { color: '#16a34a', fontWeight: '700' },
   syncStats: {
     flexDirection: 'row',
     paddingVertical: 16,

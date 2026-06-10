@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { getQueue, syncQueue } from '../../lib/offlineQueue'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLanguage } from '../../contexts/LanguageContext'
 import SyncBanner from '../../components/SyncBanner'
 
 interface HistoryItem {
@@ -23,9 +24,13 @@ interface HistoryItem {
 
 export default function HistoryScreen() {
   const { profile } = useAuth()
+  const { t, isRTL } = useLanguage()
   const [items, setItems] = useState<HistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+
+  const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
+  const textAlign = isRTL ? 'right' : 'left'
 
   const load = useCallback(async () => {
     const queue = await getQueue()
@@ -57,7 +62,6 @@ export default function HistoryScreen() {
       tyre_count: Object.keys(i.tyre_conditions ?? {}).length,
     }))
 
-    // Offline items first, then synced
     setItems([...offlineItems, ...syncedItems])
     setLoading(false)
   }, [profile?.id])
@@ -80,10 +84,14 @@ export default function HistoryScreen() {
   function renderItem({ item }: { item: HistoryItem }) {
     const status = STATUS_COLORS[item.sync_status]
     const formattedDate = item.inspection_date
-      ? new Date(item.inspection_date + 'T00:00:00').toLocaleDateString('en-GB', {
+      ? new Date(item.inspection_date + 'T00:00:00').toLocaleDateString(dateLocale, {
           day: 'numeric', month: 'short', year: 'numeric',
         })
       : '—'
+
+    const statusLabel = item.sync_status === 'synced' ? t('common.synced')
+      : item.sync_status === 'pending' ? t('common.pending')
+      : t('common.failed')
 
     return (
       <View style={styles.card}>
@@ -93,33 +101,29 @@ export default function HistoryScreen() {
           </View>
         </View>
         <View style={styles.cardBody}>
-          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-          <View style={styles.metaRow}>
+          <Text style={[styles.cardTitle, { textAlign }]} numberOfLines={1}>{item.title}</Text>
+          <View style={[styles.metaRow, isRTL && styles.metaRowRTL]}>
             <Ionicons name="location-outline" size={12} color="#94a3b8" />
             <Text style={styles.metaText}>{item.site}</Text>
             <Text style={styles.metaDot}>·</Text>
             <Ionicons name="bus-outline" size={12} color="#94a3b8" />
             <Text style={styles.metaText}>{item.asset_number}</Text>
           </View>
-          <View style={styles.metaRow}>
+          <View style={[styles.metaRow, isRTL && styles.metaRowRTL]}>
             <Ionicons name="calendar-outline" size={12} color="#94a3b8" />
             <Text style={styles.metaText}>{formattedDate}</Text>
             {item.tyre_count ? (
               <>
                 <Text style={styles.metaDot}>·</Text>
                 <Ionicons name="ellipse-outline" size={12} color="#94a3b8" />
-                <Text style={styles.metaText}>{item.tyre_count} tyres</Text>
+                <Text style={styles.metaText}>{item.tyre_count} {t('history.tyres')}</Text>
               </>
             ) : null}
           </View>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
           <Ionicons name={status.icon as any} size={13} color={status.text} />
-          <Text style={[styles.statusText, { color: status.text }]}>
-            {item.sync_status === 'synced' ? 'Synced'
-              : item.sync_status === 'pending' ? 'Pending'
-              : 'Failed'}
-          </Text>
+          <Text style={[styles.statusText, { color: status.text }]}>{statusLabel}</Text>
         </View>
       </View>
     )
@@ -128,9 +132,9 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Inspection History</Text>
-        <Text style={styles.headerSub}>{items.length} records</Text>
+      <View style={[styles.header, isRTL && styles.headerRTL]}>
+        <Text style={[styles.headerTitle, { textAlign }]}>{t('history.title')}</Text>
+        <Text style={[styles.headerSub, { textAlign }]}>{items.length} {t('common.records')}</Text>
       </View>
       <SyncBanner />
       {loading ? (
@@ -149,8 +153,8 @@ export default function HistoryScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="time-outline" size={52} color="#cbd5e1" />
-              <Text style={styles.emptyTitle}>No history yet</Text>
-              <Text style={styles.emptyText}>Submitted inspections will appear here</Text>
+              <Text style={styles.emptyTitle}>{t('history.noHistory')}</Text>
+              <Text style={styles.emptyText}>{t('history.noHistoryHint')}</Text>
             </View>
           }
         />
@@ -169,6 +173,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.07)',
   },
+  headerRTL: { alignItems: 'flex-end' },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
   headerSub: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -200,6 +205,7 @@ const styles = StyleSheet.create({
   cardBody: { flex: 1, gap: 4 },
   cardTitle: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaRowRTL: { flexDirection: 'row-reverse' },
   metaText: { fontSize: 11, color: '#94a3b8' },
   metaDot: { fontSize: 11, color: '#cbd5e1' },
   statusBadge: {

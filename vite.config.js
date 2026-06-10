@@ -10,7 +10,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       injectRegister: 'auto',
       includeAssets: [
         'favicon.svg',
@@ -85,8 +85,8 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//, /^\/supabase\//],
         offlineGoogleAnalytics: false,
         cleanupOutdatedCaches: true,
-        // autoUpdate registerType handles skipWaiting via injected SW code
-        skipWaiting: true,
+        // prompt registerType: user explicitly triggers SKIP_WAITING via updateServiceWorker()
+        skipWaiting: false,
         clientsClaim: true,
         runtimeCaching: [
           // Supabase REST API — NetworkFirst, 5-minute cache as fallback

@@ -415,7 +415,7 @@ export default function Login() {
 
           {/* Mobile-only brand */}
           <motion.div
-            initial={{ opacity:0, y:-16 }}
+            initial={{ opacity:1, y:-16 }}
             animate={{ opacity:1, y:0 }}
             transition={{ duration:0.45, ease:[0.22,1,0.36,1] }}
             style={{ textAlign:'center', marginBottom:24 }}
@@ -455,7 +455,7 @@ export default function Login() {
 
           {/* Main card */}
           <motion.div
-            initial={{ opacity:0, y:20, scale:0.98 }}
+            initial={{ opacity:1, y:20, scale:0.98 }}
             animate={{ opacity:1, y:0, scale:1 }}
             transition={{ duration:0.5, ease:[0.22,1,0.36,1] }}
             style={{ width:'100%', maxWidth:420 }}
@@ -846,7 +846,7 @@ export default function Login() {
 
             {/* Footer */}
             <motion.div
-              initial={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:0.55 }}
+              initial={{ opacity:1 }} animate={{ opacity:1 }} transition={{ delay:0.55 }}
               style={{ textAlign:'center', marginTop:20, display:'flex', flexDirection:'column', gap:6 }}
             >
               <p style={{ fontSize:11, color:'rgba(255,255,255,0.18)', letterSpacing:'0.04em' }}>

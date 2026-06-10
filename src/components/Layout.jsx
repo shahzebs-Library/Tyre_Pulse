@@ -918,7 +918,7 @@ export default function Layout({ children }) {
       >
         <motion.div
           key={location.pathname}
-          initial={{ opacity: 0, y: 6 }}
+          initial={{ opacity: 1, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
           className="p-5 max-w-screen-2xl mx-auto"

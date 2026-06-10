@@ -1,5 +1,21 @@
 import React from 'react';
 
+// ── Vehicle type normaliser — maps any DB/prop value to a LAYOUTS key ──────────
+function resolveVehicleType(vt) {
+  if (!vt) return 'Pickup'
+  if (LAYOUTS[vt]) return vt                                             // exact match
+  const s = vt.toLowerCase().trim()
+  if (s.includes('tri') || s.includes('mixer'))            return 'Tri-mixer'
+  if (s.includes('concrete') || s.includes('pump'))        return 'Concrete pump'
+  if (s.includes('wheel') && s.includes('load'))           return 'Wheel loader'
+  if (s.includes('skid'))                                  return 'Skid loader'
+  if (s.includes('canter'))                                return 'Canter'
+  if (s.includes('bus'))                                   return 'Bus'
+  if (s.includes('tata'))                                  return 'Tata'
+  if (s.includes('ashok') || s.includes('leyland'))        return 'Ashok Leyland'
+  return 'Pickup'
+}
+
 // ── Risk colours ───────────────────────────────────────────────────────────────
 const RISK = {
   good:     { rim: '#22c55e', glow: '#16a34a', dark: '#15803d', label: 'Good' },
@@ -1345,27 +1361,43 @@ const LAYOUTS = {
   },
 };
 
-// ── Main Component ─────────────────────────────────────────────────────────────
-export default function VehicleTyreDiagram({ vehicleType, tyreData = {}, onTyreClick, width = 240 }) {
-  const layout = LAYOUTS[vehicleType];
+// ── Risk level mapping (checklist uses 'Low'/'Medium'/'Critical', diagram uses 'good'/'warning'/'critical') ──
+const LEVEL_TO_RISK = {
+  good: 'good', Good: 'good', Low: 'good', low: 'good',
+  warning: 'warning', Warning: 'warning', Medium: 'warning', medium: 'warning', High: 'warning', high: 'warning',
+  critical: 'critical', Critical: 'critical',
+  none: 'none',
+}
 
-  if (!layout) {
-    return (
-      <div className="text-gray-400 text-sm italic">
-        No diagram for: {vehicleType}
-      </div>
-    );
-  }
+// ── Main Component ─────────────────────────────────────────────────────────────
+export default function VehicleTyreDiagram({ vehicleType, positions, tyreData, onPositionClick, onTyreClick, width = 240 }) {
+  const resolved = resolveVehicleType(vehicleType)
+  const layout = LAYOUTS[resolved] || LAYOUTS['Pickup']
 
   const { emoji, viewH, Body, tyres } = layout;
   const scale = width / 200;
+
+  // Build unified riskMap: { id -> 'good'|'warning'|'critical'|'none' }
+  const riskMap = {}
+  if (positions && Array.isArray(positions)) {
+    positions.forEach(p => { riskMap[p.position] = LEVEL_TO_RISK[p.risk_level] || 'none' })
+  } else if (tyreData && typeof tyreData === 'object') {
+    Object.entries(tyreData).forEach(([id, v]) => {
+      riskMap[id] = LEVEL_TO_RISK[typeof v === 'string' ? v : v?.risk] || 'none'
+    })
+  }
+
+  // Support both prop-naming conventions; wrap so both receive { position } shape
+  const handleClick = onPositionClick
+    ? (id) => onPositionClick({ position: id })
+    : onTyreClick
 
   return (
     <div className="flex flex-col items-center gap-4">
       {/* Title */}
       <div className="text-sm font-bold text-gray-100 flex items-center gap-2">
         <span className="text-xl">{emoji}</span>
-        <span>{vehicleType}</span>
+        <span>{resolved}</span>
         <span className="text-gray-500 font-normal text-xs">· {tyres.length} tyres</span>
       </div>
 
@@ -1391,8 +1423,8 @@ export default function VehicleTyreDiagram({ vehicleType, tyreData = {}, onTyreC
           <Tyre
             key={t.id}
             {...t}
-            risk={tyreData[t.id]?.risk ?? 'none'}
-            onClick={onTyreClick}
+            risk={riskMap[t.id] ?? 'none'}
+            onClick={handleClick}
           />
         ))}
       </svg>

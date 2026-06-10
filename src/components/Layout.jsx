@@ -155,10 +155,10 @@ function roleBadgeClass(role) {
 }
 
 const TYRE_MAN_TABS = [
-  { to: '/scan',        label: 'Scan',      icon: ScanLine },
   { to: '/inspections', label: 'Checklist', icon: ClipboardCheck },
+  { to: '/scan',        label: 'Scan',      icon: ScanLine },
   { to: '/alerts',      label: 'Alerts',    icon: Bell },
-  { to: '/settings',    label: 'Profile',   icon: Settings },
+  { to: '/settings',    label: 'Settings',  icon: Settings },
 ]
 
 function TyreManShell({ children, alertCount }) {
@@ -170,7 +170,7 @@ function TyreManShell({ children, alertCount }) {
       <header
         className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4"
         style={{
-          height: 52,
+          height: 'calc(52px + env(safe-area-inset-top))',
           paddingTop: 'env(safe-area-inset-top)',
           background: 'rgba(3,8,5,0.97)',
           borderBottom: '1px solid rgba(22,163,74,0.12)',
@@ -213,10 +213,10 @@ function TyreManShell({ children, alertCount }) {
 
       {/* Scrollable content */}
       <main
-        className="flex-1 overflow-auto"
+        className="flex-1 overflow-auto px-3"
         style={{
-          paddingTop: 52,
-          paddingBottom: 'calc(54px + env(safe-area-inset-bottom))',
+          paddingTop: 'calc(52px + env(safe-area-inset-top))',
+          paddingBottom: 'calc(66px + env(safe-area-inset-bottom))',
         }}
       >
         {children}

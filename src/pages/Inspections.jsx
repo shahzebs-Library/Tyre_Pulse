@@ -37,19 +37,40 @@ const ALL_TYPES = [...INSPECTION_TYPES, ...OBSERVATION_TYPES, ...TRAINING_TYPES]
 const STATUSES = ['Scheduled', 'In Progress', 'Done', 'Overdue', 'Cancelled']
 const SEVERITIES = ['Low', 'Medium', 'High', 'Critical']
 
-// Keys must match what vehicle_fleet.vehicle_type stores in the DB (case-insensitive resolved via normVT)
+// Position IDs must exactly match VehicleTyreDiagram LAYOUTS tyre ids
 const TYRE_POSITIONS = {
   'pickup':        ['FL', 'FR', 'RL', 'RR'],
   'wheel loader':  ['FL', 'FR', 'RL', 'RR'],
   'skid loader':   ['FL', 'FR', 'RL', 'RR'],
-  'canter':        ['FL', 'FR', 'RLO', 'RLI', 'RRI', 'RRO'],
-  'tri-mixer':     ['FL1', 'FR1', 'FL2', 'FR2', 'RLO3', 'RLI3', 'RRI3', 'RRO3', 'RLO4', 'RLI4', 'RRI4', 'RRO4'],
-  'concrete pump': ['FL1', 'FR1', 'RLO2', 'RLI2', 'RRI2', 'RRO2', 'RLO3', 'RLI3', 'RRI3', 'RRO3', 'RLO4', 'RLI4', 'RRI4', 'RRO4'],
+  'canter':        ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
+  'tri-mixer':     ['F1L', 'F1R', 'F2L', 'F2R', 'R1Lo', 'R1Li', 'R1Ri', 'R1Ro', 'R2Lo', 'R2Li', 'R2Ri', 'R2Ro'],
+  'concrete pump': ['FL', 'FR', 'R1Lo', 'R1Li', 'R1Ri', 'R1Ro', 'R2Lo', 'R2Li', 'R2Ri', 'R2Ro', 'R3Lo', 'R3Li', 'R3Ri', 'R3Ro'],
+  'bus':           ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
+  'tata':          ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
+  'ashok leyland': ['FL', 'FR', 'RLo', 'RLi', 'RRi', 'RRo'],
 }
 const DEFAULT_POSITIONS = ['FL', 'FR', 'RL', 'RR']
 
-// Normalise vehicle type for position lookup (matches VehicleTyreDiagram.jsx)
-function normVT(vt) { return (vt || '').toLowerCase().trim() }
+// Normalise vehicle type to TYRE_POSITIONS key
+function normVT(vt) {
+  const s = (vt || '').toLowerCase().trim()
+  if (s.includes('tri') || s.includes('mixer'))       return 'tri-mixer'
+  if (s.includes('concrete') || s.includes('pump'))   return 'concrete pump'
+  if (s.includes('wheel') && s.includes('load'))      return 'wheel loader'
+  if (s.includes('skid'))                             return 'skid loader'
+  if (s.includes('canter'))                           return 'canter'
+  if (s.includes('bus'))                              return 'bus'
+  if (s.includes('tata'))                             return 'tata'
+  if (s.includes('ashok') || s.includes('leyland'))   return 'ashok leyland'
+  return 'pickup'
+}
+
+// Infer vehicle type from asset number prefix (TM→Tri-mixer, MO→Concrete pump, etc.)
+function inferVehicleTypeFromAsset(assetNo) {
+  const prefix = ((assetNo || '').match(/^[A-Za-z]+/) || [''])[0].toUpperCase().substring(0, 2)
+  const map = { TM: 'Tri-mixer', MO: 'Concrete pump', WL: 'Wheel loader', SL: 'Skid loader', PL: 'Pickup', BH: 'Bus' }
+  return map[prefix] || null
+}
 
 const EMPTY_FORM = {
   title: '', inspection_type: 'Routine', site: '', asset_no: '', tyre_serial: '',
@@ -65,14 +86,10 @@ const CHECKLIST_LABELS = {
   en: {
     title: 'Daily Inspection Checklist',
     asset: 'Asset Number',
-    km: 'Odometer (KM)',
-    hours: 'Engine Hours',
     position: 'Position',
     pressure: 'Pressure (PSI)',
     condition: 'Condition',
-    tread: 'Tread Depth (mm)',
-    serial: 'Serial No',
-    serial_hint: 'optional',
+    tread: 'Tread (mm)',
     notes: 'Notes',
     good: 'Good',
     wear: 'Wear',
@@ -81,20 +98,15 @@ const CHECKLIST_LABELS = {
     export: 'Export PDF',
     inspector: 'Inspector',
     site: 'Site',
-    vehicle_type: 'Vehicle Type',
     no_asset: 'Enter asset number to load vehicle',
   },
   ar: {
     title: 'قائمة الفحص اليومي',
     asset: 'رقم الأصل',
-    km: 'عداد المسافة (كم)',
-    hours: 'ساعات المحرك',
     position: 'الموضع',
     pressure: 'الضغط (PSI)',
     condition: 'الحالة',
     tread: 'عمق المداس (مم)',
-    serial: 'الرقم التسلسلي',
-    serial_hint: 'اختياري',
     notes: 'ملاحظات',
     good: 'جيد',
     wear: 'تآكل',
@@ -103,7 +115,6 @@ const CHECKLIST_LABELS = {
     export: 'تصدير PDF',
     inspector: 'المفتش',
     site: 'الموقع',
-    vehicle_type: 'نوع المركبة',
     no_asset: 'أدخل رقم الأصل لتحميل المركبة',
   },
 }
@@ -309,14 +320,17 @@ export default function Inspections() {
     if (!assetNo.trim()) return
     setClLookingUp(true)
     const { data } = await supabase.from('vehicle_fleet').select('vehicle_type, asset_no, site').eq('asset_no', assetNo.trim()).maybeSingle()
-    if (data) {
-      setClFleetInfo(data)
-      const positions = TYRE_POSITIONS[normVT(data.vehicle_type)] || DEFAULT_POSITIONS
-      setClPositions(positions.map(pos => ({ position: pos, serialNo: '', pressure: '', condition: 'Good', treadDepth: '' })))
-      if (data.site && !clSite) setClSite(data.site)
+    // Use DB vehicle_type if available, otherwise infer from asset number prefix
+    const vehicleType = data?.vehicle_type || inferVehicleTypeFromAsset(assetNo)
+    const fleetInfo = data || (vehicleType ? { asset_no: assetNo.trim(), vehicle_type: vehicleType, site: null } : null)
+    if (fleetInfo) {
+      setClFleetInfo(fleetInfo)
+      const positions = TYRE_POSITIONS[normVT(vehicleType)] || DEFAULT_POSITIONS
+      setClPositions(positions.map(pos => ({ position: pos, pressure: '', condition: 'Good', treadDepth: '' })))
+      if (fleetInfo.site && !clSite) setClSite(fleetInfo.site)
     } else {
       setClFleetInfo(null)
-      setClPositions(DEFAULT_POSITIONS.map(pos => ({ position: pos, serialNo: '', pressure: '', condition: 'Good', treadDepth: '' })))
+      setClPositions(DEFAULT_POSITIONS.map(pos => ({ position: pos, pressure: '', condition: 'Good', treadDepth: '' })))
     }
     setClLookingUp(false)
   }
@@ -462,10 +476,9 @@ export default function Inspections() {
     // ── Tyre data table ─────────────────────────────────────────────────────────
     autoTable(doc, {
       startY: y,
-      head: [['Position', 'Serial No', 'Pressure (PSI)', 'Condition', 'Tread (mm)']],
+      head: [['Position', 'Pressure (PSI)', 'Condition', 'Tread Depth (mm)']],
       body: tyreData.map(row => [
         row.position || 'n/a',
-        row.serialNo || '—',
         row.pressure ? `${row.pressure} PSI` : 'n/a',
         row.condition || 'n/a',
         row.treadDepth ? `${row.treadDepth} mm` : 'n/a',
@@ -475,9 +488,8 @@ export default function Inspections() {
       styles:      { fontSize: 8, cellPadding: 2.5 },
       headStyles:  { fillColor: [21, 128, 61], textColor: [255, 255, 255], fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: { 1: { font: 'courier', fontSize: 7 } },
       didParseCell(data) {
-        if (data.section !== 'body' || data.column.index !== 3) return
+        if (data.section !== 'body' || data.column.index !== 2) return
         const cond = String(data.cell.raw)
         if (cond === 'Good')   { data.cell.styles.fillColor = [220, 252, 231]; data.cell.styles.textColor = [21, 128, 61]  }
         if (cond === 'Wear')   { data.cell.styles.fillColor = [254, 249, 195]; data.cell.styles.textColor = [161, 98, 7]   }
@@ -697,8 +709,10 @@ export default function Inspections() {
                       </button>
                     </div>
                   )}
-                  {clFleetInfo && (
-                    <p className="text-xs text-green-400 mt-1">{clFleetInfo.vehicle_type} · {(TYRE_POSITIONS[normVT(clFleetInfo.vehicle_type)] || DEFAULT_POSITIONS).length} tyres</p>
+                  {(clFleetInfo || (clAsset && inferVehicleTypeFromAsset(clAsset))) && (
+                    <p className="text-xs text-green-400 mt-1">
+                      {clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset)} · {(TYRE_POSITIONS[normVT(clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset))] || DEFAULT_POSITIONS).length} tyres
+                    </p>
                   )}
                 </div>
                 <div>
@@ -731,13 +745,13 @@ export default function Inspections() {
                   <div ref={diagramRef} className="card flex flex-col items-center py-4" style={{ background: 'rgba(0,0,0,0.2)' }}>
                     <p className="text-xs text-gray-500 mb-3">Tap a tyre position to jump to it</p>
                     <VehicleTyreDiagram
-                      vehicleType={clFleetInfo?.vehicle_type || 'Pickup'}
+                      vehicleType={clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset) || 'Pickup'}
                       positions={clPositions.map(p => ({
                         position: p.position,
-                        risk_level: p.condition === 'Good' && p.pressure ? 'Low'
-                          : p.condition === 'Wear' ? 'Medium'
-                          : p.condition === 'Damage' ? 'Critical'
-                          : null,
+                        risk_level: p.condition === 'Good' ? 'good'
+                          : p.condition === 'Wear' ? 'warning'
+                          : p.condition === 'Damage' ? 'critical'
+                          : 'none',
                       }))}
                       onPositionClick={({ position }) => {
                         const el = posRefs.current[position]
@@ -756,52 +770,50 @@ export default function Inspections() {
                     <div
                       key={pos.position}
                       ref={el => { posRefs.current[pos.position] = el }}
-                      className="flex items-center gap-3 p-3 rounded-lg flex-wrap transition-all duration-300"
+                      className="rounded-xl p-3 space-y-2.5 transition-all duration-300"
                       style={{
-                        background: highlightPos === pos.position
-                          ? 'rgba(22,163,74,0.2)'
-                          : 'rgba(255,255,255,0.03)',
-                        border: `1px solid ${highlightPos === pos.position ? 'rgba(22,163,74,0.5)' : 'transparent'}`,
-                        marginBottom: 6,
+                        background: highlightPos === pos.position ? 'rgba(22,163,74,0.18)' : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${highlightPos === pos.position ? 'rgba(22,163,74,0.5)' : 'rgba(255,255,255,0.07)'}`,
+                        marginBottom: 8,
                       }}
                     >
-                      <div className="w-12 text-center text-sm font-mono font-bold text-green-400 flex-shrink-0">{pos.position}</div>
-                      <div className="flex-1 min-w-28">
-                        <p className="text-xs text-gray-500 mb-1">
-                          {CHECKLIST_LABELS[lang].serial}
-                          <span className="text-gray-600 ml-1">({CHECKLIST_LABELS[lang].serial_hint})</span>
-                        </p>
-                        <input type="text" className="input py-1.5 text-sm font-mono" placeholder="Serial no." value={pos.serialNo || ''}
-                          onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, serialNo: e.target.value } : x))}
-                          autoCapitalize="characters" autoCorrect="off" spellCheck={false} />
-                      </div>
-                      <div className="flex-1 min-w-28">
-                        <p className="text-xs text-gray-500 mb-1">{CHECKLIST_LABELS[lang].pressure}</p>
-                        <input type="number" className="input py-1.5 text-sm" placeholder="PSI" value={pos.pressure}
-                          onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, pressure: e.target.value } : x))} />
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">{CHECKLIST_LABELS[lang].condition}</p>
-                        <div className="flex gap-1">
-                          {[['Good','✅'],['Wear','⚠️'],['Damage','❌']].map(([cond, emoji]) => (
-                            <button key={cond} onClick={() => setClPositions(p => p.map((x, j) => j === i ? { ...x, condition: cond } : x))}
-                              style={{ minWidth: 44, minHeight: 44 }}
+                      {/* Row 1: position badge + condition toggles */}
+                      <div className="flex items-center justify-between">
+                        <span
+                          className="text-sm font-mono font-bold px-2.5 py-1 rounded-lg"
+                          style={{ background: 'rgba(22,163,74,0.15)', color: '#4ade80', minWidth: 48, textAlign: 'center' }}
+                        >{pos.position}</span>
+                        <div className="flex items-center gap-1">
+                          {[['Good','✅'],['Wear','⚠️'],['Damage','❌']].map(([cond, icon]) => (
+                            <button key={cond}
+                              onClick={() => setClPositions(p => p.map((x, j) => j === i ? { ...x, condition: cond } : x))}
+                              style={{ width: 44, height: 40 }}
                               title={cond === 'Good' ? CHECKLIST_LABELS[lang].good : cond === 'Wear' ? CHECKLIST_LABELS[lang].wear : CHECKLIST_LABELS[lang].damage}
-                              className={`rounded-md text-lg border transition-all ${
+                              className={`rounded-xl text-lg border transition-all ${
                                 pos.condition === cond
-                                  ? cond === 'Good' ? 'bg-green-900/50 border-green-600' : cond === 'Wear' ? 'bg-yellow-900/50 border-yellow-600' : 'bg-red-900/50 border-red-600'
-                                  : 'bg-gray-800 border-gray-700 opacity-40 hover:opacity-70'
+                                  ? cond === 'Good' ? 'bg-green-900/60 border-green-600' : cond === 'Wear' ? 'bg-yellow-900/60 border-yellow-600' : 'bg-red-900/60 border-red-600'
+                                  : 'bg-gray-800/60 border-gray-700/50 opacity-40'
                               }`}
-                            >{emoji}</button>
+                            >{icon}</button>
                           ))}
                         </div>
                       </div>
-                      <div className="flex-1 min-w-24">
-                        <p className="text-xs text-gray-500 mb-1">{CHECKLIST_LABELS[lang].tread}</p>
-                        <input type="number" className="input py-1.5 text-sm" placeholder="mm" value={pos.treadDepth}
-                          onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, treadDepth: e.target.value } : x))} />
+                      {/* Row 2: PSI + tread side by side */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">{CHECKLIST_LABELS[lang].pressure}</p>
+                          <input type="number" inputMode="numeric" className="input py-2 text-sm w-full" placeholder="PSI"
+                            value={pos.pressure}
+                            onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, pressure: e.target.value } : x))} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">{CHECKLIST_LABELS[lang].tread}</p>
+                          <input type="number" inputMode="decimal" className="input py-2 text-sm w-full" placeholder="mm"
+                            value={pos.treadDepth}
+                            onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, treadDepth: e.target.value } : x))} />
+                        </div>
                       </div>
-                      </div>
+                    </div>
                   ))}
                   </div>
                 </div>

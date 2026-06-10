@@ -23,6 +23,7 @@ import TpLogo from '../assets/logo.svg'
 import InstallPwaPrompt from './InstallPwaPrompt'
 import NotificationCenter from './NotificationCenter'
 import GlobalSearch from './GlobalSearch'
+import MobileBottomNav from './MobileBottomNav'
 
 // Roles that have access to restricted nav groups
 const INTELLIGENCE_ROLES = ['Admin']
@@ -152,31 +153,119 @@ function roleBadgeClass(role) {
   }
 }
 
-function TyreManShell({ children }) {
+const TYRE_MAN_TABS = [
+  { to: '/',            label: 'Home',    icon: LayoutDashboard, end: true },
+  { to: '/scan',        label: 'Scan',    icon: ScanLine },
+  { to: '/inspections', label: 'Inspect', icon: ClipboardCheck },
+  { to: '/alerts',      label: 'Alerts',  icon: Bell },
+  { to: '/settings',    label: 'Profile', icon: Settings },
+]
+
+function TyreManShell({ children, alertCount }) {
   const { signOut, profile } = useAuth()
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)' }}>
-      <header className="border-b px-4 py-3 flex items-center justify-between backdrop-blur-xl"
+
+      {/* Fixed top header */}
+      <header
+        className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4"
         style={{
-          background: 'rgba(3,8,5,0.95)',
-          borderBottomColor: 'rgba(22,163,74,0.12)',
+          height: 52,
+          paddingTop: 'env(safe-area-inset-top)',
+          background: 'rgba(3,8,5,0.97)',
+          borderBottom: '1px solid rgba(22,163,74,0.12)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           boxShadow: '0 1px 20px rgba(0,0,0,0.4)',
-        }}>
+        }}
+      >
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.25)' }}>
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center"
+            style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.25)' }}
+          >
             <img src={TpLogo} alt="" className="w-4 h-4" />
           </div>
-          <span className="font-bold text-white text-sm tracking-tight">TyrePulse</span>
+          <span
+            className="font-extrabold text-sm tracking-tight"
+            style={{
+              background: 'linear-gradient(135deg, #ffffff 25%, #86efac 75%, #4ade80 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}
+          >
+            TyrePulse
+          </span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400">{profile?.full_name}</span>
-          <button onClick={signOut} className="text-xs text-gray-500 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10">
-            Sign out
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 max-w-[120px] truncate">{profile?.full_name}</span>
+          <button
+            onClick={signOut}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 transition-colors"
+            aria-label="Sign out"
+          >
+            <LogOut size={14} />
           </button>
         </div>
       </header>
-      <main className="flex-1 overflow-auto p-4">{children}</main>
+
+      {/* Scrollable content */}
+      <main
+        className="flex-1 overflow-auto"
+        style={{
+          paddingTop: 52,
+          paddingBottom: 'calc(54px + env(safe-area-inset-bottom))',
+        }}
+      >
+        {children}
+      </main>
+
+      {/* Fixed bottom tab bar */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-30"
+        aria-label="Tyre Man navigation"
+        style={{
+          background: 'rgba(3,8,5,0.97)',
+          borderTop: '1px solid rgba(22,163,74,0.14)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          boxShadow: '0 -4px 30px rgba(0,0,0,0.6)',
+        }}
+      >
+        <div className="flex items-stretch h-[54px]">
+          {TYRE_MAN_TABS.map(({ to, label, icon: Icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) =>
+                `flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:opacity-70
+                 ${isActive ? 'text-green-400' : 'text-gray-600'}`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <div className="relative">
+                    <Icon size={20} strokeWidth={isActive ? 2.2 : 1.7} />
+                    {to === '/alerts' && alertCount > 0 && (
+                      <span
+                        className="absolute -top-1.5 -right-2 min-w-[15px] h-[15px] flex items-center justify-center text-[9px] font-bold bg-red-600 text-white rounded-full px-0.5"
+                        style={{ boxShadow: '0 0 8px rgba(239,68,68,0.7)' }}
+                      >
+                        {alertCount > 9 ? '9+' : alertCount}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[9.5px] font-semibold tracking-wide">{label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
     </div>
   )
 }
@@ -197,7 +286,13 @@ export default function Layout({ children }) {
   const { theme, toggleTheme }              = useTheme()
   const navigate     = useNavigate()
   const location     = useLocation()
-  const [sidebarOpen, setSidebarOpen]         = useState(true)
+
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 768,
+  )
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
+  )
   const [collapsedGroups, setCollapsedGroups] = useState(new Set())
   const [searchOpen, setSearchOpen]           = useState(false)
   const [query, setQuery]                     = useState('')
@@ -219,9 +314,32 @@ export default function Layout({ children }) {
   const searchRef   = useRef(null)
   const debounceRef = useRef(null)
 
+  // Responsive breakpoint tracking
   useEffect(() => {
-    if (window.innerWidth >= 1024) setSidebarOpen(true)
-  }, [location.pathname])
+    const mq = window.matchMedia('(max-width: 767px)')
+    const handler = e => {
+      setIsMobile(e.matches)
+      setSidebarOpen(!e.matches)
+    }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  // Lock body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (isMobile && sidebarOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [isMobile, sidebarOpen])
+
+  // On mobile, close sidebar on route change; on desktop, re-open ≥1024px
+  useEffect(() => {
+    if (isMobile) setSidebarOpen(false)
+    else if (window.innerWidth >= 1024) setSidebarOpen(true)
+  }, [location.pathname, isMobile])
 
   useEffect(() => {
     async function fetchAlertCount() {
@@ -292,7 +410,7 @@ export default function Layout({ children }) {
     : {}
 
   if (profile?.role === 'Tyre Man') {
-    return <TyreManShell>{children}</TyreManShell>
+    return <TyreManShell alertCount={alertCount}>{children}</TyreManShell>
   }
 
   const navItemVariants = {
@@ -303,10 +421,30 @@ export default function Layout({ children }) {
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'transparent' }}>
 
+      {/* ── Mobile backdrop ──────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {isMobile && sidebarOpen && (
+          <motion.div
+            key="mobile-backdrop"
+            className="fixed inset-0 z-40"
+            style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
       <motion.aside
-        className="flex-shrink-0 flex flex-col relative z-20"
-        animate={{ width: sidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED }}
+        className={`flex-shrink-0 flex flex-col ${isMobile ? 'fixed top-0 left-0 h-full z-50' : 'relative z-20'}`}
+        animate={
+          isMobile
+            ? { x: sidebarOpen ? 0 : -SIDEBAR_EXPANDED, width: SIDEBAR_EXPANDED }
+            : { width: sidebarOpen ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED, x: 0 }
+        }
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
         style={{ overflow: 'hidden' }}
       >
@@ -653,8 +791,78 @@ export default function Layout({ children }) {
         </div>
       </motion.aside>
 
+      {/* ── Mobile top header ────────────────────────────────────────────────── */}
+      {isMobile && (
+        <div
+          className="fixed top-0 left-0 right-0 z-30 flex items-center gap-2 px-3"
+          style={{
+            height: 52,
+            background: 'rgba(3,8,5,0.97)',
+            borderBottom: '1px solid rgba(22,163,74,0.12)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            boxShadow: '0 1px 20px rgba(0,0,0,0.4)',
+          }}
+        >
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 transition-colors flex-shrink-0"
+            style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.12)' }}
+            aria-label="Open menu"
+          >
+            <Menu size={16} />
+          </button>
+
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <img src={TpLogo} alt="" className="w-5 h-5 flex-shrink-0" />
+            <span
+              className="font-extrabold text-sm tracking-tight"
+              style={{
+                background: 'linear-gradient(135deg, #ffffff 25%, #86efac 75%, #4ade80 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
+              TyrePulse
+            </span>
+          </div>
+
+          <button
+            onClick={() => setGlobalSearchOpen(true)}
+            className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 transition-colors"
+            aria-label="Search"
+          >
+            <Search size={16} />
+          </button>
+
+          <button
+            onClick={() => navigate('/alerts')}
+            className="relative w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 transition-colors"
+            aria-label="Alerts"
+          >
+            <Bell size={16} />
+            {alertCount > 0 && (
+              <span
+                className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 flex items-center justify-center text-[9px] font-bold bg-red-600 text-white rounded-full px-0.5"
+                style={{ boxShadow: '0 0 6px rgba(239,68,68,0.7)' }}
+              >
+                {alertCount > 9 ? '9+' : alertCount}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* ── Main content ────────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+      <main
+        className="flex-1 overflow-y-auto"
+        style={{
+          scrollbarWidth: 'thin',
+          paddingTop: isMobile ? 52 : 0,
+          paddingBottom: isMobile ? 'calc(54px + env(safe-area-inset-bottom))' : 0,
+        }}
+      >
         <motion.div
           key={location.pathname}
           initial={{ opacity: 0, y: 6 }}
@@ -668,6 +876,14 @@ export default function Layout({ children }) {
 
       {/* PWA */}
       <InstallPwaPrompt />
+
+      {/* Mobile bottom navigation */}
+      {isMobile && (
+        <MobileBottomNav
+          alertCount={alertCount}
+          onMenuOpen={() => setSidebarOpen(true)}
+        />
+      )}
 
       {/* Global search */}
       <GlobalSearch isOpen={globalSearchOpen} onClose={() => setGlobalSearchOpen(false)} />

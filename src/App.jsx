@@ -76,6 +76,7 @@ import LiveFleetStatus from './pages/LiveFleetStatus'
 import ComplianceDashboard from './pages/ComplianceDashboard'
 import TyreScrapManagement from './pages/TyreScrapManagement'
 import StockReplenishment from './pages/StockReplenishment'
+import TyreScan from './pages/TyreScan'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt'
 
 export default function App() {
@@ -174,6 +175,7 @@ export default function App() {
                     {/* ── Universal ── */}
                     <Route path="/upload"      element={<UploadData />} />
                     <Route path="/settings"    element={<Settings />} />
+                    <Route path="/scan"        element={<TyreScan />} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

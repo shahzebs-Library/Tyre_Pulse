@@ -1,6 +1,6 @@
 # TyrePulse — Complete Product Roadmap
 **Readymix Concrete Company · Built by Shahzeb Rahman © 2026**
-**Version 5.0 · Updated June 2026 · Governed by CLAUDE.md**
+**Version 6.0 · Updated June 2026 · Governed by CLAUDE.md**
 
 > **This roadmap is derived directly from CLAUDE.md.**
 > Every section maps to a specific CLAUDE.md requirement.
@@ -22,22 +22,20 @@
 
 | Metric | Status |
 |--------|--------|
-| Build | ✅ 0 errors — 2174 modules |
+| Build | ✅ 0 errors — 2179 modules |
 | Pages | ✅ 73 pages registered and routed |
-| Auth + RBAC | ✅ RLS, role-based routes, idle timeout |
+| Auth + RBAC | ✅ Role-based routes, 30-min idle timeout, admin approval gate |
+| Login | ✅ Email / Username / Employee ID — all three modes |
+| Intelligence RBAC | ✅ Admin only — sidebar hidden + route guarded |
+| Analytics RBAC | ✅ Admin + Manager + Director only |
+| Vehicle Diagram | ✅ Case-insensitive, position IDs consistent across checklist + diagram |
+| Checklist | ✅ Master sites/assets, auto-title, inspector auto-fill, SVG PDF |
 | Migrations | ✅ MIGRATIONS_SAFE.sql — run once to apply all |
 | Hosting | ✅ Vercel (auto-deploy on push to `main`) |
 | Database | ✅ Supabase PostgreSQL + Auth + Storage + pgvector |
-| Intelligence pages | ✅ 40+ pages (Waves 8–23 UI complete) |
 | PWA | ✅ Manifest + service worker + install prompt |
 | AI System | ✅ 4-agent router + AiCommandCenter |
 | RAG | 🔄 pgvector schema + knowledge base + retrieval service |
-
----
-
-## ⚠️ SYSTEM CHECK IN PROGRESS
-User is manually verifying all 73 pages. Do NOT add new pages until check is complete.
-Next session focus: fix any broken pages identified during testing.
 
 ---
 
@@ -45,12 +43,16 @@ Next session focus: fix any broken pages identified during testing.
 
 | Bug | Root Cause | Status |
 |-----|-----------|--------|
-| SQL error when running MIGRATIONS_SAFE.sql | `idx_tyre_serial` index created before `serial_number` column existed | ✅ Fixed |
-| Checklist save silently fails | `inspection_type: 'Daily Checklist'` violated DB CHECK constraint | ✅ Fixed — now sends `'Routine'` |
-| Checklist PDF button does nothing | Save was failing so `clSaved` stayed null | ✅ Fixed — error display added |
-| 'Site Observation' / 'Safety Training' types fail | Same CHECK constraint on inspections table | ✅ Fixed — constraint dropped in MIGRATIONS_SAFE.sql |
-
-**Action Required:** Re-run `MIGRATIONS_SAFE.sql` in Supabase SQL Editor to apply the constraint fix.
+| SQL error running MIGRATIONS_SAFE.sql | `idx_tyre_serial` created before `serial_number` column existed | ✅ Fixed |
+| Checklist save silently fails | `inspection_type: 'Daily Checklist'` violated DB CHECK constraint | ✅ Fixed |
+| 'Site Observation' / 'Safety Training' types fail | Same CHECK constraint on inspections table | ✅ Fixed |
+| `tyre_conditions` column missing on save | Column not in schema | ✅ Migration applied |
+| `vehicle_type` column missing on save | Column not in schema | ✅ Migration applied |
+| Build error — AiCommandCenter.jsx | Orphan `</div>` after PageHeader upgrade | ✅ Fixed |
+| Build error — RotationSchedule.jsx | Orphan `</div>` after PageHeader upgrade | ✅ Fixed |
+| Build error — SiteComparison.jsx | `GitCompareArrows` not in lucide-react v0.263.1 | ✅ Replaced with `GitMerge` |
+| Vehicle diagram not matching checklist | Position ID mismatch (`RL1` vs `RLO3`) + casing mismatch | ✅ Fixed |
+| Login accepts only email | No username/Employee ID support | ✅ Multi-identifier login added |
 
 ---
 
@@ -61,13 +63,18 @@ Next session focus: fix any broken pages identified during testing.
 | Feature | Status |
 |---------|--------|
 | Remove AI/Anthropic branding from visible UI | ✅ |
-| 1-hour idle session timeout with auto sign-out | ✅ |
-| Role-based page access — Admin-only routes | ✅ |
+| 30-minute idle session timeout with auto sign-out | ✅ Updated from 60 min |
+| Touch events tracked for mobile session activity | ✅ |
+| Login via Email, Username, or Employee ID | ✅ |
+| Role-based page access — tiered by role group | ✅ |
+| Intelligence section — Admin only | ✅ |
+| Analytics section — Admin + Manager + Director | ✅ |
+| Sidebar hides group if role has no access | ✅ |
 | Admin-only nav items hidden from non-Admins | ✅ |
 | Forgot password flow + /reset-password page | ✅ |
 | Employee ID field on signup and profile | ✅ |
 | Show/hide password toggle on all password fields | ✅ |
-| Pending admin approval workflow for new accounts | ✅ |
+| Pending admin approval workflow — `approved: false` on signup | ✅ |
 | UserManagement: Approve + multi-country assignment | ✅ |
 
 ### Waves 2–6 — Upload, Dashboard, Inspections, Gate Pass, Comparison ✅
@@ -100,7 +107,7 @@ All 7A–7P features complete including KPI targets, VehicleHistory forecasting,
 ---
 
 ## Wave 9 — Pressure & Inspection Intelligence ✅
-**Pages:** `/pressure-intel` → `PressureIntelligence.jsx` | `/inspection-intelligence` → `InspectionIntelligence.jsx`
+**Pages:** `/pressure-intel` | `/inspection-intelligence` | `/compliance`
 
 | Feature | Status |
 |---------|--------|
@@ -110,7 +117,7 @@ All 7A–7P features complete including KPI targets, VehicleHistory forecasting,
 | Inspector quality score per inspector | ✅ |
 | Inspection compliance % per site | ✅ |
 | Tread depth compliance tracking | ✅ |
-| Compliance Dashboard — tread + pressure + inspection combined | ✅ `/compliance` |
+| Compliance Dashboard — tread + pressure + inspection combined | ✅ |
 
 ---
 
@@ -119,7 +126,7 @@ All 7A–7P features complete including KPI targets, VehicleHistory forecasting,
 
 | Feature | Status |
 |---------|--------|
-| Position analytics — CPK per position (Steer/Drive/Trailer/Lift/Tag) | ✅ |
+| Position analytics — CPK per position | ✅ |
 | Average tyre life per position | ✅ |
 | Failure rate per position | ✅ |
 | Pressure problem positions | ✅ |
@@ -133,223 +140,140 @@ All 7A–7P features complete including KPI targets, VehicleHistory forecasting,
 ## Wave 11 — Root Cause Intelligence Engine ✅
 **Page:** `/root-cause` → `RootCauseEngine.jsx`
 
-| Feature | Status |
-|---------|--------|
-| Automated RCA classification (14 root causes, rule-based) | ✅ |
-| Under/over inflation detection | ✅ |
-| Alignment issue detection | ✅ |
-| Driver behaviour scoring | ✅ |
-| Overloading detection | ✅ |
-| Root cause frequency dashboard | ✅ |
-| RCA → Corrective Action link | ✅ |
-| AI fallback for RCA diagnosis | ✅ |
+All RCA features complete. 14 root causes, automated classification, AI fallback, corrective action linking.
 
 ---
 
 ## Wave 12 — Predictive Maintenance Engine ✅
-**Pages:** `/predictive-maintenance` → `PredictiveMaintenance.jsx` | `/maintenance-calendar` → `MaintenanceCalendar.jsx` | `/inspection-planner` → `InspectionPlanner.jsx`
+**Pages:** `/predictive-maintenance` | `/maintenance-calendar` | `/inspection-planner`
 
-| Feature | Status |
-|---------|--------|
-| Fleet-level replacement schedule calendar | ✅ |
-| Expected removal date per tyre | ✅ |
-| Remaining tread life estimation | ✅ |
-| Upcoming tyre purchase calendar (30/60/90-day) | ✅ |
-| Future budget requirements — 12-month forecast | ✅ |
-| Potential failure risk score | ✅ |
-| Maintenance planning calendar | ✅ |
-| Workshop load balancing | ✅ |
-| Predictive alerts | ✅ |
-| Inspection Planner — overdue queue, interval config, scheduling | ✅ |
+All predictive maintenance features complete. Replacement schedules, tread life estimation, 30/60/90-day purchase calendar, workshop load balancing.
 
 ---
 
 ## Wave 13 — Vendor & Workshop Intelligence ✅
-**Pages:** `/vendor-intelligence` → `VendorIntelligence.jsx` | `/suppliers` → `SupplierManagement.jsx` | `/retread` → `RetreadManagement.jsx` | `/workshop` → `WorkshopManagement.jsx`
+**Pages:** `/vendor-intelligence` | `/suppliers` | `/retread` | `/workshop`
 
-| Feature | Status |
-|---------|--------|
-| Full vendor scorecard — brands + suppliers + workshops | ✅ |
-| CPK per brand — ranked table with trend | ✅ |
-| Failure frequency per brand | ✅ |
-| Durability ranking — avg km life per brand | ✅ |
-| Cost effectiveness score — composite ranked | ✅ |
-| Supplier management — contracts, delivery, performance | ✅ |
-| Workshop performance metrics | ✅ |
-| Retread vendor comparison — CPK vs new, success rate | ✅ |
-| Scrap rate per brand | ✅ |
-| Procurement recommendation | ✅ |
-| Retread management — full lifecycle, ROI calculator | ✅ |
+Full vendor scorecard, CPK ranking, retread ROI calculator, supplier performance, workshop metrics.
 
 ---
 
 ## Wave 14 — Fleet Management Intelligence ✅
-**Pages:** `/fleet-intelligence` → `FleetIntelligence.jsx` | `/fleet-health` → `FleetHealthBoard.jsx` | `/live-fleet` → `LiveFleetStatus.jsx` | `/downtime` → `DowntimeTracker.jsx` | `/assets` → `AssetManagement.jsx`
+**Pages:** `/fleet-intelligence` | `/fleet-health` | `/live-fleet` | `/downtime` | `/assets`
 
-| Feature | Status |
-|---------|--------|
-| Fleet availability % — by site, trend | ✅ |
-| Vehicle downtime tracking | ✅ |
-| Maintenance efficiency score | ✅ |
-| Asset utilization analysis | ✅ |
-| Operating cost per vehicle | ✅ |
-| Replacement planning dashboard | ✅ |
-| Fleet health board — per-vehicle health score matrix | ✅ |
-| Live fleet status — real-time mission control, auto-refresh | ✅ |
-| Asset management — full vehicle register, health scores | ✅ |
-| Tyre scrap management — disposal log, brand/site analysis | ✅ `/scrap` |
+Fleet availability, downtime tracking, asset utilization, live fleet status, health board.
 
 ---
 
 ## Wave 15 — Advanced Analytics ✅
-**Pages:** `/advanced-analytics` → `AdvancedAnalytics.jsx` | `/cost-center` → `CostCenter.jsx` | `/benchmark` → `PerformanceBenchmark.jsx` | `/tyre-size` → `TyreSizeAnalysis.jsx` | `/fuel-efficiency` → `FuelEfficiency.jsx` | `/comparison` → `Comparison.jsx`
+**Pages:** `/advanced-analytics` | `/cost-center` | `/benchmark` | `/tyre-size` | `/fuel-efficiency` | `/comparison`
 
-| Feature | Status |
-|---------|--------|
-| Seasonal analysis — monthly patterns across years | ✅ |
-| Country comparison enhanced — CPK, failure rate, compliance | ✅ |
-| Branch comparison enhanced — all KPIs, ranking, trends | ✅ |
-| Vehicle comparison | ✅ |
-| Driver comparison | ✅ |
-| Brand comparison enhanced | ✅ |
-| Failure pattern analysis | ✅ |
-| Trend analysis — acceleration/deceleration detection | ✅ |
-| Analytics insights panel — AI-narrated summaries | ✅ |
-| Cost center — multi-dimensional cost breakdown | ✅ |
-| Performance benchmark — site/fleet vs targets | ✅ |
-| Tyre size analysis — size optimizer | ✅ |
-| Fuel efficiency — tyre impact on fuel consumption | ✅ |
+Seasonal analysis, country/branch/vehicle/driver comparison, trend analysis, AI-narrated summaries.
 
 ---
 
 ## Wave 16 — Data Quality Intelligence ✅
-**Pages:** `/cleaning` → `DataCleaning.jsx` | `/compliance` → `ComplianceDashboard.jsx` | `/serial-tracker` → `SerialTracker.jsx`
+**Pages:** `/cleaning` | `/compliance` | `/serial-tracker`
 
-| Feature | Status |
-|---------|--------|
-| Incorrect tyre serial detection | ✅ |
-| Duplicate tyre number detection | ✅ |
-| Invalid pressure readings auto-flag | ✅ |
-| Missing tread depth detection | ✅ |
-| Missing inspection record detection | ✅ |
-| Inconsistent odometer detection | ✅ |
-| Unrealistic tyre life flagging | ✅ |
-| Upload batch quality score | ✅ |
-| Data cleaning auto-run on upload | ✅ |
-| Compliance dashboard — tread + pressure + inspection | ✅ |
-| Compliance certificate PDF | ✅ |
+Duplicate detection, invalid readings, missing inspection flags, data quality score, compliance certificate PDF.
 
 ---
 
 ## Wave 17 — Executive Intelligence & Reporting ✅
-**Pages:** `/executive-report` → `ExecutiveReport.jsx` | `/reports` → `Reports.jsx` | `/kpi-command` → `KpiCommandCenter.jsx`
+**Pages:** `/executive-report` | `/reports` | `/kpi-command`
 
-| Feature | Status |
-|---------|--------|
-| Executive Summary — auto-generated monthly PDF | ✅ |
-| KPI Dashboard narrative | ✅ |
-| Root Cause Analysis section | ✅ |
-| Financial Impact section | ✅ |
-| Risk Assessment section | ✅ |
-| Recommendations section | ✅ |
-| Action Plan section | ✅ |
-| One-click Monthly Executive PDF | ✅ |
-| KPI Command Center — Director/Admin C-suite view | ✅ |
-| Reports page — configurable, paginated, print-to-window | ✅ |
+One-click monthly executive PDF, KPI narrative, root cause section, financial impact, recommendations, action plan.
 
 ---
 
 ## Wave 18 — Forecasting Engine ✅
-**Pages:** `/forecasting` → `ForecastingEngine.jsx` | `/budget-planner` → `BudgetPlanner.jsx` | `/stock-replenishment` → `StockReplenishment.jsx`
+**Pages:** `/forecasting` | `/budget-planner` | `/stock-replenishment`
 
-| Feature | Status |
-|---------|--------|
-| Annual tyre budget forecast — 12-month by site | ✅ |
-| Future tyre demand by site (30/60/90-day) | ✅ |
-| Replacement schedule with procurement timeline | ✅ |
-| Vendor/supplier requirements forecast | ✅ |
-| Inventory requirements by site | ✅ |
-| Expected failure count forecast | ✅ |
-| Budget vs forecast tracking | ✅ |
-| Stock replenishment — consumption analysis, order generator | ✅ |
-| Budget planner — 12-month inline editable grid | ✅ |
+Annual budget forecast, 30/60/90-day demand, vendor requirements, stock replenishment matrix, budget planner grid.
 
 ---
 
 ## Wave 19 — Continuous Improvement Engine ✅
 **Page:** `/continuous-improvement` → `ContinuousImprovement.jsx`
 
-| Feature | Status |
-|---------|--------|
-| Cost reduction opportunity identification | ✅ |
-| Reliability improvement tracking | ✅ |
-| Process improvement recommendations | ✅ |
-| Inspection improvement suggestions | ✅ |
-| Maintenance improvement tracking | ✅ |
-| Procurement optimization | ✅ |
-| Workshop productivity improvement | ✅ |
-| Improvement scorecard | ✅ |
+Cost reduction identification, reliability tracking, procurement optimization, improvement scorecard.
 
 ---
 
-## Wave 20 — RAG & Knowledge System Infrastructure 🔄
-**Status:** Schema complete, service layer partially implemented
+## Wave 20 — Daily Operations & Checklist ✅
+**Pages:** `/daily-ops` | `/inspections` (Checklist tab)
+
+| Feature | Status |
+|---------|--------|
+| Daily Ops dashboard | ✅ |
+| Tyre inspection checklist — bilingual (EN/AR) | ✅ |
+| Auto-title: `Daily Tyre Inspection — {site} — {date}` | ✅ |
+| Site dropdown from `vehicle_fleet` master | ✅ |
+| Asset dropdown from `vehicle_fleet` master | ✅ |
+| Inspector auto-filled from logged-in profile | ✅ |
+| Vehicle diagram — SVG, case-insensitive, correct positions | ✅ |
+| Diagram click → scroll to tyre position | ✅ |
+| tyre_conditions JSONB saved to inspections | ✅ |
+| vehicle_type saved to inspections | ✅ |
+| PDF export — captures actual SVG diagram | ✅ |
+| PDF — colour legend, tyre table, notes, signature | ✅ |
+
+---
+
+## Wave 21 — RAG & Knowledge System Infrastructure 🔄
 
 | Component | Status |
 |-----------|--------|
-| pgvector extension — enabled in MIGRATIONS_SAFE.sql | ✅ |
-| `knowledge_documents` table | ✅ MIGRATIONS_V13.sql |
-| `ai_response_cache` table | ✅ MIGRATIONS_V13.sql |
-| `kpi_snapshots` table | ✅ MIGRATIONS_V15.sql |
-| `ragService.js` — retrieval + 5-min cache | ✅ Implemented |
-| `embeddingService.js` — batch embedding generation | ✅ Implemented |
-| Edge Function: `generate-embedding` | ✅ Created |
-| Document ingestion pipeline (SOPs, manuals, policies) | ⬜ Pending |
+| pgvector extension | ✅ |
+| `knowledge_documents` table | ✅ |
+| `ai_response_cache` table | ✅ |
+| `kpi_snapshots` table | ✅ |
+| `ragService.js` — retrieval + 5-min cache | ✅ |
+| `embeddingService.js` — batch embedding | ✅ |
+| Edge Function: `generate-embedding` | ✅ |
+| Document ingestion pipeline (SOPs, manuals) | ⬜ Pending |
 | Nightly inspection comment embedding job | ⬜ Pending |
-| Inspection comments / RCA notes indexed in vector DB | ⬜ Pending |
 | Historical data archiving strategy | ⬜ Pending |
 
 ---
 
-## Wave 21 — Multi-Agent AI System 🔄
-**Pages:** `/ai-command-center` → `AiCommandCenter.jsx` | `/ai` → `AiAnalytics.jsx`
+## Wave 22 — Multi-Agent AI System 🔄
+**Pages:** `/ai-command-center` | `/ai`
 
 | Component | Status |
 |-----------|--------|
 | `aiRouter.js` — query classification | ✅ |
-| `analystAgent.js` — trends, KPIs, cost | ✅ |
-| `tyreEngineerAgent.js` — wear, pressure, alignment | ✅ |
-| `qaDataAgent.js` — clean, deduplicate, normalize | ✅ |
-| `plannerAgent.js` — schedule, forecast, balance | ✅ |
-| AI Command Center UI — multi-agent chat + visualizations | ✅ |
-| AiAnalytics — Smart Analytics with charts | ✅ |
+| `analystAgent.js` | ✅ |
+| `tyreEngineerAgent.js` | ✅ |
+| `qaDataAgent.js` | ✅ |
+| `plannerAgent.js` | ✅ |
+| AI Command Center UI | ✅ |
+| AiAnalytics — Smart Analytics | ✅ |
 | AI cost monitor dashboard | ⬜ Pending |
 | Per-user rate limiting | ⬜ Pending |
-| Response format enforcement (Observation→RCA→Risk→Action) | 🔄 Partial |
+| Response format enforcement | 🔄 Partial |
 
 ---
 
-## Wave 22 — Enterprise & Scale 🔄
-**Pages:** `/erp-sync` → `ErpSync.jsx` | `/audit` → `AuditTrail.jsx` | `/users` → `UserManagement.jsx`
+## Wave 23 — Enterprise & Scale 🔄
+**Pages:** `/erp-sync` | `/audit` | `/users`
 
 | Feature | Status |
 |---------|--------|
-| ERP Sync UI — read-only fleet data import | ✅ |
-| Audit trail — full action log | ✅ |
+| ERP Sync UI | ✅ |
+| Audit trail | ✅ |
 | Multi-country architecture (KSA/UAE/Egypt) | ✅ |
-| Role-based access control (5 roles) | ✅ |
-| API webhook system for ERP write-back | ⬜ Pending |
-| Scheduled report delivery — cron email | ⬜ Pending |
-| Multi-tenant architecture (tenant_id on all tables) | ⬜ Pending |
-| SSO / SAML integration | ⬜ Pending |
-| White-label branding per tenant | ⬜ Pending |
-| Advanced RBAC — custom role builder | ⬜ Pending |
-| Performance monitoring dashboard | ⬜ Pending |
-| Offline PWA — sync queue for inspections | ⬜ Pending |
+| Role-based access control — tiered (Admin/Manager/Director/Inspector/Tyre Man) | ✅ |
+| API webhook system for ERP write-back | ⬜ |
+| Scheduled report delivery — cron email | ⬜ |
+| Multi-tenant architecture (tenant_id on all tables) | ⬜ |
+| SSO / SAML integration | ⬜ |
+| White-label branding per tenant | ⬜ |
+| Offline PWA — sync queue for inspections | ⬜ |
 
 ---
 
-## Wave 23 — Mobile & Integrations ⬜
+## Wave 24 — Mobile & Integrations ⬜
 
 | Feature | Status |
 |---------|--------|
@@ -361,68 +285,35 @@ All 7A–7P features complete including KPI targets, VehicleHistory forecasting,
 
 ---
 
-## Additional Pages Built (Outside Original Wave Plan)
-
-These pages were added beyond the original wave plan to complete the product:
-
-| Route | Page | Purpose |
-|-------|------|---------|
-| `/tyres` | TyreRecords.jsx | Master tyre records with full CRUD |
-| `/accidents` | Accidents.jsx | Incident/accident tracking |
-| `/gate-pass` | GatePass.jsx | Tyre gate pass management |
-| `/serial-tracker` | SerialTracker.jsx | Serial number tracking across fleet |
-| `/warranty` | WarrantyTracker.jsx | Warranty claims + credit recovery ROI |
-| `/tyre-lifecycle` | TyreLifecycle.jsx | Full lifecycle from purchase to disposal |
-| `/tyre-exchange` | TyreExchange.jsx | Tyre exchange / swap management |
-| `/tyre-specs` | TyreSpecifications.jsx | Tyre specs database |
-| `/rotation` | RotationSchedule.jsx | Rotation schedule management |
-| `/recall-tracker` | RecallTracker.jsx | Manufacturer recall tracking |
-| `/procurement` | Procurement.jsx | Purchase orders + vendor management |
-| `/daily-ops` | DailyOps.jsx | Daily operational dashboard |
-| `/safety-compliance` | SafetyCompliance.jsx | Safety + compliance management |
-| `/driver-management` | DriverManagement.jsx | Driver behaviour + cost impact |
-| `/work-orders` | WorkOrders.jsx | Workshop work order management |
-| `/scrap` | TyreScrapManagement.jsx | Scrap tracking + disposal log |
-| `/retread` | RetreadManagement.jsx | Retread management + ROI calculator |
-| `/live-fleet` | LiveFleetStatus.jsx | Real-time fleet mission control |
-| `/compliance` | ComplianceDashboard.jsx | Tread + pressure + inspection compliance |
-| `/stock-replenishment` | StockReplenishment.jsx | Replenishment matrix + order generator |
-| `/assets` | AssetManagement.jsx | Vehicle asset register + health scores |
-| `/inspection-planner` | InspectionPlanner.jsx | Inspection scheduling + overdue queue |
-
----
-
 ## Migrations — Current State
 
-**Recommended: Run `MIGRATIONS_SAFE.sql` — fully idempotent, includes all fixes.**
+**Run `MIGRATIONS_SAFE.sql` — fully idempotent, includes all fixes.**
 
-| File | Status | What it adds |
-|------|--------|--------------|
-| `SUPABASE_SCHEMA.sql` | ✅ | Core tables |
-| `MIGRATIONS.sql` | ✅ | Phase 2 tables (inspections, stock_movements, audit_log) |
-| `BACKEND_RLS.sql` | ✅ | Role-based policies |
-| `MIGRATIONS_V2–V9` | ✅ | km fields, photo_data, positions, country |
-| `MIGRATIONS_V10.sql` | ✅ | profiles: employee_id, approved; accidents table |
-| `MIGRATIONS_V11.sql` | ✅ | gate_passes table |
-| `MIGRATIONS_V12.sql` | ✅ (in SAFE) | app_settings table |
-| `MIGRATIONS_V13.sql` | ✅ (in SAFE) | ai_response_cache + knowledge_documents |
-| `MIGRATIONS_V14.sql` | ✅ (in SAFE) | Seed knowledge documents |
-| `MIGRATIONS_V15.sql` | ✅ (in SAFE) | organisations, audit_log_v2, kpi_snapshots |
-| `MIGRATIONS_V16.sql` | ✅ (in SAFE) | work_orders table |
-| `MIGRATIONS_V17.sql` | ✅ (in SAFE) | purchase_orders table |
-| `MIGRATIONS_SAFE.sql` | ⚠️ **Run this** | All V10–V17 + serial_number index fix + inspections CHECK fix |
+Additionally run these two statements once in Supabase SQL Editor:
+```sql
+-- Add tyre_conditions column (if not already present)
+ALTER TABLE inspections ADD COLUMN IF NOT EXISTS tyre_conditions jsonb;
+CREATE INDEX IF NOT EXISTS idx_inspections_tyre_conditions ON inspections USING gin(tyre_conditions);
 
----
+-- Add vehicle_type column (if not already present)
+ALTER TABLE inspections ADD COLUMN IF NOT EXISTS vehicle_type text;
+CREATE INDEX IF NOT EXISTS idx_inspections_vehicle_type ON inspections (vehicle_type);
 
-## Next Session — After System Check
+-- Multi-identifier login RPC
+CREATE OR REPLACE FUNCTION get_user_email_by_id(user_id uuid)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE v_email text;
+BEGIN
+  SELECT email INTO v_email FROM auth.users WHERE id = user_id;
+  RETURN v_email;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION get_user_email_by_id(uuid) TO authenticated;
 
-Once user completes manual system check and reports broken pages:
-
-1. **Fix any broken pages** identified during testing
-2. **RAG document ingestion** — SOP/policy PDF upload pipeline (Wave 20B)
-3. **AI cost monitor** — dashboard showing token usage per day/month (Wave 21F)
-4. **Offline PWA** — service worker sync queue for inspections without internet (Wave 22)
-5. **Scheduled reports** — monthly email of executive PDF (Wave 22D)
+-- Indexes for username/employee_id login
+CREATE INDEX IF NOT EXISTS profiles_employee_id_idx ON profiles (employee_id);
+CREATE INDEX IF NOT EXISTS profiles_username_idx ON profiles (username);
+```
 
 ---
 
@@ -430,14 +321,23 @@ Once user completes manual system check and reports broken pages:
 
 | Function | Status | Input | Purpose |
 |----------|--------|-------|---------|
-| `chat-ai` | ✅ Created | `{ system, user, model, max_tokens }` | Anthropic API proxy |
-| `generate-embedding` | ✅ Created | `{ text, model }` | OpenAI embeddings proxy |
-| `send-email` | ✅ Created | `{ to, subject, body }` | Resend API email delivery |
+| `chat-ai` | ✅ | `{ system, user, model, max_tokens }` | Anthropic API proxy |
+| `generate-embedding` | ✅ | `{ text, model }` | OpenAI embeddings proxy |
+| `send-email` | ✅ | `{ to, subject, body }` | Resend API email delivery |
 
 Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
-Deploy: `./scripts/deploy-edge-functions.sh <project-ref>`
 
 ---
 
-*TyrePulse v5.0 · Readymix Concrete Company · Shahzeb Rahman © 2026*
+## Next Session Priorities
+
+1. **RAG document ingestion** — SOP/policy PDF upload pipeline (Wave 21)
+2. **AI cost monitor** — token usage dashboard per day/month (Wave 22)
+3. **Offline PWA** — service worker sync queue for inspections (Wave 23)
+4. **Scheduled reports** — monthly email of executive PDF (Wave 23)
+5. **Barcode / QR scanner** on checklist for tyre serial scanning (Wave 24)
+
+---
+
+*TyrePulse v6.0 · Readymix Concrete Company · Shahzeb Rahman © 2026*
 *Fully governed by CLAUDE.md — every section maps to a specific instruction*

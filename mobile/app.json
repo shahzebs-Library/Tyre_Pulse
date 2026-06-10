@@ -27,7 +27,8 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -44,11 +45,27 @@
         {
           "photosPermission": "TyrePulse needs photo access to attach images to tyre inspections."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25"
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
     },
-    "scheme": "tyrepulse-inspector"
+    "scheme": "tyrepulse-inspector",
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "3ed4e62f-e91f-4c78-b1eb-9b7310c08255"
+      }
+    }
   }
 }

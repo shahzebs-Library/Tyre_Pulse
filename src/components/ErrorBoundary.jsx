@@ -4,7 +4,7 @@ import { RefreshCw } from 'lucide-react'
 export default class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null }
+    this.state = { hasError: false, error: null, componentStack: null }
   }
 
   static getDerivedStateFromError(error) {
@@ -12,9 +12,8 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    if (import.meta.env.DEV) {
-      console.error('[ErrorBoundary]', error, info)
-    }
+    this.setState({ componentStack: info?.componentStack ?? null })
+    console.error('[ErrorBoundary]', error, info)
   }
 
   render() {
@@ -46,13 +45,24 @@ export default class ErrorBoundary extends Component {
         <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', maxWidth: 300, lineHeight: 1.6, margin: '0 0 24px' }}>
           TyrePulse encountered an unexpected error. Reload to continue.
         </p>
-        {import.meta.env.DEV && this.state.error && (
+        {this.state.error && (
           <pre style={{
             background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)',
             borderRadius: 10, padding: '10px 14px', fontSize: 11, color: '#fca5a5',
-            maxWidth: 360, overflow: 'auto', marginBottom: 20, whiteSpace: 'pre-wrap',
+            maxWidth: 360, width: '100%', overflow: 'auto', marginBottom: 12,
+            whiteSpace: 'pre-wrap', wordBreak: 'break-all', textAlign: 'left',
           }}>
-            {this.state.error.message}
+            {this.state.error.message || String(this.state.error)}
+          </pre>
+        )}
+        {this.state.componentStack && (
+          <pre style={{
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 10, padding: '10px 14px', fontSize: 9, color: 'rgba(255,255,255,0.4)',
+            maxWidth: 360, width: '100%', overflow: 'auto', marginBottom: 20,
+            whiteSpace: 'pre-wrap', wordBreak: 'break-all', textAlign: 'left',
+          }}>
+            {this.state.componentStack.trim().split('\n').slice(0, 8).join('\n')}
           </pre>
         )}
         <button

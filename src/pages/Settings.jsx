@@ -497,7 +497,7 @@ export default function Settings() {
           <div className="space-y-1 text-sm text-gray-400">
             <p><span className="text-gray-500">App:</span> <span className="text-white font-medium">TyrePulse</span></p>
             <p><span className="text-gray-500">Version:</span> <span className="text-white font-medium">v2.5.0</span></p>
-            <p><span className="text-gray-500">Support:</span> Contact your fleet manager</p>
+            <p><span className="text-gray-500">Support:</span> Contact your tyre planning engineer</p>
           </div>
         </div>
       </div>

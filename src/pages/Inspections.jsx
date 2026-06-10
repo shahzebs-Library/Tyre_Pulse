@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
-import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare } from 'lucide-react'
+import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
@@ -157,9 +157,8 @@ export default function Inspections() {
   const [clSaved, setClSaved]         = useState(null)
   const [clError, setClError]         = useState(null)
   const [clLookingUp, setClLookingUp] = useState(false)
-  const posRefs     = useRef({})
-  const diagramRef  = useRef(null)
-  const [highlightPos, setHighlightPos] = useState(null)
+  const diagramRef     = useRef(null)
+  const [clSelectedPos, setClSelectedPos] = useState(null)
 
   // Master data from fleet
   const [masterSites, setMasterSites]   = useState([])
@@ -739,85 +738,90 @@ export default function Inspections() {
                 </div>
               </div>
 
-              {clPositions.length > 0 && (
-                <div className="space-y-4">
-                  {/* SVG Vehicle Diagram — always rendered when positions exist */}
-                  <div ref={diagramRef} className="card flex flex-col items-center py-4" style={{ background: 'rgba(0,0,0,0.2)' }}>
-                    <p className="text-xs text-gray-500 mb-3">Tap a tyre position to jump to it</p>
-                    <VehicleTyreDiagram
-                      vehicleType={clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset) || 'Pickup'}
-                      positions={clPositions.map(p => ({
-                        position: p.position,
-                        risk_level: p.condition === 'Good' ? 'good'
-                          : p.condition === 'Wear' ? 'warning'
-                          : p.condition === 'Damage' ? 'critical'
-                          : 'none',
-                      }))}
-                      onPositionClick={({ position }) => {
-                        const el = posRefs.current[position]
-                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                        setHighlightPos(position)
-                        setTimeout(() => setHighlightPos(null), 2000)
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                  <h4 className="text-sm font-semibold text-gray-300 border-b border-gray-700 pb-2 mb-2">
-                    {CHECKLIST_LABELS[lang].position} ({clPositions.length})
-                  </h4>
-                  {clPositions.map((pos, i) => (
+              {clPositions.length > 0 && (() => {
+                const filledCount = clPositions.filter(p => p.pressure || p.treadDepth).length
+                const posIdx = clPositions.findIndex(p => p.position === clSelectedPos)
+                const selPos = posIdx >= 0 ? clPositions[posIdx] : null
+                return (
+                  <div className="space-y-3">
+                    {/* SVG diagram — single source of truth, tap to fill */}
                     <div
-                      key={pos.position}
-                      ref={el => { posRefs.current[pos.position] = el }}
-                      className="rounded-xl p-3 space-y-2.5 transition-all duration-300"
-                      style={{
-                        background: highlightPos === pos.position ? 'rgba(22,163,74,0.18)' : 'rgba(255,255,255,0.04)',
-                        border: `1px solid ${highlightPos === pos.position ? 'rgba(22,163,74,0.5)' : 'rgba(255,255,255,0.07)'}`,
-                        marginBottom: 8,
-                      }}
+                      ref={diagramRef}
+                      className="rounded-2xl flex flex-col items-center py-4 px-2"
+                      style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
                     >
-                      {/* Row 1: position badge + condition toggles */}
-                      <div className="flex items-center justify-between">
-                        <span
-                          className="text-sm font-mono font-bold px-2.5 py-1 rounded-lg"
-                          style={{ background: 'rgba(22,163,74,0.15)', color: '#4ade80', minWidth: 48, textAlign: 'center' }}
-                        >{pos.position}</span>
-                        <div className="flex items-center gap-1">
-                          {[['Good','✅'],['Wear','⚠️'],['Damage','❌']].map(([cond, icon]) => (
-                            <button key={cond}
-                              onClick={() => setClPositions(p => p.map((x, j) => j === i ? { ...x, condition: cond } : x))}
-                              style={{ width: 44, height: 40 }}
-                              title={cond === 'Good' ? CHECKLIST_LABELS[lang].good : cond === 'Wear' ? CHECKLIST_LABELS[lang].wear : CHECKLIST_LABELS[lang].damage}
-                              className={`rounded-xl text-lg border transition-all ${
-                                pos.condition === cond
-                                  ? cond === 'Good' ? 'bg-green-900/60 border-green-600' : cond === 'Wear' ? 'bg-yellow-900/60 border-yellow-600' : 'bg-red-900/60 border-red-600'
-                                  : 'bg-gray-800/60 border-gray-700/50 opacity-40'
-                              }`}
-                            >{icon}</button>
-                          ))}
-                        </div>
-                      </div>
-                      {/* Row 2: PSI + tread side by side */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">{CHECKLIST_LABELS[lang].pressure}</p>
-                          <input type="number" inputMode="numeric" className="input py-2 text-sm w-full" placeholder="PSI"
-                            value={pos.pressure}
-                            onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, pressure: e.target.value } : x))} />
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">{CHECKLIST_LABELS[lang].tread}</p>
-                          <input type="number" inputMode="decimal" className="input py-2 text-sm w-full" placeholder="mm"
-                            value={pos.treadDepth}
-                            onChange={e => setClPositions(p => p.map((x, j) => j === i ? { ...x, treadDepth: e.target.value } : x))} />
-                        </div>
-                      </div>
+                      <p className="text-xs font-medium mb-3" style={{ color: '#6b7280' }}>Tap a tyre to fill details</p>
+                      <VehicleTyreDiagram
+                        vehicleType={clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset) || 'Pickup'}
+                        positions={clPositions.map(p => ({
+                          position: p.position,
+                          risk_level: p.condition === 'Good' ? 'good'
+                            : p.condition === 'Wear' ? 'warning'
+                            : p.condition === 'Damage' ? 'critical'
+                            : 'none',
+                        }))}
+                        onPositionClick={({ position }) => setClSelectedPos(position)}
+                      />
                     </div>
-                  ))}
+
+                    {/* Position chips — tap any to jump, shows fill status */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {clPositions.map(p => {
+                        const has = !!(p.pressure || p.treadDepth)
+                        const isActive = p.position === clSelectedPos
+                        const bg = isActive ? '#16a34a'
+                          : has && p.condition === 'Wear' ? '#fefce8'
+                          : has && p.condition === 'Damage' ? '#fef2f2'
+                          : has ? '#f0fdf4'
+                          : '#f9fafb'
+                        const fg = isActive ? '#ffffff'
+                          : has && p.condition === 'Wear' ? '#854d0e'
+                          : has && p.condition === 'Damage' ? '#991b1b'
+                          : has ? '#166534'
+                          : '#9ca3af'
+                        const bd = isActive ? '#16a34a'
+                          : has && p.condition === 'Wear' ? '#fde047'
+                          : has && p.condition === 'Damage' ? '#fca5a5'
+                          : has ? '#86efac'
+                          : '#e5e7eb'
+                        return (
+                          <button
+                            key={p.position}
+                            onClick={() => setClSelectedPos(p.position)}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all active:scale-95"
+                            style={{ background: bg, color: fg, border: `1.5px solid ${bd}` }}
+                          >
+                            {p.position}{has ? ' ✓' : ''}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="text-xs px-0.5" style={{ color: '#9ca3af' }}>
+                      {filledCount} of {clPositions.length} tyres filled
+                    </p>
+
+                    {/* Bottom sheet for selected position */}
+                    {clSelectedPos && selPos && (
+                      <PositionSheet
+                        pos={selPos}
+                        posIdx={posIdx}
+                        total={clPositions.length}
+                        isLast={posIdx === clPositions.length - 1}
+                        lang={lang}
+                        onUpdate={(field, val) =>
+                          setClPositions(ps => ps.map(p => p.position === clSelectedPos ? { ...p, [field]: val } : p))
+                        }
+                        onNext={() => {
+                          if (posIdx === clPositions.length - 1) { setClSelectedPos(null); return }
+                          setClSelectedPos(clPositions[posIdx + 1].position)
+                        }}
+                        onPrev={() => { if (posIdx > 0) setClSelectedPos(clPositions[posIdx - 1].position) }}
+                        onClose={() => setClSelectedPos(null)}
+                      />
+                    )}
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {clPositions.length === 0 && clAsset.trim() && (
                 <p className="text-gray-500 text-sm text-center py-4">
@@ -1212,6 +1216,131 @@ export default function Inspections() {
           </div>
         </Modal>
       )}
+    </div>
+  )
+}
+
+function PositionSheet({ pos, posIdx, total, isLast, lang, onUpdate, onNext, onPrev, onClose }) {
+  const L = CHECKLIST_LABELS[lang]
+  return (
+    <div className="fixed inset-0 z-50" style={{ touchAction: 'none' }}>
+      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onClose} />
+      <div
+        className="absolute bottom-0 left-0 right-0 rounded-t-3xl"
+        style={{
+          background: '#ffffff',
+          boxShadow: '0 -8px 40px rgba(0,0,0,0.18)',
+          paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
+        }}
+      >
+        {/* drag handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1.5 rounded-full" style={{ background: '#e5e7eb' }} />
+        </div>
+
+        <div className="px-5 pt-2">
+          {/* header */}
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-3">
+              <span
+                className="text-base font-mono font-bold px-3 py-1.5 rounded-xl"
+                style={{ background: '#f0fdf4', color: '#166534', border: '1.5px solid #86efac' }}
+              >
+                {pos.position}
+              </span>
+              <span className="text-sm font-medium" style={{ color: '#9ca3af' }}>
+                {posIdx + 1} / {total}
+              </span>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-full"
+              style={{ background: '#f3f4f6', color: '#6b7280' }}
+            >
+              <X size={15} />
+            </button>
+          </div>
+
+          {/* condition */}
+          <p className="text-[11px] font-bold uppercase tracking-widest mb-2.5" style={{ color: '#9ca3af' }}>
+            {L.condition}
+          </p>
+          <div className="flex gap-2.5 mb-5">
+            {[
+              { cond: 'Good',   emoji: '✅', activeBg: '#f0fdf4', activeBorder: '#22c55e', activeText: '#166534', label: L.good   },
+              { cond: 'Wear',   emoji: '⚠️', activeBg: '#fefce8', activeBorder: '#eab308', activeText: '#854d0e', label: L.wear   },
+              { cond: 'Damage', emoji: '❌', activeBg: '#fef2f2', activeBorder: '#ef4444', activeText: '#991b1b', label: L.damage },
+            ].map(({ cond, emoji, activeBg, activeBorder, activeText, label }) => {
+              const on = pos.condition === cond
+              return (
+                <button
+                  key={cond}
+                  onClick={() => onUpdate('condition', cond)}
+                  className="flex-1 py-3.5 rounded-2xl flex flex-col items-center gap-1.5 transition-all active:scale-95"
+                  style={{
+                    background:   on ? activeBg : '#f9fafb',
+                    border:       `2px solid ${on ? activeBorder : '#e5e7eb'}`,
+                    color:        on ? activeText : '#9ca3af',
+                  }}
+                >
+                  <span className="text-2xl leading-none">{emoji}</span>
+                  <span className="text-xs font-bold">{label}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* psi + tread */}
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            {[
+              { label: L.pressure, field: 'pressure', mode: 'numeric', ph: 'PSI'  },
+              { label: L.tread,    field: 'treadDepth', mode: 'decimal', ph: 'mm' },
+            ].map(({ label, field, mode, ph }) => (
+              <div key={field}>
+                <label className="text-[11px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#9ca3af' }}>
+                  {label}
+                </label>
+                <input
+                  type="number"
+                  inputMode={mode}
+                  placeholder={ph}
+                  value={pos[field]}
+                  onChange={e => onUpdate(field, e.target.value)}
+                  className="w-full px-3 py-3 rounded-xl text-sm font-semibold"
+                  style={{
+                    background: '#f9fafb',
+                    border: '1.5px solid #e5e7eb',
+                    color: '#111827',
+                    outline: 'none',
+                  }}
+                  onFocus={e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }}
+                  onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none' }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* navigation */}
+          <div className="flex gap-2.5">
+            {posIdx > 0 && (
+              <button
+                onClick={onPrev}
+                className="flex-1 py-3 rounded-2xl text-sm font-bold"
+                style={{ background: '#f3f4f6', color: '#374151', border: '1.5px solid #e5e7eb' }}
+              >
+                ← Prev
+              </button>
+            )}
+            <button
+              onClick={onNext}
+              className="flex-[2] py-3 rounded-2xl text-sm font-bold text-white"
+              style={{ background: isLast ? '#166534' : '#16a34a' }}
+            >
+              {isLast ? '✓ Done' : 'Next →'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

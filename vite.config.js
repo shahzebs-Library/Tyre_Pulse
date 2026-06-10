@@ -174,38 +174,31 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        // Chunk vendor libs for better caching
+        // Chunk vendor libs for better caching.
+        // IMPORTANT: No vendor-misc fallback — avoids circular chunk deps that crash
+        // iOS Safari (JavaScriptCore TDZ error). React internals like /scheduler/,
+        // /use-sync-external-store/, /object-assign/ must be co-located in vendor-react
+        // since react-dom imports them; splitting them out creates vendor-misc →
+        // vendor-react → vendor-misc cycles that V8 tolerates but JSC does not.
         manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
-              return 'vendor-react'
-            }
-            if (id.includes('chart.js') || id.includes('react-chartjs')) {
-              return 'vendor-charts'
-            }
-            if (id.includes('framer-motion')) {
-              return 'vendor-motion'
-            }
-            if (id.includes('jspdf') || id.includes('autotable')) {
-              return 'vendor-pdf'
-            }
-            if (id.includes('pptxgenjs')) {
-              return 'vendor-pptx'
-            }
-            if (id.includes('xlsx')) {
-              return 'vendor-xlsx'
-            }
-            if (id.includes('@supabase')) {
-              return 'vendor-supabase'
-            }
-            if (id.includes('@anthropic-ai')) {
-              return 'vendor-ai'
-            }
-            if (id.includes('lucide-react')) {
-              return 'vendor-icons'
-            }
-            return 'vendor-misc'
-          }
+          if (!id.includes('node_modules')) return
+          if (
+            id.includes('/react/') ||
+            id.includes('/react-dom/') ||
+            id.includes('/react-router') ||
+            id.includes('/scheduler/') ||
+            id.includes('/object-assign/') ||
+            id.includes('/use-sync-external-store/')
+          ) return 'vendor-react'
+          if (id.includes('/chart.js/') || id.includes('/react-chartjs')) return 'vendor-charts'
+          if (id.includes('/framer-motion/')) return 'vendor-motion'
+          if (id.includes('/jspdf/') || id.includes('/jspdf-autotable/') || id.includes('autotable')) return 'vendor-pdf'
+          if (id.includes('/pptxgenjs/')) return 'vendor-pptx'
+          if (id.includes('/xlsx/')) return 'vendor-xlsx'
+          if (id.includes('/@supabase/')) return 'vendor-supabase'
+          if (id.includes('/@anthropic-ai/')) return 'vendor-ai'
+          if (id.includes('/lucide-react/')) return 'vendor-icons'
+          // Remaining packages: Rollup assigns them automatically, no forced grouping
         },
       },
     },

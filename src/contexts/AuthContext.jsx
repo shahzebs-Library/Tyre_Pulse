@@ -61,30 +61,13 @@ export function AuthProvider({ children }) {
   async function signIn(identifier, password) {
     let email = identifier.trim()
 
-    // If not an email format, look up by username or employee_id
+    // Username / Employee ID — resolve to email via SECURITY DEFINER RPC (bypasses RLS)
     if (!email.includes('@')) {
-      const { data: profiles, error: lookupErr } = await supabase
-        .from('profiles')
-        .select('id, username, employee_id')
-        .or(`username.eq.${email},employee_id.eq.${email}`)
-        .limit(1)
-
-      if (lookupErr) return lookupErr
-      if (!profiles?.length) return { message: 'No account found with that username or Employee ID.' }
-
-      // Fetch email from auth.users via the profile id
-      const { data: userData, error: userErr } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', profiles[0].id)
-        .single()
-      if (userErr) return userErr
-
-      // Use RPC to get email by user id (safe server-side lookup)
-      const { data: emailRow, error: emailErr } = await supabase
-        .rpc('get_user_email_by_id', { user_id: profiles[0].id })
-      if (emailErr || !emailRow) return { message: 'Unable to resolve account. Please use your email address.' }
-      email = emailRow
+      const { data: resolved, error: rpcErr } = await supabase
+        .rpc('get_email_by_identifier', { identifier: email })
+      if (rpcErr) return rpcErr
+      if (!resolved) return { message: 'No account found with that username or Employee ID.' }
+      email = resolved
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })

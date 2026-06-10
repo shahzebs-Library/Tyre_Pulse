@@ -49,7 +49,6 @@
     "experiments": {
       "typedRoutes": true
     },
-    "scheme": "tyrepulse-inspector",
-    "newArchEnabled": true
+    "scheme": "tyrepulse-inspector"
   }
 }

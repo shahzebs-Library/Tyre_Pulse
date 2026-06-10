@@ -45,6 +45,14 @@
         {
           "photosPermission": "TyrePulse needs photo access to attach images to tyre inspections."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25"
+          }
+        }
       ]
     ],
     "experiments": {

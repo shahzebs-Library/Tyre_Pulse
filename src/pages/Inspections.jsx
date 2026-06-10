@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -106,6 +107,7 @@ const CHECKLIST_LABELS = {
 export default function Inspections() {
   const { profile, loading: authLoading } = useAuth()
   const { activeCountry } = useSettings()
+  const [searchParams, setSearchParams] = useSearchParams()
   const isTyreMan = profile?.role === 'Tyre Man'
   const [rows, setRows]         = useState([])
   const [loading, setLoading]   = useState(true)
@@ -117,8 +119,10 @@ export default function Inspections() {
   const [search, setSearch]             = useState('')
   const [deleteId, setDeleteId]         = useState(null)
   const [activeTab, setActiveTab]       = useState('all')
-  // Lock TyreMan to checklist tab
-  useEffect(() => { if (isTyreMan) setActiveTab('checklist') }, [isTyreMan])
+  // Lock TyreMan to checklist tab; switch to checklist if asset param present
+  useEffect(() => {
+    if (isTyreMan || searchParams.get('asset')) setActiveTab('checklist')
+  }, [isTyreMan, searchParams])
   const [raisingAction, setRaisingAction] = useState(null)
   const [selectedTyre, setSelectedTyre]   = useState(null)
   const fileRef = useRef(null)
@@ -158,6 +162,16 @@ export default function Inspections() {
     const name = profile?.full_name || profile?.username || ''
     if (name && !clInspector) setClInspector(name)
   }, [profile])
+
+  // Deep-link: /inspections?asset=ASSET_NO — auto-load checklist for scanned vehicle QR
+  useEffect(() => {
+    const assetParam = searchParams.get('asset')
+    if (!assetParam || authLoading) return
+    setClAsset(assetParam)
+    loadFleetInfo(assetParam)
+    // Remove param from URL so refresh doesn't re-trigger
+    setSearchParams({}, { replace: true })
+  }, [searchParams, authLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setLoading(true)

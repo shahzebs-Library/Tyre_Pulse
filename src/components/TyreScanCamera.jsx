@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   X, Camera, Keyboard, CheckCircle, AlertCircle, Loader2, Search,
-  RefreshCw,
+  RefreshCw, ClipboardCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -18,6 +19,7 @@ const RISK_STYLE = {
 }
 
 export default function TyreScanCamera({ onClose, onResult }) {
+  const navigate = useNavigate()
   const [mode, setMode]       = useState('camera')
   const [scanning, setScanning] = useState(false)
   const [error, setError]     = useState(null)
@@ -45,15 +47,28 @@ export default function TyreScanCamera({ onClose, onResult }) {
     setScanning(false)
     setLoading(true)
     try {
-      const { data } = await supabase
+      // Primary: tyre serial lookup
+      const { data: tyreData } = await supabase
         .from('tyre_records')
         .select('id,serial_no,asset_no,brand,site,status,tread_depth,pressure,risk_level,cost')
         .ilike('serial_no', serial)
         .limit(1)
         .maybeSingle()
-      setResult({ serial, tyre: data ?? null })
+
+      if (tyreData) {
+        setResult({ serial, tyre: tyreData, fleet: null })
+      } else {
+        // Secondary: asset/vehicle QR lookup
+        const { data: fleetData } = await supabase
+          .from('vehicle_fleet')
+          .select('asset_no,vehicle_type,site,registration_no')
+          .ilike('asset_no', serial)
+          .limit(1)
+          .maybeSingle()
+        setResult({ serial, tyre: null, fleet: fleetData ?? null })
+      }
     } catch {
-      setResult({ serial, tyre: null })
+      setResult({ serial, tyre: null, fleet: null })
     } finally {
       setLoading(false)
     }
@@ -164,6 +179,12 @@ export default function TyreScanCamera({ onClose, onResult }) {
   }
 
   const riskStyle = result?.tyre?.risk_level ? RISK_STYLE[result.tyre.risk_level] : null
+
+  function handleStartChecklist() {
+    stopCamera()
+    onClose?.()
+    navigate(`/inspections?asset=${encodeURIComponent(result.serial)}`)
+  }
 
   return (
     <motion.div
@@ -342,7 +363,7 @@ export default function TyreScanCamera({ onClose, onResult }) {
             >
               <Loader2 className="w-8 h-8 text-green-400" />
             </motion.div>
-            <p className="text-sm text-gray-400 font-medium">Looking up tyre…</p>
+            <p className="text-sm text-gray-400 font-medium">Looking up…</p>
           </div>
         )}
 
@@ -354,20 +375,38 @@ export default function TyreScanCamera({ onClose, onResult }) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
-              style={{ border: `1px solid ${result.tyre ? 'rgba(22,163,74,0.35)' : 'rgba(239,68,68,0.35)'}` }}
+              style={{
+                border: `1px solid ${
+                  result.tyre  ? 'rgba(22,163,74,0.35)' :
+                  result.fleet ? 'rgba(59,130,246,0.35)' :
+                                 'rgba(239,68,68,0.35)'
+                }`,
+              }}
             >
               {/* Result header */}
               <div
                 className="flex items-center gap-3 px-4 py-3.5"
-                style={{ background: result.tyre ? 'rgba(22,163,74,0.08)' : 'rgba(239,68,68,0.08)' }}
+                style={{
+                  background: result.tyre  ? 'rgba(22,163,74,0.08)' :
+                              result.fleet ? 'rgba(59,130,246,0.08)' :
+                                             'rgba(239,68,68,0.08)',
+                }}
               >
                 {result.tyre
                   ? <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
-                  : <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />}
+                  : result.fleet
+                    ? <ClipboardCheck className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                    : <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />}
                 <div>
                   <p className="text-sm font-bold text-white font-mono leading-tight">{result.serial}</p>
-                  <p className={`text-xs mt-0.5 ${result.tyre ? 'text-green-400' : 'text-red-400'}`}>
-                    {result.tyre ? 'Found in database' : 'Not found in database'}
+                  <p className={`text-xs mt-0.5 ${
+                    result.tyre  ? 'text-green-400' :
+                    result.fleet ? 'text-blue-400'  :
+                                   'text-red-400'
+                  }`}>
+                    {result.tyre  ? 'Tyre found in database' :
+                     result.fleet ? 'Vehicle asset found' :
+                                    'Not found in database'}
                   </p>
                 </div>
                 {result.tyre?.risk_level && riskStyle && (
@@ -380,7 +419,7 @@ export default function TyreScanCamera({ onClose, onResult }) {
                 )}
               </div>
 
-              {/* Details grid */}
+              {/* Tyre details grid */}
               {result.tyre && (
                 <div
                   className="px-4 py-3 grid grid-cols-2 gap-3"
@@ -402,10 +441,43 @@ export default function TyreScanCamera({ onClose, onResult }) {
                   ))}
                 </div>
               )}
+
+              {/* Fleet/asset details grid */}
+              {result.fleet && (
+                <div
+                  className="px-4 py-3 grid grid-cols-2 gap-3"
+                  style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
+                >
+                  {[
+                    ['Asset No',      result.fleet.asset_no],
+                    ['Vehicle Type',  result.fleet.vehicle_type],
+                    ['Site',          result.fleet.site],
+                    ['Registration',  result.fleet.registration_no],
+                  ].filter(([, v]) => v).map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest">{label}</p>
+                      <p className="text-sm font-semibold text-white mt-0.5">{value}</p>
+                    </div>
+                  ))}
+                  <div className="col-span-2 mt-1 pt-2" style={{ borderTop: '1px solid rgba(59,130,246,0.15)' }}>
+                    <p className="text-[10px] text-blue-400 font-medium">Ready to start daily tyre inspection checklist</p>
+                  </div>
+                </div>
+              )}
             </motion.div>
 
             {/* Actions */}
             <div className="flex gap-2">
+              {result.fleet && (
+                <button
+                  onClick={handleStartChecklist}
+                  className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold text-white transition-opacity active:opacity-75"
+                  style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', boxShadow: '0 0 20px rgba(59,130,246,0.3)' }}
+                >
+                  <ClipboardCheck className="w-4 h-4" />
+                  Start Checklist
+                </button>
+              )}
               {result.tyre && onResult && (
                 <button
                   onClick={handleUse}

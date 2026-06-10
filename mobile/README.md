@@ -17,7 +17,7 @@ cp .env.example .env
 #   EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 
 # 3. Install EAS CLI (cloud build — no Android Studio needed)
-npm install -g @expo/eas-cli
+npm install -g eas-cli
 
 # 4. Log in to Expo
 eas login
@@ -51,9 +51,9 @@ npx expo start
 - History: all submitted inspections with sync status
 - Profile: user info, manual sync, sign out
 
-## Assets needed
+## Assets
 
-Replace placeholder files before building:
+Branded placeholders are committed in `assets/` so the build works out of the box. Replace before Play Store submission:
 - `assets/icon.png` — 1024×1024px app icon
 - `assets/splash.png` — 1284×2778px splash screen
 - `assets/adaptive-icon.png` — 1024×1024px Android adaptive icon foreground

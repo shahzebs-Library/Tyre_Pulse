@@ -94,6 +94,7 @@ const CHECKLIST_LABELS = {
     good: 'Good',
     wear: 'Wear',
     damage: 'Damage',
+    puncture: 'Puncture',
     save: 'Save Checklist',
     export: 'Export PDF',
     inspector: 'Inspector',
@@ -111,6 +112,7 @@ const CHECKLIST_LABELS = {
     good: 'جيد',
     wear: 'تآكل',
     damage: 'تلف',
+    puncture: 'ثقب',
     save: 'حفظ القائمة',
     export: 'تصدير PDF',
     inspector: 'المفتش',
@@ -739,7 +741,9 @@ export default function Inspections() {
               </div>
 
               {clPositions.length > 0 && (() => {
-                const filledCount = clPositions.filter(p => p.pressure || p.treadDepth).length
+                const filledCount = clPositions.filter(p => p.pressure).length
+                const unfilledPositions = clPositions.filter(p => !p.pressure)
+                const allFilled = unfilledPositions.length === 0
                 const posIdx = clPositions.findIndex(p => p.position === clSelectedPos)
                 const selPos = posIdx >= 0 ? clPositions[posIdx] : null
                 return (
@@ -757,7 +761,7 @@ export default function Inspections() {
                           position: p.position,
                           risk_level: p.condition === 'Good' ? 'good'
                             : p.condition === 'Wear' ? 'warning'
-                            : p.condition === 'Damage' ? 'critical'
+                            : (p.condition === 'Damage' || p.condition === 'Puncture') ? 'critical'
                             : 'none',
                         }))}
                         onPositionClick={({ position }) => setClSelectedPos(position)}
@@ -767,21 +771,24 @@ export default function Inspections() {
                     {/* Position chips — tap any to jump, shows fill status */}
                     <div className="flex flex-wrap gap-1.5">
                       {clPositions.map(p => {
-                        const has = !!(p.pressure || p.treadDepth)
+                        const has = !!p.pressure
                         const isActive = p.position === clSelectedPos
+                        const isPuncture = p.condition === 'Puncture'
+                        const isDmg = p.condition === 'Damage' || isPuncture
+                        const isWear = p.condition === 'Wear'
                         const bg = isActive ? '#16a34a'
-                          : has && p.condition === 'Wear' ? '#fefce8'
-                          : has && p.condition === 'Damage' ? '#fef2f2'
+                          : has && isWear ? '#fefce8'
+                          : has && isDmg  ? '#fef2f2'
                           : has ? '#f0fdf4'
                           : '#f9fafb'
                         const fg = isActive ? '#ffffff'
-                          : has && p.condition === 'Wear' ? '#854d0e'
-                          : has && p.condition === 'Damage' ? '#991b1b'
+                          : has && isWear ? '#854d0e'
+                          : has && isDmg  ? '#991b1b'
                           : has ? '#166534'
                           : '#9ca3af'
                         const bd = isActive ? '#16a34a'
-                          : has && p.condition === 'Wear' ? '#fde047'
-                          : has && p.condition === 'Damage' ? '#fca5a5'
+                          : has && isWear ? '#fde047'
+                          : has && isDmg  ? '#fca5a5'
                           : has ? '#86efac'
                           : '#e5e7eb'
                         return (
@@ -792,12 +799,15 @@ export default function Inspections() {
                             style={{ background: bg, color: fg, border: `1.5px solid ${bd}` }}
                           >
                             {p.position}{has ? ' ✓' : ''}
+                            {isPuncture && !isActive && <span className="ml-0.5 text-[9px]">🔴</span>}
                           </button>
                         )
                       })}
                     </div>
-                    <p className="text-xs px-0.5" style={{ color: '#9ca3af' }}>
-                      {filledCount} of {clPositions.length} tyres filled
+                    <p className="text-xs px-0.5" style={{ color: allFilled ? '#16a34a' : '#9ca3af' }}>
+                      {allFilled
+                        ? `✓ All ${clPositions.length} tyres filled — ready to save`
+                        : `${filledCount} of ${clPositions.length} filled · ${unfilledPositions.length} remaining`}
                     </p>
 
                     {/* Bottom sheet for selected position */}
@@ -807,12 +817,22 @@ export default function Inspections() {
                         posIdx={posIdx}
                         total={clPositions.length}
                         isLast={posIdx === clPositions.length - 1}
+                        unfilledCount={unfilledPositions.length}
+                        allFilled={allFilled}
                         lang={lang}
                         onUpdate={(field, val) =>
                           setClPositions(ps => ps.map(p => p.position === clSelectedPos ? { ...p, [field]: val } : p))
                         }
                         onNext={() => {
-                          if (posIdx === clPositions.length - 1) { setClSelectedPos(null); return }
+                          const isOnLast = posIdx === clPositions.length - 1
+                          if (isOnLast) {
+                            // Re-check unfilled at call time (state may have just changed)
+                            const stillUnfilled = clPositions.find((p, i) => i !== posIdx && !p.pressure)
+                            if (stillUnfilled) { setClSelectedPos(stillUnfilled.position); return }
+                            // All filled — close sheet
+                            setClSelectedPos(null)
+                            return
+                          }
                           setClSelectedPos(clPositions[posIdx + 1].position)
                         }}
                         onPrev={() => { if (posIdx > 0) setClSelectedPos(clPositions[posIdx - 1].position) }}
@@ -840,8 +860,20 @@ export default function Inspections() {
                   {clError}
                 </div>
               )}
-              <button onClick={saveChecklist} disabled={clSaving || !clAsset.trim() || clPositions.length === 0}
-                className="btn-primary w-full disabled:opacity-50">
+              {clPositions.length > 0 && clPositions.some(p => !p.pressure) && (
+                <div className="p-3 rounded-xl flex items-center gap-2 text-sm"
+                  style={{ background: '#fefce8', border: '1px solid #fde047', color: '#854d0e' }}>
+                  <span>⚠️</span>
+                  <span>
+                    {clPositions.filter(p => !p.pressure).length} tyre{clPositions.filter(p => !p.pressure).length !== 1 ? 's' : ''} still need PSI — tap them on the diagram to fill.
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={saveChecklist}
+                disabled={clSaving || !clAsset.trim() || clPositions.length === 0 || clPositions.some(p => !p.pressure)}
+                className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 {clSaving ? 'Saving...' : CHECKLIST_LABELS[lang].save}
               </button>
             </div>
@@ -1220,8 +1252,16 @@ export default function Inspections() {
   )
 }
 
-function PositionSheet({ pos, posIdx, total, isLast, lang, onUpdate, onNext, onPrev, onClose }) {
+function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, lang, onUpdate, onNext, onPrev, onClose }) {
   const L = CHECKLIST_LABELS[lang]
+  const isPuncture = pos.condition === 'Puncture'
+  const showPunctureAlert = isPuncture
+
+  const nextLabel = isLast
+    ? allFilled ? '✓ All Done' : `Fill ${unfilledCount} More →`
+    : 'Next →'
+  const nextBg = isLast && allFilled ? '#166534' : '#16a34a'
+
   return (
     <div className="fixed inset-0 z-50" style={{ touchAction: 'none' }}>
       <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onClose} />
@@ -1240,16 +1280,21 @@ function PositionSheet({ pos, posIdx, total, isLast, lang, onUpdate, onNext, onP
 
         <div className="px-5 pt-2">
           {/* header */}
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <span
                 className="text-base font-mono font-bold px-3 py-1.5 rounded-xl"
-                style={{ background: '#f0fdf4', color: '#166534', border: '1.5px solid #86efac' }}
+                style={{
+                  background: isPuncture ? '#fef2f2' : '#f0fdf4',
+                  color: isPuncture ? '#991b1b' : '#166534',
+                  border: `1.5px solid ${isPuncture ? '#fca5a5' : '#86efac'}`,
+                }}
               >
                 {pos.position}
               </span>
               <span className="text-sm font-medium" style={{ color: '#9ca3af' }}>
                 {posIdx + 1} / {total}
+                {unfilledCount > 0 && <span className="ml-2 text-xs" style={{ color: '#d97706' }}>· {unfilledCount} unfilled</span>}
               </span>
             </div>
             <button
@@ -1261,30 +1306,39 @@ function PositionSheet({ pos, posIdx, total, isLast, lang, onUpdate, onNext, onP
             </button>
           </div>
 
+          {/* puncture alert banner */}
+          {showPunctureAlert && (
+            <div className="mb-3 px-3 py-2.5 rounded-xl flex items-center gap-2 text-sm font-semibold"
+              style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#991b1b' }}>
+              🔴 Puncture detected — immediate action required
+            </div>
+          )}
+
           {/* condition */}
           <p className="text-[11px] font-bold uppercase tracking-widest mb-2.5" style={{ color: '#9ca3af' }}>
             {L.condition}
           </p>
-          <div className="flex gap-2.5 mb-5">
+          <div className="grid grid-cols-4 gap-2 mb-4">
             {[
-              { cond: 'Good',   emoji: '✅', activeBg: '#f0fdf4', activeBorder: '#22c55e', activeText: '#166534', label: L.good   },
-              { cond: 'Wear',   emoji: '⚠️', activeBg: '#fefce8', activeBorder: '#eab308', activeText: '#854d0e', label: L.wear   },
-              { cond: 'Damage', emoji: '❌', activeBg: '#fef2f2', activeBorder: '#ef4444', activeText: '#991b1b', label: L.damage },
+              { cond: 'Good',     emoji: '✅', activeBg: '#f0fdf4', activeBorder: '#22c55e', activeText: '#166534', label: L.good     },
+              { cond: 'Wear',     emoji: '⚠️', activeBg: '#fefce8', activeBorder: '#eab308', activeText: '#854d0e', label: L.wear     },
+              { cond: 'Damage',   emoji: '❌', activeBg: '#fef2f2', activeBorder: '#ef4444', activeText: '#991b1b', label: L.damage   },
+              { cond: 'Puncture', emoji: '🔴', activeBg: '#fff1f2', activeBorder: '#dc2626', activeText: '#7f1d1d', label: L.puncture },
             ].map(({ cond, emoji, activeBg, activeBorder, activeText, label }) => {
               const on = pos.condition === cond
               return (
                 <button
                   key={cond}
                   onClick={() => onUpdate('condition', cond)}
-                  className="flex-1 py-3.5 rounded-2xl flex flex-col items-center gap-1.5 transition-all active:scale-95"
+                  className="py-3 rounded-2xl flex flex-col items-center gap-1.5 transition-all active:scale-95"
                   style={{
                     background:   on ? activeBg : '#f9fafb',
                     border:       `2px solid ${on ? activeBorder : '#e5e7eb'}`,
                     color:        on ? activeText : '#9ca3af',
                   }}
                 >
-                  <span className="text-2xl leading-none">{emoji}</span>
-                  <span className="text-xs font-bold">{label}</span>
+                  <span className="text-xl leading-none">{emoji}</span>
+                  <span className="text-[10px] font-bold">{label}</span>
                 </button>
               )
             })}
@@ -1334,9 +1388,9 @@ function PositionSheet({ pos, posIdx, total, isLast, lang, onUpdate, onNext, onP
             <button
               onClick={onNext}
               className="flex-[2] py-3 rounded-2xl text-sm font-bold text-white"
-              style={{ background: isLast ? '#166534' : '#16a34a' }}
+              style={{ background: nextBg }}
             >
-              {isLast ? '✓ Done' : 'Next →'}
+              {nextLabel}
             </button>
           </div>
         </div>

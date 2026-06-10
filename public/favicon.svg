@@ -1,0 +1,24 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0f172a"/>
+  <!-- Tyre rubber: thick outer ring -->
+  <circle cx="256" cy="256" r="220" fill="none" stroke="#1d4ed8" stroke-width="80"/>
+  <!-- Rim border -->
+  <circle cx="256" cy="256" r="174" fill="none" stroke="#3b82f6" stroke-width="6"/>
+  <!-- Rim surface -->
+  <circle cx="256" cy="256" r="168" fill="#1e3a5f"/>
+  <!-- Spokes -->
+  <g stroke="#60a5fa" stroke-linecap="round">
+    <line x1="256" y1="100" x2="256" y2="412" stroke-width="20"/>
+    <line x1="100" y1="256" x2="412" y2="256" stroke-width="20"/>
+    <line x1="152" y1="152" x2="360" y2="360" stroke-width="14" opacity="0.85"/>
+    <line x1="360" y1="152" x2="152" y2="360" stroke-width="14" opacity="0.85"/>
+  </g>
+  <!-- Hub -->
+  <circle cx="256" cy="256" r="56" fill="#0f172a" stroke="#3b82f6" stroke-width="5"/>
+  <circle cx="256" cy="256" r="36" fill="#2563eb"/>
+  <circle cx="256" cy="256" r="16" fill="#1d4ed8"/>
+  <!-- Outer tread lines -->
+  <circle cx="256" cy="256" r="256" fill="none" stroke="#2563eb" stroke-width="3" opacity="0.4"/>
+  <circle cx="256" cy="256" r="182" fill="none" stroke="#3b82f6" stroke-width="2" opacity="0.3"/>
+</svg>

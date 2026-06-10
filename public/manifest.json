@@ -1,28 +1,60 @@
 {
+  "id": "/?source=pwa",
   "name": "TyrePulse Fleet Intelligence",
   "short_name": "TyrePulse",
-  "description": "Enterprise fleet tyre management and intelligence platform",
-  "start_url": "/",
+  "description": "Enterprise fleet tyre management and AI-powered intelligence platform",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#0f172a",
   "theme_color": "#1e3a5f",
   "orientation": "any",
+  "categories": ["business", "fleet", "management"],
+  "lang": "en",
+  "dir": "ltr",
   "icons": [
-    { "src": "/icons/icon-72x72.png",   "sizes": "72x72",   "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icons/icon-96x96.png",   "sizes": "96x96",   "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icons/icon-128x128.png", "sizes": "128x128", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icons/icon-144x144.png", "sizes": "144x144", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icons/icon-152x152.png", "sizes": "152x152", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icons/icon-384x384.png", "sizes": "384x384", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/icons/icon-72x72.png",            "sizes": "72x72",   "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-96x96.png",            "sizes": "96x96",   "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-128x128.png",          "sizes": "128x128", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-144x144.png",          "sizes": "144x144", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-152x152.png",          "sizes": "152x152", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192x192.png",          "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-384x384.png",          "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512x512.png",          "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192x192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-512x512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/favicon.svg",                     "sizes": "any",     "type": "image/svg+xml", "purpose": "any" }
   ],
   "shortcuts": [
-    { "name": "Dashboard",     "url": "/",            "description": "Fleet overview dashboard" },
-    { "name": "Tyre Records",  "url": "/tyres",       "description": "View tyre records" },
-    { "name": "Inspections",   "url": "/inspections", "description": "Manage inspections" },
-    { "name": "Alerts",        "url": "/alerts",      "description": "View active alerts" }
+    {
+      "name": "Dashboard",
+      "short_name": "Home",
+      "description": "Fleet overview and KPI dashboard",
+      "url": "/?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Tyre Records",
+      "short_name": "Tyres",
+      "description": "View and manage tyre records",
+      "url": "/tyres?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Inspections",
+      "short_name": "Inspect",
+      "description": "Run and review tyre inspections",
+      "url": "/inspections?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Alerts",
+      "short_name": "Alerts",
+      "description": "Active fleet alerts",
+      "url": "/alerts?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    }
   ],
-  "categories": ["fleet", "management", "business"],
-  "lang": "en"
+  "prefer_related_applications": false
 }

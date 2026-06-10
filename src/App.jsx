@@ -76,12 +76,14 @@ import LiveFleetStatus from './pages/LiveFleetStatus'
 import ComplianceDashboard from './pages/ComplianceDashboard'
 import TyreScrapManagement from './pages/TyreScrapManagement'
 import StockReplenishment from './pages/StockReplenishment'
+import PwaUpdatePrompt from './components/PwaUpdatePrompt'
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <SettingsProvider>
+        <PwaUpdatePrompt />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/reset-password" element={<ResetPassword />} />

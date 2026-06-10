@@ -1,31 +1,212 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
-  plugins: [react()],
-  build: { outDir: 'dist', sourcemap: false },
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'prompt',
+      injectRegister: 'auto',
+      includeAssets: [
+        'favicon.svg',
+        'apple-touch-icon.png',
+        'robots.txt',
+        'browserconfig.xml',
+        'offline.html',
+        'icons/*.png',
+      ],
+      manifest: {
+        id: '/?source=pwa',
+        name: 'TyrePulse Fleet Intelligence',
+        short_name: 'TyrePulse',
+        description: 'Enterprise fleet tyre management and AI-powered intelligence platform',
+        start_url: '/?source=pwa',
+        scope: '/',
+        display: 'standalone',
+        display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
+        background_color: '#0f172a',
+        theme_color: '#1e3a5f',
+        orientation: 'any',
+        categories: ['business', 'fleet', 'management'],
+        lang: 'en',
+        dir: 'ltr',
+        icons: [
+          { src: '/icons/icon-72x72.png',            sizes: '72x72',   type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-96x96.png',            sizes: '96x96',   type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-128x128.png',          sizes: '128x128', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-144x144.png',          sizes: '144x144', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-152x152.png',          sizes: '152x152', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-192x192.png',          sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-384x384.png',          sizes: '384x384', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512x512.png',          sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-192x192-maskable.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/icon-512x512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/favicon.svg',                     sizes: 'any',     type: 'image/svg+xml', purpose: 'any' },
+        ],
+        shortcuts: [
+          {
+            name: 'Dashboard', short_name: 'Home',
+            description: 'Fleet overview and KPI dashboard',
+            url: '/?source=pwa-shortcut',
+            icons: [{ src: '/icons/icon-96x96.png', sizes: '96x96' }],
+          },
+          {
+            name: 'Tyre Records', short_name: 'Tyres',
+            description: 'View and manage tyre records',
+            url: '/tyres?source=pwa-shortcut',
+            icons: [{ src: '/icons/icon-96x96.png', sizes: '96x96' }],
+          },
+          {
+            name: 'Inspections', short_name: 'Inspect',
+            description: 'Run and review tyre inspections',
+            url: '/inspections?source=pwa-shortcut',
+            icons: [{ src: '/icons/icon-96x96.png', sizes: '96x96' }],
+          },
+          {
+            name: 'Alerts', short_name: 'Alerts',
+            description: 'Active fleet alerts',
+            url: '/alerts?source=pwa-shortcut',
+            icons: [{ src: '/icons/icon-96x96.png', sizes: '96x96' }],
+          },
+        ],
+        prefer_related_applications: false,
+      },
+      workbox: {
+        // Allow large bundles — our app code exceeds the 2MB default
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot,json,webmanifest}'],
+        navigateFallback: 'index.html',
+        // Deny API paths and non-HTML requests from navigate fallback
+        navigateFallbackDenylist: [/^\/api\//, /^\/supabase\//],
+        offlineGoogleAnalytics: false,
+        cleanupOutdatedCaches: true,
+        // skipWaiting: false — we prompt the user instead of force-reloading
+        skipWaiting: false,
+        clientsClaim: true,
+        runtimeCaching: [
+          // Supabase REST API — NetworkFirst, 5-minute cache as fallback
+          {
+            urlPattern: ({ url }) =>
+              url.hostname.includes('supabase.co') && url.pathname.startsWith('/rest/'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'supabase-rest-v1',
+              expiration: { maxEntries: 200, maxAgeSeconds: 5 * 60 },
+              networkTimeoutSeconds: 10,
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // Supabase Auth — NetworkFirst, very short cache
+          {
+            urlPattern: ({ url }) =>
+              url.hostname.includes('supabase.co') && url.pathname.startsWith('/auth/'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'supabase-auth-v1',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 },
+              networkTimeoutSeconds: 5,
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // Supabase Storage / CDN — CacheFirst, 24-hour TTL
+          {
+            urlPattern: ({ url }) =>
+              url.hostname.includes('supabase.co') && url.pathname.startsWith('/storage/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'supabase-storage-v1',
+              expiration: { maxEntries: 100, maxAgeSeconds: 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // Local icons / images — CacheFirst, 30 days
+          {
+            urlPattern: /\/icons\/.*\.png$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'app-icons-v1',
+              expiration: { maxEntries: 30, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // Google Fonts — CacheFirst, 1 year
+          {
+            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-v1',
+              expiration: { maxEntries: 20, maxAgeSeconds: 365 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
+      // Disable SW in development to avoid interference with hot reload
+      devOptions: {
+        enabled: false,
+      },
+    }),
+  ],
+
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Chunk vendor libs for better caching
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'vendor-react'
+            }
+            if (id.includes('chart.js') || id.includes('react-chartjs')) {
+              return 'vendor-charts'
+            }
+            if (id.includes('framer-motion')) {
+              return 'vendor-motion'
+            }
+            if (id.includes('jspdf') || id.includes('autotable')) {
+              return 'vendor-pdf'
+            }
+            if (id.includes('pptxgenjs')) {
+              return 'vendor-pptx'
+            }
+            if (id.includes('xlsx')) {
+              return 'vendor-xlsx'
+            }
+            if (id.includes('@supabase')) {
+              return 'vendor-supabase'
+            }
+            if (id.includes('@anthropic-ai')) {
+              return 'vendor-ai'
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons'
+            }
+            return 'vendor-misc'
+          }
+        },
+      },
+    },
+  },
+
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.js'],
     exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**'],
   },
+
   resolve: {
     alias: [
-      // Stub the agent-toolset (Node.js-only) so browser build succeeds
-      {
-        find: /.*\/agent-toolset\/fs-util\.mjs$/,
-        replacement: path.resolve(__dirname, 'src/stubs/empty.js'),
-      },
-      {
-        find: /.*\/agent-toolset\/node\.mjs$/,
-        replacement: path.resolve(__dirname, 'src/stubs/empty.js'),
-      },
-      {
-        find: /.*\/agent-toolset\/skills\.mjs$/,
-        replacement: path.resolve(__dirname, 'src/stubs/empty.js'),
-      },
+      { find: /.*\/agent-toolset\/fs-util\.mjs$/, replacement: path.resolve(__dirname, 'src/stubs/empty.js') },
+      { find: /.*\/agent-toolset\/node\.mjs$/,    replacement: path.resolve(__dirname, 'src/stubs/empty.js') },
+      { find: /.*\/agent-toolset\/skills\.mjs$/,  replacement: path.resolve(__dirname, 'src/stubs/empty.js') },
     ],
   },
 })

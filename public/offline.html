@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline — TyrePulse</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 20px;
+      padding: 48px 40px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 25px 60px rgba(0,0,0,.5);
+    }
+
+    .icon-wrap {
+      width: 96px;
+      height: 96px;
+      margin: 0 auto 28px;
+      position: relative;
+    }
+
+    /* Tyre SVG ring */
+    .tyre-ring {
+      width: 96px;
+      height: 96px;
+      animation: spin 4s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .pulse-dot {
+      position: absolute;
+      inset: 50%;
+      transform: translate(-50%, -50%);
+      width: 28px;
+      height: 28px;
+      background: #3b82f6;
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      50%       { transform: translate(-50%, -50%) scale(1.25); opacity: .7; }
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 12px;
+    }
+
+    p {
+      font-size: .9375rem;
+      color: #94a3b8;
+      line-height: 1.65;
+      margin-bottom: 32px;
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 13px 24px;
+      font-size: .9375rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+
+    button:hover { background: #1d4ed8; }
+    button:active { background: #1e40af; transform: scale(.98); }
+
+    .btn-secondary {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #94a3b8;
+    }
+
+    .btn-secondary:hover { background: #334155; color: #e2e8f0; }
+
+    .status {
+      margin-top: 24px;
+      font-size: .8125rem;
+      color: #475569;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #1e3a5f;
+      border: 1px solid #1d4ed8;
+      color: #93c5fd;
+      font-size: .75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      margin-bottom: 20px;
+    }
+
+    .dot { width: 6px; height: 6px; background: #f59e0b; border-radius: 50%; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge"><span class="dot"></span> No Internet Connection</div>
+
+    <div class="icon-wrap">
+      <svg class="tyre-ring" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="48" cy="48" r="41" fill="none" stroke="#1d4ed8" stroke-width="15"/>
+        <circle cx="48" cy="48" r="24" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+        <g stroke="#60a5fa" stroke-linecap="round">
+          <line x1="48" y1="25" x2="48" y2="71" stroke-width="4"/>
+          <line x1="25" y1="48" x2="71" y2="48" stroke-width="4"/>
+          <line x1="31" y1="31" x2="65" y2="65" stroke-width="3" opacity=".7"/>
+          <line x1="65" y1="31" x2="31" y2="65" stroke-width="3" opacity=".7"/>
+        </g>
+      </svg>
+      <div class="pulse-dot"></div>
+    </div>
+
+    <h1>You're Offline</h1>
+    <p>TyrePulse couldn't reach the server. Check your connection — your cached data is still available.</p>
+
+    <div class="actions">
+      <button onclick="window.location.reload()">Try Again</button>
+      <button class="btn-secondary" onclick="window.history.back()">Go Back</button>
+    </div>
+
+    <p class="status" id="status">Checking connection…</p>
+  </div>
+
+  <script>
+    function updateStatus() {
+      const el = document.getElementById('status')
+      if (navigator.onLine) {
+        el.textContent = 'Connection restored — click Try Again'
+        el.style.color = '#22c55e'
+      } else {
+        el.textContent = 'Still offline'
+      }
+    }
+    window.addEventListener('online', updateStatus)
+    window.addEventListener('offline', updateStatus)
+    updateStatus()
+  </script>
+</body>
+</html>

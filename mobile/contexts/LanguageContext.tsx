@@ -23,9 +23,9 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | null>(null)
 
-// Resolve a dot-notated key against a nested object
 function resolve(obj: Record<string, any>, key: string): string {
-  return key.split('.').reduce((o, k) => o?.[k], obj) ?? key
+  const val = key.split('.').reduce<any>((o, k) => o?.[k], obj)
+  return typeof val === 'string' ? val : key
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {

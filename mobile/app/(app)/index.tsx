@@ -141,6 +141,26 @@ export default function HomeScreen() {
           />
         </TouchableOpacity>
 
+        {/* Secondary: Scanner */}
+        <TouchableOpacity
+          style={styles.scanButton}
+          onPress={() => router.push('/(app)/scanner')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.scanIcon}>
+            <Ionicons name="scan" size={24} color="#16a34a" />
+          </View>
+          <View style={styles.ctaText}>
+            <Text style={[styles.scanTitle, { textAlign }]}>{t('home.scanAsset')}</Text>
+            <Text style={[styles.scanSubtitle, { textAlign }]}>{t('home.scanSubtitle')}</Text>
+          </View>
+          <Ionicons
+            name={isRTL ? 'chevron-back' : 'chevron-forward'}
+            size={22}
+            color="#94a3b8"
+          />
+        </TouchableOpacity>
+
         {/* Recent */}
         {recentInspections.length > 0 && (
           <View style={styles.section}>
@@ -260,6 +280,31 @@ const styles = StyleSheet.create({
   ctaText: { flex: 1 },
   ctaTitle: { fontSize: 17, fontWeight: '800', color: '#fff' },
   ctaSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+  scanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(22,163,74,0.25)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  scanIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(22,163,74,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+  scanSubtitle: { fontSize: 12, color: '#64748b', marginTop: 2 },
   section: { gap: 10 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionHeaderRTL: { flexDirection: 'row-reverse' },

@@ -5,7 +5,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
@@ -23,12 +23,13 @@ export default function NewInspectionScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const router = useRouter()
+  const params = useLocalSearchParams<{ site?: string; asset?: string }>()
 
   const [step, setStep] = useState<Step>('header')
   const [sites, setSites] = useState<string[]>([])
   const [vehicles, setVehicles] = useState<VehicleFleet[]>([])
   const [filteredVehicles, setFilteredVehicles] = useState<VehicleFleet[]>([])
-  const [selectedSite, setSelectedSite] = useState(profile?.site ?? '')
+  const [selectedSite, setSelectedSite] = useState(params.site ?? profile?.site ?? '')
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleFleet | null>(null)
   const [odometer, setOdometer] = useState('')
   const [headerNotes, setHeaderNotes] = useState('')
@@ -47,6 +48,14 @@ export default function NewInspectionScreen() {
   useEffect(() => {
     if (selectedSite) loadVehicles(selectedSite)
   }, [selectedSite])
+
+  // Preselect the vehicle when arriving from the scanner (asset param).
+  useEffect(() => {
+    if (params.asset && !selectedVehicle && filteredVehicles.length) {
+      const match = filteredVehicles.find(v => v.asset_no === params.asset)
+      if (match) setSelectedVehicle(match)
+    }
+  }, [filteredVehicles, params.asset, selectedVehicle])
 
   useEffect(() => {
     if (selectedVehicle) {

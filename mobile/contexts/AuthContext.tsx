@@ -18,30 +18,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let mounted = true
+
+    // Resolve `loading` from the (local) session as fast as possible. The
+    // profile is fetched in the background so a slow/offline network can never
+    // hang the app on the loading spinner.
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!mounted) return
+        setUser(session?.user ?? null)
+        if (session?.user) fetchProfile(session.user.id)
+      })
+      .catch(() => {})
+      .finally(() => { if (mounted) setLoading(false) })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return
       setUser(session?.user ?? null)
       if (session?.user) fetchProfile(session.user.id)
-      else setLoading(false)
+      else setProfile(null)
+      setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        setLoading(true)
-        await fetchProfile(session.user.id)
-      } else {
-        setProfile(null)
-        setLoading(false)
-      }
-    })
-
-    return () => subscription.unsubscribe()
+    return () => { mounted = false; subscription.unsubscribe() }
   }, [])
 
   async function fetchProfile(userId: string) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    setProfile(data)
-    setLoading(false)
+    try {
+      const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+      setProfile(data ?? null)
+    } catch {
+      // Profile is non-blocking; screens fall back gracefully when it is null.
+    }
   }
 
   async function signIn(identifier: string, password: string) {

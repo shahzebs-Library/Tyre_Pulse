@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native
 import { Ionicons } from '@expo/vector-icons'
 import { getPendingCount, syncQueue, retryFailed } from '../lib/offlineQueue'
 import { useLanguage } from '../contexts/LanguageContext'
-import NetInfo from '@react-native-community/netinfo'
+import { addNetworkStateListener } from 'expo-network'
 
 export default function SyncBanner() {
   const { t } = useLanguage()
@@ -31,12 +31,12 @@ export default function SyncBanner() {
 
   useEffect(() => {
     refresh()
-    const unsub = NetInfo.addEventListener(state => {
+    const sub = addNetworkStateListener(state => {
       const isOnline = !!state.isConnected && !!state.isInternetReachable
       setOnline(isOnline)
       if (isOnline) attemptSync()
     })
-    return () => unsub()
+    return () => sub.remove()
   }, [])
 
   useEffect(() => {

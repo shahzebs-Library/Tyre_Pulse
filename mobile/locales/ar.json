@@ -88,7 +88,11 @@
     "title": "سجل الفحوصات",
     "noHistory": "لا يوجد سجل بعد",
     "noHistoryHint": "ستظهر الفحوصات المرسلة هنا",
-    "tyres": "إطارات"
+    "tyres": "إطارات",
+    "searchPlaceholder": "ابحث بالعنوان أو الأصل أو الموقع",
+    "filterAll": "الكل",
+    "noResults": "لا توجد عمليات فحص مطابقة",
+    "noResultsHint": "حاول تعديل البحث أو عوامل التصفية"
   },
   "profile": {
     "employeeId": "رقم الموظف",

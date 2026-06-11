@@ -66,6 +66,7 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen name="scanner" options={{ href: null }} />
     </Tabs>
   )
 }

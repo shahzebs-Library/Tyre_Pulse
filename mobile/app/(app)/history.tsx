@@ -15,7 +15,7 @@ interface HistoryItem {
   id: string
   title: string
   site: string
-  asset_number: string
+  asset_no: string
   inspection_date: string
   sync_status: 'synced' | 'pending' | 'failed'
   isOffline?: boolean
@@ -38,7 +38,7 @@ export default function HistoryScreen() {
       id: item.id,
       title: item.payload.title,
       site: item.payload.site,
-      asset_number: item.payload.asset_number,
+      asset_no: item.payload.asset_no,
       inspection_date: item.payload.inspection_date,
       sync_status: item.sync_status,
       isOffline: true,
@@ -47,8 +47,8 @@ export default function HistoryScreen() {
 
     const { data: dbItems } = await supabase
       .from('inspections')
-      .select('id, title, site, asset_number, inspection_date, tyre_conditions')
-      .eq('inspector_id', profile?.id)
+      .select('id, title, site, asset_no, inspection_date, tyre_conditions')
+      .eq('created_by', profile?.id)
       .order('created_at', { ascending: false })
       .limit(50)
 
@@ -56,7 +56,7 @@ export default function HistoryScreen() {
       id: i.id,
       title: i.title,
       site: i.site,
-      asset_number: i.asset_number,
+      asset_no: i.asset_no,
       inspection_date: i.inspection_date,
       sync_status: 'synced',
       tyre_count: Object.keys(i.tyre_conditions ?? {}).length,
@@ -107,7 +107,7 @@ export default function HistoryScreen() {
             <Text style={styles.metaText}>{item.site}</Text>
             <Text style={styles.metaDot}>·</Text>
             <Ionicons name="bus-outline" size={12} color="#94a3b8" />
-            <Text style={styles.metaText}>{item.asset_number}</Text>
+            <Text style={styles.metaText}>{item.asset_no}</Text>
           </View>
           <View style={[styles.metaRow, isRTL && styles.metaRowRTL]}>
             <Ionicons name="calendar-outline" size={12} color="#94a3b8" />

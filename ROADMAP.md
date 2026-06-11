@@ -1,10 +1,6 @@
 # TyrePulse — Complete Product Roadmap
 **Readymix Concrete Company · Built by Shahzeb Rahman © 2026**
-**Version 6.0 · Updated June 2026 · Governed by CLAUDE.md**
-
-> **This roadmap is derived directly from CLAUDE.md.**
-> Every section maps to a specific CLAUDE.md requirement.
-> Ordered by business impact — highest value first.
+**Version 6.1 · Updated June 2026 · Governed by CLAUDE.md**
 
 ---
 
@@ -13,8 +9,8 @@
 | Symbol | Meaning |
 |--------|---------|
 | ✅ | Complete and deployed |
-| 🔄 | Partially implemented |
-| ⬜ | Planned, not started |
+| 🔄 | In progress |
+| ⬜ | Planned |
 
 ---
 
@@ -22,285 +18,249 @@
 
 | Metric | Status |
 |--------|--------|
-| Build | ✅ 0 errors — 2179 modules |
-| Pages | ✅ 73 pages registered and routed |
-| Auth + RBAC | ✅ Role-based routes, 30-min idle timeout, admin approval gate |
-| Login | ✅ Email / Username / Employee ID — all three modes — premium animated UI |
-| Intelligence RBAC | ✅ Admin only — sidebar hidden + route guarded |
-| Analytics RBAC | ✅ Admin + Manager + Director only |
-| Vehicle Diagram | ✅ Case-insensitive, position IDs consistent across checklist + diagram |
-| Checklist | ✅ Master sites/assets, auto-title, inspector auto-fill, SVG PDF |
-| Migrations | ✅ MIGRATIONS_SAFE.sql — run once to apply all |
-| Hosting | ✅ Vercel (auto-deploy on push to `main`) |
+| Web build | ✅ 0 errors — 2179 modules |
+| Web pages | ✅ 73 pages registered and routed |
+| Web auth + RBAC | ✅ Role-based routes, 30-min timeout, admin approval |
+| Web hosting | ✅ Vercel (auto-deploy on push to `main`) |
 | Database | ✅ Supabase PostgreSQL + Auth + Storage + pgvector |
-| PWA | ✅ Manifest + service worker + install prompt |
-| AI System | ✅ 4-agent router + AiCommandCenter |
-| RAG | 🔄 pgvector schema + knowledge base + retrieval service |
+| Mobile app | ✅ React Native (Expo SDK 54) — 5 screens, offline-first |
+| Mobile i18n | ✅ English + Arabic (RTL) + Urdu (RTL) |
+| Mobile EAS build | 🔄 GitHub Actions CI/CD pipeline — Gradle fix in progress |
+| Mobile Play Store | ⬜ Pending first successful build |
 
 ---
 
-## Known Bug Fixes Applied (June 2026)
-
-| Bug | Root Cause | Status |
-|-----|-----------|--------|
-| SQL error running MIGRATIONS_SAFE.sql | `idx_tyre_serial` created before `serial_number` column existed | ✅ Fixed |
-| Checklist save silently fails | `inspection_type: 'Daily Checklist'` violated DB CHECK constraint | ✅ Fixed |
-| 'Site Observation' / 'Safety Training' types fail | Same CHECK constraint on inspections table | ✅ Fixed |
-| `tyre_conditions` column missing on save | Column not in schema | ✅ Migration applied |
-| `vehicle_type` column missing on save | Column not in schema | ✅ Migration applied |
-| Build error — AiCommandCenter.jsx | Orphan `</div>` after PageHeader upgrade | ✅ Fixed |
-| Build error — RotationSchedule.jsx | Orphan `</div>` after PageHeader upgrade | ✅ Fixed |
-| Build error — SiteComparison.jsx | `GitCompareArrows` not in lucide-react v0.263.1 | ✅ Replaced with `GitMerge` |
-| Vehicle diagram not matching checklist | Position ID mismatch (`RL1` vs `RLO3`) + casing mismatch | ✅ Fixed |
-| Login accepts only email | No username/Employee ID support | ✅ Multi-identifier login added |
-| Login page visual | Generic form — no brand identity | ✅ Premium animated truck tyre SVG, glow pulse, particle effects, theme toggle |
-
----
-
-## Waves 1–7 — Foundation, Operations & Operational Intelligence *(Complete)*
+## Waves 1–20 — Web Platform *(Complete)*
 
 ### Wave 1 — Security, Auth & Access Control ✅
-
-| Feature | Status |
-|---------|--------|
-| Remove AI/Anthropic branding from visible UI | ✅ |
-| 30-minute idle session timeout with auto sign-out | ✅ Updated from 60 min |
-| Touch events tracked for mobile session activity | ✅ |
-| Login via Email, Username, or Employee ID | ✅ |
-| Role-based page access — tiered by role group | ✅ |
-| Intelligence section — Admin only | ✅ |
-| Analytics section — Admin + Manager + Director | ✅ |
-| Sidebar hides group if role has no access | ✅ |
-| Admin-only nav items hidden from non-Admins | ✅ |
-| Forgot password flow + /reset-password page | ✅ |
-| Employee ID field on signup and profile | ✅ |
-| Show/hide password toggle on all password fields | ✅ |
-| Pending admin approval workflow — `approved: false` on signup | ✅ |
-| UserManagement: Approve + multi-country assignment | ✅ |
+- 30-minute idle session timeout, touch events tracked
+- Login via Email, Username, or Employee ID
+- Role-based access: Intelligence (Admin), Analytics (Admin+Manager+Director)
+- Admin-only approval gate for new signups
+- Multi-country assignment in UserManagement
 
 ### Waves 2–6 — Upload, Dashboard, Inspections, Gate Pass, Comparison ✅
-
-All features complete. See PHASE2_CHECKLIST.md for detail.
+All features complete. See PHASE2_CHECKLIST.md.
 
 ### Wave 7 — Operational Intelligence ✅
+KPI targets, VehicleHistory forecasting, StockManagement velocity, Reports.
 
-All 7A–7P features complete including KPI targets, VehicleHistory forecasting, StockManagement velocity, Reports enhancements.
+### Wave 8 — Engineering KPI Engine ✅
+CPK, tyre life, failure rate, pressure compliance, retread performance, vendor KPI — all 11 KPIs with PDF/Excel export.
 
----
+### Wave 9 — Pressure & Inspection Intelligence ✅
+Pressure compliance, anomaly detection, inspector quality score, compliance dashboard.
 
-## Wave 8 — Engineering KPI Engine ✅
-**Page:** `/kpi-engine` → `EngineeringKpi.jsx`
+### Wave 10 — Tyre Position Intelligence ✅
+CPK per position, failure rates, heat map, rotation compliance tracker.
 
-| KPI | Status |
-|-----|--------|
-| CPK dashboard, per asset, per brand, worst performers | ✅ |
-| Average Tyre Life — fleet, by brand, by position | ✅ |
-| Remaining Tyre Life — per active tyre forecast | ✅ |
-| Tyre Failure Rate — % High/Critical removals | ✅ |
-| Pressure Compliance % | ✅ |
-| Inspection Compliance % | ✅ |
-| Retread Performance — retread CPK vs new | ✅ |
-| Scrap Rate % | ✅ |
-| Cost Trend Analysis — 13-month rolling | ✅ |
-| Vendor Performance KPI | ✅ |
-| Engineering KPI PDF/Excel export | ✅ |
+### Wave 11 — Root Cause Intelligence Engine ✅
+14 root causes, automated classification, AI fallback, corrective action linking.
 
----
+### Wave 12 — Predictive Maintenance Engine ✅
+Replacement schedules, tread life estimation, 30/60/90-day purchase calendar, workshop load balancing.
 
-## Wave 9 — Pressure & Inspection Intelligence ✅
-**Pages:** `/pressure-intel` | `/inspection-intelligence` | `/compliance`
+### Wave 13 — Vendor & Workshop Intelligence ✅
+Vendor scorecard, CPK ranking, retread ROI calculator, workshop metrics.
 
-| Feature | Status |
-|---------|--------|
-| Pressure compliance % per vehicle, site, fleet | ✅ |
-| Pressure anomaly detection — flag out-of-spec readings | ✅ |
-| Missing inspection detection — overdue alert banner | ✅ |
-| Inspector quality score per inspector | ✅ |
-| Inspection compliance % per site | ✅ |
-| Tread depth compliance tracking | ✅ |
-| Compliance Dashboard — tread + pressure + inspection combined | ✅ |
+### Wave 14 — Fleet Management Intelligence ✅
+Fleet availability, downtime tracking, live fleet status, health board.
 
----
+### Wave 15 — Advanced Analytics ✅
+Seasonal analysis, country/branch/vehicle/driver comparison, AI-narrated summaries.
 
-## Wave 10 — Tyre Position Intelligence ✅
-**Page:** `/position-intelligence` → `PositionIntelligence.jsx`
+### Wave 16 — Data Quality Intelligence ✅
+Duplicate detection, invalid readings, missing inspections, data quality score.
 
-| Feature | Status |
-|---------|--------|
-| Position analytics — CPK per position | ✅ |
-| Average tyre life per position | ✅ |
-| Failure rate per position | ✅ |
-| Pressure problem positions | ✅ |
-| Cost per position ranked | ✅ |
-| Position-based corrective action recommendations | ✅ |
-| Heat map: position × site matrix | ✅ |
-| Rotation compliance tracker | ✅ |
+### Wave 17 — Executive Intelligence & Reporting ✅
+One-click monthly executive PDF, KPI narrative, root cause section, financial impact.
 
----
+### Wave 18 — Forecasting Engine ✅
+Annual budget forecast, 30/60/90-day demand, stock replenishment matrix.
 
-## Wave 11 — Root Cause Intelligence Engine ✅
-**Page:** `/root-cause` → `RootCauseEngine.jsx`
+### Wave 19 — Continuous Improvement Engine ✅
+Cost reduction identification, reliability tracking, procurement optimization.
 
-All RCA features complete. 14 root causes, automated classification, AI fallback, corrective action linking.
-
----
-
-## Wave 12 — Predictive Maintenance Engine ✅
-**Pages:** `/predictive-maintenance` | `/maintenance-calendar` | `/inspection-planner`
-
-All predictive maintenance features complete. Replacement schedules, tread life estimation, 30/60/90-day purchase calendar, workshop load balancing.
-
----
-
-## Wave 13 — Vendor & Workshop Intelligence ✅
-**Pages:** `/vendor-intelligence` | `/suppliers` | `/retread` | `/workshop`
-
-Full vendor scorecard, CPK ranking, retread ROI calculator, supplier performance, workshop metrics.
-
----
-
-## Wave 14 — Fleet Management Intelligence ✅
-**Pages:** `/fleet-intelligence` | `/fleet-health` | `/live-fleet` | `/downtime` | `/assets`
-
-Fleet availability, downtime tracking, asset utilization, live fleet status, health board.
-
----
-
-## Wave 15 — Advanced Analytics ✅
-**Pages:** `/advanced-analytics` | `/cost-center` | `/benchmark` | `/tyre-size` | `/fuel-efficiency` | `/comparison`
-
-Seasonal analysis, country/branch/vehicle/driver comparison, trend analysis, AI-narrated summaries.
-
----
-
-## Wave 16 — Data Quality Intelligence ✅
-**Pages:** `/cleaning` | `/compliance` | `/serial-tracker`
-
-Duplicate detection, invalid readings, missing inspection flags, data quality score, compliance certificate PDF.
-
----
-
-## Wave 17 — Executive Intelligence & Reporting ✅
-**Pages:** `/executive-report` | `/reports` | `/kpi-command`
-
-One-click monthly executive PDF, KPI narrative, root cause section, financial impact, recommendations, action plan.
-
----
-
-## Wave 18 — Forecasting Engine ✅
-**Pages:** `/forecasting` | `/budget-planner` | `/stock-replenishment`
-
-Annual budget forecast, 30/60/90-day demand, vendor requirements, stock replenishment matrix, budget planner grid.
-
----
-
-## Wave 19 — Continuous Improvement Engine ✅
-**Page:** `/continuous-improvement` → `ContinuousImprovement.jsx`
-
-Cost reduction identification, reliability tracking, procurement optimization, improvement scorecard.
-
----
-
-## Wave 20 — Daily Operations & Checklist ✅
-**Pages:** `/daily-ops` | `/inspections` (Checklist tab)
-
+### Wave 20 — Daily Operations & Checklist ✅
 | Feature | Status |
 |---------|--------|
 | Daily Ops dashboard | ✅ |
-| Tyre inspection checklist — bilingual (EN/AR) | ✅ |
-| Auto-title: `Daily Tyre Inspection — {site} — {date}` | ✅ |
-| Site dropdown from `vehicle_fleet` master | ✅ |
-| Asset dropdown from `vehicle_fleet` master | ✅ |
-| Inspector auto-filled from logged-in profile | ✅ |
+| Inspection checklist — bilingual EN/AR | ✅ |
+| Auto-title, site/asset dropdowns, inspector auto-fill | ✅ |
 | Vehicle diagram — SVG, case-insensitive, correct positions | ✅ |
-| Diagram click → scroll to tyre position | ✅ |
-| tyre_conditions JSONB saved to inspections | ✅ |
-| vehicle_type saved to inspections | ✅ |
+| `tyre_conditions` JSONB + `vehicle_type` saved | ✅ |
 | PDF export — captures actual SVG diagram | ✅ |
-| PDF — colour legend, tyre table, notes, signature | ✅ |
 
 ---
 
-## Wave 21 — RAG & Knowledge System Infrastructure 🔄
+## Wave 21 — RAG & Knowledge System 🔄
 
 | Component | Status |
 |-----------|--------|
 | pgvector extension | ✅ |
 | `knowledge_documents` table | ✅ |
 | `ai_response_cache` table | ✅ |
-| `kpi_snapshots` table | ✅ |
 | `ragService.js` — retrieval + 5-min cache | ✅ |
 | `embeddingService.js` — batch embedding | ✅ |
 | Edge Function: `generate-embedding` | ✅ |
-| Document ingestion pipeline (SOPs, manuals) | ⬜ Pending |
-| Nightly inspection comment embedding job | ⬜ Pending |
-| Historical data archiving strategy | ⬜ Pending |
+| Document ingestion pipeline (SOPs, manuals) | ⬜ |
+| Nightly inspection comment embedding job | ⬜ |
+| Historical data archiving strategy | ⬜ |
 
 ---
 
 ## Wave 22 — Multi-Agent AI System 🔄
-**Pages:** `/ai-command-center` | `/ai`
 
 | Component | Status |
 |-----------|--------|
 | `aiRouter.js` — query classification | ✅ |
-| `analystAgent.js` | ✅ |
-| `tyreEngineerAgent.js` | ✅ |
-| `qaDataAgent.js` | ✅ |
-| `plannerAgent.js` | ✅ |
+| Analyst, TyreEngineer, QAData, Planner agents | ✅ |
 | AI Command Center UI | ✅ |
-| AiAnalytics — Smart Analytics | ✅ |
-| AI cost monitor dashboard | ⬜ Pending |
-| Per-user rate limiting | ⬜ Pending |
-| Response format enforcement | 🔄 Partial |
+| AI cost monitor dashboard | ⬜ |
+| Per-user rate limiting | ⬜ |
+| Response format enforcement | 🔄 |
 
 ---
 
 ## Wave 23 — Enterprise & Scale 🔄
-**Pages:** `/erp-sync` | `/audit` | `/users`
 
 | Feature | Status |
 |---------|--------|
 | ERP Sync UI | ✅ |
 | Audit trail | ✅ |
 | Multi-country architecture (KSA/UAE/Egypt) | ✅ |
-| Role-based access control — tiered (Admin/Manager/Director/Inspector/Tyre Man) | ✅ |
-| API webhook system for ERP write-back | ⬜ |
-| Scheduled report delivery — cron email | ⬜ |
-| Multi-tenant architecture (tenant_id on all tables) | ⬜ |
+| RBAC — 6 roles, tiered | ✅ |
+| API webhook for ERP write-back | ⬜ |
+| Scheduled report delivery (cron email) | ⬜ |
+| Multi-tenant architecture (tenant_id) | ⬜ |
 | SSO / SAML integration | ⬜ |
-| White-label branding per tenant | ⬜ |
-| Offline PWA — sync queue for inspections | ⬜ |
 
 ---
 
-## Wave 24 — Mobile & Integrations ⬜
+## Wave 24 — Mobile Inspector App 🔄
+
+### Architecture Decision
+**React Native + Expo SDK 54** — chosen over Capacitor/Flutter/Native Kotlin.
+
+Reasons:
+- Shared TypeScript codebase with web (types, business logic)
+- Expo managed workflow = no Xcode/Android Studio required
+- EAS Build = cloud APK/AAB without local toolchain
+- Expo modules are New Architecture ready
+- Full access to camera, secure storage, file system, network APIs
+
+### Current Build Stack
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| Framework | React Native | 0.79.2 |
+| Expo SDK | Managed Workflow | 54.0.0 |
+| Router | expo-router | 5.0.0 |
+| Auth storage | expo-secure-store | 14.0.1 |
+| Offline queue | AsyncStorage | 2.1.2 |
+| Network | expo-network | 7.1.5 |
+| Camera | expo-camera + expo-image-picker | 16.x |
+| i18n | Custom LanguageContext | — |
+| Build | EAS Build (cloud) | CLI 20.1.0 |
+| CI/CD | GitHub Actions | ubuntu-latest |
+
+### Screens Delivered
+
+| Screen | Status | Description |
+|--------|--------|-------------|
+| Login | ✅ | Supabase auth + EN/AR/UR language selector |
+| Home | ✅ | Greeting, pending sync count, quick-start inspection |
+| New Inspection | ✅ | Multi-step: vehicle details → tyre position cards |
+| History | ✅ | All inspections, sync status badges |
+| Profile | ✅ | User info, language toggle, offline queue, sign out |
+
+### i18n
+
+| Language | Script | Direction | Status |
+|----------|--------|-----------|--------|
+| English | Latin | LTR | ✅ |
+| Arabic (MSA) | Arabic | RTL | ✅ |
+| Urdu | Nastaliq | RTL | ✅ |
+
+- Language selector on Login screen (before auth) + Profile screen (after auth)
+- App restarts on language switch to apply RTL layout via `I18nManager.forceRTL()`
+- Persisted in AsyncStorage (`tp_language`)
+
+### Offline Architecture
+
+```
+Inspection created on device
+  └─ offlineQueue.addToQueue(payload)
+       └─ AsyncStorage key: tp_inspection_queue_v1
+       └─ sync_status: 'pending'
+
+SyncBanner.addNetworkStateListener fires on reconnect
+  └─ syncQueue() → POST to Supabase inspections
+       └─ success → sync_status: 'synced'
+       └─ fail   → sync_status: 'failed', retry_count++
+  └─ retryFailed() → re-queues failed items
+```
+
+### Build Fixes Applied
+
+| Commit | Fix |
+|--------|-----|
+| `4e92755` | Add `expo-build-properties` to package.json |
+| `6b79a34` | Kotlin 2.0.21 (RN 0.79.2 requirement) |
+| `4ddcf1a` | TypeScript fix, expo-updates local install |
+| `1f3a46e` | Replace netinfo with expo-network; add SDK 35 build config |
+| `ea24776` | Disable New Architecture (`newArchEnabled: false`); pin NDK 27.1.12297006 |
+
+### Wave 24 — Remaining Features
+
+| Feature | Priority | Status |
+|---------|----------|--------|
+| Working EAS APK build | P0 | 🔄 |
+| Photo upload to Supabase Storage | P0 | ⬜ |
+| Test APK on Samsung M10 | P0 | ⬜ |
+| Play Store submission | P1 | ⬜ |
+| Barcode/QR scanner for tyre serial | P1 | ⬜ |
+| Push notifications (inspection reminders) | P1 | ⬜ |
+| GPS location tagging on inspections | P2 | ⬜ |
+| Driver mobile app (separate role/flow) | P2 | ⬜ |
+| Workshop mobile app | P3 | ⬜ |
+| OTA updates via expo-updates | P2 | ⬜ |
+
+---
+
+## Wave 25 — AI Mobile Features ⬜
 
 | Feature | Status |
 |---------|--------|
-| React Native mobile app — Tyre Man workflow | ⬜ |
-| SAP/Oracle ERP integration | ⬜ |
-| Tyre supplier portal | ⬜ |
-| Barcode / QR code scanner | ⬜ |
-| GPS telematics integration | ⬜ |
+| AI tyre wear analysis from photo | ⬜ |
+| OCR reading of tyre serial numbers | ⬜ |
+| Voice inspection input | ⬜ |
+| Predictive maintenance alerts (push) | ⬜ |
+| On-device anomaly detection | ⬜ |
+
+---
+
+## Wave 26 — Enterprise Mobile ⬜
+
+| Feature | Status |
+|---------|--------|
+| Multi-tenant mobile (company switch) | ⬜ |
+| Fleet manager mobile dashboard | ⬜ |
+| MDM / Enterprise app distribution | ⬜ |
+| iOS app (EAS build iOS profile) | ⬜ |
+| Real-time fleet tracking (GPS + live map) | ⬜ |
 
 ---
 
 ## Migrations — Current State
 
-**Run `MIGRATIONS_SAFE.sql` — fully idempotent, includes all fixes.**
+Run `MIGRATIONS_SAFE.sql` first (idempotent), then:
 
-Additionally run these two statements once in Supabase SQL Editor:
 ```sql
--- Add tyre_conditions column (if not already present)
 ALTER TABLE inspections ADD COLUMN IF NOT EXISTS tyre_conditions jsonb;
 CREATE INDEX IF NOT EXISTS idx_inspections_tyre_conditions ON inspections USING gin(tyre_conditions);
-
--- Add vehicle_type column (if not already present)
 ALTER TABLE inspections ADD COLUMN IF NOT EXISTS vehicle_type text;
 CREATE INDEX IF NOT EXISTS idx_inspections_vehicle_type ON inspections (vehicle_type);
 
--- Multi-identifier login RPC
 CREATE OR REPLACE FUNCTION get_user_email_by_id(user_id uuid)
 RETURNS text LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_email text;
@@ -311,389 +271,50 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION get_user_email_by_id(uuid) TO authenticated;
 
--- Indexes for username/employee_id login
 CREATE INDEX IF NOT EXISTS profiles_employee_id_idx ON profiles (employee_id);
 CREATE INDEX IF NOT EXISTS profiles_username_idx ON profiles (username);
+
+-- Mobile RLS
+CREATE POLICY IF NOT EXISTS "Inspector can insert own inspections"
+ON inspections FOR INSERT TO authenticated
+WITH CHECK (inspector_id = auth.uid());
 ```
 
 ---
 
 ## Supabase Edge Functions
 
-| Function | Status | Input | Purpose |
-|----------|--------|-------|---------|
-| `chat-ai` | ✅ | `{ system, user, model, max_tokens }` | Anthropic API proxy |
-| `generate-embedding` | ✅ | `{ text, model }` | OpenAI embeddings proxy |
-| `send-email` | ✅ | `{ to, subject, body }` | Resend API email delivery |
+| Function | Status | Purpose |
+|----------|--------|---------|
+| `chat-ai` | ✅ | Anthropic API proxy |
+| `generate-embedding` | ✅ | OpenAI embeddings proxy |
+| `send-email` | ✅ | Resend API email delivery |
 
-Env vars needed: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
-
----
-
-## Next Session Priorities
-
-1. **RAG document ingestion** — SOP/policy PDF upload pipeline (Wave 21)
-2. **AI cost monitor** — token usage dashboard per day/month (Wave 22)
-3. **Offline PWA** — service worker sync queue for inspections (Wave 23)
-4. **Scheduled reports** — monthly email of executive PDF (Wave 23)
-5. **Barcode / QR scanner** on checklist for tyre serial scanning (Wave 24)
+Env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
 
 ---
 
-Tyre Pulse Mobile Architecture Audit and Recommendation
-
-You are acting as a Principal Mobile Architect, Enterprise SaaS Architect, React Expert, Android Expert, Fleet Management Software Architect, Offline-First Systems Engineer, and Performance Engineer.
-
-Project Name: Tyre Pulse
-
-Current Situation
-
-Tyre Pulse currently exists as a React + Vite web application.
-
-The platform includes:
-
-* Fleet management
-* Vehicle management
-* Tyre inventory
-* Tyre inspections
-* Tyre pressure inspections
-* Tread depth inspections
-* Photo uploads
-* Dashboard analytics
-* PDF report generation
-* User management
-* Role-based permissions
-* Supabase backend
-* Real-time reporting
-* Large inspection forms
-* Multiple user roles
-
-Expected usage:
-
-* 50+ users
-* 20+ concurrent inspection users
-* 10+ dashboard users
-* Additional management users viewing reports
-* Heavy image uploads
-* Large inspection history
-* Thousands of inspection records
-* Growth toward enterprise fleet customers
-
-Objective
-
-I need a completely unbiased technical evaluation.
-
-Do NOT automatically recommend Capacitor.
-
-Do NOT automatically recommend React Native.
-
-Do NOT automatically recommend Flutter.
-
-Perform a deep engineering review and identify the best architecture for the next 12 to 36 months.
-
-⸻
-
-Part 1: Analyze Current Application
-
-Review whether the existing React + Vite architecture is suitable for:
-
-* Capacitor Android App
-* React Native App
-* Flutter App
-* Native Android Kotlin App
-
-For each option evaluate:
-
-* Performance
-* Scalability
-* Development speed
-* Long-term maintenance
-* Offline reliability
-* Security
-* Fleet industry suitability
-
-⸻
-
-Part 2: Mobile Feature Requirements
-
-Evaluate support quality for:
-
-Camera
-
-* Capture inspection photos
-* Multiple photos per tyre
-* High-resolution images
-* Photo compression
-* Metadata attachment
-
-Offline Mode
-
-* Full inspection creation offline
-* Full inspection editing offline
-* Local database storage
-* Sync when internet returns
-* Conflict resolution
-
-Storage
-
-Evaluate:
-
-* IndexedDB
-* SQLite
-* Local storage
-* Native device storage
-
-Determine which architecture provides the most reliable storage model.
-
-File Handling
-
-Evaluate:
-
-* PDF generation
-* PDF viewing
-* PDF sharing
-* Report exports
-
-Push Notifications
-
-Evaluate:
-
-* Inspection reminders
-* Maintenance alerts
-* Tyre replacement alerts
-* Fleet notifications
-
-GPS
-
-Evaluate:
-
-* Location capture
-* Vehicle location tagging
-* Geofencing support
-
-Device Hardware Access
-
-Evaluate:
-
-* Camera
-* Filesystem
-* Notifications
-* GPS
-* Barcode scanning
-* QR scanning
-* Future NFC support
-
-⸻
-
-Part 3: Performance Benchmarking
-
-Provide realistic estimates for:
-
-Application Startup Speed
-
-Measure expected startup performance for:
-
-* PWA
-* Capacitor
-* React Native
-* Flutter
-* Native Android
-
-Form Performance
-
-Evaluate:
-
-* Large inspections
-* Hundreds of form fields
-* Multiple tyre positions
-* Dynamic checklists
-
-Image Performance
-
-Evaluate:
-
-* 5 MB images
-* 10 MB images
-* Multiple uploads
-* Image caching
-
-Memory Usage
-
-Estimate:
-
-* Average RAM consumption
-* Background memory usage
-* Device battery impact
-
-⸻
-
-Part 4: Offline-First Engineering Review
-
-Tyre Pulse inspectors may work in:
-
-* Remote yards
-* Industrial sites
-* Poor mobile coverage areas
-
-Evaluate:
-
-* Offline data capture
-* Offline image storage
-* Sync reliability
-* Sync recovery after app crash
-* Sync recovery after device restart
-* Data corruption risk
-
-Design the ideal offline architecture.
-
-Provide:
-
-* Database structure
-* Sync engine architecture
-* Queue architecture
-* Conflict resolution model
-
-⸻
-
-Part 5: Enterprise Readiness
-
-Evaluate each option for:
-
-* 100 users
-* 500 users
-* 1,000 users
-* 10,000 users
-
-Determine:
-
-* Performance bottlenecks
-* Mobile limitations
-* Scalability concerns
-
-⸻
-
-Part 6: Security Review
-
-Evaluate:
-
-Authentication
-
-* JWT
-* Refresh Tokens
-* Secure storage
-* Session handling
-
-Local Device Security
-
-* Encryption
-* Offline database protection
-* Image protection
-
-API Security
-
-* Row Level Security
-* Supabase Security
-* Token protection
-
-Mobile Security
-
-* Reverse engineering resistance
-* APK protection
-* Secrets management
-
-⸻
-
-Part 7: Cost Analysis
-
-Estimate:
-
-Capacitor
-
-* Development cost
-* Maintenance cost
-* Upgrade cost
-
-React Native
-
-* Development cost
-* Maintenance cost
-* Upgrade cost
-
-Flutter
-
-* Development cost
-* Maintenance cost
-* Upgrade cost
-
-Native Android
-
-* Development cost
-* Maintenance cost
-* Upgrade cost
-
-⸻
-
-Part 8: Play Store Readiness
-
-Evaluate:
-
-* Build process
-* Deployment process
-* Update process
-* Crash reporting
-* Analytics
-* User adoption
-
-Recommend the easiest path to production.
-
-⸻
-
-Part 9: Future Roadmap Compatibility
-
-Future Tyre Pulse features may include:
-
-* AI tyre wear analysis
-* OCR reading of tyre serial numbers
-* Barcode scanning
-* QR scanning
-* Voice inspections
-* Video inspections
-* Driver mobile app
-* Workshop mobile app
-* Fleet manager mobile app
-* Predictive maintenance
-* Real-time notifications
-* Advanced analytics
-
-Evaluate which architecture supports these best.
-
-⸻
-
-Part 10: Final Recommendation
-
-Provide:
-
-1. Best option for next 6 months
-2. Best option for next 12 months
-3. Best option for next 36 months
-
-Then provide:
-
-* Architecture diagram
-* Technology stack
-* Mobile stack
-* Offline stack
-* Database stack
-* Security stack
-* Deployment stack
-
-Finally answer:
-
-If Tyre Pulse were your own fleet SaaS product and you planned to sell it commercially across GCC countries, which architecture would you personally choose today and why?
-
-Do not give generic answers.
-
-Provide engineering-level reasoning, trade-offs, performance expectations, risks, and implementation details.
-
-*TyrePulse v6.0 · Readymix Concrete Company · Shahzeb Rahman © 2026*
-*Fully governed by CLAUDE.md — every section maps to a specific instruction*
+## Immediate Priorities
+
+### P0 — This Sprint
+1. Confirm EAS build `ea24776` passes (New Architecture disabled + NDK pinned)
+2. Download APK from expo.dev, install on Samsung M10
+3. Verify login → inspection → sync flow end-to-end
+4. Fix any runtime bugs found on device
+
+### P1 — Next Sprint
+5. Photo upload to Supabase Storage
+6. Barcode scanner for tyre serial input
+7. Play Store account setup + signing keys
+8. RAG document ingestion pipeline (web)
+
+### P2 — Following Sprint
+9. Push notifications
+10. GPS tagging on inspections
+11. AI cost monitor (web)
+12. Scheduled email reports (web)
+
+---
+
+*TyrePulse v6.1 · Readymix Concrete Company · Shahzeb Rahman © 2026*
+*Fully governed by CLAUDE.md*

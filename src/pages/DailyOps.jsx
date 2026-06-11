@@ -108,7 +108,7 @@ export default function DailyOps() {
 
     const [trRes, insRes, woRes, alRes, t30Res] = await Promise.allSettled([
       supabase.from('tyre_records').select('id,asset_no,serial_number,position,risk_level,tread_depth,issue_date,cost_per_tyre,site,country,brand,km_at_fitment,km_at_removal,created_at').gte('issue_date', thirtyDaysAgo).lte('issue_date', wEnd),
-      supabase.from('inspections').select('id,asset_no,inspection_date,site,inspector_name,tread_depth,pressure_reading,created_at').gte('inspection_date', thirtyDaysAgo).lte('inspection_date', wEnd),
+      supabase.from('inspections').select('id,asset_no,inspection_date,site,inspector,tyre_conditions,created_at').gte('inspection_date', thirtyDaysAgo).lte('inspection_date', wEnd),
       supabase.from('work_orders').select('id,asset_no,work_order_no,status,priority,created_at,scheduled_date,site').gte('created_at', thirtyDaysAgo + 'T00:00:00').lte('created_at', wEnd + 'T23:59:59'),
       supabase.from('alerts').select('id,asset_no,alert_type,severity,message,created_at,resolved').gte('created_at', thirtyDaysAgo + 'T00:00:00').lte('created_at', wEnd + 'T23:59:59'),
       supabase.from('tyre_records').select('asset_no,issue_date').gte('issue_date', thirtyDaysAgo).lte('issue_date', date),
@@ -227,13 +227,17 @@ export default function DailyOps() {
       })
     })
     todayIns.forEach(r => {
+      const tc = Array.isArray(r.tyre_conditions)
+        ? r.tyre_conditions
+        : (r.tyre_conditions ? Object.values(r.tyre_conditions) : [])
+      const flagged = tc.filter(p => p && p.condition && p.condition !== 'Good').length
       events.push({
         id: `ins-${r.id}`,
         time: r.created_at || r.inspection_date,
         type: 'Inspection',
         asset: r.asset_no,
         site: r.site,
-        detail: `Inspector: ${r.inspector_name || 'N/A'} | Tread: ${r.tread_depth ?? '—'}mm | PSI: ${r.pressure_reading ?? '—'}`,
+        detail: `Inspector: ${r.inspector || 'N/A'} | Tyres: ${tc.length}${flagged ? ` | ${flagged} flagged` : ''}`,
       })
     })
     todayAlerts.forEach(r => {

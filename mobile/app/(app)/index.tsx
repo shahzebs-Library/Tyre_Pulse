@@ -34,7 +34,7 @@ export default function HomeScreen() {
       id: item.id,
       title: item.payload.title,
       site: item.payload.site,
-      asset_number: item.payload.asset_number,
+      asset_no: item.payload.asset_no,
       inspection_date: item.payload.inspection_date,
       sync_status: item.sync_status,
       isOffline: true,
@@ -42,8 +42,8 @@ export default function HomeScreen() {
 
     const { data: dbItems } = await supabase
       .from('inspections')
-      .select('id, title, site, asset_number, inspection_date, status')
-      .eq('inspector_id', profile?.id)
+      .select('id, title, site, asset_no, inspection_date, status')
+      .eq('created_by', profile?.id)
       .order('created_at', { ascending: false })
       .limit(5)
 
@@ -160,7 +160,7 @@ export default function HomeScreen() {
                     {item.title}
                   </Text>
                   <Text style={[styles.recentMeta, { textAlign }]}>
-                    {item.site} · {item.asset_number} · {
+                    {item.site} · {item.asset_no} · {
                       new Date(item.inspection_date).toLocaleDateString(isRTL ? 'ar-SA' : 'en-GB', {
                         day: 'numeric', month: 'short',
                       })

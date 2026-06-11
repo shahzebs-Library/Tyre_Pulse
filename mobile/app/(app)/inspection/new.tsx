@@ -73,9 +73,9 @@ export default function NewInspectionScreen() {
     setLoadingVehicles(true)
     const { data } = await supabase
       .from('vehicle_fleet')
-      .select('id, site, asset_number, vehicle_type, make, model')
+      .select('id, site, asset_no, vehicle_type, make, model')
       .eq('site', site)
-      .order('asset_number')
+      .order('asset_no')
     if (data) {
       setVehicles(data)
       setFilteredVehicles(data)
@@ -104,19 +104,23 @@ export default function NewInspectionScreen() {
     setSubmitting(true)
 
     const inspectionDate = new Date().toISOString().split('T')[0]
+    const odo = odometer.trim()
+    const notes = [odo ? `Odometer: ${odo} km` : '', headerNotes.trim()]
+      .filter(Boolean)
+      .join('\n')
     const payload = {
       title: `Daily Tyre Inspection — ${selectedSite} — ${inspectionDate}`,
       site: selectedSite,
-      asset_number: selectedVehicle!.asset_number,
+      asset_no: selectedVehicle!.asset_no,
       vehicle_type: selectedVehicle!.vehicle_type,
-      inspector_name: profile?.full_name ?? profile?.username ?? 'Inspector',
-      inspector_id: profile?.id ?? '',
+      inspector: profile?.full_name ?? profile?.username ?? 'Inspector',
+      created_by: profile?.id ?? null,
       inspection_date: inspectionDate,
-      inspection_type: 'Daily Checklist',
-      odometer: odometer,
+      scheduled_date: inspectionDate,
+      inspection_type: 'Routine',
       tyre_conditions: tyreData,
-      notes: headerNotes,
-      status: 'submitted' as const,
+      notes,
+      status: 'Done',
     }
 
     try {
@@ -189,7 +193,7 @@ export default function NewInspectionScreen() {
                           onPress={() => setSelectedVehicle(v)}
                         >
                           <Text style={[styles.chipText, selectedVehicle?.id === v.id && styles.chipTextActive]}>
-                            {v.asset_number}
+                            {v.asset_no}
                           </Text>
                           <Text style={[styles.chipSub, selectedVehicle?.id === v.id && { color: 'rgba(255,255,255,0.7)' }]}>
                             {v.vehicle_type}
@@ -207,7 +211,7 @@ export default function NewInspectionScreen() {
               <View style={[styles.vehicleInfo, isRTL && styles.vehicleInfoRTL]}>
                 <Ionicons name="bus-outline" size={18} color="#16a34a" />
                 <Text style={[styles.vehicleInfoText, { textAlign }]}>
-                  {selectedVehicle.asset_number} · {selectedVehicle.vehicle_type}
+                  {selectedVehicle.asset_no} · {selectedVehicle.vehicle_type}
                   {selectedVehicle.make ? ` · ${selectedVehicle.make}` : ''}
                 </Text>
                 <Text style={styles.vehiclePositionCount}>
@@ -294,7 +298,7 @@ export default function NewInspectionScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.navTitle, { textAlign }]}>{t('inspection.tyrePositionsTitle')}</Text>
             <Text style={[styles.navSubtitle, { textAlign }]}>
-              {selectedVehicle?.asset_number} · {selectedSite}
+              {selectedVehicle?.asset_no} · {selectedSite}
             </Text>
           </View>
           <View style={styles.stepPills}>
@@ -351,7 +355,7 @@ export default function NewInspectionScreen() {
       </View>
       <Text style={styles.successTitle}>{t('inspection.submittedTitle')}</Text>
       <Text style={styles.successSubtitle}>
-        {selectedVehicle?.asset_number} · {selectedSite}
+        {selectedVehicle?.asset_no} · {selectedSite}
         {'\n'}
         {new Date().toLocaleDateString(dateLocale, { day: 'numeric', month: 'long', year: 'numeric' })}
       </Text>

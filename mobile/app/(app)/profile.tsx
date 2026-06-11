@@ -25,6 +25,12 @@ export default function ProfileScreen() {
 
   const textAlign = isRTL ? 'right' : 'left'
 
+  // DB stores roles Title-cased ("Tyre Man"); locale keys are snake_case.
+  const roleKey = (profile?.role ?? '').toLowerCase().replace(/\s+/g, '_')
+  const roleLabel = t(`profile.roles.${roleKey}`) !== `profile.roles.${roleKey}`
+    ? t(`profile.roles.${roleKey}`)
+    : (profile?.role ?? '')
+
   async function load() {
     const count = await getPendingCount()
     const queue = await getQueue()
@@ -96,11 +102,7 @@ export default function ProfileScreen() {
               {profile?.full_name ?? profile?.username ?? t('tabs.profile')}
             </Text>
             <View style={styles.roleBadge}>
-              <Text style={styles.roleText}>
-                {t(`profile.roles.${profile?.role ?? ''}`) !== `profile.roles.${profile?.role ?? ''}`
-                  ? t(`profile.roles.${profile?.role ?? ''}`)
-                  : profile?.role ?? ''}
-              </Text>
+              <Text style={styles.roleText}>{roleLabel}</Text>
             </View>
           </View>
         </View>

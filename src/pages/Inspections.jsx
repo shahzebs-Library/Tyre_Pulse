@@ -169,20 +169,6 @@ export default function Inspections() {
   // PWA — Screen Wake Lock during inspection
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
 
-  // Geolocation auto-site detection (best-effort)
-  const geoAttempted = useRef(false)
-
-  useEffect(() => {
-    if (activeTab !== 'checklist' || geoAttempted.current) return
-    geoAttempted.current = true
-    if (!navigator.geolocation || masterSites.length === 0) return
-    navigator.geolocation.getCurrentPosition(
-      () => { /* future: match to nearest site from geo coordinates */ },
-      () => { /* permission denied — ignore */ },
-      { timeout: 6000, maximumAge: 60000 }
-    )
-  }, [activeTab, masterSites])
-
   // Acquire wake lock when checklist tab is active with positions loaded
   useEffect(() => {
     if (activeTab === 'checklist' && clPositions.length > 0) {
@@ -215,6 +201,20 @@ export default function Inspections() {
       setMasterAssets(data.filter(r => r.asset_no).sort((a, b) => a.asset_no.localeCompare(b.asset_no)))
     })
   }, [])
+
+  // Geolocation auto-site detection (best-effort) — declared after masterSites
+  // so its dependency array is not evaluated before that state exists.
+  const geoAttempted = useRef(false)
+  useEffect(() => {
+    if (activeTab !== 'checklist' || geoAttempted.current) return
+    geoAttempted.current = true
+    if (!navigator.geolocation || masterSites.length === 0) return
+    navigator.geolocation.getCurrentPosition(
+      () => { /* future: match to nearest site from geo coordinates */ },
+      () => { /* permission denied — ignore */ },
+      { timeout: 6000, maximumAge: 60000 }
+    )
+  }, [activeTab, masterSites])
 
   useEffect(() => {
     const name = profile?.full_name || profile?.username || ''

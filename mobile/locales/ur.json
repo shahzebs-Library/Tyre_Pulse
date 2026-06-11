@@ -88,7 +88,11 @@
     "title": "معائنے کی تاریخ",
     "noHistory": "ابھی تک کوئی تاریخ نہیں",
     "noHistoryHint": "جمع کیے گئے معائنے یہاں نظر آئیں گے",
-    "tyres": "ٹائر"
+    "tyres": "ٹائر",
+    "searchPlaceholder": "عنوان، اثاثہ یا سائٹ سے تلاش کریں",
+    "filterAll": "تمام",
+    "noResults": "کوئی مماثل معائنہ نہیں",
+    "noResultsHint": "تلاش یا فلٹرز کو ایڈجسٹ کریں"
   },
   "profile": {
     "employeeId": "ملازم نمبر",

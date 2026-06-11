@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  RefreshControl, StatusBar, ActivityIndicator,
+  RefreshControl, StatusBar, ActivityIndicator, TextInput,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -11,16 +11,21 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import SyncBanner from '../../components/SyncBanner'
 
+type SyncStatus = 'synced' | 'pending' | 'failed'
+type FilterKey = 'all' | SyncStatus
+
 interface HistoryItem {
   id: string
   title: string
   site: string
   asset_no: string
   inspection_date: string
-  sync_status: 'synced' | 'pending' | 'failed'
+  sync_status: SyncStatus
   isOffline?: boolean
   tyre_count?: number
 }
+
+const FILTERS: FilterKey[] = ['all', 'synced', 'pending', 'failed']
 
 export default function HistoryScreen() {
   const { profile } = useAuth()
@@ -28,6 +33,8 @@ export default function HistoryScreen() {
   const [items, setItems] = useState<HistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<FilterKey>('all')
 
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
   const textAlign = isRTL ? 'right' : 'left'
@@ -45,22 +52,25 @@ export default function HistoryScreen() {
       tyre_count: Object.keys(item.payload.tyre_conditions ?? {}).length,
     }))
 
-    const { data: dbItems } = await supabase
-      .from('inspections')
-      .select('id, title, site, asset_no, inspection_date, tyre_conditions')
-      .eq('created_by', profile?.id)
-      .order('created_at', { ascending: false })
-      .limit(50)
+    let syncedItems: HistoryItem[] = []
+    if (profile?.id) {
+      const { data: dbItems } = await supabase
+        .from('inspections')
+        .select('id, title, site, asset_no, inspection_date, tyre_conditions')
+        .eq('created_by', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(100)
 
-    const syncedItems: HistoryItem[] = (dbItems ?? []).map(i => ({
-      id: i.id,
-      title: i.title,
-      site: i.site,
-      asset_no: i.asset_no,
-      inspection_date: i.inspection_date,
-      sync_status: 'synced',
-      tyre_count: Object.keys(i.tyre_conditions ?? {}).length,
-    }))
+      syncedItems = (dbItems ?? []).map(i => ({
+        id: i.id,
+        title: i.title,
+        site: i.site,
+        asset_no: i.asset_no,
+        inspection_date: i.inspection_date,
+        sync_status: 'synced' as const,
+        tyre_count: Object.keys(i.tyre_conditions ?? {}).length,
+      }))
+    }
 
     setItems([...offlineItems, ...syncedItems])
     setLoading(false)
@@ -75,11 +85,36 @@ export default function HistoryScreen() {
     setRefreshing(false)
   }
 
+  // Counts per status drive the filter chip badges.
+  const counts = useMemo(() => {
+    const c = { all: items.length, synced: 0, pending: 0, failed: 0 }
+    for (const i of items) c[i.sync_status]++
+    return c
+  }, [items])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return items.filter(i => {
+      if (filter !== 'all' && i.sync_status !== filter) return false
+      if (!q) return true
+      return (
+        i.title?.toLowerCase().includes(q) ||
+        i.asset_no?.toLowerCase().includes(q) ||
+        i.site?.toLowerCase().includes(q)
+      )
+    })
+  }, [items, query, filter])
+
   const STATUS_COLORS = {
     synced:  { bg: 'rgba(22,163,74,0.08)',  text: '#15803d',  icon: 'cloud-done-outline' },
     pending: { bg: 'rgba(245,158,11,0.08)', text: '#b45309',  icon: 'cloud-upload-outline' },
     failed:  { bg: 'rgba(239,68,68,0.08)',  text: '#dc2626',  icon: 'cloud-offline-outline' },
   } as const
+
+  function filterLabel(key: FilterKey): string {
+    if (key === 'all') return t('history.filterAll')
+    return key === 'synced' ? t('common.synced') : key === 'pending' ? t('common.pending') : t('common.failed')
+  }
 
   function renderItem({ item }: { item: HistoryItem }) {
     const status = STATUS_COLORS[item.sync_status]
@@ -129,32 +164,93 @@ export default function HistoryScreen() {
     )
   }
 
+  const hasAnyRecords = items.length > 0
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
       <View style={[styles.header, isRTL && styles.headerRTL]}>
         <Text style={[styles.headerTitle, { textAlign }]}>{t('history.title')}</Text>
-        <Text style={[styles.headerSub, { textAlign }]}>{items.length} {t('common.records')}</Text>
+        <Text style={[styles.headerSub, { textAlign }]}>{filtered.length} {t('common.records')}</Text>
       </View>
       <SyncBanner />
+
+      {/* Search + status filters */}
+      <View style={styles.controls}>
+        <View style={[styles.searchBox, isRTL && styles.searchBoxRTL]}>
+          <Ionicons name="search-outline" size={18} color="#94a3b8" />
+          <TextInput
+            style={[styles.searchInput, { textAlign }]}
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t('history.searchPlaceholder')}
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={() => setQuery('')}>
+              <Ionicons name="close-circle" size={18} color="#cbd5e1" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={FILTERS}
+          keyExtractor={k => k}
+          contentContainerStyle={styles.filterRow}
+          renderItem={({ item: key }) => {
+            const active = filter === key
+            return (
+              <TouchableOpacity
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => setFilter(key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                  {filterLabel(key)}
+                </Text>
+                <View style={[styles.filterCount, active && styles.filterCountActive]}>
+                  <Text style={[styles.filterCountText, active && styles.filterCountTextActive]}>
+                    {counts[key]}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )
+          }}
+        />
+      </View>
+
       {loading ? (
         <View style={styles.loader}>
           <ActivityIndicator size="large" color="#16a34a" />
         </View>
       ) : (
         <FlatList
-          data={items}
+          data={filtered}
           keyExtractor={i => i.id}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />
           }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Ionicons name="time-outline" size={52} color="#cbd5e1" />
-              <Text style={styles.emptyTitle}>{t('history.noHistory')}</Text>
-              <Text style={styles.emptyText}>{t('history.noHistoryHint')}</Text>
+              <Ionicons
+                name={hasAnyRecords ? 'filter-outline' : 'time-outline'}
+                size={52}
+                color="#cbd5e1"
+              />
+              <Text style={styles.emptyTitle}>
+                {hasAnyRecords ? t('history.noResults') : t('history.noHistory')}
+              </Text>
+              <Text style={styles.emptyText}>
+                {hasAnyRecords ? t('history.noResultsHint') : t('history.noHistoryHint')}
+              </Text>
             </View>
           }
         />
@@ -176,8 +272,48 @@ const styles = StyleSheet.create({
   headerRTL: { alignItems: 'flex-end' },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
   headerSub: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
+  controls: { backgroundColor: '#fff', paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  searchBoxRTL: { flexDirection: 'row-reverse' },
+  searchInput: { flex: 1, fontSize: 14, color: '#0f172a' },
+  filterRow: { gap: 8, paddingHorizontal: 16, paddingTop: 12 },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+  },
+  filterChipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
+  filterChipText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
+  filterChipTextActive: { color: '#fff' },
+  filterCount: {
+    minWidth: 20,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  filterCountActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  filterCountText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
+  filterCountTextActive: { color: '#fff' },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  list: { padding: 16, gap: 10, paddingBottom: 40 },
+  list: { padding: 16, gap: 10, paddingBottom: 40, flexGrow: 1 },
   card: {
     flexDirection: 'row',
     alignItems: 'flex-start',

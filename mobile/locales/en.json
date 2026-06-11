@@ -88,7 +88,11 @@
     "title": "Inspection History",
     "noHistory": "No history yet",
     "noHistoryHint": "Submitted inspections will appear here",
-    "tyres": "tyres"
+    "tyres": "tyres",
+    "searchPlaceholder": "Search by title, asset or site",
+    "filterAll": "All",
+    "noResults": "No matching inspections",
+    "noResultsHint": "Try adjusting your search or filters"
   },
   "profile": {
     "employeeId": "Employee ID",

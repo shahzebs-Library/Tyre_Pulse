@@ -18,15 +18,17 @@
 
 | Metric | Status |
 |--------|--------|
-| Web build | ✅ 0 errors — 2179 modules |
+| Web build | ✅ Builds clean · 369/369 tests passing |
 | Web pages | ✅ 73 pages registered and routed |
 | Web auth + RBAC | ✅ Role-based routes, 30-min timeout, admin approval |
 | Web hosting | ✅ Vercel (auto-deploy on push to `main`) |
+| Web data integrity | ✅ Checklist TDZ crash fixed; `vehicles`/`tyre_changes` views + `alerts` table + perf indexes added |
 | Database | ✅ Supabase PostgreSQL + Auth + Storage + pgvector |
-| Mobile app | ✅ React Native (Expo SDK 54) — 5 screens, offline-first |
-| Mobile i18n | ✅ English + Arabic (RTL) + Urdu (RTL) |
-| Mobile EAS build | 🔄 GitHub Actions CI/CD pipeline — Gradle fix in progress |
-| Mobile Play Store | ⬜ Pending first successful build |
+| Mobile app | ✅ React Native (Expo SDK 53) — 6 screens (incl. scanner), offline-first |
+| Mobile inspection flow | ✅ Aligned to live schema; inspector RLS insert enabled |
+| Mobile i18n | ✅ English + Arabic (RTL) + Urdu (RTL) — full parity |
+| Mobile EAS build | ✅ Green — auto-builds on push to `main` |
+| Mobile Play Store | ⬜ Pending store listing + signing |
 
 ---
 

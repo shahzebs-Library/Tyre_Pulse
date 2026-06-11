@@ -1,10 +1,45 @@
 # TyrePulse — Developer Handoff
 **Last updated:** June 2026
 **Branch:** `main` (all work merged)
-**Web build status:** ✅ Clean — 2179 modules, 0 errors
-**Mobile build status:** 🔄 EAS Gradle fix in progress (see Mobile section)
+**Web build status:** ✅ Clean — builds, 369/369 tests passing, auto-deploys to Vercel
+**Mobile build status:** ✅ EAS Android build green — Expo SDK 53, auto-builds on push to `main`
 
 ---
+
+## Session 3 — Stabilization, Scanner & Whole-Project Audit
+
+### Mobile — EAS build fixed (was failing "Gradle build failed with unknown error")
+- **Root cause:** `expo` was pinned to `~54.0.0` while the entire tree was Expo **SDK 53** (RN 0.79, React 19.0.0). SDK 54 needs RN 0.81 — a binary mismatch. Earlier New-Arch/NDK/Kotlin commits were treating symptoms.
+- Pinned `expo` to `~53.0.0` (53.0.27) and aligned every native module to its SDK 53 canonical version (RN 0.79.6, react-native-screens ~4.11.1, react-native-safe-area-context 5.4.0, gesture-handler ~2.24.0, expo-build-properties ~0.14.8, expo-router ~5.1.11, …).
+- Added explicit **`expo-asset`** dependency — it was nested under `node_modules/expo/` and Metro couldn't resolve it, breaking the JS bundle phase.
+- CI now uses `npm ci` (was `npm install --legacy-peer-deps`, which masked the mismatch) + npm caching.
+- **Result:** full EAS Android build goes green end-to-end and auto-triggers on merge to `main`.
+
+### Mobile — functional fixes
+- **Sign-in routing:** login only navigated after an unrelated re-render (e.g. language change). Added a reactive guard in `(auth)/_layout.tsx` → redirects to `/(app)` the moment the user is authenticated.
+- **Inspection flow aligned to the REAL DB schema** (was silently broken): vehicle list was empty because the app queried `asset_number` (real column is **`asset_no`**); submit/history used `inspector_name`/`inspector_id`/`odometer`/`status:'submitted'`/`inspection_type:'Daily Checklist'` which don't exist / violate check constraints. Now uses `asset_no`, `inspector`, `created_by`, `scheduled_date` (NOT NULL), `status:'Done'`, `inspection_type:'Routine'`, odometer folded into `notes`. History/home filter on `created_by`.
+- **RLS:** the `inspections` INSERT policy only allowed Reporter/Manager/Admin — the `Tyre Man` (inspector) role was blocked. Added `Tyre Man`, `Inspector`, `Director`.
+- **Startup hang fixed:** auth no longer blocks on the profile query (resolves from local session, profile loads in background); font gate has a 3 s timeout fallback.
+- **Icons fixed:** Ionicons font preloaded in RootLayout (glyphs were rendering blank).
+- **Role badge** now localizes (snake_case key normalization).
+
+### Mobile — new feature: Tyre/Asset Scanner
+- `mobile/app/(app)/scanner.tsx` — `expo-camera` `CameraView` reads tyre serial barcodes / asset QR; resolves a code to a **vehicle** (→ start inspection with site+asset preselected) or a **tyre record** (brand/size/position/asset details); torch, permission, rescan states; full EN/AR/UR.
+- Home screen has a **"Scan Tyre / Asset"** entry; registered as a hidden route (no extra tab).
+
+### Mobile — History completed to product standard
+- Live search (title/asset/site), status filter chips with counts, distinct empty vs no-results states.
+
+### Web — Inspections/Checklist crash + data linkage
+- **Crash fixed:** the Checklist page threw a temporal-dead-zone `ReferenceError` (a `useEffect` referenced `masterSites` in its deps before the `useState` was declared). A full TDZ scan of `src/` found no others.
+- **Broken data sources linked (no demo data):** created DB **views** `public.vehicles → vehicle_fleet` and `public.tyre_changes → tyre_records` (`security_invoker`), and a real **`public.alerts`** table (indexes + RLS). Fixed `inspections` queries that used non-existent columns (`inspector_name`/`tread_depth`/`pressure_reading` → `inspector` + `tyre_conditions`); removed a non-existent `status` column from the global tyre search.
+- **Performance:** added indexes on `tyre_records` (asset_no, issue_date, site, serial_number), `vehicle_fleet` (site, asset_no), `inspections` (created_by, inspection_date, site).
+
+### Audit summary
+Mobile: tsc clean, bundle clean, i18n parity en/ar/ur (0 gaps), all routes/buttons/queries valid, RLS + login RPC verified. Web: build + 369/369 tests pass, all referenced tables/columns now resolve against the live DB.
+
+---
+
 
 ## Session 1 — Web Platform (Previously Documented)
 
@@ -33,9 +68,10 @@ A complete React Native mobile inspector app — **TyrePulse Inspector** — tar
 | Screen | Route | Description |
 |--------|-------|-------------|
 | Login | `/(auth)/login` | Supabase auth, language selector (EN/AR/UR), error states |
-| Home | `/(app)/index` | Greeting, pending sync count, quick-start inspection, recent history |
-| New Inspection | `/(app)/inspection/new` | Multi-step: vehicle details → tyre position cards → submit |
-| History | `/(app)/history` | All inspections with sync status badges (synced/pending/failed) |
+| Home | `/(app)/index` | Greeting, pending sync count, quick-start inspection, **Scan Tyre/Asset**, recent history |
+| New Inspection | `/(app)/inspection/new` | Multi-step: vehicle details → tyre position cards → submit (accepts `?asset=` deep-link from scanner) |
+| Scanner | `/(app)/scanner` | Camera barcode/QR scanner → vehicle or tyre lookup (hidden route) |
+| History | `/(app)/history` | Inspections with search + status filters + sync badges (synced/pending/failed) |
 | Profile | `/(app)/profile` | User info, language toggle, offline queue stats, sign out |
 
 #### Core Features
@@ -116,8 +152,8 @@ mobile/
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | React Native 0.79.2 |
-| Expo SDK | 54.0.0 |
+| Framework | React Native 0.79.6 |
+| Expo SDK | 53.0.27 |
 | Router | expo-router v5 |
 | Auth storage | expo-secure-store |
 | Offline queue | AsyncStorage (`@react-native-async-storage/async-storage` 2.1.2) |
@@ -166,11 +202,9 @@ The EAS Gradle build has been failing. All fixes applied in order:
 | 4 | `1f3a46e` | Replace `@react-native-community/netinfo` with `expo-network`; add SDK 35 config | netinfo's `build.gradle` uses old `compileOptions` incompatible with AGP 8.x; compileSdkVersion/targetSdkVersion/buildToolsVersion needed |
 | 5 | `ea24776` | `"newArchEnabled": false`; `ndkVersion: "27.1.12297006"` | RN 0.79 defaults New Architecture ON — requires NDK 27 C++ compilation that fails silently on EAS workers |
 
-**Current status:** Build `ea24776` is running. If it passes → APK downloadable from expo.dev.
+| 6 | (Session 3) | Pin `expo` to `~53.0.0`; align whole native tree to SDK 53; add explicit `expo-asset`; `npm ci` in CI | **Real root cause** — `expo` was on SDK 54 while everything else was SDK 53 (binary mismatch). Fixes #1–5 were symptom-patches. |
 
-**If Gradle still fails** — check expo.dev build logs for the "Run gradlew" phase. Likely remaining issues:
-- Memory OOM during dex compilation → EAS worker tier issue
-- A remaining native module's `build.gradle` referencing old Java source compat
+**Current status:** ✅ **Resolved.** Full EAS Android build is green end-to-end and auto-builds on push to `main`. The New-Arch/NDK/Kotlin tweaks (#2,#5) remain as valid SDK 53 defaults.
 
 ---
 
@@ -179,10 +213,13 @@ The EAS Gradle build has been failing. All fixes applied in order:
 | Table | Usage |
 |-------|-------|
 | `auth.users` | Login / sign out via `supabase.auth.signInWithPassword` |
-| `profiles` | `inspector_id`, `full_name`, `employee_id`, `assigned_site`, `country` |
-| `inspections` | Write inspection records; `inspector_id`, `tyre_conditions` JSONB, `title`, `site`, `asset_number`, `inspection_date`, `odometer_reading`, `notes`, `vehicle_type` |
+| `profiles` | `id`, `username`, `full_name`, `employee_id`, `role`, `site`, `country`, `approved` |
+| `vehicle_fleet` | Site/vehicle pickers + scanner lookup — columns `asset_no`, `site`, `vehicle_type`, `make`, `model` |
+| `inspections` | Write inspection records — `title`, `site`, **`asset_no`**, `vehicle_type`, **`inspector`** (text), **`created_by`** (uuid), `inspection_date`, **`scheduled_date`** (NOT NULL), `inspection_type` ('Routine'), `tyre_conditions` JSONB, `notes`, `status` ('Done'). No `odometer` column — folded into `notes`. |
+| `tyre_records` | Scanner tyre lookup by serial — `serial_no`/`serial_number`/`tyre_serial`, `brand`, `size`, `position`, `asset_no`, `tread_depth`, `pressure_reading` |
+| RPC `get_email_by_identifier` | Resolves username / Employee ID → email pre-auth (SECURITY DEFINER, anon-executable) |
 
-**RLS note:** Mobile uses the anon key. Inspections insert works because the `inspections` table has a RLS policy allowing authenticated users to insert rows where `inspector_id = auth.uid()`.
+**RLS note:** Mobile uses the anon key. The `inspections` INSERT policy allows roles `Reporter, Manager, Admin, Director, Tyre Man, Inspector` (the inspector role was added in Session 3). `vehicle_fleet`, `tyre_records`, and `profiles` SELECT are open to any authenticated user.
 
 ---
 
@@ -211,6 +248,9 @@ See ROADMAP.md for full status.
 ---
 
 ## Required Supabase SQL (Run Once)
+
+> **Note (Session 3):** The live `inspections` schema uses `asset_no`, `inspector` (text), `created_by` (uuid), `scheduled_date` (NOT NULL) and check constraints on `status` / `inspection_type` — the mobile app and web Checklist write to these. Username login uses the `get_email_by_identifier` RPC. Session-3 also added: views `vehicles`/`tyre_changes`, the `alerts` table, performance indexes, and the inspector INSERT policy (already applied to the live DB). The block below is the original Session-1/2 reference.
+
 
 ```sql
 -- Inspection columns
@@ -293,15 +333,14 @@ Env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
 ## Next Session Priorities
 
 ### Mobile (Immediate)
-1. Confirm EAS build `ea24776` passes — download APK from expo.dev
-2. Test APK on device — verify login, inspection flow, offline sync
-3. If Gradle still fails — share expo.dev "Run gradlew" log here
+1. ✅ EAS build green (SDK 53) — install the latest `main` APK from expo.dev (`@ws123na/tyrepulse-inspector` → Builds)
+2. Device test — login, inspection submit, scanner, offline sync (all wired to live schema)
 
 ### Mobile (Next Sprint)
-4. Photo uploads to Supabase Storage from inspection
-5. Barcode/QR scanner for tyre serial number (`expo-barcode-scanner`)
-6. Push notifications for sync failures and inspection reminders
-7. Play Store submission prep (signing keys, store listing, screenshots)
+3. Photo uploads to Supabase Storage from inspection (currently captured as local URIs)
+4. ✅ ~~Barcode/QR scanner~~ — delivered (`app/(app)/scanner.tsx`)
+5. Push notifications for sync failures and inspection reminders
+6. Play Store submission prep (signing keys, store listing, screenshots)
 
 ### Web (Next Sprint)
 8. RAG document ingestion — SOP/policy PDF upload pipeline

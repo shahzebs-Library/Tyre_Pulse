@@ -1,6 +1,6 @@
 # TyrePulse Mobile — Architecture & Roadmap
-**React Native + Expo SDK 54 · Shahzeb Rahman © 2026**
-**Last updated:** June 2026
+**React Native 0.79.6 + Expo SDK 53 · Shahzeb Rahman © 2026**
+**Last updated:** June 2026 · **EAS Android build: ✅ green (auto-builds on push to `main`)**
 
 ---
 
@@ -40,19 +40,26 @@ TyrePulse Inspector
 ├── Home Screen
 │   ├── Time-aware greeting
 │   ├── Pending sync count badge
-│   └── Quick-start inspection button
+│   ├── Quick-start inspection button
+│   └── Scan Tyre / Asset (camera barcode + QR)
+│
+├── Scanner (expo-camera CameraView)
+│   ├── Reads tyre serial barcodes + asset QR codes
+│   ├── Vehicle match → start inspection (site + asset preselected)
+│   ├── Tyre match → brand / size / position / asset details
+│   └── Torch, permission states, rescan
 │
 ├── New Inspection
-│   ├── Step 1: Vehicle details (site, asset, date, odometer, notes)
+│   ├── Step 1: Vehicle details (site, asset, date, odometer→notes, notes)
 │   ├── Step 2: Tyre position cards
 │   │   ├── Supports all position types (FL/FR/RL/RR + dual + triple axle)
 │   │   ├── Serial number, pressure (bar), tread depth (mm)
 │   │   ├── Condition: Good / Worn / Damaged / Flat / Missing
 │   │   └── Photo capture (expo-camera + expo-image-picker)
-│   └── Submit → offline queue → Supabase sync
+│   └── Submit (asset_no/inspector/created_by/scheduled_date/status='Done') → offline queue → Supabase sync
 │
 ├── History
-│   ├── All inspections (offline + synced)
+│   ├── All inspections (offline + synced) — search + status filters
 │   └── Sync status badges (synced / pending / failed)
 │
 └── Profile
@@ -65,7 +72,8 @@ TyrePulse Inspector
 ### i18n Coverage
 
 All 130+ strings translated into English, Arabic (MSA), and Urdu across:
-- `common`, `login`, `tabs`, `home`, `inspection`, `history`, `profile`, `tyre`, `sync`, `language`, `positions`
+- `common`, `login`, `tabs`, `home`, `inspection`, `history`, `profile`, `tyre`, `sync`, `language`, `positions`, `scanner`
+- Parity verified: 0 missing/extra keys across en/ar/ur; all `t()` keys resolve.
 
 Tyre positions show both code and translated label:
 - `FL` — `أمامي أيسر` (AR) / `آگے بائیں` (UR)

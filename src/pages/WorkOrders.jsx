@@ -85,10 +85,10 @@ const EMPTY_FORM = {
 }
 
 // ── Helper ────────────────────────────────────────────────────────────────────
-function fmtCurrency(v) {
+function _fmtCurrencyBase(v, currency = 'SAR') {
   const n = parseFloat(v)
   if (isNaN(n)) return '—'
-  return 'R ' + n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return `${currency} ` + n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 function fmtDate(d) {
   if (!d) return '—'
@@ -111,7 +111,8 @@ function daysOpen(wo) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function WorkOrders() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
+  const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency)
   const { user } = useAuth()
 
   const [orders, setOrders]       = useState([])
@@ -502,7 +503,7 @@ export default function WorkOrders() {
           { label: 'Overdue', value: stats.overdue, color: 'red', icon: AlertOctagon },
           { label: 'Completed Today', value: stats.completedToday, color: 'green', icon: CheckCircle },
           { label: 'Avg Days Open', value: stats.avgDaysOpen, color: 'purple', icon: Calendar },
-          { label: 'Total Cost (All)', value: `R ${(stats.totalCost / 1000).toFixed(1)}k`, color: 'teal', icon: DollarSign },
+          { label: 'Total Cost (All)', value: `${activeCurrency} ${(stats.totalCost / 1000).toFixed(1)}k`, color: 'teal', icon: DollarSign },
         ].map(({ label, value, color, icon: Icon }) => (
           <div key={label} className={`bg-gray-900 border border-gray-800 rounded-xl p-4`}>
             <div className={`flex items-center gap-2 mb-2`}>

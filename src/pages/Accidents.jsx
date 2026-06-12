@@ -91,9 +91,9 @@ const CHART_OPTS_STACKED = {
   },
 }
 
-function fmtCurrency(val) {
+function _fmtCurrencyBase(val, currency = 'SAR') {
   if (!val && val !== 0) return '-'
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'SAR', maximumFractionDigits: 0 }).format(val)
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(val)
 }
 
 function monthKey(dateStr) {
@@ -121,7 +121,8 @@ function monthLabel(key) {
 
 export default function Accidents() {
   const { profile } = useAuth()
-  const { activeCountry } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
+  const fmtCurrency = (val) => _fmtCurrencyBase(val, activeCurrency)
   const navigate = useNavigate()
 
   const [tab, setTab]                  = useState('incidents')

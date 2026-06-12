@@ -67,7 +67,7 @@ async function searchAll(query) {
   const [tyres, vehicles, inspections, workOrders, stock] = await Promise.allSettled([
     // Tyre records
     supabase.from('tyre_records')
-      .select('id, serial_number, asset_number, brand, risk_level, status')
+      .select('id, serial_number, asset_number, brand, risk_level')
       .or(`serial_number.ilike.%${q}%,asset_number.ilike.%${q}%,brand.ilike.%${q}%`)
       .limit(6),
     // Vehicles
@@ -77,8 +77,8 @@ async function searchAll(query) {
       .limit(6),
     // Inspections
     supabase.from('inspections')
-      .select('id, asset_no, inspector_name, inspection_date, site')
-      .or(`asset_no.ilike.%${q}%,inspector_name.ilike.%${q}%`)
+      .select('id, asset_no, inspector, inspection_date, site')
+      .or(`asset_no.ilike.%${q}%,inspector.ilike.%${q}%`)
       .limit(6),
     // Work orders
     supabase.from('work_orders')
@@ -116,7 +116,7 @@ async function searchAll(query) {
     results.inspections = inspections.value.data.map(r => ({
       id: r.id,
       primary: r.asset_no,
-      secondary: `${r.inspector_name || '—'} · ${r.inspection_date ? new Date(r.inspection_date).toLocaleDateString('en-ZA') : '—'}`,
+      secondary: `${r.inspector || '—'} · ${r.inspection_date ? new Date(r.inspection_date).toLocaleDateString('en-ZA') : '—'}`,
       badge: r.site,
       badgeColor: 'text-yellow-400',
       route: '/inspections',

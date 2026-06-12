@@ -5,9 +5,10 @@ import {
   KeyboardAvoidingView,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
+import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { enqueueInspection } from '../../../lib/offlineQueue'
 import TyrePositionCard from '../../../components/TyrePositionCard'
@@ -20,35 +21,41 @@ type Step = 'header' | 'tyres' | 'submit'
 
 export default function NewInspectionScreen() {
   const { profile } = useAuth()
+  const { t, isRTL } = useLanguage()
   const router = useRouter()
+  const params = useLocalSearchParams<{ site?: string; asset?: string }>()
 
-  // Step state
   const [step, setStep] = useState<Step>('header')
-
-  // Header fields
   const [sites, setSites] = useState<string[]>([])
   const [vehicles, setVehicles] = useState<VehicleFleet[]>([])
   const [filteredVehicles, setFilteredVehicles] = useState<VehicleFleet[]>([])
-  const [selectedSite, setSelectedSite] = useState(profile?.site ?? '')
+  const [selectedSite, setSelectedSite] = useState(params.site ?? profile?.site ?? '')
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleFleet | null>(null)
   const [odometer, setOdometer] = useState('')
   const [headerNotes, setHeaderNotes] = useState('')
   const [loadingVehicles, setLoadingVehicles] = useState(false)
-
-  // Tyre data
   const [positions, setPositions] = useState<string[]>([])
   const [tyreData, setTyreData] = useState<Record<string, TyrePositionData>>({})
-
-  // Submit state
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    loadSites()
-  }, [])
+  const textAlign = isRTL ? 'right' : 'left'
+  const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
+  const backIcon = isRTL ? 'arrow-forward' : 'arrow-back'
+  const forwardIcon = isRTL ? 'arrow-back' : 'arrow-forward'
+
+  useEffect(() => { loadSites() }, [])
 
   useEffect(() => {
     if (selectedSite) loadVehicles(selectedSite)
   }, [selectedSite])
+
+  // Preselect the vehicle when arriving from the scanner (asset param).
+  useEffect(() => {
+    if (params.asset && !selectedVehicle && filteredVehicles.length) {
+      const match = filteredVehicles.find(v => v.asset_no === params.asset)
+      if (match) setSelectedVehicle(match)
+    }
+  }, [filteredVehicles, params.asset, selectedVehicle])
 
   useEffect(() => {
     if (selectedVehicle) {
@@ -75,9 +82,9 @@ export default function NewInspectionScreen() {
     setLoadingVehicles(true)
     const { data } = await supabase
       .from('vehicle_fleet')
-      .select('id, site, asset_number, vehicle_type, make, model')
+      .select('id, site, asset_no, vehicle_type, make, model')
       .eq('site', site)
-      .order('asset_number')
+      .order('asset_no')
     if (data) {
       setVehicles(data)
       setFilteredVehicles(data)
@@ -90,8 +97,14 @@ export default function NewInspectionScreen() {
   }
 
   function validateHeader(): boolean {
-    if (!selectedSite) { Alert.alert('Required', 'Please select a site.'); return false }
-    if (!selectedVehicle) { Alert.alert('Required', 'Please select a vehicle.'); return false }
+    if (!selectedSite) {
+      Alert.alert(t('inspection.alertRequired'), t('inspection.alertSelectSite'))
+      return false
+    }
+    if (!selectedVehicle) {
+      Alert.alert(t('inspection.alertRequired'), t('inspection.alertSelectVehicle'))
+      return false
+    }
     return true
   }
 
@@ -100,28 +113,30 @@ export default function NewInspectionScreen() {
     setSubmitting(true)
 
     const inspectionDate = new Date().toISOString().split('T')[0]
+    const odo = odometer.trim()
+    const notes = [odo ? `Odometer: ${odo} km` : '', headerNotes.trim()]
+      .filter(Boolean)
+      .join('\n')
     const payload = {
       title: `Daily Tyre Inspection — ${selectedSite} — ${inspectionDate}`,
       site: selectedSite,
-      asset_number: selectedVehicle!.asset_number,
+      asset_no: selectedVehicle!.asset_no,
       vehicle_type: selectedVehicle!.vehicle_type,
-      inspector_name: profile?.full_name ?? profile?.username ?? 'Inspector',
-      inspector_id: profile?.id ?? '',
+      inspector: profile?.full_name ?? profile?.username ?? 'Inspector',
+      created_by: profile?.id ?? null,
       inspection_date: inspectionDate,
-      inspection_type: 'Daily Checklist',
-      odometer: odometer,
+      scheduled_date: inspectionDate,
+      inspection_type: 'Routine',
       tyre_conditions: tyreData,
-      notes: headerNotes,
-      status: 'submitted' as const,
+      notes,
+      status: 'Done',
     }
 
     try {
-      // Try live submit first
       const { error } = await supabase.from('inspections').insert(payload)
       if (error) throw error
       setStep('submit')
     } catch {
-      // Queue offline
       await enqueueInspection(payload)
       setStep('submit')
     } finally {
@@ -135,24 +150,27 @@ export default function NewInspectionScreen() {
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          {/* Nav */}
-          <View style={styles.nav}>
+          <View style={[styles.nav, isRTL && styles.navRTL]}>
             <TouchableOpacity onPress={() => router.back()} style={styles.navBack}>
-              <Ionicons name="arrow-back" size={22} color="#0f172a" />
+              <Ionicons name={backIcon} size={22} color="#0f172a" />
             </TouchableOpacity>
-            <Text style={styles.navTitle}>New Inspection</Text>
+            <Text style={styles.navTitle}>{t('inspection.navTitle')}</Text>
             <View style={styles.stepPills}>
-              <View style={[styles.stepPill, styles.stepPillActive]}><Text style={styles.stepPillTextActive}>1</Text></View>
-              <View style={styles.stepPill}><Text style={styles.stepPillText}>2</Text></View>
+              <View style={[styles.stepPill, styles.stepPillActive]}>
+                <Text style={styles.stepPillTextActive}>{t('inspection.step1')}</Text>
+              </View>
+              <View style={styles.stepPill}>
+                <Text style={styles.stepPillText}>{t('inspection.step2')}</Text>
+              </View>
             </View>
           </View>
 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-            <Text style={styles.stepTitle}>Inspection Details</Text>
+            <Text style={[styles.stepTitle, { textAlign }]}>{t('inspection.stepTitle')}</Text>
 
             {/* Site */}
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Site *</Text>
+              <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.siteLabel')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
                 <View style={styles.chipRow}>
                   {sites.map(s => (
@@ -171,7 +189,7 @@ export default function NewInspectionScreen() {
             {/* Vehicle */}
             {selectedSite ? (
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Vehicle / Asset *</Text>
+                <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.vehicleLabel')}</Text>
                 {loadingVehicles ? (
                   <ActivityIndicator size="small" color="#16a34a" style={{ marginTop: 8 }} />
                 ) : (
@@ -184,7 +202,7 @@ export default function NewInspectionScreen() {
                           onPress={() => setSelectedVehicle(v)}
                         >
                           <Text style={[styles.chipText, selectedVehicle?.id === v.id && styles.chipTextActive]}>
-                            {v.asset_number}
+                            {v.asset_no}
                           </Text>
                           <Text style={[styles.chipSub, selectedVehicle?.id === v.id && { color: 'rgba(255,255,255,0.7)' }]}>
                             {v.vehicle_type}
@@ -199,24 +217,24 @@ export default function NewInspectionScreen() {
 
             {/* Selected vehicle info */}
             {selectedVehicle && (
-              <View style={styles.vehicleInfo}>
+              <View style={[styles.vehicleInfo, isRTL && styles.vehicleInfoRTL]}>
                 <Ionicons name="bus-outline" size={18} color="#16a34a" />
-                <Text style={styles.vehicleInfoText}>
-                  {selectedVehicle.asset_number} · {selectedVehicle.vehicle_type}
+                <Text style={[styles.vehicleInfoText, { textAlign }]}>
+                  {selectedVehicle.asset_no} · {selectedVehicle.vehicle_type}
                   {selectedVehicle.make ? ` · ${selectedVehicle.make}` : ''}
                 </Text>
                 <Text style={styles.vehiclePositionCount}>
-                  {getPositionsForVehicle(selectedVehicle.vehicle_type).length} tyres
+                  {getPositionsForVehicle(selectedVehicle.vehicle_type).length} {t('inspection.tyres')}
                 </Text>
               </View>
             )}
 
             {/* Inspector (read-only) */}
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Inspector</Text>
-              <View style={styles.readonlyField}>
+              <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.inspectorLabel')}</Text>
+              <View style={[styles.readonlyField, isRTL && styles.readonlyFieldRTL]}>
                 <Ionicons name="person-circle-outline" size={18} color="#16a34a" />
-                <Text style={styles.readonlyText}>
+                <Text style={[styles.readonlyText, { textAlign }]}>
                   {profile?.full_name ?? profile?.username ?? 'Unknown'}
                   {profile?.employee_id ? `  ·  ID: ${profile.employee_id}` : ''}
                 </Text>
@@ -225,11 +243,11 @@ export default function NewInspectionScreen() {
 
             {/* Date (read-only) */}
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Inspection Date</Text>
-              <View style={styles.readonlyField}>
+              <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.dateLabel')}</Text>
+              <View style={[styles.readonlyField, isRTL && styles.readonlyFieldRTL]}>
                 <Ionicons name="calendar-outline" size={18} color="#16a34a" />
-                <Text style={styles.readonlyText}>
-                  {new Date().toLocaleDateString('en-GB', {
+                <Text style={[styles.readonlyText, { textAlign }]}>
+                  {new Date().toLocaleDateString(dateLocale, {
                     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
                   })}
                 </Text>
@@ -238,12 +256,12 @@ export default function NewInspectionScreen() {
 
             {/* Odometer */}
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Odometer (km)</Text>
+              <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.odometerLabel')}</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { textAlign }]}
                 value={odometer}
                 onChangeText={setOdometer}
-                placeholder="e.g. 125000"
+                placeholder={t('inspection.odometerPlaceholder')}
                 placeholderTextColor="#94a3b8"
                 keyboardType="numeric"
               />
@@ -251,12 +269,12 @@ export default function NewInspectionScreen() {
 
             {/* Notes */}
             <View style={styles.field}>
-              <Text style={styles.fieldLabel}>General Notes</Text>
+              <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.notesLabel')}</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, { textAlign }]}
                 value={headerNotes}
                 onChangeText={setHeaderNotes}
-                placeholder="Any general observations…"
+                placeholder={t('inspection.notesPlaceholder')}
                 placeholderTextColor="#94a3b8"
                 multiline
                 numberOfLines={3}
@@ -268,8 +286,8 @@ export default function NewInspectionScreen() {
               onPress={() => validateHeader() && setStep('tyres')}
               disabled={!selectedSite || !selectedVehicle}
             >
-              <Text style={styles.nextBtnText}>Next: Tyre Inspection</Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
+              <Text style={styles.nextBtnText}>{t('inspection.nextButton')}</Text>
+              <Ionicons name={forwardIcon} size={18} color="#fff" />
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -282,28 +300,31 @@ export default function NewInspectionScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
-        {/* Nav */}
-        <View style={styles.nav}>
+        <View style={[styles.nav, isRTL && styles.navRTL]}>
           <TouchableOpacity onPress={() => setStep('header')} style={styles.navBack}>
-            <Ionicons name="arrow-back" size={22} color="#0f172a" />
+            <Ionicons name={backIcon} size={22} color="#0f172a" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={styles.navTitle}>Tyre Positions</Text>
-            <Text style={styles.navSubtitle}>
-              {selectedVehicle?.asset_number} · {selectedSite}
+            <Text style={[styles.navTitle, { textAlign }]}>{t('inspection.tyrePositionsTitle')}</Text>
+            <Text style={[styles.navSubtitle, { textAlign }]}>
+              {selectedVehicle?.asset_no} · {selectedSite}
             </Text>
           </View>
           <View style={styles.stepPills}>
-            <View style={styles.stepPill}><Text style={styles.stepPillText}>1</Text></View>
-            <View style={[styles.stepPill, styles.stepPillActive]}><Text style={styles.stepPillTextActive}>2</Text></View>
+            <View style={styles.stepPill}>
+              <Text style={styles.stepPillText}>{t('inspection.step1')}</Text>
+            </View>
+            <View style={[styles.stepPill, styles.stepPillActive]}>
+              <Text style={styles.stepPillTextActive}>{t('inspection.step2')}</Text>
+            </View>
           </View>
         </View>
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-          <View style={styles.positionHint}>
+          <View style={[styles.positionHint, isRTL && styles.positionHintRTL]}>
             <Ionicons name="information-circle-outline" size={15} color="#64748b" />
-            <Text style={styles.positionHintText}>
-              Tap each position to expand and record readings. Tap photo icon to capture tyre image.
+            <Text style={[styles.positionHintText, { textAlign }]}>
+              {t('inspection.tyreHint')}
             </Text>
           </View>
 
@@ -325,7 +346,7 @@ export default function NewInspectionScreen() {
               : (
                 <>
                   <Ionicons name="cloud-upload-outline" size={18} color="#fff" />
-                  <Text style={styles.nextBtnText}>Submit Inspection</Text>
+                  <Text style={styles.nextBtnText}>{t('inspection.submitButton')}</Text>
                 </>
               )
             }
@@ -341,15 +362,13 @@ export default function NewInspectionScreen() {
       <View style={styles.successIcon}>
         <Ionicons name="checkmark-circle" size={64} color="#16a34a" />
       </View>
-      <Text style={styles.successTitle}>Inspection Submitted</Text>
+      <Text style={styles.successTitle}>{t('inspection.submittedTitle')}</Text>
       <Text style={styles.successSubtitle}>
-        {selectedVehicle?.asset_number} · {selectedSite}
+        {selectedVehicle?.asset_no} · {selectedSite}
         {'\n'}
-        {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+        {new Date().toLocaleDateString(dateLocale, { day: 'numeric', month: 'long', year: 'numeric' })}
       </Text>
-      <Text style={styles.successNote}>
-        If you were offline, the inspection is queued and will sync automatically when connected.
-      </Text>
+      <Text style={styles.successNote}>{t('inspection.offlineNote')}</Text>
       <TouchableOpacity
         style={[styles.nextBtn, { marginTop: 24, minWidth: 200 }]}
         onPress={() => {
@@ -362,7 +381,7 @@ export default function NewInspectionScreen() {
         }}
       >
         <Ionicons name="home-outline" size={18} color="#fff" />
-        <Text style={styles.nextBtnText}>Back to Home</Text>
+        <Text style={styles.nextBtnText}>{t('inspection.backHome')}</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.outlineBtn, { marginTop: 10 }]}
@@ -375,7 +394,7 @@ export default function NewInspectionScreen() {
         }}
       >
         <Ionicons name="add-circle-outline" size={18} color="#16a34a" />
-        <Text style={styles.outlineBtnText}>New Inspection</Text>
+        <Text style={styles.outlineBtnText}>{t('inspection.newInspection')}</Text>
       </TouchableOpacity>
     </SafeAreaView>
   )
@@ -395,6 +414,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0,0,0,0.07)',
     gap: 12,
   },
+  navRTL: { flexDirection: 'row-reverse' },
   navBack: {
     width: 36,
     height: 36,
@@ -449,6 +469,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
   },
+  vehicleInfoRTL: { flexDirection: 'row-reverse' },
   vehicleInfoText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#15803d' },
   vehiclePositionCount: {
     fontSize: 11,
@@ -470,6 +491,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
+  readonlyFieldRTL: { flexDirection: 'row-reverse' },
   readonlyText: { fontSize: 14, color: '#0f172a', flex: 1 },
   input: {
     backgroundColor: '#fff',
@@ -519,6 +541,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
   },
+  positionHintRTL: { flexDirection: 'row-reverse' },
   positionHintText: { flex: 1, fontSize: 12, color: '#64748b', lineHeight: 18 },
   successIcon: {
     marginBottom: 16,

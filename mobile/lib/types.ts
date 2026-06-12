@@ -14,7 +14,7 @@ export interface Profile {
 export interface VehicleFleet {
   id: string
   site: string
-  asset_number: string
+  asset_no: string
   vehicle_type: string
   make?: string
   model?: string
@@ -32,19 +32,20 @@ export interface TyrePositionData {
   notes: string
 }
 
+// Mirrors the actual `inspections` table columns so rows insert directly.
 export interface InspectionPayload {
   title: string
   site: string
-  asset_number: string
+  asset_no: string
   vehicle_type: string
-  inspector_name: string
-  inspector_id: string
+  inspector: string
+  created_by: string | null
   inspection_date: string
+  scheduled_date: string
   inspection_type: string
-  odometer: string
   tyre_conditions: Record<string, TyrePositionData>
   notes: string
-  status: 'submitted'
+  status: string
 }
 
 export interface OfflineInspection {

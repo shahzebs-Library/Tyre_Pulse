@@ -2,10 +2,11 @@ import { useEffect, useState, useCallback } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { getPendingCount, syncQueue, retryFailed } from '../lib/offlineQueue'
-import NetInfo from '@react-native-community/netinfo'
-// @react-native-community/netinfo is included via expo-network fallback below if unavailable
+import { useLanguage } from '../contexts/LanguageContext'
+import { addNetworkStateListener } from 'expo-network'
 
 export default function SyncBanner() {
+  const { t } = useLanguage()
   const [pending, setPending] = useState(0)
   const [syncing, setSyncing] = useState(false)
   const [online, setOnline] = useState(true)
@@ -30,12 +31,12 @@ export default function SyncBanner() {
 
   useEffect(() => {
     refresh()
-    const unsub = NetInfo.addEventListener(state => {
+    const sub = addNetworkStateListener(state => {
       const isOnline = !!state.isConnected && !!state.isInternetReachable
       setOnline(isOnline)
       if (isOnline) attemptSync()
     })
-    return () => unsub()
+    return () => sub.remove()
   }, [])
 
   useEffect(() => {
@@ -51,6 +52,10 @@ export default function SyncBanner() {
 
   if (pending === 0 && online) return null
 
+  const pendingLabel = pending !== 1
+    ? `${pending} ${t('sync.pendingPlural')}`
+    : `${pending} ${t('sync.pendingSingle')}`
+
   return (
     <View style={[styles.banner, !online && styles.bannerOffline]}>
       <Animated.View style={{ transform: [{ scale: pulse }] }}>
@@ -61,13 +66,11 @@ export default function SyncBanner() {
         />
       </Animated.View>
       <Text style={[styles.text, !online && styles.textOffline]}>
-        {!online
-          ? 'Offline — inspections will sync when connected'
-          : `${pending} inspection${pending !== 1 ? 's' : ''} pending sync`}
+        {!online ? t('sync.offline') : pendingLabel}
       </Text>
       {online && pending > 0 && (
         <TouchableOpacity onPress={attemptSync} disabled={syncing}>
-          <Text style={styles.action}>{syncing ? 'Syncing…' : 'Sync now'}</Text>
+          <Text style={styles.action}>{syncing ? t('sync.syncing') : t('sync.syncNow')}</Text>
         </TouchableOpacity>
       )}
     </View>

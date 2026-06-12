@@ -1,10 +1,12 @@
 import { Tabs, Redirect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { View, ActivityIndicator } from 'react-native'
 
 export default function AppLayout() {
   const { user, loading } = useAuth()
+  const { t } = useLanguage()
 
   if (loading) {
     return (
@@ -39,31 +41,32 @@ export default function AppLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: t('tabs.home'),
           tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="inspection/new"
         options={{
-          title: 'Inspect',
+          title: t('tabs.inspect'),
           tabBarIcon: ({ color, size }) => <Ionicons name="clipboard-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
-          title: 'History',
+          title: t('tabs.history'),
           tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('tabs.profile'),
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen name="scanner" options={{ href: null }} />
     </Tabs>
   )
 }

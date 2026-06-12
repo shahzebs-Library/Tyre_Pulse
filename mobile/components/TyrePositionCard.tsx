@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
 import { TyrePositionData, TyreCondition } from '../lib/types'
+import { useLanguage } from '../contexts/LanguageContext'
 
 const CONDITIONS: TyreCondition[] = ['Good', 'Worn', 'Damaged', 'Flat', 'Missing']
 
@@ -17,12 +18,21 @@ const CONDITION_COLORS: Record<TyreCondition, string> = {
   Missing: '#6b7280',
 }
 
+const CONDITION_KEYS: Record<TyreCondition, string> = {
+  Good:    'tyre.good',
+  Worn:    'tyre.worn',
+  Damaged: 'tyre.damaged',
+  Flat:    'tyre.flat',
+  Missing: 'tyre.missing',
+}
+
 interface Props {
   data: TyrePositionData
   onChange: (updated: TyrePositionData) => void
 }
 
 export default function TyrePositionCard({ data, onChange }: Props) {
+  const { t } = useLanguage()
   const [expanded, setExpanded] = useState(false)
   const [pickingPhoto, setPickingPhoto] = useState(false)
 
@@ -33,7 +43,7 @@ export default function TyrePositionCard({ data, onChange }: Props) {
   async function pickPhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync()
     if (status !== 'granted') {
-      Alert.alert('Camera permission needed', 'Please allow camera access in your device settings.')
+      Alert.alert(t('tyre.cameraPermissionTitle'), t('tyre.cameraPermissionMessage'))
       return
     }
     setPickingPhoto(true)
@@ -52,17 +62,18 @@ export default function TyrePositionCard({ data, onChange }: Props) {
   }
 
   const conditionColor = CONDITION_COLORS[data.condition]
-  const hasData = data.pressure_psi || data.tread_depth_mm || data.serial_number || data.photo_uri
+  const posLabel = t(`positions.${data.position}`)
 
   return (
     <View style={styles.card}>
       <TouchableOpacity style={styles.header} onPress={() => setExpanded(e => !e)} activeOpacity={0.7}>
         <View style={styles.positionBadge}>
-          <Text style={styles.positionText}>{data.position}</Text>
+          <Text style={styles.positionCode}>{data.position}</Text>
+          <Text style={styles.positionName} numberOfLines={1}>{posLabel}</Text>
         </View>
         <View style={styles.summary}>
           <View style={[styles.conditionDot, { backgroundColor: conditionColor }]} />
-          <Text style={styles.conditionLabel}>{data.condition}</Text>
+          <Text style={styles.conditionLabel}>{t(CONDITION_KEYS[data.condition])}</Text>
           {data.pressure_psi ? <Text style={styles.metaText}>{data.pressure_psi} PSI</Text> : null}
           {data.tread_depth_mm ? <Text style={styles.metaText}>{data.tread_depth_mm}mm</Text> : null}
           {data.photo_uri ? <Ionicons name="camera" size={14} color="#16a34a" /> : null}
@@ -78,12 +89,12 @@ export default function TyrePositionCard({ data, onChange }: Props) {
         <View style={styles.body}>
           {/* Serial Number */}
           <View style={styles.field}>
-            <Text style={styles.label}>Serial Number</Text>
+            <Text style={styles.label}>{t('tyre.serialNumber')}</Text>
             <TextInput
               style={styles.input}
               value={data.serial_number}
               onChangeText={v => update({ serial_number: v })}
-              placeholder="e.g. MH2024001"
+              placeholder={t('tyre.serialPlaceholder')}
               placeholderTextColor="#94a3b8"
               autoCapitalize="characters"
             />
@@ -92,24 +103,24 @@ export default function TyrePositionCard({ data, onChange }: Props) {
           {/* Pressure + Tread row */}
           <View style={styles.row}>
             <View style={[styles.field, { flex: 1 }]}>
-              <Text style={styles.label}>Pressure (PSI)</Text>
+              <Text style={styles.label}>{t('tyre.pressure')}</Text>
               <TextInput
                 style={styles.input}
                 value={data.pressure_psi}
                 onChangeText={v => update({ pressure_psi: v })}
-                placeholder="100"
+                placeholder={t('tyre.pressurePlaceholder')}
                 placeholderTextColor="#94a3b8"
                 keyboardType="decimal-pad"
               />
             </View>
             <View style={{ width: 12 }} />
             <View style={[styles.field, { flex: 1 }]}>
-              <Text style={styles.label}>Tread Depth (mm)</Text>
+              <Text style={styles.label}>{t('tyre.treadDepth')}</Text>
               <TextInput
                 style={styles.input}
                 value={data.tread_depth_mm}
                 onChangeText={v => update({ tread_depth_mm: v })}
-                placeholder="8.0"
+                placeholder={t('tyre.treadPlaceholder')}
                 placeholderTextColor="#94a3b8"
                 keyboardType="decimal-pad"
               />
@@ -118,7 +129,7 @@ export default function TyrePositionCard({ data, onChange }: Props) {
 
           {/* Condition */}
           <View style={styles.field}>
-            <Text style={styles.label}>Condition</Text>
+            <Text style={styles.label}>{t('tyre.condition')}</Text>
             <View style={styles.conditionRow}>
               {CONDITIONS.map(c => (
                 <TouchableOpacity
@@ -135,7 +146,7 @@ export default function TyrePositionCard({ data, onChange }: Props) {
                       data.condition === c && { color: '#fff' },
                     ]}
                   >
-                    {c}
+                    {t(CONDITION_KEYS[c])}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -144,13 +155,13 @@ export default function TyrePositionCard({ data, onChange }: Props) {
 
           {/* Photo */}
           <View style={styles.field}>
-            <Text style={styles.label}>Photo</Text>
+            <Text style={styles.label}>{t('tyre.photo')}</Text>
             {data.photo_uri ? (
               <View style={styles.photoContainer}>
                 <Image source={{ uri: data.photo_uri }} style={styles.photo} />
                 <TouchableOpacity style={styles.photoRetake} onPress={pickPhoto}>
                   <Ionicons name="camera-outline" size={16} color="#fff" />
-                  <Text style={styles.photoRetakeText}>Retake</Text>
+                  <Text style={styles.photoRetakeText}>{t('tyre.retake')}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -160,7 +171,7 @@ export default function TyrePositionCard({ data, onChange }: Props) {
                   : <Ionicons name="camera-outline" size={22} color="#16a34a" />
                 }
                 <Text style={styles.photoBtnText}>
-                  {pickingPhoto ? 'Opening camera…' : 'Take Photo'}
+                  {pickingPhoto ? t('tyre.openingCamera') : t('tyre.takePhoto')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -168,12 +179,12 @@ export default function TyrePositionCard({ data, onChange }: Props) {
 
           {/* Notes */}
           <View style={styles.field}>
-            <Text style={styles.label}>Notes</Text>
+            <Text style={styles.label}>{t('tyre.notes')}</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
               value={data.notes}
               onChangeText={v => update({ notes: v })}
-              placeholder="Optional notes for this tyre…"
+              placeholder={t('tyre.notesPlaceholder')}
               placeholderTextColor="#94a3b8"
               multiline
               numberOfLines={2}
@@ -203,24 +214,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingVertical: 12,
     gap: 12,
   },
   positionBadge: {
-    width: 46,
-    height: 34,
+    minWidth: 60,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
     borderRadius: 8,
     backgroundColor: 'rgba(22,163,74,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(22,163,74,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 2,
   },
-  positionText: {
-    fontSize: 11,
-    fontWeight: '700',
+  positionCode: {
+    fontSize: 12,
+    fontWeight: '800',
     color: '#15803d',
     letterSpacing: 0.5,
+  },
+  positionName: {
+    fontSize: 8,
+    fontWeight: '600',
+    color: '#15803d',
+    opacity: 0.75,
+    textAlign: 'center',
   },
   summary: {
     flex: 1,

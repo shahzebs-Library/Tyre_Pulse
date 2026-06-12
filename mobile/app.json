@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -45,13 +46,25 @@
         {
           "photosPermission": "TyrePulse needs photo access to attach images to tyre inspections."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.0.21",
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "minSdkVersion": 24,
+            "ndkVersion": "27.1.12297006"
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
     },
     "scheme": "tyrepulse-inspector",
-    "newArchEnabled": true,
     "extra": {
       "router": {
         "origin": false

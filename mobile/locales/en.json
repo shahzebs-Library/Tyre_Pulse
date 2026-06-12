@@ -248,7 +248,7 @@
       "critical": "Critical"
     },
     "noAccidents": "No accidents reported",
-    "noAccidentsHint": "Tap "Report Accident" to file an incident report",
+    "noAccidentsHint": "Tap \"Report Accident\" to file an incident report",
     "filterAll": "All",
     "filterMine": "Mine",
     "detailTitle": "Accident Report",

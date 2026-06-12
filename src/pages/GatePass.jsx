@@ -1,9 +1,13 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
-import { ShieldCheck, ShieldClose, CheckCircle, XCircle, Printer, Clock, Download } from 'lucide-react'
+import { formatDate } from '../lib/formatters'
+import {
+  ShieldCheck, ShieldClose, CheckCircle, XCircle, Printer, Clock,
+  Download, Search, RefreshCw, Activity,
+} from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 
 const STATUS_CONFIG = {
@@ -29,6 +33,7 @@ export default function GatePass() {
 
   // Tab state: 'today' | 'history'
   const [logTab, setLogTab] = useState('today')
+  const [logSearch, setLogSearch] = useState('')
   const yesterday = (() => {
     const d = new Date()
     d.setDate(d.getDate() - 1)
@@ -37,6 +42,7 @@ export default function GatePass() {
   const [historyDate, setHistoryDate] = useState(yesterday)
   const [historyPasses, setHistoryPasses] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const autoRefreshRef = useRef(null)
 
   const today = new Date().toISOString().split('T')[0]
   const todayDisplay = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
@@ -44,6 +50,10 @@ export default function GatePass() {
   useEffect(() => {
     loadPasses()
     loadSites()
+    // Auto-refresh every 60 s for gate station use
+    clearInterval(autoRefreshRef.current)
+    autoRefreshRef.current = setInterval(loadPasses, 60_000)
+    return () => clearInterval(autoRefreshRef.current)
   }, [siteFilter, activeCountry])
 
   async function loadSites() {
@@ -182,14 +192,40 @@ export default function GatePass() {
     )
   }
 
-  const cleared = useMemo(() => passes.filter(p => p.status === 'Cleared').length, [passes])
-  const denied  = useMemo(() => passes.filter(p => p.status === 'Denied').length, [passes])
+  const cleared    = useMemo(() => passes.filter(p => p.status === 'Cleared').length, [passes])
+  const denied     = useMemo(() => passes.filter(p => p.status === 'Denied').length, [passes])
+  const clearRate  = useMemo(() => {
+    const total = cleared + denied
+    return total > 0 ? Math.round((cleared / total) * 100) : null
+  }, [cleared, denied])
+
+  const siteBreakdown = useMemo(() => {
+    const m = {}
+    passes.forEach(p => {
+      const s = p.site || '(No Site)'
+      if (!m[s]) m[s] = { cleared: 0, denied: 0 }
+      if (p.status === 'Cleared') m[s].cleared++
+      else if (p.status === 'Denied') m[s].denied++
+    })
+    return Object.entries(m).sort((a, b) => (b[1].cleared + b[1].denied) - (a[1].cleared + a[1].denied))
+  }, [passes])
 
   const activePassList = logTab === 'today' ? passes : historyPasses
   const activeDateLabel = logTab === 'today' ? today : historyDate
   const activeDateDisplay = logTab === 'today'
     ? todayDisplay
     : new Date(historyDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
+  const filteredPassList = useMemo(() => {
+    if (!logSearch) return activePassList
+    const q = logSearch.toLowerCase()
+    return activePassList.filter(p =>
+      p.asset_no?.toLowerCase().includes(q) ||
+      p.site?.toLowerCase().includes(q) ||
+      p.status?.toLowerCase().includes(q) ||
+      p.denial_reason?.toLowerCase().includes(q)
+    )
+  }, [activePassList, logSearch])
 
   return (
     <div className="space-y-6">
@@ -216,18 +252,36 @@ export default function GatePass() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Passes', value: passes.length, color: 'text-white' },
-          { label: 'Cleared', value: cleared, color: 'text-green-400' },
-          { label: 'Denied', value: denied, color: 'text-red-400' },
+          { label: 'Total Today',    value: passes.length, color: 'text-white',      icon: Activity },
+          { label: 'Cleared',        value: cleared,        color: 'text-green-400', icon: CheckCircle },
+          { label: 'Denied',         value: denied,         color: 'text-red-400',   icon: XCircle },
+          { label: 'Clearance Rate', value: clearRate !== null ? `${clearRate}%` : '—', color: clearRate >= 80 ? 'text-green-400' : clearRate >= 60 ? 'text-yellow-400' : 'text-red-400', icon: ShieldCheck },
         ].map(s => (
           <div key={s.label} className="card text-center">
+            <s.icon size={16} className={`mx-auto mb-1 ${s.color} opacity-60`} />
             <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
             <p className="text-gray-400 text-sm mt-1">{s.label}</p>
           </div>
         ))}
       </div>
+
+      {/* Site breakdown (when >1 site) */}
+      {siteBreakdown.length > 1 && (
+        <div className="card py-3 px-4">
+          <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Today by Site</p>
+          <div className="flex flex-wrap gap-3">
+            {siteBreakdown.map(([site, counts]) => (
+              <div key={site} className="flex items-center gap-2 text-xs">
+                <span className="text-gray-400">{site}</span>
+                <span className="text-green-400 font-medium">{counts.cleared}✓</span>
+                {counts.denied > 0 && <span className="text-red-400 font-medium">{counts.denied}✗</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Gate Clearance panel */}
       <div className="card">
@@ -350,18 +404,34 @@ export default function GatePass() {
           </div>
         )}
 
+        {/* Log search */}
+        {activePassList.length > 0 && (
+          <div className="relative mb-3 max-w-xs">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              className="input pl-8 text-sm"
+              placeholder="Search asset, site…"
+              value={logSearch}
+              onChange={e => setLogSearch(e.target.value)}
+            />
+          </div>
+        )}
+
         {/* Table */}
         {logTab === 'history' && historyLoading ? (
-          <p className="text-center text-gray-500 py-8">Loading...</p>
-        ) : activePassList.length === 0 ? (
-          <p className="text-center text-gray-500 py-8">
-            {logTab === 'today' ? 'No gate passes recorded today' : `No gate passes found for ${activeDateLabel}`}
-          </p>
+          <div className="text-center py-8 text-gray-500">Loading…</div>
+        ) : filteredPassList.length === 0 ? (
+          <div className="text-center py-8">
+            <ShieldCheck size={28} className="text-gray-700 mx-auto mb-2" />
+            <p className="text-gray-500 text-sm">
+              {logSearch ? 'No passes match the search' : logTab === 'today' ? 'No gate passes recorded today yet' : `No gate passes found for ${activeDateLabel}`}
+            </p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-gray-400 border-b border-gray-800">
+                <tr className="text-left text-gray-400 border-b border-gray-800 text-xs">
                   <th className="pb-2 pr-4">Time</th>
                   <th className="pb-2 pr-4">Asset</th>
                   <th className="pb-2 pr-4">Site</th>
@@ -370,7 +440,7 @@ export default function GatePass() {
                 </tr>
               </thead>
               <tbody>
-                {activePassList.map(p => {
+                {filteredPassList.map(p => {
                   const cfg = STATUS_CONFIG[p.status] || STATUS_CONFIG.Pending
                   return (
                     <tr key={p.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
@@ -390,6 +460,10 @@ export default function GatePass() {
                 })}
               </tbody>
             </table>
+            <div className="px-0 pt-2 text-xs text-gray-600 text-right">
+              {filteredPassList.length} pass{filteredPassList.length !== 1 ? 'es' : ''}
+              {logSearch && activePassList.length !== filteredPassList.length && ` (filtered from ${activePassList.length})`}
+            </div>
           </div>
         )}
       </div>

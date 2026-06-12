@@ -7,10 +7,12 @@ import {
   PointElement, Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
-import { Maximize2, X, BarChart2 } from 'lucide-react'
+import { Maximize2, X, BarChart2, Download, FileText, Search, Award, TrendingUp, TrendingDown } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { ChartModal } from '../components/ChartModal'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatCurrencyCompact } from '../lib/formatters'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -30,7 +32,8 @@ export default function BrandPerformance() {
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState(null)
+  const [selected, setSelected]   = useState(null)
+  const [tableSearch, setTableSearch] = useState('')
 
   // Filters
   const [dateFrom, setDateFrom]         = useState('')
@@ -92,7 +95,36 @@ export default function BrandPerformance() {
     setRiskLevels([])
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading brand data…</div>
+  if (loading) return (
+    <div className="space-y-5">
+      <PageHeader title="Brand Performance" subtitle="Loading brand data…" icon={BarChart2} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="card animate-pulse h-24 bg-gray-800/40" />)}
+      </div>
+      <div className="grid grid-cols-2 gap-6">
+        {[...Array(2)].map((_, i) => <div key={i} className="card animate-pulse h-64 bg-gray-800/40" />)}
+      </div>
+    </div>
+  )
+
+  if (metrics.length === 0) return (
+    <div className="space-y-5">
+      <PageHeader title="Brand Performance" subtitle="No brand data available" icon={BarChart2} />
+      <div className="card py-16 flex flex-col items-center gap-3">
+        <BarChart2 size={40} className="text-gray-700" />
+        <p className="text-gray-400 font-medium">No tyre brand data yet</p>
+        <p className="text-gray-600 text-sm">Import tyre records with brand information to see performance analytics</p>
+      </div>
+    </div>
+  )
+
+  const bestBrand  = [...metrics].sort((a, b) => a.failureRate - b.failureRate)[0]
+  const worstBrand = [...metrics].sort((a, b) => b.failureRate - a.failureRate)[0]
+  const totalCostAll = metrics.reduce((s, b) => s + b.totalCost, 0)
+
+  const filteredMetrics = tableSearch
+    ? metrics.filter(b => b.brand.toLowerCase().includes(tableSearch.toLowerCase()))
+    : metrics
 
   // Top 10 brands by count for the ranking chart
   const top10 = metrics.slice(0, 10)
@@ -129,6 +161,35 @@ export default function BrandPerformance() {
         subtitle="Failure rates, avg life, cost and ranking by brand"
         icon={BarChart2}
       />
+
+      {/* KPI summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="card text-center">
+          <p className="text-2xl font-bold text-white">{metrics.length}</p>
+          <p className="text-xs text-gray-500 mt-1">Brands Tracked</p>
+        </div>
+        <div className="card text-center">
+          <p className="text-2xl font-bold text-blue-400">{formatCurrencyCompact(totalCostAll, activeCurrency)}</p>
+          <p className="text-xs text-gray-500 mt-1">Total Fleet Cost</p>
+        </div>
+        {bestBrand && (
+          <div className="card text-center border-green-700/40">
+            <div className="flex items-center justify-center gap-1 mb-0.5">
+              <Award size={12} className="text-green-400" />
+              <p className="text-xs text-green-400 font-medium uppercase tracking-wide">Best Brand</p>
+            </div>
+            <p className="text-lg font-bold text-white truncate">{bestBrand.brand}</p>
+            <p className="text-xs text-green-400">{bestBrand.failureRate.toFixed(1)}% failure rate</p>
+          </div>
+        )}
+        {worstBrand && worstBrand.brand !== bestBrand?.brand && (
+          <div className="card text-center border-red-700/40">
+            <p className="text-xs text-red-400 font-medium uppercase tracking-wide mb-0.5">Highest Risk</p>
+            <p className="text-lg font-bold text-white truncate">{worstBrand.brand}</p>
+            <p className="text-xs text-red-400">{worstBrand.failureRate.toFixed(1)}% failure rate</p>
+          </div>
+        )}
+      </div>
 
       {/* Filter bar */}
       <div className="card space-y-3">
@@ -238,59 +299,117 @@ export default function BrandPerformance() {
       </div>
 
       {/* Ranking table */}
-      <div className="card overflow-x-auto">
-        <h3 className="text-sm font-medium text-gray-400 mb-4">Brand Ranking Table</h3>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-800">
-              <th className="pb-2 pr-3">#</th>
-              <th className="pb-2 pr-4">Brand</th>
-              <th className="pb-2 pr-4 text-right">Records</th>
-              <th className="pb-2 pr-4 text-right">Total Cost</th>
-              <th className="pb-2 pr-4 text-right">Avg/Tyre</th>
-              <th className="pb-2 pr-4 text-right">Failure Rate</th>
-              <th className="pb-2 pr-4">Top Failure</th>
-              <th className="pb-2 text-right">Risk Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            {metrics.map((b, i) => (
-              <tr
-                key={b.brand}
-                className="border-b border-gray-800/50 hover:bg-gray-800/30 cursor-pointer"
-                onClick={() => setSelected(selected === b.brand ? null : b.brand)}
-              >
-                <td className="py-2 pr-3 text-gray-500 text-xs">{i + 1}</td>
-                <td className="py-2 pr-4 font-medium text-white">{b.brand}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{b.count}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">
-                  {activeCurrency} {b.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
-                </td>
-                <td className="py-2 pr-4 text-gray-300 text-right">
-                  {activeCurrency} {Math.round(b.avgCost).toLocaleString()}
-                </td>
-                <td className="py-2 pr-4 text-right">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    b.failureRate > 30 ? 'bg-red-900/40 text-red-400' :
-                    b.failureRate > 15 ? 'bg-yellow-900/40 text-yellow-400' :
-                    'bg-green-900/40 text-green-400'
-                  }`}>
-                    {b.failureRate.toFixed(1)}%
-                  </span>
-                </td>
-                <td className="py-2 pr-4 text-gray-400 text-xs">{b.topCategory}</td>
-                <td className="py-2 text-right">
-                  <span className={`text-xs font-mono ${
-                    b.riskScore > 2 ? 'text-red-400' :
-                    b.riskScore > 1.5 ? 'text-yellow-400' : 'text-green-400'
-                  }`}>
-                    {b.riskScore.toFixed(2)}
-                  </span>
-                </td>
+      <div className="card p-0 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 gap-3 flex-wrap">
+          <h3 className="text-sm font-medium text-gray-300">Brand Ranking Table</h3>
+          <div className="flex items-center gap-2 flex-wrap ml-auto">
+            <div className="relative">
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input
+                className="input pl-7 text-xs py-1.5 w-36"
+                placeholder="Search brand…"
+                value={tableSearch}
+                onChange={e => setTableSearch(e.target.value)}
+              />
+            </div>
+            <button
+              onClick={() => exportToExcel(
+                metrics.map((b, i) => ({
+                  rank: i + 1, brand: b.brand, records: b.count,
+                  total_cost: b.totalCost, avg_cost: Math.round(b.avgCost),
+                  failure_rate: b.failureRate.toFixed(1) + '%',
+                  top_category: b.topCategory, risk_score: b.riskScore.toFixed(2),
+                })),
+                ['rank','brand','records','total_cost','avg_cost','failure_rate','top_category','risk_score'],
+                ['Rank','Brand','Records','Total Cost','Avg Cost','Failure Rate','Top Category','Risk Score'],
+                'TyrePulse_BrandPerformance'
+              )}
+              className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5"
+            >
+              <Download size={12} /> Excel
+            </button>
+            <button
+              onClick={() => exportToPdf(
+                metrics.map((b, i) => ({
+                  rank: i + 1, brand: b.brand, records: b.count,
+                  total_cost: formatCurrencyCompact(b.totalCost, activeCurrency),
+                  failure_rate: b.failureRate.toFixed(1) + '%',
+                  risk_score: b.riskScore.toFixed(2),
+                })),
+                [
+                  { key: 'rank',         header: '#' },
+                  { key: 'brand',        header: 'Brand' },
+                  { key: 'records',      header: 'Records' },
+                  { key: 'total_cost',   header: 'Total Cost' },
+                  { key: 'failure_rate', header: 'Failure Rate' },
+                  { key: 'risk_score',   header: 'Risk Score' },
+                ],
+                'Brand Performance Report',
+                'TyrePulse_BrandPerformance',
+                'landscape'
+              )}
+              className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5"
+            >
+              <FileText size={12} /> PDF
+            </button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-800/50">
+              <tr className="text-left text-gray-400 text-xs">
+                <th className="px-4 py-2.5">#</th>
+                <th className="px-3 py-2.5">Brand</th>
+                <th className="px-3 py-2.5 text-right">Records</th>
+                <th className="px-3 py-2.5 text-right">Total Cost</th>
+                <th className="px-3 py-2.5 text-right">Avg/Tyre</th>
+                <th className="px-3 py-2.5 text-right">Failure Rate</th>
+                <th className="px-3 py-2.5">Top Failure</th>
+                <th className="px-3 py-2.5 text-right">Risk Score</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredMetrics.map((b, i) => (
+                <tr
+                  key={b.brand}
+                  className="border-b border-gray-800/50 hover:bg-gray-800/30 cursor-pointer transition-colors"
+                  onClick={() => setSelected(selected === b.brand ? null : b.brand)}
+                >
+                  <td className="px-4 py-2 text-gray-500 text-xs">{metrics.indexOf(b) + 1}</td>
+                  <td className="px-3 py-2 font-medium text-white">{b.brand}</td>
+                  <td className="px-3 py-2 text-gray-300 text-right">{b.count}</td>
+                  <td className="px-3 py-2 text-gray-300 text-right">
+                    {formatCurrencyCompact(b.totalCost, activeCurrency)}
+                  </td>
+                  <td className="px-3 py-2 text-gray-300 text-right">
+                    {formatCurrencyCompact(b.avgCost, activeCurrency)}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      b.failureRate > 30 ? 'bg-red-900/40 text-red-400' :
+                      b.failureRate > 15 ? 'bg-yellow-900/40 text-yellow-400' :
+                      'bg-green-900/40 text-green-400'
+                    }`}>
+                      {b.failureRate.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-gray-400 text-xs">{b.topCategory}</td>
+                  <td className="px-3 py-2 text-right">
+                    <span className={`text-xs font-mono ${
+                      b.riskScore > 2 ? 'text-red-400' :
+                      b.riskScore > 1.5 ? 'text-yellow-400' : 'text-green-400'
+                    }`}>
+                      {b.riskScore.toFixed(2)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filteredMetrics.length === 0 && (
+            <div className="text-center py-8 text-gray-500 text-sm">No brands match "{tableSearch}"</div>
+          )}
+        </div>
       </div>
 
       {/* Drill-down panel */}

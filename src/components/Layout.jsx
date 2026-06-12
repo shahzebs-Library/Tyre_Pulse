@@ -15,7 +15,7 @@ import {
   TrendingUp, BookOpen, Zap, Database, Wrench, Calendar,
   Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
-  Recycle, Radio, PackagePlus,
+  Recycle, Radio, PackagePlus, Database,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -124,10 +124,11 @@ const NAV_GROUPS = [
   {
     label: 'Data',
     items: [
-      { to: '/cleaning', label: 'Data Cleaning', icon: Wand2,         adminOnly: true },
-      { to: '/upload',   label: 'Upload Data',   icon: Upload },
-      { to: '/audit',    label: 'Audit Trail',   icon: ClipboardList, adminOnly: true },
-      { to: '/settings', label: 'Settings',      icon: Settings },
+      { to: '/cleaning',     label: 'Data Cleaning',    icon: Wand2,         adminOnly: true },
+      { to: '/upload',       label: 'Upload Data',      icon: Upload },
+      { to: '/custom-data',  label: 'Custom Data',      icon: Database },
+      { to: '/audit',        label: 'Audit Trail',      icon: ClipboardList, adminOnly: true },
+      { to: '/settings',     label: 'Settings',         icon: Settings },
     ],
   },
 ]

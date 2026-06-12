@@ -1,5 +1,5 @@
-import { useState, useRef, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useRef, useMemo, useEffect } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen,
   AlertTriangle, Package, ChevronRight, Layers, Table2, Eye,
-  Rocket, Info, Zap, Search,
+  Rocket, Info, Zap, Search, Database,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -239,18 +239,28 @@ const STOCK_FIELDS = [
 /**
  * Returns: { [canonicalKey]: { header: string | null, score: number, band: string } }
  * Uses a greedy best-match assignment — each source column can only be used once.
+ * synonyms: [{ custom_name, maps_to }] — user-defined permanent mappings (score 100).
  */
-function smartMapping(headers, fields) {
+function smartMapping(headers, fields, synonyms = []) {
+  // Build synonym lookup: normalised custom_name → maps_to
+  const synLookup = {}
+  synonyms.forEach(s => { synLookup[normalise(s.custom_name)] = s.maps_to })
+
   const scores = {}
   fields.forEach(f => {
-    scores[f.key] = headers.map(h => ({ h, ...scoreHeader(h, f.guesses) }))
-      .sort((a, b) => b.score - a.score)
+    // Check synonyms first — they score 100 (exact)
+    const synHeader = headers.find(h => synLookup[normalise(h)] === f.key)
+    if (synHeader) {
+      scores[f.key] = [{ h: synHeader, score: 100, matchedGuess: synHeader }, ...headers.filter(h => h !== synHeader).map(h => ({ h, ...scoreHeader(h, f.guesses) })).sort((a, b) => b.score - a.score)]
+    } else {
+      scores[f.key] = headers.map(h => ({ h, ...scoreHeader(h, f.guesses) })).sort((a, b) => b.score - a.score)
+    }
   })
 
   const assigned = new Set()
   const result   = {}
 
-  // First pass: assign only high-confidence matches
+  // First pass: assign only high-confidence matches (≥65 or synonym)
   fields.forEach(f => {
     const best = scores[f.key].find(m => m.score >= 65 && !assigned.has(m.h))
     if (best) { result[f.key] = { header: best.h, score: best.score, band: confidenceBand(best.score) }; assigned.add(best.h) }
@@ -331,8 +341,15 @@ export default function UploadData() {
   const [progress, setProgress]   = useState({ done: 0, total: 0 })
   const [dragging, setDragging]   = useState(false)
   const [searchMapping, setSearchMapping] = useState('')
+  const [synonyms, setSynonyms]   = useState([])  // permanent field synonyms from DB
 
   const activeFields  = uploadType === 'stock' ? STOCK_FIELDS  : TYRE_FIELDS
+
+  // Load permanent synonyms once — injected into smart mapping for 100% confidence
+  useEffect(() => {
+    supabase.from('field_synonyms').select('custom_name, maps_to').eq('table_target', 'tyre_records')
+      .then(({ data }) => { if (data) setSynonyms(data) })
+  }, [])
 
   // Unmapped source columns — shown in a warning strip so user sees what's being dropped
   const unmappedSource = useMemo(() => {
@@ -369,8 +386,8 @@ export default function UploadData() {
       })
       setMappingScores(scores)
     } else {
-      // Smart auto-mapping
-      const sm = smartMapping(hdrs, activeFields)
+      // Smart auto-mapping — inject user-defined permanent synonyms
+      const sm = smartMapping(hdrs, activeFields, synonyms)
       finalMapping = {}
       const scores = {}
       Object.entries(sm).forEach(([k, v]) => { finalMapping[k] = v.header ?? undefined; scores[k] = { score: v.score, band: v.band } })
@@ -594,7 +611,20 @@ export default function UploadData() {
 
     await supabase.from('upload_history').insert({ file_names: [fileName], records_added: added, records_skipped: skipped + (skipDupes ? dupes.length : 0), skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? defaultCountry, uploaded_by: profile?.id, batch_id: batchId })
     await logAuditEvent({ action: 'UPLOAD', tableName: 'tyre_records', recordCount: added, details: { filename: fileName, rowCount: added, skippedCount: skipped + (skipDupes ? dupes.length : 0), country: activeCountry, batch_id: batchId } })
-    setResult({ added, skipped, skipLog, autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0 })
+
+    // Bump use_count on any synonyms that were exercised in this upload
+    const usedHeaders = new Set(Object.values(mapping).filter(Boolean).map(h => normalise(h)))
+    const hitSynonyms = synonyms.filter(s => usedHeaders.has(normalise(s.custom_name)))
+    if (hitSynonyms.length > 0) {
+      await Promise.all(hitSynonyms.map(s =>
+        supabase.from('field_synonyms').update({ use_count: s.use_count + 1, last_used_at: new Date().toISOString() })
+          .eq('custom_name', s.custom_name).eq('table_target', 'tyre_records')
+      ))
+    }
+
+    // Count unmapped columns saved as extra_fields
+    const extraColCount = unmappedSource.length
+    setResult({ added, skipped, skipLog, autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0, extraColCount })
     setStep('done')
   }
 
@@ -1054,6 +1084,24 @@ export default function UploadData() {
               <Tile label="Need Review"     value={result.needsReviewCount}    color="yellow" />
               <Tile label="Dupes Skipped"   value={result.dupesSkipped}        color="gray" />
             </div>
+
+            {/* Extra fields confirmation */}
+            {result.extraColCount > 0 && (
+              <div className="bg-purple-900/20 border border-purple-800/40 rounded-xl p-4 mb-4 flex items-start gap-3">
+                <Info size={18} className="text-purple-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-white font-medium">
+                    {result.extraColCount} extra column{result.extraColCount !== 1 ? 's' : ''} saved as custom data — nothing was lost
+                  </p>
+                  <p className="text-sm text-gray-400 mt-0.5">
+                    All columns that don't match a standard field are preserved in Custom Data. You can browse, search, export, or teach the system to recognise them permanently.
+                  </p>
+                  <Link to="/custom-data" className="inline-flex items-center gap-1.5 mt-2 text-sm text-purple-300 hover:text-purple-200 underline">
+                    View Custom Data →
+                  </Link>
+                </div>
+              </div>
+            )}
             {result.needsReviewCount > 0 && (
               <div className="bg-yellow-900/20 border border-yellow-800 rounded-xl p-4 mb-4">
                 <div className="flex items-start gap-3">

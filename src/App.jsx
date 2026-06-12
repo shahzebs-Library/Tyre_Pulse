@@ -80,6 +80,7 @@ import TyreScrapManagement from './pages/TyreScrapManagement'
 import StockReplenishment from './pages/StockReplenishment'
 import TyreScan from './pages/TyreScan'
 import QrLabels from './pages/QrLabels'
+import CustomData from './pages/CustomData'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt'
 import ErrorBoundary from './components/ErrorBoundary'
 
@@ -189,6 +190,7 @@ export default function App() {
 
                     {/* ── Universal ── */}
                     <Route path="/upload"      element={<Safe><UploadData /></Safe>} />
+                    <Route path="/custom-data" element={<Safe><CustomData /></Safe>} />
                     <Route path="/settings"    element={<Safe><Settings /></Safe>} />
                     <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                     <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />

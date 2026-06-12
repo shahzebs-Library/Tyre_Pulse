@@ -60,6 +60,108 @@ export interface OfflineInspection {
   error: string | null
 }
 
+// ── Accident types ────────────────────────────────────────────────────────────
+
+export type AccidentType =
+  | 'collision' | 'rollover' | 'tyre_failure'
+  | 'mechanical' | 'near_miss' | 'property_damage' | 'other'
+
+export type AccidentSeverity = 'minor' | 'moderate' | 'severe' | 'fatal'
+
+export type AccidentStatus = 'reported' | 'under_review' | 'closed'
+
+export interface AccidentRecord {
+  id: string
+  site: string
+  asset_no: string
+  vehicle_id: string | null
+  reported_by: string | null
+  reporter_name: string | null
+  incident_date: string          // ISO date YYYY-MM-DD
+  incident_time: string | null   // HH:MM
+  location: string | null
+  accident_type: AccidentType
+  severity: AccidentSeverity
+  description: string | null
+  injuries: boolean
+  injury_count: number
+  third_party_involved: boolean
+  police_report_no: string | null
+  damage_description: string | null
+  estimated_damage_cost: number | null
+  photos: string[]               // array of public Supabase Storage URLs
+  status: AccidentStatus
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AccidentDraft {
+  site: string
+  asset_no: string
+  vehicle_id: string | null
+  incident_date: string
+  incident_time: string
+  location: string
+  accident_type: AccidentType
+  severity: AccidentSeverity
+  description: string
+  injuries: boolean
+  injury_count: string           // string for TextInput
+  third_party_involved: boolean
+  police_report_no: string
+  damage_description: string
+  estimated_damage_cost: string  // string for TextInput
+  notes: string
+}
+
+export function emptyAccidentDraft(): AccidentDraft {
+  const now = new Date()
+  return {
+    site: '',
+    asset_no: '',
+    vehicle_id: null,
+    incident_date: now.toISOString().split('T')[0],
+    incident_time: `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
+    location: '',
+    accident_type: 'collision',
+    severity: 'minor',
+    description: '',
+    injuries: false,
+    injury_count: '0',
+    third_party_involved: false,
+    police_report_no: '',
+    damage_description: '',
+    estimated_damage_cost: '',
+    notes: '',
+  }
+}
+
+export const ACCIDENT_TYPE_LABELS: Record<AccidentType, string> = {
+  collision:       'Vehicle Collision',
+  rollover:        'Vehicle Rollover',
+  tyre_failure:    'Tyre Failure',
+  mechanical:      'Mechanical Failure',
+  near_miss:       'Near Miss',
+  property_damage: 'Property Damage',
+  other:           'Other',
+}
+
+export const SEVERITY_COLORS: Record<AccidentSeverity, string> = {
+  minor:    '#16a34a',
+  moderate: '#f59e0b',
+  severe:   '#ea580c',
+  fatal:    '#dc2626',
+}
+
+export const STATUS_COLORS: Record<AccidentStatus, string> = {
+  reported:     '#3b82f6',
+  under_review: '#f59e0b',
+  closed:       '#6b7280',
+}
+
+// ── Tyre position constants ───────────────────────────────────────────────────
+
 export const TYRE_POSITIONS: Record<string, string[]> = {
   '4-Wheeler':  ['FL', 'FR', 'RL', 'RR', 'Spare'],
   '6-Wheeler':  ['FL', 'FR', 'RL1', 'RL2', 'RR1', 'RR2', 'Spare'],

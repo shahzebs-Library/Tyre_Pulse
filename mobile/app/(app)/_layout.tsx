@@ -53,6 +53,16 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
+        name="accident/dashboard"
+        options={{
+          title: t('tabs.accident'),
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name="warning-outline" size={size} color={focused ? '#dc2626' : color} />
+          ),
+          tabBarActiveTintColor: '#dc2626',
+        }}
+      />
+      <Tabs.Screen
         name="history"
         options={{
           title: t('tabs.history'),
@@ -66,7 +76,9 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen name="scanner" options={{ href: null }} />
+      <Tabs.Screen name="scanner"           options={{ href: null }} />
+      <Tabs.Screen name="accident/report"   options={{ href: null }} />
+      <Tabs.Screen name="accident/[id]"     options={{ href: null }} />
     </Tabs>
   )
 }

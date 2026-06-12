@@ -28,7 +28,10 @@ export interface TyrePositionData {
   pressure_psi: string
   tread_depth_mm: string
   condition: TyreCondition
+  /** Local file URI — used for immediate on-device preview only */
   photo_uri: string | null
+  /** Permanent public Supabase Storage URL — persists after reinstall */
+  photo_url: string | null
   notes: string
 }
 
@@ -81,6 +84,7 @@ export function emptyTyrePosition(position: string): TyrePositionData {
     tread_depth_mm: '',
     condition: 'Good',
     photo_uri: null,
+    photo_url: null,
     notes: '',
   }
 }

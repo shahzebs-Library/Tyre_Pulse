@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, StatusBar, Platform,
-  KeyboardAvoidingView,
+  KeyboardAvoidingView, useWindowDimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
@@ -12,6 +12,7 @@ import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { enqueueInspection } from '../../../lib/offlineQueue'
 import TyrePositionCard from '../../../components/TyrePositionCard'
+import VehicleTyreDiagram from '../../../components/VehicleTyreDiagram'
 import {
   VehicleFleet, TyrePositionData,
   getPositionsForVehicle, emptyTyrePosition,
@@ -38,10 +39,29 @@ export default function NewInspectionScreen() {
   const [tyreData, setTyreData] = useState<Record<string, TyrePositionData>>({})
   const [submitting, setSubmitting] = useState(false)
 
+  const { width: screenWidth } = useWindowDimensions()
+  const [highlightedPosition, setHighlightedPosition] = useState<string | null>(null)
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const textAlign = isRTL ? 'right' : 'left'
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
   const backIcon = isRTL ? 'arrow-forward' : 'arrow-back'
   const forwardIcon = isRTL ? 'arrow-back' : 'arrow-forward'
+
+  function handleDiagramPositionPress(position: string) {
+    // Clear any pending timer so re-tapping the same tyre re-highlights
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    setHighlightedPosition(position)
+    // Auto-clear highlight after 4 s so the card can be re-collapsed normally
+    highlightTimerRef.current = setTimeout(() => setHighlightedPosition(null), 4000)
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => { loadSites() }, [])
 
@@ -321,6 +341,18 @@ export default function NewInspectionScreen() {
         </View>
 
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          {/* ── Interactive vehicle tyre diagram ─────────────────────────── */}
+          {selectedVehicle && (
+            <VehicleTyreDiagram
+              vehicleType={selectedVehicle.vehicle_type}
+              positions={positions}
+              tyreData={tyreData}
+              selectedPosition={highlightedPosition}
+              onPositionPress={handleDiagramPositionPress}
+              width={screenWidth - 32}
+            />
+          )}
+
           <View style={[styles.positionHint, isRTL && styles.positionHintRTL]}>
             <Ionicons name="information-circle-outline" size={15} color="#64748b" />
             <Text style={[styles.positionHintText, { textAlign }]}>
@@ -333,6 +365,7 @@ export default function NewInspectionScreen() {
               key={pos}
               data={tyreData[pos] ?? emptyTyrePosition(pos)}
               onChange={data => handleTyreUpdate(pos, data)}
+              isHighlighted={highlightedPosition === pos}
             />
           ))}
 

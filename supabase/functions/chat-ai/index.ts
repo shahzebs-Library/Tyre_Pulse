@@ -11,10 +11,16 @@ serve(async (req) => {
   }
 
   try {
-    const { system, user, model = 'claude-haiku-4-5-20251001', max_tokens = 1500 } = await req.json()
+    const body = await req.json()
+    const { system, user, messages, model = 'claude-haiku-4-5-20251001', max_tokens = 2000 } = body
 
-    if (!user) {
-      return new Response(JSON.stringify({ error: 'Missing required field: user' }), {
+    // Support both single-turn (user string) and multi-turn (messages array)
+    const messageArray = messages && Array.isArray(messages) && messages.length > 0
+      ? messages
+      : [{ role: 'user', content: user ?? '' }]
+
+    if (!messageArray.length || !messageArray[messageArray.length - 1]?.content) {
+      return new Response(JSON.stringify({ error: 'Missing message content' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
@@ -37,13 +43,13 @@ serve(async (req) => {
         model,
         max_tokens,
         ...(system ? { system } : {}),
-        messages: [{ role: 'user', content: user }],
+        messages: messageArray,
       }),
     })
 
     if (!response.ok) {
       const err = await response.text()
-      throw new Error(`Anthropic API error: ${response.status} ${err}`)
+      throw new Error(`API error: ${response.status} ${err}`)
     }
 
     const data = await response.json()

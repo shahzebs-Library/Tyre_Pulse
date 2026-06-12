@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
 import { normaliseRole } from '../../../lib/types'
+import { useAdminGuard } from '../../../hooks/useRoleGuard'
 
 interface UserProfile {
   id: string
@@ -42,6 +43,7 @@ const ROLE_COLORS: Record<string, { bg: string; text: string }> = {
 type FilterKey = 'all' | 'pending' | 'approved'
 
 export default function UserManagementScreen() {
+  const { allowed, loading: guardLoading } = useAdminGuard()   // admin only
   const { profile } = useAuth()
   const router = useRouter()
 
@@ -161,7 +163,7 @@ export default function UserManagementScreen() {
 
   const pendingCount = users.filter(u => !u.approved).length
 
-  if (loading) {
+  if (guardLoading || !allowed || loading) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />

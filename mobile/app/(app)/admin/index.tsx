@@ -18,6 +18,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { SEVERITY_COLORS, STATUS_COLORS, isAdminOrAbove, isAdmin } from '../../../lib/types'
+import { useElevatedGuard } from '../../../hooks/useRoleGuard'
 
 interface Stats {
   totalVehicles:    number
@@ -57,6 +58,7 @@ const GREETING = () => {
 }
 
 export default function AdminDashboardScreen() {
+  const { allowed, loading: guardLoading } = useElevatedGuard()
   const { profile } = useAuth()
   const { t } = useLanguage()
   const router = useRouter()
@@ -117,7 +119,7 @@ export default function AdminDashboardScreen() {
     setRefreshing(false)
   }
 
-  if (loading) {
+  if (guardLoading || !allowed || loading) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />

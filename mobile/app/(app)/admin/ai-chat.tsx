@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
+import { useElevatedGuard } from '../../../hooks/useRoleGuard'
 
 // ── Agent definitions ─────────────────────────────────────────────────────────
 
@@ -75,8 +76,20 @@ interface Message {
 }
 
 export default function AiChatScreen() {
+  const { allowed, loading: guardLoading } = useElevatedGuard()
   const { profile } = useAuth()
   const router = useRouter()
+
+  if (guardLoading || !allowed) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color="#7c3aed" />
+        </View>
+      </SafeAreaView>
+    )
+  }
 
   const [agent, setAgent]       = useState<AgentKey>('analyst')
   const [messages, setMessages] = useState<Message[]>([])

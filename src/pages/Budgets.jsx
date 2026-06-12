@@ -6,6 +6,7 @@ import { Plus, Save, X, Download, FileText, PiggyBank } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatCurrencyCompact } from '../lib/formatters'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement,
   Filler, Tooltip, Legend, BarElement,
@@ -29,21 +30,34 @@ const STATUS_COLORS = {
   Closed:    'text-gray-500',
 }
 
+function KpiSkeletons() {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="card animate-pulse">
+          <div className="h-3 w-24 bg-gray-800/40 rounded mb-3" />
+          <div className="h-7 w-32 bg-gray-800/40 rounded" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Budgets() {
   const { profile }   = useAuth()
   const { appSettings, activeCountry } = useSettings()
   const [budgets, setBudgets]     = useState([])
-  const [spending, setSpending]   = useState({})   // { 'site-year-month': number }
+  const [spending, setSpending]   = useState({})
   const [loading, setLoading]     = useState(true)
   const [showForm, setShowForm]   = useState(false)
   const [form, setForm]           = useState(EMPTY_FORM)
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState('')
-  const [viewMode, setViewMode]   = useState('month')  // 'month' | 'annual'
+  const [viewMode, setViewMode]   = useState('month')
   const [filterYear, setFilterYear]   = useState(CURRENT_YEAR)
   const [filterMonth, setFilterMonth] = useState(CURRENT_MONTH)
   const [plannerYear, setPlannerYear] = useState(CURRENT_YEAR)
-  const [plannerEdits, setPlannerEdits] = useState({})  // { 'site-m': value }
+  const [plannerEdits, setPlannerEdits] = useState({})
   const [savingPlanner, setSavingPlanner] = useState(false)
 
   useEffect(() => { load() }, [filterYear, filterMonth, plannerYear, viewMode, activeCountry])
@@ -72,7 +86,6 @@ export default function Budgets() {
       })
       setSpending(spend)
     } else {
-      // Annual view — load all 12 months
       const [budgetRes, tyreRes] = await Promise.all([
         flt(supabase.from('budgets').select('*').eq('year', plannerYear).order('site')),
         flt(supabase.from('tyre_records')
@@ -131,7 +144,6 @@ export default function Budgets() {
     setSavingPlanner(false)
   }
 
-  // Annual planner: unique sites
   const annualSites = useMemo(() => {
     const s = new Set(budgets.map(b => b.site))
     return [...s].sort()
@@ -148,17 +160,17 @@ export default function Budgets() {
     return spending[`${site}~${year ?? filterYear}~${m}`] ?? 0
   }
 
-  // Monthly view totals
   const totalBudget = useMemo(() =>
     budgets.reduce((s, b) => s + b.monthly_budget, 0), [budgets])
   const totalSpend = useMemo(() =>
     budgets.reduce((s, b) => s + getSpend(b.site, filterMonth), 0), [budgets, spending, filterMonth])
 
-  // Budget vs actuals chart (annual view: cumulative)
+  const utilPct = totalBudget > 0 ? Math.round((totalSpend / totalBudget) * 100) : 0
+  const utilColor = utilPct >= 100 ? 'text-red-400' : utilPct >= 80 ? 'text-yellow-400' : 'text-green-400'
+
   const cumulativeChartData = useMemo(() => {
     if (viewMode !== 'annual' || !annualSites.length) return null
 
-    // Aggregate across all sites per month
     const budgetPerMonth = Array.from({ length: 12 }, (_, i) => {
       const m = i + 1
       return annualSites.reduce((s, site) => {
@@ -172,7 +184,6 @@ export default function Budgets() {
       return annualSites.reduce((s, site) => s + getSpend(site, m, plannerYear), 0)
     })
 
-    // Cumulative
     let cumBudget = 0, cumSpend = 0
     const cumBudgets = budgetPerMonth.map(v => (cumBudget += v))
     const cumSpends  = spendPerMonth.map(v => (cumSpend += v))
@@ -228,9 +239,15 @@ export default function Budgets() {
   function exportPdfFn() {
     const rows = budgets.map(b => {
       const spent = getSpend(b.site, filterMonth)
-      return [b.site, b.monthly_budget.toLocaleString(), spent.toLocaleString(), (b.monthly_budget - spent).toLocaleString()]
+      return { site: b.site, budget: Math.round(b.monthly_budget), spent: Math.round(spent), remaining: Math.round(b.monthly_budget - spent) }
     })
-    exportToPdf(rows, ['Site', 'Budget', 'Spent', 'Remaining'], 'Budget Report', `budget-${filterYear}-${filterMonth}`)
+    exportToPdf(
+      rows,
+      [{ key: 'site', header: 'Site' }, { key: 'budget', header: 'Budget' }, { key: 'spent', header: 'Spent' }, { key: 'remaining', header: 'Remaining' }],
+      `Budget Report – ${MONTHS_LABELS[filterMonth - 1]} ${filterYear}`,
+      `budget-${filterYear}-${filterMonth}`,
+      'portrait',
+    )
   }
 
   return (
@@ -276,21 +293,56 @@ export default function Budgets() {
             </select>
           </div>
 
-          {budgets.length > 0 && (
-            <div className="grid grid-cols-3 gap-4">
-              <div className="card"><p className="text-gray-400 text-sm">Total Budget</p><p className="text-2xl font-bold text-white mt-1">SAR {totalBudget.toLocaleString()}</p></div>
-              <div className="card"><p className="text-gray-400 text-sm">Total Spent</p><p className={`text-2xl font-bold mt-1 ${totalSpend > totalBudget ? 'text-red-400' : 'text-green-400'}`}>SAR {totalSpend.toLocaleString()}</p></div>
-              <div className="card"><p className="text-gray-400 text-sm">Remaining</p><p className={`text-2xl font-bold mt-1 ${totalBudget - totalSpend < 0 ? 'text-red-400' : 'text-blue-400'}`}>SAR {(totalBudget - totalSpend).toLocaleString()}</p></div>
+          {loading ? (
+            <KpiSkeletons />
+          ) : budgets.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="card">
+                <p className="text-gray-400 text-sm">Total Budget</p>
+                <p className="text-2xl font-bold text-white mt-1">{formatCurrencyCompact(totalBudget)}</p>
+              </div>
+              <div className="card">
+                <p className="text-gray-400 text-sm">Total Spent</p>
+                <p className={`text-2xl font-bold mt-1 ${totalSpend > totalBudget ? 'text-red-400' : 'text-green-400'}`}>
+                  {formatCurrencyCompact(totalSpend)}
+                </p>
+              </div>
+              <div className="card">
+                <p className="text-gray-400 text-sm">Remaining</p>
+                <p className={`text-2xl font-bold mt-1 ${totalBudget - totalSpend < 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                  {formatCurrencyCompact(totalBudget - totalSpend)}
+                </p>
+              </div>
+              <div className="card">
+                <p className="text-gray-400 text-sm">Utilization</p>
+                <p className={`text-2xl font-bold mt-1 ${utilColor}`}>{utilPct}%</p>
+              </div>
             </div>
           )}
 
           <div className="card p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr>{['Site', 'Budget (SAR)', 'Spent (SAR)', 'Remaining', 'Progress', 'Status'].map(h => <th key={h} className="table-header">{h}</th>)}</tr></thead>
+                <thead>
+                  <tr>
+                    {['Site', 'Budget (SAR)', 'Spent (SAR)', 'Remaining', 'Progress', 'Status'].map(h => (
+                      <th key={h} className="table-header">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={6} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                    <>
+                      {Array.from({ length: 4 }).map((_, ri) => (
+                        <tr key={ri} className="animate-pulse border-b border-gray-800/40">
+                          {Array.from({ length: 6 }).map((_, ci) => (
+                            <td key={ci} className="table-cell">
+                              <div className="h-3 rounded bg-gray-800/40" style={{ width: ci === 0 ? '80%' : ci === 4 ? '60%' : '55%' }} />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </>
                   ) : budgets.length === 0 ? (
                     <tr><td colSpan={6} className="text-center py-12 text-gray-500">No budgets for this period</td></tr>
                   ) : budgets.map(b => {
@@ -371,7 +423,14 @@ export default function Budgets() {
 
           {/* 12-month grid */}
           {loading ? (
-            <div className="card text-center py-12 text-gray-500">Loading…</div>
+            <div className="card overflow-x-auto animate-pulse">
+              <div className="h-3 w-48 bg-gray-800/40 rounded mb-4" />
+              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(13, minmax(0, 1fr))' }}>
+                {Array.from({ length: 5 * 13 }).map((_, i) => (
+                  <div key={i} className="h-7 rounded bg-gray-800/40" />
+                ))}
+              </div>
+            </div>
           ) : annualSites.length === 0 ? (
             <div className="card text-center py-12 text-gray-500">
               No budgets for {plannerYear}. Add some using "Set Budget" above.
@@ -421,7 +480,7 @@ export default function Budgets() {
                                 {spent > 0 && (
                                   <div
                                     className={`text-[9px] mt-0.5 ${overBudget ? 'text-red-400' : 'text-green-400'}`}
-                                    title={`Actual: SAR ${spent.toLocaleString()}`}
+                                    title={`Actual: ${formatCurrencyCompact(spent)}`}
                                   >
                                     ≈{Math.round(spent / 1000)}k
                                   </div>
@@ -431,7 +490,7 @@ export default function Budgets() {
                           )
                         })}
                         <td className="py-1.5 px-2 text-right text-gray-300 font-medium">
-                          {siteTotal > 0 ? `SAR ${siteTotal.toLocaleString('en-SA', { maximumFractionDigits: 0 })}` : '—'}
+                          {siteTotal > 0 ? formatCurrencyCompact(siteTotal) : '—'}
                         </td>
                       </tr>
                     )

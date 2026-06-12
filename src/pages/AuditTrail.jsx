@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { exportToExcel } from '../lib/exportUtils'
 import { useAuth } from '../contexts/AuthContext'
 import { logAuditEvent } from '../lib/auditLogger'
+import { formatDateTime, formatDate } from '../lib/formatters'
 import {
-  FileSpreadsheet, ChevronLeft, ChevronRight, ClipboardList, RefreshCw,
+  FileSpreadsheet, ChevronLeft, ChevronRight, ClipboardList, RefreshCw, Search,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -18,7 +19,11 @@ const ACTION_BADGE = {
   EXPORT: 'bg-green-900/50 text-green-300 border-green-700/50',
 }
 
-function SummaryCard({ label, value, color }) {
+function SummarySkeleton() {
+  return <div className="animate-pulse bg-gray-800/40 rounded h-8 w-24" />
+}
+
+function SummaryCard({ label, value, color, loading }) {
   const colors = {
     blue:   'text-blue-400 border-blue-800 bg-blue-900/20',
     green:  'text-green-400 border-green-800 bg-green-900/20',
@@ -27,7 +32,11 @@ function SummaryCard({ label, value, color }) {
   }
   return (
     <div className={`card border ${colors[color]}`}>
-      <p className={`text-3xl font-bold ${colors[color].split(' ')[0]}`}>{value ?? 0}</p>
+      {loading ? (
+        <SummarySkeleton />
+      ) : (
+        <p className={`text-3xl font-bold ${colors[color].split(' ')[0]}`}>{value ?? 0}</p>
+      )}
       <p className="text-sm mt-1 text-gray-400">{label}</p>
     </div>
   )
@@ -47,10 +56,11 @@ export default function AuditTrail() {
   const [auditPage, setAuditPage]   = useState(0)
   const [auditLoading, setAuditLoading] = useState(false)
   const [expandedRow, setExpandedRow]   = useState(null)
+  const [auditSearch, setAuditSearch]   = useState('')
 
   // Filters
-  const [dateFrom, setDateFrom]     = useState('')
-  const [dateTo, setDateTo]         = useState('')
+  const [dateFrom, setDateFrom]         = useState('')
+  const [dateTo, setDateTo]             = useState('')
   const [actionFilter, setActionFilter] = useState('')
   const [userFilter, setUserFilter]     = useState('')
   const [userOptions, setUserOptions]   = useState([])
@@ -157,7 +167,7 @@ export default function AuditTrail() {
       .limit(5000)
 
     const rows = (data ?? []).map(r => ({
-      timestamp:  r.created_at ? new Date(r.created_at).toLocaleString() : '',
+      timestamp:  r.created_at ? formatDateTime(r.created_at) : '',
       user:       r.profiles?.full_name ?? r.profiles?.username ?? r.user_id ?? '',
       action:     r.action ?? '',
       table_name: r.table_name ?? '',
@@ -186,7 +196,7 @@ export default function AuditTrail() {
       records_added:   r.records_added ?? 0,
       records_skipped: r.records_skipped ?? 0,
       uploaded_by:     r.profiles?.full_name ?? r.profiles?.username ?? r.uploaded_by ?? '',
-      uploaded_at:     r.uploaded_at ? new Date(r.uploaded_at).toLocaleString() : '',
+      uploaded_at:     r.uploaded_at ? formatDateTime(r.uploaded_at) : '',
       region:          r.region ?? '',
     }))
 
@@ -213,6 +223,17 @@ export default function AuditTrail() {
   const auditPages  = Math.ceil(auditTotal  / PAGE_SIZE)
   const uploadPages = Math.ceil(uploadTotal / PAGE_SIZE)
 
+  // Client-side search filter on current page rows
+  const searchTerm = auditSearch.trim().toLowerCase()
+  const visibleAuditRows = searchTerm
+    ? auditRows.filter(row => {
+        const userName = (row.profiles?.full_name ?? row.profiles?.username ?? '').toLowerCase()
+        const action   = (row.action ?? '').toLowerCase()
+        const table    = (row.table_name ?? '').toLowerCase()
+        return userName.includes(searchTerm) || action.includes(searchTerm) || table.includes(searchTerm)
+      })
+    : auditRows
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -223,10 +244,10 @@ export default function AuditTrail() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SummaryCard label="Total Events"           value={statsLoading ? '…' : stats.totalEvents.toLocaleString()} color="blue" />
-        <SummaryCard label="Uploads This Month"     value={statsLoading ? '…' : stats.uploadsMonth.toLocaleString()} color="green" />
-        <SummaryCard label="Records Added This Month" value={statsLoading ? '…' : stats.recordsMonth.toLocaleString()} color="purple" />
-        <SummaryCard label="Active Users (30 days)" value={statsLoading ? '…' : stats.activeUsers.toLocaleString()} color="amber" />
+        <SummaryCard label="Total Events"             value={stats.totalEvents.toLocaleString()}  color="blue"   loading={statsLoading} />
+        <SummaryCard label="Uploads This Month"       value={stats.uploadsMonth.toLocaleString()}  color="green"  loading={statsLoading} />
+        <SummaryCard label="Records Added This Month" value={stats.recordsMonth.toLocaleString()}  color="purple" loading={statsLoading} />
+        <SummaryCard label="Active Users (30 days)"   value={stats.activeUsers.toLocaleString()}   color="amber"  loading={statsLoading} />
       </div>
 
       {/* Tabs */}
@@ -285,6 +306,19 @@ export default function AuditTrail() {
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="label">Search</label>
+                <div className="relative">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="text"
+                    className="input pl-8 w-48"
+                    placeholder="Action, table, user…"
+                    value={auditSearch}
+                    onChange={e => setAuditSearch(e.target.value)}
+                  />
+                </div>
+              </div>
               <button onClick={loadAudit} className="btn-secondary flex items-center gap-2 text-sm">
                 <RefreshCw size={14} /> Refresh
               </button>
@@ -308,13 +342,13 @@ export default function AuditTrail() {
                 <tbody>
                   {auditLoading ? (
                     <tr><td colSpan={6} className="text-center py-12 text-gray-500">Loading…</td></tr>
-                  ) : auditRows.length === 0 ? (
+                  ) : visibleAuditRows.length === 0 ? (
                     <tr><td colSpan={6} className="text-center py-12 text-gray-500">No audit events found</td></tr>
-                  ) : auditRows.map(row => (
-                    <>
-                      <tr key={row.id} className="hover:bg-gray-800/30 transition-colors">
+                  ) : visibleAuditRows.map(row => (
+                    <React.Fragment key={row.id}>
+                      <tr className="hover:bg-gray-800/30 transition-colors">
                         <td className="table-cell text-gray-400 text-xs whitespace-nowrap">
-                          {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
+                          {formatDateTime(row.created_at)}
                         </td>
                         <td className="table-cell text-gray-200">
                           {row.profiles?.full_name ?? row.profiles?.username ?? <span className="text-gray-600">Unknown</span>}
@@ -340,7 +374,7 @@ export default function AuditTrail() {
                         </td>
                       </tr>
                       {expandedRow === row.id && (
-                        <tr key={`${row.id}-detail`} className="bg-gray-900/50">
+                        <tr className="bg-gray-900/50">
                           <td colSpan={6} className="px-4 pb-3 pt-0">
                             <pre className="text-xs text-gray-400 bg-gray-800/60 rounded p-3 overflow-auto max-h-40">
                               {JSON.stringify(row.details, null, 2)}
@@ -348,7 +382,7 @@ export default function AuditTrail() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
@@ -415,7 +449,7 @@ export default function AuditTrail() {
                         {row.profiles?.full_name ?? row.profiles?.username ?? <span className="text-gray-600">Unknown</span>}
                       </td>
                       <td className="table-cell text-gray-400 text-xs whitespace-nowrap">
-                        {row.uploaded_at ? new Date(row.uploaded_at).toLocaleString() : '—'}
+                        {formatDateTime(row.uploaded_at)}
                       </td>
                       <td className="table-cell text-gray-400">{row.region ?? '—'}</td>
                       {profile?.role === 'Admin' && (
@@ -460,7 +494,7 @@ export default function AuditTrail() {
           <div className="bg-gray-900 border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-white mb-3">Delete Upload Batch</h2>
             <p className="text-gray-400 text-sm mb-4">
-              This will permanently delete <strong className="text-white">{deleteTarget.count} records</strong> uploaded on {new Date(deleteTarget.date).toLocaleDateString()}. This cannot be undone.
+              This will permanently delete <strong className="text-white">{deleteTarget.count} records</strong> uploaded on {formatDate(deleteTarget.date)}. This cannot be undone.
             </p>
             <p className="text-sm text-gray-400 mb-2">Type <span className="font-mono text-red-400">DELETE</span> to confirm:</p>
             <input className="input mb-4" placeholder="DELETE" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} />

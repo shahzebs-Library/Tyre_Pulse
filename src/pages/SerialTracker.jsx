@@ -2,29 +2,88 @@ import { useState, useMemo, useRef } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
+import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import { ScanLine, Search, Download, FileText, Upload } from 'lucide-react'
-import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 
-export default function SerialTracker() {
-  const [activeTab, setActiveTab] = useState('single') // 'single' | 'bulk'
+function SearchSkeleton() {
+  return (
+    <>
+      <div className="card animate-pulse">
+        <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-40 bg-gray-800/40 rounded-md" />
+              <div className="h-6 w-16 bg-gray-800/40 rounded-full" />
+            </div>
+            <div className="h-4 w-56 bg-gray-800/40 rounded" />
+          </div>
+          <div className="flex gap-2">
+            <div className="h-8 w-20 bg-gray-800/40 rounded-md" />
+            <div className="h-8 w-16 bg-gray-800/40 rounded-md" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-gray-800/40 rounded-lg p-3 text-center space-y-2">
+              <div className="h-6 w-12 bg-gray-700/40 rounded mx-auto" />
+              <div className="h-3 w-20 bg-gray-700/40 rounded mx-auto" />
+            </div>
+          ))}
+        </div>
+        <div className="h-4 w-32 bg-gray-800/40 rounded mt-3" />
+      </div>
 
-  // ── Single Search state ───────────────────────────────────────────────────────
+      <div className="card animate-pulse">
+        <div className="h-5 w-32 bg-gray-800/40 rounded mb-4" />
+        <div className="space-y-4">
+          {[...Array(3)].map((_, gi) => (
+            <div key={gi}>
+              <div className="h-4 w-28 bg-gray-800/40 rounded mb-2" />
+              <div className="space-y-2 pl-3 border-l border-gray-800">
+                {[...Array(2)].map((_, ri) => (
+                  <div key={ri} className="flex items-start gap-3 py-2">
+                    <div className="h-3 w-20 bg-gray-800/40 rounded flex-shrink-0 mt-1" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex gap-3">
+                        <div className="h-3 w-16 bg-gray-800/40 rounded" />
+                        <div className="h-3 w-12 bg-gray-800/40 rounded" />
+                        <div className="h-3 w-10 bg-gray-800/40 rounded" />
+                      </div>
+                      <div className="h-3 w-36 bg-gray-800/40 rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
+export default function SerialTracker() {
+  const [activeTab, setActiveTab] = useState('single')
+
+  // ── Single Search state ───────────────────────────────────────────────────
   const [serialInput, setSerialInput] = useState('')
   const [records, setRecords]         = useState([])
   const [loading, setLoading]         = useState(false)
   const [searched, setSearched]       = useState(false)
   const [lastQuery, setLastQuery]     = useState('')
 
-  // ── Bulk Lookup state ─────────────────────────────────────────────────────────
-  const [bulkResults, setBulkResults]     = useState([])   // [{ serial, first_seen, last_asset, total_records, status }]
-  const [bulkLoading, setBulkLoading]     = useState(false)
-  const [bulkFileName, setBulkFileName]   = useState('')
-  const [bulkDragOver, setBulkDragOver]   = useState(false)
-  const [bulkDone, setBulkDone]           = useState(false)
+  // ── Bulk Lookup state ─────────────────────────────────────────────────────
+  const [bulkResults, setBulkResults]   = useState([])
+  const [bulkLoading, setBulkLoading]   = useState(false)
+  const [bulkFileName, setBulkFileName] = useState('')
+  const [bulkDragOver, setBulkDragOver] = useState(false)
+  const [bulkDone, setBulkDone]         = useState(false)
+  const [bulkSearch, setBulkSearch]     = useState('')
+  const [statusFilter, setStatusFilter] = useState(null)
   const bulkFileRef = useRef(null)
 
-  // ── Single search functions ───────────────────────────────────────────────────
+  // ── Single search ─────────────────────────────────────────────────────────
   async function search() {
     if (!serialInput.trim()) return
     setLoading(true)
@@ -108,7 +167,7 @@ export default function SerialTracker() {
     return 'text-green-400'
   }
 
-  // ── Bulk Lookup functions ─────────────────────────────────────────────────────
+  // ── Bulk Lookup ───────────────────────────────────────────────────────────
   const SERIAL_HEADERS = ['serial_no', 'Serial No', 'Serial Number', 'serial']
 
   function extractSerialsFromSheet(wb) {
@@ -127,6 +186,8 @@ export default function SerialTracker() {
     setBulkLoading(true)
     setBulkDone(false)
     setBulkResults([])
+    setBulkSearch('')
+    setStatusFilter(null)
 
     const arrayBuffer = await file.arrayBuffer()
     const wb = XLSX.read(arrayBuffer, { type: 'array' })
@@ -151,20 +212,22 @@ export default function SerialTracker() {
         batch.map(async serial => {
           const { data } = await supabase
             .from('tyre_records')
-            .select('serial_no, issue_date, asset_no')
+            .select('serial_no, issue_date, asset_no, cost')
             .eq('serial_no', serial)
             .order('issue_date', { ascending: true })
           if (!data || data.length === 0) {
-            return { serial, first_seen: null, last_asset: null, total_records: 0, status: 'Not Found' }
+            return { serial, first_seen: null, last_asset: null, total_records: 0, cost: 0, status: 'Not Found' }
           }
           const first = data[0]
           const last  = data[data.length - 1]
           const isActive = last.issue_date && last.issue_date >= cutoffStr
+          const cost = data.reduce((s, r) => s + (parseFloat(r.cost) || 0), 0)
           return {
             serial,
             first_seen: first.issue_date || null,
             last_asset: last.asset_no || null,
             total_records: data.length,
+            cost,
             status: isActive ? 'Active' : 'Retired',
           }
         })
@@ -192,30 +255,43 @@ export default function SerialTracker() {
   function exportBulkExcel() {
     exportToExcel(
       bulkResults,
-      ['serial', 'first_seen', 'last_asset', 'total_records', 'status'],
-      ['Serial No', 'First Seen', 'Last Asset', 'Records', 'Status'],
+      ['serial', 'first_seen', 'last_asset', 'total_records', 'cost', 'status'],
+      ['Serial No', 'First Seen', 'Last Asset', 'Records', 'Cost', 'Status'],
       'TyrePulse_BulkLookup'
     )
   }
 
   const bulkSummary = useMemo(() => {
     if (bulkResults.length === 0) return null
-    const found   = bulkResults.filter(r => r.status !== 'Not Found')
+    const found   = bulkResults.filter(r => r.status !== 'Not Found').length
     const active  = bulkResults.filter(r => r.status === 'Active').length
     const retired = bulkResults.filter(r => r.status === 'Retired').length
-    return { total: found.length, active, retired }
+    const notFound = bulkResults.filter(r => r.status === 'Not Found').length
+    return { total: found, active, retired, notFound }
   }, [bulkResults])
+
+  const filteredBulkResults = useMemo(() => {
+    let rows = bulkResults
+    if (statusFilter) rows = rows.filter(r => r.status === statusFilter)
+    if (bulkSearch.trim()) {
+      const q = bulkSearch.trim().toLowerCase()
+      rows = rows.filter(r =>
+        r.serial.toLowerCase().includes(q) ||
+        (r.last_asset || '').toLowerCase().includes(q) ||
+        r.status.toLowerCase().includes(q)
+      )
+    }
+    return rows
+  }, [bulkResults, bulkSearch, statusFilter])
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <PageHeader
         title="Serial Tracker"
         subtitle="Track a tyre's complete service history by serial number"
         icon={ScanLine}
       />
 
-      {/* Tabs */}
       <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg w-fit">
         {[['single', 'Single Search'], ['bulk', 'Bulk Lookup']].map(([key, label]) => (
           <button
@@ -230,7 +306,7 @@ export default function SerialTracker() {
         ))}
       </div>
 
-      {/* ── Single Search tab ──────────────────────────────────────────────────── */}
+      {/* ── Single Search tab ──────────────────────────────────────────────── */}
       {activeTab === 'single' && (
         <>
           <div className="card">
@@ -250,7 +326,9 @@ export default function SerialTracker() {
             </div>
           </div>
 
-          {searched && records.length === 0 && (
+          {loading && <SearchSkeleton />}
+
+          {!loading && searched && records.length === 0 && (
             <div className="card text-center py-12">
               <ScanLine size={32} className="text-gray-600 mx-auto mb-3" />
               <p className="text-gray-400">No records found for serial number <span className="text-white font-mono">"{lastQuery}"</span></p>
@@ -258,7 +336,7 @@ export default function SerialTracker() {
             </div>
           )}
 
-          {stats && (
+          {!loading && stats && (
             <>
               <div className="card">
                 <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
@@ -289,10 +367,10 @@ export default function SerialTracker() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
-                    { label: 'First Used',     value: stats.first.issue_date || '—' },
-                    { label: 'Total Records',  value: records.length },
-                    { label: 'Vehicles Used',  value: stats.assets },
-                    { label: 'Days in Service',value: stats.days || '—' },
+                    { label: 'First Used',      value: formatDate(stats.first.issue_date) },
+                    { label: 'Total Records',   value: records.length },
+                    { label: 'Vehicles Used',   value: stats.assets },
+                    { label: 'Days in Service', value: stats.days || '—' },
                   ].map(s => (
                     <div key={s.label} className="bg-gray-800/50 rounded-lg p-3 text-center">
                       <p className="text-lg font-bold text-white">{s.value}</p>
@@ -302,9 +380,7 @@ export default function SerialTracker() {
                 </div>
                 {stats.totalCost > 0 && (
                   <p className="text-gray-400 text-sm mt-3">
-                    Total cost: <span className="text-white font-semibold">
-                      {stats.totalCost.toLocaleString('en-US', { minimumFractionDigits: 0 })} SAR
-                    </span>
+                    Total cost: <span className="text-white font-semibold">{formatCurrencyCompact(stats.totalCost)}</span>
                   </p>
                 )}
               </div>
@@ -326,13 +402,13 @@ export default function SerialTracker() {
                       <div className="space-y-2 pl-3 border-l border-gray-700">
                         {group.records.map(r => (
                           <div key={r.id} className="flex items-start gap-3 py-2">
-                            <div className="text-xs font-mono text-gray-500 w-24 flex-shrink-0 pt-0.5">{r.issue_date || '—'}</div>
+                            <div className="text-xs font-mono text-gray-500 w-24 flex-shrink-0 pt-0.5">{formatDate(r.issue_date)}</div>
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
                                 <span className="text-gray-400">{r.site || '—'}</span>
                                 {r.position && <span className="text-gray-500">Pos: <span className="text-white font-mono">{r.position}</span></span>}
                                 {r.risk_level && <span className={riskColor(r.risk_level)}>{r.risk_level}</span>}
-                                {r.cost > 0 && <span className="text-gray-500">SAR {Number(r.cost).toLocaleString()}</span>}
+                                {r.cost > 0 && <span className="text-gray-500">{formatCurrencyCompact(r.cost)}</span>}
                               </div>
                               {r.description && <p className="text-xs text-gray-600 mt-0.5 truncate">{r.description}</p>}
                             </div>
@@ -348,10 +424,9 @@ export default function SerialTracker() {
         </>
       )}
 
-      {/* ── Bulk Lookup tab ────────────────────────────────────────────────────── */}
+      {/* ── Bulk Lookup tab ────────────────────────────────────────────────── */}
       {activeTab === 'bulk' && (
         <div className="space-y-4">
-          {/* Drop zone */}
           <div
             className={`card border-2 border-dashed transition-all cursor-pointer ${
               bulkDragOver ? 'border-green-500 bg-green-900/10' : 'border-gray-700 hover:border-gray-500'
@@ -385,7 +460,6 @@ export default function SerialTracker() {
             </div>
           </div>
 
-          {/* Loading state */}
           {bulkLoading && (
             <div className="card text-center py-10">
               <div className="inline-block w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mb-3" />
@@ -393,21 +467,62 @@ export default function SerialTracker() {
             </div>
           )}
 
-          {/* Results */}
           {bulkDone && !bulkLoading && (
             <>
-              {/* Summary banner */}
               {bulkSummary && (
-                <div className="rounded-xl px-5 py-4 flex flex-wrap items-center gap-4 justify-between"
+                <div className="rounded-xl px-5 py-4 space-y-3"
                   style={{ background: 'rgba(22,163,74,0.10)', border: '1px solid rgba(22,163,74,0.3)' }}>
-                  <p className="text-green-300 font-semibold">
-                    {bulkSummary.total} serial{bulkSummary.total !== 1 ? 's' : ''} found &nbsp;·&nbsp;
-                    <span className="text-green-400">{bulkSummary.active} active</span> &nbsp;·&nbsp;
-                    <span className="text-gray-400">{bulkSummary.retired} retired</span>
-                  </p>
-                  <button onClick={exportBulkExcel} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
-                    <Download size={14} /> Export Excel
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3 justify-between">
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: 'Found',   value: bulkSummary.total,    key: null,         active: statusFilter === null, color: 'green' },
+                        { label: 'Active',  value: bulkSummary.active,   key: 'Active',     active: statusFilter === 'Active',   color: 'emerald' },
+                        { label: 'Retired', value: bulkSummary.retired,  key: 'Retired',    active: statusFilter === 'Retired',  color: 'gray' },
+                        { label: 'Missing', value: bulkSummary.notFound, key: 'Not Found',  active: statusFilter === 'Not Found', color: 'red' },
+                      ].map(chip => (
+                        <button
+                          key={chip.label}
+                          onClick={() => setStatusFilter(chip.active && chip.key !== null ? null : chip.key)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                            chip.active && chip.key === null
+                              ? 'bg-green-900/40 text-green-300 border-green-600/50'
+                              : chip.active
+                                ? 'bg-gray-700 text-white border-gray-500'
+                                : 'bg-gray-800/50 text-gray-400 border-gray-700/50 hover:border-gray-500 hover:text-gray-200'
+                          }`}
+                        >
+                          <span className={`text-base font-bold ${
+                            chip.label === 'Found'   ? 'text-green-400' :
+                            chip.label === 'Active'  ? 'text-emerald-400' :
+                            chip.label === 'Missing' ? 'text-red-400' : 'text-gray-400'
+                          }`}>{chip.value}</span>
+                          <span>{chip.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                        <input
+                          className="input text-sm pl-7 pr-3 py-1.5 w-44"
+                          placeholder="Filter results..."
+                          value={bulkSearch}
+                          onChange={e => setBulkSearch(e.target.value)}
+                        />
+                      </div>
+                      <button onClick={exportBulkExcel} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
+                        <Download size={14} /> Export
+                      </button>
+                    </div>
+                  </div>
+                  {(statusFilter || bulkSearch.trim()) && (
+                    <p className="text-xs text-gray-500">
+                      Showing {filteredBulkResults.length} of {bulkResults.length} results
+                      {statusFilter && <> · filtered by <span className="text-gray-300">{statusFilter}</span></>}
+                      {bulkSearch.trim() && <> · matching <span className="text-gray-300">"{bulkSearch}"</span></>}
+                      <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="ml-2 text-gray-500 hover:text-gray-300 underline">Clear</button>
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -415,6 +530,11 @@ export default function SerialTracker() {
                 <div className="card text-center py-10">
                   <p className="text-gray-400">No serial numbers could be extracted from the file.</p>
                   <p className="text-gray-600 text-sm mt-1">Check that the file has a recognised column header.</p>
+                </div>
+              ) : filteredBulkResults.length === 0 ? (
+                <div className="card text-center py-10">
+                  <p className="text-gray-400">No results match the current filter.</p>
+                  <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="text-sm text-gray-500 hover:text-gray-300 underline mt-1">Clear filters</button>
                 </div>
               ) : (
                 <div className="card overflow-x-auto">
@@ -425,16 +545,20 @@ export default function SerialTracker() {
                         <th className="pb-2 pr-4">First Seen</th>
                         <th className="pb-2 pr-4">Last Asset</th>
                         <th className="pb-2 pr-4 text-right">Records</th>
+                        <th className="pb-2 pr-4 text-right">Cost</th>
                         <th className="pb-2">Status</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {bulkResults.map(r => (
+                      {filteredBulkResults.map(r => (
                         <tr key={r.serial} className="border-b border-gray-800/50 hover:bg-gray-800/20">
                           <td className="py-2 pr-4 font-mono text-white">{r.serial}</td>
-                          <td className="py-2 pr-4 text-gray-400 text-xs">{r.first_seen || '—'}</td>
+                          <td className="py-2 pr-4 text-gray-400 text-xs">{formatDate(r.first_seen)}</td>
                           <td className="py-2 pr-4 font-mono text-gray-300 text-xs">{r.last_asset || '—'}</td>
                           <td className="py-2 pr-4 text-gray-300 text-right">{r.total_records}</td>
+                          <td className="py-2 pr-4 text-gray-400 text-right text-xs">
+                            {r.cost > 0 ? formatCurrencyCompact(r.cost) : '—'}
+                          </td>
                           <td className="py-2">
                             {r.status === 'Not Found' ? (
                               <span className="text-xs px-2 py-0.5 rounded-full border bg-gray-800 text-gray-500 border-gray-700">Not Found</span>

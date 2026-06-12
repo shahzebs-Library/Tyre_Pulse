@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeSiteMetrics, buildSiteRadar, bucketByMonth } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatCurrencyCompact } from '../lib/formatters'
 import { Download, FileText, Maximize2, GitMerge } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -34,7 +35,6 @@ function getPeriodKey(dateStr, granularity) {
     const q = Math.ceil((d.getMonth() + 1) / 3)
     return `${y} Q${q}`
   }
-  // Monthly
   const m = String(d.getMonth() + 1).padStart(2, '0')
   return `${y}-${m}`
 }
@@ -57,6 +57,51 @@ function slicePeriods(buckets, granularity) {
   return buckets.slice(-12)
 }
 
+// ── skeleton components ───────────────────────────────────────────────────────
+function SkeletonBar({ className = '' }) {
+  return <div className={`animate-pulse bg-gray-800/60 rounded ${className}`} />
+}
+
+function FilterCardSkeleton() {
+  return (
+    <div className="card space-y-4">
+      <div className="flex flex-wrap gap-3">
+        <SkeletonBar className="h-8 w-36" />
+        <SkeletonBar className="h-8 w-36" />
+        <SkeletonBar className="h-8 w-48" />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {[1, 2, 3, 4].map(i => <SkeletonBar key={i} className="h-7 w-20 rounded-full" />)}
+      </div>
+    </div>
+  )
+}
+
+function KpiCardSkeleton() {
+  return (
+    <div className="card border-t-2 border-gray-700">
+      <SkeletonBar className="h-4 w-24 mb-3" />
+      <div className="space-y-2">
+        {[1, 2, 3, 4, 5].map(i => (
+          <div key={i} className="flex justify-between">
+            <SkeletonBar className="h-3 w-16" />
+            <SkeletonBar className="h-3 w-20" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ChartCardSkeleton() {
+  return (
+    <div className="card">
+      <SkeletonBar className="h-4 w-48 mb-4" />
+      <SkeletonBar className="h-64 w-full" />
+    </div>
+  )
+}
+
 // ── main component ────────────────────────────────────────────────────────────
 export default function SiteComparison() {
   const { appSettings, activeCountry, activeCurrency } = useSettings()
@@ -64,12 +109,10 @@ export default function SiteComparison() {
   const [loading, setLoading] = useState(true)
   const [selectedSites, setSelectedSites] = useState([])
 
-  // Filters
   const [dateFrom, setDateFrom]       = useState('')
   const [dateTo, setDateTo]           = useState('')
   const [granularity, setGranularity] = useState('Monthly')
 
-  // Modal
   const [modalOpen, setModalOpen] = useState(false)
   const trendChartRef = useRef(null)
 
@@ -83,7 +126,6 @@ export default function SiteComparison() {
       const recs = data || []
       setRecords(recs)
       setSelectedSites([])
-      // Default: top 4 sites by count
       const byCount = {}
       recs.forEach(r => { if (r.site) byCount[r.site] = (byCount[r.site] || 0) + 1 })
       const top4 = Object.entries(byCount).sort(([, a], [, b]) => b - a).slice(0, 4).map(([s]) => s)
@@ -92,7 +134,6 @@ export default function SiteComparison() {
     })
   }, [activeCountry])
 
-  // Apply date range filter to records
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
       if (dateFrom && r.issue_date && r.issue_date < dateFrom) return false
@@ -117,10 +158,18 @@ export default function SiteComparison() {
     )
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading site data…</div>
+  const SITE_COLS = [
+    { key: 'site', header: 'Site' },
+    { key: 'count', header: 'Records' },
+    { key: 'totalCost', header: 'Total Cost' },
+    { key: 'avgCost', header: 'Avg Cost' },
+    { key: 'highRiskCount', header: 'High Risk' },
+    { key: 'highRiskPct', header: 'High Risk %' },
+    { key: 'topBrand', header: 'Top Brand' },
+    { key: 'topCategory', header: 'Top Category' },
+  ]
 
-  // Side-by-side bar: Total cost comparison
-  const costChart = {
+  const costChart = !loading && filteredMetrics.length > 0 ? {
     labels: filteredMetrics.map(s => s.site),
     datasets: [{
       label: 'Total Cost (SAR)',
@@ -129,19 +178,17 @@ export default function SiteComparison() {
       borderColor:     filteredMetrics.map((_, i) => SITE_COLORS[i % SITE_COLORS.length]),
       borderWidth: 1, borderRadius: 4,
     }],
-  }
+  } : null
 
-  const riskChart = {
+  const riskChart = !loading && filteredMetrics.length > 0 ? {
     labels: filteredMetrics.map(s => s.site),
-    datasets: [
-      {
-        label: 'High Risk %',
-        data: filteredMetrics.map(s => parseFloat(s.highRiskPct.toFixed(1))),
-        backgroundColor: 'rgba(239,68,68,0.6)',
-        borderRadius: 4,
-      },
-    ],
-  }
+    datasets: [{
+      label: 'High Risk %',
+      data: filteredMetrics.map(s => parseFloat(s.highRiskPct.toFixed(1))),
+      backgroundColor: 'rgba(239,68,68,0.6)',
+      borderRadius: 4,
+    }],
+  } : null
 
   const BAR_OPTS = {
     responsive: true, maintainAspectRatio: false,
@@ -171,160 +218,180 @@ export default function SiteComparison() {
         title="Site Comparison"
         subtitle="Head-to-head performance across sites"
         icon={GitMerge}
-        actions={(() => {
-          const SITE_COLS = [
-            { key: 'site', header: 'Site' },
-            { key: 'count', header: 'Records' },
-            { key: 'totalCost', header: 'Total Cost' },
-            { key: 'avgCost', header: 'Avg Cost' },
-            { key: 'highRiskCount', header: 'High Risk' },
-            { key: 'highRiskPct', header: 'High Risk %' },
-            { key: 'topBrand', header: 'Top Brand' },
-            { key: 'topCategory', header: 'Top Category' },
-          ]
-          const exportData = allMetrics
-          return (
-            <div className="flex gap-2">
-              <button
-                onClick={() => exportToExcel(exportData, SITE_COLS.map(c => c.key), SITE_COLS.map(c => c.header), 'TyrePulse_SiteComparison')}
-                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-              >
-                <Download size={14} /> Excel
-              </button>
-              <button
-                onClick={() => exportToPdf(exportData, SITE_COLS, 'Site Comparison', 'TyrePulse_SiteComparison', 'landscape')}
-                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-              >
-                <FileText size={14} /> PDF
-              </button>
-            </div>
-          )
-        })()}
+        actions={!loading && allMetrics.length > 0 ? (
+          <div className="flex gap-2">
+            <button
+              onClick={() => exportToExcel(allMetrics, SITE_COLS.map(c => c.key), SITE_COLS.map(c => c.header), 'TyrePulse_SiteComparison')}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <Download size={14} /> Excel
+            </button>
+            <button
+              onClick={() => exportToPdf(allMetrics, SITE_COLS, 'Site Comparison', 'TyrePulse_SiteComparison', 'landscape')}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <FileText size={14} /> PDF
+            </button>
+          </div>
+        ) : null}
       />
 
-      {/* Filter bar + site selector */}
-      <div className="card space-y-4">
-        {/* Date range + granularity */}
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex flex-col gap-1">
-            <label className="label text-xs">Date From</label>
-            <input type="date" className="input py-1.5 text-sm w-36" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+      {loading ? (
+        <>
+          <FilterCardSkeleton />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => <KpiCardSkeleton key={i} />)}
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="label text-xs">Date To</label>
-            <input type="date" className="input py-1.5 text-sm w-36" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <ChartCardSkeleton />
+            <ChartCardSkeleton />
           </div>
-
-          {/* Granularity pills */}
-          <div className="flex flex-col gap-1">
-            <label className="label text-xs">Granularity</label>
-            <div className="flex gap-1">
-              {GRANULARITIES.map(g => (
-                <button
-                  key={g}
-                  onClick={() => setGranularity(g)}
-                  className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                    granularity === g
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
-                  }`}
-                >
-                  {g}
-                </button>
-              ))}
+        </>
+      ) : allSites.length === 0 ? (
+        <>
+          <div className="card space-y-4">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex flex-col gap-1">
+                <label className="label text-xs">Date From</label>
+                <input type="date" className="input py-1.5 text-sm w-36" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="label text-xs">Date To</label>
+                <input type="date" className="input py-1.5 text-sm w-36" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Site selector */}
-        <div>
-          <p className="text-sm text-gray-400 mb-3">Select sites to compare (up to 6):</p>
-          <div className="flex flex-wrap gap-2">
-            {allSites.map((site, i) => {
-              const active = selectedSites.includes(site)
-              return (
-                <button
-                  key={site}
-                  onClick={() => toggleSite(site)}
-                  disabled={!active && selectedSites.length >= 6}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
-                    active
-                      ? 'border-transparent text-white'
-                      : 'border-gray-700 text-gray-400 hover:border-gray-500 disabled:opacity-30'
-                  }`}
-                  style={active ? { backgroundColor: SITE_COLORS[selectedSites.indexOf(site) % SITE_COLORS.length] } : {}}
-                >
-                  {site}
-                </button>
-              )
-            })}
+          <div className="card flex flex-col items-center justify-center py-16 text-center">
+            <GitMerge size={40} className="text-gray-700 mb-4" />
+            <p className="text-gray-400 font-medium text-lg">No site data available</p>
+            <p className="text-gray-600 text-sm mt-1">Upload tyre records with site information to start comparing.</p>
           </div>
-        </div>
-      </div>
-
-      {filteredMetrics.length === 0 && (
-        <div className="card text-center text-gray-500 py-12">Select at least one site to compare</div>
-      )}
-
-      {filteredMetrics.length > 0 && (
+        </>
+      ) : (
         <>
-          {/* KPI comparison cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {filteredMetrics.map((s, i) => (
-              <div key={s.site} className="card border-t-2" style={{ borderColor: SITE_COLORS[i % SITE_COLORS.length] }}>
-                <p className="text-white font-semibold text-sm">{s.site}</p>
-                <div className="mt-3 space-y-2">
-                  <KpiRow label="Records" value={s.count} />
-                  <KpiRow label="Total Cost" value={`${activeCurrency} ${s.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`} />
-                  <KpiRow label="High Risk" value={`${s.highRiskCount} (${s.highRiskPct.toFixed(0)}%)`}
-                    highlight={s.highRiskPct > 30 ? 'text-red-400' : s.highRiskPct > 15 ? 'text-yellow-400' : 'text-green-400'} />
-                  <KpiRow label="Top Brand" value={s.topBrand} />
-                  <KpiRow label="Top Category" value={s.topCategory} />
+          {/* Filter bar + site selector */}
+          <div className="card space-y-4">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex flex-col gap-1">
+                <label className="label text-xs">Date From</label>
+                <input type="date" className="input py-1.5 text-sm w-36" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="label text-xs">Date To</label>
+                <input type="date" className="input py-1.5 text-sm w-36" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="label text-xs">Granularity</label>
+                <div className="flex gap-1">
+                  {GRANULARITIES.map(g => (
+                    <button
+                      key={g}
+                      onClick={() => setGranularity(g)}
+                      className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                        granularity === g
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
                 </div>
               </div>
-            ))}
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-400 mb-3">Select sites to compare (up to 6):</p>
+              <div className="flex flex-wrap gap-2">
+                {allSites.map((site, i) => {
+                  const active = selectedSites.includes(site)
+                  return (
+                    <button
+                      key={site}
+                      onClick={() => toggleSite(site)}
+                      disabled={!active && selectedSites.length >= 6}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                        active
+                          ? 'border-transparent text-white'
+                          : 'border-gray-700 text-gray-400 hover:border-gray-500 disabled:opacity-30'
+                      }`}
+                      style={active ? { backgroundColor: SITE_COLORS[selectedSites.indexOf(site) % SITE_COLORS.length] } : {}}
+                    >
+                      {site}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="card">
-              <h3 className="text-sm font-medium text-gray-400 mb-4">Total Cost Comparison</h3>
-              <div style={{ height: 260 }}>
-                <Bar data={costChart} options={BAR_OPTS} />
-              </div>
+          {filteredMetrics.length === 0 ? (
+            <div className="card flex flex-col items-center justify-center py-16 text-center">
+              <GitMerge size={40} className="text-gray-700 mb-4" />
+              <p className="text-gray-400 font-medium">Select at least one site to compare</p>
+              <p className="text-gray-600 text-sm mt-1">Toggle sites above to begin the comparison.</p>
             </div>
-            <div className="card">
-              <h3 className="text-sm font-medium text-gray-400 mb-4">High-Risk Rate Comparison</h3>
-              <div style={{ height: 260 }}>
-                <Bar data={riskChart} options={BAR_OPTS} />
+          ) : (
+            <>
+              {/* KPI comparison cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {filteredMetrics.map((s, i) => (
+                  <div key={s.site} className="card border-t-2" style={{ borderColor: SITE_COLORS[i % SITE_COLORS.length] }}>
+                    <p className="text-white font-semibold text-sm">{s.site}</p>
+                    <div className="mt-3 space-y-2">
+                      <KpiRow label="Records" value={s.count} />
+                      <KpiRow label="Total Cost" value={formatCurrencyCompact(s.totalCost, activeCurrency)} />
+                      <KpiRow label="High Risk" value={`${s.highRiskCount} (${s.highRiskPct.toFixed(0)}%)`}
+                        highlight={s.highRiskPct > 30 ? 'text-red-400' : s.highRiskPct > 15 ? 'text-yellow-400' : 'text-green-400'} />
+                      <KpiRow label="Top Brand" value={s.topBrand} />
+                      <KpiRow label="Top Category" value={s.topCategory} />
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          </div>
 
-          {/* Radar */}
-          {filteredMetrics.length >= 2 && (
-            <div className="card">
-              <h3 className="text-sm font-medium text-gray-400 mb-4">
-                Multi-Dimension Radar (0-100, higher = better)
-              </h3>
-              <div className="max-w-xl mx-auto" style={{ height: 380 }}>
-                <Radar data={radarData} options={RADAR_OPTS} />
+              {/* Charts */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="card">
+                  <h3 className="text-sm font-medium text-gray-400 mb-4">Total Cost Comparison</h3>
+                  <div style={{ height: 260 }}>
+                    <Bar data={costChart} options={BAR_OPTS} />
+                  </div>
+                </div>
+                <div className="card">
+                  <h3 className="text-sm font-medium text-gray-400 mb-4">High-Risk Rate Comparison</h3>
+                  <div style={{ height: 260 }}>
+                    <Bar data={riskChart} options={BAR_OPTS} />
+                  </div>
+                </div>
               </div>
-              <p className="text-xs text-gray-600 text-center mt-2">
-                Cost Efficiency · Safety · Volume · Risk Quality · Data Quality
-              </p>
-            </div>
+
+              {/* Radar */}
+              {filteredMetrics.length >= 2 && (
+                <div className="card">
+                  <h3 className="text-sm font-medium text-gray-400 mb-4">
+                    Multi-Dimension Radar (0-100, higher = better)
+                  </h3>
+                  <div className="max-w-xl mx-auto" style={{ height: 380 }}>
+                    <Radar data={radarData} options={RADAR_OPTS} />
+                  </div>
+                  <p className="text-xs text-gray-600 text-center mt-2">
+                    Cost Efficiency · Safety · Volume · Risk Quality · Data Quality
+                  </p>
+                </div>
+              )}
+
+              {/* Trend comparison with granularity */}
+              <TrendComparison
+                records={filteredRecords}
+                selectedSites={selectedSites}
+                defaultCost={appSettings.cost_per_tyre}
+                granularity={granularity}
+                chartRef={trendChartRef}
+                onMaximize={() => setModalOpen(true)}
+              />
+            </>
           )}
-
-          {/* Trend comparison with granularity */}
-          <TrendComparison
-            records={filteredRecords}
-            selectedSites={selectedSites}
-            defaultCost={appSettings.cost_per_tyre}
-            granularity={granularity}
-            chartRef={trendChartRef}
-            onMaximize={() => setModalOpen(true)}
-          />
         </>
       )}
 
@@ -416,7 +483,6 @@ function TrendModal({ open, onClose, records, selectedSites, defaultCost, granul
       showSite={false}
       showBrand={false}
     >
-      {/* Granularity pills inside modal */}
       <div className="flex items-center gap-2 mb-4">
         <span className="text-xs text-gray-500">Granularity:</span>
         {GRANULARITIES.map(g => (
@@ -448,7 +514,6 @@ function useTrendData(records, selectedSites, defaultCost, granularity) {
       return { site, buckets, color: SITE_COLORS[i % SITE_COLORS.length] }
     })
 
-    // Build unified period axis
     const periodSet = new Set()
     datasets.forEach(d => d.buckets.forEach(b => periodSet.add(b.period)))
     const allPeriods = [...periodSet].sort()

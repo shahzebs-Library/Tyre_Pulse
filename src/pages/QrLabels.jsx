@@ -58,7 +58,7 @@ export default function QrLabels() {
     if (mode === 'tyres') {
       const { data: rows } = await supabase
         .from('tyre_records')
-        .select('id, serial_no, brand, site, asset_no, status, risk_level')
+        .select('id, serial_number, brand, site, asset_no, risk_level')
         .order('asset_no')
         .limit(1000)
       setData(rows || [])
@@ -77,7 +77,7 @@ export default function QrLabels() {
   }
 
   const filtered = data.filter(r => {
-    const val = mode === 'tyres' ? r.serial_no : r.asset_no
+    const val = mode === 'tyres' ? r.serial_number : r.asset_no
     const q   = search.toLowerCase()
     const matchSearch = !q
       || val?.toLowerCase().includes(q)
@@ -88,7 +88,7 @@ export default function QrLabels() {
     return matchSearch && matchSite
   })
 
-  function getLabel(item) { return mode === 'tyres' ? (item.serial_no ?? item.asset_no ?? String(item.id)) : item.asset_no }
+  function getLabel(item) { return mode === 'tyres' ? (item.serial_number ?? item.asset_no ?? String(item.id)) : item.asset_no }
   function getSub(item)   {
     return mode === 'tyres'
       ? [item.brand, item.site].filter(Boolean).join(' · ')

@@ -4,10 +4,14 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { View, ActivityIndicator } from 'react-native'
 import { isAdminOrAbove } from '../../lib/types'
+import { useNetworkSync } from '../../hooks/useNetworkSync'
 
 export default function AppLayout() {
   const { user, loading, profile } = useAuth()
   const { t } = useLanguage()
+
+  // Auto-sync the offline inspection queue whenever network connectivity returns
+  useNetworkSync()
 
   if (loading) {
     return (

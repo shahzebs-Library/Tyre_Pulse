@@ -3,8 +3,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import {
   Users, Search, Edit2, Trash2, CheckCircle, XCircle, Shield,
-  Activity, LayoutGrid, ChevronDown, Eye, EyeOff, UserCheck, UserX,
-  AlertTriangle, Globe, Calendar, Hash, X, Copy, Terminal, Info
+  Activity, LayoutGrid, ChevronDown, UserCheck, UserX,
+  AlertTriangle, Globe, Calendar, Hash, X, Copy, Terminal, Info,
+  Phone, MapPin, FileText, Lock, Mail, LogIn, Clock
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -437,29 +438,34 @@ export default function UserManagement() {
 
   async function handleInlineRoleChange(userId, newRole) {
     setRoleSaveState(s => ({ ...s, [userId]: 'saving' }))
-    const { error } = await supabase
-      .from('profiles')
-      .update({ role: newRole })
-      .eq('id', userId)
+    const { data, error } = await supabase.rpc('admin_update_profile', {
+      p_user_id: userId,
+      p_role: newRole,
+    })
 
-    if (!error) {
+    const success = !error && data?.success !== false
+    if (success) {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u))
       setRoleSaveState(s => ({ ...s, [userId]: 'saved' }))
       setTimeout(() => setRoleSaveState(s => ({ ...s, [userId]: null })), 1500)
     } else {
       setRoleSaveState(s => ({ ...s, [userId]: null }))
+      showToast(error?.message ?? data?.error ?? 'Role update failed.', 'err')
     }
   }
 
   // ── Approve quick action ──────────────────────────────────────────────────
 
   async function handleApproveQuick(user) {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ approved: true })
-      .eq('id', user.id)
-    if (!error) {
+    const { data, error } = await supabase.rpc('admin_update_profile', {
+      p_user_id: user.id,
+      p_approved: true,
+    })
+    if (!error && data?.success !== false) {
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, approved: true } : u))
+      showToast(`${user.full_name || user.username || 'User'} approved.`, 'ok')
+    } else {
+      showToast(error?.message ?? data?.error ?? 'Approval failed.', 'err')
     }
   }
 
@@ -469,13 +475,17 @@ export default function UserManagement() {
     setEditTarget(user)
     const c = user.country
     setEditForm({
-      full_name:   user.full_name ?? '',
-      username:    user.username ?? '',
+      full_name:   user.full_name   ?? '',
+      username:    user.username    ?? '',
       employee_id: user.employee_id ?? '',
-      role:        user.role ?? 'Reporter',
+      role:        user.role        ?? 'Reporter',
       country:     Array.isArray(c) ? [...c] : (c ? [c] : []),
       region:      user.region ?? '',
+      site:        user.site   ?? '',
+      phone:       user.phone  ?? '',
+      notes:       user.notes  ?? '',
       approved:    user.approved !== false,
+      locked:      user.locked  ?? false,
     })
     setEditMsg({ text: '', type: '' })
   }
@@ -510,62 +520,64 @@ export default function UserManagement() {
 
     const trimmedName = editForm.full_name.trim()
 
-    // ── Try RPC first (security-definer, bypasses RLS reliably) ──────────
-    const { error: rpcError } = await supabase.rpc('admin_update_profile', {
+    // ── RPC (security-definer, bypasses RLS reliably) ────────────────────
+    const { data: rpcData, error: rpcError } = await supabase.rpc('admin_update_profile', {
       p_user_id:    editTarget.id,
-      p_full_name:  trimmedName || null,
-      p_username:   editForm.username?.trim()    || null,
-      p_employee_id: editForm.employee_id?.trim() || null,
-      p_role:       editForm.role                || null,
+      p_full_name:  trimmedName                              || null,
+      p_username:   editForm.username?.trim()                || null,
+      p_employee_id: editForm.employee_id?.trim()            || null,
+      p_role:       editForm.role                            || null,
       p_country:    editForm.country.length > 0 ? editForm.country : null,
-      p_region:     editForm.region?.trim()      || null,
+      p_region:     editForm.region?.trim()                  || null,
+      p_site:       editForm.site?.trim()                    || null,
+      p_phone:      editForm.phone?.trim()                   || null,
+      p_notes:      editForm.notes?.trim()                   || null,
       p_approved:   editForm.approved,
+      p_locked:     editForm.locked,
     })
 
-    if (!rpcError) {
-      setEditSaving(false)
-      showToast(`${trimmedName || 'User'} updated successfully.`, 'ok')
-      await loadUsers()
-      closeEdit()
-      return
-    }
+    // RPC transport error (function missing) → fallback
+    if (rpcError) {
+      const isFnMissing =
+        rpcError.code === 'PGRST202' ||
+        rpcError.message?.toLowerCase().includes('does not exist')
 
-    // ── RPC not available (function not deployed yet) — fallback to direct update ──
-    const isFnMissing =
-      rpcError.code === 'PGRST202' ||
-      rpcError.message?.toLowerCase().includes('function') ||
-      rpcError.message?.toLowerCase().includes('does not exist')
+      if (!isFnMissing) {
+        setEditMsg({ text: rpcError.message, type: 'err' })
+        setEditSaving(false)
+        return
+      }
 
-    if (!isFnMissing) {
-      // RPC exists but returned a real error (e.g. permission denied)
-      setEditMsg({ text: rpcError.message, type: 'err' })
-      setEditSaving(false)
-      return
-    }
+      // Fallback: direct table update
+      const { error: directError } = await supabase
+        .from('profiles')
+        .update({
+          full_name:   trimmedName                              || null,
+          username:    editForm.username?.trim()                || null,
+          employee_id: editForm.employee_id?.trim()            || null,
+          role:        editForm.role,
+          country:     editForm.country.length > 0 ? editForm.country : null,
+          region:      editForm.region?.trim()                  || null,
+          site:        editForm.site?.trim()                    || null,
+          phone:       editForm.phone?.trim()                   || null,
+          notes:       editForm.notes?.trim()                   || null,
+          approved:    editForm.approved,
+          locked:      editForm.locked,
+        })
+        .eq('id', editTarget.id)
 
-    // Fallback: direct table update
-    const updates = {
-      full_name:   trimmedName                               || null,
-      username:    editForm.username?.trim()                 || null,
-      employee_id: editForm.employee_id?.trim()              || null,
-      role:        editForm.role,
-      country:     editForm.country.length > 0 ? editForm.country : null,
-      region:      editForm.region?.trim()                   || null,
-      approved:    editForm.approved,
-    }
-
-    const { error: directError } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', editTarget.id)
-
-    if (directError) {
-      setEditMsg({
-        text: directError.code === '42501' || directError.code === 'PGRST301'
-          ? 'RLS policy missing. Run MIGRATION_ADMIN_PROFILES.sql in Supabase to grant Admin update access.'
-          : directError.message,
-        type: 'err',
-      })
+      if (directError) {
+        setEditMsg({
+          text: directError.code === '42501' || directError.code === 'PGRST301'
+            ? 'Permission denied. Ensure the admin_update_profile RPC function is deployed in Supabase.'
+            : directError.message,
+          type: 'err',
+        })
+        setEditSaving(false)
+        return
+      }
+    } else if (rpcData?.success === false) {
+      setEditMsg({ text: rpcData.error ?? 'Update failed.', type: 'err' })
       setEditSaving(false)
       return
     }
@@ -869,15 +881,22 @@ export default function UserManagement() {
 
                         {/* Status column */}
                         <td className="table-cell">
-                          {isPending ? (
-                            <span className="badge bg-yellow-900/40 text-yellow-300 border border-yellow-700/40">
-                              Pending
-                            </span>
-                          ) : (
-                            <span className="badge bg-green-900/30 text-green-400 border border-green-700/40">
-                              Active
-                            </span>
-                          )}
+                          <div className="flex flex-col gap-1">
+                            {isPending ? (
+                              <span className="badge bg-yellow-900/40 text-yellow-300 border border-yellow-700/40">
+                                Pending
+                              </span>
+                            ) : (
+                              <span className="badge bg-green-900/30 text-green-400 border border-green-700/40">
+                                Active
+                              </span>
+                            )}
+                            {u.locked && (
+                              <span className="badge bg-red-900/40 text-red-300 border border-red-700/40 flex items-center gap-1">
+                                <Lock size={9} />Locked
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Joined column */}
@@ -1097,30 +1116,55 @@ export default function UserManagement() {
 
       {/* ── EDIT MODAL ────────────────────────────────────────────────────────── */}
       {editTarget && (
-        <Modal title="Edit User" onClose={closeEdit}>
+        <Modal title="Edit User" onClose={closeEdit} maxWidth="max-w-2xl">
           <div className="space-y-4">
 
-            {/* Self-edit warning */}
+            {/* Banners */}
             {editTarget.id === currentProfile?.id && (
               <div className="flex items-center gap-2.5 bg-blue-900/20 border border-blue-700/40 rounded-lg px-4 py-2.5">
                 <Info size={15} className="text-blue-400 flex-shrink-0" />
                 <p className="text-blue-300 text-xs font-medium">You are editing your own profile.</p>
               </div>
             )}
-
-            {/* Last updated */}
-            {editTarget.updated_at && (
-              <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                <Calendar size={11} className="text-gray-600" />
-                Last updated: {formatDateTime(editTarget.updated_at)}
-              </p>
+            {editTarget.locked && (
+              <div className="flex items-center gap-2.5 bg-red-900/20 border border-red-700/40 rounded-lg px-4 py-2.5">
+                <Lock size={15} className="text-red-400 flex-shrink-0" />
+                <p className="text-red-300 text-xs font-medium">This account is currently locked and cannot log in.</p>
+              </div>
             )}
 
+            {/* Meta row */}
+            <div className="flex flex-wrap gap-4 text-xs text-gray-500 pb-1 border-b border-gray-800">
+              {editTarget.email && (
+                <span className="flex items-center gap-1.5">
+                  <Mail size={11} className="text-gray-600" />
+                  {editTarget.email}
+                </span>
+              )}
+              {editTarget.updated_at && (
+                <span className="flex items-center gap-1.5">
+                  <Clock size={11} className="text-gray-600" />
+                  Updated: {formatDateTime(editTarget.updated_at)}
+                </span>
+              )}
+              {editTarget.last_login_at && (
+                <span className="flex items-center gap-1.5">
+                  <LogIn size={11} className="text-gray-600" />
+                  Last login: {formatDateTime(editTarget.last_login_at)}
+                </span>
+              )}
+              {editTarget.login_count > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <Activity size={11} className="text-gray-600" />
+                  {editTarget.login_count} login{editTarget.login_count !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+
+            {/* Identity */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">
-                  Full Name <span className="text-red-500 ml-0.5">*</span>
-                </label>
+                <label className="label">Full Name <span className="text-red-500 ml-0.5">*</span></label>
                 <input
                   className={`input ${!editForm.full_name?.trim() && editMsg.type === 'err' ? 'border-red-600 focus:ring-red-500/30' : ''}`}
                   value={editForm.full_name ?? ''}
@@ -1139,7 +1183,7 @@ export default function UserManagement() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="label">Employee ID</label>
                 <input
@@ -1150,6 +1194,31 @@ export default function UserManagement() {
                 />
               </div>
               <div>
+                <label className="label">
+                  <Phone size={11} className="inline mr-1 text-gray-500" />Phone
+                </label>
+                <input
+                  className="input"
+                  value={editForm.phone ?? ''}
+                  onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="+966 5x xxx xxxx"
+                />
+              </div>
+              <div>
+                <label className="label">
+                  <MapPin size={11} className="inline mr-1 text-gray-500" />Site
+                </label>
+                <input
+                  className="input"
+                  value={editForm.site ?? ''}
+                  onChange={e => setEditForm(f => ({ ...f, site: e.target.value }))}
+                  placeholder="e.g. Riyadh Hub"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
                 <label className="label">Region</label>
                 <input
                   className="input"
@@ -1158,26 +1227,26 @@ export default function UserManagement() {
                   placeholder="e.g. Gulf"
                 />
               </div>
+              <div>
+                <label className="label">Role</label>
+                <select
+                  className="input"
+                  value={editForm.role ?? ''}
+                  onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
+                  disabled={editTarget.id === currentProfile?.id}
+                >
+                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                {editTarget.id === currentProfile?.id && (
+                  <p className="text-xs text-gray-500 mt-1">You cannot change your own role.</p>
+                )}
+              </div>
             </div>
 
-            <div>
-              <label className="label">Role</label>
-              <select
-                className="input"
-                value={editForm.role ?? ''}
-                onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
-                disabled={editTarget.id === currentProfile?.id}
-              >
-                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-              {editTarget.id === currentProfile?.id && (
-                <p className="text-xs text-gray-500 mt-1">You cannot change your own role.</p>
-              )}
-            </div>
-
+            {/* Country access */}
             <div>
               <label className="label">Country Access</label>
-              <div className="grid grid-cols-3 gap-1.5 mt-1">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mt-1">
                 {COUNTRIES.map(c => (
                   <label
                     key={c}
@@ -1199,26 +1268,62 @@ export default function UserManagement() {
               </div>
               <p className="text-xs text-gray-500 mt-2">
                 {(editForm.country ?? []).length === 0
-                  ? 'No restriction - user can see all countries.'
+                  ? 'No restriction — user can see all countries.'
                   : `Restricted to: ${editForm.country.join(', ')}`}
               </p>
             </div>
 
-            <div className="flex items-center justify-between bg-gray-800/40 rounded-lg px-4 py-3">
-              <div>
-                <p className="text-sm text-white font-medium">Account Approved</p>
-                <p className="text-xs text-gray-500 mt-0.5">Unapproved accounts cannot log in.</p>
-              </div>
-              <Toggle
-                checked={editForm.approved ?? true}
-                onChange={val => setEditForm(f => ({ ...f, approved: val }))}
+            {/* Notes */}
+            <div>
+              <label className="label">
+                <FileText size={11} className="inline mr-1 text-gray-500" />Admin Notes
+              </label>
+              <textarea
+                className="input min-h-[72px] resize-y text-sm"
+                value={editForm.notes ?? ''}
+                onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Internal notes (only visible to admins)"
               />
             </div>
 
+            {/* Toggles */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center justify-between bg-gray-800/40 rounded-lg px-4 py-3">
+                <div>
+                  <p className="text-sm text-white font-medium">Account Approved</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Unapproved accounts cannot log in.</p>
+                </div>
+                <Toggle
+                  checked={editForm.approved ?? true}
+                  onChange={val => setEditForm(f => ({ ...f, approved: val }))}
+                />
+              </div>
+              <div className={`flex items-center justify-between rounded-lg px-4 py-3 ${editForm.locked ? 'bg-red-900/20 border border-red-700/30' : 'bg-gray-800/40'}`}>
+                <div>
+                  <p className="text-sm text-white font-medium flex items-center gap-1.5">
+                    <Lock size={13} className={editForm.locked ? 'text-red-400' : 'text-gray-500'} />
+                    Account Locked
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">Locked accounts are blocked from login.</p>
+                </div>
+                <Toggle
+                  checked={editForm.locked ?? false}
+                  onChange={val => setEditForm(f => ({ ...f, locked: val }))}
+                />
+              </div>
+            </div>
+
             {editMsg.text && (
-              <p className={`text-sm ${editMsg.type === 'ok' ? 'text-green-400' : 'text-red-400'}`}>
+              <div className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${
+                editMsg.type === 'ok'
+                  ? 'bg-green-900/20 text-green-400 border border-green-700/30'
+                  : 'bg-red-900/20 text-red-400 border border-red-700/30'
+              }`}>
+                {editMsg.type === 'ok'
+                  ? <CheckCircle size={14} />
+                  : <XCircle size={14} />}
                 {editMsg.text}
-              </p>
+              </div>
             )}
 
             <div className="flex gap-3 pt-1">

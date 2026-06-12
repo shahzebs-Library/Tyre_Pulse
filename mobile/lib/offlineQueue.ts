@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { OfflineInspection, InspectionPayload } from './types'
 import { supabase } from './supabase'
+import { uploadAllPositionPhotos } from './photoUpload'
 
 const QUEUE_KEY = 'tp_inspection_queue_v1'
 
@@ -45,9 +46,35 @@ export async function syncQueue(): Promise<{ synced: number; failed: number }> {
 
   for (const item of queue) {
     if (item.sync_status !== 'pending') continue
+
     try {
-      const { error } = await supabase.from('inspections').insert(item.payload)
+      // ── Phase 1: upload any local photos to Supabase Storage ────────────────
+      // tyre_conditions is Record<string, TyrePositionData>; we need to deep-copy
+      // it before mutation so a failed insert doesn't corrupt the queued payload.
+      const conditionsCopy = JSON.parse(JSON.stringify(item.payload.tyre_conditions ?? {}))
+
+      const hasLocalPhotos = Object.values(conditionsCopy).some(
+        (pos: any) => pos.photo_uri && !pos.photo_url
+      )
+
+      if (hasLocalPhotos) {
+        await uploadAllPositionPhotos(conditionsCopy, item.id)
+      }
+
+      // Build the final payload — replace tyre_conditions with photo-resolved copy
+      const resolvedPayload: InspectionPayload = {
+        ...item.payload,
+        tyre_conditions: conditionsCopy,
+      }
+
+      // ── Phase 2: insert the inspection record ────────────────────────────────
+      const { error } = await supabase.from('inspections').insert(resolvedPayload)
       if (error) throw error
+
+      // Persist the resolved photo URLs back into the queued item so the local
+      // record is consistent if re-read (e.g. history screen) before the queue
+      // is cleared.
+      item.payload.tyre_conditions = conditionsCopy
       item.sync_status = 'synced'
       item.synced_at = new Date().toISOString()
       synced++

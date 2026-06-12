@@ -1,19 +1,22 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import type { User, AuthError } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { Profile, normaliseRole } from '../lib/types'
 
 interface AuthContextType {
-  user: any
+  /** Supabase auth user — null when signed out */
+  user: User | null
+  /** Extended profile row from the `profiles` table — null until fetched */
   profile: Profile | null
   loading: boolean
-  signIn: (identifier: string, password: string) => Promise<{ error: any }>
+  signIn: (identifier: string, password: string) => Promise<{ error: AuthError | Error | null }>
   signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -64,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: resolved, error: rpcErr } = await supabase
         .rpc('get_email_by_identifier', { identifier: email })
       if (rpcErr) return { error: rpcErr }
-      if (!resolved) return { error: { message: 'No account found with that username or Employee ID.' } }
+      if (!resolved) return { error: new Error('No account found with that username or Employee ID.') }
       email = resolved
     }
 

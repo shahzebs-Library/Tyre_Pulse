@@ -2,8 +2,9 @@
  * Accident Detail View
  *
  * Full-detail read view for a single accident report.
- * Shows all fields, photo gallery, asset/vehicle info, and status badge.
- * Managers and admins can update the status inline.
+ * - All users: view full report, photo gallery with lightbox
+ * - Managers / Directors: update status via bottom-sheet modal
+ * - Admin only: delete report (with confirmation), view full audit trail
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -21,6 +22,7 @@ import { supabase } from '../../../lib/supabase'
 import {
   AccidentRecord, AccidentStatus,
   SEVERITY_COLORS, STATUS_COLORS,
+  isAdminOrAbove, isAdmin,
 } from '../../../lib/types'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -37,36 +39,56 @@ const TYPE_ICONS: Record<string, string> = {
   other:           'ellipsis-horizontal-circle-outline',
 }
 
+interface AuditRow {
+  id: string
+  changed_at: string
+  action: string
+  old_values: Record<string, any> | null
+  new_values: Record<string, any> | null
+}
+
 export default function AccidentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const router = useRouter()
 
-  const [accident, setAccident]         = useState<AccidentRecord | null>(null)
-  const [loading, setLoading]           = useState(true)
-  const [statusLoading, setStatusLoading] = useState(false)
+  const [accident, setAccident]             = useState<AccidentRecord | null>(null)
+  const [auditLog, setAuditLog]             = useState<AuditRow[]>([])
+  const [loading, setLoading]               = useState(true)
+  const [statusLoading, setStatusLoading]   = useState(false)
+  const [deleting, setDeleting]             = useState(false)
   const [showStatusModal, setShowStatusModal] = useState(false)
-  const [lightboxIndex, setLightboxIndex]     = useState<number | null>(null)
+  const [lightboxIndex, setLightboxIndex]   = useState<number | null>(null)
 
-  const canChangeStatus = profile?.role === 'admin' || profile?.role === 'manager' || profile?.role === 'director'
+  const role           = profile?.role ?? null
+  const canChangeStatus = isAdminOrAbove(role)
+  const canDelete       = isAdmin(role)
+  const canSeeAudit     = isAdminOrAbove(role)
 
   const load = useCallback(async () => {
     if (!id) return
-    const { data, error } = await supabase
-      .from('accidents')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const [accRes, auditRes] = await Promise.all([
+      supabase.from('accidents').select('*').eq('id', id).single(),
+      canSeeAudit
+        ? supabase
+            .from('accident_audit_log')
+            .select('id, changed_at, action, old_values, new_values')
+            .eq('accident_id', id)
+            .order('changed_at', { ascending: false })
+            .limit(20)
+        : Promise.resolve({ data: [] }),
+    ])
 
-    if (error) {
+    if (accRes.error || !accRes.data) {
       Alert.alert('Error', 'Could not load accident report.')
       router.back()
       return
     }
-    setAccident(data as AccidentRecord)
+    setAccident(accRes.data as AccidentRecord)
+    setAuditLog((auditRes.data ?? []) as AuditRow[])
     setLoading(false)
-  }, [id])
+  }, [id, canSeeAudit])
 
   useEffect(() => { load() }, [load])
 
@@ -76,15 +98,47 @@ export default function AccidentDetailScreen() {
     setShowStatusModal(false)
     const { error } = await supabase
       .from('accidents')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .update({ status: newStatus })
       .eq('id', accident.id)
 
     if (error) {
       Alert.alert('Error', 'Failed to update status.')
     } else {
       setAccident(prev => prev ? { ...prev, status: newStatus } : prev)
+      // Reload audit log
+      const { data } = await supabase
+        .from('accident_audit_log')
+        .select('id, changed_at, action, old_values, new_values')
+        .eq('accident_id', accident.id)
+        .order('changed_at', { ascending: false })
+        .limit(20)
+      if (data) setAuditLog(data as AuditRow[])
     }
     setStatusLoading(false)
+  }
+
+  function confirmDelete() {
+    Alert.alert(
+      'Delete Report',
+      'This will permanently delete the accident report and all audit history. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true)
+            const { error } = await supabase.from('accidents').delete().eq('id', accident!.id)
+            setDeleting(false)
+            if (error) {
+              Alert.alert('Error', 'Failed to delete report.')
+            } else {
+              router.back()
+            }
+          },
+        },
+      ]
+    )
   }
 
   if (loading) {
@@ -108,7 +162,7 @@ export default function AccidentDetailScreen() {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff5f5" />
 
-      {/* ── Header ──────────────────────────────────────────────────────── */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={22} color="#0f172a" />
@@ -117,7 +171,8 @@ export default function AccidentDetailScreen() {
           <Text style={styles.headerTitle}>{t('accident.detailTitle')}</Text>
           <Text style={styles.headerSub}>#{accident.id.slice(0, 8).toUpperCase()}</Text>
         </View>
-        {/* Status badge — tappable for managers */}
+
+        {/* Status badge — tappable for managers/admins */}
         <TouchableOpacity
           style={[styles.statusBadge, { backgroundColor: statusColor + '18', borderColor: statusColor + '50' }]}
           onPress={() => canChangeStatus && setShowStatusModal(true)}
@@ -130,15 +185,31 @@ export default function AccidentDetailScreen() {
                 <Text style={[styles.statusText, { color: statusColor }]}>
                   {t(`accident.statuses.${accident.status}`)}
                 </Text>
-                {canChangeStatus && <Ionicons name="chevron-down" size={12} color={statusColor} style={{ marginLeft: 2 }} />}
+                {canChangeStatus && (
+                  <Ionicons name="chevron-down" size={11} color={statusColor} style={{ marginLeft: 2 }} />
+                )}
               </>
           }
         </TouchableOpacity>
+
+        {/* Admin: delete button */}
+        {canDelete && (
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={confirmDelete}
+            disabled={deleting}
+          >
+            {deleting
+              ? <ActivityIndicator size="small" color="#dc2626" />
+              : <Ionicons name="trash-outline" size={18} color="#dc2626" />
+            }
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-        {/* ── Hero severity strip ──────────────────────────────────────── */}
+        {/* ── Hero severity card ────────────────────────────────────────────── */}
         <View style={[styles.heroCard, { borderLeftColor: sevColor, borderLeftWidth: 5 }]}>
           <View style={styles.heroTop}>
             <View style={[styles.sevBadge, { backgroundColor: sevColor + '18', borderColor: sevColor + '40' }]}>
@@ -153,28 +224,35 @@ export default function AccidentDetailScreen() {
             </View>
           </View>
           <View style={styles.heroMeta}>
-            <MetaItem icon="business-outline" label={accident.site} />
-            <MetaItem icon="car-outline"      label={accident.asset_no} bold />
-            <MetaItem icon="calendar-outline" label={accident.incident_date} />
-            {accident.incident_time ? <MetaItem icon="time-outline" label={accident.incident_time} /> : null}
-            {accident.location ? <MetaItem icon="location-outline" label={accident.location} /> : null}
+            <MetaItem icon="business-outline"  label={accident.site} />
+            <MetaItem icon="car-outline"       label={accident.asset_no} bold />
+            <MetaItem icon="calendar-outline"  label={accident.incident_date} />
+            {accident.incident_time ? <MetaItem icon="time-outline"     label={accident.incident_time} /> : null}
+            {accident.location      ? <MetaItem icon="location-outline" label={accident.location} /> : null}
           </View>
         </View>
 
-        {/* ── Incident description ─────────────────────────────────────── */}
+        {/* ── Description ───────────────────────────────────────────────────── */}
         {accident.description ? (
           <SectionCard title={t('accident.incidentInfo')} icon="document-text-outline">
             <Text style={styles.descText}>{accident.description}</Text>
           </SectionCard>
         ) : null}
 
-        {/* ── Damage & people ──────────────────────────────────────────── */}
+        {/* ── Damage & Injuries ─────────────────────────────────────────────── */}
         <SectionCard title={t('accident.damageInfo')} icon="medkit-outline">
-          <InfoRow label={t('accident.injuriesLabel')} value={accident.injuries ? t('accident.yes') : t('accident.no')} highlight={accident.injuries} />
+          <InfoRow
+            label={t('accident.injuriesLabel')}
+            value={accident.injuries ? t('accident.yes') : t('accident.no')}
+            highlight={accident.injuries}
+          />
           {accident.injuries && accident.injury_count > 0 && (
             <InfoRow label={t('accident.injuryCountLabel')} value={String(accident.injury_count)} />
           )}
-          <InfoRow label={t('accident.thirdPartyLabel')} value={accident.third_party_involved ? t('accident.yes') : t('accident.no')} />
+          <InfoRow
+            label={t('accident.thirdPartyLabel')}
+            value={accident.third_party_involved ? t('accident.yes') : t('accident.no')}
+          />
           {accident.police_report_no ? (
             <InfoRow label={t('accident.policeReportLabel')} value={accident.police_report_no} />
           ) : null}
@@ -186,30 +264,33 @@ export default function AccidentDetailScreen() {
             />
           )}
           {accident.damage_description ? (
-            <View style={styles.damageDesc}>
-              <Text style={styles.damageDescLabel}>{t('accident.damageDescLabel')}</Text>
-              <Text style={styles.damageDescText}>{accident.damage_description}</Text>
+            <View style={styles.blockField}>
+              <Text style={styles.blockLabel}>{t('accident.damageDescLabel')}</Text>
+              <Text style={styles.blockText}>{accident.damage_description}</Text>
             </View>
           ) : null}
         </SectionCard>
 
-        {/* ── Reporter info ────────────────────────────────────────────── */}
-        <SectionCard title="Reported By" icon="person-circle-outline">
-          <InfoRow label="Name"       value={accident.reporter_name ?? '—'} />
-          <InfoRow label="Submitted"  value={new Date(accident.created_at).toLocaleString()} />
+        {/* ── Reporter info (admin sees reviewer too) ────────────────────────── */}
+        <SectionCard title="Report Info" icon="person-circle-outline">
+          <InfoRow label="Reported By"  value={accident.reporter_name ?? '—'} />
+          <InfoRow label="Submitted"    value={new Date(accident.created_at).toLocaleString()} />
           {accident.updated_at !== accident.created_at && (
             <InfoRow label="Last Updated" value={new Date(accident.updated_at).toLocaleString()} />
           )}
+          {canSeeAudit && accident.reviewed_by && (
+            <InfoRow label="Reviewed At" value={accident.reviewed_at ? new Date(accident.reviewed_at).toLocaleString() : '—'} />
+          )}
         </SectionCard>
 
-        {/* ── Notes ───────────────────────────────────────────────────── */}
+        {/* ── Notes ─────────────────────────────────────────────────────────── */}
         {accident.notes ? (
           <SectionCard title={t('accident.notesLabel')} icon="chatbubble-ellipses-outline">
             <Text style={styles.descText}>{accident.notes}</Text>
           </SectionCard>
         ) : null}
 
-        {/* ── Photo gallery ────────────────────────────────────────────── */}
+        {/* ── Photo gallery ──────────────────────────────────────────────────── */}
         {photos.length > 0 && (
           <SectionCard title={`${t('accident.photosSection')} (${photos.length})`} icon="images-outline">
             <View style={styles.photoGrid}>
@@ -224,16 +305,56 @@ export default function AccidentDetailScreen() {
                   <View style={styles.photoNum}>
                     <Text style={styles.photoNumText}>{idx + 1}</Text>
                   </View>
+                  <View style={styles.photoZoomHint}>
+                    <Ionicons name="expand-outline" size={12} color="#fff" />
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
           </SectionCard>
         )}
 
-        <View style={{ height: 32 }} />
+        {/* ── Audit Trail (admin / manager / director only) ──────────────────── */}
+        {canSeeAudit && auditLog.length > 0 && (
+          <SectionCard title="Audit Trail" icon="shield-checkmark-outline">
+            {auditLog.map((row, i) => {
+              const actionColor =
+                row.action === 'status_change' ? '#3b82f6'
+                : row.action === 'delete'      ? '#dc2626'
+                : '#94a3b8'
+              const actionLabel =
+                row.action === 'status_change' ? 'Status Changed'
+                : row.action === 'delete'       ? 'Deleted'
+                : 'Fields Updated'
+              const oldStatus = row.old_values?.status
+              const newStatus = row.new_values?.status
+
+              return (
+                <View key={row.id} style={[styles.auditRow, i < auditLog.length - 1 && styles.auditRowBorder]}>
+                  <View style={[styles.auditDot, { backgroundColor: actionColor }]} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <View style={styles.auditTop}>
+                      <Text style={[styles.auditAction, { color: actionColor }]}>{actionLabel}</Text>
+                      <Text style={styles.auditTime}>
+                        {new Date(row.changed_at).toLocaleDateString()} {new Date(row.changed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                    {row.action === 'status_change' && oldStatus && newStatus && (
+                      <Text style={styles.auditDetail}>
+                        {oldStatus} → {newStatus}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              )
+            })}
+          </SectionCard>
+        )}
+
+        <View style={{ height: 36 }} />
       </ScrollView>
 
-      {/* ── Status Change Modal ──────────────────────────────────────────── */}
+      {/* ── Status Modal ──────────────────────────────────────────────────────── */}
       <Modal
         visible={showStatusModal}
         transparent
@@ -244,20 +365,26 @@ export default function AccidentDetailScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Update Status</Text>
+            <Text style={styles.modalSub}>Change the investigation status of this report</Text>
             {STATUS_OPTIONS.map(opt => {
-              const c = STATUS_COLORS[opt]
+              const c      = STATUS_COLORS[opt]
               const active = opt === accident.status
+              const icons  = { reported: 'flag-outline', under_review: 'search-outline', closed: 'checkmark-circle-outline' }
               return (
                 <TouchableOpacity
                   key={opt}
                   style={[styles.statusOption, active && { backgroundColor: c + '14' }]}
                   onPress={() => updateStatus(opt)}
                 >
-                  <View style={[styles.statusDot, { backgroundColor: c }]} />
-                  <Text style={[styles.statusOptionText, { color: active ? c : '#374151' }]}>
-                    {t(`accident.statuses.${opt}`)}
-                  </Text>
-                  {active && <Ionicons name="checkmark-circle" size={18} color={c} style={{ marginLeft: 'auto' }} />}
+                  <View style={[styles.statusOptionIcon, { backgroundColor: c + '18' }]}>
+                    <Ionicons name={icons[opt] as any} size={16} color={c} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.statusOptionText, { color: active ? c : '#374151' }]}>
+                      {t(`accident.statuses.${opt}`)}
+                    </Text>
+                  </View>
+                  {active && <Ionicons name="checkmark-circle" size={20} color={c} />}
                 </TouchableOpacity>
               )
             })}
@@ -268,7 +395,7 @@ export default function AccidentDetailScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* ── Lightbox ─────────────────────────────────────────────────────── */}
+      {/* ── Lightbox ──────────────────────────────────────────────────────────── */}
       <Modal
         visible={lightboxIndex !== null}
         transparent
@@ -277,7 +404,7 @@ export default function AccidentDetailScreen() {
       >
         <View style={styles.lightbox}>
           <TouchableOpacity style={styles.lightboxClose} onPress={() => setLightboxIndex(null)}>
-            <Ionicons name="close-circle" size={34} color="#fff" />
+            <Ionicons name="close-circle" size={36} color="#fff" />
           </TouchableOpacity>
           {lightboxIndex !== null && (
             <>
@@ -287,16 +414,25 @@ export default function AccidentDetailScreen() {
                 resizeMode="contain"
               />
               <Text style={styles.lightboxCounter}>{lightboxIndex + 1} / {photos.length}</Text>
-              {/* Prev / Next */}
               <View style={styles.lightboxNav}>
                 {lightboxIndex > 0 && (
-                  <TouchableOpacity style={styles.lightboxNavBtn} onPress={() => setLightboxIndex(i => (i ?? 1) - 1)}>
-                    <Ionicons name="chevron-back" size={28} color="#fff" />
+                  <TouchableOpacity
+                    style={styles.lightboxNavBtn}
+                    onPress={() => setLightboxIndex(i => (i ?? 1) - 1)}
+                  >
+                    <View style={styles.lightboxNavInner}>
+                      <Ionicons name="chevron-back" size={24} color="#fff" />
+                    </View>
                   </TouchableOpacity>
                 )}
                 {lightboxIndex < photos.length - 1 && (
-                  <TouchableOpacity style={[styles.lightboxNavBtn, styles.lightboxNavBtnRight]} onPress={() => setLightboxIndex(i => (i ?? 0) + 1)}>
-                    <Ionicons name="chevron-forward" size={28} color="#fff" />
+                  <TouchableOpacity
+                    style={[styles.lightboxNavBtn, styles.lightboxNavRight]}
+                    onPress={() => setLightboxIndex(i => (i ?? 0) + 1)}
+                  >
+                    <View style={styles.lightboxNavInner}>
+                      <Ionicons name="chevron-forward" size={24} color="#fff" />
+                    </View>
                   </TouchableOpacity>
                 )}
               </View>
@@ -308,13 +444,13 @@ export default function AccidentDetailScreen() {
   )
 }
 
-// ── Reusable sub-components ────────────────────────────────────────────────────
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
 function SectionCard({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Ionicons name={icon as any} size={16} color="#dc2626" />
+        <Ionicons name={icon as any} size={15} color="#dc2626" />
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       <View style={styles.sectionBody}>{children}</View>
@@ -322,7 +458,9 @@ function SectionCard({ title, icon, children }: { title: string; icon: string; c
   )
 }
 
-function InfoRow({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean; bold?: boolean }) {
+function InfoRow({
+  label, value, highlight = false,
+}: { label: string; value: string; highlight?: boolean }) {
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
@@ -342,10 +480,12 @@ function MetaItem({ icon, label, bold }: { icon: string; label: string; bold?: b
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
+const PHOTO_SIZE = (SCREEN_WIDTH - 32 - 32 - 16) / 3
+
 const styles = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: '#fff5f5' },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: { flex: 1 },
+  safe:    { flex: 1, backgroundColor: '#fff5f5' },
+  loader:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scroll:  { flex: 1 },
   content: { padding: 16, gap: 14 },
 
   // Header
@@ -361,6 +501,11 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#f1f5f9',
   },
+  deleteBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#fef2f2',
+  },
   headerTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
   headerSub:   { fontSize: 11, color: '#94a3b8', marginTop: 1 },
 
@@ -372,14 +517,14 @@ const styles = StyleSheet.create({
   statusDot:  { width: 7, height: 7, borderRadius: 4 },
   statusText: { fontSize: 11, fontWeight: '700' },
 
-  // Hero card
+  // Hero
   heroCard: {
     backgroundColor: '#fff', borderRadius: 14,
     padding: 16, gap: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
   },
-  heroTop:  { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  heroTop: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   sevBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     paddingHorizontal: 10, paddingVertical: 5,
@@ -392,9 +537,9 @@ const styles = StyleSheet.create({
     borderRadius: 20, backgroundColor: '#f1f5f9',
   },
   typeChipText: { fontSize: 11, fontWeight: '600', color: '#475569' },
-  heroMeta: { gap: 6 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  metaLabel:{ fontSize: 13, color: '#475569', fontWeight: '500' },
+  heroMeta:  { gap: 6 },
+  metaItem:  { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  metaLabel: { fontSize: 13, color: '#475569', fontWeight: '500', flex: 1 },
 
   // Sections
   section: {
@@ -417,18 +562,15 @@ const styles = StyleSheet.create({
   infoValue:{ fontSize: 13, color: '#374151', fontWeight: '600', textAlign: 'right', flex: 2 },
   infoValueHighlight: { color: '#dc2626', fontWeight: '800' },
 
-  // Damage description
-  damageDesc: { gap: 4, marginTop: 4 },
-  damageDescLabel: { fontSize: 12, color: '#94a3b8', fontWeight: '600' },
-  damageDescText:  { fontSize: 13, color: '#374151', lineHeight: 20 },
+  blockField: { gap: 4, marginTop: 4 },
+  blockLabel: { fontSize: 12, color: '#94a3b8', fontWeight: '600' },
+  blockText:  { fontSize: 13, color: '#374151', lineHeight: 20 },
+  descText:   { fontSize: 13, color: '#374151', lineHeight: 21 },
 
-  descText: { fontSize: 13, color: '#374151', lineHeight: 21 },
-
-  // Photo grid
+  // Photos
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   photoThumb: {
-    width: (SCREEN_WIDTH - 32 - 32 - 16) / 3,
-    height: (SCREEN_WIDTH - 32 - 32 - 16) / 3,
+    width: PHOTO_SIZE, height: PHOTO_SIZE,
     borderRadius: 10, overflow: 'hidden',
     backgroundColor: '#f1f5f9', position: 'relative',
   },
@@ -439,23 +581,39 @@ const styles = StyleSheet.create({
     borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1,
   },
   photoNumText: { fontSize: 10, color: '#fff', fontWeight: '700' },
+  photoZoomHint: {
+    position: 'absolute', top: 4, right: 4,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 6, padding: 3,
+  },
+
+  // Audit trail
+  auditRow: { flexDirection: 'row', gap: 10, paddingVertical: 8 },
+  auditRowBorder: { borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  auditDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
+  auditTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  auditAction: { fontSize: 12, fontWeight: '700' },
+  auditTime:   { fontSize: 11, color: '#94a3b8' },
+  auditDetail: { fontSize: 11, color: '#64748b', marginTop: 1 },
 
   // Status modal
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 20, paddingBottom: 36, gap: 4,
+    backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    padding: 20, paddingBottom: 36, gap: 6,
   },
   modalHandle: {
     width: 40, height: 4, borderRadius: 2,
     backgroundColor: '#e2e8f0', alignSelf: 'center', marginBottom: 12,
   },
-  modalTitle: { fontSize: 15, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  modalTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  modalSub:   { fontSize: 12, color: '#94a3b8', marginBottom: 4 },
   statusOption: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 14, paddingHorizontal: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 13, paddingHorizontal: 12,
     borderRadius: 12, marginBottom: 2,
   },
+  statusOptionIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   statusOptionText: { fontSize: 14, fontWeight: '600' },
   modalCancel: {
     marginTop: 8, paddingVertical: 14, borderRadius: 12,
@@ -468,13 +626,11 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: 'rgba(0,0,0,0.96)',
     alignItems: 'center', justifyContent: 'center',
   },
-  lightboxClose: { position: 'absolute', top: 52, right: 20, zIndex: 10 },
-  lightboxImage: { width: SCREEN_WIDTH, height: SCREEN_WIDTH * 1.2 },
-  lightboxCounter: {
-    position: 'absolute', bottom: 60,
-    fontSize: 14, color: 'rgba(255,255,255,0.7)', fontWeight: '600',
-  },
-  lightboxNav: { position: 'absolute', bottom: 48, width: '100%', flexDirection: 'row' },
-  lightboxNavBtn: { position: 'absolute', left: 16, padding: 10 },
-  lightboxNavBtnRight: { left: undefined, right: 16 },
+  lightboxClose:   { position: 'absolute', top: 52, right: 20, zIndex: 10 },
+  lightboxImage:   { width: SCREEN_WIDTH, height: SCREEN_WIDTH * 1.2 },
+  lightboxCounter: { position: 'absolute', bottom: 60, fontSize: 14, color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
+  lightboxNav:     { position: 'absolute', bottom: 44, width: '100%' },
+  lightboxNavBtn:  { position: 'absolute', left: 16 },
+  lightboxNavRight:{ left: undefined, right: 16 },
+  lightboxNavInner:{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 24, padding: 10 },
 })

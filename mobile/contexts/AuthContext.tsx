@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
-import { Profile } from '../lib/types'
+import { Profile, normaliseRole } from '../lib/types'
 
 interface AuthContextType {
   user: any
@@ -46,7 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchProfile(userId: string) {
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
-      setProfile(data ?? null)
+      if (data) {
+        // Normalise role from DB casing ("Admin", "Tyre Man") → app convention ("admin", "tyre_man")
+        setProfile({ ...data, role: normaliseRole(data.role) } as Profile)
+      } else {
+        setProfile(null)
+      }
     } catch {
       // Profile is non-blocking; screens fall back gracefully when it is null.
     }

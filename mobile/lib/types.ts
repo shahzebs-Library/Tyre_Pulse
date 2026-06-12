@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'manager' | 'director' | 'inspector' | 'tyre_man'
+export type UserRole = 'admin' | 'manager' | 'director' | 'inspector' | 'tyre_man' | 'reporter'
 
 export interface Profile {
   id: string
@@ -9,6 +9,26 @@ export interface Profile {
   site: string | null
   country: string | null
   approved: boolean
+}
+
+/**
+ * Normalises any DB role string to a consistent lowercase_underscore UserRole.
+ * DB values like "Admin", "Tyre Man", "tyre_man" all resolve correctly.
+ */
+export function normaliseRole(raw: string | null | undefined): UserRole {
+  const key = (raw ?? 'reporter').trim().toLowerCase().replace(/\s+/g, '_')
+  const valid: UserRole[] = ['admin', 'manager', 'director', 'inspector', 'tyre_man', 'reporter']
+  return valid.includes(key as UserRole) ? (key as UserRole) : 'reporter'
+}
+
+/** Returns true for roles that have elevated management access */
+export function isAdminOrAbove(role: UserRole | null | undefined): boolean {
+  return role === 'admin' || role === 'manager' || role === 'director'
+}
+
+/** Returns true only for the admin role (hard deletes, full audit access) */
+export function isAdmin(role: UserRole | null | undefined): boolean {
+  return role === 'admin'
 }
 
 export interface VehicleFleet {
@@ -92,6 +112,8 @@ export interface AccidentRecord {
   photos: string[]               // array of public Supabase Storage URLs
   status: AccidentStatus
   notes: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
   created_at: string
   updated_at: string
 }

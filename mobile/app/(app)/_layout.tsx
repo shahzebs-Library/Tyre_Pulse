@@ -3,9 +3,10 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { View, ActivityIndicator } from 'react-native'
+import { isAdminOrAbove } from '../../lib/types'
 
 export default function AppLayout() {
-  const { user, loading } = useAuth()
+  const { user, loading, profile } = useAuth()
   const { t } = useLanguage()
 
   if (loading) {
@@ -17,6 +18,8 @@ export default function AppLayout() {
   }
 
   if (!user) return <Redirect href="/(auth)/login" />
+
+  const elevated = isAdminOrAbove(profile?.role ?? null)
 
   return (
     <Tabs
@@ -69,6 +72,19 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} />,
         }}
       />
+      {/* Admin tab — visible only to Admin / Manager / Director */}
+      <Tabs.Screen
+        name="admin/index"
+        options={{
+          title: 'Admin',
+          tabBarActiveTintColor: '#7c3aed',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name="shield-outline" size={size} color={focused ? '#7c3aed' : color} />
+          ),
+          // Hide entirely for non-elevated roles without removing the route
+          tabBarButton: elevated ? undefined : () => null,
+        }}
+      />
       <Tabs.Screen
         name="profile"
         options={{
@@ -76,9 +92,12 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
         }}
       />
+      {/* Hidden routes — accessible via router.push but not in tab bar */}
       <Tabs.Screen name="scanner"           options={{ href: null }} />
       <Tabs.Screen name="accident/report"   options={{ href: null }} />
       <Tabs.Screen name="accident/[id]"     options={{ href: null }} />
+      <Tabs.Screen name="admin/ai-chat"     options={{ href: null }} />
+      <Tabs.Screen name="admin/users"       options={{ href: null }} />
     </Tabs>
   )
 }

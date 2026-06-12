@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   StatusBar, ActivityIndicator, Alert, Modal, Image,
-  Dimensions,
+  Dimensions, Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -60,6 +60,9 @@ export default function AccidentDetailScreen() {
   const [deleting, setDeleting]             = useState(false)
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [lightboxIndex, setLightboxIndex]   = useState<number | null>(null)
+  const [analyzing, setAnalyzing]           = useState(false)
+  const [aiResult, setAiResult]             = useState<string | null>(null)
+  const [showAiModal, setShowAiModal]       = useState(false)
 
   const role           = profile?.role ?? null
   const canChangeStatus = isAdminOrAbove(role)
@@ -115,6 +118,66 @@ export default function AccidentDetailScreen() {
       if (data) setAuditLog(data as AuditRow[])
     }
     setStatusLoading(false)
+  }
+
+  async function analyzeWithAI() {
+    if (!accident) return
+    setAnalyzing(true)
+    setShowAiModal(true)
+    setAiResult(null)
+
+    const prompt = `You are a fleet accident investigator and tyre engineer. Analyze this accident report and provide a structured assessment.
+
+ACCIDENT REPORT:
+- Asset / Vehicle: ${accident.asset_no}
+- Site: ${accident.site}
+- Date: ${accident.incident_date} ${accident.incident_time ?? ''}
+- Location: ${accident.location ?? 'Not specified'}
+- Type: ${accident.accident_type.replace('_', ' ')}
+- Severity: ${accident.severity.toUpperCase()}
+- Description: ${accident.description ?? 'Not provided'}
+- Injuries: ${accident.injuries ? `Yes — ${accident.injury_count} persons` : 'No'}
+- Third Party Involved: ${accident.third_party_involved ? 'Yes' : 'No'}
+- Police Report: ${accident.police_report_no ?? 'None'}
+- Damage Description: ${accident.damage_description ?? 'Not specified'}
+- Estimated Damage Cost: ${accident.estimated_damage_cost ? `SAR ${accident.estimated_damage_cost}` : 'Not estimated'}
+
+Provide your analysis in exactly this structure:
+
+## Root Cause
+[Identify the most likely primary cause]
+
+## Contributing Factors
+[List 2-4 specific contributing factors]
+
+## Risk Assessment
+Risk Level: [Critical / High / Medium / Low]
+[Brief justification]
+
+## Immediate Actions Required
+[3-5 specific actions that should be taken now]
+
+## Prevention Recommendations
+[3-4 systemic changes to prevent recurrence]
+
+## Insurance / Legal Notes
+[Any relevant observations about documentation, liability, or reporting]`
+
+    try {
+      const { data, error } = await supabase.functions.invoke('chat-ai', {
+        body: {
+          system: 'You are TyrePulse\'s Tyre Engineer and fleet accident investigator. Provide expert, actionable analysis.',
+          user: prompt,
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1500,
+        },
+      })
+      setAiResult(error ? 'Unable to reach AI. Check your connection and try again.' : (data?.content ?? 'No analysis generated.'))
+    } catch {
+      setAiResult('Network error. Please try again.')
+    } finally {
+      setAnalyzing(false)
+    }
   }
 
   function confirmDelete() {
@@ -351,8 +414,61 @@ export default function AccidentDetailScreen() {
           </SectionCard>
         )}
 
-        <View style={{ height: 36 }} />
+        <View style={{ height: canChangeStatus ? 96 : 36 }} />
       </ScrollView>
+
+      {/* ── AI Analyze FAB (admin / manager / director) ───────────────────────── */}
+      {canChangeStatus && (
+        <View style={styles.fabBar}>
+          <TouchableOpacity
+            style={[styles.analyzeBtn, analyzing && styles.analyzeBtnLoading]}
+            onPress={analyzeWithAI}
+            disabled={analyzing}
+            activeOpacity={0.85}
+          >
+            {analyzing
+              ? <><ActivityIndicator size="small" color="#fff" /><Text style={styles.analyzeBtnText}>Analyzing…</Text></>
+              : <><Ionicons name="sparkles-outline" size={18} color="#fff" /><Text style={styles.analyzeBtnText}>Analyze with AI</Text></>
+            }
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── AI Result Modal ───────────────────────────────────────────────────── */}
+      <Modal
+        visible={showAiModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAiModal(false)}
+      >
+        <View style={styles.aiModalBackdrop}>
+          <View style={styles.aiModalSheet}>
+            <View style={styles.modalHandle} />
+            <View style={styles.aiModalHeader}>
+              <View style={styles.aiModalIcon}>
+                <Ionicons name="sparkles" size={18} color="#7c3aed" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.aiModalTitle}>AI Accident Analysis</Text>
+                <Text style={styles.aiModalSub}>Tyre Engineer Agent · {accident?.accident_type?.replace('_', ' ')}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowAiModal(false)}>
+                <Ionicons name="close-circle-outline" size={24} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.aiModalBody} showsVerticalScrollIndicator={false}>
+              {analyzing || !aiResult
+                ? <View style={styles.aiLoading}>
+                    <ActivityIndicator size="large" color="#7c3aed" />
+                    <Text style={styles.aiLoadingText}>Analyzing accident data…</Text>
+                  </View>
+                : <Text style={styles.aiResultText}>{aiResult}</Text>
+              }
+              <View style={{ height: 24 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Status Modal ──────────────────────────────────────────────────────── */}
       <Modal
@@ -620,6 +736,38 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9', alignItems: 'center',
   },
   modalCancelText: { fontSize: 14, fontWeight: '700', color: '#64748b' },
+
+  // AI Analyze FAB
+  fabBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: 16, paddingBottom: Platform.OS === 'ios' ? 24 : 16, paddingTop: 12,
+    backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f1f5f9',
+  },
+  analyzeBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#7c3aed', borderRadius: 14, paddingVertical: 14,
+  },
+  analyzeBtnLoading: { backgroundColor: '#a78bfa' },
+  analyzeBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+
+  // AI Modal
+  aiModalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  aiModalSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    maxHeight: '85%', paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  aiModalHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: '#f1f5f9',
+  },
+  aiModalIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#f5f3ff', alignItems: 'center', justifyContent: 'center' },
+  aiModalTitle: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
+  aiModalSub:   { fontSize: 11, color: '#94a3b8', marginTop: 1, textTransform: 'capitalize' },
+  aiModalBody:  { paddingHorizontal: 20, paddingTop: 14 },
+  aiLoading:    { alignItems: 'center', paddingVertical: 48, gap: 12 },
+  aiLoadingText:{ fontSize: 13, color: '#94a3b8' },
+  aiResultText: { fontSize: 13, color: '#374151', lineHeight: 22 },
 
   // Lightbox
   lightbox: {

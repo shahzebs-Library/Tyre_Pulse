@@ -615,8 +615,8 @@ export default function Procurement() {
           {
             label: 'Total Spend',
             value: kpis.spend >= 1_000_000
-              ? `R ${(kpis.spend / 1_000_000).toFixed(2)}M`
-              : `R ${(kpis.spend / 1000).toFixed(1)}k`,
+              ? `${activeCurrency} ${(kpis.spend / 1_000_000).toFixed(2)}M`
+              : `${activeCurrency} ${(kpis.spend / 1000).toFixed(1)}k`,
             suffix: '',
             color: 'green',
             icon: DollarSign,
@@ -628,7 +628,7 @@ export default function Procurement() {
             suffix: '',
             color: 'yellow',
             icon: Truck,
-            sub: `R ${(kpis.pendingValue / 1000).toFixed(1)}k pending`,
+            sub: `${activeCurrency} ${(kpis.pendingValue / 1000).toFixed(1)}k pending`,
           },
           {
             label: 'Budget Used',
@@ -636,7 +636,7 @@ export default function Procurement() {
             suffix: '',
             color: kpis.budgetVariance > 100 ? 'red' : kpis.budgetVariance > 80 ? 'yellow' : 'teal',
             icon: BarChart2,
-            sub: budget > 0 ? `of R ${(budget / 1000).toFixed(0)}k budget` : 'Set budget below',
+            sub: budget > 0 ? `of ${activeCurrency} ${(budget / 1000).toFixed(0)}k budget` : 'Set budget below',
           },
           {
             label: 'Avg Lead Time',

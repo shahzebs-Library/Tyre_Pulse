@@ -92,11 +92,11 @@ function _fmtCurrencyBase(v, currency = 'SAR') {
 }
 function fmtDate(d) {
   if (!d) return '—'
-  return new Date(d).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })
+  return new Date(d).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 function fmtDateTime(d) {
   if (!d) return '—'
-  return new Date(d).toLocaleString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return new Date(d).toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 function isOverdue(wo) {
   if (!wo.target_completion) return false
@@ -353,7 +353,7 @@ export default function WorkOrders() {
     doc.text('Workshop Job Card', 14, 23)
     doc.setFontSize(9); doc.setTextColor(156, 163, 175)
     doc.text(`${order.work_order_no}  ·  ${order.work_type}  ·  Priority: ${order.priority}`, 14, 30)
-    doc.text(`Printed: ${new Date().toLocaleString('en-ZA')}`, 140, 30)
+    doc.text(`Printed: ${new Date().toLocaleString('en-US')}`, 140, 30)
 
     const details = [
       ['Asset No', order.asset_no, 'Status', order.status],
@@ -519,15 +519,29 @@ export default function WorkOrders() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
           <h3 className="text-white font-semibold mb-4">Work Orders by Type</h3>
-          <div className="h-52">
-            <Bar data={typeChartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
-          </div>
+          {typeChartData.labels.length > 0 ? (
+            <div className="h-52">
+              <Bar data={typeChartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
+            </div>
+          ) : (
+            <div className="h-52 flex flex-col items-center justify-center gap-2 text-gray-500">
+              <Wrench size={28} className="opacity-30" />
+              <p className="text-sm">No work orders yet</p>
+            </div>
+          )}
         </div>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
           <h3 className="text-white font-semibold mb-4">Status Distribution</h3>
-          <div className="h-52">
-            <Doughnut data={statusChartData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />
-          </div>
+          {statusChartData.labels.length > 0 ? (
+            <div className="h-52">
+              <Doughnut data={statusChartData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />
+            </div>
+          ) : (
+            <div className="h-52 flex flex-col items-center justify-center gap-2 text-gray-500">
+              <CheckCircle size={28} className="opacity-30" />
+              <p className="text-sm">No status data available</p>
+            </div>
+          )}
         </div>
       </div>
 

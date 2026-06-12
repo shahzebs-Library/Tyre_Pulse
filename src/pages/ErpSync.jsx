@@ -158,7 +158,7 @@ function formatDuration(secs) {
 }
 
 function formatTs(date) {
-  return date.toLocaleString('en-ZA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+  return date.toLocaleString('en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 function formatRelative(dateStr) {
@@ -746,7 +746,7 @@ export default function ErpSync() {
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-gray-600 w-28 flex-shrink-0">Last Sync</span>
-                              <span className="text-gray-300">{new Date(erp.lastSync).toLocaleString('en-ZA')}</span>
+                              <span className="text-gray-300">{new Date(erp.lastSync).toLocaleString('en-US')}</span>
                             </div>
                           </div>
                         </div>

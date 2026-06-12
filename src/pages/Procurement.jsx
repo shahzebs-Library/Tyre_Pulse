@@ -71,7 +71,7 @@ function _fmtCurrencyBase(v, currency = 'SAR') {
 }
 function fmtDate(d) {
   if (!d) return '—'
-  return new Date(d).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })
+  return new Date(d).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 function calcItemTotal(item) {
   return (parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)
@@ -238,7 +238,7 @@ export default function Procurement() {
     return {
       labels: months.map(m => {
         const [y, mo] = m.split('-')
-        return new Date(parseInt(y), parseInt(mo) - 1).toLocaleString('en-ZA', { month: 'short', year: '2-digit' })
+        return new Date(parseInt(y), parseInt(mo) - 1).toLocaleString('en-US', { month: 'short', year: '2-digit' })
       }),
       datasets: top5.map((vendor, idx) => ({
         label: vendor,
@@ -298,7 +298,7 @@ export default function Procurement() {
     return {
       labels: months.map(m => {
         const [y, mo] = m.split('-')
-        return new Date(parseInt(y), parseInt(mo) - 1).toLocaleString('en-ZA', { month: 'short' })
+        return new Date(parseInt(y), parseInt(mo) - 1).toLocaleString('en-US', { month: 'short' })
       }),
       datasets: [
         {
@@ -472,7 +472,7 @@ export default function Procurement() {
     doc.text('PURCHASE ORDER', 14, 25)
     doc.setFontSize(8); doc.setTextColor(156, 163, 175)
     doc.text(`${po.po_number}  ·  ${po.status}  ·  Priority: ${po.priority}`, 14, 33)
-    doc.text(`Generated: ${new Date().toLocaleString('en-ZA')}`, 140, 33)
+    doc.text(`Generated: ${new Date().toLocaleString('en-US')}`, 140, 33)
 
     autoTable(doc, {
       startY: 48,

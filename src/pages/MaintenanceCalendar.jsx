@@ -59,13 +59,13 @@ function isSameDay(a, b) {
 function fmtDisplay(dateStr) {
   if (!dateStr) return '—'
   const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function fmtShort(dateStr) {
   if (!dateStr) return '—'
   const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short' })
+  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short' })
 }
 
 // ── Event builders ────────────────────────────────────────────────────────────
@@ -396,7 +396,7 @@ export default function MaintenanceCalendar() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <PageHeader
         title="Maintenance Calendar"
-        subtitle={`Unified view of work orders and tyre alerts · ${filteredEvents.length} events${lastRefresh ? ` · Updated ${lastRefresh.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+        subtitle={`Unified view of work orders and tyre alerts · ${filteredEvents.length} events${lastRefresh ? ` · Updated ${lastRefresh.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
         icon={Calendar}
         actions={<>
           <button
@@ -715,7 +715,7 @@ export default function MaintenanceCalendar() {
               <div className="flex items-center justify-between mb-5">
                 <div>
                   <h3 className="text-white font-semibold text-lg">
-                    {(selectedDay || currentDate).toLocaleDateString('en-ZA', {
+                    {(selectedDay || currentDate).toLocaleDateString('en-US', {
                       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
                     })}
                   </h3>

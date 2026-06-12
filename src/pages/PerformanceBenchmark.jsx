@@ -343,7 +343,7 @@ export default function PerformanceBenchmark() {
     doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('TyrePulse', 14, 13)
     doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.text('Fleet Performance Benchmarking Report', 14, 22)
     doc.setFontSize(8); doc.setTextColor(156, 163, 175)
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA', { dateStyle: 'long' })}`, 14, 29)
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}`, 14, 29)
     doc.text(`Overall Score: ${overallScore.toFixed(0)}/100`, 200, 29)
 
     autoTable(doc, {

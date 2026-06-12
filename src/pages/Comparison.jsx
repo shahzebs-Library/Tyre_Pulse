@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useSettings } from '../contexts/SettingsContext'
 import { supabase } from '../lib/supabase'
 import { Bar } from 'react-chartjs-2'
 import {
@@ -32,6 +33,7 @@ const CHART_OPTS = {
 }
 
 export default function Comparison() {
+  const { activeCurrency } = useSettings()
   const [periodA, setPeriodA] = useState(defaultA)
   const [periodB, setPeriodB] = useState(defaultB)
   const [metric, setMetric]   = useState('count')
@@ -193,7 +195,7 @@ export default function Comparison() {
       {/* Metric toggle + run button */}
       <div className="flex items-center gap-4 flex-wrap">
         <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg">
-          {[['count','Replacements'],['cost','Cost (SAR)']].map(([val, lbl]) => (
+          {[['count','Replacements'],['cost',`Cost (${activeCurrency})`]].map(([val, lbl]) => (
             <button key={val} onClick={() => setMetric(val)}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
                 metric === val ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'
@@ -221,7 +223,7 @@ export default function Comparison() {
           {/* Bar chart */}
           <div className="card">
             <h3 className="text-base font-semibold text-white mb-4">
-              {metric === 'count' ? 'Replacements' : 'Cost (SAR)'} by Month
+              {metric === 'count' ? 'Replacements' : `Cost (${activeCurrency})`} by Month
             </h3>
             <div style={{ height: 280 }}>
               <Bar data={chartData} options={CHART_OPTS} />

@@ -274,7 +274,7 @@ export default function EngineeringKpi() {
     return {
       labels: top10.map(b => `${b.brand} (n=${b.count})`),
       datasets: [{
-        label: 'Avg CPK (SAR/km)',
+        label: `Avg CPK (${activeCurrency}/km)`,
         data:  top10.map(b => parseFloat(b.avgCpk.toFixed(4))),
         backgroundColor: top10.map(b =>
           b.avgCpk < 1.0 ? 'rgba(34,197,94,0.7)'
@@ -993,7 +993,7 @@ export default function EngineeringKpi() {
                   <div style={{ height: 280 }}>
                     <Bar
                       data={cpkBrandChart}
-                      options={chartOpts(true, 'SAR/km', '')}
+                      options={chartOpts(true, `${activeCurrency}/km`, '')}
                     />
                   </div>
                 ) : (
@@ -1237,8 +1237,8 @@ function buildKpiSummaryRows(kpis, currency = 'SAR') {
   const n = v => v ?? 'N/A'
 
   return [
-    { kpi: 'CPK Fleet Average (SAR/km)',      value: cpk.validCount > 0 ? cpk.fleetAvgCpk.toFixed(4) : 'N/A',                  status: cpk.fleetAvgCpk < 1.0 ? 'Good' : cpk.fleetAvgCpk < 2.0 ? 'Warning' : 'Critical', description: `Coverage ${cpk.coveragePct.toFixed(1)}% (${cpk.validCount}/${cpk.totalCount})` },
-    { kpi: 'Cost Per Mile (SAR/mile)',         value: cpk.validCount > 0 ? (cpk.fleetAvgCpk * 1.60934).toFixed(4) : 'N/A',     status: 'Derived',   description: 'CPK × 1.609' },
+    { kpi: `CPK Fleet Average (${currency}/km)`,  value: cpk.validCount > 0 ? cpk.fleetAvgCpk.toFixed(4) : 'N/A',              status: cpk.fleetAvgCpk < 1.0 ? 'Good' : cpk.fleetAvgCpk < 2.0 ? 'Warning' : 'Critical', description: `Coverage ${cpk.coveragePct.toFixed(1)}% (${cpk.validCount}/${cpk.totalCount})` },
+    { kpi: `Cost Per Mile (${currency}/mile)`,    value: cpk.validCount > 0 ? (cpk.fleetAvgCpk * 1.60934).toFixed(4) : 'N/A', status: 'Derived',   description: 'CPK × 1.609' },
     { kpi: 'Average Tyre Life (km)',           value: avgTyreLife.validCount > 0 ? Math.round(avgTyreLife.avgKm) : 'N/A',       status: avgTyreLife.avgKm > 40000 ? 'Good' : avgTyreLife.avgKm > 20000 ? 'Warning' : 'Critical', description: `Median: ${Math.round(avgTyreLife.medianKm).toLocaleString()} km` },
     { kpi: 'Fleet Avg Tyre Life (km)',         value: avgTyreLife.validCount > 0 ? Math.round(avgTyreLife.avgKm) : 'N/A',       status: 'See Above', description: 'Fleet-wide average' },
     { kpi: 'Tyre Removal Rate (per 1000 km)', value: removalRate.estimatedFleetKm > 0 ? removalRate.removalPer1000Km.toFixed(4) : 'N/A', status: 'Informational', description: `${removalRate.totalRemovals} removals / ${Math.round(removalRate.estimatedFleetKm).toLocaleString()} km` },

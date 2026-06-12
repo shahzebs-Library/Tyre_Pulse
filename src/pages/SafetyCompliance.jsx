@@ -60,7 +60,7 @@ function getPosition(pos) {
 function fmtPct(n) { return isNaN(n) ? '—' : n.toFixed(1) + '%' }
 function fmtDate(d) {
   if (!d) return '—'
-  return new Date(d).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric' })
+  return new Date(d).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -155,7 +155,7 @@ export default function SafetyCompliance() {
     const monthlyTrend = []
     for (let i = 5; i >= 0; i--) {
       const d = new Date(); d.setMonth(d.getMonth() - i)
-      const month = d.toLocaleDateString('en-ZA', { month: 'short', year: '2-digit' })
+      const month = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
       const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       const monthRecords = tyreRecords.filter(r => (r.created_at || '').startsWith(monthKey))
       const monthInspections = inspections.filter(r => (r.inspection_date || '').startsWith(monthKey))
@@ -256,7 +256,7 @@ export default function SafetyCompliance() {
     doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('TyrePulse', 14, 13)
     doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.text('Safety & Compliance Report', 14, 22)
     doc.setFontSize(8); doc.setTextColor(156, 163, 175)
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA', { dateStyle: 'long' })}`, 14, 29)
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}`, 14, 29)
     doc.text(`Overall Score: ${compliance.overallScore.toFixed(1)}%`, 180, 29)
 
     autoTable(doc, {

@@ -81,6 +81,12 @@ import StockReplenishment from './pages/StockReplenishment'
 import TyreScan from './pages/TyreScan'
 import QrLabels from './pages/QrLabels'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt'
+import ErrorBoundary from './components/ErrorBoundary'
+
+// Wrap any element in a per-page error boundary so crashes don't take down the whole app
+function Safe({ children }) {
+  return <ErrorBoundary>{children}</ErrorBoundary>
+}
 
 function HomeRoute() {
   const { profile, loading } = useAuth()
@@ -104,89 +110,88 @@ export default function App() {
               <ProtectedRoute>
                 <Layout>
                   <Routes>
-                    <Route path="/"            element={<HomeRoute />} />
-                    <Route path="/tyres"       element={<TyreRecords />} />
+                    <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
+                    <Route path="/tyres"       element={<Safe><TyreRecords /></Safe>} />
                     {/* ── Analytics (Admin + Manager + Director) ── */}
-                    <Route path="/analytics"    element={<RoleRoute allowed={['Admin','Manager','Director']}><Analytics /></RoleRoute>} />
-                    <Route path="/brand-perf"   element={<RoleRoute allowed={['Admin','Manager','Director']}><BrandPerformance /></RoleRoute>} />
-                    <Route path="/site-comp"    element={<RoleRoute allowed={['Admin','Manager','Director']}><SiteComparison /></RoleRoute>} />
-                    <Route path="/fleet"        element={<RoleRoute allowed={['Admin','Manager','Director']}><FleetAnalytics /></RoleRoute>} />
-                    <Route path="/kpi"          element={<RoleRoute allowed={['Admin','Manager','Director']}><KpiScorecard /></RoleRoute>} />
-                    <Route path="/country-comp" element={<RoleRoute allowed={['Admin','Manager','Director']}><CountryComparison /></RoleRoute>} />
-                    <Route path="/comparison"   element={<RoleRoute allowed={['Admin','Manager','Director']}><Comparison /></RoleRoute>} />
+                    <Route path="/analytics"    element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><Analytics /></RoleRoute></Safe>} />
+                    <Route path="/brand-perf"   element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><BrandPerformance /></RoleRoute></Safe>} />
+                    <Route path="/site-comp"    element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><SiteComparison /></RoleRoute></Safe>} />
+                    <Route path="/fleet"        element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><FleetAnalytics /></RoleRoute></Safe>} />
+                    <Route path="/kpi"          element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><KpiScorecard /></RoleRoute></Safe>} />
+                    <Route path="/country-comp" element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><CountryComparison /></RoleRoute></Safe>} />
+                    <Route path="/comparison"   element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><Comparison /></RoleRoute></Safe>} />
 
                     {/* ── Operations (all authenticated roles) ── */}
-                    <Route path="/stock"       element={<StockManagement />} />
-                    <Route path="/budgets"     element={<Budgets />} />
-                    <Route path="/actions"     element={<CorrectiveActions />} />
-                    <Route path="/accidents"   element={<Accidents />} />
-                    <Route path="/rca"         element={<RcaRecords />} />
-                    <Route path="/inspections" element={<Inspections />} />
-                    <Route path="/alerts"      element={<Alerts />} />
-                    <Route path="/fleet-master"        element={<FleetMaster />} />
-                    <Route path="/reports"             element={<Reports />} />
-                    <Route path="/gate-pass"           element={<GatePass />} />
-                    <Route path="/serial-tracker"      element={<SerialTracker />} />
-                    <Route path="/work-orders"         element={<WorkOrders />} />
-                    <Route path="/maintenance-calendar" element={<MaintenanceCalendar />} />
-                    <Route path="/safety-compliance"   element={<SafetyCompliance />} />
-                    <Route path="/assets"              element={<AssetManagement />} />
-                    <Route path="/inspection-planner"  element={<InspectionPlanner />} />
-                    <Route path="/warranty"            element={<WarrantyTracker />} />
-                    <Route path="/tyre-exchange"       element={<TyreExchange />} />
-                    <Route path="/scrap"               element={<TyreScrapManagement />} />
-                    <Route path="/stock-replenishment" element={<StockReplenishment />} />
-                    <Route path="/live-fleet"          element={<LiveFleetStatus />} />
-                    <Route path="/compliance"          element={<ComplianceDashboard />} />
-                    <Route path="/retread"             element={<RetreadManagement />} />
-                    <Route path="/recall-tracker"      element={<RecallTracker />} />
-                    <Route path="/tyre-specs"          element={<TyreSpecifications />} />
-                    <Route path="/rotation"            element={<RotationSchedule />} />
-                    <Route path="/daily-ops"           element={<DailyOps />} />
+                    <Route path="/stock"       element={<Safe><StockManagement /></Safe>} />
+                    <Route path="/budgets"     element={<Safe><Budgets /></Safe>} />
+                    <Route path="/actions"     element={<Safe><CorrectiveActions /></Safe>} />
+                    <Route path="/accidents"   element={<Safe><Accidents /></Safe>} />
+                    <Route path="/rca"         element={<Safe><RcaRecords /></Safe>} />
+                    <Route path="/inspections" element={<Safe><Inspections /></Safe>} />
+                    <Route path="/alerts"      element={<Safe><Alerts /></Safe>} />
+                    <Route path="/fleet-master"        element={<Safe><FleetMaster /></Safe>} />
+                    <Route path="/reports"             element={<Safe><Reports /></Safe>} />
+                    <Route path="/gate-pass"           element={<Safe><GatePass /></Safe>} />
+                    <Route path="/serial-tracker"      element={<Safe><SerialTracker /></Safe>} />
+                    <Route path="/work-orders"         element={<Safe><WorkOrders /></Safe>} />
+                    <Route path="/maintenance-calendar" element={<Safe><MaintenanceCalendar /></Safe>} />
+                    <Route path="/safety-compliance"   element={<Safe><SafetyCompliance /></Safe>} />
+                    <Route path="/assets"              element={<Safe><AssetManagement /></Safe>} />
+                    <Route path="/inspection-planner"  element={<Safe><InspectionPlanner /></Safe>} />
+                    <Route path="/warranty"            element={<Safe><WarrantyTracker /></Safe>} />
+                    <Route path="/tyre-exchange"       element={<Safe><TyreExchange /></Safe>} />
+                    <Route path="/scrap"               element={<Safe><TyreScrapManagement /></Safe>} />
+                    <Route path="/stock-replenishment" element={<Safe><StockReplenishment /></Safe>} />
+                    <Route path="/live-fleet"          element={<Safe><LiveFleetStatus /></Safe>} />
+                    <Route path="/compliance"          element={<Safe><ComplianceDashboard /></Safe>} />
+                    <Route path="/retread"             element={<Safe><RetreadManagement /></Safe>} />
+                    <Route path="/recall-tracker"      element={<Safe><RecallTracker /></Safe>} />
+                    <Route path="/tyre-specs"          element={<Safe><TyreSpecifications /></Safe>} />
+                    <Route path="/rotation"            element={<Safe><RotationSchedule /></Safe>} />
+                    <Route path="/daily-ops"           element={<Safe><DailyOps /></Safe>} />
 
                     {/* ── Intelligence (Admin only) ── */}
-                    <Route path="/kpi-engine"              element={<RoleRoute allowed={['Admin']}><EngineeringKpi /></RoleRoute>} />
-                    <Route path="/kpi-command"             element={<RoleRoute allowed={['Admin']}><KpiCommandCenter /></RoleRoute>} />
-                    <Route path="/position-intelligence"   element={<RoleRoute allowed={['Admin']}><PositionIntelligence /></RoleRoute>} />
-                    <Route path="/pressure-intel"          element={<RoleRoute allowed={['Admin']}><PressureIntelligence /></RoleRoute>} />
-                    <Route path="/inspection-intelligence" element={<RoleRoute allowed={['Admin']}><InspectionIntelligence /></RoleRoute>} />
-                    <Route path="/root-cause"              element={<RoleRoute allowed={['Admin']}><RootCauseEngine /></RoleRoute>} />
-                    <Route path="/predictive-maintenance"  element={<RoleRoute allowed={['Admin']}><PredictiveMaintenance /></RoleRoute>} />
-                    <Route path="/vendor-intelligence"     element={<RoleRoute allowed={['Admin']}><VendorIntelligence /></RoleRoute>} />
-                    <Route path="/driver-management"       element={<RoleRoute allowed={['Admin']}><DriverManagement /></RoleRoute>} />
-                    <Route path="/fleet-intelligence"      element={<RoleRoute allowed={['Admin']}><FleetIntelligence /></RoleRoute>} />
-                    <Route path="/fleet-health"            element={<RoleRoute allowed={['Admin']}><FleetHealthBoard /></RoleRoute>} />
-                    <Route path="/advanced-analytics"      element={<RoleRoute allowed={['Admin']}><AdvancedAnalytics /></RoleRoute>} />
-                    <Route path="/ai-command-center"       element={<RoleRoute allowed={['Admin']}><AiCommandCenter /></RoleRoute>} />
-                    <Route path="/executive-report"        element={<RoleRoute allowed={['Admin']}><ExecutiveReport /></RoleRoute>} />
-                    <Route path="/forecasting"             element={<RoleRoute allowed={['Admin']}><ForecastingEngine /></RoleRoute>} />
-                    <Route path="/cost-center"             element={<RoleRoute allowed={['Admin']}><CostCenter /></RoleRoute>} />
-                    <Route path="/benchmark"               element={<RoleRoute allowed={['Admin']}><PerformanceBenchmark /></RoleRoute>} />
-                    <Route path="/procurement"             element={<RoleRoute allowed={['Admin']}><Procurement /></RoleRoute>} />
-                    <Route path="/suppliers"               element={<RoleRoute allowed={['Admin']}><SupplierManagement /></RoleRoute>} />
-                    <Route path="/tyre-size"               element={<RoleRoute allowed={['Admin']}><TyreSizeAnalysis /></RoleRoute>} />
-                    <Route path="/tyre-lifecycle"          element={<RoleRoute allowed={['Admin']}><TyreLifecycle /></RoleRoute>} />
-                    <Route path="/downtime"                element={<RoleRoute allowed={['Admin']}><DowntimeTracker /></RoleRoute>} />
-                    <Route path="/budget-planner"          element={<RoleRoute allowed={['Admin']}><BudgetPlanner /></RoleRoute>} />
-                    <Route path="/workshop"                element={<RoleRoute allowed={['Admin']}><WorkshopManagement /></RoleRoute>} />
-                    <Route path="/fuel-efficiency"         element={<RoleRoute allowed={['Admin']}><FuelEfficiency /></RoleRoute>} />
-                    <Route path="/continuous-improvement"  element={<RoleRoute allowed={['Admin']}><ContinuousImprovement /></RoleRoute>} />
-                    <Route path="/erp-sync"                element={<RoleRoute allowed={['Admin']}><ErpSync /></RoleRoute>} />
-                    <Route path="/safety-compliance"       element={<RoleRoute allowed={['Admin']}><SafetyCompliance /></RoleRoute>} />
-                    <Route path="/anomalies"               element={<RoleRoute allowed={['Admin']}><Anomalies /></RoleRoute>} />
-                    <Route path="/vehicle-history"         element={<RoleRoute allowed={['Admin']}><VehicleHistory /></RoleRoute>} />
-                    <Route path="/ai"                      element={<RoleRoute allowed={['Admin']}><AiAnalytics /></RoleRoute>} />
+                    <Route path="/kpi-engine"              element={<Safe><RoleRoute allowed={['Admin']}><EngineeringKpi /></RoleRoute></Safe>} />
+                    <Route path="/kpi-command"             element={<Safe><RoleRoute allowed={['Admin']}><KpiCommandCenter /></RoleRoute></Safe>} />
+                    <Route path="/position-intelligence"   element={<Safe><RoleRoute allowed={['Admin']}><PositionIntelligence /></RoleRoute></Safe>} />
+                    <Route path="/pressure-intel"          element={<Safe><RoleRoute allowed={['Admin']}><PressureIntelligence /></RoleRoute></Safe>} />
+                    <Route path="/inspection-intelligence" element={<Safe><RoleRoute allowed={['Admin']}><InspectionIntelligence /></RoleRoute></Safe>} />
+                    <Route path="/root-cause"              element={<Safe><RoleRoute allowed={['Admin']}><RootCauseEngine /></RoleRoute></Safe>} />
+                    <Route path="/predictive-maintenance"  element={<Safe><RoleRoute allowed={['Admin']}><PredictiveMaintenance /></RoleRoute></Safe>} />
+                    <Route path="/vendor-intelligence"     element={<Safe><RoleRoute allowed={['Admin']}><VendorIntelligence /></RoleRoute></Safe>} />
+                    <Route path="/driver-management"       element={<Safe><RoleRoute allowed={['Admin']}><DriverManagement /></RoleRoute></Safe>} />
+                    <Route path="/fleet-intelligence"      element={<Safe><RoleRoute allowed={['Admin']}><FleetIntelligence /></RoleRoute></Safe>} />
+                    <Route path="/fleet-health"            element={<Safe><RoleRoute allowed={['Admin']}><FleetHealthBoard /></RoleRoute></Safe>} />
+                    <Route path="/advanced-analytics"      element={<Safe><RoleRoute allowed={['Admin']}><AdvancedAnalytics /></RoleRoute></Safe>} />
+                    <Route path="/ai-command-center"       element={<Safe><RoleRoute allowed={['Admin']}><AiCommandCenter /></RoleRoute></Safe>} />
+                    <Route path="/executive-report"        element={<Safe><RoleRoute allowed={['Admin']}><ExecutiveReport /></RoleRoute></Safe>} />
+                    <Route path="/forecasting"             element={<Safe><RoleRoute allowed={['Admin']}><ForecastingEngine /></RoleRoute></Safe>} />
+                    <Route path="/cost-center"             element={<Safe><RoleRoute allowed={['Admin']}><CostCenter /></RoleRoute></Safe>} />
+                    <Route path="/benchmark"               element={<Safe><RoleRoute allowed={['Admin']}><PerformanceBenchmark /></RoleRoute></Safe>} />
+                    <Route path="/procurement"             element={<Safe><RoleRoute allowed={['Admin']}><Procurement /></RoleRoute></Safe>} />
+                    <Route path="/suppliers"               element={<Safe><RoleRoute allowed={['Admin']}><SupplierManagement /></RoleRoute></Safe>} />
+                    <Route path="/tyre-size"               element={<Safe><RoleRoute allowed={['Admin']}><TyreSizeAnalysis /></RoleRoute></Safe>} />
+                    <Route path="/tyre-lifecycle"          element={<Safe><RoleRoute allowed={['Admin']}><TyreLifecycle /></RoleRoute></Safe>} />
+                    <Route path="/downtime"                element={<Safe><RoleRoute allowed={['Admin']}><DowntimeTracker /></RoleRoute></Safe>} />
+                    <Route path="/budget-planner"          element={<Safe><RoleRoute allowed={['Admin']}><BudgetPlanner /></RoleRoute></Safe>} />
+                    <Route path="/workshop"                element={<Safe><RoleRoute allowed={['Admin']}><WorkshopManagement /></RoleRoute></Safe>} />
+                    <Route path="/fuel-efficiency"         element={<Safe><RoleRoute allowed={['Admin']}><FuelEfficiency /></RoleRoute></Safe>} />
+                    <Route path="/continuous-improvement"  element={<Safe><RoleRoute allowed={['Admin']}><ContinuousImprovement /></RoleRoute></Safe>} />
+                    <Route path="/erp-sync"                element={<Safe><RoleRoute allowed={['Admin']}><ErpSync /></RoleRoute></Safe>} />
+                    <Route path="/anomalies"               element={<Safe><RoleRoute allowed={['Admin']}><Anomalies /></RoleRoute></Safe>} />
+                    <Route path="/vehicle-history"         element={<Safe><RoleRoute allowed={['Admin']}><VehicleHistory /></RoleRoute></Safe>} />
+                    <Route path="/ai"                      element={<Safe><RoleRoute allowed={['Admin']}><AiAnalytics /></RoleRoute></Safe>} />
 
                     {/* ── Data (Admin only) ── */}
-                    <Route path="/cleaning"    element={<RoleRoute allowed={['Admin']}><DataCleaning /></RoleRoute>} />
-                    <Route path="/audit"       element={<RoleRoute allowed={['Admin']}><AuditTrail /></RoleRoute>} />
-                    <Route path="/users"       element={<RoleRoute allowed={['Admin']}><UserManagement /></RoleRoute>} />
+                    <Route path="/cleaning"    element={<Safe><RoleRoute allowed={['Admin']}><DataCleaning /></RoleRoute></Safe>} />
+                    <Route path="/audit"       element={<Safe><RoleRoute allowed={['Admin']}><AuditTrail /></RoleRoute></Safe>} />
+                    <Route path="/users"       element={<Safe><RoleRoute allowed={['Admin']}><UserManagement /></RoleRoute></Safe>} />
 
                     {/* ── Universal ── */}
-                    <Route path="/upload"      element={<UploadData />} />
-                    <Route path="/settings"    element={<Settings />} />
-                    <Route path="/scan"        element={<TyreScan />} />
-                    <Route path="/qr-labels"   element={<QrLabels />} />
+                    <Route path="/upload"      element={<Safe><UploadData /></Safe>} />
+                    <Route path="/settings"    element={<Safe><Settings /></Safe>} />
+                    <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
+                    <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
                     <Route path="*"              element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

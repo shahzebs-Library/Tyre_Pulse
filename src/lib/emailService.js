@@ -32,7 +32,7 @@ export function generateReportPdf(title, subtitle, columns, rows, summaryRows = 
   doc.setFontSize(8)
   doc.setTextColor(156, 163, 175)     // gray-400
   doc.text(subtitle, 14, 29)
-  doc.text(`Generated: ${new Date().toLocaleDateString('en-ZA', { dateStyle: 'long' })}`, 205, 29)
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}`, 205, 29)
 
   // ── KPI summary table ────────────────────────────────────────────────────────
   let startY = 40
@@ -175,7 +175,7 @@ export function buildFleetSummaryEmail(kpiData, period) {
           </td>
           <td style="text-align: right; vertical-align: top;">
             <div style="background: #1e3a5f; color: #93c5fd; font-size: 11px; padding: 4px 12px; border-radius: 20px; display: inline-block;">
-              ${new Date().toLocaleDateString('en-ZA', { dateStyle: 'long' })}
+              ${new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}
             </div>
           </td>
         </tr>

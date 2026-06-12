@@ -28,7 +28,7 @@ export default function EmailReportModal({
   kpiSummary = {},
   period,
 }) {
-  const defaultPeriod = period ?? new Date().toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })
+  const defaultPeriod = period ?? new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   const [recipients, setRecipients] = useState([''])
   const [subject, setSubject] = useState('')

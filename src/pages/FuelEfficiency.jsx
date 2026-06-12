@@ -66,7 +66,7 @@ const PALETTE = [
 
 function fmt(n, dec = 0) {
   if (n == null || !isFinite(n)) return '0'
-  return n.toLocaleString('en-ZA', { minimumFractionDigits: dec, maximumFractionDigits: dec })
+  return n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
 
 function fmtCur(n, currency = 'SAR') {

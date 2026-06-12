@@ -116,7 +116,7 @@ async function searchAll(query) {
     results.inspections = inspections.value.data.map(r => ({
       id: r.id,
       primary: r.asset_no,
-      secondary: `${r.inspector || '—'} · ${r.inspection_date ? new Date(r.inspection_date).toLocaleDateString('en-ZA') : '—'}`,
+      secondary: `${r.inspector || '—'} · ${r.inspection_date ? new Date(r.inspection_date).toLocaleDateString('en-US') : '—'}`,
       badge: r.site,
       badgeColor: 'text-yellow-400',
       route: '/inspections',

@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import pptxgen from 'pptxgenjs'
+import { formatCurrencyCompact, formatDate } from './formatters.js'
 
 // ── Brand palette — deep slate + indigo + gold (no green/AI references) ────────
 const P = {
@@ -39,16 +40,9 @@ const P = {
 }
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
-function nowStr()  { return new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) }
-function nowFull() { return new Date().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) }
 function pct(n, total) { return total > 0 ? Math.round((n / total) * 100) : 0 }
-
-function fmtCurr(n, currency = 'SAR') {
-  if (!n && n !== 0) return `${currency} —`
-  if (n >= 1_000_000) return `${currency} ${(n / 1_000_000).toFixed(2)}M`
-  if (n >= 1_000)     return `${currency} ${(n / 1_000).toFixed(1)}K`
-  return `${currency} ${n.toLocaleString()}`
-}
+const fmtCurr = (n, currency = 'SAR') => formatCurrencyCompact(n, currency)
+const nowStr  = () => formatDate(new Date(), 'All')
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 
@@ -193,68 +187,33 @@ const _TYRE_LAYOUTS = {
       { id: 'RR', x: 143, y: 185, w: 22, h: 38, rx: 4 },
     ],
   },
-  Canter: {
-    body: { x: 60, y: 30, w: 80, h: 240, rx: 8 },
-    tyres: [
-      { id: 'FL', x: 35, y: 45, w: 22, h: 36, rx: 4 },
-      { id: 'FR', x: 143, y: 45, w: 22, h: 36, rx: 4 },
-      { id: 'RLo', x: 22, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RLi', x: 44, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RRi', x: 136, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RRo', x: 158, y: 175, w: 20, h: 34, rx: 3 },
-    ],
-  },
-  Bus: {
-    body: { x: 60, y: 30, w: 80, h: 240, rx: 8 },
-    tyres: [
-      { id: 'FL', x: 35, y: 45, w: 22, h: 36, rx: 4 },
-      { id: 'FR', x: 143, y: 45, w: 22, h: 36, rx: 4 },
-      { id: 'RLo', x: 22, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RLi', x: 44, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RRi', x: 136, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RRo', x: 158, y: 175, w: 20, h: 34, rx: 3 },
-    ],
-  },
-  Tata: {
-    body: { x: 60, y: 30, w: 80, h: 240, rx: 8 },
-    tyres: [
-      { id: 'FL', x: 35, y: 45, w: 22, h: 36, rx: 4 },
-      { id: 'FR', x: 143, y: 45, w: 22, h: 36, rx: 4 },
-      { id: 'RLo', x: 22, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RLi', x: 44, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RRi', x: 136, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RRo', x: 158, y: 175, w: 20, h: 34, rx: 3 },
-    ],
-  },
-  'Ashok Leyland': {
-    body: { x: 60, y: 30, w: 80, h: 240, rx: 8 },
-    tyres: [
-      { id: 'FL', x: 35, y: 45, w: 22, h: 36, rx: 4 },
-      { id: 'FR', x: 143, y: 45, w: 22, h: 36, rx: 4 },
-      { id: 'RLo', x: 22, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RLi', x: 44, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RRi', x: 136, y: 175, w: 20, h: 34, rx: 3 },
-      { id: 'RRo', x: 158, y: 175, w: 20, h: 34, rx: 3 },
-    ],
-  },
-  'Wheel loader': {
-    body: { x: 60, y: 40, w: 80, h: 200, rx: 8 },
-    tyres: [
-      { id: 'FL', x: 30, y: 55, w: 28, h: 44, rx: 5 },
-      { id: 'FR', x: 142, y: 55, w: 28, h: 44, rx: 5 },
-      { id: 'RL', x: 30, y: 185, w: 28, h: 44, rx: 5 },
-      { id: 'RR', x: 142, y: 185, w: 28, h: 44, rx: 5 },
-    ],
-  },
-  'Skid loader': {
-    body: { x: 60, y: 40, w: 80, h: 200, rx: 8 },
-    tyres: [
-      { id: 'FL', x: 30, y: 55, w: 28, h: 44, rx: 5 },
-      { id: 'FR', x: 142, y: 55, w: 28, h: 44, rx: 5 },
-      { id: 'RL', x: 30, y: 185, w: 28, h: 44, rx: 5 },
-      { id: 'RR', x: 142, y: 185, w: 28, h: 44, rx: 5 },
-    ],
-  },
+  // Dual-rear-axle layout shared by Canter / Bus / Tata / Ashok Leyland
+  ...(function() {
+    const _dualRear = {
+      body:  { x: 60, y: 30, w: 80, h: 240, rx: 8 },
+      tyres: [
+        { id: 'FL',  x: 35,  y: 45,  w: 22, h: 36, rx: 4 },
+        { id: 'FR',  x: 143, y: 45,  w: 22, h: 36, rx: 4 },
+        { id: 'RLo', x: 22,  y: 175, w: 20, h: 34, rx: 3 },
+        { id: 'RLi', x: 44,  y: 175, w: 20, h: 34, rx: 3 },
+        { id: 'RRi', x: 136, y: 175, w: 20, h: 34, rx: 3 },
+        { id: 'RRo', x: 158, y: 175, w: 20, h: 34, rx: 3 },
+      ],
+    }
+    const _loader = {
+      body:  { x: 60, y: 40, w: 80, h: 200, rx: 8 },
+      tyres: [
+        { id: 'FL', x: 30,  y: 55,  w: 28, h: 44, rx: 5 },
+        { id: 'FR', x: 142, y: 55,  w: 28, h: 44, rx: 5 },
+        { id: 'RL', x: 30,  y: 185, w: 28, h: 44, rx: 5 },
+        { id: 'RR', x: 142, y: 185, w: 28, h: 44, rx: 5 },
+      ],
+    }
+    return {
+      Canter: _dualRear, Bus: _dualRear, Tata: _dualRear, 'Ashok Leyland': _dualRear,
+      'Wheel loader': _loader, 'Skid loader': _loader,
+    }
+  }()),
   'Tri-mixer': {
     body: { x: 55, y: 20, w: 90, h: 290, rx: 8 },
     tyres: [
@@ -917,7 +876,7 @@ export function exportDailyExecutivePdf(data, filename) {
       { l: 'Open Actions',        v: data.openActions?.length ?? 0, sub: 'pending resolution',     rgb: [...P.gold] },
     ]
     const cw = (PW - 28 - (row1.length - 1) * 4) / row1.length
-    row1.forEach((k, i) => _kpiBox(doc, 14 + i * (cw + 4), y, cw, 34, k.l, k.v, k.sub, k.rgb))
+    row1.forEach((k, i) => _kpiBox(doc, 14 + i * (cw + 4), y, cw, 34, k.v, k.l, k.sub, k.rgb))
     y += 40
 
     // Fleet condition bar
@@ -958,7 +917,7 @@ export function exportDailyExecutivePdf(data, filename) {
     doc.text('Financial & Fleet Snapshot', 14, y)
     y += 5
     const fcw = (PW - 28 - (costKpis.length - 1) * 4) / costKpis.length
-    costKpis.forEach((k, i) => _kpiBox(doc, 14 + i * (fcw + 4), y, fcw, 30, k.l, k.v, null, k.rgb))
+    costKpis.forEach((k, i) => _kpiBox(doc, 14 + i * (fcw + 4), y, fcw, 30, k.v, k.l, null, k.rgb))
   }
 
   // ── PAGE 3: TYRE HEALTH + SITE MATRIX ─────────────────────────────────────
@@ -1031,7 +990,7 @@ export function exportDailyExecutivePdf(data, filename) {
       { l: 'Completion %',   v: `${pct(data.inspectionsCompleted, data.inspectionsScheduled)}%`, rgb: [...P.gold] },
     ]
     const ikw = (PW * 0.45 - 14 - 3 * 4) / 4
-    iKpis.forEach((k, i) => _kpiBox(doc, 14 + i * (ikw + 4), y, ikw, 30, k.l, k.v, null, k.rgb))
+    iKpis.forEach((k, i) => _kpiBox(doc, 14 + i * (ikw + 4), y, ikw, 30, k.v, k.l, null, k.rgb))
     y += 36
 
     // Alerts table (left)
@@ -1358,5 +1317,3 @@ export async function exportToPptx(data, filename = 'Operations_Report') {
   await pptx.writeFile({ fileName: `${filename}.pptx` })
 }
 
-// Keep formatSAR as alias for fmtCurr for backward compat
-function formatSAR(n) { return fmtCurr(n) }

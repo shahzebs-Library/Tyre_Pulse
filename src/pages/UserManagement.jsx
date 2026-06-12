@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import {
   Users, Search, Edit2, Trash2, CheckCircle, XCircle, Shield,
   Activity, LayoutGrid, ChevronDown, Eye, EyeOff, UserCheck, UserX,
-  AlertTriangle, Globe, Calendar, Hash, X
+  AlertTriangle, Globe, Calendar, Hash, X, Copy, Terminal, Info
 } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -167,6 +167,132 @@ function Toggle({ checked, onChange }) {
   )
 }
 
+// ─── Migration SQL snippet ────────────────────────────────────────────────────
+
+const MIGRATION_SQL = `-- Fix: Allow Admins to update any profile row
+drop policy if exists "profiles_admin_update" on public.profiles;
+create policy "profiles_admin_update"
+  on public.profiles for update
+  using (public.get_my_role() = 'Admin');
+
+-- Security-definer RPC fallback for admin profile edits
+create or replace function public.admin_update_profile(
+  p_user_id    uuid,
+  p_full_name  text    default null,
+  p_username   text    default null,
+  p_employee_id text   default null,
+  p_role       text    default null,
+  p_country    text[]  default null,
+  p_region     text    default null,
+  p_approved   boolean default null
+)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if (select get_my_role()) <> 'Admin' then
+    raise exception 'Permission denied: Admin role required';
+  end if;
+  update profiles set
+    full_name   = coalesce(p_full_name,   full_name),
+    username    = coalesce(p_username,    username),
+    employee_id = coalesce(p_employee_id, employee_id),
+    role        = coalesce(p_role,        role),
+    country     = case when p_country is not null then p_country else country end,
+    region      = coalesce(p_region,      region),
+    approved    = coalesce(p_approved,    approved),
+    updated_at  = now()
+  where id = p_user_id;
+end;
+$$;
+
+grant execute on function public.admin_update_profile to authenticated;`
+
+function RlsBlockedCard() {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(MIGRATION_SQL)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Fallback: select the textarea content
+    }
+  }
+
+  return (
+    <div className="card border border-yellow-700/40 bg-yellow-900/10 space-y-4">
+      <div className="flex items-start gap-3">
+        <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-yellow-300 font-semibold text-sm">Admin Policy Missing</p>
+          <p className="text-gray-400 text-sm mt-1">
+            The <code className="bg-gray-800 text-yellow-200 px-1.5 py-0.5 rounded text-xs">profiles_admin_update</code> RLS
+            policy has not been applied yet. Admin profile edits will silently fail until this migration is run
+            in the Supabase SQL Editor.
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-lg overflow-hidden border border-gray-700/60">
+        <div className="flex items-center justify-between bg-gray-800/70 px-4 py-2 border-b border-gray-700/60">
+          <span className="flex items-center gap-2 text-xs text-gray-400">
+            <Terminal size={13} />
+            MIGRATION_ADMIN_PROFILES.sql
+          </span>
+          <button
+            onClick={handleCopy}
+            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded transition-colors ${
+              copied
+                ? 'bg-green-800/60 text-green-300 border border-green-700/40'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white border border-gray-600/40'
+            }`}
+          >
+            {copied ? <CheckCircle size={12} /> : <Copy size={12} />}
+            {copied ? 'Copied!' : 'Copy SQL'}
+          </button>
+        </div>
+        <pre className="text-[11px] leading-relaxed text-gray-300 bg-gray-900/60 p-4 overflow-x-auto whitespace-pre-wrap max-h-56 font-mono">
+          {MIGRATION_SQL}
+        </pre>
+      </div>
+
+      <p className="text-xs text-gray-500 flex items-center gap-1.5">
+        <Info size={12} className="text-gray-600 flex-shrink-0" />
+        After running the SQL, refresh this page. The user list and edit functionality will restore automatically.
+      </p>
+    </div>
+  )
+}
+
+// ─── Toast component ──────────────────────────────────────────────────────────
+
+function Toast({ toast }) {
+  return (
+    <AnimatePresence>
+      {toast && (
+        <motion.div
+          key="toast"
+          initial={{ opacity: 0, y: 24, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 16, scale: 0.96 }}
+          transition={{ duration: 0.2 }}
+          className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl text-sm font-medium border backdrop-blur-sm ${
+            toast.type === 'ok'
+              ? 'bg-green-900/90 text-green-200 border-green-700/50'
+              : 'bg-red-900/90 text-red-200 border-red-700/50'
+          }`}
+        >
+          {toast.type === 'ok'
+            ? <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
+            : <XCircle size={16} className="text-red-400 flex-shrink-0" />
+          }
+          {toast.text}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function UserManagement() {
@@ -191,6 +317,10 @@ export default function UserManagement() {
   // Inline role save state per user id: 'saving' | 'saved' | null
   const [roleSaveState, setRoleSaveState] = useState({})
 
+  // Toast notification
+  const [toast, setToast]           = useState(null) // { text, type: 'ok'|'err' }
+  const toastTimerRef               = useRef(null)
+
   // Edit modal
   const [editTarget, setEditTarget] = useState(null)
   const [editForm, setEditForm]     = useState({})
@@ -207,6 +337,14 @@ export default function UserManagement() {
   const [expandedRow, setExpandedRow] = useState(null)
 
   const isAdmin = currentProfile?.role === 'Admin'
+
+  // ── Toast helper ──────────────────────────────────────────────────────────
+
+  function showToast(text, type = 'ok', duration = 3500) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    setToast({ text, type })
+    toastTimerRef.current = setTimeout(() => setToast(null), duration)
+  }
 
   // ── Data loading ─────────────────────────────────────────────────────────
 
@@ -360,34 +498,82 @@ export default function UserManagement() {
 
   async function handleEditSave() {
     if (!editTarget) return
+
+    // Validate required fields
+    if (!editForm.full_name?.trim()) {
+      setEditMsg({ text: 'Full name cannot be empty.', type: 'err' })
+      return
+    }
+
     setEditSaving(true)
     setEditMsg({ text: '', type: '' })
 
-    const updates = {
-      full_name:   editForm.full_name   || null,
-      username:    editForm.username    || null,
-      employee_id: editForm.employee_id || null,
-      role:        editForm.role,
-      country:     editForm.country.length > 0 ? editForm.country : null,
-      region:      editForm.region      || null,
-      approved:    editForm.approved,
+    const trimmedName = editForm.full_name.trim()
+
+    // ── Try RPC first (security-definer, bypasses RLS reliably) ──────────
+    const { error: rpcError } = await supabase.rpc('admin_update_profile', {
+      p_user_id:    editTarget.id,
+      p_full_name:  trimmedName || null,
+      p_username:   editForm.username?.trim()    || null,
+      p_employee_id: editForm.employee_id?.trim() || null,
+      p_role:       editForm.role                || null,
+      p_country:    editForm.country.length > 0 ? editForm.country : null,
+      p_region:     editForm.region?.trim()      || null,
+      p_approved:   editForm.approved,
+    })
+
+    if (!rpcError) {
+      setEditSaving(false)
+      showToast(`${trimmedName || 'User'} updated successfully.`, 'ok')
+      await loadUsers()
+      closeEdit()
+      return
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', editTarget.id)
+    // ── RPC not available (function not deployed yet) — fallback to direct update ──
+    const isFnMissing =
+      rpcError.code === 'PGRST202' ||
+      rpcError.message?.toLowerCase().includes('function') ||
+      rpcError.message?.toLowerCase().includes('does not exist')
 
-    if (error) {
-      setEditMsg({ text: error.message, type: 'err' })
+    if (!isFnMissing) {
+      // RPC exists but returned a real error (e.g. permission denied)
+      setEditMsg({ text: rpcError.message, type: 'err' })
       setEditSaving(false)
       return
     }
 
-    setEditMsg({ text: 'Changes saved successfully.', type: 'ok' })
+    // Fallback: direct table update
+    const updates = {
+      full_name:   trimmedName                               || null,
+      username:    editForm.username?.trim()                 || null,
+      employee_id: editForm.employee_id?.trim()              || null,
+      role:        editForm.role,
+      country:     editForm.country.length > 0 ? editForm.country : null,
+      region:      editForm.region?.trim()                   || null,
+      approved:    editForm.approved,
+    }
+
+    const { error: directError } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', editTarget.id)
+
+    if (directError) {
+      setEditMsg({
+        text: directError.code === '42501' || directError.code === 'PGRST301'
+          ? 'RLS policy missing. Run MIGRATION_ADMIN_PROFILES.sql in Supabase to grant Admin update access.'
+          : directError.message,
+        type: 'err',
+      })
+      setEditSaving(false)
+      return
+    }
+
     setEditSaving(false)
+    showToast(`${trimmedName || 'User'} updated successfully.`, 'ok')
     await loadUsers()
-    setTimeout(() => closeEdit(), 1200)
+    closeEdit()
   }
 
   // ── Delete modal ──────────────────────────────────────────────────────────
@@ -473,20 +659,7 @@ export default function UserManagement() {
       </div>
 
       {/* RLS / error notices */}
-      {rlsBlocked && (
-        <div className="card border border-yellow-700/40 bg-yellow-900/10">
-          <div className="flex gap-3">
-            <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-            <div className="text-sm">
-              <p className="text-yellow-300 font-semibold mb-1">Unable to load users</p>
-              <p className="text-gray-400">
-                Add a Supabase RLS policy allowing Admins to read all profiles rows.
-                Go to Authentication &gt; Policies &gt; profiles table &gt; New policy &gt; Allow read for role = Admin.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {rlsBlocked && <RlsBlockedCard />}
 
       {loadError && (
         <div className="card border border-red-700/40 bg-red-900/10">
@@ -927,11 +1100,29 @@ export default function UserManagement() {
         <Modal title="Edit User" onClose={closeEdit}>
           <div className="space-y-4">
 
+            {/* Self-edit warning */}
+            {editTarget.id === currentProfile?.id && (
+              <div className="flex items-center gap-2.5 bg-blue-900/20 border border-blue-700/40 rounded-lg px-4 py-2.5">
+                <Info size={15} className="text-blue-400 flex-shrink-0" />
+                <p className="text-blue-300 text-xs font-medium">You are editing your own profile.</p>
+              </div>
+            )}
+
+            {/* Last updated */}
+            {editTarget.updated_at && (
+              <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                <Calendar size={11} className="text-gray-600" />
+                Last updated: {formatDateTime(editTarget.updated_at)}
+              </p>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Full Name</label>
+                <label className="label">
+                  Full Name <span className="text-red-500 ml-0.5">*</span>
+                </label>
                 <input
-                  className="input"
+                  className={`input ${!editForm.full_name?.trim() && editMsg.type === 'err' ? 'border-red-600 focus:ring-red-500/30' : ''}`}
                   value={editForm.full_name ?? ''}
                   onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))}
                   placeholder="Full name"
@@ -1053,6 +1244,9 @@ export default function UserManagement() {
           </div>
         </Modal>
       )}
+
+      {/* ── GLOBAL TOAST ─────────────────────────────────────────────────────── */}
+      <Toast toast={toast} />
 
       {/* ── DELETE MODAL ─────────────────────────────────────────────────────── */}
       {deleteTarget && (

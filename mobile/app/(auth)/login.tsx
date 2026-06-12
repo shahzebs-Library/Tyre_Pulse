@@ -6,6 +6,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
+import { useRouter } from 'expo-router'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage, Language } from '../../contexts/LanguageContext'
 
@@ -18,6 +19,7 @@ const LANG_OPTIONS: { code: Language; label: string }[] = [
 export default function LoginScreen() {
   const { signIn } = useAuth()
   const { t, language, setLanguage, isRTL } = useLanguage()
+  const router = useRouter()
 
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -155,6 +157,18 @@ export default function LoginScreen() {
               }
             </TouchableOpacity>
           </View>
+
+          {/* Register link */}
+          <TouchableOpacity
+            style={styles.registerLink}
+            onPress={() => router.push('/(auth)/register')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.registerLinkText}>
+              Don't have an account?{' '}
+              <Text style={styles.registerLinkBold}>Create Account</Text>
+            </Text>
+          </TouchableOpacity>
 
           <Text style={styles.footer}>{t('login.tagline')}</Text>
         </ScrollView>
@@ -324,6 +338,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     color: '#94a3b8',
-    marginTop: 32,
+    marginTop: 8,
+  },
+  registerLink: {
+    alignItems: 'center',
+    marginTop: 24,
+    paddingVertical: 4,
+  },
+  registerLinkText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  registerLinkBold: {
+    color: '#16a34a',
+    fontWeight: '700',
   },
 })

@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import StatCard from '../components/StatCard'
-import { exportToPptx, exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import {
   recordCost, computeFleetHealthScore, computeSeasonalTrends, computeTyreLifeAnalysis,
 } from '../lib/analyticsEngine'
@@ -401,6 +401,85 @@ export default function Dashboard() {
     await exportToPptx({ totalTyres: all.length, totalCost: all.reduce((s,t)=>s+recordCost(t),0), openActions: (actionRes.data??[]).length, highRisk: all.filter(t=>t.risk_level==='Critical'||t.risk_level==='High').length, topSites: sumBy(all,'site').slice(0,12).map(([site,count])=>({site,count})), categoryBreakdown: countBy(all,'category').map(([category,count])=>({category,count})), riskBreakdown: Object.entries(riskCounts).map(([level,count])=>({level,count})), monthlyTrend, recentActions: actionRes.data??[], period: now.toLocaleString('default',{month:'long',year:'numeric'}), company: appSettings.company_name||'TyrePulse' }, `TyrePulse_Report_${now.toISOString().slice(0,10)}`)
   }
 
+  async function handleDailyReportExport() {
+    const now = new Date()
+    const [tyreRes, actionRes, inspRes] = await Promise.all([
+      supabase.from('tyre_records').select('site,category,risk_level,cost_per_tyre,issue_date,brand,asset_no'),
+      supabase.from('corrective_actions').select('id,title,priority,site,status,assigned_to').eq('status','Open').order('created_at',{ascending:false}).limit(20),
+      supabase.from('inspections').select('id,status,severity,scheduled_date,site,findings,inspector').order('scheduled_date',{ascending:false}).limit(50),
+    ])
+    const all     = tyreRes.data ?? []
+    const actions = actionRes.data ?? []
+    const insps   = inspRes.data ?? []
+
+    const today    = now.toISOString().slice(0,10)
+    const todayInsps  = insps.filter(i => i.scheduled_date === today)
+    const completedToday = todayInsps.filter(i => i.status === 'Done').length
+    const defectsFound   = insps.filter(i => i.severity === 'High' || i.severity === 'Critical').length
+
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`
+    const monthTyres = all.filter(t => t.issue_date >= monthStart)
+    const monthCost  = monthTyres.reduce((s,t)=>s+recordCost(t),0)
+
+    const siteCounts = {}
+    all.forEach(t => { if (t.site) siteCounts[t.site] = (siteCounts[t.site] ?? 0) + 1 })
+
+    const defectTypes = {}
+    insps.forEach(i => { if (i.findings) { const key = i.findings.split('.')[0].slice(0,40); defectTypes[key] = (defectTypes[key]??0)+1 } })
+    const topDefects = Object.entries(defectTypes).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([type,count])=>({type,count}))
+
+    const uniqueSites = [...new Set(all.map(t=>t.site).filter(Boolean))]
+    const siteBreakdown = uniqueSites.slice(0,10).map(name => {
+      const siteT = all.filter(t => t.site === name)
+      const alerts = siteT.filter(t => t.risk_level === 'Critical' || t.risk_level === 'High').length
+      const good   = siteT.filter(t => t.risk_level === 'Low').length
+      const compliance = siteT.length > 0 ? Math.round((good / siteT.length) * 100) : 0
+      return { name, vehicles: new Set(siteT.map(t=>t.asset_no).filter(Boolean)).size, alerts, compliance }
+    })
+
+    const criticalTyres = all.filter(t => t.risk_level === 'Critical').length
+    const warningTyres  = all.filter(t => t.risk_level === 'High').length
+    const goodTyres     = all.filter(t => t.risk_level === 'Low').length
+
+    exportDailyExecutivePdf({
+      date: now.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}),
+      company: appSettings.company_name || 'TyrePulse Fleet',
+      reportPeriod: 'Daily',
+      generatedBy: profile?.full_name || profile?.username || 'Fleet Manager',
+      site: activeCountry !== 'All' ? activeCountry : 'All Sites',
+      totalVehicles: new Set(all.map(t=>t.asset_no).filter(Boolean)).size,
+      activeVehicles: new Set(monthTyres.map(t=>t.asset_no).filter(Boolean)).size,
+      vehiclesWithAlerts: new Set(all.filter(t=>t.risk_level==='Critical'||t.risk_level==='High').map(t=>t.asset_no).filter(Boolean)).size,
+      totalTyres: all.length,
+      criticalTyres,
+      warningTyres,
+      goodTyres,
+      pressureCompliance: all.length > 0 ? Math.round((goodTyres / all.length) * 100) : 0,
+      inspectionsScheduled: todayInsps.length,
+      inspectionsCompleted: completedToday,
+      defectsFound,
+      monthlyBudget: null,
+      monthlySpend: monthCost,
+      ytdSpend: all.filter(t=>t.issue_date?.slice(0,4)===String(now.getFullYear())).reduce((s,t)=>s+recordCost(t),0),
+      criticalAlerts: all.filter(t=>t.risk_level==='Critical').slice(0,10).map(t=>({ message:`Critical tyre risk on ${t.asset_no||'unknown'}`, asset: t.asset_no||'—', site: t.site||'—', severity:'Critical' })),
+      openActions: actions.map(a=>({ title: a.title, priority: a.priority, site: a.site, assignee: a.assigned_to||'Unassigned' })),
+      topDefects,
+      siteBreakdown,
+      insights: [
+        `Fleet recorded ${all.length} tyre issues in the selected period with ${criticalTyres} critical cases.`,
+        goodTyres > 0 ? `${Math.round((goodTyres/all.length)*100)}% of tyres are within safe operating parameters.` : 'Tyre risk distribution requires management review.',
+        actions.length > 0 ? `${actions.length} corrective actions are pending resolution — prioritize ${actions.filter(a=>a.priority==='Critical'||a.priority==='High').length} high priority items.` : 'No open corrective actions.',
+        monthCost > 0 ? `Monthly tyre spend of ${(appSettings.currency||'SAR')} ${Math.round(monthCost).toLocaleString()} recorded this month.` : 'No tyre cost records for this month.',
+      ].filter(Boolean),
+      recommendations: [
+        criticalTyres > 0 ? { priority:'Critical', text:`${criticalTyres} tyres in critical condition — schedule immediate replacement before next vehicle deployment.` } : null,
+        warningTyres > 3  ? { priority:'High',     text:`${warningTyres} tyres showing high-risk wear patterns — schedule inspection and replacement within 7 days.` } : null,
+        actions.length > 5 ? { priority:'Medium',   text:`${actions.length} open corrective actions backlog — review assignments and resolve overdue items.` } : null,
+        { priority:'Low', text:'Maintain weekly tyre pressure checks and monthly tread depth measurements across all fleet sites.' },
+      ].filter(Boolean),
+    }, `TyrePulse_Daily_Report_${today}`)
+  }
+
   const TrendIcon = riskTrend?.delta > 0 ? TrendingUp : riskTrend?.delta < 0 ? TrendingDown : Minus
   const trendCol  = riskTrend?.delta > 0 ? '#ef4444' : riskTrend?.delta < 0 ? '#22c55e' : '#6b7280'
   const periodChartTitle = { daily:'Daily Changes', weekly:'Weekly Changes', monthly:'Monthly Changes', yearly:'Yearly Changes' }[granularity]
@@ -481,6 +560,10 @@ export default function Dashboard() {
               </button>
               <button onClick={handlePptxExport} className="btn-secondary text-xs gap-1.5 py-1.5 px-3">
                 <Presentation size={12} className="text-orange-400" /> PPTX
+              </button>
+              <button onClick={handleDailyReportExport} className="btn-secondary text-xs gap-1.5 py-1.5 px-3"
+                style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.25)' }}>
+                <FileText size={12} className="text-green-400" /> Daily PDF
               </button>
             </div>
           </div>

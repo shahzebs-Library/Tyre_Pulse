@@ -339,3 +339,177 @@
 4. Centralize currency formatting
 5. Fix date locale inconsistency
 6. Mobile table responsiveness audit
+
+---
+
+## Visual / Color / UI Audit
+**Date:** 2026-06-12  
+**Method:** Live Chrome inspection across all 30+ deployed pages  
+**URL:** https://tyre-pulse-peach.vercel.app
+
+---
+
+### Design System Overview
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| Brand Primary | `#16a34a` (green-600) | CTAs, active nav, positive KPIs |
+| Brand Dark | `#0a0f0a` (near-black green) | Sidebar bg, dashboard hero |
+| Content bg | `#f0f4f0` (off-white w/ grid) | All light-theme page bodies |
+| Error / Critical | `#ef4444` / `#dc2626` | Alerts, FAIL badges, critical risk |
+| Warning / High | `#f59e0b` / `#d97706` | Amber badges, overdue states |
+| Info / Blue | `#3b82f6` | Info pills, selected site chips |
+| Purple | `#9333ea` | Cost KPI card icons |
+
+---
+
+### Theme Inconsistency — HIGH SEVERITY
+
+The app has an **unresolved mixed dark/light theme** that fragments visual identity:
+
+| Page | Theme |
+|------|-------|
+| Sidebar | ✅ Dark (`bg-gray-950`) |
+| Dashboard hero banner | ✅ Dark (`bg-[#0a0f0a]`) |
+| All Analytics pages | ⚠️ Light (off-white content area) |
+| Work Orders forms/modals | ⚠️ Dark (`bg-gray-900`) |
+| AI Command Center | ⚠️ Light (grid bg) |
+| Engineering KPI cards | ⚠️ Dark (`bg-gray-800/900`) |
+| Benchmark cards | ⚠️ Light |
+| Fleet Health Board | ✅ Light (consistent card design) |
+| Executive Report header | ✅ Dark, body light |
+
+**Impact:** Users experience dark sidebar → light content on most pages, but dark sidebar → dark cards/modals on Work Orders and Engineering KPI. No coherent theme contract exists.
+
+**Recommendation:** Choose one of:
+- **Option A (Light SaaS):** Light content area globally. Sidebar stays dark. Remove dark card variants from Work Orders forms.
+- **Option B (Dark SaaS):** Full dark theme. Convert all light content areas. Consistent dark cards.
+
+---
+
+### Color Combination Issues
+
+#### ✅ PASSING — Good contrast and accessibility
+
+| Element | Foreground | Background | Ratio |
+|---------|-----------|------------|-------|
+| Sidebar nav text | White `#fff` | Dark `#0a0f0a` | ~16:1 |
+| Active nav item | White `#fff` | Green `#16a34a` | ~5.5:1 |
+| KPI value numbers | `#111827` | White `#fff` | ~16:1 |
+| PASS badge | White | Green `#16a34a` | ~5.5:1 |
+| FAIL badge | White | Red `#dc2626` | ~5.0:1 |
+| Done status | White | Green-600 | ~5.5:1 |
+| Overdue status | Dark | Salmon pink | ~4.5:1 |
+| Critical badge | White | Red `#ef4444` | ~4.8:1 |
+| Medium badge | Dark | Amber `#f59e0b` | ~3.2:1 ⚠️ |
+| Work Orders dark cards | White | `#1f2937` | ~13:1 |
+
+#### ⚠️ WARNINGS — Low contrast or inconsistency
+
+1. **Medium/amber badge**: Dark text on `#f59e0b` amber → ratio ~3.2:1 (fails WCAG AA 4.5:1 for normal text). Seen on Tyre Records, Inspections, Brand Performance pages.
+
+2. **KPI Scorecard "Record Count: 0" in red** on white card — passes contrast but the red color on the same card as the green "Monthly Cost" creates visual noise.
+
+3. **Work Orders empty bar chart** — The chart renders 0–1.0 scale with 10 horizontal lines and no data. This looks broken/loading rather than "empty state". Needs a proper "No work orders yet" empty state component.
+
+4. **Comparison page "Cost (SAR)" tab** — Hardcoded "SAR" in tab label. Will not update when user switches country. Minor but inconsistent.
+
+5. **Brand Performance charts** — Both "Volume by Brand" and "High-Risk Failure Rate" use the same green color. Adding color distinction (green for volume, red for risk) would aid comprehension.
+
+---
+
+### Typography Audit
+
+| Element | Class | Rendering |
+|---------|-------|-----------|
+| Page title | `text-2xl font-bold` | ✅ Clear, prominent |
+| Page subtitle | `text-sm text-gray-500` | ✅ Appropriate hierarchy |
+| KPI numbers (large) | `text-3xl font-bold` | ✅ Excellent for scanning |
+| KPI labels | `text-xs uppercase tracking-wide` | ✅ Standard SaaS pattern |
+| Table headers | `text-xs uppercase text-gray-400` | ✅ Clean |
+| Table body | `text-sm text-gray-700/800` | ✅ Readable |
+| Dashboard welcome | Custom heading style | ⚠️ "GOOD MORNING" label is very small, hard to read |
+
+**Issue — Date locale**: `toLocaleDateString('en-ZA')` is used throughout (Procurement, Benchmark, MaintenanceCalendar, SafetyCompliance, StockReplenishment, WorkOrders). This renders dates in South African format (DD MMM YYYY) which is close to ISO but not the regional expectation for Arabic-speaking users in KSA/UAE/Egypt. Should use locale based on `activeCountry`.
+
+---
+
+### Component Design Consistency
+
+#### KPI Cards — 3 Incompatible Styles
+
+| Style | Pages | Description |
+|-------|-------|-------------|
+| Light card, colored top stripe | Dashboard, Fleet Master, KPI Scorecard | White bg, subtle border, colored accent at top |
+| Light card, icon + colored border-left | Brand Performance, Site Comparison | White bg, colored left border |
+| Dark card, icon, flat | Work Orders, Engineering KPI | `bg-gray-900`, white text |
+
+**Recommendation:** Standardize on the "light card, colored top stripe" design for all analytics pages. Reserve dark cards only for the dashboard hero or if a full dark-mode implementation is pursued.
+
+#### Buttons — Mostly Consistent
+
+| Variant | Style | Consistency |
+|---------|-------|-------------|
+| Primary (add/new) | Green, white text, rounded | ✅ Consistent |
+| Secondary (export) | White/gray, border | ✅ Consistent |
+| Destructive (del) | Red, white text | ✅ Consistent |
+| Refresh | Ghost, icon only | ✅ Consistent |
+| Tab buttons | Outlined or filled | ⚠️ 2 different styles used |
+| Filter chips | Outlined pill | ✅ Consistent |
+
+---
+
+### Page-by-Page Audit Results
+
+| Page | Load | Currency | Color Theme | Empty State | Notes |
+|------|------|----------|-------------|-------------|-------|
+| `/` Dashboard | ✅ | SAR ✅ | Dark hero + light cards | ✅ | |
+| `/tyres` Tyre Records | ✅ | SAR ✅ | Light | ✅ | |
+| `/analytics` Analytics | ✅ | SAR ✅ | Light | ✅ | |
+| `/brand-perf` Brand Performance | ✅ | N/A | Light | N/A | Chart colors could differ |
+| `/site-comp` Site Comparison | ✅ | SAR ✅ | Light | ✅ | Best multi-filter UI |
+| `/fleet` Fleet Analytics | ✅ | SAR ✅ | Light | ✅ | |
+| `/kpi` KPI Scorecard | ✅ | SAR ✅ | Light | ✅ | FAIL/PASS badges work well |
+| `/country-comp` Country Comparison | ✅ | SAR ✅ | Light | ✅ | |
+| `/comparison` Period Comparison | ✅ | SAR* | Light | ✅ | "Cost (SAR)" tab hardcoded |
+| `/fleet-master` Fleet Master | ✅ | N/A | Light | ✅ | |
+| `/asset-management` Assets | ✅ | SAR ✅ | Light | ✅ | Fixed (active≠false) |
+| `/stock` Stock Management | ✅ | N/A | Light | ✅ | |
+| `/budgets` Budgets | ✅ | SAR ✅ | Light | ✅ | |
+| `/work-orders` Work Orders | ✅ | SAR ✅ | **Dark** | ⚠️ Empty chart | Fixed currency. Theme inconsistent |
+| `/inspections` Inspections | ✅ | N/A | Light | ✅ | |
+| `/procurement` Procurement | ✅ | SAR ✅ | Light | ✅ | Fixed |
+| `/qr-labels` QR Labels | ✅ | N/A | Light | ✅ | Fixed (serial_number) |
+| `/reports` Custom Reports | ✅ | N/A | Light | ✅ | Clean step-wizard design |
+| `/audit-trail` Audit Trail | ✅ | N/A | Light | ✅ | Fixed (audit_log_v2) |
+| `/benchmark` Performance Benchmark | ✅ | SAR ✅ | Light | ✅ | Fixed crash |
+| `/fuel-efficiency` Fuel Efficiency | ✅ | SAR ✅ | Light | ✅ | Fixed |
+| `/kpi-engine` Engineering KPI | ✅ | SAR ✅ | **Dark cards** | N/A | Theme inconsistent with other analytics pages |
+| `/predictive-maintenance` Predictive | ✅ | SAR ✅ | Light | ✅ | |
+| `/executive-report` Executive Report | ✅ | SAR ✅ | Dark header + light | ✅ | Best designed content page |
+| `/fleet-health` Fleet Health Board | ✅ | N/A | Light | ✅ | Best overall visual design |
+| `/ai-command-center` AI Command | ✅ | N/A | Light | ✅ | Button color variety needs attention |
+| `/accidents` Accidents | ✅ | SAR ✅ | Light | ✅ | Fixed |
+
+---
+
+### Currency Fixes Applied (This Session)
+
+| Page | Bug | Fix |
+|------|-----|-----|
+| `WorkOrders.jsx` | `R 0.0k` → `SAR 0.0k` in KPI card | `activeCurrency` from SettingsContext |
+| `Accidents.jsx` | Hardcoded `currency: 'SAR'` in Intl.NumberFormat | Dynamic `activeCurrency` |
+
+---
+
+### Top 5 UI Recommendations
+
+1. **Standardize theme** — Commit to light-content SaaS pattern. Convert Work Orders dark cards to white cards with green accent borders. Engineering KPI dark section cards also need alignment.
+
+2. **Fix amber badge contrast** — `Medium` risk badge: change text from `text-amber-900` to `text-white` or darken background to `amber-600` to reach WCAG AA 4.5:1.
+
+3. **Work Orders empty chart state** — Replace the empty bar chart grid with a proper empty state illustration + "Create your first work order" CTA.
+
+4. **Centralize `formatCurrency()` as a shared hook** — Create `src/hooks/useCurrency.js` that exports `formatCurrency(value)`, `formatCurrencyK(value)`, and `formatCurrencyM(value)` — all reading `activeCurrency` from SettingsContext. Replace all 12+ per-file implementations.
+
+5. **Date locale alignment** — Replace all `toLocaleDateString('en-ZA', ...)` with a shared `formatDate(d)` utility that maps `activeCountry` → appropriate locale (`ar-SA`, `ar-AE`, `ar-EG` or `en-US` as fallback).

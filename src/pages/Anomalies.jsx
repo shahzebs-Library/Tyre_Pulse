@@ -6,8 +6,8 @@ import {
   ANOMALY_TYPES, ANOMALY_TYPE_LABELS, ANOMALY_TYPE_DESC,
 } from '../lib/anomalyEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatCurrencyCompact } from '../lib/formatters'
 import { Download, FileText, Search, AlertTriangle } from 'lucide-react'
-import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 
 const SEVERITY_STYLE = {
@@ -84,7 +84,7 @@ function AnomalyTypeGroup({ typeName, items }) {
                       <td className="py-1 pr-3 text-gray-300">{r.brand ?? '—'}</td>
                       <td className="py-1 pr-3 text-gray-400 font-mono">{r.serial_no ?? '—'}</td>
                       <td className="py-1 pr-3 text-gray-400">{r.site ?? '—'}</td>
-                      <td className="py-1 text-gray-300">{r.cost_per_tyre ? `SAR ${Number(r.cost_per_tyre).toLocaleString()}` : '—'}</td>
+                      <td className="py-1 text-gray-300">{r.cost_per_tyre ? formatCurrencyCompact(r.cost_per_tyre) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -176,62 +176,79 @@ export default function Anomalies() {
     return arr
   }, [active, filterType, filterSeverity, filterSite])
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading tyre records…</div>
+  // ── Header (always rendered) ───────────────────────────────────────────────
+  const header = (
+    <div className="flex items-center justify-between flex-wrap gap-3">
+      <PageHeader
+        title="Anomaly Detection"
+        subtitle="Detect short intervals, same-day bursts, rapid recurrence, cost spikes and duplicates"
+        icon={AlertTriangle}
+      />
+      <div className="flex gap-2">
+        {dismissed.size > 0 && (
+          <button onClick={clearDismissed} className="btn-secondary text-xs px-3">
+            Restore {dismissed.size} dismissed
+          </button>
+        )}
+        <button onClick={() => setShowConfig(!showConfig)} className="btn-secondary text-sm">
+          ⚙ Thresholds
+        </button>
+        <button
+          onClick={runDetection}
+          disabled={running || loading}
+          className="btn-primary text-sm disabled:opacity-50 min-w-36"
+        >
+          {running ? 'Scanning…' : hasRun ? '↻ Re-scan' : '▶ Run Scan'}
+        </button>
+        {hasRun && (
+          <>
+            <button
+              onClick={() => exportToExcel(
+                anomalies.map(a => ({ type: ANOMALY_TYPE_LABELS[a.type] ?? a.type, severity: a.severity, asset_no: a.asset_no ?? '', site: a.site ?? '', description: a.message ?? '', detected_at: a.date ?? '' })),
+                ['type','severity','asset_no','site','description','detected_at'],
+                ['Type','Severity','Asset No','Site','Description','Detected At'],
+                'TyrePulse_Anomalies'
+              )}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <Download size={14}/> Excel
+            </button>
+            <button
+              onClick={() => exportToPdf(
+                anomalies.map(a => ({ type: ANOMALY_TYPE_LABELS[a.type] ?? a.type, severity: a.severity, asset_no: a.asset_no ?? '', site: a.site ?? '', description: a.message ?? '', detected_at: a.date ?? '' })),
+                [{key:'type',header:'Type'},{key:'severity',header:'Severity'},{key:'asset_no',header:'Asset No'},{key:'site',header:'Site'},{key:'description',header:'Description'},{key:'detected_at',header:'Detected At'}],
+                'Anomaly Detection Report',
+                'TyrePulse_Anomalies',
+                'landscape'
+              )}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <FileText size={14}/> PDF
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+
+  // ── Loading skeleton ───────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-gray-800/40 h-20 rounded-xl animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <PageHeader
-          title="Anomaly Detection"
-          subtitle="Detect short intervals, same-day bursts, rapid recurrence, cost spikes and duplicates"
-          icon={AlertTriangle}
-        />
-        <div className="flex gap-2">
-          {dismissed.size > 0 && (
-            <button onClick={clearDismissed} className="btn-secondary text-xs px-3">
-              Restore {dismissed.size} dismissed
-            </button>
-          )}
-          <button onClick={() => setShowConfig(!showConfig)} className="btn-secondary text-sm">
-            ⚙ Thresholds
-          </button>
-          <button
-            onClick={runDetection}
-            disabled={running || loading}
-            className="btn-primary text-sm disabled:opacity-50 min-w-36"
-          >
-            {running ? 'Scanning…' : hasRun ? '↻ Re-scan' : '▶ Run Scan'}
-          </button>
-          {hasRun && (
-            <>
-              <button
-                onClick={() => exportToExcel(
-                  anomalies.map(a => ({ type: ANOMALY_TYPE_LABELS[a.type] ?? a.type, severity: a.severity, asset_no: a.asset_no ?? '', site: a.site ?? '', description: a.message ?? '', detected_at: a.date ?? '' })),
-                  ['type','severity','asset_no','site','description','detected_at'],
-                  ['Type','Severity','Asset No','Site','Description','Detected At'],
-                  'TyrePulse_Anomalies'
-                )}
-                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-              >
-                <Download size={14}/> Excel
-              </button>
-              <button
-                onClick={() => exportToPdf(
-                  anomalies.map(a => ({ type: ANOMALY_TYPE_LABELS[a.type] ?? a.type, severity: a.severity, asset_no: a.asset_no ?? '', site: a.site ?? '', description: a.message ?? '', detected_at: a.date ?? '' })),
-                  [{key:'type',header:'Type'},{key:'severity',header:'Severity'},{key:'asset_no',header:'Asset No'},{key:'site',header:'Site'},{key:'description',header:'Description'},{key:'detected_at',header:'Detected At'}],
-                  'Anomaly Detection Report',
-                  'TyrePulse_Anomalies',
-                  'landscape'
-                )}
-                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
-              >
-                <FileText size={14}/> PDF
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+      {header}
 
       {/* What this scans — info cards */}
       {!hasRun && (
@@ -490,7 +507,7 @@ function AnomalyDetail({ anomaly: a }) {
                   }`}>{r.risk_level || '?'}</span>
                 </td>
                 <td className="py-1.5 text-right text-gray-400">
-                  {r.cost_per_tyre ? `${activeCurrency} ${r.cost_per_tyre.toLocaleString()}` : '—'}
+                  {r.cost_per_tyre ? formatCurrencyCompact(r.cost_per_tyre, activeCurrency) : '—'}
                 </td>
               </tr>
             ))}
@@ -530,7 +547,7 @@ function AnomalyDetail({ anomaly: a }) {
         <div className="bg-yellow-900/10 border border-yellow-800/30 rounded-lg p-3">
           <p className="text-xs text-yellow-300 font-medium mb-1">Why this matters</p>
           <p className="text-xs text-gray-400">
-            Cost {activeCurrency} {a.cost?.toLocaleString()} is <strong className="text-white">{a.zScore?.toFixed(1)}σ</strong> from the fleet average ({activeCurrency} {a.fleetAvg?.toLocaleString()}).
+            Cost {formatCurrencyCompact(a.cost, activeCurrency)} is <strong className="text-white">{a.zScore?.toFixed(1)}σ</strong> from the fleet average ({formatCurrencyCompact(a.fleetAvg, activeCurrency)}).
             Verify the price entry is correct or check for special tyre procurement.
           </p>
         </div>

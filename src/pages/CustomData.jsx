@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { formatCurrencyCompact } from '../lib/formatters'
 import {
   Database, Search, Plus, Trash2, Check, X, ArrowRight,
   ChevronRight, Download, RefreshCw, Eye, EyeOff, Filter,
@@ -325,7 +326,29 @@ export default function CustomData() {
             </div>
 
             {loading ? (
-              <div className="card text-center py-16 text-gray-500">Loading custom field stats…</div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="card space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-gray-800/40 animate-pulse" />
+                        <div className="h-4 w-32 rounded bg-gray-800/40 animate-pulse" />
+                      </div>
+                      <div className="h-3 w-20 rounded bg-gray-800/40 animate-pulse" />
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {Array.from({ length: 3 }).map((_, j) => (
+                        <div key={j} className="h-5 w-16 rounded-full bg-gray-800/40 animate-pulse" />
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="h-7 w-28 rounded-lg bg-gray-800/40 animate-pulse" />
+                      <div className="h-7 w-24 rounded-lg bg-gray-800/40 animate-pulse" />
+                      <div className="h-7 w-24 rounded-lg bg-gray-800/40 animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : filteredStats.length === 0 ? (
               <div className="card text-center py-16">
                 <Database size={32} className="text-gray-700 mx-auto mb-3" />
@@ -482,7 +505,30 @@ export default function CustomData() {
 
             {/* Synonym list */}
             {synLoading ? (
-              <div className="card text-center py-10 text-gray-500">Loading…</div>
+              <div className="card overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr>
+                      <th className="table-header">Column Name in File</th>
+                      <th className="table-header">Maps To</th>
+                      <th className="table-header">Times Used</th>
+                      <th className="table-header">Last Used</th>
+                      <th className="table-header w-16"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i} className="border-b border-gray-800/40">
+                        <td className="table-cell"><div className="h-3 w-32 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="table-cell"><div className="h-3 w-28 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="table-cell"><div className="h-3 w-12 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="table-cell"><div className="h-3 w-20 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="table-cell"><div className="w-6 h-6 rounded bg-gray-800/40 animate-pulse" /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : synonyms.length === 0 ? (
               <div className="card text-center py-12">
                 <Tag size={28} className="text-gray-700 mx-auto mb-3" />
@@ -589,7 +635,36 @@ export default function CustomData() {
               </div>
 
               {recLoading ? (
-                <div className="text-center py-10 text-gray-500">Loading…</div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr>
+                      <th className="table-header w-8"></th>
+                      <th className="table-header">Asset No</th>
+                      <th className="table-header">Serial No</th>
+                      <th className="table-header">Date</th>
+                      <th className="table-header">Site</th>
+                      <th className="table-header">Custom Fields</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <tr key={i} className="border-b border-gray-800/40">
+                        <td className="table-cell"><div className="w-3 h-3 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="table-cell"><div className="h-3 w-20 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="table-cell"><div className="h-3 w-24 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="table-cell"><div className="h-3 w-16 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="table-cell"><div className="h-3 w-20 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="table-cell">
+                          <div className="flex gap-1.5">
+                            <div className="h-4 w-24 rounded-full bg-gray-800/40 animate-pulse" />
+                            <div className="h-4 w-20 rounded-full bg-gray-800/40 animate-pulse" />
+                            <div className="h-4 w-16 rounded-full bg-gray-800/40 animate-pulse" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : records.length === 0 ? (
                 <div className="text-center py-10 text-gray-500">No records match this filter.</div>
               ) : (

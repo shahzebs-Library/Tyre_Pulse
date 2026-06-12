@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
+import { formatCurrencyCompact } from '../lib/formatters'
 import {
   Search, ChevronLeft, ChevronRight, Eye, FileSpreadsheet,
   FileText, Plus, Edit2, Trash2, Save, X, Check, AlertTriangle,
@@ -281,14 +282,24 @@ export default function TyreRecords() {
             <tbody>
               <AnimatePresence mode="wait">
                 {loading ? (
-                  <motion.tr key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                    <td colSpan={12} className="py-16 text-center">
-                      <div className="flex flex-col items-center gap-3 text-muted">
-                        <Loader2 className="w-5 h-5 animate-spin text-brand" />
-                        <span className="text-sm">Loading records…</span>
-                      </div>
-                    </td>
-                  </motion.tr>
+                  <>
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <tr key={`sk-${i}`} className="border-b border-[var(--border-subtle)]">
+                        <td className="px-4 py-3"><div className="w-4 h-4 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="px-4 py-3"><div className="h-3 w-20 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="px-4 py-3"><div className="h-3 w-24 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="px-4 py-3"><div className="h-3 w-28 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="px-4 py-3"><div className="h-3 w-16 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="px-4 py-3"><div className="h-3 w-20 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="px-4 py-3"><div className="h-3 w-18 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="px-4 py-3"><div className="h-3 w-18 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="px-4 py-3"><div className="h-5 w-16 rounded-full bg-gray-800/40 animate-pulse" /></td>
+                        <td className="px-4 py-3"><div className="h-3 w-16 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="px-4 py-3"><div className="h-3 w-12 rounded bg-gray-800/40 animate-pulse" /></td>
+                        <td className="px-4 py-3"><div className="flex gap-2"><div className="w-7 h-7 rounded-lg bg-gray-800/40 animate-pulse" /><div className="w-7 h-7 rounded-lg bg-gray-800/40 animate-pulse" /></div></td>
+                      </tr>
+                    ))}
+                  </>
                 ) : records.length === 0 ? (
                   <motion.tr key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                     <td colSpan={12} className="py-16 text-center">
@@ -336,7 +347,7 @@ export default function TyreRecords() {
                             : <span className="text-muted">—</span>}
                         </td>
                         <td className="px-4 py-3 text-gray-300 text-xs tabular-nums">
-                          {activeCurrency} {(r.cost_per_tyre ?? appSettings.cost_per_tyre).toLocaleString()}
+                          {formatCurrencyCompact(r.cost_per_tyre ?? appSettings.cost_per_tyre, activeCurrency)}
                         </td>
                         <td className="px-4 py-3 text-xs tabular-nums">
                           {cpk
@@ -439,7 +450,7 @@ export default function TyreRecords() {
               ['Issue Date', detailRecord.issue_date], ['MIS Number', detailRecord.mis_number],
               ['Job Card', detailRecord.job_card], ['Qty', detailRecord.qty],
               ['Risk Level', detailRecord.risk_level], ['Category', detailRecord.category],
-              ['Cost', detailRecord.cost_per_tyre ? `${activeCurrency} ${detailRecord.cost_per_tyre}` : null],
+              ['Cost', detailRecord.cost_per_tyre ? formatCurrencyCompact(detailRecord.cost_per_tyre, activeCurrency) : null],
               ['Description', detailRecord.description], ['Remarks', detailRecord.remarks],
             ].filter(([, v]) => v).map(([k, v]) => (
               <div key={k} className={k === 'Description' || k === 'Remarks' ? 'col-span-2' : ''}>

@@ -6,6 +6,7 @@ import {
   computeSiteMetrics, computeBrandMetrics, computeAssetMetrics,
   bucketByMonth, monthlyTrendWithForecast, sum, recordCost,
 } from '../lib/analyticsEngine'
+import { formatCurrencyCompact } from '../lib/formatters'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend, Filler,
@@ -139,7 +140,40 @@ export default function Analytics() {
   const modalFilters = { year: yearFilter !== '' ? Number(yearFilter) : undefined }
   const filterOptions = { sites: uniqueSites, brands: uniqueBrands, years }
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading analytics…</div>
+  // ── Loading skeleton ───────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Analytics"
+          subtitle="Cost, trend and breakdown analysis"
+          icon={BarChart2}
+        />
+        {/* Filter bar skeleton */}
+        <div className="card">
+          <div className="flex flex-wrap gap-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="bg-gray-800/40 h-9 w-32 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        </div>
+        {/* KPI skeletons */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-gray-800/40 h-24 rounded-xl animate-pulse" />
+          ))}
+        </div>
+        {/* Tab button skeletons */}
+        <div className="flex gap-1 border-b border-gray-800 pb-px">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-gray-800/40 h-9 w-28 rounded-t-lg animate-pulse" />
+          ))}
+        </div>
+        {/* Chart card skeleton */}
+        <div className="bg-gray-800/40 h-80 rounded-xl animate-pulse" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -236,7 +270,7 @@ export default function Analytics() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Records', value: totalCount.toLocaleString(), color: 'text-blue-400' },
-          { label: `Total Cost (${activeCurrency})`, value: `${activeCurrency} ${totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`, color: 'text-green-400' },
+          { label: `Total Cost (${activeCurrency})`, value: formatCurrencyCompact(totalCost, activeCurrency), color: 'text-green-400' },
           { label: 'Sites Active', value: siteMetrics.length, color: 'text-purple-400' },
           { label: 'Brands Tracked', value: brandMetrics.length, color: 'text-yellow-400' },
         ].map(({ label, value, color }, i) => (
@@ -429,8 +463,8 @@ function CostBySite({ siteMetrics, currency = 'SAR', onMaximize, chartRef }) {
               <tr key={s.site} className="border-b border-gray-800/50 hover:bg-gray-800/20">
                 <td className="py-2 pr-4 text-white font-medium">{s.site}</td>
                 <td className="py-2 pr-4 text-gray-300 text-right">{s.count}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{currency} {s.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{currency} {Math.round(s.avgCost).toLocaleString()}</td>
+                <td className="py-2 pr-4 text-gray-300 text-right">{formatCurrencyCompact(s.totalCost, currency)}</td>
+                <td className="py-2 pr-4 text-gray-300 text-right">{formatCurrencyCompact(Math.round(s.avgCost), currency)}</td>
                 <td className="py-2 pr-4 text-right">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${s.highRiskPct > 30 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}`}>
                     {s.highRiskCount} ({s.highRiskPct.toFixed(0)}%)
@@ -487,8 +521,8 @@ function CostByBrand({ brandMetrics, currency = 'SAR', onMaximize, chartRef }) {
               <tr key={b.brand} className="border-b border-gray-800/50 hover:bg-gray-800/20">
                 <td className="py-2 pr-4 text-white font-medium">{b.brand}</td>
                 <td className="py-2 pr-4 text-gray-300 text-right">{b.count}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{currency} {b.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{currency} {Math.round(b.avgCost).toLocaleString()}</td>
+                <td className="py-2 pr-4 text-gray-300 text-right">{formatCurrencyCompact(b.totalCost, currency)}</td>
+                <td className="py-2 pr-4 text-gray-300 text-right">{formatCurrencyCompact(Math.round(b.avgCost), currency)}</td>
                 <td className="py-2 pr-4 text-right">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${b.failureRate > 25 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}`}>
                     {b.failureRate.toFixed(1)}%
@@ -553,7 +587,7 @@ function MonthlyTrend({ trendData, currency = 'SAR', onMaximize, chartRef }) {
           <div key={d.month} className={`card ${d.isForecast ? 'border border-yellow-800/50' : ''}`}>
             <p className="text-xs text-gray-500">{d.isForecast ? 'Forecast' : 'Actual'} — {d.month}</p>
             <p className="text-lg font-bold text-white mt-1">
-              {currency} {(d.value ?? d.total ?? 0).toLocaleString('en-SA', { maximumFractionDigits: 0 })}
+              {formatCurrencyCompact(d.value ?? d.total ?? 0, currency)}
             </p>
           </div>
         ))}
@@ -619,7 +653,7 @@ function AssetBreakdown({ assetMetrics, currency = 'SAR', onMaximize, chartRef }
               <tr key={a.assetNo} className="border-b border-gray-800/50 hover:bg-gray-800/20">
                 <td className="py-2 pr-4 text-white font-medium font-mono text-xs">{a.assetNo}</td>
                 <td className="py-2 pr-4 text-gray-300 text-right">{a.count}</td>
-                <td className="py-2 pr-4 text-gray-300 text-right">{currency} {a.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}</td>
+                <td className="py-2 pr-4 text-gray-300 text-right">{formatCurrencyCompact(a.totalCost, currency)}</td>
                 <td className="py-2 pr-4 text-right">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${a.highRiskCount > 0 ? 'bg-red-900/40 text-red-400' : 'bg-gray-800 text-gray-400'}`}>
                     {a.highRiskCount}

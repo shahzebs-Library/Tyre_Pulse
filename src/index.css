@@ -955,3 +955,29 @@ html.light .fixed.inset-0 > div[class*="bg-gray"] { background-color: #ffffff !i
     transition-duration: 150ms;
   }
 }
+
+/* ─── Console helpers ───────────────────────────────────────────────────── */
+.input-dark {
+  width: 100%;
+  height: 2.25rem;
+  background: rgba(31,41,55,0.8);
+  border: 1px solid rgb(55,65,81);
+  border-radius: 0.5rem;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+  color: white;
+  outline: none;
+  transition: border-color 150ms;
+}
+.input-dark:focus { border-color: rgb(249,115,22); }
+textarea.input-dark { height: auto; padding: 0.5rem 0.75rem; }
+select.input-dark option { background: rgb(31,41,55); }
+.field-label {
+  display: block;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: rgb(107,114,128);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}

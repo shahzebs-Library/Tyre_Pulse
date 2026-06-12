@@ -15,7 +15,7 @@ import {
   TrendingUp, BookOpen, Zap, Database, Wrench, Calendar,
   Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
-  Recycle, Radio, PackagePlus, Database,
+  Recycle, Radio, PackagePlus,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'

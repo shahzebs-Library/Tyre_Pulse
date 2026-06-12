@@ -83,12 +83,25 @@ import QrLabels from './pages/QrLabels'
 import CustomData from './pages/CustomData'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt'
 import ErrorBoundary from './components/ErrorBoundary'
+// Console (completely isolated auth context)
+import { ConsoleAuthProvider, useConsoleAuth } from './console/ConsoleAuthContext'
+import ConsoleLayout from './console/components/ConsoleLayout'
+import ConsoleLogin from './console/pages/ConsoleLogin'
+import ConsoleDashboard from './console/pages/ConsoleDashboard'
+import ConsoleOrganisations from './console/pages/ConsoleOrganisations'
+import ConsoleUsers from './console/pages/ConsoleUsers'
+import ConsolePermissions from './console/pages/ConsolePermissions'
+import ConsoleAIUsage from './console/pages/ConsoleAIUsage'
+import ConsoleAuditLog from './console/pages/ConsoleAuditLog'
+import ConsoleAnnouncements from './console/pages/ConsoleAnnouncements'
+import ConsoleSystemConfig from './console/pages/ConsoleSystemConfig'
 
-// Wrap any element in a per-page error boundary so crashes don't take down the whole app
+// ── Per-page error boundary ───────────────────────────────────────────────
 function Safe({ children }) {
   return <ErrorBoundary>{children}</ErrorBoundary>
 }
 
+// ── Main app home redirect based on role ─────────────────────────────────
 function HomeRoute() {
   const { profile, loading } = useAuth()
   if (loading) return <LoadingSpinner />
@@ -96,14 +109,26 @@ function HomeRoute() {
   return <Dashboard />
 }
 
-export default function App() {
+// ── Console auth guard (must sit inside ConsoleAuthProvider) ──────────────
+function ConsoleGuard({ children }) {
+  const { admin, loading } = useConsoleAuth()
+  if (loading) return (
+    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+  if (!admin) return <Navigate to="/console/login" replace />
+  return children
+}
+
+// ── Main app wrapped in its own providers (keeps console completely isolated)
+function MainApp() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <SettingsProvider>
+    <AuthProvider>
+      <SettingsProvider>
         <PwaUpdatePrompt />
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/login"          element={<Login />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route
             path="/*"
@@ -113,7 +138,7 @@ export default function App() {
                   <Routes>
                     <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
                     <Route path="/tyres"       element={<Safe><TyreRecords /></Safe>} />
-                    {/* ── Analytics (Admin + Manager + Director) ── */}
+                    {/* ── Analytics ── */}
                     <Route path="/analytics"    element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><Analytics /></RoleRoute></Safe>} />
                     <Route path="/brand-perf"   element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><BrandPerformance /></RoleRoute></Safe>} />
                     <Route path="/site-comp"    element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><SiteComparison /></RoleRoute></Safe>} />
@@ -121,8 +146,7 @@ export default function App() {
                     <Route path="/kpi"          element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><KpiScorecard /></RoleRoute></Safe>} />
                     <Route path="/country-comp" element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><CountryComparison /></RoleRoute></Safe>} />
                     <Route path="/comparison"   element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><Comparison /></RoleRoute></Safe>} />
-
-                    {/* ── Operations (all authenticated roles) ── */}
+                    {/* ── Operations ── */}
                     <Route path="/stock"       element={<Safe><StockManagement /></Safe>} />
                     <Route path="/budgets"     element={<Safe><Budgets /></Safe>} />
                     <Route path="/actions"     element={<Safe><CorrectiveActions /></Safe>} />
@@ -130,27 +154,26 @@ export default function App() {
                     <Route path="/rca"         element={<Safe><RcaRecords /></Safe>} />
                     <Route path="/inspections" element={<Safe><Inspections /></Safe>} />
                     <Route path="/alerts"      element={<Safe><Alerts /></Safe>} />
-                    <Route path="/fleet-master"        element={<Safe><FleetMaster /></Safe>} />
-                    <Route path="/reports"             element={<Safe><Reports /></Safe>} />
-                    <Route path="/gate-pass"           element={<Safe><GatePass /></Safe>} />
-                    <Route path="/serial-tracker"      element={<Safe><SerialTracker /></Safe>} />
-                    <Route path="/work-orders"         element={<Safe><WorkOrders /></Safe>} />
+                    <Route path="/fleet-master"         element={<Safe><FleetMaster /></Safe>} />
+                    <Route path="/reports"              element={<Safe><Reports /></Safe>} />
+                    <Route path="/gate-pass"            element={<Safe><GatePass /></Safe>} />
+                    <Route path="/serial-tracker"       element={<Safe><SerialTracker /></Safe>} />
+                    <Route path="/work-orders"          element={<Safe><WorkOrders /></Safe>} />
                     <Route path="/maintenance-calendar" element={<Safe><MaintenanceCalendar /></Safe>} />
-                    <Route path="/safety-compliance"   element={<Safe><SafetyCompliance /></Safe>} />
-                    <Route path="/assets"              element={<Safe><AssetManagement /></Safe>} />
-                    <Route path="/inspection-planner"  element={<Safe><InspectionPlanner /></Safe>} />
-                    <Route path="/warranty"            element={<Safe><WarrantyTracker /></Safe>} />
-                    <Route path="/tyre-exchange"       element={<Safe><TyreExchange /></Safe>} />
-                    <Route path="/scrap"               element={<Safe><TyreScrapManagement /></Safe>} />
-                    <Route path="/stock-replenishment" element={<Safe><StockReplenishment /></Safe>} />
-                    <Route path="/live-fleet"          element={<Safe><LiveFleetStatus /></Safe>} />
-                    <Route path="/compliance"          element={<Safe><ComplianceDashboard /></Safe>} />
-                    <Route path="/retread"             element={<Safe><RetreadManagement /></Safe>} />
-                    <Route path="/recall-tracker"      element={<Safe><RecallTracker /></Safe>} />
-                    <Route path="/tyre-specs"          element={<Safe><TyreSpecifications /></Safe>} />
-                    <Route path="/rotation"            element={<Safe><RotationSchedule /></Safe>} />
-                    <Route path="/daily-ops"           element={<Safe><DailyOps /></Safe>} />
-
+                    <Route path="/safety-compliance"    element={<Safe><SafetyCompliance /></Safe>} />
+                    <Route path="/assets"               element={<Safe><AssetManagement /></Safe>} />
+                    <Route path="/inspection-planner"   element={<Safe><InspectionPlanner /></Safe>} />
+                    <Route path="/warranty"             element={<Safe><WarrantyTracker /></Safe>} />
+                    <Route path="/tyre-exchange"        element={<Safe><TyreExchange /></Safe>} />
+                    <Route path="/scrap"                element={<Safe><TyreScrapManagement /></Safe>} />
+                    <Route path="/stock-replenishment"  element={<Safe><StockReplenishment /></Safe>} />
+                    <Route path="/live-fleet"           element={<Safe><LiveFleetStatus /></Safe>} />
+                    <Route path="/compliance"           element={<Safe><ComplianceDashboard /></Safe>} />
+                    <Route path="/retread"              element={<Safe><RetreadManagement /></Safe>} />
+                    <Route path="/recall-tracker"       element={<Safe><RecallTracker /></Safe>} />
+                    <Route path="/tyre-specs"           element={<Safe><TyreSpecifications /></Safe>} />
+                    <Route path="/rotation"             element={<Safe><RotationSchedule /></Safe>} />
+                    <Route path="/daily-ops"            element={<Safe><DailyOps /></Safe>} />
                     {/* ── Intelligence (Admin only) ── */}
                     <Route path="/kpi-engine"              element={<Safe><RoleRoute allowed={['Admin']}><EngineeringKpi /></RoleRoute></Safe>} />
                     <Route path="/kpi-command"             element={<Safe><RoleRoute allowed={['Admin']}><KpiCommandCenter /></RoleRoute></Safe>} />
@@ -182,27 +205,59 @@ export default function App() {
                     <Route path="/anomalies"               element={<Safe><RoleRoute allowed={['Admin']}><Anomalies /></RoleRoute></Safe>} />
                     <Route path="/vehicle-history"         element={<Safe><RoleRoute allowed={['Admin']}><VehicleHistory /></RoleRoute></Safe>} />
                     <Route path="/ai"                      element={<Safe><RoleRoute allowed={['Admin']}><AiAnalytics /></RoleRoute></Safe>} />
-
                     {/* ── Data (Admin only) ── */}
                     <Route path="/cleaning"    element={<Safe><RoleRoute allowed={['Admin']}><DataCleaning /></RoleRoute></Safe>} />
                     <Route path="/audit"       element={<Safe><RoleRoute allowed={['Admin']}><AuditTrail /></RoleRoute></Safe>} />
                     <Route path="/users"       element={<Safe><RoleRoute allowed={['Admin']}><UserManagement /></RoleRoute></Safe>} />
-
                     {/* ── Universal ── */}
                     <Route path="/upload"      element={<Safe><UploadData /></Safe>} />
                     <Route path="/custom-data" element={<Safe><CustomData /></Safe>} />
                     <Route path="/settings"    element={<Safe><Settings /></Safe>} />
                     <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                     <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
-                    <Route path="*"              element={<Navigate to="/" replace />} />
+                    <Route path="*"            element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>
             }
           />
         </Routes>
-        </SettingsProvider>
-      </AuthProvider>
+      </SettingsProvider>
+    </AuthProvider>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* ── System Console — completely isolated from main app ── */}
+        <Route path="/console/login" element={
+          <ConsoleAuthProvider>
+            <ConsoleLogin />
+          </ConsoleAuthProvider>
+        } />
+        <Route path="/console/*" element={
+          <ConsoleAuthProvider>
+            <ConsoleGuard>
+              <ConsoleLayout />
+            </ConsoleGuard>
+          </ConsoleAuthProvider>
+        }>
+          <Route index                element={<ConsoleDashboard />} />
+          <Route path="organisations" element={<ConsoleOrganisations />} />
+          <Route path="users"         element={<ConsoleUsers />} />
+          <Route path="permissions"   element={<ConsolePermissions />} />
+          <Route path="ai-usage"      element={<ConsoleAIUsage />} />
+          <Route path="audit"         element={<ConsoleAuditLog />} />
+          <Route path="announcements" element={<ConsoleAnnouncements />} />
+          <Route path="config"        element={<ConsoleSystemConfig />} />
+          <Route path="*"             element={<Navigate to="/console" replace />} />
+        </Route>
+
+        {/* ── Main TyrePulse Application ── */}
+        <Route path="*" element={<MainApp />} />
+      </Routes>
     </BrowserRouter>
   )
 }

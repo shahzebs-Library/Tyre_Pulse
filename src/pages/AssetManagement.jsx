@@ -729,13 +729,13 @@ export default function AssetManagement() {
 
   // ── KPIs ──────────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
-    const totalActive = enrichedAssets.filter(a => a.active).length
-    const totalInactive = enrichedAssets.filter(a => !a.active).length
+    const totalActive = enrichedAssets.filter(a => a.active !== false).length
+    const totalInactive = enrichedAssets.filter(a => a.active === false).length
     const atRisk = enrichedAssets.filter(a => a._worstRisk === 'Critical' || a._worstRisk === 'High').length
     const ytdStart = new Date(new Date().getFullYear(), 0, 1)
     const totalYtdCost = enrichedAssets.reduce((s, a) => s + (a._ytdCost || 0), 0)
     const avgCost = totalActive > 0 ? totalYtdCost / totalActive : 0
-    const needsAttention = enrichedAssets.filter(a => a.active && a._noRecentRecord).length
+    const needsAttention = enrichedAssets.filter(a => a.active !== false && a._noRecentRecord).length
     return { totalActive, totalInactive, atRisk, avgCost, needsAttention }
   }, [enrichedAssets])
 
@@ -1208,7 +1208,7 @@ export default function AssetManagement() {
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
                   {[...enrichedAssets]
-                    .filter(a => a.active)
+                    .filter(a => a.active !== false)
                     .sort((a, b) => a._healthScore - b._healthScore)
                     .map(a => (
                       <button
@@ -1230,7 +1230,7 @@ export default function AssetManagement() {
                       </button>
                     ))
                   }
-                  {enrichedAssets.filter(a => a.active).length === 0 && (
+                  {enrichedAssets.filter(a => a.active !== false).length === 0 && (
                     <div className="col-span-full text-center py-12 text-gray-600 text-sm">
                       No active assets to display.
                     </div>
@@ -1239,14 +1239,14 @@ export default function AssetManagement() {
               </div>
 
               {/* Bottom 10 worst */}
-              {enrichedAssets.filter(a => a.active && a._healthScore < 60).length > 0 && (
+              {enrichedAssets.filter(a => a.active !== false && a._healthScore < 60).length > 0 && (
                 <div className="bg-gray-900 rounded-xl border border-red-900/30 p-5">
                   <h3 className="text-sm font-semibold text-red-400 mb-4 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4" /> Low Health Assets — Immediate Review Required
                   </h3>
                   <div className="space-y-2">
                     {[...enrichedAssets]
-                      .filter(a => a.active && a._healthScore < 60)
+                      .filter(a => a.active !== false && a._healthScore < 60)
                       .sort((a, b) => a._healthScore - b._healthScore)
                       .slice(0, 10)
                       .map(a => (

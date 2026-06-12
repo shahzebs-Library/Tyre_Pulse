@@ -69,11 +69,11 @@ function fmt(n, dec = 0) {
   return n.toLocaleString('en-ZA', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
 
-function fmtCur(n, currency = 'R') {
-  if (n == null || !isFinite(n)) return `${currency}0`
-  if (Math.abs(n) >= 1_000_000) return `${currency}${(n / 1_000_000).toFixed(2)}M`
-  if (Math.abs(n) >= 1_000) return `${currency}${(n / 1_000).toFixed(1)}K`
-  return `${currency}${Math.round(n).toLocaleString()}`
+function fmtCur(n, currency = 'SAR') {
+  if (n == null || !isFinite(n)) return `${currency} 0`
+  if (Math.abs(n) >= 1_000_000) return `${currency} ${(n / 1_000_000).toFixed(2)}M`
+  if (Math.abs(n) >= 1_000) return `${currency} ${(n / 1_000).toFixed(1)}K`
+  return `${currency} ${Math.round(n).toLocaleString()}`
 }
 
 // ── Pressure deviation → % under-inflation ───────────────────────────────────
@@ -403,7 +403,7 @@ export default function FuelEfficiency() {
         recs.push({
           icon: Fuel,
           color: 'text-amber-400',
-          text: `Improving pressure compliance at ${worst.site} from ${worst.compliancePct}% to 95% would save ~${fmtCur(saving, 'R')}/month`,
+          text: `Improving pressure compliance at ${worst.site} from ${worst.compliancePct}% to 95% would save ~${fmtCur(saving, activeCurrency)}/month`,
           impact: 'High',
         })
       }
@@ -412,14 +412,14 @@ export default function FuelEfficiency() {
     recs.push({
       icon: TrendingDown,
       color: 'text-green-400',
-      text: `Fleet-wide 1% improvement in rolling resistance = ${fmtCur(fleetRRSaving, 'R')} annual saving`,
+      text: `Fleet-wide 1% improvement in rolling resistance = ${fmtCur(fleetRRSaving, activeCurrency)} annual saving`,
       impact: 'High',
     })
     const rotationSaving = 0.025 * (fleetConsumption / 100) * monthlyKm * fleetSize * fuelCostPerLiter * 12
     recs.push({
       icon: Activity,
       color: 'text-blue-400',
-      text: `Full tyre rotation program compliance could reduce rolling resistance by ~2.5% = ${fmtCur(rotationSaving, 'R')}/year`,
+      text: `Full tyre rotation program compliance could reduce rolling resistance by ~2.5% = ${fmtCur(rotationSaving, activeCurrency)}/year`,
       impact: 'Medium',
     })
     const worn = enriched.filter(r => parseFloat(r.tread_depth) <= TREAD_WORN_MM).length
@@ -428,7 +428,7 @@ export default function FuelEfficiency() {
       recs.push({
         icon: AlertTriangle,
         color: 'text-red-400',
-        text: `${worn} tyres at ≤3mm tread depth are costing ~${fmtCur(wornCost, 'R')}/month in excess fuel — replace immediately`,
+        text: `${worn} tyres at ≤3mm tread depth are costing ~${fmtCur(wornCost, activeCurrency)}/month in excess fuel — replace immediately`,
         impact: 'Critical',
       })
     }
@@ -441,7 +441,7 @@ export default function FuelEfficiency() {
       })
     }
     return recs
-  }, [kpis, siteMetrics, enriched, fleetSize, fleetConsumption, monthlyKm, fuelCostPerLiter])
+  }, [kpis, siteMetrics, enriched, fleetSize, fleetConsumption, monthlyKm, fuelCostPerLiter, activeCurrency])
 
   // ── Environmental ─────────────────────────────────────────────────────────
   const envMetrics = useMemo(() => {
@@ -629,7 +629,7 @@ export default function FuelEfficiency() {
                 >
                   <div className="px-5 pb-5 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-800">
                     <ConfigField
-                      label="Fuel Cost / Liter (R)"
+                      label={`Fuel Cost / Liter (${activeCurrency})`}
                       value={fuelCostPerLiter}
                       onChange={v => setFuelCostPerLiter(+v)}
                       step={0.5}
@@ -667,7 +667,7 @@ export default function FuelEfficiency() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <KpiCard
                 label="Monthly Fuel Loss Cost"
-                value={fmtCur(kpis.totalExtraCostMonth, 'R')}
+                value={fmtCur(kpis.totalExtraCostMonth, activeCurrency)}
                 sub={`${fmt(kpis.totalExtraFuelMonth)} L wasted / month`}
                 icon={Fuel}
                 color="amber"
@@ -682,7 +682,7 @@ export default function FuelEfficiency() {
               />
               <KpiCard
                 label="Potential Annual Savings"
-                value={fmtCur(kpis.potentialCostSavingAnnual, 'R')}
+                value={fmtCur(kpis.potentialCostSavingAnnual, activeCurrency)}
                 sub="Achieving 95% pressure compliance"
                 icon={TrendingDown}
                 color="green"
@@ -774,12 +774,12 @@ export default function FuelEfficiency() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-gray-800 rounded-xl p-4">
                       <p className="text-gray-400 text-xs mb-1">Monthly Fuel Saving</p>
-                      <p className="text-xl font-bold text-green-400">{fmtCur(sliderSavings.monthly, 'R')}</p>
+                      <p className="text-xl font-bold text-green-400">{fmtCur(sliderSavings.monthly, activeCurrency)}</p>
                       <p className="text-xs text-gray-500 mt-1">{fmt(sliderSavings.monthly / fuelCostPerLiter, 0)} L saved</p>
                     </div>
                     <div className="bg-gray-800 rounded-xl p-4">
                       <p className="text-gray-400 text-xs mb-1">Annual Fuel Saving</p>
-                      <p className="text-xl font-bold text-green-400">{fmtCur(sliderSavings.annual, 'R')}</p>
+                      <p className="text-xl font-bold text-green-400">{fmtCur(sliderSavings.annual, activeCurrency)}</p>
                       <p className="text-xs text-gray-500 mt-1">{fmt(sliderSavings.annual / fuelCostPerLiter, 0)} L saved</p>
                     </div>
                   </div>
@@ -799,7 +799,7 @@ export default function FuelEfficiency() {
                   data={{
                     labels: vehicleMetrics.slice(0, 20).map(v => v.asset_no),
                     datasets: [{
-                      label: 'Est. Monthly Extra Cost (R)',
+                      label: `Est. Monthly Extra Cost (${activeCurrency})`,
                       data: vehicleMetrics.slice(0, 20).map(v => v.totalExtraCostMonth),
                       backgroundColor: vehicleMetrics.slice(0, 20).map(v =>
                         v.totalExtraCostMonth > 500 ? '#ef4444cc' : v.totalExtraCostMonth > 200 ? '#f59e0bcc' : '#3b82f6cc'
@@ -823,7 +823,7 @@ export default function FuelEfficiency() {
                               `Compliance: ${v.compliancePct}%`,
                             ]
                           },
-                          label: ctx => `R ${fmt(ctx.raw, 2)}/month extra`,
+                          label: ctx => `${activeCurrency} ${fmt(ctx.raw, 2)}/month extra`,
                         },
                       },
                     },
@@ -901,10 +901,10 @@ export default function FuelEfficiency() {
                             : <span className="text-gray-500">N/A</span>}
                         </td>
                         <td className="px-4 py-3 text-right text-gray-300">{fmt(s.extraFuelMonth)}</td>
-                        <td className="px-4 py-3 text-right text-amber-400 font-medium">{fmtCur(s.totalExtraCostMonth, 'R')}</td>
+                        <td className="px-4 py-3 text-right text-amber-400 font-medium">{fmtCur(s.totalExtraCostMonth, activeCurrency)}</td>
                         <td className="px-4 py-3 text-right">
                           <span className={`font-bold ${i === 0 ? 'text-red-400' : i === 1 ? 'text-orange-400' : 'text-gray-300'}`}>
-                            {fmtCur(s.annualExtraCost, 'R')}
+                            {fmtCur(s.annualExtraCost, activeCurrency)}
                           </span>
                         </td>
                       </tr>
@@ -917,8 +917,8 @@ export default function FuelEfficiency() {
                       <td className="px-4 py-3 text-right">—</td>
                       <td className="px-4 py-3 text-right">—</td>
                       <td className="px-4 py-3 text-right">{fmt(siteMetrics.reduce((s, r) => s + r.extraFuelMonth, 0))}</td>
-                      <td className="px-4 py-3 text-right text-amber-400">{fmtCur(siteMetrics.reduce((s, r) => s + r.totalExtraCostMonth, 0), 'R')}</td>
-                      <td className="px-4 py-3 text-right text-red-400">{fmtCur(siteMetrics.reduce((s, r) => s + r.annualExtraCost, 0), 'R')}</td>
+                      <td className="px-4 py-3 text-right text-amber-400">{fmtCur(siteMetrics.reduce((s, r) => s + r.totalExtraCostMonth, 0), activeCurrency)}</td>
+                      <td className="px-4 py-3 text-right text-red-400">{fmtCur(siteMetrics.reduce((s, r) => s + r.annualExtraCost, 0), activeCurrency)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -967,8 +967,8 @@ export default function FuelEfficiency() {
                             ? <span className={v.avgTread <= 3 ? 'text-red-400' : v.avgTread <= 5 ? 'text-amber-400' : 'text-gray-300'}>{v.avgTread}mm</span>
                             : <span className="text-gray-500">N/A</span>}
                         </td>
-                        <td className="px-4 py-3 text-right text-red-400">{fmtCur(v.totalExtraCostMonth, 'R')}</td>
-                        <td className="px-4 py-3 text-right text-green-400 font-semibold">{fmtCur(v.potentialSaving, 'R')}</td>
+                        <td className="px-4 py-3 text-right text-red-400">{fmtCur(v.totalExtraCostMonth, activeCurrency)}</td>
+                        <td className="px-4 py-3 text-right text-green-400 font-semibold">{fmtCur(v.potentialSaving, activeCurrency)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -990,7 +990,7 @@ export default function FuelEfficiency() {
                     labels: monthlyTrend.map(m => m.label),
                     datasets: [
                       {
-                        label: 'Monthly Extra Fuel Cost (R)',
+                        label: `Monthly Extra Fuel Cost (${activeCurrency})`,
                         data: monthlyTrend.map(m => m.totalExtraCost),
                         borderColor: '#f59e0b',
                         backgroundColor: '#f59e0b22',
@@ -1008,7 +1008,7 @@ export default function FuelEfficiency() {
                       tooltip: {
                         ...CHART_OPTS.plugins.tooltip,
                         callbacks: {
-                          label: ctx => `R ${fmt(ctx.raw, 2)}`,
+                          label: ctx => `${activeCurrency} ${fmt(ctx.raw, 2)}`,
                           afterLabel: ctx => {
                             const m = monthlyTrend[ctx.dataIndex]
                             return `Records: ${m.count} | Avg Penalty: ${m.avgPenalty.toFixed(2)}%`

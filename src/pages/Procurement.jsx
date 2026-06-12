@@ -64,10 +64,10 @@ const EMPTY_FORM = {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function fmtCurrency(v) {
+function _fmtCurrencyBase(v, currency = 'SAR') {
   const n = parseFloat(v)
   if (isNaN(n)) return '—'
-  return 'R ' + n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return `${currency} ` + n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 function fmtDate(d) {
   if (!d) return '—'
@@ -109,8 +109,9 @@ function StatusBadge({ status }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function Procurement() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
   const { user, profile } = useAuth()
+  const fmtCur = (v) => _fmtCurrencyBase(v, activeCurrency)
 
   const [orders, setOrders]         = useState([])
   const [loading, setLoading]       = useState(true)
@@ -498,14 +499,14 @@ export default function Procurement() {
         body: (po.items || []).map(it => [
           it.brand, it.size,
           it.quantity,
-          fmtCurrency(it.unit_price),
-          fmtCurrency(calcItemTotal(it)),
+          fmtCur(it.unit_price),
+          fmtCur(calcItemTotal(it)),
           it.received_qty ?? 0,
         ]),
         foot: [
-          ['', '', '', 'Subtotal', fmtCurrency(po.subtotal), ''],
-          ['', '', '', `Tax (${Math.round(po.tax_amount / Math.max(po.subtotal, 0.01) * 100)}%)`, fmtCurrency(po.tax_amount), ''],
-          ['', '', '', 'TOTAL', fmtCurrency(po.total_amount), ''],
+          ['', '', '', 'Subtotal', fmtCur(po.subtotal), ''],
+          ['', '', '', `Tax (${Math.round(po.tax_amount / Math.max(po.subtotal, 0.01) * 100)}%)`, fmtCur(po.tax_amount), ''],
+          ['', '', '', 'TOTAL', fmtCur(po.total_amount), ''],
         ],
         theme: 'striped',
         styles: { fontSize: 9 },
@@ -720,18 +721,18 @@ export default function Procurement() {
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Annual Budget</span>
-              <span className="text-white font-medium">{budget > 0 ? fmtCurrency(budget) : 'Not set'}</span>
+              <span className="text-white font-medium">{budget > 0 ? fmtCur(budget) : 'Not set'}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Total Spend</span>
-              <span className="text-green-400 font-medium">{fmtCurrency(kpis.spend)}</span>
+              <span className="text-green-400 font-medium">{fmtCur(kpis.spend)}</span>
             </div>
             {budget > 0 && (
               <>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Remaining</span>
                   <span className={`font-medium ${budget - kpis.spend < 0 ? 'text-red-400' : 'text-teal-400'}`}>
-                    {fmtCurrency(budget - kpis.spend)}
+                    {fmtCur(budget - kpis.spend)}
                   </span>
                 </div>
                 {/* Gauge */}
@@ -741,7 +742,7 @@ export default function Procurement() {
                     <span className={kpis.budgetVariance > 100 ? 'text-red-400 font-semibold' : 'text-gray-400'}>
                       {kpis.budgetVariance?.toFixed(1)}%
                     </span>
-                    <span>{fmtCurrency(budget)}</span>
+                    <span>{fmtCur(budget)}</span>
                   </div>
                   <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
                     <div
@@ -865,7 +866,7 @@ export default function Procurement() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-center">{(po.items || []).length}</td>
-                    <td className="px-4 py-3 text-green-400 font-medium whitespace-nowrap">{fmtCurrency(po.total_amount)}</td>
+                    <td className="px-4 py-3 text-green-400 font-medium whitespace-nowrap">{fmtCur(po.total_amount)}</td>
                     <td className="px-4 py-3 text-gray-400">{po.site || '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
@@ -1010,8 +1011,8 @@ export default function Procurement() {
                               <td className="px-3 py-2 text-white">{it.brand}</td>
                               <td className="px-3 py-2 text-gray-300">{it.size}</td>
                               <td className="px-3 py-2 text-gray-300 text-right">{it.quantity}</td>
-                              <td className="px-3 py-2 text-gray-300 text-right">{fmtCurrency(it.unit_price)}</td>
-                              <td className="px-3 py-2 text-green-400 text-right font-medium">{fmtCurrency(calcItemTotal(it))}</td>
+                              <td className="px-3 py-2 text-gray-300 text-right">{fmtCur(it.unit_price)}</td>
+                              <td className="px-3 py-2 text-green-400 text-right font-medium">{fmtCur(calcItemTotal(it))}</td>
                               <td className="px-3 py-2">
                                 <button onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-400"><X size={13} /></button>
                               </td>
@@ -1043,7 +1044,7 @@ export default function Procurement() {
                     <div className="mt-3 bg-gray-800 rounded-lg p-3 space-y-1.5">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Subtotal</span>
-                        <span className="text-white">{fmtCurrency(formSubtotal)}</span>
+                        <span className="text-white">{fmtCur(formSubtotal)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-400 flex items-center gap-2">
@@ -1052,11 +1053,11 @@ export default function Procurement() {
                             className="w-14 px-2 py-0.5 bg-gray-700 border border-gray-600 rounded text-white text-xs focus:outline-none" />
                           %
                         </span>
-                        <span className="text-white">{fmtCurrency(formTax)}</span>
+                        <span className="text-white">{fmtCur(formTax)}</span>
                       </div>
                       <div className="flex justify-between text-base font-semibold border-t border-gray-700 pt-1.5 mt-1.5">
                         <span className="text-white">Total</span>
-                        <span className="text-green-400">{fmtCurrency(formTotal)}</span>
+                        <span className="text-green-400">{fmtCur(formTotal)}</span>
                       </div>
                     </div>
                   )}
@@ -1074,7 +1075,7 @@ export default function Procurement() {
               {/* Footer */}
               <div className="sticky bottom-0 bg-gray-900 border-t border-gray-800 px-6 py-4 flex items-center justify-between">
                 <div className="text-gray-400 text-sm">
-                  Total: <span className="text-green-400 font-bold text-base">{fmtCurrency(formTotal)}</span>
+                  Total: <span className="text-green-400 font-bold text-base">{fmtCur(formTotal)}</span>
                   {formData.items.length > 0 && <span className="text-gray-500 ml-2">({formData.items.length} items)</span>}
                 </div>
                 <div className="flex gap-3">
@@ -1217,10 +1218,10 @@ export default function Procurement() {
                           <div key={idx} className="bg-gray-800 rounded-xl p-3">
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-white text-sm font-medium">{it.brand} — {it.size}</span>
-                              <span className="text-green-400 text-sm font-semibold">{fmtCurrency(calcItemTotal(it))}</span>
+                              <span className="text-green-400 text-sm font-semibold">{fmtCur(calcItemTotal(it))}</span>
                             </div>
                             <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
-                              <span>{it.quantity} units × {fmtCurrency(it.unit_price)}</span>
+                              <span>{it.quantity} units × {fmtCur(it.unit_price)}</span>
                               <span className={received >= it.quantity ? 'text-green-400' : 'text-orange-400'}>
                                 {received}/{it.quantity} received
                               </span>
@@ -1249,15 +1250,15 @@ export default function Procurement() {
                   <p className="text-gray-400 text-xs mb-2 uppercase tracking-wide font-medium">Cost Summary</p>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Subtotal</span>
-                    <span className="text-white">{fmtCurrency(viewPO.subtotal)}</span>
+                    <span className="text-white">{fmtCur(viewPO.subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Tax</span>
-                    <span className="text-white">{fmtCurrency(viewPO.tax_amount)}</span>
+                    <span className="text-white">{fmtCur(viewPO.tax_amount)}</span>
                   </div>
                   <div className="flex justify-between text-base font-semibold border-t border-gray-700 pt-2 mt-2">
                     <span className="text-white">Total</span>
-                    <span className="text-green-400 text-xl">{fmtCurrency(viewPO.total_amount)}</span>
+                    <span className="text-green-400 text-xl">{fmtCur(viewPO.total_amount)}</span>
                   </div>
                 </div>
 

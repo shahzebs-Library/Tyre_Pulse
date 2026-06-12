@@ -59,8 +59,7 @@ export default function QrLabels() {
       const { data: rows } = await supabase
         .from('tyre_records')
         .select('id, serial_no, brand, site, asset_no, status, risk_level')
-        .not('serial_no', 'is', null)
-        .order('serial_no')
+        .order('asset_no')
         .limit(1000)
       setData(rows || [])
       setSites([...new Set((rows || []).map(r => r.site).filter(Boolean))].sort())
@@ -89,7 +88,7 @@ export default function QrLabels() {
     return matchSearch && matchSite
   })
 
-  function getLabel(item) { return mode === 'tyres' ? item.serial_no : item.asset_no }
+  function getLabel(item) { return mode === 'tyres' ? (item.serial_no ?? item.asset_no ?? String(item.id)) : item.asset_no }
   function getSub(item)   {
     return mode === 'tyres'
       ? [item.brand, item.site].filter(Boolean).join(' · ')

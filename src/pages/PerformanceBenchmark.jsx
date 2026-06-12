@@ -48,13 +48,13 @@ const CHART_OPTS = {
 const BENCHMARKS = {
   cpk: {
     label: 'Cost Per Kilometer (CPK)',
-    unit: 'R/km',
+    unit: '/km',
     world_class: 0.80,
     good: 1.20,
     average: 1.80,
     poor: 2.50,
     description: 'Amount spent per kilometre on tyre costs. Lower is better.',
-    format: v => `R${v.toFixed(2)}/km`,
+    format: (v, cur = 'SAR') => typeof v === 'number' && isFinite(v) ? `${cur} ${v.toFixed(2)}/km` : 'N/A',
   },
   tyre_life: {
     label: 'Average Tyre Life',
@@ -64,7 +64,7 @@ const BENCHMARKS = {
     average: 70000,
     poor: 45000,
     description: 'Average distance per tyre before removal. Higher is better.',
-    format: v => `${(v / 1000).toFixed(0)}k km`,
+    format: (v) => typeof v === 'number' && isFinite(v) ? `${(v / 1000).toFixed(0)}k km` : 'N/A',
     higherIsBetter: true,
   },
   failure_rate: {
@@ -75,7 +75,7 @@ const BENCHMARKS = {
     average: 15,
     poor: 25,
     description: 'Percentage of tyres removed due to failure (not wear-out). Lower is better.',
-    format: v => `${v.toFixed(1)}%`,
+    format: (v) => typeof v === 'number' && isFinite(v) ? `${v.toFixed(1)}%` : 'N/A',
   },
   pressure_compliance: {
     label: 'Pressure Compliance',
@@ -85,7 +85,7 @@ const BENCHMARKS = {
     average: 85,
     poor: 70,
     description: 'Percentage of inspections with pressure within ±10% spec. Higher is better.',
-    format: v => `${v.toFixed(1)}%`,
+    format: (v) => typeof v === 'number' && isFinite(v) ? `${v.toFixed(1)}%` : 'N/A',
     higherIsBetter: true,
   },
   scrap_rate: {
@@ -96,7 +96,7 @@ const BENCHMARKS = {
     average: 20,
     poor: 35,
     description: 'Percentage of removed tyres that are scrapped vs retreaded. Lower is better.',
-    format: v => `${v.toFixed(1)}%`,
+    format: (v) => typeof v === 'number' && isFinite(v) ? `${v.toFixed(1)}%` : 'N/A',
   },
   inspection_compliance: {
     label: 'Inspection Compliance',
@@ -106,14 +106,14 @@ const BENCHMARKS = {
     average: 80,
     poor: 65,
     description: 'Percentage of scheduled inspections completed. Higher is better.',
-    format: v => `${v.toFixed(1)}%`,
+    format: (v) => typeof v === 'number' && isFinite(v) ? `${v.toFixed(1)}%` : 'N/A',
     higherIsBetter: true,
   },
 }
 
 function getBenchmarkRating(key, value) {
   const b = BENCHMARKS[key]
-  if (!b) return { rating: 'Unknown', score: 50, color: 'text-gray-400' }
+  if (!b || typeof value !== 'number' || !isFinite(value)) return { rating: 'N/A', score: 0, color: 'text-gray-400' }
   const better = b.higherIsBetter
   if (better) {
     if (value >= b.world_class)  return { rating: 'World Class', score: 100, color: 'text-green-400' }
@@ -207,9 +207,9 @@ export default function PerformanceBenchmark() {
     const inspectionCompliance = uniqueAssets ? Math.min(100, (inspectedAssets / uniqueAssets) * 100) : 95
 
     return {
-      cpk: kpis.fleetCpk || 0,
+      cpk: kpis.cpk?.fleetAvgCpk ?? 0,
       tyre_life: avgLife,
-      failure_rate: kpis.failureRate || 0,
+      failure_rate: (kpis.failureRate?.failureRate ?? 0) * 100,
       pressure_compliance: pressureCompliance,
       scrap_rate: scrapRate,
       inspection_compliance: inspectionCompliance,

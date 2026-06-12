@@ -76,9 +76,9 @@ export default function AuditTrail() {
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
         const [totalRes, monthRes, activeRes] = await Promise.all([
-          supabase.from('audit_log').select('id', { count: 'exact', head: true }),
-          supabase.from('audit_log').select('record_count').eq('action', 'UPLOAD').gte('created_at', monthStart),
-          supabase.from('audit_log').select('user_id').gte('created_at', thirtyDaysAgo),
+          supabase.from('audit_log_v2').select('id', { count: 'exact', head: true }),
+          supabase.from('audit_log_v2').select('record_count').eq('action', 'UPLOAD').gte('created_at', monthStart),
+          supabase.from('audit_log_v2').select('user_id').gte('created_at', thirtyDaysAgo),
         ])
 
         const uploadsMonth  = (monthRes.data ?? []).length
@@ -111,7 +111,7 @@ export default function AuditTrail() {
     setAuditLoading(true)
     try {
       let q = supabase
-        .from('audit_log')
+        .from('audit_log_v2')
         .select('*, profiles(full_name, username)', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(auditPage * PAGE_SIZE, (auditPage + 1) * PAGE_SIZE - 1)
@@ -151,7 +151,7 @@ export default function AuditTrail() {
   // ── Export handlers ────────────────────────────────────────────────────────
   async function exportAuditLog() {
     const { data } = await supabase
-      .from('audit_log')
+      .from('audit_log_v2')
       .select('*, profiles(full_name, username)')
       .order('created_at', { ascending: false })
       .limit(5000)

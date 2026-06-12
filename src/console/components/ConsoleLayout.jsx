@@ -3,9 +3,10 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   Shield, LayoutDashboard, Building2, Users, Settings2,
   ClipboardList, Zap, Megaphone, Lock, LogOut, ChevronDown,
-  Globe, Menu, X, AlertTriangle, Layers,
+  Globe, Menu, X, AlertTriangle, Layers, Smartphone,
 } from 'lucide-react'
 import { useConsoleAuth } from '../ConsoleAuthContext'
+import Console2FAModal from './Console2FAModal'
 
 const NAV = [
   { to: '/console',              label: 'Dashboard',      icon: LayoutDashboard, end: true },
@@ -23,6 +24,7 @@ export default function ConsoleLayout() {
   const navigate  = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [orgOpen, setOrgOpen]         = useState(false)
+  const [show2FA, setShow2FA]         = useState(false)
 
   async function handleSignOut() {
     await signOut()
@@ -105,6 +107,12 @@ export default function ConsoleLayout() {
               <p className="text-[10px] text-gray-600 truncate">{admin?.email ?? ''}</p>
             </div>
           )}
+          <button onClick={() => setShow2FA(true)}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:text-blue-400 hover:bg-blue-950/20 transition-colors mb-0.5"
+            title="Two-Factor Authentication">
+            <Smartphone size={14} className="flex-shrink-0" />
+            {sidebarOpen && '2FA Security'}
+          </button>
           <button onClick={handleSignOut}
             className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:text-red-400 hover:bg-red-950/20 transition-colors">
             <LogOut size={14} className="flex-shrink-0" />
@@ -112,6 +120,7 @@ export default function ConsoleLayout() {
           </button>
         </div>
       </aside>
+      {show2FA && <Console2FAModal onClose={() => setShow2FA(false)} />}
 
       {/* ── Main content ────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">

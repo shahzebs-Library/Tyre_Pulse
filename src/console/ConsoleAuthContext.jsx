@@ -2,6 +2,7 @@
  * ConsoleAuthContext
  * Completely separate from the main app AuthContext.
  * Only users with is_super_admin = true can enter the console.
+ * Supports TOTP MFA (Supabase built-in AAL2).
  */
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -11,7 +12,7 @@ const ConsoleAuthContext = createContext(null)
 export function ConsoleAuthProvider({ children }) {
   const [admin, setAdmin]         = useState(null)   // profile row
   const [loading, setLoading]     = useState(true)
-  const [activeOrg, setActiveOrg] = useState(null)   // { id, name, countries[] } | null = all orgs
+  const [activeOrg, setActiveOrg] = useState(null)
   const [orgs, setOrgs]           = useState([])
 
   useEffect(() => {
@@ -36,7 +37,6 @@ export function ConsoleAuthProvider({ children }) {
       setAdmin(data)
       await loadOrgs()
     } else {
-      // Not a super admin — sign out silently
       await supabase.auth.signOut()
       setAdmin(null)
     }
@@ -51,9 +51,18 @@ export function ConsoleAuthProvider({ children }) {
     setOrgs(data ?? [])
   }
 
+  /**
+   * signIn — step 1 of login.
+   * Returns:
+   *   { error }                          — credentials wrong / not super admin
+   *   { mfaRequired: true, factorId, challengeId } — TOTP enrolled, step 2 needed
+   *   { error: null }                    — fully logged in (no MFA enrolled)
+   */
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return { error }
+
+    // Check super admin
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_super_admin, full_name, role')
@@ -63,12 +72,93 @@ export function ConsoleAuthProvider({ children }) {
       await supabase.auth.signOut()
       return { error: { message: 'Access denied. This login is reserved for system administrators only.' } }
     }
-    // Log console session
+
+    // Check MFA assurance level
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
+      // User has TOTP enrolled — need to verify
+      const { data: factors } = await supabase.auth.mfa.listFactors()
+      const totpFactor = factors?.totp?.find(f => f.status === 'verified')
+      if (totpFactor) {
+        const { data: challenge, error: chalErr } = await supabase.auth.mfa.challenge({ factorId: totpFactor.id })
+        if (chalErr) return { error: chalErr }
+        return {
+          error: null,
+          mfaRequired: true,
+          factorId: totpFactor.id,
+          challengeId: challenge.id,
+        }
+      }
+    }
+
+    // No MFA or already at aal2 — log the session and proceed
     await supabase.from('console_sessions').insert({
       admin_id: data.user.id, action: 'login', target_type: 'system',
       details: { email, user_agent: navigator.userAgent }
     })
     return { error: null }
+  }
+
+  /**
+   * verifyMfa — step 2. Call after signIn returns mfaRequired:true.
+   */
+  async function verifyMfa(factorId, challengeId, code) {
+    const { error } = await supabase.auth.mfa.verify({ factorId, challengeId, code })
+    if (error) return { error }
+    // Log session after successful MFA
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      await supabase.from('console_sessions').insert({
+        admin_id: user.id, action: 'login', target_type: 'system',
+        details: { mfa: true, user_agent: navigator.userAgent }
+      })
+    }
+    return { error: null }
+  }
+
+  /**
+   * enrollMfa — start TOTP setup. Returns { qrCode, secret, factorId } or { error }.
+   */
+  async function enrollMfa() {
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', issuer: 'TyrePulse Console' })
+    if (error) return { error }
+    return {
+      error: null,
+      factorId: data.id,
+      qrCode: data.totp.qr_code,
+      secret: data.totp.secret,
+      uri: data.totp.uri,
+    }
+  }
+
+  /**
+   * confirmMfaEnrollment — verify the first TOTP code to activate the factor.
+   */
+  async function confirmMfaEnrollment(factorId, code) {
+    const { data: challenge, error: chalErr } = await supabase.auth.mfa.challenge({ factorId })
+    if (chalErr) return { error: chalErr }
+    const { error } = await supabase.auth.mfa.verify({ factorId, challengeId: challenge.id, code })
+    if (error) return { error }
+    await logAction('enable_2fa', null, 'system', { factorId })
+    return { error: null }
+  }
+
+  /**
+   * unenrollMfa — remove a TOTP factor.
+   */
+  async function unenrollMfa(factorId) {
+    const { error } = await supabase.auth.mfa.unenroll({ factorId })
+    if (error) return { error }
+    await logAction('disable_2fa', null, 'system', { factorId })
+    return { error: null }
+  }
+
+  /**
+   * listMfaFactors — get current TOTP factors.
+   */
+  async function listMfaFactors() {
+    const { data } = await supabase.auth.mfa.listFactors()
+    return data?.totp ?? []
   }
 
   async function signOut() {
@@ -91,7 +181,8 @@ export function ConsoleAuthProvider({ children }) {
   return (
     <ConsoleAuthContext.Provider value={{
       admin, loading, activeOrg, setActiveOrg, orgs, loadOrgs,
-      signIn, signOut, logAction,
+      signIn, verifyMfa, enrollMfa, confirmMfaEnrollment, unenrollMfa, listMfaFactors,
+      signOut, logAction,
     }}>
       {children}
     </ConsoleAuthContext.Provider>

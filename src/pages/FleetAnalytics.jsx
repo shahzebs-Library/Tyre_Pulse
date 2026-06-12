@@ -2,9 +2,11 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, linearRegression, recordCost } from '../lib/analyticsEngine'
-import { BarChart2 } from 'lucide-react'
+import { BarChart2, Download, FileText } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatCurrencyCompact } from '../lib/formatters'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, Title, Tooltip, Legend, Filler,
@@ -65,7 +67,15 @@ export default function FleetAnalytics() {
     })
   }, [sorted, search, dateFrom, dateTo, siteFilter])
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading fleet data…</div>
+  if (loading) return (
+    <div className="space-y-5">
+      <PageHeader title="Fleet Analytics" subtitle="Loading fleet data…" icon={BarChart2} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="card animate-pulse h-24 bg-gray-800/40" />)}
+      </div>
+      <div className="card animate-pulse h-64 bg-gray-800/40" />
+    </div>
+  )
 
   const selectedAsset = selected ? assetMetrics.find(a => a.assetNo === selected) : null
 
@@ -88,7 +98,7 @@ export default function FleetAnalytics() {
             color: 'text-red-400' },
           { label: 'Avg Cost/Asset',
             value: assetMetrics.length
-              ? `${activeCurrency} ${Math.round(assetMetrics.reduce((s, a) => s + a.totalCost, 0) / assetMetrics.length).toLocaleString()}`
+              ? formatCurrencyCompact(assetMetrics.reduce((s, a) => s + a.totalCost, 0) / assetMetrics.length, activeCurrency)
               : '—',
             color: 'text-green-400' },
         ].map(({ label, value, color }, i) => (
@@ -116,6 +126,48 @@ export default function FleetAnalytics() {
             <option value="risk">Sort: High Risk Count</option>
             <option value="freq">Sort: Failure Freq</option>
           </select>
+          <div className="flex gap-2 ml-auto">
+            <button
+              onClick={() => exportToExcel(
+                filtered.slice(0, 1000).map(a => ({
+                  asset_no: a.assetNo, records: a.count,
+                  total_cost: a.totalCost, high_risk: a.highRiskCount,
+                  fail_per_month: a.failureFreqPerMonth.toFixed(1),
+                  sites: a.sites.join(', '), brands: a.brands.join(', '),
+                  last_seen: a.lastSeen ?? '',
+                })),
+                ['asset_no','records','total_cost','high_risk','fail_per_month','sites','brands','last_seen'],
+                ['Asset No','Records','Total Cost','High Risk','Fail/Mo','Sites','Brands','Last Seen'],
+                'TyrePulse_FleetAnalytics'
+              )}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <Download size={14} /> Excel
+            </button>
+            <button
+              onClick={() => exportToPdf(
+                filtered.slice(0, 200).map(a => ({
+                  asset_no: a.assetNo, records: a.count,
+                  total_cost: formatCurrencyCompact(a.totalCost, activeCurrency),
+                  high_risk: a.highRiskCount,
+                  fail_per_month: a.failureFreqPerMonth.toFixed(1),
+                })),
+                [
+                  { key: 'asset_no',       header: 'Asset No' },
+                  { key: 'records',        header: 'Records' },
+                  { key: 'total_cost',     header: 'Total Cost' },
+                  { key: 'high_risk',      header: 'High Risk' },
+                  { key: 'fail_per_month', header: 'Fail/Mo' },
+                ],
+                'Fleet Analytics Report',
+                'TyrePulse_FleetAnalytics',
+                'landscape'
+              )}
+              className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+            >
+              <FileText size={14} /> PDF
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-3 mb-4 items-center">
           <span className="text-xs text-gray-400">Date range:</span>
@@ -186,7 +238,7 @@ export default function FleetAnalytics() {
                   <td className="py-2 pr-4 font-mono text-xs text-blue-400 font-medium">{a.assetNo}</td>
                   <td className="py-2 pr-4 text-gray-300 text-right">{a.count}</td>
                   <td className="py-2 pr-4 text-gray-300 text-right">
-                    {activeCurrency} {a.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
+                    {formatCurrencyCompact(a.totalCost, activeCurrency)}
                   </td>
                   <td className="py-2 pr-4 text-right">
                     {a.highRiskCount > 0
@@ -202,6 +254,12 @@ export default function FleetAnalytics() {
               ))}
             </tbody>
           </table>
+          {filtered.length === 0 && (
+            <div className="text-center py-10">
+              <BarChart2 size={32} className="text-gray-700 mx-auto mb-2" />
+              <p className="text-gray-500 text-sm">No assets match the current filters</p>
+            </div>
+          )}
           {filtered.length > 100 && (
             <p className="text-xs text-gray-500 text-center pt-3">
               Showing 100 of {filtered.length} assets — refine search to narrow
@@ -287,7 +345,7 @@ function AssetDrillDown({ asset, currency = 'SAR' }) {
         <div>
           <h3 className="text-white font-bold text-lg font-mono">{asset.assetNo}</h3>
           <p className="text-gray-400 text-sm mt-1">
-            {asset.count} records · {currency} {asset.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })} total
+            {asset.count} records · {formatCurrencyCompact(asset.totalCost, currency)} total
             · active since {asset.firstSeen || '?'}
           </p>
         </div>
@@ -374,7 +432,7 @@ function AssetDrillDown({ asset, currency = 'SAR' }) {
                     </span>
                   </td>
                   <td className="py-1.5 pr-3 text-right text-gray-400">
-                    {currency} {recordCost(r).toLocaleString()}
+                    {formatCurrencyCompact(recordCost(r), currency)}
                   </td>
                   <td className="py-1.5 text-gray-500 max-w-xs truncate">{r.remarks_cleaned || r.remarks || '—'}</td>
                 </tr>

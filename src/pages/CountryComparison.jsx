@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { computeCountryMetrics, sum } from '../lib/analyticsEngine'
-import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText } from 'lucide-react'
+import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText, Award } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
@@ -10,6 +10,7 @@ import {
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatCurrencyCompact } from '../lib/formatters'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -18,33 +19,33 @@ const COUNTRY_CURRENCY_MAP = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
 
 const BAR_OPTS = {
   responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
+  plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', titleColor: '#fff', bodyColor: '#9ca3af' } },
   scales: {
-    x: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280' } },
-    y: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280' } },
+    x: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280', font: { size: 11 } } },
+    y: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280', font: { size: 11 } } },
   },
-}
-
-function fmt(n, currency) {
-  if (n == null) return 'N/A'
-  if (n >= 1_000_000) return `${currency} ${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000)     return `${currency} ${(n / 1_000).toFixed(0)}K`
-  return `${currency} ${n.toLocaleString()}`
 }
 
 function pct(n) { return n == null ? 'N/A' : `${n.toFixed(1)}%` }
 function cpk(n) { return n == null ? 'N/A' : n.toFixed(3) }
 
+// Re-uses shared formatCurrencyCompact for currency values
+function fmtCost(n, currency) {
+  if (n == null) return 'N/A'
+  return formatCurrencyCompact(n, currency)
+}
+
+// lowerIsBetter: true = green for minimum value, red for maximum
 const KPI_ROWS = [
-  { key: 'count',          label: 'Fleet Records',        fmt: (v)  => v.toLocaleString(),                     icon: Truck },
-  { key: 'totalCost',      label: 'Total Cost',           fmt: (v, c) => fmt(v, COUNTRY_CURRENCY_MAP[c] || 'SAR'), icon: DollarSign },
-  { key: 'avgCostPerTyre', label: 'Avg Cost / Tyre',      fmt: (v, c) => fmt(v, COUNTRY_CURRENCY_MAP[c] || 'SAR'), icon: DollarSign },
-  { key: 'avgCpk',         label: 'Avg CPK',              fmt: (v)  => cpk(v),                                 icon: Activity },
-  { key: 'highRiskPct',    label: 'High Risk %',          fmt: (v)  => pct(v),                                 icon: AlertTriangle },
-  { key: 'openActions',    label: 'Open Actions',         fmt: (v)  => v.toLocaleString(),                     icon: TrendingUp },
-  { key: 'overdueActions', label: 'Overdue Actions',      fmt: (v)  => v.toLocaleString(),                     icon: AlertTriangle },
-  { key: 'siteCount',      label: 'Sites',                fmt: (v)  => v.toLocaleString(),                     icon: Globe },
-  { key: 'brandCount',     label: 'Brands Used',          fmt: (v)  => v.toLocaleString(),                     icon: Globe },
+  { key: 'count',          label: 'Fleet Records',   fmt: (v)     => v.toLocaleString(),                              icon: Truck,         lowerIsBetter: false },
+  { key: 'totalCost',      label: 'Total Cost',      fmt: (v, c)  => fmtCost(v, COUNTRY_CURRENCY_MAP[c] || 'SAR'),   icon: DollarSign,    lowerIsBetter: true  },
+  { key: 'avgCostPerTyre', label: 'Avg Cost / Tyre', fmt: (v, c)  => fmtCost(v, COUNTRY_CURRENCY_MAP[c] || 'SAR'),   icon: DollarSign,    lowerIsBetter: true  },
+  { key: 'avgCpk',         label: 'Avg CPK',         fmt: (v)     => cpk(v),                                         icon: Activity,      lowerIsBetter: true  },
+  { key: 'highRiskPct',    label: 'High Risk %',     fmt: (v)     => pct(v),                                         icon: AlertTriangle, lowerIsBetter: true  },
+  { key: 'openActions',    label: 'Open Actions',    fmt: (v)     => v.toLocaleString(),                              icon: TrendingUp,    lowerIsBetter: true  },
+  { key: 'overdueActions', label: 'Overdue Actions', fmt: (v)     => v.toLocaleString(),                              icon: AlertTriangle, lowerIsBetter: true  },
+  { key: 'siteCount',      label: 'Sites',           fmt: (v)     => v.toLocaleString(),                              icon: Globe,         lowerIsBetter: false },
+  { key: 'brandCount',     label: 'Brands Used',     fmt: (v)     => v.toLocaleString(),                              icon: Globe,         lowerIsBetter: false },
 ]
 
 function riskColor(pct) {
@@ -159,16 +160,23 @@ export default function CountryComparison() {
   }
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="animate-spin h-7 w-7 rounded-full border-2 border-gray-700 border-t-blue-500" />
+    <div className="space-y-5">
+      <PageHeader title="Country Comparison" subtitle="Loading fleet data…" icon={Globe} />
+      <div className="grid grid-cols-3 gap-4">
+        {[...Array(3)].map((_, i) => <div key={i} className="card animate-pulse h-52 bg-gray-800/40" />)}
+      </div>
+      <div className="card animate-pulse h-48 bg-gray-800/40" />
     </div>
   )
 
   if (allMetrics.length === 0) return (
-    <div className="flex flex-col items-center justify-center h-64 gap-3">
-      <Globe size={36} className="text-gray-700" />
-      <p className="text-gray-500 text-sm">No country data yet.</p>
-      <p className="text-gray-600 text-xs">Upload tyre records and set the country field to see comparisons.</p>
+    <div className="space-y-5">
+      <PageHeader title="Country Comparison" subtitle="No country data available" icon={Globe} />
+      <div className="card py-16 flex flex-col items-center gap-3">
+        <Globe size={40} className="text-gray-700" />
+        <p className="text-gray-400 font-medium">No country data yet</p>
+        <p className="text-gray-600 text-sm">Upload tyre records with the country field populated to see comparisons</p>
+      </div>
     </div>
   )
 
@@ -286,7 +294,7 @@ export default function CountryComparison() {
                 </div>
                 <div>
                   <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">Total Cost</p>
-                  <p className="text-lg font-bold text-white">{fmt(m.totalCost, currency)}</p>
+                  <p className="text-lg font-bold text-white">{fmtCost(m.totalCost, currency)}</p>
                 </div>
                 <div>
                   <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">High Risk</p>
@@ -326,29 +334,47 @@ export default function CountryComparison() {
               </tr>
             </thead>
             <tbody>
-              {KPI_ROWS.map(({ key, label, fmt: fmtFn, icon: Icon }) => (
-                <tr key={key} className="hover:bg-white/2 transition-colors">
-                  <td className="table-cell">
-                    <div className="flex items-center gap-2">
-                      <Icon size={13} className="text-gray-600 flex-shrink-0" />
-                      <span className="text-gray-400">{label}</span>
-                    </div>
-                  </td>
-                  {metrics.map(m => {
-                    const val = m[key]
-                    const display = fmtFn(val, m.country)
-                    let colorClass = 'text-gray-200'
-                    if (key === 'highRiskPct')    colorClass = riskColor(val)
-                    if (key === 'overdueActions') colorClass = overdueColor(val)
-                    if (key === 'openActions')    colorClass = overdueColor(val)
-                    return (
-                      <td key={m.country} className="table-cell text-center">
-                        <span className={`font-semibold ${colorClass}`}>{display}</span>
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
+              {KPI_ROWS.map(({ key, label, fmt: fmtFn, icon: Icon, lowerIsBetter }) => {
+                // Find best / worst for rank highlights
+                const numericVals = metrics.map(m => m[key]).filter(v => v != null && !isNaN(v))
+                const minVal = numericVals.length ? Math.min(...numericVals) : null
+                const maxVal = numericVals.length ? Math.max(...numericVals) : null
+                const bestVal  = lowerIsBetter ? minVal : maxVal
+                const worstVal = lowerIsBetter ? maxVal : minVal
+
+                return (
+                  <tr key={key} className="hover:bg-white/2 transition-colors">
+                    <td className="table-cell">
+                      <div className="flex items-center gap-2">
+                        <Icon size={13} className="text-gray-600 flex-shrink-0" />
+                        <span className="text-gray-400">{label}</span>
+                      </div>
+                    </td>
+                    {metrics.map(m => {
+                      const val = m[key]
+                      const display = fmtFn(val, m.country)
+                      let colorClass = 'text-gray-200'
+                      if (key === 'highRiskPct')    colorClass = riskColor(val)
+                      else if (key === 'overdueActions' || key === 'openActions') colorClass = overdueColor(val)
+                      else if (val != null && numericVals.length > 1) {
+                        if (val === bestVal)  colorClass = 'text-green-400'
+                        if (val === worstVal) colorClass = 'text-red-400'
+                      }
+                      const isBest  = val != null && val === bestVal  && numericVals.length > 1
+                      const isWorst = val != null && val === worstVal && numericVals.length > 1
+
+                      return (
+                        <td key={m.country} className="table-cell text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            {isBest  && <Award size={10} className="text-green-400 flex-shrink-0" />}
+                            <span className={`font-semibold ${colorClass}`}>{display}</span>
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

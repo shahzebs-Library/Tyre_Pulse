@@ -105,6 +105,20 @@ export default function ScannerScreen() {
     })
   }
 
+  // Scanned a tyre serial → jump straight into the inspection for its vehicle,
+  // pre-filling the matching position's serial and opening its detail popup.
+  function startInspectionForTyre(tyre: TyreRecord, code: string) {
+    router.replace({
+      pathname: '/(app)/inspection/new',
+      params: {
+        site: tyre.site ?? '',
+        asset: tyre.asset_no ?? '',
+        tyreSerial: code,
+        tyrePosition: tyre.tyre_position ?? tyre.position ?? '',
+      },
+    })
+  }
+
   // ── Permission gates ───────────────────────────────────────────────────────
   if (!permission) {
     return (
@@ -249,6 +263,15 @@ export default function ScannerScreen() {
                   align={textAlign}
                 />
               </View>
+              {resolved.tyre.asset_no ? (
+                <TouchableOpacity
+                  style={styles.primaryBtn}
+                  onPress={() => startInspectionForTyre(resolved.tyre, resolved.code)}
+                >
+                  <Ionicons name="clipboard-outline" size={18} color="#fff" />
+                  <Text style={styles.primaryBtnText}>{t('scanner.inspectThisTyre')}</Text>
+                </TouchableOpacity>
+              ) : null}
             </>
           )}
 

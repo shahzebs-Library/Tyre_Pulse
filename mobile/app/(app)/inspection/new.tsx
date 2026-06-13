@@ -12,6 +12,7 @@ import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { enqueueInspection } from '../../../lib/offlineQueue'
 import TyrePositionCard from '../../../components/TyrePositionCard'
+import TyreDetailModal from '../../../components/TyreDetailModal'
 import VehicleTyreDiagram from '../../../components/VehicleTyreDiagram'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import {
@@ -28,7 +29,9 @@ export default function NewInspectionScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const router = useRouter()
-  const params = useLocalSearchParams<{ site?: string; asset?: string }>()
+  const params = useLocalSearchParams<{
+    site?: string; asset?: string; tyreSerial?: string; tyrePosition?: string
+  }>()
 
   // RBAC: only inspection-capable roles may open this screen (defends against
   // deep-links / programmatic navigation; the tab is already role-hidden).
@@ -49,11 +52,10 @@ export default function NewInspectionScreen() {
   const [submitting, setSubmitting] = useState(false)
 
   const { width: screenWidth } = useWindowDimensions()
-  const [highlightedPosition, setHighlightedPosition] = useState<string | null>(null)
-  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // ScrollView + per-card Y offsets so a tyre tap scrolls to its card.
-  const tyreScrollRef = useRef<ScrollView>(null)
-  const cardOffsets = useRef<Record<string, number>>({})
+  // The position whose detail popup is open (also drives the diagram selection).
+  const [activePosition, setActivePosition] = useState<string | null>(null)
+  // One-shot guard so a scanned tyre only pre-fills once.
+  const prefilledRef = useRef(false)
 
   const textAlign = isRTL ? 'right' : 'left'
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
@@ -84,25 +86,13 @@ export default function NewInspectionScreen() {
     }, 0)
   }, [positions, tyreData])
 
-  function handleDiagramPositionPress(position: string) {
-    // Clear any pending timer so re-tapping the same tyre re-highlights
-    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
-    setHighlightedPosition(position)
-    // Scroll the matching position card into view
-    const y = cardOffsets.current[position]
-    if (y != null && tyreScrollRef.current) {
-      tyreScrollRef.current.scrollTo({ y: Math.max(0, y - 12), animated: true })
-    }
-    // Auto-clear highlight after 6 s so the card can be re-collapsed normally
-    highlightTimerRef.current = setTimeout(() => setHighlightedPosition(null), 6000)
+  // Open the focused detail popup for a position (from diagram or list).
+  function openTyre(position: string) {
+    setActivePosition(position)
   }
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
-    }
-  }, [])
+  function closeTyre() {
+    setActivePosition(null)
+  }
 
   useEffect(() => { loadSites() }, [])
 
@@ -127,6 +117,29 @@ export default function NewInspectionScreen() {
       setTyreData(initialData)
     }
   }, [selectedVehicle])
+
+  // Pre-fill from a scanned tyre (serial + position). Runs once positions exist.
+  useEffect(() => {
+    if (prefilledRef.current) return
+    const serial = (params.tyreSerial ?? '').toString().trim()
+    if (!serial || positions.length === 0) return
+
+    const wanted = (params.tyrePosition ?? '').toString().trim().toLowerCase()
+    const target =
+      positions.find(p => p.toLowerCase() === wanted) ??
+      positions.find(p => t(`positions.${p}`).toLowerCase() === wanted) ??
+      null
+
+    prefilledRef.current = true
+    setStep('tyres')
+    if (target) {
+      setTyreData(prev => ({
+        ...prev,
+        [target]: { ...(prev[target] ?? emptyTyrePosition(target)), serial_number: serial },
+      }))
+      setActivePosition(target)
+    }
+  }, [positions, params.tyreSerial, params.tyrePosition, t])
 
   async function loadSites() {
     const { data } = await supabase
@@ -420,15 +433,15 @@ export default function NewInspectionScreen() {
           </View>
         </View>
 
-        <ScrollView ref={tyreScrollRef} style={styles.scroll} contentContainerStyle={styles.content}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
           {/* ── Interactive vehicle tyre diagram ─────────────────────────── */}
           {selectedVehicle && (
             <VehicleTyreDiagram
               vehicleType={selectedVehicle.vehicle_type}
               positions={positions}
               tyreData={tyreData}
-              selectedPosition={highlightedPosition}
-              onPositionPress={handleDiagramPositionPress}
+              selectedPosition={activePosition}
+              onPositionPress={openTyre}
               width={screenWidth - 32}
             />
           )}
@@ -462,16 +475,12 @@ export default function NewInspectionScreen() {
           </View>
 
           {positions.map(pos => (
-            <View
+            <TyrePositionCard
               key={pos}
-              onLayout={e => { cardOffsets.current[pos] = e.nativeEvent.layout.y }}
-            >
-              <TyrePositionCard
-                data={tyreData[pos] ?? emptyTyrePosition(pos)}
-                onChange={data => handleTyreUpdate(pos, data)}
-                isHighlighted={highlightedPosition === pos}
-              />
-            </View>
+              data={tyreData[pos] ?? emptyTyrePosition(pos)}
+              onPress={() => openTyre(pos)}
+              isHighlighted={activePosition === pos}
+            />
           ))}
 
           <TouchableOpacity
@@ -490,6 +499,15 @@ export default function NewInspectionScreen() {
             }
           </TouchableOpacity>
         </ScrollView>
+
+        {/* Focused per-tyre detail popup */}
+        <TyreDetailModal
+          visible={activePosition !== null}
+          position={activePosition}
+          data={activePosition ? (tyreData[activePosition] ?? emptyTyrePosition(activePosition)) : null}
+          onChange={d => { if (activePosition) handleTyreUpdate(activePosition, d) }}
+          onClose={closeTyre}
+        />
       </SafeAreaView>
     )
   }
@@ -515,6 +533,7 @@ export default function NewInspectionScreen() {
           setOdometer('')
           setHeaderNotes('')
           setTyreData({})
+          setActivePosition(null)
           router.replace('/(app)')
         }}
       >
@@ -529,6 +548,7 @@ export default function NewInspectionScreen() {
           setOdometer('')
           setHeaderNotes('')
           setTyreData({})
+          setActivePosition(null)
         }}
       >
         <Ionicons name="add-circle-outline" size={18} color="#16a34a" />

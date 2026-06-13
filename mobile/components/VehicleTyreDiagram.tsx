@@ -8,6 +8,7 @@
 
 import React, { useMemo } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import Svg, {
   G, Rect, Ellipse, Circle, Line, Path,
   Text as SvgText, Defs, RadialGradient,
@@ -17,10 +18,10 @@ import type { TyreCondition, TyrePositionData } from '../lib/types'
 
 // ── Risk colour palette (matches web exactly) ──────────────────────────────────
 const RISK = {
-  good:     { rim: '#22c55e', glow: '#16a34a', dark: '#15803d', label: 'Good' },
-  warning:  { rim: '#f59e0b', glow: '#d97706', dark: '#b45309', label: 'Warning' },
-  critical: { rim: '#ef4444', glow: '#dc2626', dark: '#b91c1c', label: 'Critical' },
-  none:     { rim: '#6b7280', glow: '#4b5563', dark: '#374151', label: 'No Data' },
+  good:     { rim: '#22c55e', glow: '#16a34a', dark: '#15803d', label: 'Good',     icon: 'checkmark-circle' },
+  warning:  { rim: '#f59e0b', glow: '#d97706', dark: '#b45309', label: 'Worn',     icon: 'alert-circle' },
+  critical: { rim: '#ef4444', glow: '#dc2626', dark: '#b91c1c', label: 'Critical', icon: 'warning' },
+  none:     { rim: '#6b7280', glow: '#4b5563', dark: '#374151', label: 'No Data',  icon: 'help-circle' },
 } as const
 
 type RiskKey = keyof typeof RISK
@@ -685,11 +686,11 @@ export default function VehicleTyreDiagram({
         ))}
       </Svg>
 
-      {/* Risk legend */}
+      {/* Risk legend — iconic */}
       <View style={styles.legend}>
         {(Object.entries(RISK) as [RiskKey, typeof RISK[RiskKey]][]).map(([key, col]) => (
           <View key={key} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: col.rim }]} />
+            <Ionicons name={col.icon as any} size={13} color={col.rim} />
             <Text style={styles.legendLabel}>{col.label}</Text>
           </View>
         ))}

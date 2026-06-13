@@ -229,8 +229,8 @@ export default function AdminDashboardScreen() {
             onViewAll={() => router.push('/(app)/accident/dashboard')}
           >
             {accidents.map(acc => {
-              const sevColor = SEVERITY_COLORS[acc.severity as any] ?? '#94a3b8'
-              const stColor  = STATUS_COLORS[acc.status as any] ?? '#94a3b8'
+              const sevColor = SEVERITY_COLORS[acc.severity as keyof typeof SEVERITY_COLORS] ?? '#94a3b8'
+              const stColor  = STATUS_COLORS[acc.status as keyof typeof STATUS_COLORS] ?? '#94a3b8'
               return (
                 <TouchableOpacity
                   key={acc.id}

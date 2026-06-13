@@ -1,0 +1,275 @@
+/**
+ * TyreEditor
+ *
+ * The editable detail body for a single tyre position: serial, pressure,
+ * iconic condition picker, photo capture (with background upload to Supabase
+ * Storage) and notes. Shared by the position list popup so the capture logic
+ * lives in exactly one place.
+ */
+
+import { useState } from 'react'
+import {
+  View, Text, TextInput, TouchableOpacity, Image,
+  StyleSheet, Alert, ActivityIndicator,
+} from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import * as ImagePicker from 'expo-image-picker'
+import { TyrePositionData } from '../lib/types'
+import { CONDITION_META, CONDITIONS, SHOW_TREAD_DEPTH } from '../lib/tyreConditions'
+import { useLanguage } from '../contexts/LanguageContext'
+import { supabase } from '../lib/supabase'
+
+type UploadState = 'idle' | 'uploading' | 'done' | 'error'
+
+interface Props {
+  data: TyrePositionData
+  onChange: (updated: TyrePositionData) => void
+}
+
+export default function TyreEditor({ data, onChange }: Props) {
+  const { t } = useLanguage()
+  const [pickingPhoto, setPickingPhoto] = useState(false)
+  const [uploadState, setUploadState] = useState<UploadState>('idle')
+
+  function update(partial: Partial<TyrePositionData>) {
+    onChange({ ...data, ...partial })
+  }
+
+  async function pickPhoto() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert(t('tyre.cameraPermissionTitle'), t('tyre.cameraPermissionMessage'))
+      return
+    }
+    setPickingPhoto(true)
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.75,
+        allowsEditing: false,
+      })
+      if (!result.canceled && result.assets[0]) {
+        const localUri = result.assets[0].uri
+        update({ photo_uri: localUri, photo_url: null })
+        await uploadPhoto(localUri)
+      }
+    } finally {
+      setPickingPhoto(false)
+    }
+  }
+
+  async function uploadPhoto(localUri: string) {
+    setUploadState('uploading')
+    try {
+      const response = await fetch(localUri)
+      const blob = await response.blob()
+
+      const ext       = 'jpg'
+      const safePosId = data.position.replace(/[^a-zA-Z0-9]/g, '_')
+      const path      = `photos/${Date.now()}_${safePosId}.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('tyre-photos')
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage.from('tyre-photos').getPublicUrl(path)
+      update({ photo_url: urlData.publicUrl })
+      setUploadState('done')
+    } catch (err) {
+      console.warn('[TyrePulse] Photo upload failed:', err)
+      setUploadState('error')
+    }
+  }
+
+  const displayUri = data.photo_uri
+
+  return (
+    <View style={styles.body}>
+      {/* Serial Number */}
+      <View style={styles.field}>
+        <Text style={styles.label}>{t('tyre.serialNumber')}</Text>
+        <TextInput
+          style={styles.input}
+          value={data.serial_number}
+          onChangeText={v => update({ serial_number: v })}
+          placeholder={t('tyre.serialPlaceholder')}
+          placeholderTextColor="#94a3b8"
+          autoCapitalize="characters"
+        />
+      </View>
+
+      {/* Pressure (+ Tread when enabled) */}
+      <View style={styles.row}>
+        <View style={[styles.field, { flex: 1 }]}>
+          <Text style={styles.label}>{t('tyre.pressure')}</Text>
+          <TextInput
+            style={styles.input}
+            value={data.pressure_psi}
+            onChangeText={v => update({ pressure_psi: v })}
+            placeholder={t('tyre.pressurePlaceholder')}
+            placeholderTextColor="#94a3b8"
+            keyboardType="decimal-pad"
+          />
+        </View>
+        {SHOW_TREAD_DEPTH && (
+          <>
+            <View style={{ width: 12 }} />
+            <View style={[styles.field, { flex: 1 }]}>
+              <Text style={styles.label}>{t('tyre.treadDepth')}</Text>
+              <TextInput
+                style={styles.input}
+                value={data.tread_depth_mm}
+                onChangeText={v => update({ tread_depth_mm: v })}
+                placeholder={t('tyre.treadPlaceholder')}
+                placeholderTextColor="#94a3b8"
+                keyboardType="decimal-pad"
+              />
+            </View>
+          </>
+        )}
+      </View>
+
+      {/* Condition — iconic picker */}
+      <View style={styles.field}>
+        <Text style={styles.label}>{t('tyre.condition')}</Text>
+        <View style={styles.conditionGrid}>
+          {CONDITIONS.map(c => {
+            const meta = CONDITION_META[c]
+            const active = data.condition === c
+            return (
+              <TouchableOpacity
+                key={c}
+                style={[
+                  styles.conditionBtn,
+                  active && { backgroundColor: meta.tint, borderColor: meta.color },
+                ]}
+                onPress={() => update({ condition: c })}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={meta.icon as any}
+                  size={22}
+                  color={active ? meta.color : '#94a3b8'}
+                />
+                <Text style={[styles.conditionBtnText, active && { color: meta.color }]}>
+                  {t(meta.i18nKey)}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      </View>
+
+      {/* Photo */}
+      <View style={styles.field}>
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>{t('tyre.photo')}</Text>
+          {uploadState === 'uploading' && (
+            <View style={styles.uploadBadge}>
+              <ActivityIndicator size="small" color="#fff" style={{ transform: [{ scale: 0.7 }] }} />
+              <Text style={styles.uploadBadgeText}>Uploading…</Text>
+            </View>
+          )}
+          {uploadState === 'done' && (
+            <View style={[styles.uploadBadge, styles.uploadBadgeDone]}>
+              <Ionicons name="checkmark-circle" size={12} color="#fff" />
+              <Text style={styles.uploadBadgeText}>Saved to cloud</Text>
+            </View>
+          )}
+          {uploadState === 'error' && (
+            <View style={[styles.uploadBadge, styles.uploadBadgeError]}>
+              <Ionicons name="warning-outline" size={12} color="#fff" />
+              <Text style={styles.uploadBadgeText}>Local only</Text>
+            </View>
+          )}
+        </View>
+
+        {displayUri ? (
+          <View style={styles.photoContainer}>
+            <Image source={{ uri: displayUri }} style={styles.photo} />
+            <TouchableOpacity
+              style={styles.photoRetake}
+              onPress={pickPhoto}
+              disabled={pickingPhoto || uploadState === 'uploading'}
+            >
+              <Ionicons name="camera-outline" size={16} color="#fff" />
+              <Text style={styles.photoRetakeText}>{t('tyre.retake')}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.photoBtn} onPress={pickPhoto} disabled={pickingPhoto}>
+            {pickingPhoto
+              ? <ActivityIndicator size="small" color="#16a34a" />
+              : <Ionicons name="camera-outline" size={22} color="#16a34a" />}
+            <Text style={styles.photoBtnText}>
+              {pickingPhoto ? t('tyre.openingCamera') : t('tyre.takePhoto')}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Notes */}
+      <View style={styles.field}>
+        <Text style={styles.label}>{t('tyre.notes')}</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          value={data.notes}
+          onChangeText={v => update({ notes: v })}
+          placeholder={t('tyre.notesPlaceholder')}
+          placeholderTextColor="#94a3b8"
+          multiline
+          numberOfLines={2}
+        />
+      </View>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  body: { gap: 16 },
+  field: { gap: 6 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  label: {
+    fontSize: 12, fontWeight: '600', color: '#64748b',
+    letterSpacing: 0.3, textTransform: 'uppercase',
+  },
+  input: {
+    backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0',
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    fontSize: 14, color: '#0f172a',
+  },
+  textArea: { minHeight: 60, textAlignVertical: 'top' },
+  row: { flexDirection: 'row' },
+  conditionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  conditionBtn: {
+    flexGrow: 1, flexBasis: '30%',
+    alignItems: 'center', justifyContent: 'center', gap: 4,
+    paddingVertical: 12, paddingHorizontal: 8,
+    borderRadius: 12, borderWidth: 1.5, borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+  },
+  conditionBtnText: { fontSize: 12, fontWeight: '700', color: '#64748b' },
+  uploadBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#64748b', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12,
+  },
+  uploadBadgeDone:  { backgroundColor: '#16a34a' },
+  uploadBadgeError: { backgroundColor: '#f59e0b' },
+  uploadBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
+  photoBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: 'rgba(22,163,74,0.06)', borderWidth: 1.5, borderColor: 'rgba(22,163,74,0.25)',
+    borderStyle: 'dashed', borderRadius: 10, paddingVertical: 16,
+  },
+  photoBtnText: { fontSize: 14, fontWeight: '600', color: '#16a34a' },
+  photoContainer: { borderRadius: 10, overflow: 'hidden', position: 'relative' },
+  photo: { width: '100%', height: 160, borderRadius: 10 },
+  photoRetake: {
+    position: 'absolute', bottom: 8, right: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
+  },
+  photoRetakeText: { fontSize: 12, color: '#fff', fontWeight: '600' },
+})

@@ -150,7 +150,8 @@
     "worn": "Worn",
     "damaged": "Damaged",
     "flat": "Flat",
-    "missing": "Missing"
+    "missing": "Missing",
+    "done": "Done"
   },
   "sync": {
     "offline": "Offline — inspections will sync when connected",
@@ -279,6 +280,7 @@
     "noMatchHint": "No vehicle or tyre matches this code.",
     "scanned": "Scanned",
     "startInspection": "Start Inspection",
+    "inspectThisTyre": "Inspect This Tyre",
     "scanAgain": "Scan Again",
     "torchOn": "Torch On",
     "torchOff": "Torch Off",

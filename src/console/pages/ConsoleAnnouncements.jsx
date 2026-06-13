@@ -15,7 +15,7 @@ const TYPE_STYLE = {
 
 const EMPTY = {
   title: '', message: '', type: 'info', target_roles: [],
-  target_org_id: null, active: true, expires_at: '',
+  target_org_id: null, active: true, show_until: '',
 }
 
 export default function ConsoleAnnouncements() {
@@ -52,9 +52,9 @@ export default function ConsoleAnnouncements() {
   }
   function openEdit(ann) {
     setForm({
-      title: ann.title ?? '', message: ann.message ?? '', type: ann.type ?? 'info',
+      title: ann.title ?? '', message: ann.body ?? '', type: ann.type ?? 'info',
       target_roles: ann.target_roles ?? [], target_org_id: ann.target_org_id ?? null,
-      active: ann.active ?? true, expires_at: ann.expires_at ? ann.expires_at.slice(0, 10) : '',
+      active: ann.active ?? true, show_until: ann.show_until ? ann.show_until.slice(0, 10) : '',
     })
     setError(null); setModal({ type: 'edit', id: ann.id })
   }
@@ -64,11 +64,11 @@ export default function ConsoleAnnouncements() {
     if (!form.message.trim()) { setError('Message is required.'); return }
     setSaving(true); setError(null)
     const payload = {
-      title: form.title.trim(), message: form.message.trim(), type: form.type,
+      title: form.title.trim(), body: form.message.trim(), type: form.type,
       target_roles: form.target_roles.length ? form.target_roles : null,
       target_org_id: form.target_org_id || null,
       active: form.active,
-      expires_at: form.expires_at ? new Date(form.expires_at + 'T23:59:59Z').toISOString() : null,
+      show_until: form.show_until ? new Date(form.show_until + 'T23:59:59Z').toISOString() : null,
     }
     if (modal === 'create') {
       const { data, error: err } = await supabase.from('announcements').insert(payload).select().single()
@@ -191,7 +191,7 @@ export default function ConsoleAnnouncements() {
                 </div>
                 <div>
                   <label className="field-label">Expires</label>
-                  <input type="date" value={form.expires_at} onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))}
+                  <input type="date" value={form.show_until} onChange={e => setForm(f => ({ ...f, show_until: e.target.value }))}
                     className="input-dark" />
                 </div>
                 <div className="flex items-end">
@@ -256,7 +256,7 @@ export default function ConsoleAnnouncements() {
 
 function AnnCard({ ann, orgs, onEdit, onToggle, onDelete }) {
   const orgName = orgs.find(o => o.id === ann.target_org_id)?.name
-  const expired = ann.expires_at && new Date(ann.expires_at) < new Date()
+  const expired = ann.show_until && new Date(ann.show_until) < new Date()
   return (
     <div className={`rounded-xl border p-4 ${TYPE_STYLE[ann.type] ?? TYPE_STYLE.info}`}>
       <div className="flex items-start justify-between gap-3">
@@ -265,14 +265,14 @@ function AnnCard({ ann, orgs, onEdit, onToggle, onDelete }) {
             <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold uppercase ${TYPE_STYLE[ann.type]}`}>{ann.type}</span>
             {orgName && <span className="text-[10px] text-gray-500">→ {orgName}</span>}
             {expired && <span className="text-[10px] text-red-500">EXPIRED</span>}
-            {ann.expires_at && !expired && (
+            {ann.show_until && !expired && (
               <span className="text-[10px] text-gray-500">
-                Expires {new Date(ann.expires_at).toLocaleDateString()}
+                Expires {new Date(ann.show_until).toLocaleDateString()}
               </span>
             )}
           </div>
           <p className="text-sm font-semibold text-white">{ann.title}</p>
-          <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{ann.message}</p>
+          <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{ann.body}</p>
           {ann.target_roles && ann.target_roles.length > 0 && (
             <div className="flex gap-1 mt-2 flex-wrap">
               {ann.target_roles.map(r => (

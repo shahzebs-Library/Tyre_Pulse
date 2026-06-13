@@ -115,7 +115,9 @@ export default function ConsoleSystemConfig() {
 
   async function handleSave() {
     setSaving(true)
-    const rows = Object.entries(configs).map(([key, value]) => ({ key, value: String(value ?? '') }))
+    const rows = Object.entries(configs).map(([key, value]) => ({
+      key, value: String(value ?? ''), updated_at: new Date().toISOString(),
+    }))
     const { error } = await supabase
       .from('system_config')
       .upsert(rows, { onConflict: 'key', ignoreDuplicates: false })

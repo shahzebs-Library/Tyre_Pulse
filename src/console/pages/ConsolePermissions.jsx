@@ -68,14 +68,13 @@ export default function ConsolePermissions() {
     const orgFilter = selOrg === '__global__' ? null : selOrg
     const q = supabase.from('module_permissions').select('*')
     const { data } = orgFilter
-      ? await q.eq('organisation_id', orgFilter)
-      : await q.is('organisation_id', null)
+      ? await q.eq('org_id', orgFilter)
+      : await q.is('org_id', null)
 
-    // Build map: role__module -> enabled
+    // Build map: role__module_key -> enabled
     const map = {}
-    // Default: all enabled for Admin, limited for others (start from DB rows)
     ;(data ?? []).forEach(row => {
-      map[`${row.role}__${row.module}`] = row.enabled
+      map[`${row.role}__${row.module_key}`] = row.enabled
     })
 
     // For any missing combos, set sensible defaults
@@ -134,18 +133,17 @@ export default function ConsolePermissions() {
     ROLES.forEach(role => {
       MODULES.forEach(m => {
         rows.push({
-          organisation_id: orgId,
+          org_id: orgId,
           role,
-          module: m.key,
+          module_key: m.key,
           enabled: perms[`${role}__${m.key}`] ?? false,
         })
       })
     })
 
-    // Upsert all rows
     const { error } = await supabase
       .from('module_permissions')
-      .upsert(rows, { onConflict: 'organisation_id,role,module', ignoreDuplicates: false })
+      .upsert(rows, { onConflict: 'org_id,role,module_key', ignoreDuplicates: false })
 
     if (!error) {
       await logAction('update_permissions', orgId, 'permissions', { org: selOrg, modules: rows.length })

@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { supabase } from '../lib/supabase'
 import TpLogo from '../assets/logo.svg'
+import TwoFactorChallenge from '../components/TwoFactorChallenge'
 
 /* ── CSS injected once ────────────────────────────────────────────────────── */
 const STYLES = `
@@ -207,6 +208,7 @@ export default function Login() {
   const [forgotLoading, setForgotLoading] = useState(false)
   const [focusedField, setFocusedField] = useState(null)
   const [isOnline, setIsOnline]       = useState(navigator.onLine)
+  const [mfaState, setMfaState]       = useState(null) // { factorId } when MFA challenge needed
 
   // Track network status
   useEffect(() => {
@@ -226,8 +228,19 @@ export default function Login() {
     e.preventDefault()
     if (!isOnline) { setError('No internet connection. Please check your network.'); return }
     setError(''); setLoading(true)
-    const err = await signIn(identifier, password)
-    if (err) { setError(err.message); setLoading(false) } else navigate('/')
+    const result = await signIn(identifier, password)
+    if (result?.mfaRequired) {
+      const { data: factors } = await supabase.auth.mfa.listFactors()
+      const factor = factors?.totp?.[0]
+      if (factor) {
+        setMfaState({ factorId: factor.id })
+      } else {
+        setError('MFA is required but no authenticator factor found.')
+      }
+      setLoading(false)
+      return
+    }
+    if (result) { setError(result.message || 'Login failed'); setLoading(false) } else navigate('/')
   }
 
   async function handleSignup(e) {

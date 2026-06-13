@@ -19,6 +19,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [modulePerms, setModulePerms] = useState(null) // null = not yet fetched
+  const [mfaEnabled, setMfaEnabled] = useState(false)
 
   // Idle timeout — sign out after 30 minutes of inactivity
   const IDLE_MS = 30 * 60 * 1000
@@ -62,6 +63,7 @@ export function AuthProvider({ children }) {
         await fetchProfile(session.user.id)
       } else {
         setProfile(null)
+        setMfaEnabled(false)
         setLoading(false)
       }
     })
@@ -70,12 +72,14 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function fetchProfile(userId) {
-    const [profileRes, permsRes] = await Promise.all([
+    const [profileRes, permsRes, factorsRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', userId).single(),
       supabase.rpc('get_user_module_permissions'),
+      supabase.auth.mfa.listFactors(),
     ])
     setProfile(profileRes.data)
     setModulePerms(permsRes.data ?? {})
+    setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)
     setLoading(false)
   }
 
@@ -103,7 +107,14 @@ export function AuthProvider({ children }) {
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return error
+    if (error) return error
+
+    // Check whether MFA challenge is still required for this session
+    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (aalData?.nextLevel === 'aal2' && aalData?.currentLevel !== 'aal2') {
+      return { mfaRequired: true }
+    }
+    return null
   }
 
   async function signOut() {
@@ -111,7 +122,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, modulePerms, hasPermission, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled }}>
       {children}
     </AuthContext.Provider>
   )

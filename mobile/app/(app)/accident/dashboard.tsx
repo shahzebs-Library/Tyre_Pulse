@@ -19,6 +19,7 @@ import { supabase } from '../../../lib/supabase'
 import {
   AccidentRecord, AccidentSeverity,
   SEVERITY_COLORS, STATUS_COLORS,
+  SEVERITY_ICONS, STATUS_ICONS,
   isAdminOrAbove,
 } from '../../../lib/types'
 
@@ -297,6 +298,7 @@ function AccidentCard({
             <Text style={styles.accType}>{t(`accident.types.${accident.accident_type}`)}</Text>
           </View>
           <View style={[styles.accSeverityBadge, { backgroundColor: sevColor + '20', borderColor: sevColor + '50' }]}>
+            <Ionicons name={SEVERITY_ICONS[accident.severity] as any} size={12} color={sevColor} />
             <Text style={[styles.accSeverityText, { color: sevColor }]}>
               {t(`accident.severities.${accident.severity}`)}
             </Text>
@@ -323,6 +325,7 @@ function AccidentCard({
             </View>
           )}
           <View style={[styles.accStatusBadge, { backgroundColor: statusColor + '20' }]}>
+            <Ionicons name={STATUS_ICONS[accident.status] as any} size={11} color={statusColor} />
             <Text style={[styles.accStatusText, { color: statusColor }]}>
               {t(`accident.statuses.${accident.status}`)}
             </Text>
@@ -451,12 +454,12 @@ const styles = StyleSheet.create({
   accAsset:    { fontSize: 14, fontWeight: '800', color: '#0f172a' },
   accSite:     { fontWeight: '400', color: '#64748b' },
   accType:     { fontSize: 12, color: '#64748b', marginTop: 2 },
-  accSeverityBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
+  accSeverityBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
   accSeverityText:  { fontSize: 11, fontWeight: '800' },
   accBottomRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
   accMeta:          { flexDirection: 'row', alignItems: 'center', gap: 3 },
   accMetaText:      { fontSize: 11, color: '#94a3b8' },
-  accStatusBadge:   { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  accStatusBadge:   { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
   accStatusText:    { fontSize: 10, fontWeight: '700' },
   accPhotoMeta:     { flexDirection: 'row', alignItems: 'center', gap: 4 },
   reporterRow:      { flexDirection: 'row', alignItems: 'center', gap: 4 },

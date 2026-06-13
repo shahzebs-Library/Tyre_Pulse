@@ -21,7 +21,7 @@ import { supabase } from '../../../lib/supabase'
 import AccidentPhotoGrid from '../../../components/AccidentPhotoGrid'
 import {
   VehicleFleet, AccidentDraft, AccidentType, AccidentSeverity,
-  emptyAccidentDraft, ACCIDENT_TYPE_LABELS, SEVERITY_COLORS,
+  emptyAccidentDraft, ACCIDENT_TYPE_LABELS, SEVERITY_COLORS, SEVERITY_ICONS,
 } from '../../../lib/types'
 
 type Step = 'step1' | 'step2' | 'step3' | 'success'
@@ -210,8 +210,11 @@ export default function AccidentReportScreen() {
                   ]}
                   onPress={() => update({ severity: sev })}
                 >
-                  <View style={[styles.severityDot, { backgroundColor: SEVERITY_COLORS[sev] },
-                    draft.severity === sev && { backgroundColor: '#fff' }]} />
+                  <Ionicons
+                    name={SEVERITY_ICONS[sev] as any}
+                    size={16}
+                    color={draft.severity === sev ? '#fff' : SEVERITY_COLORS[sev]}
+                  />
                   <Text style={[
                     styles.severityChipText,
                     draft.severity === sev && { color: '#fff' },

@@ -12,30 +12,14 @@ import {
 import { supabase } from '../../lib/supabase'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { VehicleFleet } from '../../lib/types'
+import { lookupTyreBySerial, sanitizeSerial, TyreLookupRecord } from '../../lib/tyreLookup'
 
 type ScanState = 'scanning' | 'searching' | 'result'
 
-interface TyreRecord {
-  id: string
-  brand: string | null
-  size: string | null
-  position: string | null
-  tyre_position: string | null
-  asset_no: string | null
-  site: string | null
-  tread_depth: string | number | null
-  pressure_reading: string | number | null
-}
-
 type Resolved =
   | { kind: 'vehicle'; code: string; vehicle: VehicleFleet }
-  | { kind: 'tyre'; code: string; tyre: TyreRecord }
+  | { kind: 'tyre'; code: string; tyre: TyreLookupRecord }
   | { kind: 'none'; code: string }
-
-// PostgREST or() filters break on commas/parens — keep only safe serial chars.
-function sanitize(code: string): string {
-  return code.trim().replace(/[(),]/g, '').slice(0, 64)
-}
 
 export default function ScannerScreen() {
   const router = useRouter()
@@ -51,7 +35,7 @@ export default function ScannerScreen() {
   const backIcon = isRTL ? 'arrow-forward' : 'arrow-back'
 
   const resolveCode = useCallback(async (raw: string) => {
-    const code = sanitize(raw)
+    const code = sanitizeSerial(raw)
     if (!code) { reset(); return }
 
     // 1) Asset / vehicle match
@@ -66,14 +50,10 @@ export default function ScannerScreen() {
       return
     }
 
-    // 2) Tyre serial match (serials live across several imported columns)
-    const { data: tyres } = await supabase
-      .from('tyre_records')
-      .select('id, brand, size, position, tyre_position, asset_no, site, tread_depth, pressure_reading')
-      .or(`serial_no.eq.${code},serial_number.eq.${code},tyre_serial.eq.${code}`)
-      .limit(1)
-    if (tyres && tyres.length) {
-      setResolved({ kind: 'tyre', code, tyre: tyres[0] as TyreRecord })
+    // 2) Tyre serial match (shared resolver — serials span several columns)
+    const tyre = await lookupTyreBySerial(code)
+    if (tyre) {
+      setResolved({ kind: 'tyre', code, tyre })
       setState('result')
       return
     }
@@ -87,7 +67,7 @@ export default function ScannerScreen() {
     lockRef.current = true
     setState('searching')
     resolveCode(res.data).catch(() => {
-      setResolved({ kind: 'none', code: sanitize(res.data) })
+      setResolved({ kind: 'none', code: sanitizeSerial(res.data) })
       setState('result')
     })
   }, [state, resolveCode])
@@ -107,7 +87,7 @@ export default function ScannerScreen() {
 
   // Scanned a tyre serial → jump straight into the inspection for its vehicle,
   // pre-filling the matching position's serial and opening its detail popup.
-  function startInspectionForTyre(tyre: TyreRecord, code: string) {
+  function startInspectionForTyre(tyre: TyreLookupRecord, code: string) {
     router.replace({
       pathname: '/(app)/inspection/new',
       params: {

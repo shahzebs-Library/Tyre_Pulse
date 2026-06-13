@@ -22,6 +22,7 @@ import { supabase } from '../../../lib/supabase'
 import {
   AccidentRecord, AccidentStatus,
   SEVERITY_COLORS, STATUS_COLORS,
+  SEVERITY_ICONS, STATUS_ICONS,
   isAdminOrAbove, isAdmin,
 } from '../../../lib/types'
 
@@ -244,7 +245,7 @@ Risk Level: [Critical / High / Medium / Low]
           {statusLoading
             ? <ActivityIndicator size="small" color={statusColor} />
             : <>
-                <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                <Ionicons name={STATUS_ICONS[accident.status] as any} size={13} color={statusColor} />
                 <Text style={[styles.statusText, { color: statusColor }]}>
                   {t(`accident.statuses.${accident.status}`)}
                 </Text>
@@ -276,7 +277,7 @@ Risk Level: [Critical / High / Medium / Low]
         <View style={[styles.heroCard, { borderLeftColor: sevColor, borderLeftWidth: 5 }]}>
           <View style={styles.heroTop}>
             <View style={[styles.sevBadge, { backgroundColor: sevColor + '18', borderColor: sevColor + '40' }]}>
-              <Ionicons name="warning" size={13} color={sevColor} />
+              <Ionicons name={SEVERITY_ICONS[accident.severity] as any} size={13} color={sevColor} />
               <Text style={[styles.sevBadgeText, { color: sevColor }]}>
                 {t(`accident.severities.${accident.severity}`).toUpperCase()}
               </Text>

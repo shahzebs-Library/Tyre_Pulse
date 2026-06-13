@@ -16,10 +16,12 @@ import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
 import { TyrePositionData } from '../lib/types'
 import { CONDITION_META, CONDITIONS, SHOW_TREAD_DEPTH } from '../lib/tyreConditions'
+import { lookupTyreBySerial, TyreLookupRecord } from '../lib/tyreLookup'
 import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 
 type UploadState = 'idle' | 'uploading' | 'done' | 'error'
+type LookupState = 'idle' | 'searching' | 'found' | 'none'
 
 interface Props {
   data: TyrePositionData
@@ -30,10 +32,29 @@ export default function TyreEditor({ data, onChange }: Props) {
   const { t } = useLanguage()
   const [pickingPhoto, setPickingPhoto] = useState(false)
   const [uploadState, setUploadState] = useState<UploadState>('idle')
+  const [lookupState, setLookupState] = useState<LookupState>('idle')
+  const [matched, setMatched] = useState<TyreLookupRecord | null>(null)
 
   function update(partial: Partial<TyrePositionData>) {
     onChange({ ...data, ...partial })
   }
+
+  // Resolve the entered serial against the tyre master records to surface the
+  // correct brand / size / last reading and avoid mis-keyed data.
+  async function runSerialLookup() {
+    const serial = data.serial_number.trim()
+    if (!serial) { setLookupState('idle'); setMatched(null); return }
+    setLookupState('searching')
+    try {
+      const rec = await lookupTyreBySerial(serial)
+      if (rec) { setMatched(rec); setLookupState('found') }
+      else { setMatched(null); setLookupState('none') }
+    } catch {
+      setMatched(null); setLookupState('none')
+    }
+  }
+
+  const lastPressure = matched?.pressure_reading != null ? String(matched.pressure_reading) : null
 
   async function pickPhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync()
@@ -87,17 +108,61 @@ export default function TyreEditor({ data, onChange }: Props) {
 
   return (
     <View style={styles.body}>
-      {/* Serial Number */}
+      {/* Serial Number + lookup */}
       <View style={styles.field}>
         <Text style={styles.label}>{t('tyre.serialNumber')}</Text>
-        <TextInput
-          style={styles.input}
-          value={data.serial_number}
-          onChangeText={v => update({ serial_number: v })}
-          placeholder={t('tyre.serialPlaceholder')}
-          placeholderTextColor="#94a3b8"
-          autoCapitalize="characters"
-        />
+        <View style={styles.serialRow}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            value={data.serial_number}
+            onChangeText={v => { update({ serial_number: v }); if (lookupState !== 'idle') { setLookupState('idle'); setMatched(null) } }}
+            onSubmitEditing={runSerialLookup}
+            placeholder={t('tyre.serialPlaceholder')}
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="characters"
+            returnKeyType="search"
+          />
+          <TouchableOpacity
+            style={styles.lookupBtn}
+            onPress={runSerialLookup}
+            disabled={lookupState === 'searching' || !data.serial_number.trim()}
+            activeOpacity={0.8}
+          >
+            {lookupState === 'searching'
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Ionicons name="search" size={18} color="#fff" />}
+          </TouchableOpacity>
+        </View>
+
+        {/* Matched master record */}
+        {lookupState === 'found' && matched && (
+          <View style={styles.matchCard}>
+            <View style={styles.matchHeader}>
+              <Ionicons name="checkmark-circle" size={15} color="#16a34a" />
+              <Text style={styles.matchTitle}>{t('tyre.matchFound')}</Text>
+            </View>
+            <Text style={styles.matchMeta}>
+              {[matched.brand, matched.size, matched.tyre_position ?? matched.position, matched.asset_no]
+                .filter(Boolean)
+                .join('  ·  ') || '—'}
+            </Text>
+            {lastPressure && !data.pressure_psi ? (
+              <TouchableOpacity
+                style={styles.matchAction}
+                onPress={() => update({ pressure_psi: lastPressure })}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="speedometer-outline" size={14} color="#16a34a" />
+                <Text style={styles.matchActionText}>
+                  {t('tyre.useLastPressure')} ({lastPressure} PSI)
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        )}
+        {lookupState === 'none' && (
+          <Text style={styles.matchNone}>{t('tyre.matchNone')}</Text>
+        )}
       </View>
 
       {/* Pressure (+ Tread when enabled) */}
@@ -242,6 +307,31 @@ const styles = StyleSheet.create({
   },
   textArea: { minHeight: 60, textAlignVertical: 'top' },
   row: { flexDirection: 'row' },
+  serialRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  lookupBtn: {
+    width: 44, height: 42, borderRadius: 10,
+    backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center',
+  },
+  matchCard: {
+    marginTop: 8, gap: 6,
+    backgroundColor: 'rgba(22,163,74,0.06)',
+    borderWidth: 1, borderColor: 'rgba(22,163,74,0.25)',
+    borderRadius: 10, padding: 10,
+  },
+  matchHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  matchTitle: {
+    fontSize: 11, fontWeight: '700', color: '#15803d',
+    textTransform: 'uppercase', letterSpacing: 0.4,
+  },
+  matchMeta: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
+  matchAction: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(22,163,74,0.3)',
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginTop: 2,
+  },
+  matchActionText: { fontSize: 12, fontWeight: '700', color: '#16a34a' },
+  matchNone: { marginTop: 8, fontSize: 12, color: '#94a3b8', fontStyle: 'italic' },
   conditionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   conditionBtn: {
     flexGrow: 1, flexBasis: '30%',

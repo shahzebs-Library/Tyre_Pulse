@@ -182,6 +182,20 @@ export const STATUS_COLORS: Record<AccidentStatus, string> = {
   closed:       '#6b7280',
 }
 
+// Iconic representations — distinct glyphs so severity / status read at a glance.
+export const SEVERITY_ICONS: Record<AccidentSeverity, string> = {
+  minor:    'alert-circle-outline',
+  moderate: 'warning-outline',
+  severe:   'flame-outline',
+  fatal:    'skull-outline',
+}
+
+export const STATUS_ICONS: Record<AccidentStatus, string> = {
+  reported:     'ellipse-outline',
+  under_review: 'hourglass-outline',
+  closed:       'checkmark-done-outline',
+}
+
 // ── Tyre position constants ───────────────────────────────────────────────────
 
 export const TYRE_POSITIONS: Record<string, string[]> = {

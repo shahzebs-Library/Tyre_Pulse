@@ -151,7 +151,10 @@
     "damaged": "Damaged",
     "flat": "Flat",
     "missing": "Missing",
-    "done": "Done"
+    "done": "Done",
+    "matchFound": "Matched in records",
+    "matchNone": "No matching tyre record found",
+    "useLastPressure": "Use last pressure"
   },
   "sync": {
     "offline": "Offline — inspections will sync when connected",

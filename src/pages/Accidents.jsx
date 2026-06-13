@@ -493,9 +493,48 @@ export default function Accidents() {
     })
   }
 
-  const exportCols    = ['incident_date', 'asset_no', 'site', 'severity', 'status', 'repair_cost', 'inspector']
-  const exportHeaders = ['Date', 'Asset', 'Site', 'Severity', 'Status', 'Repair Cost', 'Inspector']
-  const exportPdfCols = exportCols.map((k, i) => ({ key: k, header: exportHeaders[i] }))
+  // Full export — every incident + claim + recovery + cost field ("everything").
+  const EXPORT_FIELDS = [
+    ['incident_date', 'Date', r => r.incident_date],
+    ['asset_no', 'Asset', r => r.asset_no],
+    ['site', 'Site', r => r.site],
+    ['country', 'Country', r => r.country],
+    ['severity', 'Severity', r => canonSeverity(r.severity)],
+    ['status', 'Status', r => canonStatus(r.status)],
+    ['closure_status', 'Closure', r => r.closure_status],
+    ['responsible_party', 'Responsible', r => r.responsible_party],
+    ['liable_party', 'Liable', r => r.liable_party],
+    ['payer', 'Who Pays', r => r.payer],
+    ['driver_name', 'Driver', r => r.driver_name],
+    ['insurer', 'Insurer', r => r.insurer],
+    ['policy_no', 'Policy/Claim No', r => r.policy_no],
+    ['claim_status', 'Claim Status', r => r.claim_status],
+    ['claim_amount', 'Claim Amount', r => r.claim_amount],
+    ['claim_approved_amount', 'Approved', r => r.claim_approved_amount],
+    ['deductible', 'Deductible', r => r.deductible],
+    ['recovery_status', 'Recovery Status', r => r.recovery_status],
+    ['recovered_amount', 'Recovered', r => r.recovered_amount],
+    ['recovery_source', 'Recovery Source', r => r.recovery_source],
+    ['recovery_date', 'Recovery Date', r => r.recovery_date],
+    ['recovery_reference', 'Recovery Ref', r => r.recovery_reference],
+    ['repair_cost', 'Repair Cost', r => r.repair_cost],
+    ['estimated_damage_cost', 'Est. Damage', r => r.estimated_damage_cost],
+    ['parts_cost', 'Parts Cost', r => r.parts_cost],
+    ['net_cost', 'Net Cost', r => Math.max(0, (Number(r.repair_cost) || Number(r.estimated_damage_cost) || 0) + (Number(r.parts_cost) || 0) - (Number(r.recovered_amount) || 0))],
+    ['inspector', 'Inspector', r => r.inspector],
+    ['reporter_name', 'Reported By', r => r.reporter_name],
+  ]
+  const exportCols    = EXPORT_FIELDS.map(f => f[0])
+  const exportHeaders = EXPORT_FIELDS.map(f => f[1])
+  const exportPdfCols = EXPORT_FIELDS.map(([key, header]) => ({ key, header }))
+  const exportRows = useMemo(
+    () => filtered.map(r => {
+      const o = {}
+      EXPORT_FIELDS.forEach(([k, , get]) => { o[k] = get(r) ?? '' })
+      return o
+    }),
+    [filtered],
+  )
 
   return (
     <div className="space-y-4">
@@ -508,13 +547,13 @@ export default function Accidents() {
         />
         <div className="flex gap-2 flex-wrap">
           <button
-            onClick={() => exportToExcel(filtered, exportCols, exportHeaders, 'TyrePulse_Accidents')}
+            onClick={() => exportToExcel(exportRows, exportCols, exportHeaders, 'TyrePulse_Accidents')}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
             <Download size={14} /> Excel
           </button>
           <button
-            onClick={() => exportToPdf(filtered, exportPdfCols, 'Accidents & Incidents', 'TyrePulse_Accidents', 'landscape')}
+            onClick={() => exportToPdf(exportRows, exportPdfCols, 'Accidents & Incidents', 'TyrePulse_Accidents', 'landscape')}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
             <FileText size={14} /> PDF

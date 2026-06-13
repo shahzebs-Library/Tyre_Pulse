@@ -28,6 +28,7 @@ interface Stats {
   criticalAlerts:   number
   inspThisWeek:     number
   pendingUsers:     number
+  pendingClosures:  number
 }
 
 interface RecentAccident {
@@ -75,7 +76,7 @@ export default function AdminDashboardScreen() {
 
     const [
       vehiclesRes, accidentsRes, alertsRes, inspRes, usersRes,
-      recentAccRes, activeAlertRes,
+      recentAccRes, activeAlertRes, closuresRes,
     ] = await Promise.all([
       supabase.from('vehicle_fleet').select('id', { count: 'exact', head: true }),
       supabase.from('accidents').select('severity, status'),
@@ -94,6 +95,7 @@ export default function AdminDashboardScreen() {
         .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(5),
+      supabase.from('accidents').select('id', { count: 'exact', head: true }).eq('closure_status', 'pending_closure'),
     ])
 
     const accData = accidentsRes.data ?? []
@@ -105,6 +107,7 @@ export default function AdminDashboardScreen() {
       criticalAlerts:    (alertsRes.data ?? []).filter(a => a.severity === 'critical' || a.severity === 'high').length,
       inspThisWeek:      inspRes.count ?? 0,
       pendingUsers:      usersRes.count ?? 0,
+      pendingClosures:   closuresRes.count ?? 0,
     })
     setAccidents((recentAccRes.data ?? []) as RecentAccident[])
     setAlerts((activeAlertRes.data ?? []) as ActiveAlert[])
@@ -157,6 +160,7 @@ export default function AdminDashboardScreen() {
           <KpiPill icon="warning-outline"   label="Open Acc"  value={stats!.openAccidents}    color="#fbbf24" alert={stats!.openAccidents > 0} />
           <KpiPill icon="notifications-outline" label="Alerts" value={stats!.activeAlerts}  color="#f87171" alert={stats!.criticalAlerts > 0} />
           <KpiPill icon="clipboard-outline" label="Insp/Wk"   value={stats!.inspThisWeek}    color="#34d399" />
+          <KpiPill icon="lock-closed-outline" label="Closures" value={stats!.pendingClosures} color="#fbbf24" alert={stats!.pendingClosures > 0} />
           {isAdmin(profile?.role) && (
             <KpiPill icon="people-outline"  label="Pending"   value={stats!.pendingUsers}     color="#60a5fa" alert={stats!.pendingUsers > 0} />
           )}
@@ -199,6 +203,26 @@ export default function AdminDashboardScreen() {
             onPress={() => router.push('/(app)/accident/dashboard')}
           />
         </View>
+
+        {/* ── Closures awaiting approval (elevated) ────────────────────── */}
+        {stats!.pendingClosures > 0 && (
+          <TouchableOpacity
+            style={styles.closureBanner}
+            onPress={() => router.push('/(app)/accident/dashboard')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.closureIcon}>
+              <Ionicons name="lock-closed-outline" size={18} color="#b45309" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.closureTitle}>
+                {stats!.pendingClosures} accident closure{stats!.pendingClosures > 1 ? 's' : ''} awaiting approval
+              </Text>
+              <Text style={styles.closureSub}>Tap to review and approve closures</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#fbbf24" />
+          </TouchableOpacity>
+        )}
 
         {/* ── Pending approval banner (admin only) ─────────────────────── */}
         {isAdmin(profile?.role) && stats!.pendingUsers > 0 && (
@@ -402,6 +426,15 @@ const styles = StyleSheet.create({
     padding: 14, borderWidth: 1, borderColor: '#bfdbfe',
   },
   approvalIcon:  { width: 36, height: 36, borderRadius: 10, backgroundColor: '#dbeafe', alignItems: 'center', justifyContent: 'center' },
+
+  closureBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#fffbeb', borderRadius: 14,
+    padding: 14, borderWidth: 1, borderColor: '#fde68a',
+  },
+  closureIcon:  { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fef3c7', alignItems: 'center', justifyContent: 'center' },
+  closureTitle: { fontSize: 13, fontWeight: '700', color: '#92400e' },
+  closureSub:   { fontSize: 11, color: '#b45309', marginTop: 1 },
   approvalTitle: { fontSize: 13, fontWeight: '700', color: '#1e40af' },
   approvalSub:   { fontSize: 11, color: '#3b82f6', marginTop: 1 },
 

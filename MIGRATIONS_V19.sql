@@ -258,3 +258,12 @@ GRANT EXECUTE ON FUNCTION public.request_accident_closure(uuid, text)     TO aut
 GRANT EXECUTE ON FUNCTION public.approve_accident_closure(uuid)           TO authenticated;
 GRANT EXECUTE ON FUNCTION public.reject_accident_closure(uuid, text)      TO authenticated;
 GRANT EXECUTE ON FUNCTION public.mark_notification_read(uuid)             TO authenticated;
+
+-- Harden: revoke the implicit PUBLIC/anon EXECUTE so only signed-in users can
+-- invoke the SECURITY DEFINER workflow RPCs (the trigger helper needs no caller).
+REVOKE EXECUTE ON FUNCTION public.request_accident_closure(uuid, text) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.approve_accident_closure(uuid)       FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.reject_accident_closure(uuid, text)  FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.mark_notification_read(uuid)         FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.is_elevated_user()                   FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.sync_accident_parts_cost()           FROM PUBLIC, anon, authenticated;

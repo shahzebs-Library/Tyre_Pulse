@@ -309,6 +309,66 @@ export default function Accidents() {
     }))
   }, [records, statusCounts])
 
+  // ---- Claims & cost-recovery analytics (V19 module) ----
+  const claimAnalytics = useMemo(() => {
+    let totalClaim = 0, totalApproved = 0, totalParts = 0, totalRepair = 0, totalDeductible = 0
+    const byStatus = { none: 0, filed: 0, approved: 0, rejected: 0, settled: 0 }
+    const byPayer = {}
+    let pendingClosure = 0, closedApproved = 0
+    records.forEach(r => {
+      totalClaim      += Number(r.claim_amount) || 0
+      totalApproved   += Number(r.claim_approved_amount) || 0
+      totalParts      += Number(r.parts_cost) || 0
+      totalRepair     += Number(r.repair_cost) || 0
+      totalDeductible += Number(r.deductible) || 0
+      const cs = r.claim_status || 'none'
+      if (byStatus[cs] !== undefined) byStatus[cs]++
+      const cost = (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0)
+      if (cost > 0) { const p = r.payer || 'Unassigned'; byPayer[p] = (byPayer[p] || 0) + cost }
+      if (r.closure_status === 'pending_closure') pendingClosure++
+      if (r.closure_status === 'closed') closedApproved++
+    })
+    const grossCost   = totalRepair + totalParts
+    const recovery    = totalClaim > 0 ? Math.round((totalApproved / totalClaim) * 100) : 0
+    const netExposure = Math.max(0, grossCost - totalApproved)
+    return {
+      totalClaim, totalApproved, totalParts, totalRepair, totalDeductible,
+      grossCost, recovery, netExposure, byStatus, byPayer, pendingClosure, closedApproved,
+    }
+  }, [records])
+
+  const claimStatusChart = useMemo(() => {
+    const order = ['filed', 'approved', 'settled', 'rejected', 'none']
+    const labels = { none: 'No Claim', filed: 'Filed', approved: 'Approved', rejected: 'Rejected', settled: 'Settled' }
+    const colors = { none: '#6b7280', filed: '#3b82f6', approved: '#16a34a', rejected: '#dc2626', settled: '#9333ea' }
+    return {
+      labels: order.map(k => labels[k]),
+      datasets: [{
+        label: 'Claims',
+        data: order.map(k => claimAnalytics.byStatus[k] ?? 0),
+        backgroundColor: order.map(k => colors[k] + 'b3'),
+        borderColor: order.map(k => colors[k]),
+        borderWidth: 1,
+        borderRadius: 3,
+      }],
+    }
+  }, [claimAnalytics])
+
+  const payerCostChart = useMemo(() => {
+    const sorted = Object.entries(claimAnalytics.byPayer).sort((a, b) => b[1] - a[1]).slice(0, 6)
+    return {
+      labels: sorted.map(([k]) => k),
+      datasets: [{
+        label: 'Cost',
+        data: sorted.map(([, v]) => v),
+        backgroundColor: 'rgba(168,85,247,0.7)',
+        borderColor: '#a855f7',
+        borderWidth: 1,
+        borderRadius: 3,
+      }],
+    }
+  }, [claimAnalytics])
+
   const pendingClosures = useMemo(
     () => records.filter(r => r.closure_status === 'pending_closure').length,
     [records],
@@ -724,6 +784,67 @@ export default function Accidents() {
             <p className="text-sm font-semibold text-gray-300 mb-3">Monthly Severity Breakdown (last 12 months)</p>
             <div style={{ height: 220 }}>
               <Bar data={severityMonthlyChart} options={CHART_OPTS_STACKED} />
+            </div>
+          </div>
+
+          {/* Claims & cost recovery */}
+          <div className="card">
+            <p className="text-sm font-semibold text-gray-300 mb-3">Claims & Cost Recovery</p>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+              <div className="text-center">
+                <p className="text-lg font-bold text-white">{fmtCurrency(claimAnalytics.grossCost)}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Gross Cost (repair + parts)</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-blue-400">{fmtCurrency(claimAnalytics.totalClaim)}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Total Claimed</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-green-400">{fmtCurrency(claimAnalytics.totalApproved)}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Recovered (Approved)</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-orange-400">{fmtCurrency(claimAnalytics.netExposure)}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Net Exposure</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-purple-400">{fmtCurrency(claimAnalytics.totalParts)}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Parts Cost</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-yellow-400">{claimAnalytics.pendingClosure}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Pending Closures</p>
+              </div>
+            </div>
+
+            {/* Recovery rate bar */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-400">Insurance recovery rate</span>
+                <span className="text-sm font-semibold text-gray-200">{claimAnalytics.recovery}%</span>
+              </div>
+              <div className="w-full bg-gray-800 rounded-full h-2.5">
+                <div
+                  className="h-2.5 rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, claimAnalytics.recovery)}%`,
+                    background: claimAnalytics.recovery >= 75 ? '#16a34a' : claimAnalytics.recovery >= 40 ? '#ca8a04' : '#dc2626',
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium text-gray-400 mb-2">Claim Status Breakdown</p>
+                <div style={{ height: 180 }}><Bar data={claimStatusChart} options={chartOpts} /></div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-400 mb-2">Cost by Responsible Payer</p>
+                {payerCostChart.labels.length === 0
+                  ? <p className="text-gray-500 text-sm text-center py-12">No payer cost data</p>
+                  : <div style={{ height: 180 }}><Bar data={payerCostChart} options={CHART_OPTS_H} /></div>}
+              </div>
             </div>
           </div>
 

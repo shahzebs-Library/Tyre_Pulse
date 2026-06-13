@@ -166,6 +166,20 @@ export default function Inspections() {
   const [pendingCount, setPendingCount] = useState(0)
   const diagramRef     = useRef(null)
   const [clSelectedPos, setClSelectedPos] = useState(null)
+  // Row PDF export: render the live diagram offscreen, then capture its SVG.
+  const [pdfRow, setPdfRow] = useState(null)
+  const pdfDiagramRef = useRef(null)
+
+  useEffect(() => {
+    if (!pdfRow) return
+    let cancelled = false
+    const t = setTimeout(async () => {
+      const svgEl = pdfDiagramRef.current?.querySelector('svg')
+      try { await exportInspectionDetailPdf(pdfRow, { svgEl }) }
+      finally { if (!cancelled) setPdfRow(null) }
+    }, 80)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [pdfRow])
 
   // PWA — Screen Wake Lock during inspection
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
@@ -1092,9 +1106,9 @@ export default function Inspections() {
                         className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors">
                         Edit
                       </button>
-                      <button onClick={() => exportInspectionDetailPdf(r)}
-                        className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
-                        title="Export detailed PDF with tyre diagram">
+                      <button onClick={() => setPdfRow(r)} disabled={!!pdfRow}
+                        className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors disabled:opacity-50"
+                        title="Export detailed PDF with live tyre diagram">
                         <FileText size={11} className="inline" />
                       </button>
                       <button onClick={() => setDeleteId(r.id)}
@@ -1352,6 +1366,21 @@ export default function Inspections() {
             <button onClick={confirmDelete} className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700">Delete</button>
           </div>
         </Modal>
+      )}
+
+      {/* Offscreen live diagram for row PDF export (captured as SVG) */}
+      {pdfRow && (
+        <div
+          ref={pdfDiagramRef}
+          aria-hidden
+          style={{ position: 'fixed', left: -9999, top: 0, width: 360, opacity: 0, pointerEvents: 'none' }}
+        >
+          <VehicleTyreDiagram
+            vehicleType={pdfRow.vehicle_type || inferVehicleTypeFromAsset(pdfRow.asset_no) || 'Pickup'}
+            tyreData={pdfRow.tyre_conditions || {}}
+            width={340}
+          />
+        </div>
       )}
     </div>
   )

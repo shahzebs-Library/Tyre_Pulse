@@ -9,11 +9,23 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   X, Save, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
-  ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase,
+  ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../lib/formatters'
+import { describeAuditRow } from '../lib/auditDiff'
+
+const RECOVERY_SOURCES = ['none', 'insurer', 'third_party', 'driver', 'warranty']
+const RECOVERY_SOURCE_LABELS = { none: 'None', insurer: 'Insurer', third_party: 'Third Party', driver: 'Driver', warranty: 'Warranty' }
+const RECOVERY_STATUSES = ['pending', 'partial', 'recovered', 'written_off']
+const RECOVERY_STATUS_LABELS = { pending: 'Pending', partial: 'Partial', recovered: 'Recovered', written_off: 'Written Off' }
+const RECOVERY_BADGE = {
+  pending:     'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
+  partial:     'bg-blue-900/50 text-blue-300 border border-blue-700/50',
+  recovered:   'bg-green-900/50 text-green-300 border border-green-700/50',
+  written_off: 'bg-red-900/50 text-red-300 border border-red-700/50',
+}
 
 const CLAIM_STATUSES = ['none', 'filed', 'approved', 'rejected', 'settled']
 const CLAIM_LABELS = { none: 'No Claim', filed: 'Filed', approved: 'Approved', rejected: 'Rejected', settled: 'Settled' }
@@ -46,9 +58,10 @@ function isElevated(role) {
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: FileText },
-  { key: 'claim',    label: 'Claim & Responsibility', icon: Briefcase },
+  { key: 'claim',    label: 'Claim & Recovery', icon: Briefcase },
   { key: 'parts',    label: 'Parts & Repairs', icon: Wrench },
   { key: 'log',      label: 'Case Log', icon: MessageSquare },
+  { key: 'activity', label: 'Activity', icon: History },
   { key: 'closure',  label: 'Closure', icon: Lock },
 ]
 
@@ -152,6 +165,7 @@ export default function AccidentDetailModal({ accidentId, onClose, onChanged }) 
           {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
           {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} />}
           {tab === 'log'       && <LogTab acc={acc} remarks={remarks} profile={profile} reload={load} setErr={setErr} />}
+          {tab === 'activity'  && <ActivityTab accidentId={acc.id} />}
           {tab === 'closure'   && (
             <ClosureTab
               acc={acc} closure={closure} elevated={elevated} busy={busy}
@@ -216,9 +230,17 @@ function ClaimTab({ acc, elevated, onSaved, setErr }) {
     claim_amount: acc.claim_amount ?? '',
     claim_approved_amount: acc.claim_approved_amount ?? '',
     deductible: acc.deductible ?? '',
+    recovered_amount: acc.recovered_amount ?? '',
+    recovery_date: acc.recovery_date ?? '',
+    recovery_source: acc.recovery_source ?? 'none',
+    recovery_status: acc.recovery_status ?? 'pending',
+    recovery_reference: acc.recovery_reference ?? '',
   })
   const [saving, setSaving] = useState(false)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+
+  const grossCost = (Number(acc.repair_cost) || 0) + (Number(acc.parts_cost) || 0)
+  const netCost = Math.max(0, grossCost - (Number(acc.recovered_amount) || 0))
 
   async function save() {
     setSaving(true); setErr('')
@@ -233,16 +255,32 @@ function ClaimTab({ acc, elevated, onSaved, setErr }) {
       claim_amount: f.claim_amount !== '' ? Number(f.claim_amount) : null,
       claim_approved_amount: f.claim_approved_amount !== '' ? Number(f.claim_approved_amount) : null,
       deductible: f.deductible !== '' ? Number(f.deductible) : null,
+      recovered_amount: f.recovered_amount !== '' ? Number(f.recovered_amount) : null,
+      recovery_date: f.recovery_date || null,
+      recovery_source: f.recovery_source,
+      recovery_status: f.recovery_status,
+      recovery_reference: f.recovery_reference || null,
     }).eq('id', acc.id)
     setSaving(false)
     if (error) { setErr(error.message); return }
     onSaved()
   }
 
+  const NetCostCard = () => (
+    <div className="grid grid-cols-3 gap-3 rounded-lg border border-gray-700 bg-gray-800/40 p-3">
+      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Gross cost</p><p className="text-sm font-semibold text-gray-200">{formatCurrency(grossCost)}</p></div>
+      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Recovered</p><p className="text-sm font-semibold text-green-400">{formatCurrency(Number(acc.recovered_amount) || 0)}</p></div>
+      <div><p className="text-[11px] uppercase tracking-wide text-gray-500">Net cost</p><p className="text-sm font-semibold text-orange-400">{formatCurrency(netCost)}</p></div>
+    </div>
+  )
+
   if (!elevated) {
     return (
       <div className="space-y-3">
-        <span className={`badge text-xs ${CLAIM_BADGE[acc.claim_status ?? 'none']}`}>{CLAIM_LABELS[acc.claim_status ?? 'none']}</span>
+        <div className="flex gap-2">
+          <span className={`badge text-xs ${CLAIM_BADGE[acc.claim_status ?? 'none']}`}>{CLAIM_LABELS[acc.claim_status ?? 'none']}</span>
+          <span className={`badge text-xs ${RECOVERY_BADGE[acc.recovery_status ?? 'pending']}`}>Recovery: {RECOVERY_STATUS_LABELS[acc.recovery_status ?? 'pending']}</span>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <KV label="Responsible party" value={acc.responsible_party} />
           <KV label="Liable party" value={acc.liable_party} />
@@ -253,8 +291,12 @@ function ClaimTab({ acc, elevated, onSaved, setErr }) {
           <KV label="Claim amount" value={acc.claim_amount != null ? formatCurrency(acc.claim_amount) : '—'} />
           <KV label="Approved" value={acc.claim_approved_amount != null ? formatCurrency(acc.claim_approved_amount) : '—'} />
           <KV label="Deductible" value={acc.deductible != null ? formatCurrency(acc.deductible) : '—'} />
+          <KV label="Recovered amount" value={acc.recovered_amount != null ? formatCurrency(acc.recovered_amount) : '—'} highlight />
+          <KV label="Recovery source" value={RECOVERY_SOURCE_LABELS[acc.recovery_source ?? 'none']} />
+          <KV label="Recovery date" value={acc.recovery_date} />
         </div>
-        <p className="text-xs text-gray-600">Only Admin / Manager / Director can edit claim details.</p>
+        <NetCostCard />
+        <p className="text-xs text-gray-600">Only Admin / Manager / Director can edit claim & recovery details.</p>
       </div>
     )
   }
@@ -269,20 +311,95 @@ function ClaimTab({ acc, elevated, onSaved, setErr }) {
         <Inp label="Insurer" value={f.insurer} onChange={v => set('insurer', v)} />
         <Inp label="Policy / Claim no" value={f.policy_no} onChange={v => set('policy_no', v)} />
       </div>
-      <div>
-        <label className="label">Claim status</label>
-        <select className="input" value={f.claim_status} onChange={e => set('claim_status', e.target.value)}>
-          {CLAIM_STATUSES.map(s => <option key={s} value={s}>{CLAIM_LABELS[s]}</option>)}
-        </select>
-      </div>
       <div className="grid grid-cols-3 gap-3">
+        <div>
+          <label className="label">Claim status</label>
+          <select className="input" value={f.claim_status} onChange={e => set('claim_status', e.target.value)}>
+            {CLAIM_STATUSES.map(s => <option key={s} value={s}>{CLAIM_LABELS[s]}</option>)}
+          </select>
+        </div>
         <Inp label="Claim amount" type="number" value={f.claim_amount} onChange={v => set('claim_amount', v)} />
         <Inp label="Approved amount" type="number" value={f.claim_approved_amount} onChange={v => set('claim_approved_amount', v)} />
-        <Inp label="Deductible" type="number" value={f.deductible} onChange={v => set('deductible', v)} />
       </div>
+
+      <div className="border-t border-gray-800 pt-3">
+        <p className="text-xs font-semibold text-gray-400 mb-2">Cost Recovery</p>
+        <div className="grid grid-cols-3 gap-3">
+          <Inp label="Deductible" type="number" value={f.deductible} onChange={v => set('deductible', v)} />
+          <Inp label="Recovered amount" type="number" value={f.recovered_amount} onChange={v => set('recovered_amount', v)} />
+          <Inp label="Recovery date" type="date" value={f.recovery_date} onChange={v => set('recovery_date', v)} />
+        </div>
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <div>
+            <label className="label">Recovery source</label>
+            <select className="input" value={f.recovery_source} onChange={e => set('recovery_source', e.target.value)}>
+              {RECOVERY_SOURCES.map(s => <option key={s} value={s}>{RECOVERY_SOURCE_LABELS[s]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Recovery status</label>
+            <select className="input" value={f.recovery_status} onChange={e => set('recovery_status', e.target.value)}>
+              {RECOVERY_STATUSES.map(s => <option key={s} value={s}>{RECOVERY_STATUS_LABELS[s]}</option>)}
+            </select>
+          </div>
+          <Inp label="Recovery reference" value={f.recovery_reference} onChange={v => set('recovery_reference', v)} />
+        </div>
+      </div>
+
+      <NetCostCard />
       <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-        <Save size={16} /> {saving ? 'Saving…' : 'Save Claim Details'}
+        <Save size={16} /> {saving ? 'Saving…' : 'Save Claim & Recovery'}
       </button>
+    </div>
+  )
+}
+
+function ActivityTab({ accidentId }) {
+  const [rows, setRows] = useState(null)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data, error } = await supabase.rpc('get_accident_audit', { p_accident_id: accidentId })
+      if (cancelled) return
+      if (error) setErr(error.message)
+      else setRows(data ?? [])
+    })()
+    return () => { cancelled = true }
+  }, [accidentId])
+
+  if (err) return <p className="text-sm text-red-400">{err}</p>
+  if (rows === null) return <p className="text-sm text-gray-500">Loading activity…</p>
+  if (rows.length === 0) return <p className="text-sm text-gray-500">No changes recorded yet.</p>
+
+  return (
+    <div className="space-y-3">
+      {rows.map(row => {
+        const d = describeAuditRow(row)
+        return (
+          <div key={row.id} className="flex gap-3">
+            <span className="mt-1.5 w-2 h-2 rounded-full flex-shrink-0 bg-green-500" />
+            <div className="flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm text-gray-200 font-medium">{d.title}</p>
+                <span className="text-[11px] text-gray-500 whitespace-nowrap">{new Date(row.changed_at).toLocaleString()}</span>
+              </div>
+              <p className="text-[11px] text-gray-500 flex items-center gap-1"><User size={10} /> {row.actor_name}</p>
+              {d.summary && <p className="text-xs text-gray-400 mt-1">{d.summary}</p>}
+              {d.lines.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {d.lines.map((l, i) => (
+                    <li key={i} className="text-xs text-gray-400">
+                      <span className="text-gray-500">{l.label}:</span> <span className="text-red-300/80 line-through">{l.from}</span> <span className="text-gray-600">→</span> <span className="text-green-300">{l.to}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

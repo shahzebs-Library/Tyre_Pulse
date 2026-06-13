@@ -18,9 +18,10 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import {
   AccidentRecord, AccidentRemark, AccidentPart,
-  ClaimStatus, PartStatus, ClosureStatus,
+  ClaimStatus, PartStatus, ClosureStatus, RecoverySource, RecoveryStatus,
   CLAIM_STATUS_LABELS, CLAIM_STATUS_COLORS,
   PART_STATUS_LABELS, PART_STATUS_COLORS,
+  RECOVERY_SOURCE_LABELS, RECOVERY_STATUS_LABELS, RECOVERY_STATUS_COLORS,
   REMARK_TYPE_META, isAdminOrAbove,
 } from '../lib/types'
 
@@ -31,6 +32,8 @@ interface Props {
 
 const CLAIM_STATUSES: ClaimStatus[] = ['none', 'filed', 'approved', 'rejected', 'settled']
 const PART_STATUSES: PartStatus[] = ['needed', 'ordered', 'received', 'fitted']
+const RECOVERY_SOURCES: RecoverySource[] = ['none', 'insurer', 'third_party', 'driver', 'warranty']
+const RECOVERY_STATUSES: RecoveryStatus[] = ['pending', 'partial', 'recovered', 'written_off']
 
 function money(n: number | null | undefined): string {
   if (n == null || isNaN(Number(n))) return '—'
@@ -121,6 +124,9 @@ export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
   }
 
   const claimColor = CLAIM_STATUS_COLORS[accident.claim_status ?? 'none']
+  const recoveryColor = RECOVERY_STATUS_COLORS[accident.recovery_status ?? 'pending']
+  const grossCost = (Number(accident.estimated_damage_cost) || 0) + partsTotal
+  const netCost = Math.max(0, grossCost - (Number(accident.recovered_amount) || 0))
 
   return (
     <View style={{ gap: 14 }}>
@@ -225,6 +231,26 @@ export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
           <Row label="Claim amount" value={money(accident.claim_amount)} />
           <Row label="Approved amount" value={money(accident.claim_approved_amount)} />
           <Row label="Deductible" value={money(accident.deductible)} />
+
+          {/* Recovery */}
+          <View style={styles.divider} />
+          <View style={styles.claimStatusRow}>
+            <View style={[styles.claimChip, { backgroundColor: recoveryColor + '18', borderColor: recoveryColor + '50' }]}>
+              <Text style={[styles.claimChipText, { color: recoveryColor }]}>
+                Recovery: {RECOVERY_STATUS_LABELS[accident.recovery_status ?? 'pending']}
+              </Text>
+            </View>
+          </View>
+          <Row label="Recovered amount" value={money(accident.recovered_amount)} highlight />
+          <Row label="Recovery source" value={RECOVERY_SOURCE_LABELS[accident.recovery_source ?? 'none']} />
+          <Row label="Recovery date" value={accident.recovery_date} />
+          <Row label="Recovery ref" value={accident.recovery_reference} />
+
+          {/* Net cost after recovery */}
+          <View style={styles.netRow}>
+            <Text style={styles.netLabel}>Net cost after recovery</Text>
+            <Text style={styles.netValue}>{money(netCost)}</Text>
+          </View>
         </View>
       </View>
 
@@ -511,6 +537,8 @@ function ClaimEditModal({
     responsible_party: '', liable_party: '', payer: '', driver_name: '',
     insurer: '', policy_no: '', claim_status: 'none' as ClaimStatus,
     claim_amount: '', claim_approved_amount: '', deductible: '',
+    recovered_amount: '', recovery_date: '', recovery_reference: '',
+    recovery_source: 'none' as RecoverySource, recovery_status: 'pending' as RecoveryStatus,
   })
   const [saving, setSaving] = useState(false)
 
@@ -526,6 +554,11 @@ function ClaimEditModal({
       claim_amount: accident.claim_amount != null ? String(accident.claim_amount) : '',
       claim_approved_amount: accident.claim_approved_amount != null ? String(accident.claim_approved_amount) : '',
       deductible: accident.deductible != null ? String(accident.deductible) : '',
+      recovered_amount: accident.recovered_amount != null ? String(accident.recovered_amount) : '',
+      recovery_date: accident.recovery_date ?? '',
+      recovery_reference: accident.recovery_reference ?? '',
+      recovery_source: accident.recovery_source ?? 'none',
+      recovery_status: accident.recovery_status ?? 'pending',
     })
   }, [visible, accident])
 
@@ -544,6 +577,11 @@ function ClaimEditModal({
       claim_amount: f.claim_amount ? Number(f.claim_amount) : null,
       claim_approved_amount: f.claim_approved_amount ? Number(f.claim_approved_amount) : null,
       deductible: f.deductible ? Number(f.deductible) : null,
+      recovered_amount: f.recovered_amount ? Number(f.recovered_amount) : null,
+      recovery_date: f.recovery_date.trim() || null,
+      recovery_reference: f.recovery_reference.trim() || null,
+      recovery_source: f.recovery_source,
+      recovery_status: f.recovery_status,
     }).eq('id', accident.id)
     setSaving(false)
     if (error) { Alert.alert('Error', error.message); return }
@@ -585,6 +623,40 @@ function ClaimEditModal({
               <Field label="Approved" flex><TextInput style={styles.input} value={f.claim_approved_amount} onChangeText={v => set('claim_approved_amount', v)} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#94a3b8" /></Field>
             </View>
             <Field label="Deductible"><TextInput style={styles.input} value={f.deductible} onChangeText={v => set('deductible', v)} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#94a3b8" /></Field>
+
+            {/* Recovery */}
+            <View style={styles.divider} />
+            <Text style={styles.fieldLabel}>Cost Recovery</Text>
+            <View style={styles.twoCol}>
+              <Field label="Recovered amount" flex><TextInput style={styles.input} value={f.recovered_amount} onChangeText={v => set('recovered_amount', v)} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#94a3b8" /></Field>
+              <Field label="Recovery date" flex><TextInput style={styles.input} value={f.recovery_date} onChangeText={v => set('recovery_date', v)} placeholder="YYYY-MM-DD" placeholderTextColor="#94a3b8" /></Field>
+            </View>
+            <Field label="Recovery source">
+              <View style={styles.chipWrap}>
+                {RECOVERY_SOURCES.map(s => {
+                  const active = f.recovery_source === s
+                  return (
+                    <TouchableOpacity key={s} style={[styles.pickChip, active && { backgroundColor: '#16a34a18', borderColor: '#16a34a' }]} onPress={() => set('recovery_source', s)}>
+                      <Text style={[styles.pickChipText, active && { color: '#16a34a' }]}>{RECOVERY_SOURCE_LABELS[s]}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+            </Field>
+            <Field label="Recovery status">
+              <View style={styles.chipWrap}>
+                {RECOVERY_STATUSES.map(s => {
+                  const active = f.recovery_status === s
+                  const c = RECOVERY_STATUS_COLORS[s]
+                  return (
+                    <TouchableOpacity key={s} style={[styles.pickChip, active && { backgroundColor: c + '18', borderColor: c }]} onPress={() => set('recovery_status', s)}>
+                      <Text style={[styles.pickChipText, active && { color: c }]}>{RECOVERY_STATUS_LABELS[s]}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+            </Field>
+            <Field label="Recovery reference"><TextInput style={styles.input} value={f.recovery_reference} onChangeText={v => set('recovery_reference', v)} placeholderTextColor="#94a3b8" /></Field>
           </View>
           <View style={styles.sheetBtns}>
             <TouchableOpacity style={styles.sheetCancel} onPress={onClose}><Text style={styles.sheetCancelText}>Cancel</Text></TouchableOpacity>
@@ -644,6 +716,10 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: 12, color: '#94a3b8', fontWeight: '600', flex: 1 },
   infoValue: { fontSize: 13, color: '#374151', fontWeight: '600', textAlign: 'right', flex: 1.4 },
   infoValueHi: { color: '#dc2626', fontWeight: '800' },
+  divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 4 },
+  netRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  netLabel: { fontSize: 13, fontWeight: '700', color: '#64748b' },
+  netValue: { fontSize: 15, fontWeight: '800', color: '#dc2626' },
 
   empty: { fontSize: 13, color: '#94a3b8', fontStyle: 'italic' },
 

@@ -59,6 +59,36 @@ export async function uploadInspectionPhoto(
 }
 
 /**
+ * Upload a captured accident photo to the public `tyre-photos` bucket.
+ * Uses base64 → Uint8Array (RN's fetch().blob() yields empty files in Expo,
+ * which is why accident photos were previously saved as broken file:// URIs).
+ * Returns the permanent public URL, or null on failure.
+ */
+export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<string | null> {
+  if (!localUri || !localUri.startsWith('file://')) return localUri || null
+  try {
+    const rawExt = localUri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
+    const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
+    const path = `accidents/${Date.now()}_${index}.${ext}`
+
+    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 })
+    const bytes = decodeBase64(base64)
+
+    const { error } = await supabase.storage
+      .from('tyre-photos')
+      .upload(path, bytes, { contentType, upsert: true })
+    if (error) { console.warn('[photoUpload] accident upload error:', error.message); return null }
+
+    const { data } = supabase.storage.from('tyre-photos').getPublicUrl(path)
+    return data?.publicUrl ?? null
+  } catch (err: any) {
+    console.warn('[photoUpload] accident upload failed:', err?.message)
+    return null
+  }
+}
+
+/**
  * Decode a base64 string into a Uint8Array.
  * atob is available globally in React Native via hermes.
  */

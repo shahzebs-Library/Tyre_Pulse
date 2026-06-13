@@ -44,6 +44,14 @@ const STATUS_BADGE = {
   'Closed':                'bg-green-900/50 text-green-300 border border-green-700/50',
 }
 
+// Mobile writes lowercase values (minor/severe, reported/closed); the web form
+// writes title-case. Canonicalise both vocabularies so badges & stats are correct.
+const SEVERITY_ALIAS = { minor: 'Minor', moderate: 'Major', major: 'Major', severe: 'Total Loss', fatal: 'Total Loss', 'total loss': 'Total Loss' }
+const STATUS_ALIAS = { reported: 'Reported', under_review: 'Under Investigation', under_investigation: 'Under Investigation', closed: 'Closed' }
+const canonSeverity = (s) => SEVERITY_ALIAS[String(s || '').toLowerCase()] || s || ''
+const canonStatus = (s) => STATUS_ALIAS[String(s || '').toLowerCase().replace(/\s+/g, '_')] || s || ''
+const isClosed = (r) => r.closure_status === 'closed' || canonStatus(r.status) === 'Closed'
+
 const EMPTY_FORM = {
   incident_date: '',
   asset_no: '',
@@ -162,10 +170,10 @@ export default function Accidents() {
 
   const stats = useMemo(() => {
     const total  = records.length
-    const open   = records.filter(r => r.status !== 'Closed').length
-    const insur  = records.filter(r => r.status === 'Insurance Claim').length
-    const cost   = records.reduce((s, r) => s + (Number(r.repair_cost) || 0), 0)
-    const closed = records.filter(r => r.status === 'Closed')
+    const open   = records.filter(r => !isClosed(r)).length
+    const insur  = records.filter(r => canonStatus(r.status) === 'Insurance Claim' || (r.claim_status && r.claim_status !== 'none')).length
+    const cost   = records.reduce((s, r) => s + (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0), 0)
+    const closed = records.filter(r => isClosed(r))
     let avgDays  = 0
     if (closed.length > 0) {
       const total_days = closed.reduce((sum, r) => {
@@ -311,8 +319,9 @@ export default function Accidents() {
 
   // ---- Claims & cost-recovery analytics (V19 module) ----
   const claimAnalytics = useMemo(() => {
-    let totalClaim = 0, totalApproved = 0, totalParts = 0, totalRepair = 0, totalDeductible = 0
+    let totalClaim = 0, totalApproved = 0, totalParts = 0, totalRepair = 0, totalDeductible = 0, totalRecovered = 0
     const byStatus = { none: 0, filed: 0, approved: 0, rejected: 0, settled: 0 }
+    const byRecovery = { pending: 0, partial: 0, recovered: 0, written_off: 0 }
     const byPayer = {}
     let pendingClosure = 0, closedApproved = 0
     records.forEach(r => {
@@ -321,19 +330,22 @@ export default function Accidents() {
       totalParts      += Number(r.parts_cost) || 0
       totalRepair     += Number(r.repair_cost) || 0
       totalDeductible += Number(r.deductible) || 0
+      totalRecovered  += Number(r.recovered_amount) || 0
       const cs = r.claim_status || 'none'
       if (byStatus[cs] !== undefined) byStatus[cs]++
+      const rs = r.recovery_status || 'pending'
+      if (byRecovery[rs] !== undefined) byRecovery[rs]++
       const cost = (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0)
       if (cost > 0) { const p = r.payer || 'Unassigned'; byPayer[p] = (byPayer[p] || 0) + cost }
       if (r.closure_status === 'pending_closure') pendingClosure++
       if (r.closure_status === 'closed') closedApproved++
     })
     const grossCost   = totalRepair + totalParts
-    const recovery    = totalClaim > 0 ? Math.round((totalApproved / totalClaim) * 100) : 0
-    const netExposure = Math.max(0, grossCost - totalApproved)
+    const recovery    = grossCost > 0 ? Math.round((totalRecovered / grossCost) * 100) : 0
+    const netExposure = Math.max(0, grossCost - totalRecovered)
     return {
-      totalClaim, totalApproved, totalParts, totalRepair, totalDeductible,
-      grossCost, recovery, netExposure, byStatus, byPayer, pendingClosure, closedApproved,
+      totalClaim, totalApproved, totalParts, totalRepair, totalDeductible, totalRecovered,
+      grossCost, recovery, netExposure, byStatus, byRecovery, byPayer, pendingClosure, closedApproved,
     }
   }, [records])
 
@@ -688,16 +700,16 @@ export default function Accidents() {
                       <td className="table-cell">{row.site || '-'}</td>
                       <td className="table-cell">
                         {row.severity && (
-                          <span className={`badge text-xs ${SEVERITY_BADGE[row.severity] ?? 'bg-gray-800 text-gray-300'}`}>
-                            {row.severity}
+                          <span className={`badge text-xs ${SEVERITY_BADGE[canonSeverity(row.severity)] ?? 'bg-gray-800 text-gray-300'}`}>
+                            {canonSeverity(row.severity)}
                           </span>
                         )}
                       </td>
                       <td className="table-cell">
                         <div className="flex flex-col gap-1 items-start">
                           {row.status && (
-                            <span className={`badge text-xs ${STATUS_BADGE[row.status] ?? 'bg-gray-800 text-gray-300'}`}>
-                              {row.status}
+                            <span className={`badge text-xs ${STATUS_BADGE[canonStatus(row.status)] ?? 'bg-gray-800 text-gray-300'}`}>
+                              {canonStatus(row.status)}
                             </span>
                           )}
                           {row.closure_status === 'pending_closure' && (
@@ -800,12 +812,12 @@ export default function Accidents() {
                 <p className="text-[11px] text-gray-400 mt-1">Total Claimed</p>
               </div>
               <div className="text-center">
-                <p className="text-lg font-bold text-green-400">{fmtCurrency(claimAnalytics.totalApproved)}</p>
-                <p className="text-[11px] text-gray-400 mt-1">Recovered (Approved)</p>
+                <p className="text-lg font-bold text-green-400">{fmtCurrency(claimAnalytics.totalRecovered)}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Recovered</p>
               </div>
               <div className="text-center">
                 <p className="text-lg font-bold text-orange-400">{fmtCurrency(claimAnalytics.netExposure)}</p>
-                <p className="text-[11px] text-gray-400 mt-1">Net Exposure</p>
+                <p className="text-[11px] text-gray-400 mt-1">Net After Recovery</p>
               </div>
               <div className="text-center">
                 <p className="text-lg font-bold text-purple-400">{fmtCurrency(claimAnalytics.totalParts)}</p>

@@ -32,6 +32,7 @@ import {
   computeFailureRate,
 } from '../lib/kpiEngine'
 import { useSettings } from '../contexts/SettingsContext'
+import { applyCountry } from '../lib/countryFilter'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -269,7 +270,7 @@ function SectionHeader({ icon: Icon, title, subtitle, badge }) {
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ExecutiveReport() {
-  const { appSettings, activeCurrency } = useSettings()
+  const { appSettings, activeCurrency, activeCountry } = useSettings()
   const currency = activeCurrency || 'SAR'
   const companyName = appSettings?.company_name || 'TyrePulse Fleet'
 
@@ -298,9 +299,9 @@ export default function ExecutiveReport() {
       setError(null)
       try {
         const [rRes, iRes, aRes, fRes] = await Promise.all([
-          supabase.from('tyre_records').select(
-            'id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,tread_depth'
-          ).limit(10000),
+          applyCountry(supabase.from('tyre_records').select(
+            'id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,tread_depth,country'
+          ), activeCountry).limit(10000),
           supabase.from('inspections').select(
             'id,asset_no,site,status,scheduled_date,completed_date,findings'
           ).limit(5000),
@@ -327,7 +328,7 @@ export default function ExecutiveReport() {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [activeCountry])
 
   // ── Period-filtered datasets ───────────────────────────────────────────────
   const periodRecords     = useMemo(() => filterByPeriod(records,     period, 'issue_date'),      [records,     period])
@@ -343,7 +344,7 @@ export default function ExecutiveReport() {
   )
 
   const kpis        = useMemo(() => computeAllKpis(periodRecords, periodInspections, periodActions, fleetSize), [periodRecords, periodInspections, periodActions, fleetSize])
-  const costTrend   = useMemo(() => computeCostTrend(records), [records])
+  const costTrend   = useMemo(() => computeCostTrend(periodRecords), [periodRecords])
   const vendors     = useMemo(() => computeVendorPerformance(periodRecords), [periodRecords])
   const rootCauses  = useMemo(() => computeRootCauses(periodRecords), [periodRecords])
 

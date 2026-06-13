@@ -136,6 +136,28 @@ export interface AccidentRecord {
   closure_approved_by?: string | null
   closure_approved_at?: string | null
   closure_rejected_reason?: string | null
+
+  // Recovery (MIGRATIONS_V20)
+  recovered_amount?: number | null
+  recovery_date?: string | null
+  recovery_source?: RecoverySource | null
+  recovery_status?: RecoveryStatus | null
+  recovery_reference?: string | null
+}
+
+export type RecoverySource = 'none' | 'insurer' | 'third_party' | 'driver' | 'warranty'
+export type RecoveryStatus = 'pending' | 'partial' | 'recovered' | 'written_off'
+
+export const RECOVERY_SOURCE_LABELS: Record<RecoverySource, string> = {
+  none: 'None', insurer: 'Insurer', third_party: 'Third Party', driver: 'Driver', warranty: 'Warranty',
+}
+
+export const RECOVERY_STATUS_LABELS: Record<RecoveryStatus, string> = {
+  pending: 'Pending', partial: 'Partial', recovered: 'Recovered', written_off: 'Written Off',
+}
+
+export const RECOVERY_STATUS_COLORS: Record<RecoveryStatus, string> = {
+  pending: '#f59e0b', partial: '#3b82f6', recovered: '#16a34a', written_off: '#dc2626',
 }
 
 // ── Claims module supporting types ──────────────────────────────────────────────

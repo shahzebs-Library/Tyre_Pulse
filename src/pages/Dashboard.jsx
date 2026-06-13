@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { applyCountry } from '../lib/countryFilter'
 import StatCard from '../components/StatCard'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import {
@@ -189,12 +190,23 @@ export default function Dashboard() {
   useEffect(() => { applyShortcut('This Month') }, [])
   useEffect(() => { load() }, [activeCountry, dateFrom, dateTo])
 
+  // Refresh when the user returns to the tab (e.g. after uploading data),
+  // so newly-added records appear without changing filters.
+  useEffect(() => {
+    const onFocus = () => load()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCountry, dateFrom, dateTo])
+
   async function load() {
     setLoading(true)
-    const cf  = activeCountry !== 'All' ? activeCountry : null
-    const flt = q => cf ? q.eq('country', cf) : q
-    let tyreQ = supabase.from('tyre_records').select('id,cost_per_tyre,brand,issue_date,risk_level,site,category,asset_no')
-    if (cf)       tyreQ = tyreQ.eq('country', cf)
+    // Null-safe country filter: never silently drop uncategorised rows.
+    const flt = q => applyCountry(q, activeCountry)
+    let tyreQ = applyCountry(
+      supabase.from('tyre_records').select('id,cost_per_tyre,brand,issue_date,risk_level,site,category,asset_no'),
+      activeCountry,
+    )
     if (dateFrom) tyreQ = tyreQ.gte('issue_date', dateFrom)
     if (dateTo)   tyreQ = tyreQ.lte('issue_date', dateTo)
     const [tyreRes, stockRes, actionRes, recentRes, openActRes] = await Promise.all([

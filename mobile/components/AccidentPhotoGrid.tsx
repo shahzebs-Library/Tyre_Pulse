@@ -15,7 +15,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
-import { supabase } from '../lib/supabase'
+import { uploadAccidentPhoto } from '../lib/photoUpload'
 import { useLanguage } from '../contexts/LanguageContext'
 
 const MAX_PHOTOS = 10
@@ -58,33 +58,17 @@ export default function AccidentPhotoGrid({ photos, localUris, onPhotosChange }:
     const newLocalUris = [...localUris, localUri]
     onPhotosChange(newUrls, newLocalUris)
 
-    // Upload in background
+    // Upload in background (base64 → public bucket; reliable in Expo/RN)
     setUploadingIndex(newIndex)
     try {
-      const response = await fetch(localUri)
-      const blob = await response.blob()
-      const path = `accident-photos/${Date.now()}_${newIndex}.jpg`
-
-      const { error: uploadErr } = await supabase.storage
-        .from('accident-photos')
-        .upload(path, blob, { contentType: 'image/jpeg', upsert: true })
-
-      if (uploadErr) throw uploadErr
-
-      const { data: urlData } = supabase.storage
-        .from('accident-photos')
-        .getPublicUrl(path)
-
-      // Replace placeholder with real URL
+      const publicUrl = await uploadAccidentPhoto(localUri, newIndex)
       const finalUrls = [...newUrls]
-      finalUrls[newIndex] = urlData.publicUrl
+      // Only store a permanent URL; never persist a local file:// URI to the DB.
+      finalUrls[newIndex] = publicUrl || ''
       onPhotosChange(finalUrls, newLocalUris)
-    } catch (err) {
-      console.warn('[TyrePulse] Accident photo upload failed:', err)
-      // Keep local URI in URL slot as fallback
-      const fallbackUrls = [...newUrls]
-      fallbackUrls[newIndex] = localUri
-      onPhotosChange(fallbackUrls, newLocalUris)
+      if (!publicUrl) {
+        Alert.alert('Upload failed', 'Photo could not be uploaded. Check your connection and retake.')
+      }
     } finally {
       setUploadingIndex(null)
     }

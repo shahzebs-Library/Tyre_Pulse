@@ -5,6 +5,12 @@
 -- Idempotent: safe to re-run.
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- Fix: upload_batch_id is a logical batch-grouping UUID, NOT a reference to
+-- upload_history.id (upload_history carries its own batch_id column). The
+-- mismatched foreign key rejected every tyre upload. Drop it; the indexed
+-- column still groups records per upload batch.
+ALTER TABLE public.tyre_records DROP CONSTRAINT IF EXISTS tyre_records_upload_batch_id_fkey;
+
 -- Vehicle classification carried by every ERP tyre/complaint export
 ALTER TABLE public.tyre_records ADD COLUMN IF NOT EXISTS vehicle_type    text;
 

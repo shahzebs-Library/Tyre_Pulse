@@ -42,22 +42,39 @@ export function RoleRoute({ allowed, children }) {
     <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>
   )
   if (!profile || !allowed.includes(profile.role)) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 text-center px-4">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4"
-          style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}>
-          <span className="text-3xl">🔒</span>
-        </div>
-        <h2 className="text-xl font-bold text-white mb-2">Access Restricted</h2>
-        <p className="text-gray-400 text-sm max-w-sm">
-          This section requires {allowed.join(' or ')} access.
-          Contact your administrator to request permission.
-        </p>
-        <p className="text-gray-600 text-xs mt-3">
-          Your current role: <span className="text-gray-400 font-semibold">{profile?.role || 'Unknown'}</span>
-        </p>
-      </div>
-    )
+    return <AccessDenied role={profile?.role} allowed={allowed} />
   }
   return children
+}
+
+export function ModuleRoute({ moduleKey, children }) {
+  const { profile, hasPermission, loading } = useAuth()
+  if (loading) return (
+    <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>
+  )
+  if (!profile || !hasPermission(moduleKey)) {
+    return <AccessDenied role={profile?.role} moduleKey={moduleKey} />
+  }
+  return children
+}
+
+function AccessDenied({ role, allowed, moduleKey }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-96 text-center px-4">
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4"
+        style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)' }}>
+        <span className="text-3xl">🔒</span>
+      </div>
+      <h2 className="text-xl font-bold text-white mb-2">Access Restricted</h2>
+      <p className="text-gray-400 text-sm max-w-sm">
+        {allowed
+          ? `This section requires ${allowed.join(' or ')} access.`
+          : `Your role does not have permission to access this module.`}
+        {' '}Contact your administrator to request access.
+      </p>
+      <p className="text-gray-600 text-xs mt-3">
+        Your current role: <span className="text-gray-400 font-semibold">{role || 'Unknown'}</span>
+      </p>
+    </div>
+  )
 }

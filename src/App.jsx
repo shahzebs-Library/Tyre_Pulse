@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { SettingsProvider } from './contexts/SettingsContext'
-import ProtectedRoute, { RoleRoute } from './components/ProtectedRoute'
+import ProtectedRoute, { RoleRoute, ModuleRoute } from './components/ProtectedRoute'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
@@ -139,13 +139,13 @@ function MainApp() {
                     <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
                     <Route path="/tyres"       element={<Safe><TyreRecords /></Safe>} />
                     {/* ── Analytics ── */}
-                    <Route path="/analytics"    element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><Analytics /></RoleRoute></Safe>} />
-                    <Route path="/brand-perf"   element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><BrandPerformance /></RoleRoute></Safe>} />
-                    <Route path="/site-comp"    element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><SiteComparison /></RoleRoute></Safe>} />
-                    <Route path="/fleet"        element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><FleetAnalytics /></RoleRoute></Safe>} />
-                    <Route path="/kpi"          element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><KpiScorecard /></RoleRoute></Safe>} />
-                    <Route path="/country-comp" element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><CountryComparison /></RoleRoute></Safe>} />
-                    <Route path="/comparison"   element={<Safe><RoleRoute allowed={['Admin','Manager','Director']}><Comparison /></RoleRoute></Safe>} />
+                    <Route path="/analytics"    element={<Safe><ModuleRoute moduleKey="analytics"><Analytics /></ModuleRoute></Safe>} />
+                    <Route path="/brand-perf"   element={<Safe><ModuleRoute moduleKey="brand_performance"><BrandPerformance /></ModuleRoute></Safe>} />
+                    <Route path="/site-comp"    element={<Safe><ModuleRoute moduleKey="site_comparison"><SiteComparison /></ModuleRoute></Safe>} />
+                    <Route path="/fleet"        element={<Safe><ModuleRoute moduleKey="fleet_analytics"><FleetAnalytics /></ModuleRoute></Safe>} />
+                    <Route path="/kpi"          element={<Safe><ModuleRoute moduleKey="kpi_scorecard"><KpiScorecard /></ModuleRoute></Safe>} />
+                    <Route path="/country-comp" element={<Safe><ModuleRoute moduleKey="country_comparison"><CountryComparison /></ModuleRoute></Safe>} />
+                    <Route path="/comparison"   element={<Safe><ModuleRoute moduleKey="analytics"><Comparison /></ModuleRoute></Safe>} />
                     {/* ── Operations ── */}
                     <Route path="/stock"       element={<Safe><StockManagement /></Safe>} />
                     <Route path="/budgets"     element={<Safe><Budgets /></Safe>} />
@@ -174,41 +174,41 @@ function MainApp() {
                     <Route path="/tyre-specs"           element={<Safe><TyreSpecifications /></Safe>} />
                     <Route path="/rotation"             element={<Safe><RotationSchedule /></Safe>} />
                     <Route path="/daily-ops"            element={<Safe><DailyOps /></Safe>} />
-                    {/* ── Intelligence (Admin only) ── */}
-                    <Route path="/kpi-engine"              element={<Safe><RoleRoute allowed={['Admin']}><EngineeringKpi /></RoleRoute></Safe>} />
-                    <Route path="/kpi-command"             element={<Safe><RoleRoute allowed={['Admin']}><KpiCommandCenter /></RoleRoute></Safe>} />
-                    <Route path="/position-intelligence"   element={<Safe><RoleRoute allowed={['Admin']}><PositionIntelligence /></RoleRoute></Safe>} />
-                    <Route path="/pressure-intel"          element={<Safe><RoleRoute allowed={['Admin']}><PressureIntelligence /></RoleRoute></Safe>} />
-                    <Route path="/inspection-intelligence" element={<Safe><RoleRoute allowed={['Admin']}><InspectionIntelligence /></RoleRoute></Safe>} />
-                    <Route path="/root-cause"              element={<Safe><RoleRoute allowed={['Admin']}><RootCauseEngine /></RoleRoute></Safe>} />
-                    <Route path="/predictive-maintenance"  element={<Safe><RoleRoute allowed={['Admin']}><PredictiveMaintenance /></RoleRoute></Safe>} />
-                    <Route path="/vendor-intelligence"     element={<Safe><RoleRoute allowed={['Admin']}><VendorIntelligence /></RoleRoute></Safe>} />
-                    <Route path="/driver-management"       element={<Safe><RoleRoute allowed={['Admin']}><DriverManagement /></RoleRoute></Safe>} />
-                    <Route path="/fleet-intelligence"      element={<Safe><RoleRoute allowed={['Admin']}><FleetIntelligence /></RoleRoute></Safe>} />
-                    <Route path="/fleet-health"            element={<Safe><RoleRoute allowed={['Admin']}><FleetHealthBoard /></RoleRoute></Safe>} />
-                    <Route path="/advanced-analytics"      element={<Safe><RoleRoute allowed={['Admin']}><AdvancedAnalytics /></RoleRoute></Safe>} />
-                    <Route path="/ai-command-center"       element={<Safe><RoleRoute allowed={['Admin']}><AiCommandCenter /></RoleRoute></Safe>} />
-                    <Route path="/executive-report"        element={<Safe><RoleRoute allowed={['Admin']}><ExecutiveReport /></RoleRoute></Safe>} />
-                    <Route path="/forecasting"             element={<Safe><RoleRoute allowed={['Admin']}><ForecastingEngine /></RoleRoute></Safe>} />
-                    <Route path="/cost-center"             element={<Safe><RoleRoute allowed={['Admin']}><CostCenter /></RoleRoute></Safe>} />
-                    <Route path="/benchmark"               element={<Safe><RoleRoute allowed={['Admin']}><PerformanceBenchmark /></RoleRoute></Safe>} />
-                    <Route path="/procurement"             element={<Safe><RoleRoute allowed={['Admin']}><Procurement /></RoleRoute></Safe>} />
-                    <Route path="/suppliers"               element={<Safe><RoleRoute allowed={['Admin']}><SupplierManagement /></RoleRoute></Safe>} />
-                    <Route path="/tyre-size"               element={<Safe><RoleRoute allowed={['Admin']}><TyreSizeAnalysis /></RoleRoute></Safe>} />
-                    <Route path="/tyre-lifecycle"          element={<Safe><RoleRoute allowed={['Admin']}><TyreLifecycle /></RoleRoute></Safe>} />
-                    <Route path="/downtime"                element={<Safe><RoleRoute allowed={['Admin']}><DowntimeTracker /></RoleRoute></Safe>} />
-                    <Route path="/budget-planner"          element={<Safe><RoleRoute allowed={['Admin']}><BudgetPlanner /></RoleRoute></Safe>} />
-                    <Route path="/workshop"                element={<Safe><RoleRoute allowed={['Admin']}><WorkshopManagement /></RoleRoute></Safe>} />
-                    <Route path="/fuel-efficiency"         element={<Safe><RoleRoute allowed={['Admin']}><FuelEfficiency /></RoleRoute></Safe>} />
-                    <Route path="/continuous-improvement"  element={<Safe><RoleRoute allowed={['Admin']}><ContinuousImprovement /></RoleRoute></Safe>} />
-                    <Route path="/erp-sync"                element={<Safe><RoleRoute allowed={['Admin']}><ErpSync /></RoleRoute></Safe>} />
-                    <Route path="/anomalies"               element={<Safe><RoleRoute allowed={['Admin']}><Anomalies /></RoleRoute></Safe>} />
-                    <Route path="/vehicle-history"         element={<Safe><RoleRoute allowed={['Admin']}><VehicleHistory /></RoleRoute></Safe>} />
-                    <Route path="/ai"                      element={<Safe><RoleRoute allowed={['Admin']}><AiAnalytics /></RoleRoute></Safe>} />
-                    {/* ── Data (Admin only) ── */}
-                    <Route path="/cleaning"    element={<Safe><RoleRoute allowed={['Admin']}><DataCleaning /></RoleRoute></Safe>} />
-                    <Route path="/audit"       element={<Safe><RoleRoute allowed={['Admin']}><AuditTrail /></RoleRoute></Safe>} />
-                    <Route path="/users"       element={<Safe><RoleRoute allowed={['Admin']}><UserManagement /></RoleRoute></Safe>} />
+                    {/* ── Intelligence ── */}
+                    <Route path="/kpi-engine"              element={<Safe><ModuleRoute moduleKey="kpi_scorecard"><EngineeringKpi /></ModuleRoute></Safe>} />
+                    <Route path="/kpi-command"             element={<Safe><ModuleRoute moduleKey="kpi_scorecard"><KpiCommandCenter /></ModuleRoute></Safe>} />
+                    <Route path="/position-intelligence"   element={<Safe><ModuleRoute moduleKey="position_intelligence"><PositionIntelligence /></ModuleRoute></Safe>} />
+                    <Route path="/pressure-intel"          element={<Safe><ModuleRoute moduleKey="pressure_intelligence"><PressureIntelligence /></ModuleRoute></Safe>} />
+                    <Route path="/inspection-intelligence" element={<Safe><ModuleRoute moduleKey="inspections"><InspectionIntelligence /></ModuleRoute></Safe>} />
+                    <Route path="/root-cause"              element={<Safe><ModuleRoute moduleKey="root_cause_engine"><RootCauseEngine /></ModuleRoute></Safe>} />
+                    <Route path="/predictive-maintenance"  element={<Safe><ModuleRoute moduleKey="predictive_maintenance"><PredictiveMaintenance /></ModuleRoute></Safe>} />
+                    <Route path="/vendor-intelligence"     element={<Safe><ModuleRoute moduleKey="vendor_intelligence"><VendorIntelligence /></ModuleRoute></Safe>} />
+                    <Route path="/driver-management"       element={<Safe><ModuleRoute moduleKey="fleet_master"><DriverManagement /></ModuleRoute></Safe>} />
+                    <Route path="/fleet-intelligence"      element={<Safe><ModuleRoute moduleKey="fleet_intelligence"><FleetIntelligence /></ModuleRoute></Safe>} />
+                    <Route path="/fleet-health"            element={<Safe><ModuleRoute moduleKey="fleet_intelligence"><FleetHealthBoard /></ModuleRoute></Safe>} />
+                    <Route path="/advanced-analytics"      element={<Safe><ModuleRoute moduleKey="analytics"><AdvancedAnalytics /></ModuleRoute></Safe>} />
+                    <Route path="/ai-command-center"       element={<Safe><ModuleRoute moduleKey="ai_command_center"><AiCommandCenter /></ModuleRoute></Safe>} />
+                    <Route path="/executive-report"        element={<Safe><ModuleRoute moduleKey="executive_report"><ExecutiveReport /></ModuleRoute></Safe>} />
+                    <Route path="/forecasting"             element={<Safe><ModuleRoute moduleKey="forecasting"><ForecastingEngine /></ModuleRoute></Safe>} />
+                    <Route path="/cost-center"             element={<Safe><ModuleRoute moduleKey="budgets"><CostCenter /></ModuleRoute></Safe>} />
+                    <Route path="/benchmark"               element={<Safe><ModuleRoute moduleKey="analytics"><PerformanceBenchmark /></ModuleRoute></Safe>} />
+                    <Route path="/procurement"             element={<Safe><ModuleRoute moduleKey="stock"><Procurement /></ModuleRoute></Safe>} />
+                    <Route path="/suppliers"               element={<Safe><ModuleRoute moduleKey="stock"><SupplierManagement /></ModuleRoute></Safe>} />
+                    <Route path="/tyre-size"               element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreSizeAnalysis /></ModuleRoute></Safe>} />
+                    <Route path="/tyre-lifecycle"          element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreLifecycle /></ModuleRoute></Safe>} />
+                    <Route path="/downtime"                element={<Safe><ModuleRoute moduleKey="fleet_analytics"><DowntimeTracker /></ModuleRoute></Safe>} />
+                    <Route path="/budget-planner"          element={<Safe><ModuleRoute moduleKey="budgets"><BudgetPlanner /></ModuleRoute></Safe>} />
+                    <Route path="/workshop"                element={<Safe><ModuleRoute moduleKey="work_orders"><WorkshopManagement /></ModuleRoute></Safe>} />
+                    <Route path="/fuel-efficiency"         element={<Safe><ModuleRoute moduleKey="fleet_analytics"><FuelEfficiency /></ModuleRoute></Safe>} />
+                    <Route path="/continuous-improvement"  element={<Safe><ModuleRoute moduleKey="analytics"><ContinuousImprovement /></ModuleRoute></Safe>} />
+                    <Route path="/erp-sync"                element={<Safe><ModuleRoute moduleKey="erp_sync"><ErpSync /></ModuleRoute></Safe>} />
+                    <Route path="/anomalies"               element={<Safe><ModuleRoute moduleKey="tyre_records"><Anomalies /></ModuleRoute></Safe>} />
+                    <Route path="/vehicle-history"         element={<Safe><ModuleRoute moduleKey="fleet_master"><VehicleHistory /></ModuleRoute></Safe>} />
+                    <Route path="/ai"                      element={<Safe><ModuleRoute moduleKey="ai_analytics"><AiAnalytics /></ModuleRoute></Safe>} />
+                    {/* ── Data ── */}
+                    <Route path="/cleaning"    element={<Safe><ModuleRoute moduleKey="data_cleaning"><DataCleaning /></ModuleRoute></Safe>} />
+                    <Route path="/audit"       element={<Safe><ModuleRoute moduleKey="audit_trail"><AuditTrail /></ModuleRoute></Safe>} />
+                    <Route path="/users"       element={<Safe><ModuleRoute moduleKey="user_management"><UserManagement /></ModuleRoute></Safe>} />
                     {/* ── Universal ── */}
                     <Route path="/upload"      element={<Safe><UploadData /></Safe>} />
                     <Route path="/custom-data" element={<Safe><CustomData /></Safe>} />

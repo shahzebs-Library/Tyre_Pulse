@@ -1,12 +1,24 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
+
+// Role-based defaults used when no DB permissions have been configured yet
+const ROLE_DEFAULTS = {
+  Admin:    () => true,
+  Manager:  k => !['user_management','erp_sync','data_cleaning','audit_trail'].includes(k),
+  Director: k => !['user_management','erp_sync','data_cleaning','audit_trail'].includes(k),
+  Inspector: k => ['dashboard','tyre_records','inspections','alerts','fleet_master','gate_pass','daily_ops'].includes(k),
+  'Tyre Man': k => ['dashboard','tyre_records','inspections','alerts','stock','work_orders','gate_pass'].includes(k),
+  Reporter: k => ['dashboard','analytics','kpi_scorecard','reports','executive_report','tyre_records'].includes(k),
+  Driver:   k => ['dashboard','inspections','alerts'].includes(k),
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [modulePerms, setModulePerms] = useState(null) // null = not yet fetched
 
   // Idle timeout — sign out after 30 minutes of inactivity
   const IDLE_MS = 30 * 60 * 1000
@@ -58,10 +70,25 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function fetchProfile(userId) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    setProfile(data)
+    const [profileRes, permsRes] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.rpc('get_user_module_permissions'),
+    ])
+    setProfile(profileRes.data)
+    setModulePerms(permsRes.data ?? {})
     setLoading(false)
   }
+
+  const hasPermission = useCallback((moduleKey) => {
+    if (!profile) return false
+    if (profile.role === 'Admin') return true
+    // If DB permissions loaded and non-empty, use them
+    if (modulePerms && Object.keys(modulePerms).length > 0) {
+      return modulePerms[moduleKey] === true
+    }
+    // Fall back to hardcoded role defaults
+    return (ROLE_DEFAULTS[profile.role] ?? (() => false))(moduleKey)
+  }, [profile, modulePerms])
 
   async function signIn(identifier, password) {
     let email = identifier.trim()
@@ -84,7 +111,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, modulePerms, hasPermission, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )

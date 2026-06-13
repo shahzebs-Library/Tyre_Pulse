@@ -8,6 +8,7 @@ import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSqu
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
+import { legacyPositionCode } from '../lib/tyrePositions'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { useWakeLock, vibrate, shareOrCopy } from '../hooks/useWakeLock'
@@ -368,12 +369,13 @@ export default function Inspections() {
     const fleetInfo = data || (vehicleType ? { asset_no: assetNo.trim(), vehicle_type: vehicleType, site: null } : null)
     if (fleetInfo) {
       setClFleetInfo(fleetInfo)
-      const positions = TYRE_POSITIONS[normVT(vehicleType)] || DEFAULT_POSITIONS
-      setClPositions(positions.map(pos => ({ position: pos, pressure: '', condition: 'Good', treadDepth: '' })))
+      const vtKey = normVT(vehicleType)
+      const positions = TYRE_POSITIONS[vtKey] || DEFAULT_POSITIONS
+      setClPositions(positions.map(pos => ({ position: pos, label: legacyPositionCode(vtKey, pos), pressure: '', condition: 'Good', treadDepth: '' })))
       if (fleetInfo.site && !clSite) setClSite(fleetInfo.site)
     } else {
       setClFleetInfo(null)
-      setClPositions(DEFAULT_POSITIONS.map(pos => ({ position: pos, pressure: '', condition: 'Good', treadDepth: '' })))
+      setClPositions(DEFAULT_POSITIONS.map(pos => ({ position: pos, label: legacyPositionCode('', pos), pressure: '', condition: 'Good', treadDepth: '' })))
     }
     setClLookingUp(false)
   }
@@ -901,7 +903,7 @@ export default function Inspections() {
                             className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all active:scale-95"
                             style={{ background: bg, color: fg, border: `1.5px solid ${bd}` }}
                           >
-                            {p.position}{has ? ' ✓' : ''}
+                            {p.label || p.position}{has ? ' ✓' : ''}
                             {isPuncture && !isActive && <span className="ml-0.5 text-[9px]">🔴</span>}
                           </button>
                         )
@@ -1402,7 +1404,7 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
                   border: `1.5px solid ${isPuncture ? '#fca5a5' : '#86efac'}`,
                 }}
               >
-                {pos.position}
+                {pos.label || pos.position}
               </span>
               <span className="text-sm font-medium" style={{ color: '#9ca3af' }}>
                 {posIdx + 1} / {total}

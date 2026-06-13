@@ -387,6 +387,90 @@ function guessFileType(headers) {
   return 'unknown'
 }
 
+// ── Intelligent header-row detection ──────────────────────────────────────────
+
+const _NUMERIC_RE = /^-?[\d,]+(\.\d+)?$/
+const _DATEISH_RE = /^\d{1,4}[\/\-.]\d{1,2}([\/\-.]\d{1,4})?/
+
+/** A cell counts as a "label" if it's non-empty text that isn't a number/date. */
+function _isLabelCell(v) {
+  if (v === null || v === undefined) return false
+  const s = String(v).trim()
+  if (!s) return false
+  if (_NUMERIC_RE.test(s.replace(/\s/g, ''))) return false
+  if (_DATEISH_RE.test(s)) return false
+  return true
+}
+
+/**
+ * Many ERP/Excel exports prepend title/metadata rows before the real header
+ * (e.g. "MONTHLY TYRES CONSUMPTION REPORT", date ranges, blank rows). Scan the
+ * first rows and score each as a candidate header: a header row is densely
+ * filled with short, unique text labels and is followed by populated data rows.
+ * Returns the zero-based index of the most likely header row.
+ */
+function detectHeaderRow(aoa) {
+  const scan  = Math.min(aoa.length, 25)
+  const width = Math.max(1, ...aoa.slice(0, scan).map(r => (r ? r.length : 0)))
+  let best = { idx: 0, score: -Infinity }
+
+  for (let r = 0; r < scan; r++) {
+    const row      = aoa[r] || []
+    const cells    = row.map(c => (c == null ? '' : String(c).trim()))
+    const nonEmpty = cells.filter(c => c !== '').length
+    if (nonEmpty < 2) continue
+
+    const labels   = cells.filter(_isLabelCell).length
+    const uniq     = new Set(cells.filter(Boolean)).size
+    const avgLen   = cells.filter(Boolean).reduce((a, c) => a + c.length, 0) / nonEmpty
+
+    // Count populated rows shortly after this candidate.
+    let below = 0
+    for (let k = r + 1; k < Math.min(aoa.length, r + 8); k++) {
+      const fc = (aoa[k] || []).filter(c => c != null && String(c).trim() !== '').length
+      if (fc >= Math.max(2, nonEmpty * 0.5)) below++
+    }
+    if (below === 0) continue
+
+    const labelRatio = labels / nonEmpty          // headers are mostly text
+    const density    = nonEmpty / width           // headers span most columns
+    const uniqRatio  = uniq / nonEmpty            // headers rarely repeat
+    const lenPenalty = avgLen > 40 ? -1.5 : 0     // long sentences ≠ headers
+
+    const score = labelRatio * 3 + density * 2 + uniqRatio * 1.5
+                + Math.min(below, 5) * 0.2 + lenPenalty - r * 0.05
+    if (score > best.score) best = { idx: r, score }
+  }
+  return best.idx
+}
+
+/** Clean a header array: blanks → "Column N", de-duplicate collisions. */
+function cleanHeaders(arr) {
+  const seen = {}
+  return arr.map((h, i) => {
+    let name = h == null ? '' : String(h).trim()
+    if (!name) name = `Column ${i + 1}`
+    if (seen[name] != null) { seen[name]++; name = `${name} (${seen[name]})` }
+    else seen[name] = 0
+    return name
+  })
+}
+
+/**
+ * Convert a worksheet to { headers, rows } using smart header detection.
+ * rows are arrays aligned to headers, with fully-empty rows removed.
+ */
+function extractTable(ws) {
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+  if (aoa.length === 0) return { headers: [], rows: [], headerRow: 0 }
+  const hIdx    = detectHeaderRow(aoa)
+  const headers = cleanHeaders(aoa[hIdx] || [])
+  const rows    = aoa.slice(hIdx + 1)
+    .map(r => headers.map((_, i) => r[i] ?? ''))
+    .filter(r => r.some(c => c !== '' && c != null))
+  return { headers, rows, headerRow: hIdx }
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function UploadData() {
@@ -502,11 +586,9 @@ export default function UploadData() {
           return
         }
 
-        const ws   = wb.Sheets[wb.SheetNames[0]]
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-        if (data.length < 2) { setError('File is empty or has no data rows'); return }
-        const hdrs     = data[0].map(String)
-        const dataRows = data.slice(1).filter(r => r.some(c => c !== ''))
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const { headers: hdrs, rows: dataRows } = extractTable(ws)
+        if (hdrs.length === 0 || dataRows.length === 0) { setError('File is empty or has no data rows'); return }
 
         if (uploadType === 'auto') {
           const detected = guessFileType(hdrs)
@@ -860,10 +942,15 @@ export default function UploadData() {
               <button disabled={!sheetOptions.some(s => s.selected)}
                 onClick={async () => {
                   const wb = wbRef.current
-                  const merged = []
-                  sheetOptions.filter(s => s.selected).forEach(s => { merged.push(...XLSX.utils.sheet_to_json(wb.Sheets[s.name])) })
-                  const hdrs = merged.length > 0 ? Object.keys(merged[0]) : []
-                  const dataRows = merged.map(r => hdrs.map(h => r[h] ?? ''))
+                  // Smart header detection per sheet, then unify into one header set.
+                  const tables = sheetOptions.filter(s => s.selected).map(s => extractTable(wb.Sheets[s.name]))
+                  const hdrs = []
+                  tables.forEach(t => t.headers.forEach(h => { if (!hdrs.includes(h)) hdrs.push(h) }))
+                  const dataRows = []
+                  tables.forEach(t => {
+                    const idxOf = hdrs.map(h => t.headers.indexOf(h))
+                    t.rows.forEach(r => dataRows.push(idxOf.map(i => (i === -1 ? '' : r[i] ?? ''))))
+                  })
                   if (uploadType === 'auto') setUploadType(guessFileType(hdrs) !== 'unknown' ? guessFileType(hdrs) : 'tyres')
                   await applyHeaders(hdrs, dataRows)
                 }}

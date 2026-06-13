@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2 } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import AccidentDetailModal from '../components/AccidentDetailModal'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -142,6 +143,8 @@ export default function Accidents() {
   const [filterFrom, setFilterFrom]            = useState('')
   const [filterTo, setFilterTo]                = useState('')
   const [statusFunnel, setStatusFunnel]        = useState('')
+  const [onlyPendingClosure, setOnlyPendingClosure] = useState(false)
+  const [detailId, setDetailId]                = useState(null)
 
   const loadRecords = useCallback(async () => {
     setLoading(true)
@@ -306,9 +309,15 @@ export default function Accidents() {
     }))
   }, [records, statusCounts])
 
+  const pendingClosures = useMemo(
+    () => records.filter(r => r.closure_status === 'pending_closure').length,
+    [records],
+  )
+
   // ---- Incidents tab filtered data ----
   const filtered = useMemo(() => {
     let arr = records
+    if (onlyPendingClosure) arr = arr.filter(r => r.closure_status === 'pending_closure')
     if (statusFunnel)   arr = arr.filter(r => r.status === statusFunnel)
     if (filterStatus)   arr = arr.filter(r => r.status === filterStatus)
     if (filterSeverity) arr = arr.filter(r => r.severity === filterSeverity)
@@ -323,7 +332,7 @@ export default function Accidents() {
       )
     }
     return arr
-  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel])
+  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure])
 
   function openAdd() {
     setForm(EMPTY_FORM)
@@ -475,6 +484,27 @@ export default function Accidents() {
       {/* ===== INCIDENTS TAB ===== */}
       {tab === 'incidents' && (
         <>
+          {/* Closures awaiting approval */}
+          {pendingClosures > 0 && (
+            <button
+              onClick={() => setOnlyPendingClosure(v => !v)}
+              className={`w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
+                onlyPendingClosure
+                  ? 'bg-yellow-900/40 border-yellow-600'
+                  : 'bg-yellow-900/20 border-yellow-700/50 hover:bg-yellow-900/30'
+              }`}
+            >
+              <Hourglass size={18} className="text-yellow-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-yellow-200">
+                  {pendingClosures} closure{pendingClosures > 1 ? 's' : ''} awaiting approval
+                </p>
+                <p className="text-xs text-yellow-500/80">Tap to {onlyPendingClosure ? 'show all incidents' : 'review and approve closures'}</p>
+              </div>
+              {onlyPendingClosure && <X size={14} className="text-yellow-400" />}
+            </button>
+          )}
+
           {/* Stats row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
@@ -604,16 +634,24 @@ export default function Accidents() {
                         )}
                       </td>
                       <td className="table-cell">
-                        {row.status && (
-                          <span className={`badge text-xs ${STATUS_BADGE[row.status] ?? 'bg-gray-800 text-gray-300'}`}>
-                            {row.status}
-                          </span>
-                        )}
+                        <div className="flex flex-col gap-1 items-start">
+                          {row.status && (
+                            <span className={`badge text-xs ${STATUS_BADGE[row.status] ?? 'bg-gray-800 text-gray-300'}`}>
+                              {row.status}
+                            </span>
+                          )}
+                          {row.closure_status === 'pending_closure' && (
+                            <span className="badge text-xs bg-yellow-900/50 text-yellow-300 border border-yellow-700/50 flex items-center gap-1">
+                              <Hourglass size={10} /> Pending Closure
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="table-cell whitespace-nowrap">{fmtCurrency(row.repair_cost)}</td>
                       <td className="table-cell">{row.inspector || '-'}</td>
                       <td className="table-cell">
                         <div className="flex items-center gap-2">
+                          <button onClick={() => setDetailId(row.id)} className="text-gray-400 hover:text-green-400 text-xs transition-colors flex items-center gap-1"><Eye size={12} /> Open</button>
                           <button onClick={() => openEdit(row)} className="text-gray-400 hover:text-blue-400 text-xs transition-colors">Edit</button>
                           {row.status !== 'Closed' && (
                             <button onClick={() => raiseAction(row)} className="text-gray-400 hover:text-orange-400 text-xs transition-colors whitespace-nowrap">Raise CA</button>
@@ -875,6 +913,15 @@ export default function Accidents() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Deep claims detail (timeline, parts, claim, closure workflow) */}
+      {detailId && (
+        <AccidentDetailModal
+          accidentId={detailId}
+          onClose={() => setDetailId(null)}
+          onChanged={loadRecords}
+        />
       )}
     </div>
   )

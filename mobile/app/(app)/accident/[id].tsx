@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
+import AccidentClaimsPanel from '../../../components/AccidentClaimsPanel'
 import {
   AccidentRecord, AccidentStatus,
   SEVERITY_COLORS, STATUS_COLORS,
@@ -353,6 +354,9 @@ Risk Level: [Critical / High / Medium / Low]
             <Text style={styles.descText}>{accident.notes}</Text>
           </SectionCard>
         ) : null}
+
+        {/* ── Deep claims module: closure, claim/responsibility, parts, log ──── */}
+        <AccidentClaimsPanel accident={accident} onChanged={load} />
 
         {/* ── Photo gallery ──────────────────────────────────────────────────── */}
         {photos.length > 0 && (

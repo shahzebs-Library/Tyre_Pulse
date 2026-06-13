@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { AXLE_GROUPS, GROUP_ICONS, normalizePosition } from '../lib/tyrePositions'
 import PageHeader from '../components/ui/PageHeader'
 import {
   MapPin, Download, FileText, AlertTriangle, CheckCircle,
@@ -21,16 +22,10 @@ ChartJS.register(
 )
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const POSITIONS = ['Steer', 'Drive', 'Trailer', 'Lift Axle', 'Tag Axle', 'Other']
-
-const POSITION_ICONS = {
-  Steer: '🔵',
-  Drive: '🔴',
-  Trailer: '🟡',
-  'Lift Axle': '🟢',
-  'Tag Axle': '🟣',
-  Other: '⚪',
-}
+// Canonical axle groups + icons are sourced from lib/tyrePositions (single
+// source of truth, shared with Upload mapping and the inspection diagrams).
+const POSITIONS = AXLE_GROUPS
+const POSITION_ICONS = GROUP_ICONS
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
@@ -67,17 +62,6 @@ const DOUGHNUT_OPTS = {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-function normalizePosition(pos) {
-  if (!pos) return 'Other'
-  const p = pos.toLowerCase()
-  if (p.includes('steer') || p.includes('front')) return 'Steer'
-  if (p.includes('drive') || p.includes('rear') || p.includes('back')) return 'Drive'
-  if (p.includes('trailer')) return 'Trailer'
-  if (p.includes('lift')) return 'Lift Axle'
-  if (p.includes('tag')) return 'Tag Axle'
-  return 'Other'
-}
-
 function recordCost(r) {
   return (r.cost_per_tyre || 0) * (r.qty || 1)
 }

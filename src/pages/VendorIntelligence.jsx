@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   computeVendorPerformance,
@@ -122,14 +123,8 @@ function miniBar(pct, color = '#3b82f6') {
   )
 }
 
-function normalizePosition(pos) {
-  if (!pos) return 'Other'
-  const p = pos.toLowerCase()
-  if (p.includes('steer') || p.includes('front')) return 'Steer'
-  if (p.includes('drive') || p.includes('rear') || p.includes('back')) return 'Drive'
-  if (p.includes('trailer')) return 'Trailer'
-  return 'Other'
-}
+// normalizePosition now sourced from lib/tyrePositions (recognises coded
+// positions like LHF1 / LHRI as well as free-text labels).
 
 // ── Chart options factories ────────────────────────────────────────────────────
 function barOpts(horizontal = false, tickCallback) {

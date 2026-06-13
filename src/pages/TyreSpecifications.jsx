@@ -19,6 +19,7 @@ import * as XLSX from 'xlsx'
 import PageHeader from '../components/ui/PageHeader'
 const uuidv4 = () => crypto.randomUUID()
 import { supabase } from '../lib/supabase'
+import { normalizePosition } from '../lib/tyrePositions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 
@@ -687,16 +688,7 @@ export default function TyreSpecifications() {
     })
   }, [tyreRecords, specs, fleetMaster])
 
-  function normalizePosition(pos) {
-    if (!pos) return ''
-    const p = pos.toLowerCase()
-    if (p.includes('steer')) return 'Steer'
-    if (p.includes('drive')) return 'Drive'
-    if (p.includes('trail')) return 'Trailer'
-    if (p.includes('lift')) return 'Lift Axle'
-    if (p.includes('tag')) return 'Tag Axle'
-    return pos
-  }
+  // normalizePosition sourced from lib/tyrePositions (coded + free-text aware).
 
   function normalizeSize(size) {
     return (size || '').replace(/\s/g, '').toUpperCase()

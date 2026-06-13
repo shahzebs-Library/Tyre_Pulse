@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { batchClassify } from '../lib/tyreClassifier'
+import { canonicalCode } from '../lib/tyrePositions'
 import { logAuditEvent } from '../lib/auditLogger'
 import * as XLSX from 'xlsx'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -148,27 +149,27 @@ const TYRE_FIELDS = [
   },
   {
     key: 'issue_date',
-    label: 'Issue Date',
+    label: 'Issue / Fitment Date',
     required: true,
-    guesses: ['date', 'issue date', 'issue_date', 'issuance date', 'issued', 'issued date', 'issue dt', 'تاريخ', 'تاريخ الإصدار', 'tarikh', 'تاريخ التركيب', 'transaction date'],
+    guesses: ['date', 'issue date', 'issue_date', 'issuance date', 'issued', 'issued date', 'issue dt', 'تاريخ', 'تاريخ الإصدار', 'tarikh', 'تاريخ التركيب', 'transaction date', 'tyre fix date', 'fix date', 'fixed date', 'fitment date', 'fitted date', 'job card date', 'jc date', 'vehicle in date', 'date fitted'],
   },
   {
     key: 'description',
-    label: 'Description',
+    label: 'Description / Tyre Size',
     required: true,
-    guesses: ['description', 'desc', 'tyre description', 'type', 'item', 'item name', 'product', 'product name', 'item desc', 'tyre type', 'الوصف', 'وصف', 'نوع الإطار', 'الإطار'],
+    guesses: ['description', 'desc', 'tyre description', 'type', 'item', 'item name', 'product', 'product name', 'item desc', 'tyre type', 'item/tyre', 'item tyre', 'tyre size', 'size', 'tyre size/desc', 'tyre item', 'الوصف', 'وصف', 'نوع الإطار', 'الإطار'],
   },
   {
     key: 'brand',
-    label: 'Brand',
+    label: 'Brand / Make',
     required: false,
-    guesses: ['brand', 'tyre brand', 'tyre_brand', 'manufacturer', 'make', 'brand name', 'ماركة', 'الماركة', 'العلامة التجارية', 'صانع'],
+    guesses: ['brand', 'tyre brand', 'tyre_brand', 'manufacturer', 'make', 'brand name', 'tyre make', 'ماركة', 'الماركة', 'العلامة التجارية', 'صانع'],
   },
   {
     key: 'serial_no',
-    label: 'Serial Number',
+    label: 'Serial / Tyre Number',
     required: true,
-    guesses: ['serial', 'serial no', 'serial_no', 'serial number', 's/n', 'sn', 'serial num', 'tyre serial', 'barcode', 'part no', 'الرقم التسلسلي', 'رقم التسلسل', 'رقم المنتج', 'رقم القطعة'],
+    guesses: ['serial', 'serial no', 'serial_no', 'serial number', 's/n', 'sn', 'serial num', 'tyre serial', 'tyre no', 'tyre no.', 'tyre number', 'tyre num', 'barcode', 'part no', 'الرقم التسلسلي', 'رقم التسلسل', 'رقم المنتج', 'رقم القطعة'],
   },
   {
     key: 'qty',
@@ -180,7 +181,7 @@ const TYRE_FIELDS = [
     key: 'job_card',
     label: 'Job Card / Work Order',
     required: false,
-    guesses: ['job card', 'job_card', 'jc', 'work order', 'wo', 'job no', 'job number', 'wo no', 'work order no', 'order no', 'بطاقة العمل', 'رقم العمل', 'أمر العمل'],
+    guesses: ['job card', 'job_card', 'jc', 'jc no', 'jc no.', 'job card no', 'job card no.', 'work order', 'wo', 'job no', 'job number', 'wo no', 'work order no', 'order no', 'بطاقة العمل', 'رقم العمل', 'أمر العمل'],
   },
   {
     key: 'mis_number',
@@ -194,8 +195,9 @@ const TYRE_FIELDS = [
     required: true,
     guesses: [
       'asset', 'asset no', 'asset_no', 'asset number', 'equipment', 'vehicle',
-      'vehicle no', 'vehicle number', 'plate', 'plate no', 'reg', 'reg no',
-      'registration', 'fleet no', 'fleet number', 'unit', 'unit no', 'chassis',
+      'vehicle no', 'vehicle no.', 'vehicle number', 'veh no', 'veh no.', 'veh.no',
+      'plate', 'plate no', 'reg', 'reg no', 'registration', 'fleet no', 'fleet number',
+      'unit', 'unit no', 'chassis', 'ub no',
       'رقم المركبة', 'رقم الأصل', 'لوحة السيارة', 'رقم السيارة', 'الأصل',
     ],
   },
@@ -203,7 +205,7 @@ const TYRE_FIELDS = [
     key: 'site',
     label: 'Site / Location',
     required: false,
-    guesses: ['site', 'location', 'area', 'camp', 'branch', 'depot', 'yard', 'warehouse', 'project', 'موقع', 'المنطقة', 'المعسكر', 'موقع العمل', 'الفرع'],
+    guesses: ['site', 'location', 'area', 'camp', 'branch', 'depot', 'yard', 'warehouse', 'project', 'asset location', 'workshop location', 'tracking category', 'موقع', 'المنطقة', 'المعسكر', 'موقع العمل', 'الفرع'],
   },
   {
     key: 'country',
@@ -213,11 +215,87 @@ const TYRE_FIELDS = [
   },
   {
     key: 'remarks',
-    label: 'Remarks / Notes',
+    label: 'Remarks / Complaint',
     required: false,
-    guesses: ['remarks', 'notes', 'comment', 'comments', 'note', 'observation', 'ملاحظات', 'ملاحظة', 'تعليق', 'بيانات إضافية'],
+    guesses: ['remarks', 'notes', 'comment', 'comments', 'note', 'observation', 'qc remarks', 'complaints', 'complaint', 'job done description', 'job done', 'ملاحظات', 'ملاحظة', 'تعليق', 'بيانات إضافية'],
+  },
+  // ── Fleet / asset context ────────────────────────────────────────────────
+  {
+    key: 'vehicle_type',
+    label: 'Vehicle Type / Category',
+    required: false,
+    guesses: ['vehicle type', 'veh type', 'veh type/category', 'veh type / category', 'type/category', 'category', 'asset type', 'asset desc', 'asset description', 'equipment type', 'fleet type', 'capacity', 'نوع المركبة', 'فئة'],
+  },
+  {
+    key: 'position',
+    label: 'Tyre Position',
+    required: false,
+    guesses: ['position', 'tyre position', 'tyre pos', 'wheel position', 'pos', 'axle position', 'axle', 'wheel', 'الموضع', 'موضع الإطار'],
+  },
+  // ── Lifecycle: fitment ───────────────────────────────────────────────────
+  {
+    key: 'km_at_fitment',
+    label: 'Fitted KM',
+    required: false,
+    guesses: ['fixed km', 'fitted km', 'fitment km', 'km at fitment', 'km fitted', 'install km', 'km/hr', 'km', 'kms', 'odometer', 'كم التركيب'],
+  },
+  {
+    key: 'hrs_at_fitment',
+    label: 'Fitted Hours',
+    required: false,
+    guesses: ['fixed hrs', 'fixed hours', 'fitted hrs', 'fitment hrs', 'hrs at fitment', 'install hrs', 'hours', 'hrs', 'ساعات التركيب'],
+  },
+  // ── Lifecycle: removal ───────────────────────────────────────────────────
+  {
+    key: 'removal_date',
+    label: 'Removed Date',
+    required: false,
+    guesses: ['tyre removed date', 'removed date', 'removal date', 'date removed', 'scrap date', 'replace date', 'vehicle out date', 'تاريخ الإزالة'],
+  },
+  {
+    key: 'km_at_removal',
+    label: 'Removed KM',
+    required: false,
+    guesses: ['removed km', 'removal km', 'km at removal', 'km removed', 'scrap km', 'كم الإزالة'],
+  },
+  {
+    key: 'hrs_at_removal',
+    label: 'Removed Hours',
+    required: false,
+    guesses: ['removed hrs', 'removed hours', 'removal hrs', 'hrs at removal', 'scrap hrs', 'ساعات الإزالة'],
+  },
+  {
+    key: 'removal_reason',
+    label: 'Removal Reason',
+    required: false,
+    guesses: ['reason', 'removal reason', 'reason of repair', 'reason for removal', 'scrap reason', 'failure reason', 'cause', 'سبب الإزالة', 'سبب'],
+  },
+  // ── Lifecycle: totals ────────────────────────────────────────────────────
+  {
+    key: 'total_km',
+    label: 'Total KM Run',
+    required: false,
+    guesses: ['total km', 'total kms', 'km run', 'tyre life km', 'distance run', 'إجمالي الكيلومترات'],
+  },
+  {
+    key: 'total_hrs',
+    label: 'Total Hours Run',
+    required: false,
+    guesses: ['total hrs', 'total hours', 'hrs run', 'tyre life hrs', 'إجمالي الساعات'],
   },
 ]
+
+// Fields parsed as dates / numbers during row building.
+const DATE_FIELDS    = new Set(['issue_date', 'removal_date'])
+const NUMERIC_FIELDS = new Set(['km_at_fitment', 'hrs_at_fitment', 'km_at_removal', 'hrs_at_removal', 'total_km', 'total_hrs'])
+
+/** Parse a numeric cell that may carry units e.g. "240 M/H", "3,940.00", "132282.0". */
+function parseNumeric(val) {
+  if (val == null || val === '') return null
+  if (typeof val === 'number') return Number.isFinite(val) ? val : null
+  const m = String(val).replace(/,/g, '').match(/-?\d+(\.\d+)?/)
+  return m ? parseFloat(m[0]) : null
+}
 
 const STOCK_FIELDS = [
   { key: 'item_code',   label: 'Item Code',    required: true,  guesses: ['item code', 'item_code', 'code', 'part no', 'part number', 'sku', 'item no', 'رمز الصنف', 'كود الصنف'] },
@@ -301,7 +379,7 @@ function parseDate(val) {
 function guessFileType(headers) {
   const h = headers.map(x => normalise(String(x)))
   const fleetSignals = ['make', 'model', 'vehicle type', 'fleet number', 'operator', 'chassis']
-  const tyreSignals  = ['serial no', 'serial', 'description', 'remarks', 'job card', 'mis number', 'mis no']
+  const tyreSignals  = ['serial no', 'serial', 'description', 'remarks', 'job card', 'mis number', 'mis no', 'tyre no', 'tyre position', 'fixed km', 'item/tyre']
   const fleetScore   = fleetSignals.filter(s => h.some(x => x.includes(s))).length
   const tyreScore    = tyreSignals.filter(s => h.some(x => x.includes(s))).length
   if (fleetScore >= 2 && fleetScore > tyreScore) return 'fleet'
@@ -458,8 +536,10 @@ export default function UploadData() {
         const idx = hdrs.indexOf(srcCol)
         if (idx === -1) return
         let val = row[idx]
-        if (f.key === 'issue_date') val = parseDate(val)
-        else if (f.key === 'qty')   val = val ? +val || 1 : 1
+        if (DATE_FIELDS.has(f.key))         val = parseDate(val)
+        else if (NUMERIC_FIELDS.has(f.key)) val = parseNumeric(val)
+        else if (f.key === 'qty')           val = val ? +val || 1 : 1
+        else if (f.key === 'position')      val = canonicalCode(val)
         else val = val !== '' && val !== null && val !== undefined ? String(val).trim() : null
         obj[f.key] = val
       })

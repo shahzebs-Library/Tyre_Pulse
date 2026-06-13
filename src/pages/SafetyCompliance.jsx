@@ -21,6 +21,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -50,10 +51,11 @@ const LEGAL_TREAD = { steer: 3, drive: 3, trailer: 3, default: 2 }
 const PRESSURE_TOLERANCE = 10
 
 function getPosition(pos) {
-  const p = (pos || '').toLowerCase()
-  if (p.includes('steer')) return 'steer'
-  if (p.includes('drive')) return 'drive'
-  if (p.includes('trailer')) return 'trailer'
+  // Map any coded/free-text position to a LEGAL_TREAD key via the shared mapper.
+  const g = normalizePosition(pos)
+  if (g === 'Steer')   return 'steer'
+  if (g === 'Drive')   return 'drive'
+  if (g === 'Trailer') return 'trailer'
   return 'default'
 }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -123,16 +124,7 @@ function cpkBgCell(cpk) {
   return 'bg-red-900/40 text-red-300'
 }
 
-function normalizePosition(pos) {
-  if (!pos) return 'Other'
-  const p = pos.toLowerCase()
-  if (p.includes('steer') || p.includes('front')) return 'Steer'
-  if (p.includes('drive') || p.includes('rear') || p.includes('back')) return 'Drive'
-  if (p.includes('trailer')) return 'Trailer'
-  if (p.includes('lift'))  return 'Lift Axle'
-  if (p.includes('tag'))   return 'Tag Axle'
-  return 'Other'
-}
+// normalizePosition sourced from lib/tyrePositions (coded + free-text aware).
 
 function monthKey(d) {
   if (!d) return null

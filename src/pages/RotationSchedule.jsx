@@ -21,6 +21,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -88,14 +89,12 @@ function safeKm(v) {
   return isNaN(n) ? null : n
 }
 function normPos(pos) {
-  if (!pos) return 'Other'
-  const p = pos.toLowerCase()
-  if (p.includes('steer') || p.includes('front')) return 'Steer'
-  if (p.includes('drive') || p.includes('rear') || p.includes('back')) return 'Drive'
-  if (p.includes('trailer')) return 'Trailer'
-  if (p.includes('lift')) return 'Lift'
-  if (p.includes('tag')) return 'Tag'
-  return 'Other'
+  // Delegate to the shared canonical mapper (recognises coded positions like
+  // LHF1 / LHRI) then collapse to this page's short axle-group labels.
+  const g = normalizePosition(pos)
+  if (g === 'Lift Axle') return 'Lift'
+  if (g === 'Tag Axle')  return 'Tag'
+  return g
 }
 
 // ── Core rotation analytics engine ────────────────────────────────────────────

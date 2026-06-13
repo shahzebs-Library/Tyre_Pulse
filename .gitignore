@@ -4,3 +4,6 @@ dist/
 .env.local
 .DS_Store
 .claude/
+.playwright-mcp/
+.idea/
+mobile/expo-start*.log

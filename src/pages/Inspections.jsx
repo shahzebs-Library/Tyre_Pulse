@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -124,6 +125,9 @@ const CHECKLIST_LABELS = {
   },
 }
 
+// Column widths for the virtual inspection table grid
+const INSP_COL_WIDTHS = [110, 200, 110, 110, 100, 90, 100, 120, 240]
+
 export default function Inspections() {
   const { profile, loading: authLoading } = useAuth()
   const { activeCountry } = useSettings()
@@ -180,6 +184,9 @@ export default function Inspections() {
     }, 80)
     return () => { cancelled = true; clearTimeout(t) }
   }, [pdfRow])
+
+  // Virtual scroll ref for the inspections table
+  const tableParentRef = useRef(null)
 
   // PWA — Screen Wake Lock during inspection
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
@@ -309,6 +316,14 @@ export default function Inspections() {
     filtered.forEach(r => { c[r.status] = (c[r.status] || 0) + 1 })
     return c
   }, [filtered])
+
+  // Virtualizer for the inspections table
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => tableParentRef.current,
+    estimateSize: () => 52,
+    overscan: 10,
+  })
 
   function handlePhotoChange(e) {
     const file = e.target.files?.[0]
@@ -640,6 +655,13 @@ export default function Inspections() {
   const defaultType = activeTab === 'observations' ? 'Site Observation'
     : activeTab === 'training' ? 'Safety Training'
     : 'Routine'
+
+  // Shared grid style for virtual inspection rows
+  const inspGridStyle = {
+    display: 'grid',
+    gridTemplateColumns: INSP_COL_WIDTHS.map(w => `${w}px`).join(' '),
+    alignItems: 'center',
+  }
 
   return (
     <div className="space-y-6">
@@ -1029,102 +1051,147 @@ export default function Inspections() {
         </select>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-800">
-              <th className="pb-2 pr-3">Type</th>
-              <th className="pb-2 pr-3">Title</th>
-              <th className="pb-2 pr-3">Site</th>
-              <th className="pb-2 pr-3">Asset</th>
-              <th className="pb-2 pr-3">Date</th>
-              <th className="pb-2 pr-3">Severity</th>
-              <th className="pb-2 pr-3">Status</th>
-              <th className="pb-2 pr-3">Inspector</th>
-              <th className="pb-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(r => {
-              const cfg    = STATUS_CONFIG[r.status] || STATUS_CONFIG.Scheduled
-              const sevCfg = SEV_CONFIG[r.severity]  || SEV_CONFIG.Medium
-              const isObs  = isObservationType(r.inspection_type)
-              const isTrn  = isTrainingType(r.inspection_type)
-              return (
-                <tr key={r.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                  <td className="py-2 pr-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                      isObs ? 'bg-purple-900/20 text-purple-400 border-purple-700/40'
-                      : isTrn ? 'bg-blue-900/20 text-blue-400 border-blue-700/40'
-                      : 'bg-gray-800 text-gray-400 border-gray-700'
-                    }`}>
-                      {r.inspection_type}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-3 text-white font-medium max-w-48 truncate" title={r.title}>
-                    {r.title}
-                    {r.photo_data && <Camera className="inline w-3 h-3 ml-1 text-gray-500" title="Has photo" />}
-                    {r.linked_action_id && <ClipboardList className="inline w-3 h-3 ml-1 text-yellow-400" title="Action raised" />}
-                  </td>
-                  <td className="py-2 pr-3 text-gray-300">{r.site}</td>
-                  <td className="py-2 pr-3 font-mono text-xs text-gray-400">{r.asset_no || '—'}</td>
-                  <td className="py-2 pr-3 text-gray-400 text-xs">{r.scheduled_date}</td>
-                  <td className="py-2 pr-3">
-                    {r.severity && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${sevCfg.bg} ${sevCfg.color} ${sevCfg.border}`}>
-                        {r.severity}
+      {/* Virtualised Table */}
+      <div className="card overflow-x-auto p-0">
+        {/* Sticky header */}
+        <div
+          className="text-left text-gray-400 border-b border-gray-800 bg-gray-900/60"
+          style={{ minWidth: `${INSP_COL_WIDTHS.reduce((a, b) => a + b, 0)}px` }}
+        >
+          <div style={inspGridStyle} className="px-0">
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Type</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Title</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Site</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Asset</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Date</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Severity</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Status</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Inspector</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Actions</div>
+          </div>
+        </div>
+
+        {/* Virtual scroll container */}
+        <div
+          ref={tableParentRef}
+          className="overflow-y-auto"
+          style={{
+            height: filtered.length === 0 ? 'auto' : '600px',
+            minWidth: `${INSP_COL_WIDTHS.reduce((a, b) => a + b, 0)}px`,
+          }}
+        >
+          {filtered.length === 0 ? (
+            <div className="py-12 text-center text-gray-500 text-sm">No records found</div>
+          ) : (
+            <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+              {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                const r = filtered[virtualRow.index]
+                const cfg    = STATUS_CONFIG[r.status] || STATUS_CONFIG.Scheduled
+                const sevCfg = SEV_CONFIG[r.severity]  || SEV_CONFIG.Medium
+                const isObs  = isObservationType(r.inspection_type)
+                const isTrn  = isTrainingType(r.inspection_type)
+
+                return (
+                  <div
+                    key={virtualRow.key}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                      height: `${virtualRow.size}px`,
+                      ...inspGridStyle,
+                    }}
+                    className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors"
+                  >
+                    {/* Type */}
+                    <div className="px-3 overflow-hidden">
+                      <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                        isObs ? 'bg-purple-900/20 text-purple-400 border-purple-700/40'
+                        : isTrn ? 'bg-blue-900/20 text-blue-400 border-blue-700/40'
+                        : 'bg-gray-800 text-gray-400 border-gray-700'
+                      }`}>
+                        {r.inspection_type}
                       </span>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-3 text-gray-400 text-xs">{r.inspector || r.attendees || '—'}</td>
-                  <td className="py-2">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {r.status !== 'Done' && r.status !== 'Cancelled' && (
-                        <button onClick={() => markDone(r.id)}
-                          className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-700/50 transition-colors">
-                          ✓ Done
-                        </button>
-                      )}
-                      {isObs && r.status === 'Done' && !r.linked_action_id && (
-                        <button onClick={() => setRaisingAction(r)}
-                          className="text-xs px-2 py-1 rounded bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 border border-yellow-700/40 transition-colors">
-                          Raise Action
-                        </button>
-                      )}
-                      {r.linked_action_id && (
-                        <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-500 border border-gray-700">
-                          Action ✓
+                    </div>
+
+                    {/* Title */}
+                    <div className="px-3 text-white font-medium text-sm truncate" title={r.title}>
+                      {r.title}
+                      {r.photo_data && <Camera className="inline w-3 h-3 ml-1 text-gray-500" title="Has photo" />}
+                      {r.linked_action_id && <ClipboardList className="inline w-3 h-3 ml-1 text-yellow-400" title="Action raised" />}
+                    </div>
+
+                    {/* Site */}
+                    <div className="px-3 text-gray-300 text-sm truncate">{r.site}</div>
+
+                    {/* Asset */}
+                    <div className="px-3 font-mono text-xs text-gray-400 truncate">{r.asset_no || '—'}</div>
+
+                    {/* Date */}
+                    <div className="px-3 text-gray-400 text-xs tabular-nums">{r.scheduled_date}</div>
+
+                    {/* Severity */}
+                    <div className="px-3">
+                      {r.severity && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${sevCfg.bg} ${sevCfg.color} ${sevCfg.border}`}>
+                          {r.severity}
                         </span>
                       )}
-                      <button onClick={() => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} })}
-                        className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors">
-                        Edit
-                      </button>
-                      <button onClick={() => setPdfRow(r)} disabled={!!pdfRow}
-                        className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors disabled:opacity-50"
-                        title="Export detailed PDF with live tyre diagram">
-                        <FileText size={11} className="inline" />
-                      </button>
-                      <button onClick={() => setDeleteId(r.id)}
-                        className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-800/50 transition-colors">
-                        Del
-                      </button>
                     </div>
-                  </td>
-                </tr>
-              )
-            })}
-            {filtered.length === 0 && (
-              <tr><td colSpan={9} className="py-12 text-center text-gray-500">No records found</td></tr>
-            )}
-          </tbody>
-        </table>
+
+                    {/* Status */}
+                    <div className="px-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+                        {r.status}
+                      </span>
+                    </div>
+
+                    {/* Inspector */}
+                    <div className="px-3 text-gray-400 text-xs truncate">{r.inspector || r.attendees || '—'}</div>
+
+                    {/* Actions */}
+                    <div className="px-3">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {r.status !== 'Done' && r.status !== 'Cancelled' && (
+                          <button onClick={() => markDone(r.id)}
+                            className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-700/50 transition-colors whitespace-nowrap">
+                            ✓ Done
+                          </button>
+                        )}
+                        {isObs && r.status === 'Done' && !r.linked_action_id && (
+                          <button onClick={() => setRaisingAction(r)}
+                            className="text-xs px-2 py-1 rounded bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 border border-yellow-700/40 transition-colors whitespace-nowrap">
+                            Raise Action
+                          </button>
+                        )}
+                        {r.linked_action_id && (
+                          <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-500 border border-gray-700 whitespace-nowrap">
+                            Action ✓
+                          </span>
+                        )}
+                        <button onClick={() => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} })}
+                          className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors">
+                          Edit
+                        </button>
+                        <button onClick={() => exportInspectionDetailPdf(r)}
+                          className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
+                          title="Export detailed PDF with tyre diagram">
+                          <FileText size={11} className="inline" />
+                        </button>
+                        <button onClick={() => setDeleteId(r.id)}
+                          className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-800/50 transition-colors">
+                          Del
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
       </>}
 

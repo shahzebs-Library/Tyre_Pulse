@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator, StatusBar, Platform,
@@ -13,10 +13,14 @@ import { supabase } from '../../../lib/supabase'
 import { enqueueInspection } from '../../../lib/offlineQueue'
 import TyrePositionCard from '../../../components/TyrePositionCard'
 import VehicleTyreDiagram from '../../../components/VehicleTyreDiagram'
+import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import {
-  VehicleFleet, TyrePositionData,
+  VehicleFleet, TyrePositionData, UserRole,
   getPositionsForVehicle, emptyTyrePosition,
 } from '../../../lib/types'
+
+// Roles permitted to record inspections (mirrors permissions.canInspect)
+const INSPECT_ROLES: UserRole[] = ['inspector', 'tyre_man', 'admin', 'manager', 'director']
 
 type Step = 'header' | 'tyres' | 'submit'
 
@@ -26,10 +30,15 @@ export default function NewInspectionScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{ site?: string; asset?: string }>()
 
+  // RBAC: only inspection-capable roles may open this screen (defends against
+  // deep-links / programmatic navigation; the tab is already role-hidden).
+  const { allowed } = useRoleGuard(INSPECT_ROLES)
+
   const [step, setStep] = useState<Step>('header')
   const [sites, setSites] = useState<string[]>([])
   const [vehicles, setVehicles] = useState<VehicleFleet[]>([])
   const [filteredVehicles, setFilteredVehicles] = useState<VehicleFleet[]>([])
+  const [vehicleQuery, setVehicleQuery] = useState('')
   const [selectedSite, setSelectedSite] = useState(params.site ?? profile?.site ?? '')
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleFleet | null>(null)
   const [odometer, setOdometer] = useState('')
@@ -42,18 +51,50 @@ export default function NewInspectionScreen() {
   const { width: screenWidth } = useWindowDimensions()
   const [highlightedPosition, setHighlightedPosition] = useState<string | null>(null)
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // ScrollView + per-card Y offsets so a tyre tap scrolls to its card.
+  const tyreScrollRef = useRef<ScrollView>(null)
+  const cardOffsets = useRef<Record<string, number>>({})
 
   const textAlign = isRTL ? 'right' : 'left'
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
   const backIcon = isRTL ? 'arrow-forward' : 'arrow-back'
   const forwardIcon = isRTL ? 'arrow-back' : 'arrow-forward'
 
+  // Live vehicle search over the loaded site fleet.
+  const shownVehicles = useMemo(() => {
+    const q = vehicleQuery.trim().toLowerCase()
+    if (!q) return filteredVehicles
+    return filteredVehicles.filter(v =>
+      v.asset_no?.toLowerCase().includes(q) ||
+      v.vehicle_type?.toLowerCase().includes(q) ||
+      v.make?.toLowerCase().includes(q) ||
+      v.model?.toLowerCase().includes(q)
+    )
+  }, [filteredVehicles, vehicleQuery])
+
+  // Progress: how many positions have at least one recorded value.
+  const recordedCount = useMemo(() => {
+    return positions.reduce((n, pos) => {
+      const d = tyreData[pos]
+      const touched = !!d && (
+        !!d.serial_number || !!d.pressure_psi || !!d.tread_depth_mm ||
+        !!d.notes || !!d.photo_uri || d.condition !== 'Good'
+      )
+      return n + (touched ? 1 : 0)
+    }, 0)
+  }, [positions, tyreData])
+
   function handleDiagramPositionPress(position: string) {
     // Clear any pending timer so re-tapping the same tyre re-highlights
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
     setHighlightedPosition(position)
-    // Auto-clear highlight after 4 s so the card can be re-collapsed normally
-    highlightTimerRef.current = setTimeout(() => setHighlightedPosition(null), 4000)
+    // Scroll the matching position card into view
+    const y = cardOffsets.current[position]
+    if (y != null && tyreScrollRef.current) {
+      tyreScrollRef.current.scrollTo({ y: Math.max(0, y - 12), animated: true })
+    }
+    // Auto-clear highlight after 6 s so the card can be re-collapsed normally
+    highlightTimerRef.current = setTimeout(() => setHighlightedPosition(null), 6000)
   }
 
   // Cleanup on unmount
@@ -164,6 +205,15 @@ export default function NewInspectionScreen() {
     }
   }
 
+  // RBAC gate — render nothing while the guard redirects unauthorised roles.
+  if (!allowed) {
+    return (
+      <SafeAreaView style={[styles.safe, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#16a34a" />
+      </SafeAreaView>
+    )
+  }
+
   // ── Step: HEADER ───────────────────────────────────────────────────────────
   if (step === 'header') {
     return (
@@ -210,12 +260,42 @@ export default function NewInspectionScreen() {
             {selectedSite ? (
               <View style={styles.field}>
                 <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.vehicleLabel')}</Text>
+
+                {/* Vehicle search */}
+                <View style={[styles.searchBox, isRTL && styles.searchBoxRTL]}>
+                  <Ionicons name="search-outline" size={18} color="#94a3b8" />
+                  <TextInput
+                    style={[styles.searchInput, { textAlign }]}
+                    value={vehicleQuery}
+                    onChangeText={setVehicleQuery}
+                    placeholder={t('inspection.vehicleSearchPlaceholder')}
+                    placeholderTextColor="#94a3b8"
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    returnKeyType="search"
+                  />
+                  {vehicleQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setVehicleQuery('')}>
+                      <Ionicons name="close-circle" size={18} color="#cbd5e1" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
                 {loadingVehicles ? (
                   <ActivityIndicator size="small" color="#16a34a" style={{ marginTop: 8 }} />
+                ) : shownVehicles.length === 0 ? (
+                  <View style={styles.vehicleEmpty}>
+                    <Ionicons name="car-outline" size={20} color="#cbd5e1" />
+                    <Text style={styles.vehicleEmptyText}>
+                      {vehicleQuery
+                        ? t('inspection.vehicleNoMatch')
+                        : t('inspection.vehicleNone')}
+                    </Text>
+                  </View>
                 ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }} keyboardShouldPersistTaps="handled">
                     <View style={styles.chipRow}>
-                      {filteredVehicles.map(v => (
+                      {shownVehicles.map(v => (
                         <TouchableOpacity
                           key={v.id}
                           style={[styles.chip, selectedVehicle?.id === v.id && styles.chipActive]}
@@ -340,7 +420,7 @@ export default function NewInspectionScreen() {
           </View>
         </View>
 
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <ScrollView ref={tyreScrollRef} style={styles.scroll} contentContainerStyle={styles.content}>
           {/* ── Interactive vehicle tyre diagram ─────────────────────────── */}
           {selectedVehicle && (
             <VehicleTyreDiagram
@@ -353,6 +433,27 @@ export default function NewInspectionScreen() {
             />
           )}
 
+          {/* ── Progress ─────────────────────────────────────────────────── */}
+          {positions.length > 0 && (
+            <View style={styles.progressWrap}>
+              <View style={[styles.progressLabelRow, isRTL && styles.navRTL]}>
+                <Text style={styles.progressLabel}>{t('inspection.progressLabel')}</Text>
+                <Text style={styles.progressCount}>
+                  {recordedCount}/{positions.length}
+                </Text>
+              </View>
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${Math.round((recordedCount / positions.length) * 100)}%` },
+                    recordedCount === positions.length && { backgroundColor: '#16a34a' },
+                  ]}
+                />
+              </View>
+            </View>
+          )}
+
           <View style={[styles.positionHint, isRTL && styles.positionHintRTL]}>
             <Ionicons name="information-circle-outline" size={15} color="#64748b" />
             <Text style={[styles.positionHintText, { textAlign }]}>
@@ -361,12 +462,16 @@ export default function NewInspectionScreen() {
           </View>
 
           {positions.map(pos => (
-            <TyrePositionCard
+            <View
               key={pos}
-              data={tyreData[pos] ?? emptyTyrePosition(pos)}
-              onChange={data => handleTyreUpdate(pos, data)}
-              isHighlighted={highlightedPosition === pos}
-            />
+              onLayout={e => { cardOffsets.current[pos] = e.nativeEvent.layout.y }}
+            >
+              <TyrePositionCard
+                data={tyreData[pos] ?? emptyTyrePosition(pos)}
+                onChange={data => handleTyreUpdate(pos, data)}
+                isHighlighted={highlightedPosition === pos}
+              />
+            </View>
           ))}
 
           <TouchableOpacity
@@ -566,6 +671,55 @@ const styles = StyleSheet.create({
     minWidth: 200,
   },
   outlineBtnText: { color: '#16a34a', fontSize: 15, fontWeight: '600' },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  searchBoxRTL: { flexDirection: 'row-reverse' },
+  searchInput: { flex: 1, fontSize: 14, color: '#0f172a' },
+  vehicleEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 16,
+  },
+  vehicleEmptyText: { fontSize: 13, color: '#94a3b8', fontWeight: '500' },
+  progressWrap: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  progressLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progressLabel: { fontSize: 12, fontWeight: '600', color: '#64748b' },
+  progressCount: { fontSize: 13, fontWeight: '800', color: '#0f172a' },
+  progressTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#f1f5f9',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#f59e0b',
+  },
   positionHint: {
     flexDirection: 'row',
     alignItems: 'flex-start',

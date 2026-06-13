@@ -144,15 +144,15 @@ function SharedDefs() {
   )
 }
 
-// ── 3D Tyre ────────────────────────────────────────────────────────────────────
+// ── 3D Tyre (visual only — touch handled by a separate hit layer) ──────────────
 interface TyreProps {
   x: number; y: number; w: number; h: number
-  id: string; risk: RiskKey; label: string
-  selected: boolean; onPress: (id: string) => void
+  risk: RiskKey; label: string
+  selected: boolean; recorded?: boolean
   horizontal?: boolean
 }
 
-function Tyre({ x, y, w, h, id, risk, label, selected, onPress, horizontal }: TyreProps) {
+function Tyre({ x, y, w, h, risk, label, selected, recorded, horizontal }: TyreProps) {
   const col = RISK[risk]
   const cx  = x + w / 2
   const cy  = y + h / 2
@@ -160,7 +160,7 @@ function Tyre({ x, y, w, h, id, risk, label, selected, onPress, horizontal }: Ty
   // For horizontal spare tyre: just draw a flat oval
   if (horizontal) {
     return (
-      <G onPress={() => onPress(id)}>
+      <G>
         <Ellipse cx={cx} cy={cy + 2} rx={w / 2 + 1} ry={h / 2 + 0.5} fill="rgba(0,0,0,0.4)" />
         <Rect x={x} y={y} width={w} height={h} rx={h * 0.5}
           fill="#111111" stroke={selected ? '#3b82f6' : col.rim}
@@ -172,9 +172,6 @@ function Tyre({ x, y, w, h, id, risk, label, selected, onPress, horizontal }: Ty
           fontWeight="800" fill="white">
           {label}
         </SvgText>
-        {/* Transparent hit area */}
-        <Rect x={x - 4} y={y - 4} width={w + 8} height={h + 8}
-          fill="transparent" />
       </G>
     )
   }
@@ -184,7 +181,7 @@ function Tyre({ x, y, w, h, id, risk, label, selected, onPress, horizontal }: Ty
   const spokes = [0, 60, 120]
 
   return (
-    <G onPress={() => onPress(id)}>
+    <G>
       {/* Drop shadow */}
       <Ellipse cx={cx + 1.5} cy={cy + 2} rx={w / 2 + 1} ry={h / 2 + 0.5}
         fill="rgba(0,0,0,0.45)" />
@@ -239,16 +236,48 @@ function Tyre({ x, y, w, h, id, risk, label, selected, onPress, horizontal }: Ty
         {label}
       </SvgText>
 
+      {/* Recorded check mark — drawn at the top-right corner once data exists */}
+      {recorded && !selected && (
+        <Circle cx={x + w} cy={y} r={Math.max(2.5, w * 0.16)} fill="#16a34a" stroke="#fff" strokeWidth={0.5} />
+      )}
+
       {/* Selection ring */}
       {selected && (
         <Rect x={x - 3} y={y - 3} width={w + 6} height={h + 6}
           rx={w * 0.3 + 1} fill="none" stroke="#3b82f6" strokeWidth={2.5} />
       )}
-
-      {/* Transparent tap target (full area) */}
-      <Rect x={x - 2} y={y - 2} width={w + 4} height={h + 4}
-        fill="transparent" />
     </G>
+  )
+}
+
+// ── Touch hit target ──────────────────────────────────────────────────────────
+// A dedicated, generously-padded transparent rectangle rendered ABOVE every
+// visual element. Keeping the press handler on a single leaf <Rect> (rather than
+// a parent <G> wrapping decorative shapes) makes taps register reliably on both
+// iOS and Android — the previous nested-<G> approach frequently swallowed touches.
+interface HitAreaProps {
+  x: number; y: number; w: number; h: number
+  id: string
+  onActivate: (id: string) => void
+}
+
+function HitArea({ x, y, w, h, id, onActivate }: HitAreaProps) {
+  // Minimum ~44pt-equivalent target: expand small tyres outward so the finger
+  // target is comfortable even though the drawn tyre is small.
+  const padX = Math.max(6, w * 0.45)
+  const padY = Math.max(6, h * 0.30)
+  return (
+    <Rect
+      x={x - padX}
+      y={y - padY}
+      width={w + padX * 2}
+      height={h + padY * 2}
+      fill="transparent"
+      // onPressIn fires on finger-down for snappy feedback; onPress covers the
+      // standard tap. Both are safe to call — the parent de-bounces.
+      onPressIn={() => onActivate(id)}
+      onPress={() => onActivate(id)}
+    />
   )
 }
 
@@ -469,7 +498,10 @@ interface TyreLayoutItem {
 
 interface VehicleLayout {
   viewH: number
-  Body: React.ComponentType<TruckBodyProps | Record<string, never>>
+  // Body components differ in props (TruckBody needs cargoH; others take none),
+  // so the descriptor accepts any body and the matching bodyProps are supplied
+  // alongside it below.
+  Body: React.ComponentType<any>
   bodyProps?: TruckBodyProps
   tyres: TyreLayoutItem[]
 }
@@ -584,19 +616,27 @@ export default function VehicleTyreDiagram({
   const scale     = width / 200
   const svgHeight = Math.round(viewH * scale)
 
-  // Build risk map from tyre condition data
-  const riskMap = useMemo<Record<string, RiskKey>>(() => {
-    const m: Record<string, RiskKey> = {}
-    positions.forEach(pos => {
-      const d = tyreData[pos]
-      m[pos] = d ? CONDITION_RISK[d.condition] : 'none'
-    })
-    return m
-  }, [positions, tyreData])
-
-  // Only render tyres that exist in this vehicle's positions
+  // Build risk + "recorded" maps keyed by every tyre id in the layout. We never
+  // hide a tyre: positions not yet inspected simply render in the neutral
+  // "No Data" colour so the operator can always see and tap the full axle set.
   const posSet = new Set(positions)
-  const visibleTyres = tyres.filter(t => posSet.has(t.id))
+  const { riskMap, recordedMap } = useMemo(() => {
+    const risk: Record<string, RiskKey> = {}
+    const recorded: Record<string, boolean> = {}
+    tyres.forEach(t => {
+      const d = tyreData[t.id]
+      risk[t.id] = d ? CONDITION_RISK[d.condition] : 'none'
+      // "Recorded" = the inspector entered something beyond the default state.
+      recorded[t.id] = !!d && (
+        !!d.serial_number || !!d.pressure_psi || !!d.tread_depth_mm ||
+        !!d.notes || !!d.photo_uri || d.condition !== 'Good'
+      )
+    })
+    return { riskMap: risk, recordedMap: recorded }
+  }, [tyres, tyreData])
+
+  // Every tyre that belongs to this vehicle is rendered AND tappable.
+  const allTyres = tyres.filter(t => posSet.size === 0 || posSet.has(t.id))
 
   const handlePress = (id: string) => onPositionPress?.(id)
 
@@ -618,17 +658,29 @@ export default function VehicleTyreDiagram({
         </SvgText>
 
         {/* Vehicle body */}
-        {/* @ts-ignore — bodyProps type union; runtime always matches */}
         <Body {...(bodyProps ?? {})} />
 
-        {/* Tyres */}
-        {visibleTyres.map(t => (
+        {/* Tyres — visual layer (all positions always shown) */}
+        {allTyres.map(t => (
           <Tyre
             key={t.id}
-            {...t}
+            x={t.x} y={t.y} w={t.w} h={t.h}
+            label={t.label}
+            horizontal={t.horizontal}
             risk={riskMap[t.id] ?? 'none'}
+            recorded={recordedMap[t.id]}
             selected={selectedPosition === t.id}
-            onPress={handlePress}
+          />
+        ))}
+
+        {/* Touch layer — rendered last so transparent hit targets sit on top of
+            every decorative shape and reliably capture taps. */}
+        {allTyres.map(t => (
+          <HitArea
+            key={`hit-${t.id}`}
+            id={t.id}
+            x={t.x} y={t.y} w={t.w} h={t.h}
+            onActivate={handlePress}
           />
         ))}
       </Svg>

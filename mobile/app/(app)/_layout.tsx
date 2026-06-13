@@ -3,8 +3,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { View, ActivityIndicator } from 'react-native'
-import { isAdminOrAbove } from '../../lib/types'
 import { useNetworkSync } from '../../hooks/useNetworkSync'
+import { TAB_BAR } from '../../lib/permissions'
 
 export default function AppLayout() {
   const { user, loading, profile } = useAuth()
@@ -23,7 +23,7 @@ export default function AppLayout() {
 
   if (!user) return <Redirect href="/(auth)/login" />
 
-  const elevated = isAdminOrAbove(profile?.role ?? null)
+  const role = profile?.role ?? null
 
   return (
     <Tabs
@@ -45,63 +45,39 @@ export default function AppLayout() {
         },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: t('tabs.home'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="inspection/new"
-        options={{
-          title: t('tabs.inspect'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="clipboard-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="accident/dashboard"
-        options={{
-          title: t('tabs.accident'),
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name="warning-outline" size={size} color={focused ? '#dc2626' : color} />
-          ),
-          tabBarActiveTintColor: '#dc2626',
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: t('tabs.history'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} />,
-        }}
-      />
-      {/* Admin tab — visible only to Admin / Manager / Director */}
-      <Tabs.Screen
-        name="admin/index"
-        options={{
-          title: 'Admin',
-          tabBarActiveTintColor: '#7c3aed',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name="shield-outline" size={size} color={focused ? '#7c3aed' : color} />
-          ),
-          // Hide entirely for non-elevated roles without removing the route
-          tabBarButton: elevated ? undefined : () => null,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: t('tabs.profile'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
-        }}
-      />
-      {/* Hidden routes — accessible via router.push but not in tab bar */}
-      <Tabs.Screen name="scanner"           options={{ href: null }} />
-      <Tabs.Screen name="accident/report"   options={{ href: null }} />
-      <Tabs.Screen name="accident/[id]"     options={{ href: null }} />
-      <Tabs.Screen name="admin/ai-chat"     options={{ href: null }} />
-      <Tabs.Screen name="admin/users"       options={{ href: null }} />
+      {/* Tab bar is rendered from the RBAC descriptor — navigation auto-adjusts
+          to the signed-in user's role. Routes the role cannot access are kept
+          registered but hidden (href:null) so deep-links still resolve safely. */}
+      {TAB_BAR.map(tab => {
+        const allowed = tab.visible(role)
+        return (
+          <Tabs.Screen
+            key={tab.name}
+            name={tab.name}
+            options={{
+              title: t(tab.labelKey),
+              ...(tab.activeTint ? { tabBarActiveTintColor: tab.activeTint } : {}),
+              tabBarIcon: ({ color, size, focused }) => (
+                <Ionicons
+                  name={tab.icon as any}
+                  size={size}
+                  color={focused && tab.activeTint ? tab.activeTint : color}
+                />
+              ),
+              // Hide the tab entirely for roles that lack access, without
+              // unmounting the route (deep-links / programmatic nav still work).
+              href: allowed ? undefined : null,
+            }}
+          />
+        )
+      })}
+
+      {/* Hidden routes — reachable via router.push but never in the tab bar */}
+      <Tabs.Screen name="scanner"         options={{ href: null }} />
+      <Tabs.Screen name="accident/report" options={{ href: null }} />
+      <Tabs.Screen name="accident/[id]"   options={{ href: null }} />
+      <Tabs.Screen name="admin/ai-chat"   options={{ href: null }} />
+      <Tabs.Screen name="admin/users"     options={{ href: null }} />
     </Tabs>
   )
 }

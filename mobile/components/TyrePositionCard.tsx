@@ -11,6 +11,13 @@ import { supabase } from '../lib/supabase'
 
 const CONDITIONS: TyreCondition[] = ['Good', 'Worn', 'Damaged', 'Flat', 'Missing']
 
+/**
+ * Tread-depth capture is temporarily disabled in the field workflow. Flip to
+ * `true` to restore the input and its summary chip everywhere at once — the
+ * underlying data model (`tread_depth_mm`) is left intact.
+ */
+const SHOW_TREAD_DEPTH = false
+
 const CONDITION_COLORS: Record<TyreCondition, string> = {
   Good:    '#16a34a',
   Worn:    '#f59e0b',
@@ -146,7 +153,7 @@ export default function TyrePositionCard({ data, onChange, isHighlighted = false
           {data.pressure_psi ? (
             <Text style={styles.metaText}>{data.pressure_psi} PSI</Text>
           ) : null}
-          {data.tread_depth_mm ? (
+          {SHOW_TREAD_DEPTH && data.tread_depth_mm ? (
             <Text style={styles.metaText}>{data.tread_depth_mm}mm</Text>
           ) : null}
           {displayUri ? (
@@ -182,7 +189,7 @@ export default function TyrePositionCard({ data, onChange, isHighlighted = false
             />
           </View>
 
-          {/* Pressure + Tread */}
+          {/* Pressure (+ Tread when enabled) */}
           <View style={styles.row}>
             <View style={[styles.field, { flex: 1 }]}>
               <Text style={styles.label}>{t('tyre.pressure')}</Text>
@@ -195,18 +202,22 @@ export default function TyrePositionCard({ data, onChange, isHighlighted = false
                 keyboardType="decimal-pad"
               />
             </View>
-            <View style={{ width: 12 }} />
-            <View style={[styles.field, { flex: 1 }]}>
-              <Text style={styles.label}>{t('tyre.treadDepth')}</Text>
-              <TextInput
-                style={styles.input}
-                value={data.tread_depth_mm}
-                onChangeText={v => update({ tread_depth_mm: v })}
-                placeholder={t('tyre.treadPlaceholder')}
-                placeholderTextColor="#94a3b8"
-                keyboardType="decimal-pad"
-              />
-            </View>
+            {SHOW_TREAD_DEPTH && (
+              <>
+                <View style={{ width: 12 }} />
+                <View style={[styles.field, { flex: 1 }]}>
+                  <Text style={styles.label}>{t('tyre.treadDepth')}</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={data.tread_depth_mm}
+                    onChangeText={v => update({ tread_depth_mm: v })}
+                    placeholder={t('tyre.treadPlaceholder')}
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              </>
+            )}
           </View>
 
           {/* Condition */}

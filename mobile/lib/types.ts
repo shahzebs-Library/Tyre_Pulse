@@ -116,6 +116,122 @@ export interface AccidentRecord {
   reviewed_at: string | null
   created_at: string
   updated_at: string
+
+  // ── Deep claims module (MIGRATIONS_V19) ───────────────────────────────────
+  responsible_party?: string | null     // who is at fault
+  liable_party?: string | null          // who is liable
+  payer?: string | null                 // who will pay
+  driver_name?: string | null
+  insurer?: string | null
+  policy_no?: string | null
+  claim_status?: ClaimStatus | null
+  claim_amount?: number | null
+  claim_approved_amount?: number | null
+  deductible?: number | null
+  parts_cost?: number | null
+  closure_status?: ClosureStatus | null
+  close_requested_by?: string | null
+  close_requested_at?: string | null
+  close_request_note?: string | null
+  closure_approved_by?: string | null
+  closure_approved_at?: string | null
+  closure_rejected_reason?: string | null
+
+  // Recovery (MIGRATIONS_V20)
+  recovered_amount?: number | null
+  recovery_date?: string | null
+  recovery_source?: RecoverySource | null
+  recovery_status?: RecoveryStatus | null
+  recovery_reference?: string | null
+}
+
+export type RecoverySource = 'none' | 'insurer' | 'third_party' | 'driver' | 'warranty'
+export type RecoveryStatus = 'pending' | 'partial' | 'recovered' | 'written_off'
+
+export const RECOVERY_SOURCE_LABELS: Record<RecoverySource, string> = {
+  none: 'None', insurer: 'Insurer', third_party: 'Third Party', driver: 'Driver', warranty: 'Warranty',
+}
+
+export const RECOVERY_STATUS_LABELS: Record<RecoveryStatus, string> = {
+  pending: 'Pending', partial: 'Partial', recovered: 'Recovered', written_off: 'Written Off',
+}
+
+export const RECOVERY_STATUS_COLORS: Record<RecoveryStatus, string> = {
+  pending: '#f59e0b', partial: '#3b82f6', recovered: '#16a34a', written_off: '#dc2626',
+}
+
+// ── Claims module supporting types ──────────────────────────────────────────────
+
+export type ClaimStatus = 'none' | 'filed' | 'approved' | 'rejected' | 'settled'
+export type ClosureStatus = 'open' | 'pending_closure' | 'closed'
+export type PartStatus = 'needed' | 'ordered' | 'received' | 'fitted'
+
+export type RemarkType =
+  | 'note' | 'insurance' | 'repair' | 'responsibility'
+  | 'status_change' | 'closure_request' | 'closure_approved' | 'closure_rejected'
+
+export interface AccidentRemark {
+  id: string
+  accident_id: string
+  author_id: string | null
+  author_name: string | null
+  remark: string
+  remark_type: RemarkType
+  created_at: string
+}
+
+export interface AccidentPart {
+  id: string
+  accident_id: string
+  part_name: string
+  part_number: string | null
+  quantity: number
+  unit_cost: number
+  total_cost: number
+  supplier: string | null
+  status: PartStatus
+  created_at: string
+}
+
+export const CLAIM_STATUS_LABELS: Record<ClaimStatus, string> = {
+  none:     'No Claim',
+  filed:    'Filed',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  settled:  'Settled',
+}
+
+export const CLAIM_STATUS_COLORS: Record<ClaimStatus, string> = {
+  none:     '#6b7280',
+  filed:    '#3b82f6',
+  approved: '#16a34a',
+  rejected: '#dc2626',
+  settled:  '#7c3aed',
+}
+
+export const PART_STATUS_LABELS: Record<PartStatus, string> = {
+  needed:   'Needed',
+  ordered:  'Ordered',
+  received: 'Received',
+  fitted:   'Fitted',
+}
+
+export const PART_STATUS_COLORS: Record<PartStatus, string> = {
+  needed:   '#f59e0b',
+  ordered:  '#3b82f6',
+  received: '#7c3aed',
+  fitted:   '#16a34a',
+}
+
+export const REMARK_TYPE_META: Record<RemarkType, { icon: string; color: string }> = {
+  note:             { icon: 'chatbubble-ellipses-outline', color: '#64748b' },
+  insurance:        { icon: 'shield-outline',              color: '#3b82f6' },
+  repair:           { icon: 'construct-outline',           color: '#f59e0b' },
+  responsibility:   { icon: 'person-outline',              color: '#7c3aed' },
+  status_change:    { icon: 'swap-horizontal-outline',     color: '#0ea5e9' },
+  closure_request:  { icon: 'lock-closed-outline',         color: '#f59e0b' },
+  closure_approved: { icon: 'checkmark-done-outline',      color: '#16a34a' },
+  closure_rejected: { icon: 'close-circle-outline',        color: '#dc2626' },
 }
 
 export interface AccidentDraft {
@@ -180,6 +296,20 @@ export const STATUS_COLORS: Record<AccidentStatus, string> = {
   reported:     '#3b82f6',
   under_review: '#f59e0b',
   closed:       '#6b7280',
+}
+
+// Iconic representations — distinct glyphs so severity / status read at a glance.
+export const SEVERITY_ICONS: Record<AccidentSeverity, string> = {
+  minor:    'alert-circle-outline',
+  moderate: 'warning-outline',
+  severe:   'flame-outline',
+  fatal:    'skull-outline',
+}
+
+export const STATUS_ICONS: Record<AccidentStatus, string> = {
+  reported:     'ellipse-outline',
+  under_review: 'hourglass-outline',
+  closed:       'checkmark-done-outline',
 }
 
 // ── Tyre position constants ───────────────────────────────────────────────────

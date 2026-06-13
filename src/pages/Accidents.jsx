@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2 } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import AccidentDetailModal from '../components/AccidentDetailModal'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -42,6 +43,14 @@ const STATUS_BADGE = {
   'Insurance Claim':       'bg-red-900/50 text-red-300 border border-red-700/50',
   'Closed':                'bg-green-900/50 text-green-300 border border-green-700/50',
 }
+
+// Mobile writes lowercase values (minor/severe, reported/closed); the web form
+// writes title-case. Canonicalise both vocabularies so badges & stats are correct.
+const SEVERITY_ALIAS = { minor: 'Minor', moderate: 'Major', major: 'Major', severe: 'Total Loss', fatal: 'Total Loss', 'total loss': 'Total Loss' }
+const STATUS_ALIAS = { reported: 'Reported', under_review: 'Under Investigation', under_investigation: 'Under Investigation', closed: 'Closed' }
+const canonSeverity = (s) => SEVERITY_ALIAS[String(s || '').toLowerCase()] || s || ''
+const canonStatus = (s) => STATUS_ALIAS[String(s || '').toLowerCase().replace(/\s+/g, '_')] || s || ''
+const isClosed = (r) => r.closure_status === 'closed' || canonStatus(r.status) === 'Closed'
 
 const EMPTY_FORM = {
   incident_date: '',
@@ -142,6 +151,8 @@ export default function Accidents() {
   const [filterFrom, setFilterFrom]            = useState('')
   const [filterTo, setFilterTo]                = useState('')
   const [statusFunnel, setStatusFunnel]        = useState('')
+  const [onlyPendingClosure, setOnlyPendingClosure] = useState(false)
+  const [detailId, setDetailId]                = useState(null)
 
   const loadRecords = useCallback(async () => {
     setLoading(true)
@@ -159,10 +170,10 @@ export default function Accidents() {
 
   const stats = useMemo(() => {
     const total  = records.length
-    const open   = records.filter(r => r.status !== 'Closed').length
-    const insur  = records.filter(r => r.status === 'Insurance Claim').length
-    const cost   = records.reduce((s, r) => s + (Number(r.repair_cost) || 0), 0)
-    const closed = records.filter(r => r.status === 'Closed')
+    const open   = records.filter(r => !isClosed(r)).length
+    const insur  = records.filter(r => canonStatus(r.status) === 'Insurance Claim' || (r.claim_status && r.claim_status !== 'none')).length
+    const cost   = records.reduce((s, r) => s + (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0), 0)
+    const closed = records.filter(r => isClosed(r))
     let avgDays  = 0
     if (closed.length > 0) {
       const total_days = closed.reduce((sum, r) => {
@@ -306,9 +317,79 @@ export default function Accidents() {
     }))
   }, [records, statusCounts])
 
+  // ---- Claims & cost-recovery analytics (V19 module) ----
+  const claimAnalytics = useMemo(() => {
+    let totalClaim = 0, totalApproved = 0, totalParts = 0, totalRepair = 0, totalDeductible = 0, totalRecovered = 0
+    const byStatus = { none: 0, filed: 0, approved: 0, rejected: 0, settled: 0 }
+    const byRecovery = { pending: 0, partial: 0, recovered: 0, written_off: 0 }
+    const byPayer = {}
+    let pendingClosure = 0, closedApproved = 0
+    records.forEach(r => {
+      totalClaim      += Number(r.claim_amount) || 0
+      totalApproved   += Number(r.claim_approved_amount) || 0
+      totalParts      += Number(r.parts_cost) || 0
+      totalRepair     += Number(r.repair_cost) || 0
+      totalDeductible += Number(r.deductible) || 0
+      totalRecovered  += Number(r.recovered_amount) || 0
+      const cs = r.claim_status || 'none'
+      if (byStatus[cs] !== undefined) byStatus[cs]++
+      const rs = r.recovery_status || 'pending'
+      if (byRecovery[rs] !== undefined) byRecovery[rs]++
+      const cost = (Number(r.repair_cost) || 0) + (Number(r.parts_cost) || 0)
+      if (cost > 0) { const p = r.payer || 'Unassigned'; byPayer[p] = (byPayer[p] || 0) + cost }
+      if (r.closure_status === 'pending_closure') pendingClosure++
+      if (r.closure_status === 'closed') closedApproved++
+    })
+    const grossCost   = totalRepair + totalParts
+    const recovery    = grossCost > 0 ? Math.round((totalRecovered / grossCost) * 100) : 0
+    const netExposure = Math.max(0, grossCost - totalRecovered)
+    return {
+      totalClaim, totalApproved, totalParts, totalRepair, totalDeductible, totalRecovered,
+      grossCost, recovery, netExposure, byStatus, byRecovery, byPayer, pendingClosure, closedApproved,
+    }
+  }, [records])
+
+  const claimStatusChart = useMemo(() => {
+    const order = ['filed', 'approved', 'settled', 'rejected', 'none']
+    const labels = { none: 'No Claim', filed: 'Filed', approved: 'Approved', rejected: 'Rejected', settled: 'Settled' }
+    const colors = { none: '#6b7280', filed: '#3b82f6', approved: '#16a34a', rejected: '#dc2626', settled: '#9333ea' }
+    return {
+      labels: order.map(k => labels[k]),
+      datasets: [{
+        label: 'Claims',
+        data: order.map(k => claimAnalytics.byStatus[k] ?? 0),
+        backgroundColor: order.map(k => colors[k] + 'b3'),
+        borderColor: order.map(k => colors[k]),
+        borderWidth: 1,
+        borderRadius: 3,
+      }],
+    }
+  }, [claimAnalytics])
+
+  const payerCostChart = useMemo(() => {
+    const sorted = Object.entries(claimAnalytics.byPayer).sort((a, b) => b[1] - a[1]).slice(0, 6)
+    return {
+      labels: sorted.map(([k]) => k),
+      datasets: [{
+        label: 'Cost',
+        data: sorted.map(([, v]) => v),
+        backgroundColor: 'rgba(168,85,247,0.7)',
+        borderColor: '#a855f7',
+        borderWidth: 1,
+        borderRadius: 3,
+      }],
+    }
+  }, [claimAnalytics])
+
+  const pendingClosures = useMemo(
+    () => records.filter(r => r.closure_status === 'pending_closure').length,
+    [records],
+  )
+
   // ---- Incidents tab filtered data ----
   const filtered = useMemo(() => {
     let arr = records
+    if (onlyPendingClosure) arr = arr.filter(r => r.closure_status === 'pending_closure')
     if (statusFunnel)   arr = arr.filter(r => r.status === statusFunnel)
     if (filterStatus)   arr = arr.filter(r => r.status === filterStatus)
     if (filterSeverity) arr = arr.filter(r => r.severity === filterSeverity)
@@ -323,7 +404,7 @@ export default function Accidents() {
       )
     }
     return arr
-  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel])
+  }, [records, search, filterSite, filterSeverity, filterStatus, filterFrom, filterTo, statusFunnel, onlyPendingClosure])
 
   function openAdd() {
     setForm(EMPTY_FORM)
@@ -412,9 +493,48 @@ export default function Accidents() {
     })
   }
 
-  const exportCols    = ['incident_date', 'asset_no', 'site', 'severity', 'status', 'repair_cost', 'inspector']
-  const exportHeaders = ['Date', 'Asset', 'Site', 'Severity', 'Status', 'Repair Cost', 'Inspector']
-  const exportPdfCols = exportCols.map((k, i) => ({ key: k, header: exportHeaders[i] }))
+  // Full export — every incident + claim + recovery + cost field ("everything").
+  const EXPORT_FIELDS = [
+    ['incident_date', 'Date', r => r.incident_date],
+    ['asset_no', 'Asset', r => r.asset_no],
+    ['site', 'Site', r => r.site],
+    ['country', 'Country', r => r.country],
+    ['severity', 'Severity', r => canonSeverity(r.severity)],
+    ['status', 'Status', r => canonStatus(r.status)],
+    ['closure_status', 'Closure', r => r.closure_status],
+    ['responsible_party', 'Responsible', r => r.responsible_party],
+    ['liable_party', 'Liable', r => r.liable_party],
+    ['payer', 'Who Pays', r => r.payer],
+    ['driver_name', 'Driver', r => r.driver_name],
+    ['insurer', 'Insurer', r => r.insurer],
+    ['policy_no', 'Policy/Claim No', r => r.policy_no],
+    ['claim_status', 'Claim Status', r => r.claim_status],
+    ['claim_amount', 'Claim Amount', r => r.claim_amount],
+    ['claim_approved_amount', 'Approved', r => r.claim_approved_amount],
+    ['deductible', 'Deductible', r => r.deductible],
+    ['recovery_status', 'Recovery Status', r => r.recovery_status],
+    ['recovered_amount', 'Recovered', r => r.recovered_amount],
+    ['recovery_source', 'Recovery Source', r => r.recovery_source],
+    ['recovery_date', 'Recovery Date', r => r.recovery_date],
+    ['recovery_reference', 'Recovery Ref', r => r.recovery_reference],
+    ['repair_cost', 'Repair Cost', r => r.repair_cost],
+    ['estimated_damage_cost', 'Est. Damage', r => r.estimated_damage_cost],
+    ['parts_cost', 'Parts Cost', r => r.parts_cost],
+    ['net_cost', 'Net Cost', r => Math.max(0, (Number(r.repair_cost) || Number(r.estimated_damage_cost) || 0) + (Number(r.parts_cost) || 0) - (Number(r.recovered_amount) || 0))],
+    ['inspector', 'Inspector', r => r.inspector],
+    ['reporter_name', 'Reported By', r => r.reporter_name],
+  ]
+  const exportCols    = EXPORT_FIELDS.map(f => f[0])
+  const exportHeaders = EXPORT_FIELDS.map(f => f[1])
+  const exportPdfCols = EXPORT_FIELDS.map(([key, header]) => ({ key, header }))
+  const exportRows = useMemo(
+    () => filtered.map(r => {
+      const o = {}
+      EXPORT_FIELDS.forEach(([k, , get]) => { o[k] = get(r) ?? '' })
+      return o
+    }),
+    [filtered],
+  )
 
   return (
     <div className="space-y-4">
@@ -427,13 +547,13 @@ export default function Accidents() {
         />
         <div className="flex gap-2 flex-wrap">
           <button
-            onClick={() => exportToExcel(filtered, exportCols, exportHeaders, 'TyrePulse_Accidents')}
+            onClick={() => exportToExcel(exportRows, exportCols, exportHeaders, 'TyrePulse_Accidents')}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
             <Download size={14} /> Excel
           </button>
           <button
-            onClick={() => exportToPdf(filtered, exportPdfCols, 'Accidents & Incidents', 'TyrePulse_Accidents', 'landscape')}
+            onClick={() => exportToPdf(exportRows, exportPdfCols, 'Accidents & Incidents', 'TyrePulse_Accidents', 'landscape')}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
             <FileText size={14} /> PDF
@@ -475,6 +595,27 @@ export default function Accidents() {
       {/* ===== INCIDENTS TAB ===== */}
       {tab === 'incidents' && (
         <>
+          {/* Closures awaiting approval */}
+          {pendingClosures > 0 && (
+            <button
+              onClick={() => setOnlyPendingClosure(v => !v)}
+              className={`w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
+                onlyPendingClosure
+                  ? 'bg-yellow-900/40 border-yellow-600'
+                  : 'bg-yellow-900/20 border-yellow-700/50 hover:bg-yellow-900/30'
+              }`}
+            >
+              <Hourglass size={18} className="text-yellow-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-yellow-200">
+                  {pendingClosures} closure{pendingClosures > 1 ? 's' : ''} awaiting approval
+                </p>
+                <p className="text-xs text-yellow-500/80">Tap to {onlyPendingClosure ? 'show all incidents' : 'review and approve closures'}</p>
+              </div>
+              {onlyPendingClosure && <X size={14} className="text-yellow-400" />}
+            </button>
+          )}
+
           {/* Stats row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
@@ -598,22 +739,30 @@ export default function Accidents() {
                       <td className="table-cell">{row.site || '-'}</td>
                       <td className="table-cell">
                         {row.severity && (
-                          <span className={`badge text-xs ${SEVERITY_BADGE[row.severity] ?? 'bg-gray-800 text-gray-300'}`}>
-                            {row.severity}
+                          <span className={`badge text-xs ${SEVERITY_BADGE[canonSeverity(row.severity)] ?? 'bg-gray-800 text-gray-300'}`}>
+                            {canonSeverity(row.severity)}
                           </span>
                         )}
                       </td>
                       <td className="table-cell">
-                        {row.status && (
-                          <span className={`badge text-xs ${STATUS_BADGE[row.status] ?? 'bg-gray-800 text-gray-300'}`}>
-                            {row.status}
-                          </span>
-                        )}
+                        <div className="flex flex-col gap-1 items-start">
+                          {row.status && (
+                            <span className={`badge text-xs ${STATUS_BADGE[canonStatus(row.status)] ?? 'bg-gray-800 text-gray-300'}`}>
+                              {canonStatus(row.status)}
+                            </span>
+                          )}
+                          {row.closure_status === 'pending_closure' && (
+                            <span className="badge text-xs bg-yellow-900/50 text-yellow-300 border border-yellow-700/50 flex items-center gap-1">
+                              <Hourglass size={10} /> Pending Closure
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="table-cell whitespace-nowrap">{fmtCurrency(row.repair_cost)}</td>
                       <td className="table-cell">{row.inspector || '-'}</td>
                       <td className="table-cell">
                         <div className="flex items-center gap-2">
+                          <button onClick={() => setDetailId(row.id)} className="text-gray-400 hover:text-green-400 text-xs transition-colors flex items-center gap-1"><Eye size={12} /> Open</button>
                           <button onClick={() => openEdit(row)} className="text-gray-400 hover:text-blue-400 text-xs transition-colors">Edit</button>
                           {row.status !== 'Closed' && (
                             <button onClick={() => raiseAction(row)} className="text-gray-400 hover:text-orange-400 text-xs transition-colors whitespace-nowrap">Raise CA</button>
@@ -686,6 +835,67 @@ export default function Accidents() {
             <p className="text-sm font-semibold text-gray-300 mb-3">Monthly Severity Breakdown (last 12 months)</p>
             <div style={{ height: 220 }}>
               <Bar data={severityMonthlyChart} options={CHART_OPTS_STACKED} />
+            </div>
+          </div>
+
+          {/* Claims & cost recovery */}
+          <div className="card">
+            <p className="text-sm font-semibold text-gray-300 mb-3">Claims & Cost Recovery</p>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+              <div className="text-center">
+                <p className="text-lg font-bold text-white">{fmtCurrency(claimAnalytics.grossCost)}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Gross Cost (repair + parts)</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-blue-400">{fmtCurrency(claimAnalytics.totalClaim)}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Total Claimed</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-green-400">{fmtCurrency(claimAnalytics.totalRecovered)}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Recovered</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-orange-400">{fmtCurrency(claimAnalytics.netExposure)}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Net After Recovery</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-purple-400">{fmtCurrency(claimAnalytics.totalParts)}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Parts Cost</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-bold text-yellow-400">{claimAnalytics.pendingClosure}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Pending Closures</p>
+              </div>
+            </div>
+
+            {/* Recovery rate bar */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-400">Insurance recovery rate</span>
+                <span className="text-sm font-semibold text-gray-200">{claimAnalytics.recovery}%</span>
+              </div>
+              <div className="w-full bg-gray-800 rounded-full h-2.5">
+                <div
+                  className="h-2.5 rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, claimAnalytics.recovery)}%`,
+                    background: claimAnalytics.recovery >= 75 ? '#16a34a' : claimAnalytics.recovery >= 40 ? '#ca8a04' : '#dc2626',
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium text-gray-400 mb-2">Claim Status Breakdown</p>
+                <div style={{ height: 180 }}><Bar data={claimStatusChart} options={chartOpts} /></div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-400 mb-2">Cost by Responsible Payer</p>
+                {payerCostChart.labels.length === 0
+                  ? <p className="text-gray-500 text-sm text-center py-12">No payer cost data</p>
+                  : <div style={{ height: 180 }}><Bar data={payerCostChart} options={CHART_OPTS_H} /></div>}
+              </div>
             </div>
           </div>
 
@@ -875,6 +1085,15 @@ export default function Accidents() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Deep claims detail (timeline, parts, claim, closure workflow) */}
+      {detailId && (
+        <AccidentDetailModal
+          accidentId={detailId}
+          onClose={() => setDetailId(null)}
+          onChanged={loadRecords}
+        />
       )}
     </div>
   )

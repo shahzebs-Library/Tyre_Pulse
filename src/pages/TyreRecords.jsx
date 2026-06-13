@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { applyCountry } from '../lib/countryFilter'
 import { ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
 import { formatCurrencyCompact } from '../lib/formatters'
 import {
@@ -85,7 +86,7 @@ export default function TyreRecords() {
     if (siteFilter) q = q.eq('site', siteFilter)
     if (brandFilter) q = q.eq('brand', brandFilter)
     if (riskFilter) q = q.eq('risk_level', riskFilter)
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    q = applyCountry(q, activeCountry)
 
     const { data, count } = await q
     setRecords(data ?? [])
@@ -212,7 +213,7 @@ export default function TyreRecords() {
     if (siteFilter)  q = q.eq('site', siteFilter)
     if (brandFilter) q = q.eq('brand', brandFilter)
     if (riskFilter)  q = q.eq('risk_level', riskFilter)
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    q = applyCountry(q, activeCountry)
     const { data } = await q
     return data ?? []
   }

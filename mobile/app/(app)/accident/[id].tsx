@@ -19,9 +19,13 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
+import AccidentClaimsPanel from '../../../components/AccidentClaimsPanel'
+import { describeAuditRow, AuditRow } from '../../../lib/auditDiff'
+import { exportAccidentPdf } from '../../../lib/accidentPdf'
 import {
   AccidentRecord, AccidentStatus,
   SEVERITY_COLORS, STATUS_COLORS,
+  SEVERITY_ICONS, STATUS_ICONS,
   isAdminOrAbove, isAdmin,
 } from '../../../lib/types'
 
@@ -37,14 +41,6 @@ const TYPE_ICONS: Record<string, string> = {
   near_miss:       'warning-outline',
   property_damage: 'business-outline',
   other:           'ellipsis-horizontal-circle-outline',
-}
-
-interface AuditRow {
-  id: string
-  changed_at: string
-  action: string
-  old_values: Record<string, any> | null
-  new_values: Record<string, any> | null
 }
 
 export default function AccidentDetailScreen() {
@@ -63,6 +59,19 @@ export default function AccidentDetailScreen() {
   const [analyzing, setAnalyzing]           = useState(false)
   const [aiResult, setAiResult]             = useState<string | null>(null)
   const [showAiModal, setShowAiModal]       = useState(false)
+  const [exporting, setExporting]           = useState(false)
+
+  async function handleExportPdf() {
+    if (!accident || exporting) return
+    setExporting(true)
+    try {
+      await exportAccidentPdf(accident)
+    } catch (e: any) {
+      Alert.alert('Export failed', e?.message ?? 'Could not generate the PDF.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const role           = profile?.role ?? null
   const canChangeStatus = isAdminOrAbove(role)
@@ -74,12 +83,7 @@ export default function AccidentDetailScreen() {
     const [accRes, auditRes] = await Promise.all([
       supabase.from('accidents').select('*').eq('id', id).single(),
       canSeeAudit
-        ? supabase
-            .from('accident_audit_log')
-            .select('id, changed_at, action, old_values, new_values')
-            .eq('accident_id', id)
-            .order('changed_at', { ascending: false })
-            .limit(20)
+        ? supabase.rpc('get_accident_audit', { p_accident_id: id })
         : Promise.resolve({ data: [] }),
     ])
 
@@ -109,12 +113,7 @@ export default function AccidentDetailScreen() {
     } else {
       setAccident(prev => prev ? { ...prev, status: newStatus } : prev)
       // Reload audit log
-      const { data } = await supabase
-        .from('accident_audit_log')
-        .select('id, changed_at, action, old_values, new_values')
-        .eq('accident_id', accident.id)
-        .order('changed_at', { ascending: false })
-        .limit(20)
+      const { data } = await supabase.rpc('get_accident_audit', { p_accident_id: accident.id })
       if (data) setAuditLog(data as AuditRow[])
     }
     setStatusLoading(false)
@@ -244,7 +243,7 @@ Risk Level: [Critical / High / Medium / Low]
           {statusLoading
             ? <ActivityIndicator size="small" color={statusColor} />
             : <>
-                <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                <Ionicons name={STATUS_ICONS[accident.status] as any} size={13} color={statusColor} />
                 <Text style={[styles.statusText, { color: statusColor }]}>
                   {t(`accident.statuses.${accident.status}`)}
                 </Text>
@@ -253,6 +252,13 @@ Risk Level: [Critical / High / Medium / Low]
                 )}
               </>
           }
+        </TouchableOpacity>
+
+        {/* Export PDF */}
+        <TouchableOpacity style={styles.pdfBtn} onPress={handleExportPdf} disabled={exporting}>
+          {exporting
+            ? <ActivityIndicator size="small" color="#dc2626" />
+            : <Ionicons name="share-outline" size={18} color="#dc2626" />}
         </TouchableOpacity>
 
         {/* Admin: delete button */}
@@ -276,7 +282,7 @@ Risk Level: [Critical / High / Medium / Low]
         <View style={[styles.heroCard, { borderLeftColor: sevColor, borderLeftWidth: 5 }]}>
           <View style={styles.heroTop}>
             <View style={[styles.sevBadge, { backgroundColor: sevColor + '18', borderColor: sevColor + '40' }]}>
-              <Ionicons name="warning" size={13} color={sevColor} />
+              <Ionicons name={SEVERITY_ICONS[accident.severity] as any} size={13} color={sevColor} />
               <Text style={[styles.sevBadgeText, { color: sevColor }]}>
                 {t(`accident.severities.${accident.severity}`).toUpperCase()}
               </Text>
@@ -353,6 +359,9 @@ Risk Level: [Critical / High / Medium / Low]
           </SectionCard>
         ) : null}
 
+        {/* ── Deep claims module: closure, claim/responsibility, parts, log ──── */}
+        <AccidentClaimsPanel accident={accident} onChanged={load} />
+
         {/* ── Photo gallery ──────────────────────────────────────────────────── */}
         {photos.length > 0 && (
           <SectionCard title={`${t('accident.photosSection')} (${photos.length})`} icon="images-outline">
@@ -377,36 +386,36 @@ Risk Level: [Critical / High / Medium / Low]
           </SectionCard>
         )}
 
-        {/* ── Audit Trail (admin / manager / director only) ──────────────────── */}
+        {/* ── Activity / Audit (admin / manager / director only) ─────────────── */}
         {canSeeAudit && auditLog.length > 0 && (
-          <SectionCard title="Audit Trail" icon="shield-checkmark-outline">
+          <SectionCard title="Activity — who changed what" icon="shield-checkmark-outline">
             {auditLog.map((row, i) => {
               const actionColor =
                 row.action === 'status_change' ? '#3b82f6'
                 : row.action === 'delete'      ? '#dc2626'
-                : '#94a3b8'
-              const actionLabel =
-                row.action === 'status_change' ? 'Status Changed'
-                : row.action === 'delete'       ? 'Deleted'
-                : 'Fields Updated'
-              const oldStatus = row.old_values?.status
-              const newStatus = row.new_values?.status
+                : row.action?.startsWith('part_') ? '#7c3aed'
+                : '#16a34a'
+              const d = describeAuditRow(row)
 
               return (
                 <View key={row.id} style={[styles.auditRow, i < auditLog.length - 1 && styles.auditRowBorder]}>
                   <View style={[styles.auditDot, { backgroundColor: actionColor }]} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <View style={styles.auditTop}>
-                      <Text style={[styles.auditAction, { color: actionColor }]}>{actionLabel}</Text>
+                      <Text style={[styles.auditAction, { color: actionColor }]}>{d.title}</Text>
                       <Text style={styles.auditTime}>
                         {new Date(row.changed_at).toLocaleDateString()} {new Date(row.changed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </Text>
                     </View>
-                    {row.action === 'status_change' && oldStatus && newStatus && (
-                      <Text style={styles.auditDetail}>
-                        {oldStatus} → {newStatus}
+                    <Text style={styles.auditActor}>
+                      <Ionicons name="person-outline" size={10} color="#94a3b8" /> {row.actor_name ?? 'User'}
+                    </Text>
+                    {d.summary && <Text style={styles.auditDetail}>{d.summary}</Text>}
+                    {d.lines.map((l, li) => (
+                      <Text key={li} style={styles.auditDetail}>
+                        {l.label}: <Text style={{ color: '#dc2626' }}>{l.from}</Text> → <Text style={{ color: '#16a34a' }}>{l.to}</Text>
                       </Text>
-                    )}
+                    ))}
                   </View>
                 </View>
               )
@@ -622,6 +631,11 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#fef2f2',
   },
+  pdfBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#fef2f2',
+  },
   headerTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
   headerSub:   { fontSize: 11, color: '#94a3b8', marginTop: 1 },
 
@@ -711,6 +725,7 @@ const styles = StyleSheet.create({
   auditAction: { fontSize: 12, fontWeight: '700' },
   auditTime:   { fontSize: 11, color: '#94a3b8' },
   auditDetail: { fontSize: 11, color: '#64748b', marginTop: 1 },
+  auditActor:  { fontSize: 11, color: '#94a3b8', fontWeight: '600' },
 
   // Status modal
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },

@@ -5,6 +5,7 @@ import PageHeader from '../components/ui/PageHeader'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { applyCountry } from '../lib/countryFilter'
 import EmailReportModal from '../components/EmailReportModal'
 
 const REPORT_TYPES = [
@@ -165,7 +166,7 @@ export default function Reports() {
         if (filterSite)       q = q.ilike('site', `%${filterSite}%`)
         if (filterCountry)    q = q.eq('country', filterCountry)
         if (filterInspType)   q = q.eq('inspection_type', filterInspType)
-        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        if (!filterCountry)   q = applyCountry(q, activeCountry)
         const { data } = await q.order('inspection_date', { ascending: false }).limit(5000)
         rows = data ?? []
       } else {
@@ -176,7 +177,7 @@ export default function Reports() {
         if (dateTo)        q = q.lte('issue_date', dateTo)
         if (filterSite)    q = q.ilike('site', `%${filterSite}%`)
         if (filterCountry) q = q.eq('country', filterCountry)
-        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        if (!filterCountry) q = applyCountry(q, activeCountry)
 
         if (reportType === 'Vehicle History' && filterAsset)
           q = q.ilike('asset_no', `%${filterAsset}%`)
@@ -618,7 +619,7 @@ export default function Reports() {
         onClose={() => setEmailModalOpen(false)}
         reportTitle={reportType ? `${reportType} Report` : 'Custom Report'}
         pdfColumns={displayCols.map(c => COLUMN_LABELS[c] ?? c)}
-        pdfRows={allRows.slice(0, 500).map(row => displayCols.map(c => row[c] ?? ''))}
+        pdfRows={allRows.slice(0, 5000).map(row => displayCols.map(c => row[c] ?? ''))}
         kpiSummary={{
           'Report Type':    reportType || '—',
           'Total Records':  allRows.length.toLocaleString(),

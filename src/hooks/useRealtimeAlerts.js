@@ -133,6 +133,42 @@ function buildAlertNotification(alertRecord) {
   })
 }
 
+// Per-user `notifications` table rows (closure approvals, etc.)
+const NOTIF_SEVERITY = {
+  closure_request:  'High',
+  closure_rejected: 'High',
+  closure_approved: 'Low',
+  info:             'Low',
+}
+
+function buildDbNotification(row) {
+  return {
+    id:         `db-${row.id}`,
+    dbId:       row.id,
+    type:       row.type || 'info',
+    title:      row.title || 'Notification',
+    message:    row.body || '',
+    severity:   NOTIF_SEVERITY[row.type] || 'Medium',
+    assetNo:    null,
+    entityType: row.entity_type || null,
+    entityId:   row.entity_id || null,
+    timestamp:  row.created_at || new Date().toISOString(),
+    read:       !!row.read,
+  }
+}
+
+// Merge DB rows into the list, dedupe by id, newest first, capped.
+function mergeDb(existing, incoming) {
+  const byId = new Map(existing.map(n => [n.id, n]))
+  for (const n of incoming) {
+    const prev = byId.get(n.id)
+    byId.set(n.id, prev ? { ...prev, ...n, read: prev.read || n.read } : n)
+  }
+  return Array.from(byId.values())
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .slice(0, MAX_NOTIFICATIONS)
+}
+
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useRealtimeAlerts() {
@@ -213,16 +249,59 @@ export function useRealtimeAlerts() {
     }
   }, [addNotification])
 
+  // Per-user DB notifications (closure approvals etc.): initial fetch + realtime.
+  useEffect(() => {
+    let cancelled = false
+    let channel = null
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || cancelled) return
+
+      const { data } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(MAX_NOTIFICATIONS)
+      if (data && !cancelled) {
+        setNotifications(prev => mergeDb(prev, data.map(buildDbNotification)))
+      }
+
+      channel = supabase
+        .channel('tp-db-notifications')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+          ({ new: row }) => setNotifications(prev => mergeDb(prev, [buildDbNotification(row)])),
+        )
+        .subscribe()
+    })()
+
+    return () => {
+      cancelled = true
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [])
+
   // ── Actions ────────────────────────────────────────────────────────────────
 
   const markRead = useCallback((id) => {
     setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, read: true } : n)
     )
+    // Persist read state for DB-backed notifications
+    if (typeof id === 'string' && id.startsWith('db-')) {
+      supabase.rpc('mark_notification_read', { p_id: id.slice(3) }).then(() => {}, () => {})
+    }
   }, [])
 
   const markAllRead = useCallback(() => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+    setNotifications(prev => {
+      prev
+        .filter(n => !n.read && typeof n.id === 'string' && n.id.startsWith('db-'))
+        .forEach(n => supabase.rpc('mark_notification_read', { p_id: n.id.slice(3) }).then(() => {}, () => {}))
+      return prev.map(n => ({ ...n, read: true }))
+    })
   }, [])
 
   const clearAll = useCallback(() => {

@@ -38,6 +38,7 @@
     "inspect": "Inspect",
     "accident": "Accident",
     "history": "History",
+    "admin": "Admin",
     "profile": "Profile"
   },
   "home": {
@@ -71,8 +72,12 @@
     "notesLabel": "General Notes",
     "notesPlaceholder": "Any general observations…",
     "nextButton": "Next: Tyre Inspection",
+    "vehicleSearchPlaceholder": "Search asset, type, make…",
+    "vehicleNoMatch": "No vehicle matches your search",
+    "vehicleNone": "No vehicles found for this site",
+    "progressLabel": "Positions recorded",
     "tyrePositionsTitle": "Tyre Positions",
-    "tyreHint": "Tap each position to expand and record readings. Tap photo icon to capture tyre image.",
+    "tyreHint": "Tap any tyre on the diagram to jump to its card, or tap a card to expand and record readings. Tap the photo icon to capture a tyre image.",
     "submitButton": "Submit Inspection",
     "submittedTitle": "Inspection Submitted",
     "offlineNote": "If you were offline, the inspection is queued and will sync automatically when connected.",
@@ -145,7 +150,11 @@
     "worn": "Worn",
     "damaged": "Damaged",
     "flat": "Flat",
-    "missing": "Missing"
+    "missing": "Missing",
+    "done": "Done",
+    "matchFound": "Matched in records",
+    "matchNone": "No matching tyre record found",
+    "useLastPressure": "Use last pressure"
   },
   "sync": {
     "offline": "Offline — inspections will sync when connected",
@@ -274,6 +283,7 @@
     "noMatchHint": "No vehicle or tyre matches this code.",
     "scanned": "Scanned",
     "startInspection": "Start Inspection",
+    "inspectThisTyre": "Inspect This Tyre",
     "scanAgain": "Scan Again",
     "torchOn": "Torch On",
     "torchOff": "Torch Off",

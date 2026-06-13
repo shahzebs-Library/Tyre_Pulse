@@ -732,7 +732,7 @@ export default function UploadData() {
     const defaultCountry = activeCountry !== 'All' ? activeCountry : 'KSA'
     let records = buildRows(headers, rows, mapping).map(r => ({
       ...r,
-      country:         r.country || defaultCountry,
+      country:         (r.country && String(r.country).trim()) || defaultCountry,
       region:          profile?.region ?? defaultCountry,
       uploaded_by:     profile?.id,
       upload_batch_id: batchId,

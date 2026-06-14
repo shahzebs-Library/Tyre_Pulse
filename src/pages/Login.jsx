@@ -225,7 +225,11 @@ export default function Login() {
   }, [])
 
   const sessionExpired = localStorage.getItem('tp_session_expired') === '1'
-  useEffect(() => { if (sessionExpired) localStorage.removeItem('tp_session_expired') }, [])
+  const accessRevoked  = localStorage.getItem('tp_access_revoked')  === '1'
+  useEffect(() => {
+    if (sessionExpired) localStorage.removeItem('tp_session_expired')
+    if (accessRevoked)  localStorage.removeItem('tp_access_revoked')
+  }, [])
 
   const currentMode = ID_MODES.find(m => m.value === idMode)
 
@@ -468,6 +472,28 @@ export default function Login() {
               >
                 <AlertCircle size={14} style={{flexShrink:0}}/>
                 Session expired after inactivity. Please sign in again.
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Access revoked banner */}
+          <AnimatePresence>
+            {accessRevoked && (
+              <motion.div
+                initial={{ opacity:0, y:-8, height:0 }}
+                animate={{ opacity:1, y:0, height:'auto' }}
+                exit={{ opacity:0, height:0 }}
+                style={{
+                  display:'flex', alignItems:'center', gap:8,
+                  padding:'10px 14px', borderRadius:12, marginBottom:12,
+                  fontSize:13, color:'#fca5a5',
+                  background:'rgba(239,68,68,0.08)',
+                  border:'1px solid rgba(239,68,68,0.25)',
+                  width:'100%', maxWidth:420,
+                }}
+              >
+                <AlertCircle size={14} style={{flexShrink:0}}/>
+                Your account access has been suspended. Contact your administrator.
               </motion.div>
             )}
           </AnimatePresence>

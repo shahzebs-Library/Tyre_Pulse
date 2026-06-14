@@ -77,7 +77,19 @@ export function AuthProvider({ children }) {
       supabase.rpc('get_user_module_permissions'),
       supabase.auth.mfa.listFactors(),
     ])
-    setProfile(profileRes.data)
+
+    const p = profileRes.data
+    // Enforce locked / unapproved accounts immediately on the client
+    if (p && (p.locked === true || p.approved === false)) {
+      await supabase.auth.signOut()
+      localStorage.setItem('tp_access_revoked', '1')
+      setProfile(null)
+      setModulePerms({})
+      setLoading(false)
+      return
+    }
+
+    setProfile(p)
     setModulePerms(permsRes.data ?? {})
     setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)
     setLoading(false)

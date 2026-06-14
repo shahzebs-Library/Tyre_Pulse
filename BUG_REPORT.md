@@ -9,10 +9,10 @@
 | Severity | Total | ✅ Resolved | ◑ Partial / cosmetic | ⚠️ Re-verify on device |
 |----------|-------|-------------|----------------------|------------------------|
 | Critical | 8 | 8 | 0 | 0 |
-| High | 11 | 6 | 1 | 4 |
-| Medium | 9 | 4 | 5 | 0 |
+| High | 11 | 7 | 0 | 4 |
+| Medium | 9 | 5 | 4 | 0 |
 | Low | 5 | 2 | 3 | 0 |
-| **Total** | **33** | **20** | **9** | **4** |
+| **Total** | **33** | **22** | **7** | **4** |
 
 No **error-level** issues remain. Remaining items are cosmetic/UX or need a manual device pass (offline/exports/PDF).
 
@@ -34,14 +34,14 @@ No **error-level** issues remain. Remaining items are cosmetic/UX or need a manu
 | 012 | Dashboard CPK NaN | ✅ Resolved | kpiEngine returns guarded scalars |
 | 013 | Reports PDF silent fail | ⚠️ Re-verify | `autoTable` registered; live-SVG capture added (Inspections) |
 | 014 | Tyre-changes date filter | ⚠️ Re-verify | confirm gte/lte applied |
-| 015 | Driver Behavior no data | ◑ Open | needs null-safe `driver_id` fallback grouping |
+| 015 | Driver Behavior no data | ✅ Resolved | groups by `driver_name` with `'Unassigned'` fallback (DriverManagement.jsx:110) — null-safe |
 | 016 | Predictive spinner stuck | ✅ Resolved | `catch { setLoading(false) }` present |
 | 017 | Inventory double-count | ◑ Re-verify | confirm distinct/status filter on stock |
 | 018 | Cost-analysis ÷0 | ✅ Resolved | `_isValidRecord` guarantees `remKm > fitKm` |
 | 019 | Workshop save duplicates | ◑ Re-verify | confirm single submit path |
 | 020 | Country change no refresh | ◑ Partial | `applyCountry()` helper + Dashboard focus-refresh; most pages have `activeCountry` in deps |
 | 021 | Active filter null | ✅ Resolved | `active !== false` |
-| 022 | Medium risk badge color | ◑ Cosmetic | amber contrast ~3.2:1 (WCAG AA nit) |
+| 022 | Medium risk badge color | ✅ Resolved | all Medium badges now pass contrast (amber-100/700, amber-400-on-dark, white-on-yellow-700) |
 | 023 | Upload progress bar | ✅ Resolved | `setProgress` updates per batch |
 | 024 | Notifications stale count | ✅ Resolved | realtime channel + focus refresh (useRealtimeAlerts) |
 | 025 | Map pins overlap | ◑ N/A | no live map feature / needs lat-lng seeding |
@@ -60,11 +60,10 @@ No **error-level** issues remain. Remaining items are cosmetic/UX or need a manu
 - 009 bulk actions, 010 CSV export, 013 PDF generation, 014 date filter, 017 inventory counts, 019 workshop submit, 032 mobile tables.
 
 **Code — small, safe follow-ups:**
-- 015 Driver Behavior: group by `driver_id`, treat null as "Unassigned".
 - 020 Country refresh: extend the `applyCountry()` + focus-refresh pattern to any remaining list pages.
 
 **Cosmetic / design:**
-- 022 amber badge contrast, 026 print CSS, 028 radar skeleton, 029 date locale, 030 empty states.
+- 026 print CSS, 028 radar skeleton, 029 date locale, 030 empty states.
 
 ## Architecture / design debt (still valid)
 1. `kpiEngine.js` returns objects not scalars — consumers must destructure (guards now in place).

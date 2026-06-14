@@ -208,3 +208,49 @@ Each role sees a tailored set of screens and actions, on both web and mobile.
 5. Reports go out to leadership with the right numbers for each country.
 
 That is TyrePulse: capture once, trust the data, and act with confidence.
+
+---
+
+## 7. Screenshots
+
+Drop your images into `docs/screenshots/` using the file names below and they will show here. They are listed even before the files exist, so you can see what to capture. Take them on a logged in device so the real data shows.
+
+### Web
+
+**Dashboard**
+![Dashboard](docs/screenshots/dashboard.png)
+
+**Tyre Records**
+![Tyre Records](docs/screenshots/tyre-records.png)
+
+**Accident Claim and Recovery**
+![Accident claims](docs/screenshots/accident-claims.png)
+
+**Accident Activity (who changed what)**
+![Accident activity](docs/screenshots/accident-activity.png)
+
+**Upload preview and header picker**
+![Upload preview](docs/screenshots/upload-preview.png)
+
+**Upload Data Quality report**
+![Data quality](docs/screenshots/upload-quality.png)
+
+**Reports**
+![Reports](docs/screenshots/reports.png)
+
+**Analytics**
+![Analytics](docs/screenshots/analytics.png)
+
+### Mobile
+
+**Inspection with tyre diagram popup**
+![Mobile inspection](docs/screenshots/mobile-inspection.png)
+
+**Scanner**
+![Mobile scan](docs/screenshots/mobile-scan.png)
+
+**Accident report and claims**
+![Mobile accident](docs/screenshots/mobile-accident.png)
+
+See `docs/screenshots/README.md` for sizes and tips.
+

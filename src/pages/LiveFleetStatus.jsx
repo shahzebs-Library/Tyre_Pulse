@@ -202,7 +202,7 @@ function TyreDot({ tyre, label }) {
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 rounded-lg p-2 text-xs whitespace-nowrap shadow-xl pointer-events-none">
           <p className="text-white font-semibold">{label}</p>
           <p className="text-gray-400">{tyre.brand ?? '—'}</p>
-          {tyre.tread_depth != null && <p className="text-gray-400">Tread: {tyre.tread_depth}mm</p>}
+          {/* tread_depth disabled — re-enable when ready */}
           {tyre.pressure_reading != null && <p className="text-gray-400">PSI: {tyre.pressure_reading}</p>}
           <p style={{ color: riskColor(tyre.risk_level) }}>{tyre.risk_level}</p>
         </div>

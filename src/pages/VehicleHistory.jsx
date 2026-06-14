@@ -1377,9 +1377,10 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-sm text-gray-300 w-20">{p.position}</span>
                     {p.brand && <span className="text-xs text-gray-500">{p.brand}</span>}
+                    {/* serial_no disabled — re-enable when ready
                     {p.serial_no && (
                       <span className="text-[10px] font-mono text-gray-600">{p.serial_no}</span>
-                    )}
+                    )} */}
                   </div>
                   <span className={`text-xs font-medium ${forecastClass}`}>{forecastText}</span>
                 </div>

@@ -72,7 +72,7 @@ function normVT(vt) {
 // Infer vehicle type from asset number prefix (TM→Tri-mixer, MO→Concrete pump, etc.)
 function inferVehicleTypeFromAsset(assetNo) {
   const prefix = ((assetNo || '').match(/^[A-Za-z]+/) || [''])[0].toUpperCase().substring(0, 2)
-  const map = { TM: 'Tri-mixer', MO: 'Concrete pump', WL: 'Wheel loader', SL: 'Skid loader', PL: 'Pickup', BH: 'Bus' }
+  const map = { TM: 'Tri-mixer', PM: 'Concrete pump', WL: 'Wheel loader', SL: 'Skid loader', PL: 'Pickup', BH: 'Bus' }
   return map[prefix] || null
 }
 
@@ -1554,35 +1554,36 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
             })}
           </div>
 
-          {/* psi + tread */}
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            {[
-              { label: L.pressure, field: 'pressure', mode: 'numeric', ph: 'PSI'  },
-              { label: L.tread,    field: 'treadDepth', mode: 'decimal', ph: 'mm' },
-            ].map(({ label, field, mode, ph }) => (
-              <div key={field}>
-                <label className="text-[11px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#9ca3af' }}>
-                  {label}
-                </label>
-                <input
-                  type="number"
-                  inputMode={mode}
-                  placeholder={ph}
-                  value={pos[field]}
-                  onChange={e => onUpdate(field, e.target.value)}
-                  className="w-full px-3 py-3 rounded-xl text-sm font-semibold"
-                  style={{
-                    background: '#f9fafb',
-                    border: '1.5px solid #e5e7eb',
-                    color: '#111827',
-                    outline: 'none',
-                  }}
-                  onFocus={e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }}
-                  onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none' }}
-                />
-              </div>
-            ))}
+          {/* psi */}
+          <div className="mb-5">
+            <label className="text-[11px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#9ca3af' }}>
+              {L.pressure}
+            </label>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="PSI"
+              value={pos.pressure}
+              onChange={e => onUpdate('pressure', e.target.value)}
+              className="w-full px-3 py-3 rounded-xl text-sm font-semibold"
+              style={{ background: '#f9fafb', border: '1.5px solid #e5e7eb', color: '#111827', outline: 'none' }}
+              onFocus={e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }}
+              onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none' }}
+            />
           </div>
+          {/* tread disabled — re-enable when data collection is ready
+          <div className="mb-5">
+            <label className="text-[11px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#9ca3af' }}>
+              {L.tread}
+            </label>
+            <input type="number" inputMode="decimal" placeholder="mm" value={pos.treadDepth}
+              onChange={e => onUpdate('treadDepth', e.target.value)}
+              className="w-full px-3 py-3 rounded-xl text-sm font-semibold"
+              style={{ background: '#f9fafb', border: '1.5px solid #e5e7eb', color: '#111827', outline: 'none' }}
+              onFocus={e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }}
+              onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none' }}
+            />
+          </div> */}
 
           {/* navigation */}
           <div className="flex gap-2.5">

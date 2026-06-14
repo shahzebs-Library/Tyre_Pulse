@@ -311,8 +311,8 @@ export default function Login() {
     <>
       <style>{STYLES}</style>
 
-      {/* Force dark on login page regardless of stored theme */}
-      <div style={{ minHeight:'100vh', display:'flex', background:'#060e08', position:'relative', overflow:'hidden' }}>
+      {/* Page background follows the theme; the auth card stays a premium panel */}
+      <div style={{ minHeight:'100vh', display:'flex', background:'var(--login-bg)', position:'relative', overflow:'hidden' }}>
 
         {/* ── Background layers ──────────────────────────────────────────── */}
         {/* Deep radial glow */}
@@ -506,11 +506,11 @@ export default function Login() {
             style={{ width:'100%', maxWidth:420 }}
           >
             <div style={{
-              background:'rgba(6,16,9,0.88)',
-              border:'1.5px solid rgba(22,163,74,0.22)',
+              background:'var(--login-card-bg)',
+              border:'1.5px solid var(--login-card-border)',
               borderRadius:24,
               padding:'28px 28px 32px',
-              boxShadow:'0 0 0 1px rgba(74,222,128,0.04), 0 32px 80px rgba(0,0,0,0.7), 0 0 60px rgba(22,163,74,0.08)',
+              boxShadow:'var(--login-card-shadow)',
               backdropFilter:'blur(32px)',
               position:'relative',
               overflow:'hidden',

@@ -1,12 +1,13 @@
 name: Build Android APK
 
+# APK builds consume the limited EAS Free-plan monthly Android quota, so they are
+# NOT run on every push. Trigger manually (Actions -> Run workflow) or by pushing
+# a release tag like `mobile-v1.2.0`.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'mobile/**'
   workflow_dispatch:
+  push:
+    tags:
+      - 'mobile-v*'
 
 jobs:
   build:

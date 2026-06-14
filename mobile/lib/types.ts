@@ -40,7 +40,7 @@ export interface VehicleFleet {
   model?: string
 }
 
-export type TyreCondition = 'Good' | 'Worn' | 'Damaged' | 'Flat' | 'Missing'
+export type TyreCondition = 'Good' | 'Worn' | 'Damaged' | 'Puncture' | 'Flat' | 'Missing'
 
 export interface TyrePositionData {
   position: string

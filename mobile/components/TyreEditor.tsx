@@ -196,7 +196,7 @@ export default function TyreEditor({ data, onChange }: Props) {
         )}
       </View>
 
-      {/* Condition — iconic picker */}
+      {/* Condition — emoji + icon picker (matches web ✅⚠️❌🔴) */}
       <View style={styles.field}>
         <Text style={styles.label}>{t('tyre.condition')}</Text>
         <View style={styles.conditionGrid}>
@@ -208,17 +208,17 @@ export default function TyreEditor({ data, onChange }: Props) {
                 key={c}
                 style={[
                   styles.conditionBtn,
-                  active && { backgroundColor: meta.tint, borderColor: meta.color },
+                  active && {
+                    backgroundColor: meta.tint,
+                    borderColor: meta.borderColor,
+                    borderWidth: 2,
+                  },
                 ]}
                 onPress={() => update({ condition: c })}
-                activeOpacity={0.8}
+                activeOpacity={0.75}
               >
-                <Ionicons
-                  name={meta.icon as any}
-                  size={22}
-                  color={active ? meta.color : '#94a3b8'}
-                />
-                <Text style={[styles.conditionBtnText, active && { color: meta.color }]}>
+                <Text style={styles.conditionEmoji}>{meta.emoji}</Text>
+                <Text style={[styles.conditionBtnText, active && { color: meta.color, fontWeight: '800' }]}>
                   {t(meta.i18nKey)}
                 </Text>
               </TouchableOpacity>
@@ -340,7 +340,8 @@ const styles = StyleSheet.create({
     borderRadius: 12, borderWidth: 1.5, borderColor: '#e2e8f0',
     backgroundColor: '#fff',
   },
-  conditionBtnText: { fontSize: 12, fontWeight: '700', color: '#64748b' },
+  conditionEmoji: { fontSize: 22, lineHeight: 26 },
+  conditionBtnText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
   uploadBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
     backgroundColor: '#64748b', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12,

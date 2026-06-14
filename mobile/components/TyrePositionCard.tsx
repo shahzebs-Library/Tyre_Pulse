@@ -51,8 +51,8 @@ export default function TyrePositionCard({ data, onPress, isHighlighted = false 
           {posLabel}
         </Text>
         <View style={[styles.metaRow, isRTL && styles.metaRowRTL]}>
-          <View style={styles.conditionPill}>
-            <Ionicons name={meta.icon as any} size={14} color={meta.color} />
+          <View style={[styles.conditionPill, { backgroundColor: meta.tint, borderColor: meta.borderColor }]}>
+            <Text style={styles.conditionEmoji}>{meta.emoji}</Text>
             <Text style={[styles.conditionText, { color: meta.color }]}>{t(meta.i18nKey)}</Text>
           </View>
           {data.pressure_psi ? <Text style={styles.metaChip}>{data.pressure_psi} PSI</Text> : null}
@@ -121,8 +121,13 @@ const styles = StyleSheet.create({
   posName: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   metaRowRTL: { flexDirection: 'row-reverse' },
-  conditionPill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  conditionText: { fontSize: 13, fontWeight: '700' },
+  conditionEmoji: { fontSize: 13 },
+  conditionPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 8, borderWidth: 1,
+  },
+  conditionText: { fontSize: 12, fontWeight: '700' },
   metaChip: {
     fontSize: 12, color: '#64748b',
     backgroundColor: '#f1f5f9',

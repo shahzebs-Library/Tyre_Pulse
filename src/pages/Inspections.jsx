@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
-import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff } from 'lucide-react'
+import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
+import SignaturePad from '../components/SignaturePad'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
@@ -168,6 +169,23 @@ export default function Inspections() {
   const [clLookingUp, setClLookingUp] = useState(false)
   const [clOffline, setClOffline]     = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
+  // Hour meter + odometer
+  const [clOdometer, setClOdometer]   = useState('')
+  const [clHourMeter, setClHourMeter] = useState('')
+  // Multi-photo
+  const [clPhotos, setClPhotos]       = useState([]) // array of base64 strings
+  const cameraInputRef                = useRef(null)
+  const galleryInputRef               = useRef(null)
+  // Signature
+  const [clSignature, setClSignature]         = useState(null) // base64 PNG
+  const [showSignaturePad, setShowSignaturePad] = useState(false)
+  // Approval workflow
+  const [clApprovalStatus, setClApprovalStatus] = useState('done') // 'done' | 'pending_approval' | 'approved'
+  const [clApproverEmail, setClApproverEmail]   = useState('')
+  const [showApprovalForm, setShowApprovalForm] = useState(false)
+  // Mobile PDF preview
+  const [pdfBlobUrl, setPdfBlobUrl]   = useState(null)
+  const [showPdfPreview, setShowPdfPreview] = useState(false)
   const diagramRef     = useRef(null)
   const [clSelectedPos, setClSelectedPos] = useState(null)
   // Row PDF export: render the live diagram offscreen, then capture its SVG.
@@ -420,7 +438,7 @@ export default function Inspections() {
       site: clSite,
       asset_no: clAsset.trim(),
       scheduled_date: clDate,
-      status: 'Done',
+      status: clApprovalStatus === 'pending_approval' ? 'In Progress' : 'Done',
       completed_date: clDate,
       inspector: clInspector,
       tyre_conditions: clPositions,
@@ -429,6 +447,13 @@ export default function Inspections() {
       notes: clNotes,
       country: activeCountry !== 'All' ? activeCountry : null,
       created_by: profile?.id ?? null,
+      // Extended fields
+      odometer_km: clOdometer ? parseFloat(clOdometer) : null,
+      hour_meter: clHourMeter ? parseFloat(clHourMeter) : null,
+      photo_data: clPhotos.length > 0 ? clPhotos[0] : null, // primary photo (DB compat)
+      inspector_signature: clSignature || null,
+      approval_status: clApprovalStatus,
+      approver_email: clApproverEmail || null,
     }
 
     // Vibrate on save attempt (success signal pattern)
@@ -460,7 +485,7 @@ export default function Inspections() {
     setClSaving(false)
   }
 
-  async function exportChecklistPdf() {
+  async function exportChecklistPdf(preview = false) {
     if (!clSaved) return
     const tyreData = clPositions.length > 0 ? clPositions
       : (clSaved.tyre_conditions || (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })())
@@ -494,6 +519,8 @@ export default function Inspections() {
       ['Inspector',      clInspector || clSaved.inspector || 'n/a'],
       ['Date',           clDate || clSaved.scheduled_date || 'n/a'],
       ['Tyre Count',     String(tyreData.length)],
+      ['Odometer (km)',  clOdometer || clSaved.odometer_km || 'n/a'],
+      ['Hour Meter',     clHourMeter || clSaved.hour_meter || 'n/a'],
     ]
     const colW = (pw - mx * 2) / 3
     infoItems.forEach(([label, value], i) => {
@@ -510,7 +537,8 @@ export default function Inspections() {
       doc.setFont('helvetica', 'bold')
       doc.text(String(value), ix, iy + 5)
     })
-    y += 30
+    const infoRows = Math.ceil(infoItems.length / 3)
+    y += infoRows * 12 + 6
 
     // ── Vehicle diagram — capture actual SVG rendered in the DOM ───────────────
     const svgEl = diagramRef.current?.querySelector('svg')
@@ -609,19 +637,82 @@ export default function Inspections() {
       finalY += lines.length * 4.5 + 6
     }
 
-    // ── Signature line ──────────────────────────────────────────────────────────
-    if (finalY + 25 < ph - 15) {
-      finalY += 4
+    // ── Photos (if any) ─────────────────────────────────────────────────────────
+    const photos = clPhotos.length > 0 ? clPhotos : (clSaved.photo_data ? [clSaved.photo_data] : [])
+    if (photos.length > 0) {
+      if (finalY + 60 > ph - 20) { doc.addPage(); finalY = 20 }
+      doc.setTextColor(31, 41, 55)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Photos', mx, finalY)
+      finalY += 5
+      const photoW = 40
+      const photoH = 30
+      const photoCols = Math.floor((pw - mx * 2) / (photoW + 4))
+      for (let pi = 0; pi < Math.min(photos.length, 6); pi++) {
+        const col = pi % photoCols
+        const row = Math.floor(pi / photoCols)
+        const px = mx + col * (photoW + 4)
+        const py = finalY + row * (photoH + 4)
+        try {
+          doc.addImage(photos[pi], 'JPEG', px, py, photoW, photoH)
+          doc.setDrawColor(209, 213, 219)
+          doc.setLineWidth(0.3)
+          doc.rect(px, py, photoW, photoH)
+        } catch { /* skip bad image */ }
+      }
+      const photoRows = Math.ceil(Math.min(photos.length, 6) / photoCols)
+      finalY += photoRows * (photoH + 4) + 6
+    }
+
+    // ── Signature section ───────────────────────────────────────────────────────
+    const sigH = 24
+    const sigW = 70
+    if (finalY + sigH + 20 > ph - 15) { doc.addPage(); finalY = 20 }
+    finalY += 4
+    doc.setTextColor(31, 41, 55)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Signatures', mx, finalY)
+    finalY += 5
+
+    const sig = clSignature || clSaved.inspector_signature
+    if (sig) {
+      // Inspector signature image
+      doc.setDrawColor(209, 213, 219)
+      doc.setLineWidth(0.3)
+      doc.rect(mx, finalY, sigW, sigH)
+      try { doc.addImage(sig, 'PNG', mx, finalY, sigW, sigH) } catch { /* skip */ }
+      doc.setFontSize(7)
+      doc.setTextColor(107, 114, 128)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Inspector: ${clInspector || clSaved.inspector || ''}`, mx, finalY + sigH + 4)
+      doc.text(new Date().toLocaleDateString('en-GB'), mx + sigW - 1, finalY + sigH + 4, { align: 'right' })
+    } else {
+      // Blank line fallback
       doc.setDrawColor(156, 163, 175)
       doc.setLineWidth(0.5)
-      doc.line(mx, finalY + 10, mx + 65, finalY + 10)
-      doc.line(mx + 75, finalY + 10, mx + 140, finalY + 10)
-      doc.setTextColor(107, 114, 128)
+      doc.line(mx, finalY + sigH, mx + sigW, finalY + sigH)
       doc.setFontSize(7.5)
+      doc.setTextColor(107, 114, 128)
       doc.setFont('helvetica', 'normal')
-      doc.text('Inspector Signature', mx, finalY + 15)
-      doc.text(`Name: ${clInspector || '________________'}`, mx + 75, finalY + 15)
+      doc.text('Inspector Signature', mx, finalY + sigH + 4)
     }
+
+    // Approver signature box (blank pending)
+    const approverX = mx + sigW + 15
+    doc.setDrawColor(209, 213, 219)
+    doc.setLineWidth(0.3)
+    doc.rect(approverX, finalY, sigW, sigH)
+    doc.setFontSize(8)
+    doc.setTextColor(156, 163, 175)
+    doc.text('Approver Signature', approverX + 2, finalY + 10)
+    doc.setFontSize(7)
+    doc.text(clApproverEmail ? `Sent to: ${clApproverEmail}` : 'Pending', approverX + 2, finalY + 16)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Approved by / التوقيع', approverX, finalY + sigH + 4)
+
+    finalY += sigH + 10
 
     // ── Footer on every page ────────────────────────────────────────────────────
     const totalPages = doc.internal.getNumberOfPages()
@@ -639,7 +730,15 @@ export default function Inspections() {
       doc.text(`${i} / ${totalPages}`, pw - mx, ph - 4, { align: 'right' })
     }
 
-    doc.save(`TyrePulse_Checklist_${clAsset || clSaved.asset_no || 'report'}.pdf`)
+    if (preview) {
+      const blob = doc.output('blob')
+      const url = URL.createObjectURL(blob)
+      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl)
+      setPdfBlobUrl(url)
+      setShowPdfPreview(true)
+    } else {
+      doc.save(`TyrePulse_Checklist_${clAsset || clSaved.asset_no || 'report'}.pdf`)
+    }
   }
 
   if (loading || authLoading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading…</div>
@@ -760,10 +859,44 @@ export default function Inspections() {
               <p className="text-gray-400 text-sm mb-4">
                 Inspection for <span className="text-white font-mono">{clSaved.asset_no}</span> on {clSaved.scheduled_date}{clOffline ? ' is queued for upload.' : ' has been saved.'}
               </p>
+              {/* Summary badges */}
+              <div className="flex flex-wrap gap-2 mb-2">
+                {clPositions.filter(p => p.condition === 'Good').length > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-green-900/30 text-green-400 border border-green-700/40">
+                    ✓ {clPositions.filter(p => p.condition === 'Good').length} Good
+                  </span>
+                )}
+                {clPositions.filter(p => p.condition === 'Wear').length > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-yellow-900/30 text-yellow-400 border border-yellow-700/40">
+                    ⚠ {clPositions.filter(p => p.condition === 'Wear').length} Wear
+                  </span>
+                )}
+                {clPositions.filter(p => p.condition === 'Damage' || p.condition === 'Puncture').length > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-700/40">
+                    ✗ {clPositions.filter(p => p.condition === 'Damage' || p.condition === 'Puncture').length} Critical
+                  </span>
+                )}
+                {clSignature && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-blue-900/30 text-blue-400 border border-blue-700/40">
+                    ✍ Signed
+                  </span>
+                )}
+                {clPhotos.length > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-purple-900/30 text-purple-400 border border-purple-700/40">
+                    📷 {clPhotos.length} photo{clPhotos.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+
               <div className="flex gap-3 flex-wrap">
                 {!clOffline && (
-                  <button onClick={exportChecklistPdf} className="btn-secondary flex items-center gap-2 text-sm">
+                  <button onClick={() => exportChecklistPdf(false)} className="btn-secondary flex items-center gap-2 text-sm">
                     <FileText size={14} /> {CHECKLIST_LABELS[lang].export}
+                  </button>
+                )}
+                {!clOffline && (
+                  <button onClick={() => exportChecklistPdf(true)} className="btn-secondary flex items-center gap-2 text-sm">
+                    <ExternalLink size={14} /> Preview PDF
                   </button>
                 )}
                 {!clOffline && navigator.share && (
@@ -779,11 +912,77 @@ export default function Inspections() {
                     <Share2 size={14} /> Share
                   </button>
                 )}
-                <button onClick={() => { setClSaved(null); setClOffline(false); setClAsset(''); setClPositions([]); setClFleetInfo(null); setClNotes('') }}
+                {!clOffline && (
+                  <button
+                    onClick={() => setShowApprovalForm(v => !v)}
+                    className="btn-secondary flex items-center gap-2 text-sm"
+                    style={{ borderColor: '#6366f1', color: '#818cf8' }}
+                  >
+                    <Send size={14} /> Send for Approval
+                  </button>
+                )}
+                <button onClick={() => {
+                  setClSaved(null); setClOffline(false); setClAsset(''); setClPositions([])
+                  setClFleetInfo(null); setClNotes(''); setClOdometer(''); setClHourMeter('')
+                  setClPhotos([]); setClSignature(null); setClApprovalStatus('done')
+                  setClApproverEmail(''); setShowApprovalForm(false)
+                  if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); setPdfBlobUrl(null) }
+                  setShowPdfPreview(false)
+                }}
                   className="btn-primary text-sm">
                   New Checklist
                 </button>
               </div>
+
+              {/* Approval workflow panel */}
+              {showApprovalForm && !clOffline && (
+                <div className="mt-3 p-4 rounded-xl" style={{ background: '#1e1b4b', border: '1px solid #4338ca' }}>
+                  <h4 className="text-sm font-semibold text-indigo-300 mb-3 flex items-center gap-2">
+                    <Send size={14} /> Send for Manager Approval
+                  </h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="label text-indigo-300">Approver Email</label>
+                      <input
+                        type="email"
+                        className="input"
+                        placeholder="manager@company.com"
+                        value={clApproverEmail}
+                        onChange={e => setClApproverEmail(e.target.value)}
+                        style={{ background: '#312e81', borderColor: '#4338ca', color: '#e0e7ff' }}
+                      />
+                    </div>
+                    <p className="text-xs text-indigo-300/70">
+                      The approver will receive a link to view this inspection and add their digital signature. Both signatures will appear in the final PDF.
+                    </p>
+                    <button
+                      disabled={!clApproverEmail.trim()}
+                      onClick={async () => {
+                        if (!clSaved?.id) return
+                        await supabase.from('inspections').update({
+                          approval_status: 'pending_approval',
+                          approver_email: clApproverEmail,
+                          status: 'In Progress',
+                        }).eq('id', clSaved.id)
+                        setClApprovalStatus('pending_approval')
+                        setShowApprovalForm(false)
+                      }}
+                      className="btn-primary text-sm w-full disabled:opacity-50"
+                      style={{ background: '#4338ca' }}
+                    >
+                      <Send size={13} className="inline mr-1" /> Send Approval Request
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {clApprovalStatus === 'pending_approval' && !showApprovalForm && (
+                <div className="mt-3 px-3 py-2 rounded-xl flex items-center gap-2 text-sm"
+                  style={{ background: '#1e1b4b', border: '1px solid #4338ca', color: '#a5b4fc' }}>
+                  <Send size={14} />
+                  <span>Approval request sent to <strong>{clApproverEmail}</strong></span>
+                </div>
+              )}
             </div>
           ) : (
             <div
@@ -990,6 +1189,130 @@ export default function Inspections() {
                 </p>
               )}
 
+              {/* Odometer + Hour Meter */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label flex items-center gap-1.5"><Gauge size={12} className="text-gray-400" /> Odometer (km)</label>
+                  <input type="number" className="input" placeholder="e.g. 123456" min="0"
+                    value={clOdometer} onChange={e => setClOdometer(e.target.value)} />
+                </div>
+                <div>
+                  <label className="label flex items-center gap-1.5"><Clock size={12} className="text-gray-400" /> Hour Meter (hrs)</label>
+                  <input type="number" className="input" placeholder="e.g. 4521" min="0"
+                    value={clHourMeter} onChange={e => setClHourMeter(e.target.value)} />
+                </div>
+              </div>
+
+              {/* Photo capture */}
+              <div>
+                <label className="label flex items-center gap-1.5"><Camera size={12} className="text-gray-400" /> Photos</label>
+                <div className="flex gap-2 flex-wrap mb-2">
+                  {clPhotos.map((src, i) => (
+                    <div key={i} className="relative">
+                      <img src={src} alt={`photo-${i}`}
+                        style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid #374151' }} />
+                      <button
+                        onClick={() => setClPhotos(ps => ps.filter((_, j) => j !== i))}
+                        style={{
+                          position: 'absolute', top: -6, right: -6, width: 18, height: 18,
+                          borderRadius: '50%', background: '#ef4444', border: 'none',
+                          color: '#fff', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >×</button>
+                    </div>
+                  ))}
+                  {clPhotos.length < 6 && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
+                        style={{ background: '#0c4a6e', border: '1.5px solid #0369a1', color: '#7dd3fc' }}
+                      >
+                        <Camera size={13} /> Camera
+                      </button>
+                      <button
+                        onClick={() => galleryInputRef.current?.click()}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
+                        style={{ background: '#1e1b4b', border: '1.5px solid #4338ca', color: '#a5b4fc' }}
+                      >
+                        <ImageIcon size={13} /> Gallery
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const reader = new FileReader()
+                    reader.onload = ev => {
+                      // Compress via canvas
+                      const img = new Image()
+                      img.onload = () => {
+                        const MAX = 800
+                        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+                        const canvas = document.createElement('canvas')
+                        canvas.width = img.width * scale
+                        canvas.height = img.height * scale
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+                        setClPhotos(ps => [...ps, canvas.toDataURL('image/jpeg', 0.75)])
+                      }
+                      img.src = ev.target.result
+                    }
+                    reader.readAsDataURL(file)
+                    e.target.value = ''
+                  }}
+                />
+                <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden"
+                  onChange={e => {
+                    Array.from(e.target.files || []).slice(0, 6 - clPhotos.length).forEach(file => {
+                      const reader = new FileReader()
+                      reader.onload = ev => {
+                        const img = new Image()
+                        img.onload = () => {
+                          const MAX = 800
+                          const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+                          const canvas = document.createElement('canvas')
+                          canvas.width = img.width * scale
+                          canvas.height = img.height * scale
+                          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+                          setClPhotos(ps => [...ps, canvas.toDataURL('image/jpeg', 0.75)])
+                        }
+                        img.src = ev.target.result
+                      }
+                      reader.readAsDataURL(file)
+                    })
+                    e.target.value = ''
+                  }}
+                />
+              </div>
+
+              {/* Inspector Signature */}
+              <div>
+                <label className="label flex items-center gap-1.5"><PenLine size={12} className="text-gray-400" /> Inspector Signature</label>
+                {clSignature ? (
+                  <div className="flex items-center gap-3">
+                    <img src={clSignature} alt="signature"
+                      style={{ height: 56, maxWidth: 180, background: '#fff', borderRadius: 8, border: '1px solid #374151', padding: 4 }} />
+                    <div>
+                      <p className="text-xs text-green-400 font-semibold">✓ Signed — {clInspector}</p>
+                      <button onClick={() => setClSignature(null)}
+                        className="text-xs text-gray-500 hover:text-red-400 transition-colors mt-0.5">
+                        Clear signature
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowSignaturePad(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold w-full"
+                    style={{ background: '#1a2e1a', border: '1.5px dashed #16a34a', color: '#4ade80' }}
+                  >
+                    <PenLine size={15} /> Tap to Sign
+                  </button>
+                )}
+              </div>
+
               <div>
                 <label className="label">{CHECKLIST_LABELS[lang].notes}</label>
                 <textarea className="input h-20 resize-none" placeholder="General observations..."
@@ -1019,6 +1342,56 @@ export default function Inspections() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Signature Pad Modal */}
+      {showSignaturePad && (
+        <SignaturePad
+          label="Inspector Signature"
+          inspectorName={clInspector}
+          employeeId={profile?.employee_id || ''}
+          onSave={dataUrl => { setClSignature(dataUrl); setShowSignaturePad(false) }}
+          onClose={() => setShowSignaturePad(false)}
+        />
+      )}
+
+      {/* Mobile PDF Preview Modal */}
+      {showPdfPreview && pdfBlobUrl && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9998,
+          background: 'rgba(0,0,0,0.9)',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 16px',
+            background: '#111827', borderBottom: '1px solid #374151',
+          }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>
+              Inspection Report — {clSaved?.asset_no}
+            </span>
+            <div className="flex gap-2">
+              <a
+                href={pdfBlobUrl}
+                download={`TyrePulse_Checklist_${clSaved?.asset_no || 'report'}.pdf`}
+                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              >
+                <Download size={13} /> Download
+              </a>
+              <button
+                onClick={() => setShowPdfPreview(false)}
+                style={{ background: '#374151', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', padding: '6px 10px' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+          <iframe
+            src={pdfBlobUrl}
+            style={{ flex: 1, border: 'none', background: '#fff' }}
+            title="Inspection PDF Preview"
+          />
         </div>
       )}
 

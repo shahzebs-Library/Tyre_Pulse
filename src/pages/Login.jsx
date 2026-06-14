@@ -183,9 +183,14 @@ const FEATURES = [
 ]
 
 export default function Login() {
-  const { signIn }         = useAuth()
+  const { signIn, user, loading: authLoading } = useAuth()
   const { isDark, toggleTheme } = useTheme()
   const navigate            = useNavigate()
+
+  // Navigate to dashboard once auth state resolves — avoids race with async fetchProfile
+  useEffect(() => {
+    if (!authLoading && user) navigate('/', { replace: true })
+  }, [user, authLoading, navigate])
 
   const [tab, setTab]                 = useState('login')
   const [idMode, setIdMode]           = useState('email')
@@ -240,7 +245,8 @@ export default function Login() {
       setLoading(false)
       return
     }
-    if (result) { setError(result.message || 'Login failed'); setLoading(false) } else navigate('/')
+    if (result) { setError(result.message || 'Login failed'); setLoading(false) }
+    // on success: useEffect above handles navigation once AuthContext resolves user + profile
   }
 
   async function handleSignup(e) {
@@ -889,7 +895,7 @@ export default function Login() {
       <TwoFactorChallenge
         open={!!mfaState}
         factorId={mfaState?.factorId}
-        onSuccess={() => { setMfaState(null); navigate('/') }}
+        onSuccess={() => { setMfaState(null) }}
         onCancel={() => { setMfaState(null); setLoading(false) }}
       />
     </>

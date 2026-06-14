@@ -45,7 +45,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!api|_next|favicon\\.ico|robots\\.txt|browserconfig\\.xml|offline\\.html|manifest\\.webmanifest|sw\\.js|workbox-.*|icons|assets).*)",
+      "source": "/((?!api|_next|favicon\\.ico|robots\\.txt|browserconfig\\.xml|offline\\.html|manifest\\.webmanifest|sw\\.js|workbox-.*|icons|assets|\\.well-known).*)",
       "destination": "/index.html"
     }
   ]

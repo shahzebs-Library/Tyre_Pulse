@@ -129,6 +129,94 @@ const CHECKLIST_LABELS = {
 // Column widths for the virtual inspection table grid
 const INSP_COL_WIDTHS = [110, 200, 110, 110, 100, 90, 100, 120, 240]
 
+// ── Approval email HTML builder ────────────────────────────────────────────────
+function buildApprovalEmailHtml({ assetNo, inspector, date, site, odometer, hourMeter, notes, approvalLink, signature }) {
+  const sigBlock = signature
+    ? `<img src="${signature}" alt="Inspector Signature" style="max-width:220px;border:1px solid #e5e7eb;border-radius:8px;margin-top:8px;" />`
+    : '<p style="color:#9ca3af;font-style:italic;">No digital signature captured</p>'
+
+  const rows = [
+    ['Asset / Vehicle', assetNo || '—'],
+    ['Inspection Date', date || '—'],
+    ['Site', site || '—'],
+    ['Inspector', inspector || '—'],
+    odometer ? ['Odometer (km)', odometer] : null,
+    hourMeter ? ['Hour Meter (hrs)', hourMeter] : null,
+  ].filter(Boolean)
+
+  const tableRows = rows.map(([k, v]) => `
+    <tr>
+      <td style="padding:8px 12px;color:#6b7280;font-size:13px;border-bottom:1px solid #f3f4f6;">${k}</td>
+      <td style="padding:8px 12px;color:#111827;font-size:13px;font-weight:600;border-bottom:1px solid #f3f4f6;">${v}</td>
+    </tr>`).join('')
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#15803d 0%,#166534 100%);padding:28px 32px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:40px;height:40px;background:rgba(255,255,255,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+          <span style="color:#fff;font-size:20px;">🔍</span>
+        </div>
+        <div>
+          <h1 style="margin:0;color:#fff;font-size:18px;font-weight:700;">Tyre Pulse</h1>
+          <p style="margin:0;color:#bbf7d0;font-size:13px;">Inspection Approval Request</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:32px;">
+      <p style="margin:0 0 8px;color:#374151;font-size:15px;font-weight:600;">Your approval is required</p>
+      <p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.6;">
+        An inspection checklist has been submitted and requires your review and digital signature before it can be finalised.
+      </p>
+
+      <!-- Details table -->
+      <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+        <div style="background:#f9fafb;padding:10px 12px;border-bottom:1px solid #e5e7eb;">
+          <span style="font-size:12px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:0.05em;">Inspection Details</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">${tableRows}</table>
+      </div>
+
+      ${notes ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin-bottom:24px;">
+        <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#166534;">Inspector Notes</p>
+        <p style="margin:0;font-size:13px;color:#374151;">${notes}</p>
+      </div>` : ''}
+
+      <!-- Inspector Signature -->
+      <div style="margin-bottom:24px;">
+        <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:0.05em;">Inspector Signature</p>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+          ${sigBlock}
+        </div>
+      </div>
+
+      <!-- CTA -->
+      <a href="${approvalLink}"
+        style="display:block;text-align:center;background:#15803d;color:#fff;text-decoration:none;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:700;margin-bottom:16px;">
+        Review &amp; Sign Inspection →
+      </a>
+
+      <p style="margin:0;text-align:center;color:#9ca3af;font-size:12px;">
+        This link requires you to be logged in to Tyre Pulse.<br>
+        If the button doesn't work, copy this URL: <span style="color:#15803d;word-break:break-all;">${approvalLink}</span>
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
+      <p style="margin:0;color:#9ca3af;font-size:12px;">Tyre Pulse Fleet Intelligence · This is an automated message</p>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
 export default function Inspections() {
   const { profile, loading: authLoading } = useAuth()
   const { activeCountry } = useSettings()
@@ -148,6 +236,16 @@ export default function Inspections() {
   useEffect(() => {
     if (isTyreMan || searchParams.get('asset')) setActiveTab('checklist')
   }, [isTyreMan, searchParams])
+
+  // Approver landing: ?approve=<inspection_id>
+  useEffect(() => {
+    const approveId = searchParams.get('approve')
+    if (!approveId || authLoading) return
+    supabase.from('inspections').select('*').eq('id', approveId).single()
+      .then(({ data }) => {
+        if (data) { setApproveTarget(data); setShowApproveModal(true) }
+      })
+  }, [searchParams, authLoading])
   const [raisingAction, setRaisingAction] = useState(null)
   const [selectedTyre, setSelectedTyre]   = useState(null)
   const fileRef = useRef(null)
@@ -183,6 +281,15 @@ export default function Inspections() {
   const [clApprovalStatus, setClApprovalStatus] = useState('done') // 'done' | 'pending_approval' | 'approved'
   const [clApproverEmail, setClApproverEmail]   = useState('')
   const [showApprovalForm, setShowApprovalForm] = useState(false)
+  const [clSendingEmail, setClSendingEmail]     = useState(false)
+  const [clEmailSent, setClEmailSent]           = useState(false)
+  // Approver landing modal (when manager opens ?approve=<id> link)
+  const [approveTarget, setApproveTarget]       = useState(null)
+  const [showApproveModal, setShowApproveModal] = useState(false)
+  const [approverSig, setApproverSig]           = useState(null)
+  const [showApproverPad, setShowApproverPad]   = useState(false)
+  const [approveSubmitting, setApproveSubmitting] = useState(false)
+  const [approveMsg, setApproveMsg]             = useState(null)
   // Mobile PDF preview
   const [pdfBlobUrl, setPdfBlobUrl]   = useState(null)
   const [showPdfPreview, setShowPdfPreview] = useState(false)
@@ -956,21 +1063,48 @@ export default function Inspections() {
                       The approver will receive a link to view this inspection and add their digital signature. Both signatures will appear in the final PDF.
                     </p>
                     <button
-                      disabled={!clApproverEmail.trim()}
+                      disabled={!clApproverEmail.trim() || clSendingEmail}
                       onClick={async () => {
                         if (!clSaved?.id) return
+                        setClSendingEmail(true)
+                        // Update DB status
                         await supabase.from('inspections').update({
                           approval_status: 'pending_approval',
                           approver_email: clApproverEmail,
                           status: 'In Progress',
                         }).eq('id', clSaved.id)
+                        // Build approval link
+                        const approvalLink = `${window.location.origin}/inspections?approve=${clSaved.id}`
+                        // Send email via Edge Function
+                        await supabase.functions.invoke('send-email', {
+                          body: {
+                            to: clApproverEmail,
+                            subject: `Inspection Approval Required — Asset ${clSaved.asset_no || clAsset}`,
+                            body: buildApprovalEmailHtml({
+                              assetNo: clSaved.asset_no || clAsset,
+                              inspector: clInspector || profile?.full_name || '',
+                              date: clDate,
+                              site: clSite,
+                              odometer: clOdometer,
+                              hourMeter: clHourMeter,
+                              notes: clNotes,
+                              approvalLink,
+                              signature: clSignature,
+                            }),
+                          },
+                        })
+                        setClSendingEmail(false)
+                        setClEmailSent(true)
                         setClApprovalStatus('pending_approval')
                         setShowApprovalForm(false)
                       }}
                       className="btn-primary text-sm w-full disabled:opacity-50"
                       style={{ background: '#4338ca' }}
                     >
-                      <Send size={13} className="inline mr-1" /> Send Approval Request
+                      {clSendingEmail
+                        ? <><span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" /> Sending…</>
+                        : <><Send size={13} className="inline mr-1" /> Send Approval Request</>
+                      }
                     </button>
                   </div>
                 </div>
@@ -980,7 +1114,10 @@ export default function Inspections() {
                 <div className="mt-3 px-3 py-2 rounded-xl flex items-center gap-2 text-sm"
                   style={{ background: '#1e1b4b', border: '1px solid #4338ca', color: '#a5b4fc' }}>
                   <Send size={14} />
-                  <span>Approval request sent to <strong>{clApproverEmail}</strong></span>
+                  <span>
+                    {clEmailSent ? '✓ Approval email sent to' : 'Awaiting approval from'}{' '}
+                    <strong>{clApproverEmail}</strong>
+                  </span>
                 </div>
               )}
             </div>
@@ -1353,6 +1490,166 @@ export default function Inspections() {
           employeeId={profile?.employee_id || ''}
           onSave={dataUrl => { setClSignature(dataUrl); setShowSignaturePad(false) }}
           onClose={() => setShowSignaturePad(false)}
+        />
+      )}
+
+      {/* ── Approver Modal (opens when landing via ?approve=<id>) ── */}
+      {showApproveModal && approveTarget && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        }}>
+          <div style={{
+            background: '#111827', border: '1px solid #374151', borderRadius: 20,
+            width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
+            padding: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Approve Inspection</div>
+                <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                  Asset: <strong style={{ color: '#d1d5db' }}>{approveTarget.asset_no}</strong>
+                  {approveTarget.site ? ` · ${approveTarget.site}` : ''}
+                  {' · '}{approveTarget.inspection_date || approveTarget.scheduled_date}
+                </div>
+              </div>
+              <button onClick={() => { setShowApproveModal(false); setSearchParams({}) }}
+                style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Details */}
+            <div style={{ background: '#1f2937', borderRadius: 12, padding: 16, marginBottom: 16, fontSize: 13 }}>
+              {[
+                ['Inspector', approveTarget.inspector_name || approveTarget.inspector],
+                ['Type', approveTarget.inspection_type],
+                ['Odometer', approveTarget.odometer_km ? `${approveTarget.odometer_km} km` : null],
+                ['Hour Meter', approveTarget.hour_meter ? `${approveTarget.hour_meter} hrs` : null],
+                ['Notes', approveTarget.notes],
+              ].filter(([, v]) => v).map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <span style={{ color: '#6b7280', minWidth: 100 }}>{k}</span>
+                  <span style={{ color: '#d1d5db', fontWeight: 600 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Inspector signature preview */}
+            {approveTarget.inspector_signature && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>Inspector Signature</div>
+                <img src={approveTarget.inspector_signature} alt="Inspector signature"
+                  style={{ maxWidth: 200, border: '1px solid #374151', borderRadius: 8 }} />
+              </div>
+            )}
+
+            {/* Approver signature */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8 }}>Your Signature (Approver)</div>
+              {approverSig ? (
+                <div>
+                  <img src={approverSig} alt="Approver signature"
+                    style={{ maxWidth: 200, border: '1px solid #374151', borderRadius: 8 }} />
+                  <button onClick={() => setApproverSig(null)}
+                    style={{ display: 'block', marginTop: 6, fontSize: 11, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    Clear &amp; re-sign
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowApproverPad(true)}
+                  style={{
+                    width: '100%', padding: '14px', borderRadius: 12,
+                    border: '2px dashed #374151', background: '#1f2937',
+                    color: '#9ca3af', fontSize: 13, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}
+                >
+                  <span>✍</span> Tap to add your approval signature
+                </button>
+              )}
+            </div>
+
+            {/* Status message */}
+            {approveMsg && (
+              <div style={{
+                padding: '10px 14px', borderRadius: 10, marginBottom: 14, fontSize: 13,
+                background: approveMsg.type === 'ok' ? 'rgba(22,163,74,0.15)' : 'rgba(239,68,68,0.15)',
+                border: `1px solid ${approveMsg.type === 'ok' ? '#16a34a' : '#ef4444'}`,
+                color: approveMsg.type === 'ok' ? '#4ade80' : '#f87171',
+              }}>
+                {approveMsg.text}
+              </div>
+            )}
+
+            {/* Actions */}
+            {approveTarget.approval_status !== 'approved' && (
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={async () => {
+                    setApproveSubmitting(true)
+                    await supabase.from('inspections').update({
+                      approval_status: 'rejected',
+                      approved_at: new Date().toISOString(),
+                      approved_by: profile?.id,
+                    }).eq('id', approveTarget.id)
+                    setApproveMsg({ type: 'err', text: 'Inspection rejected.' })
+                    setApproveSubmitting(false)
+                  }}
+                  disabled={approveSubmitting}
+                  style={{
+                    flex: 1, padding: '11px', borderRadius: 10,
+                    border: '1.5px solid #ef4444', background: 'transparent',
+                    color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!approverSig) { setApproveMsg({ type: 'err', text: 'Please add your signature before approving.' }); return }
+                    setApproveSubmitting(true)
+                    await supabase.from('inspections').update({
+                      approval_status: 'approved',
+                      approver_signature: approverSig,
+                      approved_at: new Date().toISOString(),
+                      approved_by: profile?.id,
+                    }).eq('id', approveTarget.id)
+                    setApproveMsg({ type: 'ok', text: '✓ Inspection approved and signed.' })
+                    setApproveSubmitting(false)
+                    setApproveTarget(prev => ({ ...prev, approval_status: 'approved', approver_signature: approverSig }))
+                  }}
+                  disabled={approveSubmitting || !approverSig}
+                  style={{
+                    flex: 2, padding: '11px', borderRadius: 10, border: 'none',
+                    background: approverSig ? '#16a34a' : '#374151',
+                    color: '#fff', fontSize: 13, fontWeight: 700, cursor: approverSig ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  {approveSubmitting ? 'Saving…' : '✓ Approve & Sign'}
+                </button>
+              </div>
+            )}
+            {approveTarget.approval_status === 'approved' && (
+              <div style={{ textAlign: 'center', padding: '12px', borderRadius: 10, background: 'rgba(22,163,74,0.15)', border: '1px solid #16a34a', color: '#4ade80', fontWeight: 600 }}>
+                ✓ This inspection has been approved
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Approver Signature Pad */}
+      {showApproverPad && (
+        <SignaturePad
+          label="Approver Signature"
+          inspectorName={profile?.full_name || ''}
+          employeeId={profile?.employee_id || ''}
+          onSave={dataUrl => { setApproverSig(dataUrl); setShowApproverPad(false) }}
+          onClose={() => setShowApproverPad(false)}
         />
       )}
 

@@ -884,6 +884,14 @@ export default function Login() {
           .mobile-brand { display: none !important; }
         }
       `}</style>
+
+      {/* MFA challenge modal — shown after password succeeds but AAL2 is required */}
+      <TwoFactorChallenge
+        open={!!mfaState}
+        factorId={mfaState?.factorId}
+        onSuccess={() => { setMfaState(null); navigate('/') }}
+        onCancel={() => { setMfaState(null); setLoading(false) }}
+      />
     </>
   )
 }

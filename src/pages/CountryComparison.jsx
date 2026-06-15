@@ -1,8 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
-import { computeCountryMetrics, sum } from '../lib/analyticsEngine'
 import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText, Award } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import {
@@ -65,7 +63,7 @@ function overdueColor(n) {
 
 export default function CountryComparison() {
   const { appSettings } = useSettings()
-  const [records, setRecords]   = useState([])
+  const [countryMetrics, setCountryMetrics] = useState([])
   const [actions, setActions]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [dateFrom, setDateFrom] = useState('')
@@ -74,20 +72,18 @@ export default function CountryComparison() {
 
   useEffect(() => {
     async function load() {
-      const [tRes, aRes] = await Promise.all([
-        fetchAllPages((from, to) =>
-          supabase.from('tyre_records').select(
-            'id,country,site,brand,category,risk_level,cost_per_tyre,qty,issue_date,km_at_fitment,km_at_removal'
-          ).range(from, to)
-        , { max: 200000 }),
+      setLoading(true)
+      // Server-side per-country aggregates (accurate over the full dataset, fast).
+      const [mRes, aRes] = await Promise.all([
+        supabase.rpc('report_country_metrics', { p_from: dateFrom || null, p_to: dateTo || null }),
         supabase.from('corrective_actions').select('id,country,status,due_date,priority'),
       ])
-      setRecords(tRes.data ?? [])
+      setCountryMetrics(mRes.data ?? [])
       setActions(aRes.data ?? [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [dateFrom, dateTo])
 
   // Dynamic color map based on available countries
   const countryColorMap = useMemo(() => {
@@ -96,17 +92,17 @@ export default function CountryComparison() {
     return map
   }, [])
 
-  const filteredRecords = useMemo(() => {
-    let arr = records
-    if (dateFrom) arr = arr.filter(r => r.issue_date && r.issue_date >= dateFrom)
-    if (dateTo)   arr = arr.filter(r => r.issue_date && r.issue_date <= dateTo)
-    return arr
-  }, [records, dateFrom, dateTo])
-
-  const allMetrics = useMemo(
-    () => computeCountryMetrics(filteredRecords, actions, appSettings.cost_per_tyre),
-    [filteredRecords, actions, appSettings.cost_per_tyre]
-  )
+  const allMetrics = useMemo(() => {
+    const now = new Date()
+    return countryMetrics.map(m => {
+      const openActions = actions.filter(a => (a.country || 'KSA') === m.country && a.status !== 'Closed').length
+      const overdueActions = actions.filter(a =>
+        (a.country || 'KSA') === m.country && a.status !== 'Closed' &&
+        a.due_date && new Date(a.due_date) < now
+      ).length
+      return { ...m, openActions, overdueActions }
+    })
+  }, [countryMetrics, actions])
 
   const metrics = useMemo(
     () => allMetrics.filter(m => selectedCountries.has(m.country)),

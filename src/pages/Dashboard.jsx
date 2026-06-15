@@ -31,7 +31,7 @@ ChartJS.register(
   ArcElement, LineElement, PointElement, Filler,
 )
 
-const GRID   = { color: 'rgba(255,255,255,0.04)' }
+const GRID   = { color:'var(--text-muted)' }
 const TICK   = { color: '#4b5563', font: { size: 11 } }
 const LEGEND = { labels: { color: '#6b7280', boxWidth: 10, font: { size: 11 } } }
 
@@ -509,7 +509,7 @@ export default function Dashboard() {
       {/* ── HERO HEADER ─────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl p-6"
         style={{
-          background: 'linear-gradient(135deg, rgba(9,18,11,0.98) 0%, rgba(5,12,7,0.99) 100%)',
+          background: 'linear-gradient(135deg, var(--hero-from) 0%, var(--hero-to) 100%)',
           border: '1px solid rgba(22,163,74,0.2)',
           boxShadow: '0 0 80px rgba(22,163,74,0.06), 0 8px 32px rgba(0,0,0,0.5)',
         }}>

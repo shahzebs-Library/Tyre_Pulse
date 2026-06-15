@@ -428,7 +428,7 @@ export default function QrLabels() {
                         {/* Serial / info */}
                         <div
                           className="px-2 pt-1.5 pb-2 text-center"
-                          style={{ background: 'rgba(3,8,5,0.95)' }}
+                          style={{ background: 'var(--panel-deep)' }}
                         >
                           <p className="text-[11px] font-bold font-mono text-white tracking-tight truncate">{val}</p>
                           {sub && (

@@ -61,7 +61,7 @@ function chartOpts(horizontal = false, yLabel = '', xLabel = '') {
     plugins: {
       legend: { labels: { color: '#9ca3af', font: { size: 10 } } },
       title:  { display: false },
-      tooltip: { backgroundColor: '#111827', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: '#374151', borderWidth: 1 },
+      tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1 },
     },
     scales: {
       x: {

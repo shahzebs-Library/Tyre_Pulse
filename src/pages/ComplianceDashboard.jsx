@@ -40,10 +40,10 @@ const chartOpts = (horizontal = false, xLabel = '', yLabel = '') => ({
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 10 } } },
     tooltip: {
-      backgroundColor: '#111827',
+      backgroundColor: 'var(--panel)',
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
-      borderColor: '#374151',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
     },
   },
@@ -68,10 +68,10 @@ const doughnutOpts = {
   plugins: {
     legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 10 }, padding: 12 } },
     tooltip: {
-      backgroundColor: '#111827',
+      backgroundColor: 'var(--panel)',
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
-      borderColor: '#374151',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
     },
   },
@@ -635,10 +635,10 @@ export default function ComplianceDashboard() {
     plugins: {
       legend: { labels: { color: '#9ca3af', font: { size: 10 } } },
       tooltip: {
-        backgroundColor: '#111827',
+        backgroundColor: 'var(--panel)',
         titleColor: '#f9fafb',
         bodyColor: '#d1d5db',
-        borderColor: '#374151',
+        borderColor: 'var(--hairline)',
         borderWidth: 1,
         callbacks: { label: ctx => ` ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(1) : 'N/A'}%` },
       },
@@ -1255,7 +1255,7 @@ export default function ComplianceDashboard() {
                         <div className="h-52">
                           <Bar data={treadDistChart} options={{
                             ...chartOpts(false, 'Tread Depth Band', 'Tyres'),
-                            plugins: { legend: { display: false }, tooltip: { backgroundColor: '#111827', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: '#374151', borderWidth: 1 } },
+                            plugins: { legend: { display: false }, tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1 } },
                           }} />
                         </div>
                         <div className="flex flex-wrap gap-3 mt-2">
@@ -1286,7 +1286,7 @@ export default function ComplianceDashboard() {
                               ...chartOpts(true, 'Compliance %', ''),
                               plugins: {
                                 legend: { display: false },
-                                tooltip: { backgroundColor: '#111827', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: '#374151', borderWidth: 1, callbacks: { label: ctx => ` ${Number(ctx.parsed.x).toFixed(1)}%` } },
+                                tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1, callbacks: { label: ctx => ` ${Number(ctx.parsed.x).toFixed(1)}%` } },
                               },
                               scales: {
                                 x: { min: 0, max: 100, grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${v}%` } },
@@ -1469,7 +1469,7 @@ export default function ComplianceDashboard() {
                               ...chartOpts(true, 'Compliance %', ''),
                               plugins: {
                                 legend: { display: false },
-                                tooltip: { backgroundColor: '#111827', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: '#374151', borderWidth: 1, callbacks: { label: ctx => ` ${Number(ctx.parsed.x).toFixed(1)}%` } },
+                                tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1, callbacks: { label: ctx => ` ${Number(ctx.parsed.x).toFixed(1)}%` } },
                               },
                               scales: {
                                 x: { min: 0, max: 100, grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${v}%` } },
@@ -1607,7 +1607,7 @@ export default function ComplianceDashboard() {
                             ...chartOpts(false, 'Site', 'Vehicles'),
                             plugins: {
                               legend: { labels: { color: '#9ca3af', font: { size: 10 } } },
-                              tooltip: { backgroundColor: '#111827', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: '#374151', borderWidth: 1 },
+                              tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1 },
                             },
                             scales: {
                               x: { stacked: true, grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },

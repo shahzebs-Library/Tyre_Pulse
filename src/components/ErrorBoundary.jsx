@@ -39,10 +39,10 @@ export default class ErrorBoundary extends Component {
         }}>
           <span style={{ fontSize: 28 }}>⚠️</span>
         </div>
-        <h2 style={{ color: '#fff', fontSize: 18, fontWeight: 700, margin: '0 0 8px', textAlign: 'center' }}>
+        <h2 style={{ color:'var(--panel-ink)', fontSize: 18, fontWeight: 700, margin: '0 0 8px', textAlign: 'center' }}>
           Something went wrong
         </h2>
-        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', maxWidth: 300, lineHeight: 1.6, margin: '0 0 24px' }}>
+        <p style={{ color:'var(--text-muted)', fontSize: 13, textAlign: 'center', maxWidth: 300, lineHeight: 1.6, margin: '0 0 24px' }}>
           TyrePulse encountered an unexpected error. Reload to continue.
         </p>
         {this.state.error && (
@@ -58,7 +58,7 @@ export default class ErrorBoundary extends Component {
         {this.state.componentStack && (
           <pre style={{
             background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 10, padding: '10px 14px', fontSize: 9, color: 'rgba(255,255,255,0.4)',
+            borderRadius: 10, padding: '10px 14px', fontSize: 9, color:'var(--text-muted)',
             maxWidth: 360, width: '100%', overflow: 'auto', marginBottom: 20,
             whiteSpace: 'pre-wrap', wordBreak: 'break-all', textAlign: 'left',
           }}>
@@ -71,7 +71,7 @@ export default class ErrorBoundary extends Component {
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '11px 24px', borderRadius: 12, border: 'none',
             background: 'linear-gradient(135deg, #16a34a, #15803d)',
-            color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+            color:'var(--panel-ink)', fontSize: 14, fontWeight: 700, cursor: 'pointer',
             boxShadow: '0 4px 20px rgba(22,163,74,0.35)',
           }}
         >

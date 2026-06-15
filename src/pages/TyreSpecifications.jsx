@@ -121,8 +121,8 @@ const CHART_OPTS = {
       labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 }, padding: 12 },
     },
     tooltip: {
-      backgroundColor: '#111827',
-      borderColor: '#374151',
+      backgroundColor: 'var(--panel)',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',

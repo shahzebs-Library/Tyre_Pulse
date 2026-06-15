@@ -81,6 +81,19 @@
   --login-text-dim:     rgba(255,255,255,0.55);
   --login-input-bg:     rgba(255,255,255,0.05);
   --login-input-border: rgba(255,255,255,0.12);
+
+  /* ── Inline-style panel tokens (theme-aware single source of truth) ──
+     Used to retire hardcoded dark literals scattered across page inline
+     styles so light mode never renders dark-on-light surfaces. */
+  --panel:         #111827;
+  --panel-2:       #1f2937;
+  --panel-3:       #1e1b4b;
+  --panel-overlay: rgba(17,24,39,0.92);
+  --panel-deep:    rgba(8,15,10,0.9);
+  --panel-ink:     #ffffff;
+  --hairline:      #374151;
+  --hero-from:     rgba(9,18,11,0.98);
+  --hero-to:       rgba(5,12,7,0.99);
 }
 
 /* ─── Base ─────────────────────────────────────────────────────────────────── */
@@ -768,6 +781,17 @@ html.light {
   /* Login — page background responds to the theme; the auth card stays a
      premium elevated panel (brand showcase) in both themes. */
   --login-bg: #eef2f0;
+
+  /* Inline-style panel tokens — clean light surfaces */
+  --panel:         #ffffff;
+  --panel-2:       #f1f5f9;
+  --panel-3:       #eef2ff;
+  --panel-overlay: rgba(255,255,255,0.95);
+  --panel-deep:    rgba(255,255,255,0.96);
+  --panel-ink:     #0f172a;
+  --hairline:      rgba(15,23,42,0.10);
+  --hero-from:     #ffffff;
+  --hero-to:       #f5faf6;
 }
 
 html.light body {

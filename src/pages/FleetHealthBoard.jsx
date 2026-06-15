@@ -367,7 +367,7 @@ export default function FleetHealthBoard() {
   }, [trendData])
 
   const TICK = { color: '#6b7280', font: { size: 10 } }
-  const GRID = { color: 'rgba(255,255,255,0.04)' }
+  const GRID = { color:'var(--text-muted)' }
 
   const trendOpts = {
     responsive: true,
@@ -375,8 +375,8 @@ export default function FleetHealthBoard() {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#111827',
-        borderColor: '#374151',
+        backgroundColor: 'var(--panel)',
+        borderColor: 'var(--hairline)',
         borderWidth: 1,
         titleColor: '#f9fafb',
         bodyColor: '#9ca3af',

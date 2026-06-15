@@ -40,7 +40,7 @@ const HOURS_PER_CHANGE = 2
 
 const CHART_THEME = {
   textColor: '#9ca3af',
-  gridColor: 'rgba(255,255,255,0.08)',
+  gridcolor:'var(--text-muted)',
   tooltipBg: '#111827',
   tooltipBorder: '#374151',
   tooltipTitle: '#f9fafb',

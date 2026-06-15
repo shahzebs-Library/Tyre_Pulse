@@ -61,20 +61,20 @@ const BASE_OPTS = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#1f2937',
+      backgroundColor: 'var(--panel-2)',
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
-      borderColor: '#374151',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
     },
   },
   scales: {
     x: {
-      grid: { color: 'rgba(255,255,255,0.06)' },
+      grid: { color:'var(--text-muted)' },
       ticks: { color: '#6b7280', font: { size: 10 } },
     },
     y: {
-      grid: { color: 'rgba(255,255,255,0.06)' },
+      grid: { color:'var(--text-muted)' },
       ticks: { color: '#6b7280', font: { size: 10 } },
     },
   },

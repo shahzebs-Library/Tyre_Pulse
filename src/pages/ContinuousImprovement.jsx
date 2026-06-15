@@ -54,16 +54,16 @@ const CHART_BASE = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#111827',
+      backgroundColor: 'var(--panel)',
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
-      borderColor: '#374151',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
     },
   },
   scales: {
-    x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#6b7280', font: { size: 10 } } },
-    y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#6b7280', font: { size: 10 } } },
+    x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 10 } } },
+    y: { grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 10 } } },
   },
 }
 
@@ -1036,8 +1036,8 @@ export default function ContinuousImprovement() {
         {
           label: 'Target',
           data: kpiScorecard.map(k => k.target),
-          backgroundColor: 'rgba(255,255,255,0.08)',
-          borderColor: 'rgba(255,255,255,0.2)',
+          backgroundcolor:'var(--text-muted)',
+          bordercolor:'var(--text-muted)',
           borderWidth: 1,
           borderRadius: 4,
         },

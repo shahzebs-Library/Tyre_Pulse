@@ -27,7 +27,7 @@ const CHART_OPTS = {
   maintainAspectRatio: false,
   plugins: {
     legend: { labels: { color: '#9ca3af', boxWidth: 10, font: { size: 10 } } },
-    tooltip: { backgroundColor: '#111827', borderColor: '#374151', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+    tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
   },
   scales: {
     x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: '#1f2937' } },
@@ -39,7 +39,7 @@ const DOUGHNUT_OPTS = {
   maintainAspectRatio: false,
   plugins: {
     legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 10, font: { size: 10 } } },
-    tooltip: { backgroundColor: '#111827', borderColor: '#374151', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+    tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
   },
 }
 

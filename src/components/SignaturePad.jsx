@@ -208,7 +208,7 @@ export default function SignaturePad({ label = 'Inspector Signature', inspectorN
             style={{
               flex: 2, padding: '10px', borderRadius: 10, border: 'none',
               background: isEmpty ? '#d1d5db' : '#16a34a',
-              color: '#fff', fontSize: 13, fontWeight: 700,
+              color:'var(--panel-ink)', fontSize: 13, fontWeight: 700,
               cursor: isEmpty ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}

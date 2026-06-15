@@ -51,7 +51,7 @@ const CHART_BASE = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
     tooltip: {
-      backgroundColor: '#111827',
+      backgroundColor: 'var(--panel)',
       titleColor: '#f3f4f6',
       bodyColor: '#9ca3af',
       borderColor: 'rgba(34,197,94,0.25)',
@@ -59,8 +59,8 @@ const CHART_BASE = {
     },
   },
   scales: {
-    x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
-    y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
+    x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
+    y: { grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
   },
 }
 
@@ -387,7 +387,7 @@ export default function DowntimeTracker() {
       datasets: [{
         data: labels.map(l => map[l]),
         backgroundColor: labels.map(l => CAUSE_COLORS[l] || '#6b7280'),
-        borderColor: '#111827',
+        borderColor: 'var(--panel)',
         borderWidth: 2,
       }],
     }
@@ -711,16 +711,16 @@ export default function DowntimeTracker() {
     indexAxis: 'y',
     plugins: { ...CHART_BASE.plugins, legend: { labels: { color: '#9ca3af', font: { size: 11 } } } },
     scales: {
-      x: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
-      y: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 10 }, maxTicksLimit: 14 } },
+      x: { stacked: true, grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
+      y: { stacked: true, grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 10 }, maxTicksLimit: 14 } },
     },
   }
 
   const costBarOpts = {
     ...CHART_BASE,
     scales: {
-      x: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
-      y: { id: 'y', stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 11 }, callback: v => fmtCurrency(v, sym) } },
+      x: { stacked: true, grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
+      y: { id: 'y', stacked: true, grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 11 }, callback: v => fmtCurrency(v, sym) } },
       y2: { id: 'y2', position: 'right', grid: { display: false }, ticks: { color: '#22c55e', font: { size: 11 }, callback: v => fmtCurrency(v, sym) } },
     },
   }

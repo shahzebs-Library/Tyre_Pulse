@@ -46,8 +46,8 @@ const CHART_OPTS = {
   plugins: {
     legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#111827',
-      borderColor: '#374151',
+      backgroundColor: 'var(--panel)',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
@@ -728,7 +728,7 @@ export default function FuelEfficiency() {
                         cutout: '75%',
                         plugins: {
                           legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 11 } } },
-                          tooltip: { backgroundColor: '#111827', titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+                          tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db' },
                         },
                       }}
                     />

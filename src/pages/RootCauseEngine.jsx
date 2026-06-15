@@ -74,8 +74,8 @@ const CHART_DARK = {
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#1f2937',
-      borderColor: '#374151',
+      backgroundColor: 'var(--panel-2)',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
@@ -83,11 +83,11 @@ const CHART_DARK = {
   },
   scales: {
     x: {
-      grid: { color: 'rgba(255,255,255,0.06)' },
+      grid: { color:'var(--text-muted)' },
       ticks: { color: '#9ca3af', font: { size: 11 } },
     },
     y: {
-      grid: { color: 'rgba(255,255,255,0.06)' },
+      grid: { color:'var(--text-muted)' },
       ticks: { color: '#9ca3af', font: { size: 11 } },
     },
   },
@@ -810,7 +810,7 @@ export default function RootCauseEngine() {
                   },
                   scales: {
                     x: {
-                      grid: { color: 'rgba(255,255,255,0.06)' },
+                      grid: { color:'var(--text-muted)' },
                       ticks: { color: '#9ca3af', font: { size: 11 } },
                     },
                     y: {
@@ -858,7 +858,7 @@ export default function RootCauseEngine() {
                   },
                   scales: {
                     x: {
-                      grid: { color: 'rgba(255,255,255,0.06)' },
+                      grid: { color:'var(--text-muted)' },
                       ticks: {
                         color: '#9ca3af',
                         font: { size: 11 },

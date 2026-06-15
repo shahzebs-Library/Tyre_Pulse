@@ -860,7 +860,7 @@ export default function Layout({ children }) {
           className="fixed top-0 left-0 right-0 z-30 flex items-center gap-2 px-3"
           style={{
             height: 52,
-            background: 'rgba(3,8,5,0.97)',
+            background: 'var(--panel-deep)',
             borderBottom: '1px solid rgba(22,163,74,0.12)',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
@@ -969,7 +969,7 @@ export default function Layout({ children }) {
             <motion.div
               className="w-full max-w-xl overflow-hidden"
               style={{
-                background: 'linear-gradient(145deg, rgba(6,13,8,0.99) 0%, rgba(3,8,5,0.99) 100%)',
+                background: 'linear-gradient(145deg, rgba(6,13,8,0.99) 0%, var(--panel-deep) 100%)',
                 border: '1px solid rgba(22,163,74,0.28)',
                 borderRadius: 20,
                 boxShadow: '0 0 80px rgba(22,163,74,0.16), 0 32px 100px rgba(0,0,0,0.85)',

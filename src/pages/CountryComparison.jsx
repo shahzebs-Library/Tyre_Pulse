@@ -19,7 +19,7 @@ const COUNTRY_CURRENCY_MAP = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
 
 const BAR_OPTS = {
   responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', titleColor: '#fff', bodyColor: '#9ca3af' } },
+  plugins: { legend: { display: false }, tooltip: { backgroundColor: 'var(--panel-2)', titlecolor:'var(--panel-ink)', bodyColor: '#9ca3af' } },
   scales: {
     x: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280', font: { size: 11 } } },
     y: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280', font: { size: 11 } } },

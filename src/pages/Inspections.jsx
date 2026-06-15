@@ -1043,7 +1043,7 @@ export default function Inspections() {
 
               {/* Approval workflow panel */}
               {showApprovalForm && !clOffline && (
-                <div className="mt-3 p-4 rounded-xl" style={{ background: '#1e1b4b', border: '1px solid #4338ca' }}>
+                <div className="mt-3 p-4 rounded-xl" style={{ background: 'var(--panel-3)', border: '1px solid #4338ca' }}>
                   <h4 className="text-sm font-semibold text-indigo-300 mb-3 flex items-center gap-2">
                     <Send size={14} /> Send for Manager Approval
                   </h4>
@@ -1112,7 +1112,7 @@ export default function Inspections() {
 
               {clApprovalStatus === 'pending_approval' && !showApprovalForm && (
                 <div className="mt-3 px-3 py-2 rounded-xl flex items-center gap-2 text-sm"
-                  style={{ background: '#1e1b4b', border: '1px solid #4338ca', color: '#a5b4fc' }}>
+                  style={{ background: 'var(--panel-3)', border: '1px solid #4338ca', color: '#a5b4fc' }}>
                   <Send size={14} />
                   <span>
                     {clEmailSent ? '✓ Approval email sent to' : 'Awaiting approval from'}{' '}
@@ -1347,13 +1347,13 @@ export default function Inspections() {
                   {clPhotos.map((src, i) => (
                     <div key={i} className="relative">
                       <img src={src} alt={`photo-${i}`}
-                        style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid #374151' }} />
+                        style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--hairline)' }} />
                       <button
                         onClick={() => setClPhotos(ps => ps.filter((_, j) => j !== i))}
                         style={{
                           position: 'absolute', top: -6, right: -6, width: 18, height: 18,
                           borderRadius: '50%', background: '#ef4444', border: 'none',
-                          color: '#fff', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color:'var(--panel-ink)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}
                       >×</button>
                     </div>
@@ -1370,7 +1370,7 @@ export default function Inspections() {
                       <button
                         onClick={() => galleryInputRef.current?.click()}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
-                        style={{ background: '#1e1b4b', border: '1.5px solid #4338ca', color: '#a5b4fc' }}
+                        style={{ background: 'var(--panel-3)', border: '1.5px solid #4338ca', color: '#a5b4fc' }}
                       >
                         <ImageIcon size={13} /> Gallery
                       </button>
@@ -1430,7 +1430,7 @@ export default function Inspections() {
                 {clSignature ? (
                   <div className="flex items-center gap-3">
                     <img src={clSignature} alt="signature"
-                      style={{ height: 56, maxWidth: 180, background: '#fff', borderRadius: 8, border: '1px solid #374151', padding: 4 }} />
+                      style={{ height: 56, maxWidth: 180, background: '#fff', borderRadius: 8, border: '1px solid var(--hairline)', padding: 4 }} />
                     <div>
                       <p className="text-xs text-green-400 font-semibold">✓ Signed — {clInspector}</p>
                       <button onClick={() => setClSignature(null)}
@@ -1501,14 +1501,14 @@ export default function Inspections() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
         }}>
           <div style={{
-            background: '#111827', border: '1px solid #374151', borderRadius: 20,
+            background: 'var(--panel)', border: '1px solid var(--hairline)', borderRadius: 20,
             width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
             padding: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
           }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Approve Inspection</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color:'var(--panel-ink)' }}>Approve Inspection</div>
                 <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
                   Asset: <strong style={{ color: '#d1d5db' }}>{approveTarget.asset_no}</strong>
                   {approveTarget.site ? ` · ${approveTarget.site}` : ''}
@@ -1522,7 +1522,7 @@ export default function Inspections() {
             </div>
 
             {/* Details */}
-            <div style={{ background: '#1f2937', borderRadius: 12, padding: 16, marginBottom: 16, fontSize: 13 }}>
+            <div style={{ background: 'var(--panel-2)', borderRadius: 12, padding: 16, marginBottom: 16, fontSize: 13 }}>
               {[
                 ['Inspector', approveTarget.inspector_name || approveTarget.inspector],
                 ['Type', approveTarget.inspection_type],
@@ -1542,7 +1542,7 @@ export default function Inspections() {
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>Inspector Signature</div>
                 <img src={approveTarget.inspector_signature} alt="Inspector signature"
-                  style={{ maxWidth: 200, border: '1px solid #374151', borderRadius: 8 }} />
+                  style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
               </div>
             )}
 
@@ -1552,7 +1552,7 @@ export default function Inspections() {
               {approverSig ? (
                 <div>
                   <img src={approverSig} alt="Approver signature"
-                    style={{ maxWidth: 200, border: '1px solid #374151', borderRadius: 8 }} />
+                    style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
                   <button onClick={() => setApproverSig(null)}
                     style={{ display: 'block', marginTop: 6, fontSize: 11, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer' }}>
                     Clear &amp; re-sign
@@ -1563,7 +1563,7 @@ export default function Inspections() {
                   onClick={() => setShowApproverPad(true)}
                   style={{
                     width: '100%', padding: '14px', borderRadius: 12,
-                    border: '2px dashed #374151', background: '#1f2937',
+                    border: '2px dashed var(--hairline)', background: 'var(--panel-2)',
                     color: '#9ca3af', fontSize: 13, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   }}
@@ -1626,7 +1626,7 @@ export default function Inspections() {
                   style={{
                     flex: 2, padding: '11px', borderRadius: 10, border: 'none',
                     background: approverSig ? '#16a34a' : '#374151',
-                    color: '#fff', fontSize: 13, fontWeight: 700, cursor: approverSig ? 'pointer' : 'not-allowed',
+                    color:'var(--panel-ink)', fontSize: 13, fontWeight: 700, cursor: approverSig ? 'pointer' : 'not-allowed',
                   }}
                 >
                   {approveSubmitting ? 'Saving…' : '✓ Approve & Sign'}
@@ -1663,9 +1663,9 @@ export default function Inspections() {
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '12px 16px',
-            background: '#111827', borderBottom: '1px solid #374151',
+            background: 'var(--panel)', borderBottom: '1px solid var(--hairline)',
           }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color:'var(--panel-ink)' }}>
               Inspection Report — {clSaved?.asset_no}
             </span>
             <div className="flex gap-2">
@@ -1678,7 +1678,7 @@ export default function Inspections() {
               </a>
               <button
                 onClick={() => setShowPdfPreview(false)}
-                style={{ background: '#374151', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', padding: '6px 10px' }}
+                style={{ background: 'var(--hairline)', border: 'none', borderRadius: 8, color:'var(--panel-ink)', cursor: 'pointer', padding: '6px 10px' }}
               >
                 <X size={16} />
               </button>

@@ -248,8 +248,8 @@ function lineOpts(currency) {
     plugins: {
       legend: { labels: { color: CHART_DARK.color, font: { size: 11 } } },
       tooltip: {
-        backgroundColor: '#111827',
-        borderColor: '#374151',
+        backgroundColor: 'var(--panel)',
+        borderColor: 'var(--hairline)',
         borderWidth: 1,
         titleColor: '#f9fafb',
         bodyColor: '#9ca3af',
@@ -283,8 +283,8 @@ function barOpts(currency) {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#111827',
-        borderColor: '#374151',
+        backgroundColor: 'var(--panel)',
+        borderColor: 'var(--hairline)',
         borderWidth: 1,
         titleColor: '#f9fafb',
         bodyColor: '#9ca3af',

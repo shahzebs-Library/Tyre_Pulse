@@ -48,7 +48,7 @@ const CHART_DEFAULTS = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#1f2937',
+      backgroundColor: 'var(--panel-2)',
       titleColor: '#f3f4f6',
       bodyColor: '#9ca3af',
       borderColor: 'rgba(59,130,246,0.3)',
@@ -56,8 +56,8 @@ const CHART_DEFAULTS = {
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
   },
 }
 
@@ -355,9 +355,9 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
       r: {
         min: 0, max: 100,
         ticks: { color: '#6b7280', font: { size: 10 }, stepSize: 25 },
-        grid: { color: 'rgba(255,255,255,0.08)' },
+        grid: { color:'var(--text-muted)' },
         pointLabels: { color: '#9ca3af', font: { size: 11 } },
-        angleLines: { color: 'rgba(255,255,255,0.08)' },
+        angleLines: { color:'var(--text-muted)' },
       },
     },
   }
@@ -1095,9 +1095,9 @@ export default function SupplierManagement() {
                             r: {
                               min: 0, max: 100,
                               ticks: { color: '#6b7280', font: { size: 10 }, stepSize: 25 },
-                              grid: { color: 'rgba(255,255,255,0.08)' },
+                              grid: { color:'var(--text-muted)' },
                               pointLabels: { color: '#9ca3af', font: { size: 11 } },
-                              angleLines: { color: 'rgba(255,255,255,0.08)' },
+                              angleLines: { color:'var(--text-muted)' },
                             },
                           },
                         }} />

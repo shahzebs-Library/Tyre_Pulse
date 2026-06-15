@@ -103,7 +103,7 @@ const CHART_BASE = {
   plugins: {
     legend: { labels: { color: '#9ca3af', boxWidth: 10, font: { size: 10 } } },
     tooltip: {
-      backgroundColor: '#111827', borderColor: '#374151', borderWidth: 1,
+      backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1,
       titleColor: '#f9fafb', bodyColor: '#d1d5db',
     },
   },
@@ -1011,7 +1011,7 @@ export default function KpiCommandCenter() {
               maintainAspectRatio: false,
               plugins: {
                 legend: { labels: { color: '#9ca3af', boxWidth: 10, font: { size: 10 } } },
-                tooltip: { backgroundColor: '#111827', borderColor: '#374151', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+                tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
               },
               scales: {
                 r: {

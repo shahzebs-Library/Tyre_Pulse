@@ -37,7 +37,7 @@ const CHART_BASE = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#1f2937',
+      backgroundColor: 'var(--panel-2)',
       titleColor: '#f3f4f6',
       bodyColor: '#9ca3af',
       borderColor: 'rgba(59,130,246,0.3)',
@@ -45,8 +45,8 @@ const CHART_BASE = {
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
   },
 }
 
@@ -410,7 +410,7 @@ export default function BudgetPlanner() {
       datasets: [{
         data: top.map(b => b.thisYear),
         backgroundColor: PALETTE.slice(0, top.length),
-        borderColor: '#111827',
+        borderColor: 'var(--panel)',
         borderWidth: 2,
       }],
     }
@@ -423,7 +423,7 @@ export default function BudgetPlanner() {
       datasets: [{
         data: top.map(b => b.lastYear),
         backgroundColor: PALETTE.slice(0, top.length),
-        borderColor: '#111827',
+        borderColor: 'var(--panel)',
         borderWidth: 2,
       }],
     }

@@ -45,8 +45,8 @@ const BAR_OPTS = (horizontal = false) => ({
   indexAxis: horizontal ? 'y' : 'x',
   plugins: { legend: { display: false } },
   scales: {
-    x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
-    y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
+    x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
+    y: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
   },
 })
 
@@ -697,11 +697,11 @@ export default function PositionIntelligence() {
                   },
                   scales: {
                     x: {
-                      grid: { color: 'rgba(255,255,255,0.04)' },
+                      grid: { color:'var(--text-muted)' },
                       ticks: { color: '#9ca3af', font: { size: 10 } },
                     },
                     y: {
-                      grid: { color: 'rgba(255,255,255,0.04)' },
+                      grid: { color:'var(--text-muted)' },
                       ticks: { color: '#9ca3af', font: { size: 10 } },
                     },
                   },
@@ -728,9 +728,9 @@ export default function PositionIntelligence() {
                     },
                   },
                   scales: {
-                    x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
+                    x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
                     y: {
-                      grid: { color: 'rgba(255,255,255,0.04)' },
+                      grid: { color:'var(--text-muted)' },
                       ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${v}%` },
                     },
                   },
@@ -760,9 +760,9 @@ export default function PositionIntelligence() {
                       },
                     },
                     scales: {
-                      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
+                      x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
                       y: {
-                        grid: { color: 'rgba(255,255,255,0.04)' },
+                        grid: { color:'var(--text-muted)' },
                         ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${(v / 1000).toFixed(0)}k` },
                       },
                     },

@@ -554,7 +554,7 @@ export default function InspectionIntelligence() {
     datasets: [{
       data: typeDistribution.map(([, c]) => c),
       backgroundColor: typeDistribution.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]),
-      borderColor: '#111827',
+      borderColor: 'var(--panel)',
       borderWidth: 2,
     }],
   }), [typeDistribution])

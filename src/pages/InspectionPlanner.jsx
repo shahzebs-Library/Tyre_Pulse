@@ -885,7 +885,7 @@ export default function InspectionPlanner() {
     maintainAspectRatio: false,
     plugins: {
       legend: { position: 'top', labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
-      tooltip: { backgroundColor: '#1f2937', titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+      tooltip: { backgroundColor: 'var(--panel-2)', titleColor: '#f9fafb', bodyColor: '#d1d5db' },
     },
     scales: {
       x: { ticks: { color: '#6b7280' }, grid: { color: '#1f2937' } },

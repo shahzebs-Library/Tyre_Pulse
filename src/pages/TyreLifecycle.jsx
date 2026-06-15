@@ -264,7 +264,7 @@ export default function TyreLifecycle() {
           'rgba(245,158,11,0.8)',
           'rgba(239,68,68,0.8)',
         ],
-        borderColor: '#111827',
+        borderColor: 'var(--panel)',
         borderWidth: 2,
       }],
     }

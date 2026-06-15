@@ -666,8 +666,8 @@ export default function LiveFleetStatus() {
   const hasFilters = siteFilter !== 'All' || statusFilter !== 'All' || search
 
   const chartTooltipDefaults = {
-    backgroundColor: '#111827',
-    borderColor: '#374151',
+    backgroundColor: 'var(--panel)',
+    borderColor: 'var(--hairline)',
     borderWidth: 1,
     titleColor: '#f9fafb',
     bodyColor: '#9ca3af',

@@ -409,10 +409,10 @@ export default function FleetIntelligence() {
 
       // Inspections — graceful
       try {
-        const { data: inspData } = await supabase
+        const { data: inspData } = await fetchAllPages((from, to) => supabase
           .from('inspections')
           .select('asset_no,site,status,scheduled_date,completed_date')
-          .limit(5000)
+          .range(from, to))
         setInspections(inspData || [])
       } catch {
         setInspections([])

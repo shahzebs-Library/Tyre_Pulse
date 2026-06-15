@@ -522,6 +522,8 @@ export default function CostCenter() {
         'Cost Center — Cost by Site',
         'CostCenter_Report',
         'landscape',
+        '',
+        { currency: activeCurrency },
       )
     } finally { setExporting(false) }
   }

@@ -58,7 +58,7 @@ function applyShortcut(label, setDateFrom, setDateTo, setDateShortcut) {
 }
 
 export default function Reports() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
   const [step, setStep]               = useState('type')
   const [reportType, setReportType]   = useState('')
   const [dateFrom, setDateFrom]       = useState('')
@@ -270,7 +270,9 @@ export default function Reports() {
       columns,
       `TyrePulse · ${reportType}`,
       `TyrePulse_${reportType.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}`,
-      'landscape'
+      'landscape',
+      '',
+      { currency: activeCurrency },
     )
   }
 

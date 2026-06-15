@@ -247,6 +247,8 @@ export default function Budgets() {
       `Budget Report – ${MONTHS_LABELS[filterMonth - 1]} ${filterYear}`,
       `budget-${filterYear}-${filterMonth}`,
       'portrait',
+      '',
+      { currency: appSettings?.currency || 'SAR' },
     )
   }
 

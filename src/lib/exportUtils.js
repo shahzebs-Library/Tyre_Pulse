@@ -46,6 +46,96 @@ const nowStr  = () => formatDate(new Date(), 'All')
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 
+// ── Executive intelligence derivation (business meaning, not raw data) ───────────
+// These convert the report data object into narrative, business insights, and a
+// forward-looking outlook so every report leads with decisions, not tables.
+function _deriveNarrative(data) {
+  const totalT = data.totalTyres || 0
+  const crit   = data.criticalTyres || 0
+  const warn   = data.warningTyres || 0
+  const good   = data.goodTyres || 0
+  const comp   = data.pressureCompliance ?? (totalT ? Math.round((good / totalT) * 100) : 0)
+  const critShare = totalT ? Math.round((crit / totalT) * 100) : 0
+  const actions   = data.openActions?.length || 0
+  const highAct   = (data.openActions || []).filter(a => /crit|high/i.test(a.priority || '')).length
+  const vAlert    = data.vehiclesWithAlerts || 0
+  const vTotal    = data.totalVehicles || 0
+  const spend     = data.monthlySpend || 0
+  const insp      = pct(data.inspectionsCompleted, data.inspectionsScheduled)
+
+  const tone   = (critShare >= 15 || comp < 70) ? 'crit'
+               : (critShare >= 5  || comp < 85) ? 'warn' : 'good'
+  const status = tone === 'crit' ? 'Requires Immediate Attention'
+               : tone === 'warn' ? 'Stable — Monitoring Advised'
+               : 'Healthy — Within Target'
+
+  const p1 = `The fleet ${tone === 'crit' ? 'requires immediate attention' : tone === 'warn' ? 'is stable but warrants close monitoring' : 'is healthy and operating within target parameters'}. `
+    + `Of ${totalT.toLocaleString()} monitored tyre records, ${good.toLocaleString()} (${comp}%) sit within safe operating limits, `
+    + `while ${crit.toLocaleString()} (${critShare}%) are classified critical and ${warn.toLocaleString()} show elevated wear. `
+    + (vTotal ? `${vAlert} of ${vTotal} vehicles currently carry one or more active alerts.` : '')
+
+  const money = spend > 0
+    ? ` Tyre spend for the period totals ${fmtCurr(spend)}${data.ytdSpend ? `, with ${fmtCurr(data.ytdSpend)} year to date` : ''}.`
+    : ''
+  const p2 = `${actions} corrective action${actions === 1 ? '' : 's'} ${actions === 1 ? 'is' : 'are'} open`
+    + `${highAct ? `, including ${highAct} high priority` : ''}.`
+    + money
+    + ` Inspection completion stands at ${insp || 0}%.`
+
+  const action = crit > 0
+    ? `Replace ${crit} critical tyre${crit === 1 ? '' : 's'} before next deployment and resolve ${highAct} high-priority action${highAct === 1 ? '' : 's'}.`
+    : comp < 85
+      ? `Raise pressure and tread compliance from ${comp}% toward the 90% target through scheduled inspections.`
+      : `Sustain the preventive inspection cadence to hold compliance above 90%.`
+
+  return { status, tone, paragraphs: [p1, p2], action }
+}
+
+function _deriveBusinessInsights(data) {
+  const out = []
+  const sites = data.siteBreakdown || []
+  if (sites.length) {
+    const worst = [...sites].sort((a, b) => (b.alerts || 0) - (a.alerts || 0))[0]
+    if (worst && (worst.alerts || 0) > 0)
+      out.push({ label: 'Highest-Risk Site', value: worst.name, sub: `${worst.alerts} alerts · ${worst.compliance ?? 0}% compliant`, tone: 'crit' })
+    const best = [...sites].filter(s => s.compliance != null).sort((a, b) => (b.compliance || 0) - (a.compliance || 0))[0]
+    if (best) out.push({ label: 'Most Reliable Site', value: best.name, sub: `${best.compliance}% compliance`, tone: 'good' })
+  }
+  const defs = data.topDefects || []
+  if (defs.length) out.push({ label: 'Top Defect Pattern', value: String(defs[0].type).slice(0, 24), sub: `${defs[0].count} occurrences`, tone: 'warn' })
+  const totalT = data.totalTyres || 1
+  if ((data.criticalTyres || 0) > 0)
+    out.push({ label: 'Critical Exposure', value: `${data.criticalTyres} tyres`, sub: `${Math.round((data.criticalTyres / totalT) * 100)}% of fleet`, tone: 'crit' })
+  if ((data.monthlySpend || 0) > 0)
+    out.push({ label: 'Period Tyre Spend', value: fmtCurr(data.monthlySpend), sub: data.ytdSpend ? `${fmtCurr(data.ytdSpend)} YTD` : 'current period', tone: 'info' })
+  const acts = data.openActions || []
+  if (acts.length) {
+    const hi = acts.filter(a => /crit|high/i.test(a.priority || '')).length
+    out.push({ label: 'Action Backlog', value: `${acts.length} open`, sub: hi ? `${hi} high priority` : 'all routine', tone: hi ? 'warn' : 'info' })
+  }
+  return out.slice(0, 6)
+}
+
+function _deriveForecast(data) {
+  const out = []
+  const ytd = data.ytdSpend || 0
+  const monthIdx = (new Date()).getMonth() + 1
+  if (ytd > 0) {
+    const runRate = ytd / monthIdx
+    out.push({ label: 'Next-Month Spend', value: fmtCurr(runRate), conf: 'Medium', note: 'YTD run-rate' })
+    out.push({ label: 'Projected Annual', value: fmtCurr(runRate * 12), conf: 'Medium', note: 'Linear extrapolation' })
+  } else if ((data.monthlySpend || 0) > 0) {
+    out.push({ label: 'Projected Annual', value: fmtCurr(data.monthlySpend * 12), conf: 'Low', note: 'From current month' })
+  }
+  const repl = (data.criticalTyres || 0) + Math.round((data.warningTyres || 0) * 0.5)
+  if (repl > 0) out.push({ label: 'Replacements Due', value: `~${repl} tyres`, conf: 'High', note: 'Critical + 50% high-risk' })
+  const comp = data.pressureCompliance ?? 0
+  out.push({ label: 'Compliance Outlook', value: comp < 85 ? 'Below target' : 'On target', conf: 'Medium', note: `Currently ${comp}%` })
+  return out.slice(0, 4)
+}
+
+const _TONE_RGB = { crit: P.crimson, warn: P.scarlet, good: P.emerald, info: P.indigo }
+
 // Serialize a DOM SVG element to a PNG data URL at given scale
 async function svgToPngDataUrl(svgEl, scale = 2, bgColor = '#0A0F1E') {
   return new Promise((resolve) => {
@@ -855,10 +945,103 @@ export function exportDailyExecutivePdf(data, filename) {
     kpis.forEach((k, i) => _kpiBox(doc, PW - 195 + i * 47, 30, 42, 38, k.v, k.l, null, k.rgb))
   }
 
-  // ── PAGE 2: EXECUTIVE SUMMARY ──────────────────────────────────────────────
+  // ── PAGE 2: EXECUTIVE SUMMARY (narrative-first, 60-second read) ─────────────
   doc.addPage()
   {
-    lsHeader('Executive Summary', P.indigo)
+    const narrative = data.narrative || _deriveNarrative(data)
+    const biz       = data.businessInsights || _deriveBusinessInsights(data)
+    const forecast  = data.forecast || _deriveForecast(data)
+    const toneRgb   = _TONE_RGB[narrative.tone] || P.indigo
+
+    lsHeader('Executive Summary', toneRgb)
+    let y = 32
+
+    // Status banner
+    doc.setFillColor(toneRgb[0] * 0.12 + 224, toneRgb[1] * 0.12 + 224, toneRgb[2] * 0.12 + 224)
+    doc.setDrawColor(...toneRgb); doc.setLineWidth(0.4)
+    doc.roundedRect(14, y, PW - 28, 13, 2, 2, 'FD')
+    doc.setFillColor(...toneRgb)
+    doc.roundedRect(14, y, 3.5, 13, 1.5, 1.5, 'F')
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ghost)
+    doc.text('FLEET STATUS', 22, y + 5)
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...toneRgb)
+    doc.text(narrative.status.toUpperCase(), 22, y + 10.5)
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+    doc.text(`${period} · ${siteLabel} · ${date}`, PW - 18, y + 8, { align: 'right' })
+    y += 18
+
+    // Narrative ("what happened / why / what matters")
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text('Situation Overview', 14, y); y += 4
+    const narrLines = []
+    ;(narrative.paragraphs || []).forEach(p => { doc.splitTextToSize(p, PW - 36).forEach(l => narrLines.push(l)) })
+    const narrH = narrLines.length * 4.4 + 9
+    doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
+    doc.roundedRect(14, y, PW - 28, narrH, 2, 2, 'FD')
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.steel)
+    doc.text(narrLines, 20, y + 6)
+    y += narrH + 6
+
+    // Business insights (decisions, not raw data)
+    if (biz.length) {
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text('Business Insights', 14, y); y += 4
+      const cols = Math.min(3, biz.length)
+      const rows = Math.ceil(biz.length / cols)
+      const bw = (PW - 28 - (cols - 1) * 4) / cols
+      const bh = 22
+      biz.forEach((b, i) => {
+        const r = Math.floor(i / cols), c = i % cols
+        const bx = 14 + c * (bw + 4), by = y + r * (bh + 4)
+        const rgb = _TONE_RGB[b.tone] || P.indigo
+        doc.setFillColor(...P.white); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
+        doc.roundedRect(bx, by, bw, bh, 2, 2, 'FD')
+        doc.setFillColor(...rgb); doc.roundedRect(bx, by, 3, bh, 1.5, 1.5, 'F')
+        doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ghost)
+        doc.text(String(b.label).toUpperCase(), bx + 6, by + 6)
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...rgb)
+        doc.text(doc.splitTextToSize(String(b.value), bw - 10)[0], bx + 6, by + 13)
+        doc.setFontSize(6.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+        doc.text(doc.splitTextToSize(String(b.sub || ''), bw - 10)[0] || '', bx + 6, by + 18.5)
+      })
+      y += rows * (bh + 4) + 4
+    }
+
+    // Predictive outlook + priority action (two columns)
+    const colW = (PW - 28 - 6) / 2
+    const fy = y
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text('Predictive Outlook', 14, fy)
+    let py = fy + 4
+    ;(forecast || []).slice(0, 4).forEach(f => {
+      doc.setFillColor(...P.cloud); doc.roundedRect(14, py, colW, 9.5, 1.5, 1.5, 'F')
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+      doc.text(String(f.label), 18, py + 6)
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.steel)
+      doc.text(String(f.value), 14 + colW - 28, py + 6, { align: 'right' })
+      doc.setFontSize(5.6); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.indigo)
+      doc.text(String(f.conf || '').toUpperCase(), 14 + colW - 4, py + 6, { align: 'right' })
+      py += 11.5
+    })
+
+    // Priority action callout (right column)
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text('Priority Action', 14 + colW + 6, fy)
+    const actX = 14 + colW + 6
+    const actLines = doc.splitTextToSize(narrative.action || '', colW - 12)
+    const actH = Math.max(20, actLines.length * 4.6 + 10)
+    doc.setFillColor(toneRgb[0] * 0.1, toneRgb[1] * 0.1, toneRgb[2] * 0.1)
+    doc.setDrawColor(...toneRgb); doc.setLineWidth(0.4)
+    doc.roundedRect(actX, fy + 4, colW, actH, 2, 2, 'FD')
+    doc.setFillColor(...toneRgb); doc.roundedRect(actX, fy + 4, 3, actH, 1.5, 1.5, 'F')
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.steel)
+    doc.text(actLines, actX + 7, fy + 11)
+  }
+
+  // ── PAGE 3: KPI COMMAND CENTER ─────────────────────────────────────────────
+  doc.addPage()
+  {
+    lsHeader('KPI Command Center', P.indigo)
     let y = 32
 
     const totalT = data.totalTyres || 1
@@ -1168,7 +1351,62 @@ export async function exportToPptx(data, filename = 'Operations_Report') {
   ]
   coverKpis.forEach((k, i) => kpiTile(s1, 9.8, 0.8 + i * 1.6, 3.1, k.l, k.v, k.c))
 
-  // Slide 2: KPIs
+  // Slide 2: Executive Summary (narrative-first, board-ready)
+  {
+    const totalT    = data.totalTyres || 0
+    const high      = data.highRisk || 0
+    const highShare = totalT ? Math.round((high / totalT) * 100) : 0
+    const acts      = typeof data.openActions === 'number' ? data.openActions : (data.openActions?.length || 0)
+    const tone      = highShare >= 15 ? CRIM : highShare >= 5 ? SCAR : EMER
+    const statusTxt = highShare >= 15 ? 'Requires Immediate Attention'
+                    : highShare >= 5  ? 'Stable — Monitoring Advised'
+                    : 'Healthy — Within Target'
+    const trend     = data.monthlyTrend || []
+    const trendDir  = trend.length >= 2
+      ? (trend[trend.length - 1].count > trend[0].count ? 'rising' : trend[trend.length - 1].count < trend[0].count ? 'easing' : 'flat')
+      : null
+    const topSite   = (data.topSites || [])[0]
+    const topCat    = (data.categoryBreakdown || [])[0]
+
+    const se = pptx.addSlide()
+    se.background = { color: DARK }
+    header(se, 'Executive Summary', tone)
+
+    // Status banner
+    se.addShape(pptx.ShapeType.rect, { x: 0.3, y: 1.35, w: 12.7, h: 0.95, fill: { color: SLATE }, line: { color: tone, width: 1.25 }, rounding: true })
+    se.addShape(pptx.ShapeType.rect, { x: 0.3, y: 1.35, w: 0.09, h: 0.95, fill: { color: tone } })
+    se.addText('FLEET STATUS', { x: 0.55, y: 1.45, w: 4, h: 0.3, fontSize: 9, bold: true, color: GHOST, fontFace: 'Arial' })
+    se.addText(statusTxt, { x: 0.55, y: 1.72, w: 9, h: 0.45, fontSize: 17, bold: true, color: tone, fontFace: 'Arial' })
+
+    // Narrative bullets
+    const bullets = [
+      { text: `${totalT.toLocaleString()} tyre records monitored; ${high.toLocaleString()} (${highShare}%) flagged high-risk or critical.`, options: { bullet: true, color: 'D5DBE8', fontSize: 13, paraSpaceAfter: 8 } },
+      { text: `${acts} corrective action${acts === 1 ? '' : 's'} open and awaiting resolution.`, options: { bullet: true, color: 'D5DBE8', fontSize: 13, paraSpaceAfter: 8 } },
+      { text: trendDir ? `Issue volume is ${trendDir} across the last ${trend.length} reporting periods.` : `Period tyre cost totals ${fmtCurr(data.totalCost)}.`, options: { bullet: true, color: 'D5DBE8', fontSize: 13, paraSpaceAfter: 8 } },
+      { text: highShare >= 5 ? `Priority: action ${high} high-risk tyres and clear the ${acts}-item backlog.` : `Priority: sustain preventive inspections to hold risk below 5%.`, options: { bullet: true, color: GOLD, fontSize: 13, bold: true } },
+    ]
+    se.addText('Situation Overview', { x: 0.3, y: 2.55, w: 7.5, h: 0.4, fontSize: 13, bold: true, color: WHITE, fontFace: 'Arial' })
+    se.addText(bullets, { x: 0.4, y: 3.0, w: 7.2, h: 3.2, fontFace: 'Arial', valign: 'top' })
+
+    // Business insight chips (right rail)
+    se.addText('Business Insights', { x: 8.0, y: 2.55, w: 5, h: 0.4, fontSize: 13, bold: true, color: WHITE, fontFace: 'Arial' })
+    const chips = [
+      topSite ? { l: 'Highest-Volume Site', v: topSite.site, s: `${topSite.count} records`, c: SCAR } : null,
+      topCat  ? { l: 'Top Category', v: topCat.category, s: `${topCat.count} records`, c: INDIGO } : null,
+      { l: 'Period Tyre Cost', v: fmtCurr(data.totalCost), s: data.period || 'current period', c: VIOLET },
+      { l: 'Critical Exposure', v: `${high} tyres`, s: `${highShare}% of fleet`, c: tone },
+    ].filter(Boolean)
+    chips.forEach((ch, i) => {
+      const cy = 3.0 + i * 0.92
+      se.addShape(pptx.ShapeType.rect, { x: 8.0, y: cy, w: 5.0, h: 0.8, fill: { color: STEEL }, rounding: true })
+      se.addShape(pptx.ShapeType.rect, { x: 8.0, y: cy, w: 0.07, h: 0.8, fill: { color: ch.c } })
+      se.addText(String(ch.l).toUpperCase(), { x: 8.2, y: cy + 0.06, w: 4.7, h: 0.25, fontSize: 8, bold: true, color: GHOST, fontFace: 'Arial' })
+      se.addText(String(ch.v), { x: 8.2, y: cy + 0.28, w: 3.4, h: 0.4, fontSize: 14, bold: true, color: ch.c, fontFace: 'Arial' })
+      se.addText(String(ch.s), { x: 11.4, y: cy + 0.32, w: 1.5, h: 0.35, fontSize: 8, color: MIST, align: 'right', fontFace: 'Arial' })
+    })
+  }
+
+  // Slide 3: KPIs
   const s2 = pptx.addSlide()
   s2.background = { color: DARK }
   header(s2, 'Executive KPI Summary', INDIGO)

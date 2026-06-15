@@ -963,6 +963,45 @@ html.light [class*="from-white"] { --tw-gradient-from: #0f172a; }
 html.light .invert-on-light { filter: invert(1); }
 html.light .fixed.inset-0 > div[class*="bg-gray"] { background-color: #ffffff !important; }
 
+/* ─── Light theme: comprehensive dark-surface catch-all ─────────────────────
+   Substring selectors catch EVERY opacity variant (e.g. bg-gray-900/40, /70,
+   /95) and slate equivalents in one pass, so dark panels never leak into light.
+   Black overlays are deliberately excluded above so modals keep their dim. */
+html.light [class*="bg-gray-950"],
+html.light [class*="bg-gray-900"],
+html.light [class*="bg-slate-950"],
+html.light [class*="bg-slate-900"]   { background-color: #f1f5f9 !important; }
+html.light [class*="bg-gray-800"],
+html.light [class*="bg-slate-800"]   { background-color: #ffffff !important; }
+html.light [class*="bg-gray-700"],
+html.light [class*="bg-slate-700"]   { background-color: #f8fafc !important; }
+
+/* Dark gradients → light surfaces */
+html.light [class*="from-gray-950"],
+html.light [class*="from-gray-900"],
+html.light [class*="from-slate-900"],
+html.light [class*="from-gray-800"] { --tw-gradient-from: #ffffff !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(255,255,255,0)) !important; }
+html.light [class*="via-gray-900"],
+html.light [class*="via-gray-800"]  { --tw-gradient-via: #f8fafc !important; }
+html.light [class*="to-gray-950"],
+html.light [class*="to-gray-900"],
+html.light [class*="to-slate-900"],
+html.light [class*="to-gray-800"]   { --tw-gradient-to: #f1f5f9 !important; }
+
+/* Dark borders (all opacity variants) */
+html.light [class*="border-gray-800"],
+html.light [class*="border-gray-700"],
+html.light [class*="border-slate-800"],
+html.light [class*="border-slate-700"] { border-color: rgba(15,23,42,0.10) !important; }
+
+/* Dark text (all opacity variants) → readable slate */
+html.light [class*="text-gray-100"],
+html.light [class*="text-white"]:not([class*="bg-"]) { color: #0f172a !important; }
+html.light [class*="text-gray-200"],
+html.light [class*="text-gray-300"] { color: #334155 !important; }
+html.light [class*="text-gray-400"],
+html.light [class*="text-gray-500"] { color: #64748b !important; }
+
 /* ─── Design System Utility Extensions ─────────────────────────────────────── */
 @layer utilities {
   /* Surface backgrounds */

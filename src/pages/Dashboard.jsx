@@ -529,11 +529,7 @@ export default function Dashboard() {
             <p className="text-xs font-semibold text-green-600 uppercase tracking-[0.12em] mb-1">
               {greeting}
             </p>
-            <h1 className="text-2xl font-extrabold tracking-tight leading-none"
-              style={{
-                background: 'linear-gradient(135deg, #ffffff 0%, #dcfce7 50%, #86efac 100%)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-              }}>
+            <h1 className="page-title" style={{ fontSize: '1.5rem' }}>
               {firstName}
             </h1>
             <p className="text-gray-500 text-sm mt-1.5">

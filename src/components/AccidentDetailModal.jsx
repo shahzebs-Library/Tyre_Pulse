@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   X, Save, Plus, Trash2, Send, Lock, CheckCircle2, XCircle,
-  ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User,
+  ShieldCheck, Hourglass, FileText, Wrench, MessageSquare, Briefcase, History, User, ClipboardList,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -58,6 +58,7 @@ function isElevated(role) {
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: FileText },
+  { key: 'tracker',  label: 'Tracker', icon: ClipboardList },
   { key: 'claim',    label: 'Claim & Recovery', icon: Briefcase },
   { key: 'parts',    label: 'Parts & Repairs', icon: Wrench },
   { key: 'log',      label: 'Case Log', icon: MessageSquare },
@@ -162,6 +163,7 @@ export default function AccidentDetailModal({ accidentId, onClose, onChanged }) 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
           {tab === 'overview'  && <OverviewTab acc={acc} />}
+          {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
           {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
           {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} />}
           {tab === 'log'       && <LogTab acc={acc} remarks={remarks} profile={profile} reload={load} setErr={setErr} />}
@@ -214,6 +216,88 @@ function OverviewTab({ acc }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function TrackerTab({ acc, elevated, onSaved, setErr }) {
+  const [f, setF] = useState({
+    location: acc.location ?? '',
+    liable_party: acc.liable_party ?? '',
+    case_stage: acc.case_stage ?? '',
+    damage_condition: acc.damage_condition ?? '',
+    current_status: acc.current_status ?? '',
+    action_to_be_taken: acc.action_to_be_taken ?? '',
+    responsible_owner: acc.responsible_owner ?? '',
+    required_action: acc.required_action ?? '',
+    status_update_date: acc.status_update_date ?? '',
+    status_update_note: acc.status_update_note ?? '',
+    expected_release_date: acc.expected_release_date ?? '',
+  })
+  const [saving, setSaving] = useState(false)
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+
+  async function save() {
+    setSaving(true); setErr('')
+    const { error } = await supabase.from('accidents').update({
+      location: f.location || null,
+      liable_party: f.liable_party || null,
+      case_stage: f.case_stage || null,
+      damage_condition: f.damage_condition || null,
+      current_status: f.current_status || null,
+      action_to_be_taken: f.action_to_be_taken || null,
+      responsible_owner: f.responsible_owner || null,
+      required_action: f.required_action || null,
+      status_update_date: f.status_update_date || null,
+      status_update_note: f.status_update_note || null,
+      expected_release_date: f.expected_release_date || null,
+    }).eq('id', acc.id)
+    setSaving(false)
+    if (error) { setErr(error.message); return }
+    onSaved()
+  }
+
+  if (!elevated) {
+    return (
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <KV label="Location" value={acc.location} />
+          <KV label="Liability" value={acc.liable_party} highlight />
+          <KV label="Case stage" value={acc.case_stage} />
+          <KV label="Damage condition" value={acc.damage_condition} />
+          <KV label="Current status" value={acc.current_status} highlight />
+          <KV label="Action to be taken" value={acc.action_to_be_taken} />
+          <KV label="Responsible owner" value={acc.responsible_owner} />
+          <KV label="Required action" value={acc.required_action} />
+          <KV label="Status update" value={acc.status_update_date} />
+          <KV label="Expected release" value={acc.expected_release_date} />
+        </div>
+        {acc.status_update_note && <KV label="Status update note" value={acc.status_update_note} />}
+        <p className="text-xs text-gray-600">Only Admin / Manager / Director can edit tracker details.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <Inp label="Location" value={f.location} onChange={v => set('location', v)} placeholder="e.g. GCC Plant" />
+        <Inp label="Liability" value={f.liable_party} onChange={v => set('liable_party', v)} placeholder="e.g. 100% Third Party Liability" />
+        <Inp label="Case stage" value={f.case_stage} onChange={v => set('case_stage', v)} placeholder="e.g. Internal Report Preparation" />
+        <Inp label="Damage condition" value={f.damage_condition} onChange={v => set('damage_condition', v)} placeholder="Minor / Major Repair" />
+        <Inp label="Current status" value={f.current_status} onChange={v => set('current_status', v)} placeholder="e.g. Under Repair" />
+        <Inp label="Responsible owner" value={f.responsible_owner} onChange={v => set('responsible_owner', v)} placeholder="Accountable person" />
+      </div>
+      <Inp label="Action to be taken" value={f.action_to_be_taken} onChange={v => set('action_to_be_taken', v)} placeholder="Next step" />
+      <Inp label="Required action / progress" value={f.required_action} onChange={v => set('required_action', v)} placeholder="Latest progress note" />
+      <div className="grid grid-cols-2 gap-3">
+        <Inp label="Status update date" type="date" value={f.status_update_date} onChange={v => set('status_update_date', v)} />
+        <Inp label="Expected release date" type="date" value={f.expected_release_date} onChange={v => set('expected_release_date', v)} />
+      </div>
+      <Inp label="Status update note" value={f.status_update_note} onChange={v => set('status_update_note', v)} placeholder="Optional note for this update" />
+      <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
+        <Save size={16} /> {saving ? 'Saving…' : 'Save Tracker'}
+      </button>
     </div>
   )
 }

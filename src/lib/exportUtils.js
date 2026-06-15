@@ -450,15 +450,68 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
 }
 
 // ── Excel Export ───────────────────────────────────────────────────────────────
-export function exportToExcel(rows, columns, headers, filename = 'export', sheetName = 'Sheet1') {
+export function exportToExcel(rows, columns, headers, filename = 'export', sheetName = 'Data', opts = {}) {
+  rows = Array.isArray(rows) ? rows : []
+  const currency = opts.currency || 'SAR'
+  const wb = XLSX.utils.book_new()
+
+  // ── Sheet 1: Summary (analytical, built from the loaded/filtered rows) ──
+  if (rows.length > 0) {
+    const aoa = []
+    aoa.push([opts.title || filename])
+    aoa.push(['Generated', nowStr()])
+    if (opts.dateRange) aoa.push(['Date range', opts.dateRange])
+    if (opts.company)   aoa.push(['Organisation', opts.company])
+    if (opts.meta) Object.entries(opts.meta).forEach(([k, v]) => aoa.push([k, v]))
+    aoa.push(['Total records', rows.length])
+    aoa.push([])
+
+    const riskKey = columns.find(k => /risk/i.test(k))
+    const catPriority = ['site', 'branch', 'country', 'brand', 'category', 'type', 'vendor', 'supplier',
+      'workshop', 'liab', 'stage', 'status', 'severity', 'responsible', 'owner', 'position']
+    let catKey = null
+    for (const p of catPriority) { catKey = columns.find(k => k.toLowerCase().includes(p)); if (catKey) break }
+    const numKeys = columns.filter(k => _colIsNumeric(rows, k))
+
+    if (riskKey) {
+      aoa.push(['Risk Distribution']); aoa.push(['Level', 'Count', '% of total'])
+      _countBy(rows, riskKey).forEach(([k, c]) => aoa.push([k, c, `${pct(c, rows.length)}%`]))
+      aoa.push([])
+    }
+    if (catKey && catKey !== riskKey) {
+      const hdr = headers[columns.indexOf(catKey)] || catKey
+      aoa.push([`${hdr} Breakdown (Top 15)`]); aoa.push([hdr, 'Count', '% of total'])
+      _countBy(rows, catKey).slice(0, 15).forEach(([k, c]) => aoa.push([k, c, `${pct(c, rows.length)}%`]))
+      aoa.push([])
+    }
+    if (numKeys.length) {
+      aoa.push(['Numeric Summary']); aoa.push(['Metric', 'Total', 'Average'])
+      numKeys.slice(0, 8).forEach(k => {
+        const hdr = headers[columns.indexOf(k)] || k
+        const tot = _sumBy(rows, k)
+        const isMoney = /cost|amount|price|spend|value|budget|claim|deduct|recover/i.test(k)
+        const fm = v => isMoney ? `${currency} ${Math.round(v).toLocaleString()}` : Math.round(v * 100) / 100
+        aoa.push([hdr, fm(tot), fm(tot / rows.length)])
+      })
+      aoa.push([])
+    }
+
+    const wsSum = XLSX.utils.aoa_to_sheet(aoa)
+    wsSum['!cols'] = [{ wch: 34 }, { wch: 22 }, { wch: 14 }]
+    XLSX.utils.book_append_sheet(wb, wsSum, 'Summary')
+  }
+
+  // ── Sheet 2: Data (frozen header + auto-filter) ──
   const displayRows = rows.map(r => Object.fromEntries(columns.map((col, i) => [headers[i], r[col] ?? ''])))
   const ws = XLSX.utils.json_to_sheet(displayRows, { header: headers })
-  ws['!cols'] = headers.map((h, i) => {
+  ws['!cols'] = headers.map((h) => {
     const maxLen = Math.max(h.length, ...displayRows.map(r => String(r[h] ?? '').length))
-    return { wch: Math.min(maxLen + 2, 40) }
+    return { wch: Math.min(maxLen + 2, 44) }
   })
-  const wb = XLSX.utils.book_new()
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(0, displayRows.length), c: Math.max(0, headers.length - 1) } }) }
+  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' }
   XLSX.utils.book_append_sheet(wb, ws, sheetName)
+
   XLSX.writeFile(wb, `${filename}.xlsx`)
 }
 

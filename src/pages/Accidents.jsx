@@ -22,6 +22,16 @@ const BULK_TEMPLATE_COLS = [
   'asset_no',
   'site',
   'country',
+  'location',
+  'liability',
+  'case_stage',
+  'damage_condition',
+  'current_status',
+  'action_to_be_taken',
+  'responsible_owner',
+  'required_action',
+  'status_update_date',
+  'expected_release_date',
   'description',
   'severity',
   'status',
@@ -31,7 +41,10 @@ const BULK_TEMPLATE_COLS = [
 ]
 
 const BULK_TEMPLATE_EXAMPLE = [
-  '2026-06-01', 'TM-001', 'Riyadh', 'KSA',
+  '2026-06-01', 'TM-001', 'Riyadh', 'KSA', 'GCC Plant',
+  '100% Third Party Liability', 'Internal Report Preparation', 'Major Repair',
+  'Under Repair', 'Awaiting insurance approval', 'Ms. Fatima',
+  'Submit repair invoice', '2026-06-10', '2026-06-20',
   'Rear collision at depot', 'Minor', 'Reported',
   '5000', 'CLM-2026-001', 'John Doe',
 ]
@@ -150,7 +163,7 @@ function monthLabel(key) {
 
 export default function Accidents() {
   const { profile } = useAuth()
-  const { activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency, appSettings } = useSettings()
   const fmtCurrency = (val) => _fmtCurrencyBase(val, activeCurrency)
   const navigate = useNavigate()
 
@@ -256,33 +269,56 @@ export default function Accidents() {
         const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const raw = XLSX.utils.sheet_to_json(ws, { defval: '' })
-        const rows = raw.map((r, i) => {
-          // Normalise header casing
-          const norm = {}
-          Object.entries(r).forEach(([k, v]) => { norm[k.trim().toLowerCase().replace(/\s+/g, '_')] = v })
-          const dateRaw = norm.incident_date
-          let incident_date = ''
-          if (dateRaw instanceof Date) {
-            incident_date = dateRaw.toISOString().split('T')[0]
-          } else if (typeof dateRaw === 'string' && dateRaw) {
-            incident_date = dateRaw.trim()
-          } else if (typeof dateRaw === 'number') {
-            const d = XLSX.SSF.parse_date_code(dateRaw)
-            incident_date = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`
+
+        const toISO = (val) => {
+          if (val === '' || val === null || val === undefined) return ''
+          if (val instanceof Date) return val.toISOString().split('T')[0]
+          if (typeof val === 'number') {
+            const d = XLSX.SSF.parse_date_code(val)
+            return d ? `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}` : ''
           }
+          return String(val).trim()
+        }
+        const txt = (v) => { const s = String(v ?? '').trim(); return s || null }
+
+        const rows = raw.map((r, i) => {
+          // Normalise headers: lowercase, collapse any non-alphanumeric to '_'
+          const norm = {}
+          Object.entries(r).forEach(([k, v]) => {
+            const key = String(k).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+            if (key) norm[key] = v
+          })
+          const pick = (...keys) => { for (const k of keys) { if (norm[k] !== undefined && norm[k] !== '') return norm[k] } return '' }
+
+          const incident_date = toISO(pick('incident_date', 'accident_date', 'date'))
+          const asset_no = String(pick('asset_no', 'assets_no', 'asset', 'asset_number', 'vehicle', 'vehicle_no', 'plate') || '').trim()
+
           return {
             _row: i + 2,
-            _valid: !!(incident_date && norm.asset_no),
+            _valid: !!(incident_date && asset_no),
             incident_date,
-            asset_no:           String(norm.asset_no || '').trim(),
-            site:               String(norm.site || '').trim() || null,
-            country:            String(norm.country || '').trim() || null,
-            description:        String(norm.description || '').trim() || null,
-            severity:           norm.severity || 'Minor',
-            status:             norm.status || 'Reported',
-            repair_cost:        norm.repair_cost !== '' ? Number(norm.repair_cost) || null : null,
-            insurance_claim_no: String(norm.insurance_claim_no || '').trim() || null,
-            inspector:          String(norm.inspector || '').trim() || null,
+            asset_no,
+            site:                 txt(pick('site', 'branch', 'plant')),
+            country:              txt(pick('country')),
+            location:             txt(pick('location')),
+            description:          txt(pick('description', 'remarks')),
+            severity:             pick('severity') || 'Minor',
+            status:               pick('status') || 'Reported',
+            repair_cost:          pick('repair_cost') !== '' ? (Number(pick('repair_cost')) || null) : null,
+            estimated_damage_cost: pick('estimated_damage_cost', 'estimated_cost') !== '' ? (Number(pick('estimated_damage_cost', 'estimated_cost')) || null) : null,
+            liable_party:         txt(pick('liable_party', 'liability', 'liable')),
+            insurer:              txt(pick('insurer')),
+            policy_no:            txt(pick('policy_no', 'insurance_claim_no', 'claim_no')),
+            inspector:            txt(pick('inspector')),
+            // ── Claims tracker fields ──
+            case_stage:           txt(pick('case_stage', 'current_case_stage', 'stage')),
+            damage_condition:     txt(pick('damage_condition')),
+            current_status:       txt(pick('current_status')),
+            action_to_be_taken:   txt(pick('action_to_be_taken', 'action')),
+            responsible_owner:    txt(pick('responsible_owner', 'owner', 'responsible')),
+            required_action:      txt(pick('required_action')),
+            status_update_date:   toISO(pick('status_update_date', 'status_update')) || null,
+            expected_release_date: toISO(pick('expected_release_date', 'expected_release')) || null,
           }
         })
         setBulkRows(rows)
@@ -667,6 +703,15 @@ export default function Accidents() {
     ['estimated_damage_cost', 'Est. Damage', r => r.estimated_damage_cost],
     ['parts_cost', 'Parts Cost', r => r.parts_cost],
     ['net_cost', 'Net Cost', r => Math.max(0, (Number(r.repair_cost) || Number(r.estimated_damage_cost) || 0) + (Number(r.parts_cost) || 0) - (Number(r.recovered_amount) || 0))],
+    ['location', 'Location', r => r.location],
+    ['case_stage', 'Case Stage', r => r.case_stage],
+    ['damage_condition', 'Damage Condition', r => r.damage_condition],
+    ['current_status', 'Current Status', r => r.current_status],
+    ['action_to_be_taken', 'Action To Be Taken', r => r.action_to_be_taken],
+    ['responsible_owner', 'Responsible Owner', r => r.responsible_owner],
+    ['required_action', 'Required Action', r => r.required_action],
+    ['status_update_date', 'Status Update', r => r.status_update_date],
+    ['expected_release_date', 'Expected Release', r => r.expected_release_date],
     ['inspector', 'Inspector', r => r.inspector],
     ['reporter_name', 'Reported By', r => r.reporter_name],
   ]
@@ -693,13 +738,19 @@ export default function Accidents() {
         />
         <div className="flex gap-2 flex-wrap">
           <button
-            onClick={() => exportToExcel(exportRows, exportCols, exportHeaders, 'TyrePulse_Accidents')}
+            onClick={() => exportToExcel(exportRows, exportCols, exportHeaders, `TyrePulse_Accidents_${new Date().toISOString().slice(0,10)}`, 'Accidents', {
+              title: 'Accident & Claims Tracker',
+              currency: activeCurrency,
+              company: appSettings?.company_name,
+              dateRange: (filterFrom || filterTo) ? `${filterFrom || '…'} to ${filterTo || '…'}` : 'All dates',
+              meta: { Scope: activeCountry !== 'All' ? activeCountry : 'All countries' },
+            })}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
             <Download size={14} /> Excel
           </button>
           <button
-            onClick={() => exportToPdf(exportRows, exportPdfCols, 'Accidents & Incidents', 'TyrePulse_Accidents', 'landscape')}
+            onClick={() => exportToPdf(exportRows, exportPdfCols, 'Accident & Claims Tracker', `TyrePulse_Accidents_${new Date().toISOString().slice(0,10)}`, 'landscape', appSettings?.company_name || '', { currency: activeCurrency })}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
             <FileText size={14} /> PDF

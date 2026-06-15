@@ -814,7 +814,7 @@ export default function PositionIntelligence() {
             <table className="min-w-full text-xs">
               <thead>
                 <tr>
-                  <th className="table-header text-left pr-4 py-2 sticky left-0 bg-[#070f09] z-10">Site</th>
+                  <th className="table-header text-left pr-4 py-2 sticky left-0 bg-[var(--surface-1)] z-10">Site</th>
                   {POSITIONS.map(pos => (
                     <th key={pos} className="table-header text-center px-3 py-2 whitespace-nowrap">
                       {POSITION_ICONS[pos]} {pos}
@@ -825,7 +825,7 @@ export default function PositionIntelligence() {
               <tbody>
                 {heatMapData.matrix.map((row, i) => (
                   <tr key={row.site} className={i % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.02]'}>
-                    <td className="table-cell pr-4 py-2 font-medium text-gray-300 sticky left-0 bg-[#070f09] z-10 whitespace-nowrap">
+                    <td className="table-cell pr-4 py-2 font-medium text-gray-300 sticky left-0 bg-[var(--surface-1)] z-10 whitespace-nowrap">
                       {row.site}
                     </td>
                     {POSITIONS.map(pos => {

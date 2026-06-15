@@ -401,16 +401,46 @@ export default function Dashboard() {
   }
   async function handlePptxExport() {
     const [tyreRes, actionRes] = await Promise.all([
-      supabase.from('tyre_records').select('site,category,risk_level,cost_per_tyre,issue_date,brand'),
+      supabase.from('tyre_records').select('site,category,risk_level,cost_per_tyre,issue_date,brand,asset_no'),
       supabase.from('corrective_actions').select('title,priority,site,status').eq('status','Open').order('created_at',{ascending:false}).limit(20),
     ])
     const all = tyreRes.data ?? []; const now = new Date()
+    const actions = actionRes.data ?? []
     const countBy = (arr, key) => { const m={}; arr.forEach(t=>{if(t[key]) m[t[key]]=(m[t[key]]??0)+1}); return Object.entries(m).sort((a,b)=>b[1]-a[1]) }
     const sumBy   = (arr, key) => { const m={}; arr.forEach(t=>{if(t[key]) m[t[key]]=(m[t[key]]??0)+recordCost(t)}); return Object.entries(m).sort((a,b)=>b[1]-a[1]) }
     const riskCounts = { Critical:0, High:0, Medium:0, Low:0 }
     all.forEach(t=>{ if(t.risk_level && riskCounts[t.risk_level]!==undefined) riskCounts[t.risk_level]++ })
     const monthlyTrend = Array.from({length:6},(_,i)=>{ const d = new Date(now.getFullYear(), now.getMonth()-5+i, 1); const count = all.filter(t=>{ if(!t.issue_date) return false; const td=new Date(t.issue_date); return td.getFullYear()===d.getFullYear()&&td.getMonth()===d.getMonth() }).length; return { month: d.toLocaleString('default',{month:'short',year:'2-digit'}), count } })
-    await exportToPptx({ totalTyres: all.length, totalCost: all.reduce((s,t)=>s+recordCost(t),0), openActions: (actionRes.data??[]).length, highRisk: all.filter(t=>t.risk_level==='Critical'||t.risk_level==='High').length, topSites: sumBy(all,'site').slice(0,12).map(([site,count])=>({site,count})), categoryBreakdown: countBy(all,'category').map(([category,count])=>({category,count})), riskBreakdown: Object.entries(riskCounts).map(([level,count])=>({level,count})), monthlyTrend, recentActions: actionRes.data??[], period: now.toLocaleString('default',{month:'long',year:'numeric'}), company: appSettings.company_name||'TyrePulse' }, `TyrePulse_Report_${now.toISOString().slice(0,10)}`)
+    const totalCost = all.reduce((s,t)=>s+recordCost(t),0)
+    const highRisk  = all.filter(t=>t.risk_level==='Critical'||t.risk_level==='High').length
+    const critical  = all.filter(t=>t.risk_level==='Critical').length
+    const cur = appSettings.currency || 'SAR'
+    const insights = [
+      `Fleet holds ${all.length.toLocaleString()} tyre records across ${countBy(all,'site').length} sites, with ${highRisk} flagged high-risk or critical.`,
+      `${countBy(all,'brand')[0]?.[0] || 'Top brand'} is the most-deployed brand (${countBy(all,'brand')[0]?.[1] || 0} records).`,
+      totalCost > 0 ? `Period tyre spend totals ${cur} ${Math.round(totalCost).toLocaleString()}; ${sumBy(all,'site')[0]?.[0] || 'lead site'} carries the largest share.` : 'No tyre cost recorded for the period.',
+      actions.length ? `${actions.length} corrective actions are open — ${actions.filter(a=>a.priority==='Critical'||a.priority==='High').length} high priority.` : 'No open corrective actions.',
+    ]
+    const recommendations = [
+      critical > 0 ? { priority:'Critical', text:`Replace ${critical} critical tyres before next deployment.` } : null,
+      highRisk - critical > 0 ? { priority:'High', text:`Inspect ${highRisk - critical} high-risk tyres within 7 days.` } : null,
+      actions.length > 5 ? { priority:'Medium', text:`Clear the ${actions.length}-item corrective-action backlog.` } : null,
+      { priority:'Low', text:'Maintain weekly pressure checks and monthly tread measurements fleet-wide.' },
+    ].filter(Boolean)
+    await exportToPptx({
+      totalVehicles: new Set(all.map(t=>t.asset_no).filter(Boolean)).size,
+      totalTyres: all.length, totalCost, openActions: actions.length, highRisk,
+      currency: cur,
+      topSites: countBy(all,'site').slice(0,10).map(([site,count])=>({site,count})),
+      costBySite: sumBy(all,'site').slice(0,8).map(([site,cost])=>({site,cost})),
+      categoryBreakdown: countBy(all,'category').map(([category,count])=>({category,count})),
+      topBrands: countBy(all,'brand').slice(0,8).map(([brand,count])=>({brand,count})),
+      riskBreakdown: Object.entries(riskCounts).map(([level,count])=>({level,count})),
+      monthlyTrend, recentActions: actions, insights, recommendations,
+      period: now.toLocaleString('default',{month:'long',year:'numeric'}),
+      generatedBy: profile?.full_name || profile?.username || 'Fleet Manager',
+      company: appSettings.company_name||'TyrePulse',
+    }, `TyrePulse_Report_${now.toISOString().slice(0,10)}`)
   }
 
   async function handleDailyReportExport() {

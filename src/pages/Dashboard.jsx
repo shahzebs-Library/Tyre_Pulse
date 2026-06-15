@@ -668,7 +668,7 @@ export default function Dashboard() {
             style={{ background:'rgba(59,130,246,0.1)', border:'1px solid rgba(59,130,246,0.25)' }}>
             <Clock size={16} className="text-blue-400" />
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-gray-600">Avg Tyre Life</p>
+          <p className="text-label">Avg Tyre Life</p>
           <p className="text-3xl font-extrabold text-blue-400 leading-none mt-1">
             {tyreLife?.avgLifeDays != null ? tyreLife.avgLifeDays : '—'}
           </p>
@@ -727,7 +727,7 @@ export default function Dashboard() {
           ].map(({ label, value, color }) => (
             <div key={label} className="rounded-xl p-3 text-center" style={{ background:'rgba(59,130,246,0.06)', border:'1px solid rgba(59,130,246,0.14)' }}>
               <p className={`text-2xl font-extrabold ${color} leading-none`}>{value}</p>
-              <p className="text-[10px] text-gray-600 mt-1.5 uppercase tracking-wider">{label}</p>
+              <p className="text-label mt-1.5">{label}</p>
             </div>
           ))}
         </div>

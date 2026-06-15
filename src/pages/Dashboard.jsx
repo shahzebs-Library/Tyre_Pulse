@@ -156,6 +156,7 @@ export default function Dashboard() {
   const { appSettings, activeCountry, activeCurrency } = useSettings()
 
   const [rawTyres, setRawTyres]       = useState([])
+  const [summary, setSummary]         = useState(null)
   const [rawActions, setRawActions]   = useState([])
   const [rawStock, setRawStock]       = useState([])
   const [dateFrom, setDateFrom]       = useState('')
@@ -209,14 +210,17 @@ export default function Dashboard() {
     )
     if (dateFrom) tyreQ = tyreQ.gte('issue_date', dateFrom)
     if (dateTo)   tyreQ = tyreQ.lte('issue_date', dateTo)
-    const [tyreRes, stockRes, actionRes, recentRes, openActRes] = await Promise.all([
+    const [tyreRes, stockRes, actionRes, recentRes, openActRes, summaryRes] = await Promise.all([
       tyreQ,
       flt(supabase.from('stock_records').select('id', { count: 'exact' })),
       flt(supabase.from('corrective_actions').select('id,status', { count: 'exact' })),
       flt(supabase.from('tyre_records').select('id,issue_date,brand,asset_no,site,risk_level').order('created_at', { ascending: false }).limit(8)),
       flt(supabase.from('corrective_actions').select('id,title,priority,site,status').eq('status','Open').order('created_at', { ascending: false }).limit(8)),
+      // Full-fleet aggregates (server-side) — accurate beyond the 1000-row page cap.
+      supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: dateFrom || null, p_to: dateTo || null }),
     ])
     setRawTyres(tyreRes.data ?? [])
+    setSummary(summaryRes?.data ?? null)
     setRawStock(stockRes.data ?? [])
     setRawActions(actionRes.data ?? [])
     setRecentRecords(recentRes.data ?? [])
@@ -236,11 +240,22 @@ export default function Dashboard() {
   }, [rawTyres, search])
 
   const stats = useMemo(() => {
+    const open = (rawActions ?? []).filter(a => a.status === 'Open').length
+    // Use accurate server-side aggregates unless a text search narrows the view.
+    if (summary && !search) {
+      return {
+        tyres: Number(summary.total_records) || 0,
+        stock: rawStock.length,
+        actions: open,
+        critical: Number(summary.high_risk) || 0,
+        cost: Number(summary.total_cost) || 0,
+        vehicles: Number(summary.distinct_assets) || 0,
+      }
+    }
     const cost = tyres.reduce((s, t) => s + recordCost(t), 0)
     const crit = tyres.filter(isHigh).length
-    const open = (rawActions ?? []).filter(a => a.status === 'Open').length
-    return { tyres: tyres.length, stock: rawStock.length, actions: open, critical: crit, cost }
-  }, [tyres, rawActions, rawStock])
+    return { tyres: tyres.length, stock: rawStock.length, actions: open, critical: crit, cost, vehicles: new Set(tyres.map(t => t.asset_no).filter(Boolean)).size }
+  }, [tyres, rawActions, rawStock, summary, search])
 
   const fleetHealthScore = useMemo(() => computeFleetHealthScore(tyres), [tyres])
   const seasonalTrends   = useMemo(() => computeSeasonalTrends(tyres), [tyres])
@@ -400,25 +415,23 @@ export default function Dashboard() {
       `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'landscape')
   }
   async function handlePptxExport() {
-    const [tyreRes, actionRes] = await Promise.all([
-      supabase.from('tyre_records').select('site,category,risk_level,cost_per_tyre,issue_date,brand,asset_no'),
+    const now = new Date()
+    const [{ data: sum }, actionRes] = await Promise.all([
+      supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: dateFrom || null, p_to: dateTo || null }),
       supabase.from('corrective_actions').select('title,priority,site,status').eq('status','Open').order('created_at',{ascending:false}).limit(20),
     ])
-    const all = tyreRes.data ?? []; const now = new Date()
+    const s = sum || {}
     const actions = actionRes.data ?? []
-    const countBy = (arr, key) => { const m={}; arr.forEach(t=>{if(t[key]) m[t[key]]=(m[t[key]]??0)+1}); return Object.entries(m).sort((a,b)=>b[1]-a[1]) }
-    const sumBy   = (arr, key) => { const m={}; arr.forEach(t=>{if(t[key]) m[t[key]]=(m[t[key]]??0)+recordCost(t)}); return Object.entries(m).sort((a,b)=>b[1]-a[1]) }
-    const riskCounts = { Critical:0, High:0, Medium:0, Low:0 }
-    all.forEach(t=>{ if(t.risk_level && riskCounts[t.risk_level]!==undefined) riskCounts[t.risk_level]++ })
-    const monthlyTrend = Array.from({length:6},(_,i)=>{ const d = new Date(now.getFullYear(), now.getMonth()-5+i, 1); const count = all.filter(t=>{ if(!t.issue_date) return false; const td=new Date(t.issue_date); return td.getFullYear()===d.getFullYear()&&td.getMonth()===d.getMonth() }).length; return { month: d.toLocaleString('default',{month:'short',year:'2-digit'}), count } })
-    const totalCost = all.reduce((s,t)=>s+recordCost(t),0)
-    const highRisk  = all.filter(t=>t.risk_level==='Critical'||t.risk_level==='High').length
-    const critical  = all.filter(t=>t.risk_level==='Critical').length
     const cur = appSettings.currency || 'SAR'
+    const totalCost = Number(s.total_cost) || 0
+    const highRisk  = Number(s.high_risk) || 0
+    const critical  = Number(s.critical) || 0
+    const sites = s.top_sites || []
+    const brands = s.top_brands || []
     const insights = [
-      `Fleet holds ${all.length.toLocaleString()} tyre records across ${countBy(all,'site').length} sites, with ${highRisk} flagged high-risk or critical.`,
-      `${countBy(all,'brand')[0]?.[0] || 'Top brand'} is the most-deployed brand (${countBy(all,'brand')[0]?.[1] || 0} records).`,
-      totalCost > 0 ? `Period tyre spend totals ${cur} ${Math.round(totalCost).toLocaleString()}; ${sumBy(all,'site')[0]?.[0] || 'lead site'} carries the largest share.` : 'No tyre cost recorded for the period.',
+      `Fleet holds ${(s.total_records||0).toLocaleString()} tyre records across ${(s.top_sites||[]).length}+ sites, with ${highRisk} flagged high-risk or critical.`,
+      brands[0] ? `${brands[0].brand} is the most-deployed brand (${brands[0].count} records).` : 'Brand distribution unavailable.',
+      totalCost > 0 ? `Period tyre spend totals ${cur} ${Math.round(totalCost).toLocaleString()}; ${(s.cost_by_site||[])[0]?.site || 'lead site'} carries the largest share.` : 'No tyre cost recorded for the period.',
       actions.length ? `${actions.length} corrective actions are open — ${actions.filter(a=>a.priority==='Critical'||a.priority==='High').length} high priority.` : 'No open corrective actions.',
     ]
     const recommendations = [
@@ -428,15 +441,16 @@ export default function Dashboard() {
       { priority:'Low', text:'Maintain weekly pressure checks and monthly tread measurements fleet-wide.' },
     ].filter(Boolean)
     await exportToPptx({
-      totalVehicles: new Set(all.map(t=>t.asset_no).filter(Boolean)).size,
-      totalTyres: all.length, totalCost, openActions: actions.length, highRisk,
+      totalVehicles: Number(s.distinct_assets) || 0,
+      totalTyres: Number(s.total_records) || 0, totalCost, openActions: actions.length, highRisk,
       currency: cur,
-      topSites: countBy(all,'site').slice(0,10).map(([site,count])=>({site,count})),
-      costBySite: sumBy(all,'site').slice(0,8).map(([site,cost])=>({site,cost})),
-      categoryBreakdown: countBy(all,'category').map(([category,count])=>({category,count})),
-      topBrands: countBy(all,'brand').slice(0,8).map(([brand,count])=>({brand,count})),
-      riskBreakdown: Object.entries(riskCounts).map(([level,count])=>({level,count})),
-      monthlyTrend, recentActions: actions, insights, recommendations,
+      topSites: sites.map(t => ({ site: t.site, count: t.count })),
+      costBySite: (s.cost_by_site || []).map(t => ({ site: t.site, cost: t.cost })),
+      categoryBreakdown: (s.category_breakdown || []).map(t => ({ category: t.category, count: t.count })),
+      topBrands: brands.map(b => ({ brand: b.brand, count: b.count })),
+      riskBreakdown: (s.risk_breakdown || []).map(r => ({ level: r.level, count: r.count })),
+      monthlyTrend: (s.monthly_trend || []).map(m => ({ month: m.month, count: m.count })),
+      recentActions: actions, insights, recommendations,
       period: now.toLocaleString('default',{month:'long',year:'numeric'}),
       generatedBy: profile?.full_name || profile?.username || 'Fleet Manager',
       company: appSettings.company_name||'TyrePulse',
@@ -445,71 +459,67 @@ export default function Dashboard() {
 
   async function handleDailyReportExport() {
     const now = new Date()
-    const [tyreRes, actionRes, inspRes] = await Promise.all([
-      supabase.from('tyre_records').select('site,category,risk_level,cost_per_tyre,issue_date,brand,asset_no'),
+    const today      = now.toISOString().slice(0,10)
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`
+    const yearStart  = `${now.getFullYear()}-01-01`
+    // Accurate, full-fleet aggregates (server-side) + month/YTD cost slices.
+    const [{ data: sAll }, { data: sMonth }, { data: sYtd }, actionRes, inspRes, critRes] = await Promise.all([
+      supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: null, p_to: null }),
+      supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: monthStart, p_to: null }),
+      supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: yearStart, p_to: null }),
       supabase.from('corrective_actions').select('id,title,priority,site,status,assigned_to').eq('status','Open').order('created_at',{ascending:false}).limit(20),
       supabase.from('inspections').select('id,status,severity,scheduled_date,site,findings,inspector').order('scheduled_date',{ascending:false}).limit(50),
+      applyCountry(supabase.from('tyre_records').select('asset_no,site'), activeCountry).eq('risk_level','Critical').order('created_at',{ascending:false}).limit(10),
     ])
-    const all     = tyreRes.data ?? []
+    const s       = sAll || {}
     const actions = actionRes.data ?? []
     const insps   = inspRes.data ?? []
+    const critRows = critRes.data ?? []
 
-    const today    = now.toISOString().slice(0,10)
-    const todayInsps  = insps.filter(i => i.scheduled_date === today)
+    const todayInsps     = insps.filter(i => i.scheduled_date === today)
     const completedToday = todayInsps.filter(i => i.status === 'Done').length
     const defectsFound   = insps.filter(i => i.severity === 'High' || i.severity === 'Critical').length
-
-    const monthStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`
-    const monthTyres = all.filter(t => t.issue_date >= monthStart)
-    const monthCost  = monthTyres.reduce((s,t)=>s+recordCost(t),0)
-
-    const siteCounts = {}
-    all.forEach(t => { if (t.site) siteCounts[t.site] = (siteCounts[t.site] ?? 0) + 1 })
 
     const defectTypes = {}
     insps.forEach(i => { if (i.findings) { const key = i.findings.split('.')[0].slice(0,40); defectTypes[key] = (defectTypes[key]??0)+1 } })
     const topDefects = Object.entries(defectTypes).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([type,count])=>({type,count}))
 
-    const uniqueSites = [...new Set(all.map(t=>t.site).filter(Boolean))]
-    const siteBreakdown = uniqueSites.slice(0,10).map(name => {
-      const siteT = all.filter(t => t.site === name)
-      const alerts = siteT.filter(t => t.risk_level === 'Critical' || t.risk_level === 'High').length
-      const good   = siteT.filter(t => t.risk_level === 'Low').length
-      const compliance = siteT.length > 0 ? Math.round((good / siteT.length) * 100) : 0
-      return { name, vehicles: new Set(siteT.map(t=>t.asset_no).filter(Boolean)).size, alerts, compliance }
-    })
+    const siteBreakdown = (s.site_breakdown || []).map(b => ({ name: b.name, vehicles: b.vehicles, alerts: b.alerts, compliance: b.compliance }))
 
-    const criticalTyres = all.filter(t => t.risk_level === 'Critical').length
-    const warningTyres  = all.filter(t => t.risk_level === 'High').length
-    const goodTyres     = all.filter(t => t.risk_level === 'Low').length
+    const criticalTyres = Number(s.critical) || 0
+    const warningTyres  = Number(s.high) || 0
+    const goodTyres     = Number(s.low) || 0
+    const totalTyres    = Number(s.total_records) || 0
+    const monthCost     = Number(sMonth?.total_cost) || 0
 
     exportDailyExecutivePdf({
       date: now.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}),
       company: appSettings.company_name || 'TyrePulse Fleet',
       reportPeriod: 'Daily',
+      currency: appSettings.currency || 'SAR',
       generatedBy: profile?.full_name || profile?.username || 'Fleet Manager',
       site: activeCountry !== 'All' ? activeCountry : 'All Sites',
-      totalVehicles: new Set(all.map(t=>t.asset_no).filter(Boolean)).size,
-      activeVehicles: new Set(monthTyres.map(t=>t.asset_no).filter(Boolean)).size,
-      vehiclesWithAlerts: new Set(all.filter(t=>t.risk_level==='Critical'||t.risk_level==='High').map(t=>t.asset_no).filter(Boolean)).size,
-      totalTyres: all.length,
+      totalVehicles: Number(s.distinct_assets) || 0,
+      activeVehicles: Number(sMonth?.distinct_assets) || 0,
+      vehiclesWithAlerts: Number(s.vehicles_with_alerts) || 0,
+      totalTyres,
       criticalTyres,
       warningTyres,
       goodTyres,
-      pressureCompliance: all.length > 0 ? Math.round((goodTyres / all.length) * 100) : 0,
+      pressureCompliance: totalTyres > 0 ? Math.round((goodTyres / totalTyres) * 100) : 0,
       inspectionsScheduled: todayInsps.length,
       inspectionsCompleted: completedToday,
       defectsFound,
       monthlyBudget: null,
       monthlySpend: monthCost,
-      ytdSpend: all.filter(t=>t.issue_date?.slice(0,4)===String(now.getFullYear())).reduce((s,t)=>s+recordCost(t),0),
-      criticalAlerts: all.filter(t=>t.risk_level==='Critical').slice(0,10).map(t=>({ message:`Critical tyre risk on ${t.asset_no||'unknown'}`, asset: t.asset_no||'—', site: t.site||'—', severity:'Critical' })),
+      ytdSpend: Number(sYtd?.total_cost) || 0,
+      criticalAlerts: critRows.map(t=>({ message:`Critical tyre risk on ${t.asset_no||'unknown'}`, asset: t.asset_no||'—', site: t.site||'—', severity:'Critical' })),
       openActions: actions.map(a=>({ title: a.title, priority: a.priority, site: a.site, assignee: a.assigned_to||'Unassigned' })),
       topDefects,
       siteBreakdown,
       insights: [
-        `Fleet recorded ${all.length} tyre issues in the selected period with ${criticalTyres} critical cases.`,
-        goodTyres > 0 ? `${Math.round((goodTyres/all.length)*100)}% of tyres are within safe operating parameters.` : 'Tyre risk distribution requires management review.',
+        `Fleet recorded ${totalTyres.toLocaleString()} tyre records with ${criticalTyres} critical cases.`,
+        goodTyres > 0 && totalTyres > 0 ? `${Math.round((goodTyres/totalTyres)*100)}% of tyres are within safe operating parameters.` : 'Tyre risk distribution requires management review.',
         actions.length > 0 ? `${actions.length} corrective actions are pending resolution — prioritize ${actions.filter(a=>a.priority==='Critical'||a.priority==='High').length} high priority items.` : 'No open corrective actions.',
         monthCost > 0 ? `Monthly tyre spend of ${(appSettings.currency||'SAR')} ${Math.round(monthCost).toLocaleString()} recorded this month.` : 'No tyre cost records for this month.',
       ].filter(Boolean),

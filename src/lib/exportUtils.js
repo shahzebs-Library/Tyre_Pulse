@@ -462,23 +462,185 @@ export function exportToExcel(rows, columns, headers, filename = 'export', sheet
   XLSX.writeFile(wb, `${filename}.xlsx`)
 }
 
-// ── PDF Table Export ───────────────────────────────────────────────────────────
-export function exportToPdf(rows, columns, title, filename = 'report', orientation = 'landscape', company = '') {
+// ── Data analysis helpers (auto-summarise any tabular dataset) ──────────────────
+function _parseNum(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  if (v == null) return null
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''))
+  return Number.isFinite(n) ? n : null
+}
+function _colIsNumeric(rows, key) {
+  let num = 0, seen = 0
+  for (const r of rows) {
+    const v = r[key]
+    if (v === '' || v == null) continue
+    seen++
+    if (_parseNum(v) != null) num++
+    if (seen >= 60) break
+  }
+  return seen > 0 && num / seen >= 0.75
+}
+function _countBy(rows, key) {
+  const m = new Map()
+  for (const r of rows) {
+    const v = r[key]
+    if (v === '' || v == null) continue
+    const s = String(v).trim()
+    if (!s) continue
+    m.set(s, (m.get(s) || 0) + 1)
+  }
+  return [...m.entries()].sort((a, b) => b[1] - a[1])
+}
+function _sumBy(rows, key) { return rows.reduce((s, r) => s + (_parseNum(r[key]) || 0), 0) }
+function _sumByGroup(rows, groupKey, valKey) {
+  const m = new Map()
+  for (const r of rows) {
+    const g = r[groupKey]
+    if (g === '' || g == null) continue
+    const k = String(g).trim(); if (!k) continue
+    m.set(k, (m.get(k) || 0) + (_parseNum(r[valKey]) || 0))
+  }
+  return [...m.entries()].filter(e => e[1] > 0).sort((a, b) => b[1] - a[1])
+}
+const _RISK_RGB_PDF = { critical: P.crimson, high: P.scarlet, medium: P.gold, low: P.emerald, none: P.ghost }
+
+// Clean horizontal bar chart (vector — crisp at any zoom). entries: [[label, value]]
+function _hBarChart(doc, x, y, w, h, entries, accentRgb, fmt) {
+  if (!entries.length) return
+  const max   = Math.max(...entries.map(e => e[1]), 1)
+  const rowH  = Math.min(10, h / entries.length)
+  const labelW = Math.min(46, w * 0.36)
+  const barX  = x + labelW
+  const valW  = 20
+  const barMaxW = w - labelW - valW
+  entries.forEach((e, i) => {
+    const by = y + i * rowH
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.steel)
+    doc.text(String(e[0]).slice(0, 24), x, by + rowH / 2 + 1)
+    doc.setFillColor(...P.cloud)
+    doc.roundedRect(barX, by + rowH * 0.18, barMaxW, rowH * 0.6, 1, 1, 'F')
+    const bw = Math.max(1.5, barMaxW * (e[1] / max))
+    const rgb = typeof accentRgb === 'function' ? accentRgb(e[0], i) : accentRgb
+    doc.setFillColor(...rgb)
+    doc.roundedRect(barX, by + rowH * 0.18, bw, rowH * 0.6, 1, 1, 'F')
+    doc.setFontSize(6.8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ghost)
+    doc.text(fmt ? fmt(e[1]) : e[1].toLocaleString(), barX + barMaxW + 2, by + rowH / 2 + 1)
+  })
+}
+
+// ── PDF Report Export — auto KPI summary + charts, then the data table ───────────
+export function exportToPdf(rows, columns, title, filename = 'report', orientation = 'landscape', company = '', opts = {}) {
   const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
-  const pw = doc.internal.pageSize.width
-  const ph = doc.internal.pageSize.height
+  const PW  = doc.internal.pageSize.width
+  rows = Array.isArray(rows) ? rows : []
+  const currency = opts.currency || 'SAR'
 
-  _pageHeader(doc, title, `${rows.length} records`, company)
+  // ── Detect dataset structure ──
+  const riskCol = columns.find(c => /risk/i.test(c.header || '') || /risk/i.test(c.key || ''))
+  const catPriority = ['site', 'branch', 'depot', 'location', 'country', 'brand', 'make', 'manufacturer',
+    'category', 'type', 'vendor', 'supplier', 'workshop', 'position', 'axle', 'status', 'severity', 'driver']
+  let catCol = null
+  for (const p of catPriority) {
+    catCol = columns.find(c => (c.key || '').toLowerCase().includes(p) || (c.header || '').toLowerCase().includes(p))
+    if (catCol) break
+  }
+  const numCols = columns.filter(c => _colIsNumeric(rows, c.key))
+  const costCol = numCols.find(c => /cost|amount|price|sar|spend|value|total|budget|expense/i.test((c.key || '') + (c.header || ''))) || numCols[0]
 
-  const usableW = orientation === 'landscape' ? 237 : 170
+  const showSummary = rows.length > 0 && (riskCol || catCol || costCol)
+
+  // ── PAGE 1: ANALYTICAL SUMMARY ──
+  if (showSummary) {
+    _pageHeader(doc, title, `${rows.length.toLocaleString()} records · ${nowStr()}`, company)
+    let y = 30
+
+    // KPI cards
+    const cards = [{ v: rows.length.toLocaleString(), l: 'Total Records', rgb: P.indigo }]
+    let critN = 0, highN = 0
+    if (riskCol) {
+      const rc  = _countBy(rows, riskCol.key)
+      const get = lvl => rc.find(([k]) => k.toLowerCase() === lvl)?.[1] || 0
+      critN = get('critical'); highN = get('high')
+      cards.push({ v: critN, l: 'Critical', rgb: P.crimson })
+      cards.push({ v: highN, l: 'High Risk', rgb: P.scarlet })
+    }
+    if (catCol) cards.push({ v: _countBy(rows, catCol.key).length, l: `Distinct ${catCol.header}`, rgb: P.violet })
+    if (costCol) {
+      const tot = _sumBy(rows, costCol.key)
+      cards.push({ v: fmtCurr(tot, currency), l: `Total ${costCol.header}`, rgb: P.gold })
+      cards.push({ v: fmtCurr(tot / Math.max(1, rows.length), currency), l: `Avg ${costCol.header}`, rgb: P.emerald })
+    }
+    const cardsRow = cards.slice(0, 6)
+    const cw = (PW - 28 - (cardsRow.length - 1) * 4) / cardsRow.length
+    cardsRow.forEach((c, i) => _kpiBox(doc, 14 + i * (cw + 4), y, cw, 26, c.v, c.l, null, c.rgb))
+    y += 33
+
+    // Charts — two columns
+    const half = (PW - 28 - 8) / 2
+    const chartY = y + 6
+    const chartH = 74
+
+    // Left chart: category breakdown
+    if (catCol) {
+      const cats = _countBy(rows, catCol.key).slice(0, 8)
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text(`${catCol.header} Breakdown (Top ${cats.length})`, 14, y)
+      _hBarChart(doc, 14, chartY, half, chartH, cats, P.indigo)
+    }
+    // Right chart: risk distribution, else cost-by-category, else numeric top contributors
+    const rx = 14 + half + 8
+    if (riskCol) {
+      const order = ['Critical', 'High', 'Medium', 'Low']
+      const rc = _countBy(rows, riskCol.key)
+      const entries = order.map(o => [o, rc.find(([k]) => k.toLowerCase() === o.toLowerCase())?.[1] || 0]).filter(e => e[1] > 0)
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text('Risk Distribution', rx, y)
+      _hBarChart(doc, rx, chartY, half, chartH, entries, lbl => _RISK_RGB_PDF[String(lbl).toLowerCase()] || P.ghost)
+    } else if (costCol && catCol) {
+      const byCat = _sumByGroup(rows, catCol.key, costCol.key).slice(0, 8)
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text(`${costCol.header} by ${catCol.header} (Top ${byCat.length})`, rx, y)
+      _hBarChart(doc, rx, chartY, half, chartH, byCat, P.gold, v => fmtCurr(v, currency))
+    } else if (numCols.length > 1) {
+      const alt = numCols.find(c => c.key !== costCol?.key)
+      if (alt && catCol) {
+        const byCat = _sumByGroup(rows, catCol.key, alt.key).slice(0, 8)
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+        doc.text(`${alt.header} by ${catCol.header}`, rx, y)
+        _hBarChart(doc, rx, chartY, half, chartH, byCat, P.violet)
+      }
+    }
+
+    // Auto narrative
+    let ny = chartY + chartH + 8
+    const bits = [`Dataset contains ${rows.length.toLocaleString()} records.`]
+    if (riskCol && (critN + highN) > 0) bits.push(`${critN} critical and ${highN} high-risk items require attention (${pct(critN + highN, rows.length)}% of total).`)
+    if (catCol) {
+      const top = _countBy(rows, catCol.key)[0]
+      if (top) bits.push(`${top[0]} leads ${catCol.header.toLowerCase()} with ${top[1]} records (${pct(top[1], rows.length)}%).`)
+    }
+    if (costCol) bits.push(`Total ${costCol.header.toLowerCase()} is ${fmtCurr(_sumBy(rows, costCol.key), currency)}.`)
+    const narr = doc.splitTextToSize(bits.join(' '), PW - 36)
+    doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
+    doc.roundedRect(14, ny, PW - 28, narr.length * 4.4 + 8, 2, 2, 'FD')
+    doc.setFillColor(...P.indigo); doc.roundedRect(14, ny, 3, narr.length * 4.4 + 8, 1.5, 1.5, 'F')
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.steel)
+    doc.text(narr, 20, ny + 6)
+
+    _pageFooter(doc, 1, null, company)
+    doc.addPage()
+  }
+
+  // ── DATA TABLE (operational detail) ──
+  const usableW = orientation === 'landscape' ? 269 : 182
   const colW = columns.map(c => {
     const k = (c.key ?? '').toLowerCase(), h = (c.header ?? '').toLowerCase()
-    if (k.includes('id') || k === 'qty')                              return 22
-    if (k.includes('risk') || h.includes('risk'))                    return 28
-    if (k.includes('remark') || k.includes('note') || k.includes('description')) return 50
-    if (k.includes('date') || k.includes('month'))                   return 28
-    if (k.includes('cost') || k.includes('sar'))                     return 30
-    if (k.includes('site') || k.includes('brand'))                   return 32
+    if (k.includes('id') || k === 'qty')                                            return 22
+    if (k.includes('risk') || h.includes('risk'))                                   return 28
+    if (k.includes('remark') || k.includes('note') || k.includes('description'))    return 50
+    if (k.includes('date') || k.includes('month'))                                  return 28
+    if (k.includes('cost') || k.includes('sar'))                                    return 30
+    if (k.includes('site') || k.includes('brand'))                                  return 32
     return 30
   })
   const rawTotal = colW.reduce((s, w) => s + w, 0)
@@ -487,14 +649,14 @@ export function exportToPdf(rows, columns, title, filename = 'report', orientati
   const riskIdx = columns.findIndex(c => /risk/i.test(c.header ?? '') || /risk_level/i.test(c.key ?? ''))
 
   autoTable(doc, {
-    startY: 28,
+    startY: showSummary ? 30 : 28,
+    margin: { left: 14, right: 14, top: 28 },
     head: [columns.map(c => c.header)],
     body: rows.map(r => columns.map(c => String(r[c.key] ?? ''))),
     styles: { fontSize: 7.5, cellPadding: 2.5, overflow: 'linebreak', textColor: [20, 20, 30] },
     headStyles: { fillColor: P.steel, textColor: P.white, fontStyle: 'bold', fontSize: 8 },
     alternateRowStyles: { fillColor: P.cloud },
     columnStyles: Object.fromEntries(scaledW.map((w, i) => [i, { cellWidth: w }])),
-    margin: { left: 14, right: 14 },
     didParseCell: riskIdx >= 0 ? (data) => {
       if (data.section !== 'body' || data.column.index !== riskIdx) return
       const v = String(data.cell.raw ?? '').trim().toLowerCase()
@@ -503,7 +665,10 @@ export function exportToPdf(rows, columns, title, filename = 'report', orientati
       else if (v === 'medium') { data.cell.styles.fillColor = P.yCream; data.cell.styles.textColor = P.ochre }
       else if (v === 'low') { data.cell.styles.fillColor = P.eCream; data.cell.styles.textColor = P.emerald }
     } : undefined,
-    didDrawPage: (data) => { _pageFooter(doc, data.pageNumber, null, company) },
+    didDrawPage: () => {
+      _pageHeader(doc, title, `${rows.length.toLocaleString()} records · ${nowStr()}`, company)
+      _pageFooter(doc, doc.internal.getNumberOfPages(), null, company)
+    },
   })
 
   doc.save(`${filename}.pdf`)

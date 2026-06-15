@@ -11,6 +11,7 @@ import {
   Filter, BarChart2, ShieldAlert, Layers,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -310,21 +311,21 @@ export default function RootCauseEngine() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    let q = supabase
-      .from('tyre_records')
-      .select(
-        'id,asset_no,site,brand,tyre_serial,category,risk_level,findings,description,remarks,' +
-        'tread_depth,pressure_reading,km_at_fitment,km_at_removal,cost_per_tyre,' +
-        'issue_date,removal_reason,position'
-      )
-      .order('issue_date', { ascending: false })
-      .limit(10000)
 
-    if (activeCountry && activeCountry !== 'All') {
-      q = q.eq('country', activeCountry)
-    }
-
-    q.then(({ data, error: err }) => {
+    fetchAllPages((from, to) => {
+      let q = supabase
+        .from('tyre_records')
+        .select(
+          'id,asset_no,site,brand,tyre_serial,category,risk_level,findings,description,remarks,' +
+          'tread_depth,pressure_reading,km_at_fitment,km_at_removal,cost_per_tyre,' +
+          'issue_date,removal_reason,position'
+        )
+        .order('issue_date', { ascending: false })
+      if (activeCountry && activeCountry !== 'All') {
+        q = q.eq('country', activeCountry)
+      }
+      return q.range(from, to)
+    }).then(({ data, error: err }) => {
       if (err) {
         setError(err.message)
       } else {

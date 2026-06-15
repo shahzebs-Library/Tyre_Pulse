@@ -18,6 +18,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -208,13 +209,14 @@ export default function TyreScrapManagement() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await supabase
+      const { data, error: err } = await fetchAllPages((from, to) => supabase
         .from('tyre_records')
         .select(
           'id, asset_no, serial_number, brand, size, position, site, country, ' +
           'risk_level, tread_depth, cost_per_tyre, km_at_fitment, km_at_removal, ' +
           'issue_date, removal_date, qty, category, removal_reason'
         )
+        .range(from, to))
       if (err) throw err
       setAllTyres(data ?? [])
     } catch (e) {

@@ -18,6 +18,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -132,14 +133,16 @@ export default function FuelEfficiency() {
     setError(null)
     try {
       const [{ data: recs, error: rErr }, { data: insp, error: iErr }] = await Promise.all([
-        supabase
+        fetchAllPages((from, to) => supabase
           .from('tyre_records')
           .select('id,asset_no,serial_number,position,tread_depth,pressure_reading,risk_level,km_at_fitment,km_at_removal,site,country,brand,issue_date')
-          .match(activeCountry && activeCountry !== 'All' ? { country: activeCountry } : {}),
-        supabase
+          .match(activeCountry && activeCountry !== 'All' ? { country: activeCountry } : {})
+          .range(from, to)),
+        fetchAllPages((from, to) => supabase
           .from('inspections')
           .select('id,asset_no,pressure_reading,tread_depth,position,inspection_date,site')
-          .match(activeCountry && activeCountry !== 'All' ? { country: activeCountry } : {}),
+          .match(activeCountry && activeCountry !== 'All' ? { country: activeCountry } : {})
+          .range(from, to)),
       ])
       if (rErr) throw rErr
       setRecords(recs ?? [])

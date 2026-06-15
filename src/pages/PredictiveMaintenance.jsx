@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -366,11 +367,11 @@ export default function PredictiveMaintenance() {
     setError(null)
     try {
       // Load tyre_records
-      const { data: tyreData, error: tyreErr } = await supabase
+      const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => supabase
         .from('tyre_records')
         .select('id,asset_no,site,brand,tyre_serial,position,tread_depth,pressure_reading,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,risk_level,category')
-        .limit(5000)
         .order('issue_date', { ascending: false })
+        .range(from, to))
 
       if (tyreErr) throw tyreErr
       setRecords(tyreData || [])

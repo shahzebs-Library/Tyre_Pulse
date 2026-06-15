@@ -17,6 +17,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 
@@ -272,14 +273,16 @@ export default function ComplianceDashboard() {
     setError(null)
     try {
       const [{ data: tr }, { data: ins }, { data: fm }] = await Promise.all([
-        supabase
+        fetchAllPages((from, to) => supabase
           .from('tyre_records')
           .select('id,asset_no,serial_number,brand,size,position,site,country,tread_depth,pressure_reading,risk_level,issue_date,removal_date,category')
-          .order('issue_date', { ascending: false }),
-        supabase
+          .order('issue_date', { ascending: false })
+          .range(from, to)),
+        fetchAllPages((from, to) => supabase
           .from('inspections')
           .select('id,asset_no,site,scheduled_date,status,inspection_type,findings,inspector')
-          .order('scheduled_date', { ascending: false }),
+          .order('scheduled_date', { ascending: false })
+          .range(from, to)),
         supabase
           .from('fleet_master')
           .select('asset_no,site,vehicle_type,status'),

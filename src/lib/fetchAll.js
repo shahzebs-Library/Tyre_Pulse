@@ -8,11 +8,11 @@ import { supabase } from './supabase'
  * @param {(from:number,to:number)=>PromiseLike} pageFn  builder invoked per page,
  *        e.g. (from,to) => supabase.from('tyre_records').select('...').range(from,to)
  * @param {object} [opts]
- * @param {number} [opts.pageSize=1000]  rows per request
+ * @param {number} [opts.pageSize=50000]  rows per request (must be <= PostgREST db_max_rows)
  * @param {number} [opts.max=Infinity]   safety ceiling on total rows
  * @returns {Promise<{data:any[], error:any, truncated:boolean}>}
  */
-export async function fetchAllPages(pageFn, { pageSize = 1000, max = Infinity } = {}) {
+export async function fetchAllPages(pageFn, { pageSize = 50000, max = Infinity } = {}) {
   const all = []
   let from = 0
   let truncated = false

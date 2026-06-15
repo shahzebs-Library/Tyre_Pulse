@@ -20,6 +20,7 @@ import {
   linearRegression, computeSiteMetrics, computeBrandMetrics,
   computeAssetMetrics, computeSeasonalTrends, recordCost, recordCpk,
 } from '../lib/analyticsEngine'
+import { fetchAllPages } from '../lib/fetchAll'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -238,13 +239,14 @@ export default function AdvancedAnalytics() {
       setLoading(true)
       setError(null)
       try {
-        let q = supabase
-          .from('tyre_records')
-          .select('id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,tread_depth,pressure_reading')
-          .order('issue_date', { ascending: true })
-          .limit(10000)
-        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-        const { data, error: err } = await q
+        const { data, error: err } = await fetchAllPages((from, to) => {
+          let q = supabase
+            .from('tyre_records')
+            .select('id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,tread_depth,pressure_reading')
+            .order('issue_date', { ascending: true })
+          if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+          return q.range(from, to)
+        })
         if (err) throw err
         setRecords(data || [])
       } catch (e) {

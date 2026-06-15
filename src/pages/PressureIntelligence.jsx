@@ -16,6 +16,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 
 ChartJS.register(
@@ -207,14 +208,16 @@ export default function PressureIntelligence() {
       setError(null)
       try {
         const [{ data: ins }, { data: tr }] = await Promise.all([
-          supabase
+          fetchAllPages((from, to) => supabase
             .from('inspections')
             .select('id,asset_no,tyre_serial,position,pressure_reading,tread_depth,inspector_name,inspection_date,site,country,notes')
-            .order('inspection_date', { ascending: false }),
-          supabase
+            .order('inspection_date', { ascending: false })
+            .range(from, to)),
+          fetchAllPages((from, to) => supabase
             .from('tyre_records')
             .select('id,asset_no,serial_number,position,pressure_reading,brand,size,site,country,issue_date,risk_level')
-            .order('issue_date', { ascending: false }),
+            .order('issue_date', { ascending: false })
+            .range(from, to)),
         ])
         setInspections(ins || [])
         setTyreRecords(tr || [])

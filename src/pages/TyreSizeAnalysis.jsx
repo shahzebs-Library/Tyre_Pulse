@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -177,11 +178,13 @@ export default function TyreSizeAnalysis() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    let q = supabase
-      .from('tyre_records')
-      .select('id,asset_no,serial_number,size,brand,position,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,site,country,tread_depth,issue_date')
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    q.then(({ data, error: err }) => {
+    fetchAllPages((from, to) => {
+      let q = supabase
+        .from('tyre_records')
+        .select('id,asset_no,serial_number,size,brand,position,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,site,country,tread_depth,issue_date')
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      return q.range(from, to)
+    }).then(({ data, error: err }) => {
       if (err) { setError(err.message); setLoading(false); return }
       setRecords(data || [])
       setLoading(false)

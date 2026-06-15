@@ -7,6 +7,7 @@ import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { fetchAllPages } from '../lib/fetchAll'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement,
   Filler, Tooltip, Legend, BarElement,
@@ -70,12 +71,12 @@ export default function Budgets() {
     if (viewMode === 'month') {
       const [budgetRes, tyreRes] = await Promise.all([
         flt(supabase.from('budgets').select('*').eq('year', filterYear).eq('month', filterMonth).order('site')),
-        flt(supabase.from('tyre_records')
+        fetchAllPages((from, to) => flt(supabase.from('tyre_records')
           .select('site, cost_per_tyre, qty, issue_date')
           .gte('issue_date', `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`)
           .lt('issue_date', filterMonth === 12
             ? `${filterYear + 1}-01-01`
-            : `${filterYear}-${String(filterMonth + 1).padStart(2, '0')}-01`)),
+            : `${filterYear}-${String(filterMonth + 1).padStart(2, '0')}-01`)).range(from, to)),
       ])
       setBudgets(budgetRes.data ?? [])
 
@@ -88,10 +89,10 @@ export default function Budgets() {
     } else {
       const [budgetRes, tyreRes] = await Promise.all([
         flt(supabase.from('budgets').select('*').eq('year', plannerYear).order('site')),
-        flt(supabase.from('tyre_records')
+        fetchAllPages((from, to) => flt(supabase.from('tyre_records')
           .select('site, cost_per_tyre, qty, issue_date')
           .gte('issue_date', `${plannerYear}-01-01`)
-          .lt('issue_date', `${plannerYear + 1}-01-01`)),
+          .lt('issue_date', `${plannerYear + 1}-01-01`)).range(from, to)),
       ])
       setBudgets(budgetRes.data ?? [])
 

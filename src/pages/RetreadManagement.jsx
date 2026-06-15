@@ -17,6 +17,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -235,15 +236,15 @@ export default function RetreadManagement() {
     setLoading(true)
     setError(null)
     try {
-      let query = supabase
-        .from('tyre_records')
-        .select('id, asset_no, serial_number, brand, size, position, site, country, risk_level, tread_depth, cost_per_tyre, km_at_fitment, km_at_removal, issue_date, removal_date, qty, category')
-
-      if (activeCountry && activeCountry !== 'All') {
-        query = query.eq('country', activeCountry)
-      }
-
-      const { data, error: err } = await query
+      const { data, error: err } = await fetchAllPages((from, to) => {
+        let query = supabase
+          .from('tyre_records')
+          .select('id, asset_no, serial_number, brand, size, position, site, country, risk_level, tread_depth, cost_per_tyre, km_at_fitment, km_at_removal, issue_date, removal_date, qty, category')
+        if (activeCountry && activeCountry !== 'All') {
+          query = query.eq('country', activeCountry)
+        }
+        return query.range(from, to)
+      })
       if (err) throw err
       setRecords(data ?? [])
     } catch (e) {

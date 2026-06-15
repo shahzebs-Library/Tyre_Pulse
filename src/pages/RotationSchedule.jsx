@@ -21,6 +21,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -671,16 +672,16 @@ export default function RotationSchedule() {
     setLoading(true)
     setError(null)
     try {
-      let query = supabase
-        .from('tyre_records')
-        .select('id,asset_no,serial_number,serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country')
-        .order('issue_date', { ascending: true })
-
-      if (activeCountry && activeCountry !== 'All') {
-        query = query.eq('country', activeCountry)
-      }
-
-      const { data, error: err } = await query.limit(50000)
+      const { data, error: err } = await fetchAllPages((from, to) => {
+        let query = supabase
+          .from('tyre_records')
+          .select('id,asset_no,serial_number,serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country')
+          .order('issue_date', { ascending: true })
+        if (activeCountry && activeCountry !== 'All') {
+          query = query.eq('country', activeCountry)
+        }
+        return query.range(from, to)
+      })
       if (err) throw err
       setRecords(data || [])
     } catch (e) {

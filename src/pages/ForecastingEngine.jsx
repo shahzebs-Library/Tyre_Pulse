@@ -13,6 +13,7 @@ import {
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
@@ -209,15 +210,14 @@ export default function ForecastingEngine() {
         const cf = activeCountry !== 'All' ? activeCountry : null
 
         const [recRes, fleetRes] = await Promise.all([
-          (() => {
+          fetchAllPages((from, to) => {
             let q = supabase
               .from('tyre_records')
               .select('id,asset_no,site,brand,position,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,risk_level,category')
-              .limit(10000)
               .order('issue_date', { ascending: true })
             if (cf) q = q.eq('country', cf)
-            return q
-          })(),
+            return q.range(from, to)
+          }),
           (() => {
             let q = supabase
               .from('vehicle_fleet')

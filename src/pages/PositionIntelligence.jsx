@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { AXLE_GROUPS, GROUP_ICONS, normalizePosition } from '../lib/tyrePositions'
@@ -158,15 +159,16 @@ export default function PositionIntelligence() {
     setLoading(true)
     setError(null)
     try {
-      let q = supabase
-        .from('tyre_records')
-        .select('id,issue_date,asset_no,brand,site,country,cost_per_tyre,qty,risk_level,km_at_fitment,km_at_removal,position,category,remarks')
-        .order('issue_date', { ascending: false })
-
       const country = countryChip !== 'All' ? countryChip : (activeCountry !== 'All' ? activeCountry : null)
-      if (country) q = q.eq('country', country)
 
-      const { data, error: err } = await q
+      const { data, error: err } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id,issue_date,asset_no,brand,site,country,cost_per_tyre,qty,risk_level,km_at_fitment,km_at_removal,position,category,remarks')
+          .order('issue_date', { ascending: false })
+        if (country) q = q.eq('country', country)
+        return q.range(from, to)
+      })
       if (err) throw err
       setRecords(data || [])
     } catch (e) {

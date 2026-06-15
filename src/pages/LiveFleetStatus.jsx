@@ -16,6 +16,7 @@ import {
   Eye, ChevronDown, ChevronUp, Radio,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -448,15 +449,17 @@ export default function LiveFleetStatus() {
           .from('fleet_master')
           .select('asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name'),
 
-        supabase
+        fetchAllPages((from, to) => supabase
           .from('tyre_records')
           .select('asset_no,risk_level,tread_depth,pressure_reading,position,site,issue_date,removal_date,brand,serial_number,size')
-          .is('removal_date', null),
+          .is('removal_date', null)
+          .range(from, to)),
 
-        supabase
+        fetchAllPages((from, to) => supabase
           .from('inspections')
           .select('asset_no,scheduled_date,status,inspection_type')
-          .order('scheduled_date', { ascending: false }),
+          .order('scheduled_date', { ascending: false })
+          .range(from, to)),
 
         supabase
           .from('alerts')

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeSiteMetrics, buildSiteRadar, bucketByMonth } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -117,12 +118,14 @@ export default function SiteComparison() {
   const trendChartRef = useRef(null)
 
   useEffect(() => {
-    let q = supabase
-      .from('tyre_records')
-      .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty')
-      .order('issue_date')
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    q.then(({ data }) => {
+    fetchAllPages((from, to) => {
+      let q = supabase
+        .from('tyre_records')
+        .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty')
+        .order('issue_date')
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      return q.range(from, to)
+    }).then(({ data }) => {
       const recs = data || []
       setRecords(recs)
       setSelectedSites([])

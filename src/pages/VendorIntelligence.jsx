@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -218,10 +219,10 @@ export default function VendorIntelligence() {
     setError(null)
     try {
       const [recRes, actRes] = await Promise.all([
-        supabase
+        fetchAllPages((from, to) => supabase
           .from('tyre_records')
           .select('id,asset_no,site,brand,supplier,tyre_serial,position,risk_level,category,findings,tread_depth,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,removal_reason')
-          .limit(10000),
+          .range(from, to)),
         supabase
           .from('corrective_actions')
           .select('id,site,status,priority,created_at,resolved_at')

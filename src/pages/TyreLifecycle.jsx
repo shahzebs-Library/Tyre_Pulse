@@ -12,6 +12,7 @@ import {
   DollarSign, Activity, Filter, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
@@ -108,12 +109,14 @@ export default function TyreLifecycle() {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    let q = supabase
-      .from('tyre_records')
-      .select('id,asset_no,serial_number,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
-      .order('issue_date', { ascending: false })
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    const { data } = await q
+    const { data } = await fetchAllPages((from, to) => {
+      let q = supabase
+        .from('tyre_records')
+        .select('id,asset_no,serial_number,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
+        .order('issue_date', { ascending: false })
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      return q.range(from, to)
+    })
     setRecords(data || [])
     setLoading(false)
   }, [activeCountry])

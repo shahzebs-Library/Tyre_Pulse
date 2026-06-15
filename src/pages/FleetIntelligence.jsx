@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import EmailReportModal from '../components/EmailReportModal'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import PageHeader from '../components/ui/PageHeader'
 import {
   computeFleetAvailability,
@@ -380,11 +381,11 @@ export default function FleetIntelligence() {
     setLoading(true)
     setError(null)
     try {
-      const { data: tyreData, error: tyreErr } = await supabase
+      const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => supabase
         .from('tyre_records')
         .select('id,asset_no,site,brand,position,risk_level,category,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,tread_depth')
-        .limit(10000)
         .order('issue_date', { ascending: false })
+        .range(from, to))
 
       if (tyreErr) throw tyreErr
       setRecords(tyreData || [])

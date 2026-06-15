@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -584,9 +585,10 @@ export default function SupplierManagement() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const { data, error: err } = await supabase
+    const { data, error: err } = await fetchAllPages((from, to) => supabase
       .from('tyre_records')
       .select('id, brand, cost_per_tyre, issue_date, site, country, position, km_at_fitment, km_at_removal, risk_level, size, serial_number, asset_no')
+      .range(from, to))
     if (err) { setError(err.message); setLoading(false); return }
     setRecords(data || [])
     setLoading(false)

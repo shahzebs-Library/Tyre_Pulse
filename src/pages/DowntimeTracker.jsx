@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   Chart as ChartJS,
@@ -185,12 +186,14 @@ export default function DowntimeTracker() {
     else setLoading(true)
     setError(null)
     try {
-      let q = supabase
-        .from('tyre_records')
-        .select('id,asset_no,serial_number,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,position,reason_for_removal')
-        .order('issue_date', { ascending: false })
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data: tyreData, error: tyreErr } = await q
+      const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id,asset_no,serial_number,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,position,reason_for_removal')
+          .order('issue_date', { ascending: false })
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q.range(from, to)
+      })
       if (tyreErr) throw tyreErr
       setTyreRecords(tyreData || [])
 

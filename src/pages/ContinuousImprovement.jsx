@@ -13,6 +13,7 @@ import {
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
@@ -299,24 +300,22 @@ export default function ContinuousImprovement() {
       const applyCountry = (q) => activeCountry !== 'All' ? q.eq('country', activeCountry) : q
 
       const [recRes, actRes, insRes, tgtRes] = await Promise.all([
-        applyCountry(
+        fetchAllPages((from, to) => applyCountry(
           supabase.from('tyre_records')
             .select('id,asset_no,site,brand,position,risk_level,category,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,country')
             .order('issue_date', { ascending: false })
-            .limit(10000)
-        ),
+        ).range(from, to)),
         applyCountry(
           supabase.from('corrective_actions')
             .select('id,title,site,status,priority,created_at,resolved_at,description,country')
             .order('created_at', { ascending: false })
             .limit(2000)
         ),
-        applyCountry(
+        fetchAllPages((from, to) => applyCountry(
           supabase.from('inspections')
             .select('id,asset_no,site,status,scheduled_date,completed_date,country')
             .order('scheduled_date', { ascending: false })
-            .limit(3000)
-        ),
+        ).range(from, to)),
         supabase.from('kpi_targets').select('metric,target_value,year,month,site').limit(500),
       ])
 

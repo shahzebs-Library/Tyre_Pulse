@@ -19,6 +19,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -134,8 +135,10 @@ export default function StockReplenishment() {
 
       const [stockRes, tyreRes] = await Promise.all([
         supabase.from('stock').select('*'),
-        supabase.from('tyre_records').select('site,brand,size,issue_date,cost_per_tyre')
-          .gte('issue_date', ninetyStr),
+        fetchAllPages((from, to) =>
+          supabase.from('tyre_records').select('site,brand,size,issue_date,cost_per_tyre')
+            .gte('issue_date', ninetyStr).range(from, to)
+        , { max: 200000 }),
       ])
 
       if (stockRes.error) throw stockRes.error

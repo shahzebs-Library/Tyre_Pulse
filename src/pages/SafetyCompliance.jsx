@@ -21,6 +21,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -85,8 +86,12 @@ export default function SafetyCompliance() {
       const from = cutoff.toISOString()
 
       const queries = [
-        supabase.from('tyre_records').select('*').gte('created_at', from).then(r => country ? supabase.from('tyre_records').select('*').gte('created_at', from).eq('country', country) : r),
-        supabase.from('inspections').select('*').gte('inspection_date', from.slice(0,10)),
+        fetchAllPages((rFrom, rTo) => {
+          let q = supabase.from('tyre_records').select('*').gte('created_at', from)
+          if (country) q = q.eq('country', country)
+          return q.range(rFrom, rTo)
+        }, { max: 200000 }),
+        fetchAllPages((rFrom, rTo) => supabase.from('inspections').select('*').gte('inspection_date', from.slice(0,10)).range(rFrom, rTo), { max: 200000 }),
         supabase.from('accidents').select('*').gte('date', from.slice(0,10)),
       ]
       const [tr, insp, acc] = await Promise.all(queries)

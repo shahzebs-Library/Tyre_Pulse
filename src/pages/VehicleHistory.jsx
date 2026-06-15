@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, countBy, sum } from '../lib/analyticsEngine'
 import { detectAnomalies, ANOMALY_TYPES } from '../lib/anomalyEngine'
@@ -253,9 +254,11 @@ export default function VehicleHistory() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: true })
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data } = await q
+      const { data } = await fetchAllPages((from, to) => {
+        let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: true })
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q.range(from, to)
+      }, { max: 200000 })
       const rows = data || []
       setAllRecords(rows)
       const uniqSites = [...new Set(rows.map(r => r.site).filter(Boolean))].sort()

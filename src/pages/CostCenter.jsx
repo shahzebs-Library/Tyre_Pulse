@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
@@ -137,21 +138,23 @@ export default function CostCenter() {
     setLoading(true)
     setError(null)
     try {
-      let q = supabase
-        .from('tyre_records')
-        .select(
-          'id, asset_number, asset_no, brand, site, country, cost_per_tyre, ' +
-          'km_at_fitment, km_at_removal, risk_level, removal_reason, category, ' +
-          'created_at, tyre_position, position'
-        )
+      const { data, error: err } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select(
+            'id, asset_number, asset_no, brand, site, country, cost_per_tyre, ' +
+            'km_at_fitment, km_at_removal, risk_level, removal_reason, category, ' +
+            'created_at, tyre_position, position'
+          )
 
-      if (activeCountry && activeCountry !== 'All') {
-        q = q.eq('country', activeCountry)
-      }
-      if (dateFrom) q = q.gte('created_at', dateFrom)
-      if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
+        if (activeCountry && activeCountry !== 'All') {
+          q = q.eq('country', activeCountry)
+        }
+        if (dateFrom) q = q.gte('created_at', dateFrom)
+        if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
 
-      const { data, error: err } = await q.order('created_at', { ascending: false })
+        return q.order('created_at', { ascending: false }).range(from, to)
+      }, { max: 200000 })
       if (err) throw err
       setRecords(data ?? [])
     } catch (e) {

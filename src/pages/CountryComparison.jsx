@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { computeCountryMetrics, sum } from '../lib/analyticsEngine'
 import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText, Award } from 'lucide-react'
@@ -74,9 +75,11 @@ export default function CountryComparison() {
   useEffect(() => {
     async function load() {
       const [tRes, aRes] = await Promise.all([
-        supabase.from('tyre_records').select(
-          'id,country,site,brand,category,risk_level,cost_per_tyre,qty,issue_date,km_at_fitment,km_at_removal'
-        ),
+        fetchAllPages((from, to) =>
+          supabase.from('tyre_records').select(
+            'id,country,site,brand,category,risk_level,cost_per_tyre,qty,issue_date,km_at_fitment,km_at_removal'
+          ).range(from, to)
+        , { max: 200000 }),
         supabase.from('corrective_actions').select('id,country,status,due_date,priority'),
       ])
       setRecords(tRes.data ?? [])

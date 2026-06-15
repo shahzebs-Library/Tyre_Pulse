@@ -18,6 +18,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 import {
@@ -535,33 +536,33 @@ export default function KpiCommandCenter() {
         { data: siteRows },
         { data: histRecs },
       ] = await Promise.all([
-        applyFilters(
+        fetchAllPages((from_, to_) => applyFilters(
           supabase.from('tyre_records')
             .select('id,issue_date,asset_no,brand,site,country,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,category,tread_depth,pressure_reading')
             .gte('issue_date', from).lte('issue_date', to)
-        ),
-        applyFilters(
+        ).range(from_, to_), { max: 200000 }),
+        fetchAllPages((from_, to_) => applyFilters(
           supabase.from('tyre_records')
             .select('id,issue_date,asset_no,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,category,tread_depth')
             .gte('issue_date', prevFrom).lte('issue_date', prevTo)
-        ),
-        applyFilters(
+        ).range(from_, to_), { max: 200000 }),
+        fetchAllPages((from_, to_) => applyFilters(
           supabase.from('inspections')
             .select('id,asset_no,site,country,status,scheduled_date,completed_date,findings,inspection_type')
             .gte('inspection_date', from).lte('inspection_date', to)
-        ),
-        applyFilters(
+        ).range(from_, to_), { max: 200000 }),
+        fetchAllPages((from_, to_) => applyFilters(
           supabase.from('inspections')
             .select('id,status,scheduled_date,completed_date,findings')
             .gte('inspection_date', prevFrom).lte('inspection_date', prevTo)
-        ),
+        ).range(from_, to_), { max: 200000 }),
         supabase.from('tyre_records').select('site').not('site', 'is', null).limit(1000),
         // 12 months historical for sparklines + matrix
-        applyFilters(
+        fetchAllPages((from_, to_) => applyFilters(
           supabase.from('tyre_records')
             .select('id,issue_date,asset_no,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,category,tread_depth')
             .gte('issue_date', (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return fmt(d) })())
-        ),
+        ).range(from_, to_), { max: 200000 }),
       ])
 
       if (e1) throw new Error(e1.message)

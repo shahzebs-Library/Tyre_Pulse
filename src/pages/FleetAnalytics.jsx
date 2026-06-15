@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, linearRegression, recordCost } from '../lib/analyticsEngine'
 import { BarChart2, Download, FileText } from 'lucide-react'
@@ -35,9 +36,11 @@ export default function FleetAnalytics() {
   const [siteFilter, setSiteFilter] = useState('')
 
   useEffect(() => {
-    let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: false })
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    q.then(({ data }) => { setRecords(data || []); setLoading(false) })
+    fetchAllPages((from, to) => {
+      let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: false })
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      return q.range(from, to)
+    }, { max: 200000 }).then(({ data }) => { setRecords(data || []); setLoading(false) })
   }, [activeCountry])
 
   const assetMetrics = useMemo(() => computeAssetMetrics(records), [records])

@@ -16,6 +16,7 @@ import {
   Award, Layers, Info,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -610,7 +611,7 @@ export default function AssetManagement() {
     try {
       const [assetsRes, tyresRes, woRes] = await Promise.allSettled([
         supabase.from('fleet_master').select('*').order('asset_no'),
-        supabase.from('tyre_records').select('id,asset_no,serial_number,position,brand,size,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,tread_depth,site,country'),
+        fetchAllPages((from, to) => supabase.from('tyre_records').select('id,asset_no,serial_number,position,brand,size,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,tread_depth,site,country').range(from, to), { max: 200000 }),
         supabase.from('work_orders').select('id,asset_no,status,total_cost,created_at,work_type'),
       ])
 

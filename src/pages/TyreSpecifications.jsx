@@ -19,6 +19,7 @@ import * as XLSX from 'xlsx'
 import PageHeader from '../components/ui/PageHeader'
 const uuidv4 = () => crypto.randomUUID()
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -621,9 +622,11 @@ export default function TyreSpecifications() {
   async function fetchLiveData() {
     setLoadingRecords(true)
     try {
-      let q = supabase.from('tyre_records').select('id, asset_no, serial_number, position, brand, size, site, country, issue_date, risk_level')
-      if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data: tr } = await q.order('issue_date', { ascending: false })
+      const { data: tr } = await fetchAllPages((from, to) => {
+        let q = supabase.from('tyre_records').select('id, asset_no, serial_number, position, brand, size, site, country, issue_date, risk_level')
+        if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q.order('issue_date', { ascending: false }).range(from, to)
+      }, { max: 200000 })
       setTyreRecords(tr ?? [])
 
       const { data: fm } = await supabase.from('fleet_master').select('id, asset_no, vehicle_type, make, model, site, country').catch(() => ({ data: null }))

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
@@ -220,18 +221,22 @@ export default function EngineeringKpi() {
       }
 
       const [recRes, insRes, actRes, fleetRes] = await Promise.all([
-        applyCountry(
-          applyDateFilter(
-            supabase.from('tyre_records').select(
-              'id,issue_date,asset_no,brand,site,country,cost_per_tyre,qty,risk_level,km_at_fitment,km_at_removal,position,category,remarks'
+        fetchAllPages((from, to) =>
+          applyCountry(
+            applyDateFilter(
+              supabase.from('tyre_records').select(
+                'id,issue_date,asset_no,brand,site,country,cost_per_tyre,qty,risk_level,km_at_fitment,km_at_removal,position,category,remarks'
+              )
             )
-          )
-        ),
-        applyCountry(
-          supabase.from('inspections').select(
-            'id,asset_no,site,country,status,scheduled_date,completed_date,findings,inspection_type'
-          )
-        ),
+          ).range(from, to)
+        , { max: 200000 }),
+        fetchAllPages((from, to) =>
+          applyCountry(
+            supabase.from('inspections').select(
+              'id,asset_no,site,country,status,scheduled_date,completed_date,findings,inspection_type'
+            )
+          ).range(from, to)
+        , { max: 200000 }),
         applyCountry(
           supabase.from('corrective_actions').select(
             'id,status,site,country,due_date,created_at'

@@ -20,6 +20,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 import { computeAllKpis, computeCpkByBrand } from '../lib/kpiEngine'
@@ -155,11 +156,13 @@ export default function PerformanceBenchmark() {
       const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - daysBack)
       const from = cutoff.toISOString()
 
-      let q = supabase.from('tyre_records').select('*').gte('created_at', from)
-      if (country) q = q.eq('country', country)
       const [tr, insp] = await Promise.all([
-        q,
-        supabase.from('inspections').select('*').gte('inspection_date', from.slice(0, 10)),
+        fetchAllPages((rFrom, rTo) => {
+          let q = supabase.from('tyre_records').select('*').gte('created_at', from)
+          if (country) q = q.eq('country', country)
+          return q.range(rFrom, rTo)
+        }, { max: 200000 }),
+        fetchAllPages((rFrom, rTo) => supabase.from('inspections').select('*').gte('inspection_date', from.slice(0, 10)).range(rFrom, rTo), { max: 200000 }),
       ])
       setRecords(tr.data || [])
       setInspections(insp.data || [])

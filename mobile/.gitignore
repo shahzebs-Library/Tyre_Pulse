@@ -16,3 +16,5 @@ dist/
 *.mobileprovision
 *.orig.*
 web-build/
+# Google Play service account key (provided via CI secret, never commit)
+google-service-account.json

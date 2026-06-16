@@ -11,6 +11,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
 import { canInspect } from '../../lib/permissions'
+import PhotoCapture from '../../components/PhotoCapture'
 
 interface Rca {
   id: string
@@ -48,6 +49,7 @@ export default function RcaScreen() {
   const [km, setKm] = useState('')
   const [rootCause, setRootCause] = useState('')
   const [factors, setFactors] = useState<string[]>([])
+  const [photos, setPhotos] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   const textAlign = isRTL ? 'right' : 'left'
@@ -88,12 +90,13 @@ export default function RcaScreen() {
       km_at_failure: km ? Number(km) : null,
       root_cause: rootCause.trim(),
       contributing_factors: factors.length ? factors : null,
+      photos: photos.filter(Boolean).length ? photos.filter(Boolean) : null,
       country: profile?.country ?? null,
       created_by: profile?.id ?? null,
     })
     setSaving(false)
     if (error) { Alert.alert('Could not save', error.message); return }
-    setShowForm(false); setRootCause(''); setFactors([]); setKm(''); setSerial('')
+    setShowForm(false); setRootCause(''); setFactors([]); setKm(''); setSerial(''); setPhotos([])
     load()
   }
 
@@ -182,6 +185,8 @@ export default function RcaScreen() {
               </View>
               <Text style={styles.label}>Root cause</Text>
               <TextInput style={[styles.input, styles.textarea]} placeholder="What caused the failure…" placeholderTextColor="#94a3b8" value={rootCause} onChangeText={setRootCause} multiline />
+              <Text style={styles.label}>Photos</Text>
+              <PhotoCapture value={photos} onChange={setPhotos} tint="#7c3aed" />
               <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={create} disabled={saving}>
                 {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Analysis</Text>}
               </TouchableOpacity>

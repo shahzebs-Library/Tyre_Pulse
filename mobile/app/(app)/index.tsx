@@ -113,8 +113,11 @@ export default function HomeScreen() {
   }
 
   // Primary call-to-action chosen by what the role actually does
+  const isManager = canAccessAdmin(role) || role === 'manager' || role === 'director'
   const primary = flags.inspect
     ? { title: t('home.startInspection'), subtitle: t('home.startSubtitle'), icon: 'add-circle', go: () => router.push('/(app)/inspection/new') }
+    : isManager
+    ? { title: 'Fleet Overview', subtitle: 'KPIs, risk & cost at a glance', icon: 'stats-chart', go: () => router.push('/(app)/overview') }
     : flags.reportAccident
     ? { title: t('tabs.accident') || 'Report Accident', subtitle: 'Log a new incident', icon: 'warning', go: () => router.push('/(app)/accident/report') }
     : flags.accidents
@@ -123,6 +126,7 @@ export default function HomeScreen() {
 
   // Module tiles, filtered by role; `count` drives a badge
   const modules = [
+    { key: 'overview', label: 'Overview',                     icon: 'stats-chart-outline',  tint: '#2563eb', show: isManager,        count: 0,              go: () => router.push('/(app)/overview') },
     { key: 'tasks',    label: t('home.tasks') || 'Tasks',     icon: 'checkbox-outline',     tint: '#16a34a', show: true,             count: openTasks,      go: () => router.push('/(app)/tasks') },
     { key: 'alerts',   label: t('home.alerts') || 'Alerts',   icon: 'alert-circle-outline', tint: '#dc2626', show: true,             count: criticalAlerts, go: () => router.push('/(app)/alerts') },
     { key: 'vehicles', label: 'Vehicles',                     icon: 'bus-outline',          tint: '#0d9488', show: true,             count: 0,              go: () => router.push('/(app)/vehicles') },

@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
+import PhotoCapture from '../../components/PhotoCapture'
 import { UserRole } from '../../lib/types'
 
 const ROLES: UserRole[] = ['inspector', 'tyre_man', 'admin', 'manager', 'director']
@@ -35,6 +36,7 @@ export default function ReportIssueScreen() {
   const [assetNo, setAssetNo] = useState(params.asset ?? '')
   const [description, setDescription] = useState('')
   const [dueDays, setDueDays] = useState<number | null>(7)
+  const [photos, setPhotos] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   const textAlign = isRTL ? 'right' : 'left'
@@ -54,6 +56,7 @@ export default function ReportIssueScreen() {
       status: 'Open',
       assigned_to: profile?.full_name ?? profile?.username ?? null,
       due_date: due,
+      photos: photos.filter(Boolean).length ? photos.filter(Boolean) : null,
       country: profile?.country ?? null,
       created_by: profile?.id ?? null,
     })
@@ -133,6 +136,9 @@ export default function ReportIssueScreen() {
             onChangeText={setDescription}
             multiline
           />
+
+          <Text style={[styles.label, { textAlign }]}>Photos (optional)</Text>
+          <PhotoCapture value={photos} onChange={setPhotos} tint="#e11d48" />
 
           <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={submit} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : (

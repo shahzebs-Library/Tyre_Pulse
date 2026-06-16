@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
+import PhotoCapture from '../../components/PhotoCapture'
 import { UserRole } from '../../lib/types'
 
 const ROLES: UserRole[] = ['tyre_man', 'inspector', 'admin', 'manager', 'director']
@@ -32,6 +33,7 @@ export default function TyreChangeScreen() {
   const [kmFit, setKmFit] = useState('')
   const [tread, setTread] = useState('')
   const [removalReason, setRemovalReason] = useState('')
+  const [photos, setPhotos] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   const textAlign = isRTL ? 'right' : 'left'
@@ -60,11 +62,12 @@ export default function TyreChangeScreen() {
       risk_level: 'Low',
       category: 'Tyre Change',
       removal_reason: removalReason.trim() || null,
+      photos: photos.filter(Boolean).length ? photos.filter(Boolean) : null,
     })
     setSaving(false)
     if (error) { Alert.alert('Could not save', error.message); return }
     Alert.alert('Tyre recorded', 'The new fitment has been saved.', [
-      { text: 'Add another', onPress: () => { setPosition(''); setSerial(''); setBrand(''); setSize(''); setCost(''); setKmFit(''); setTread('') } },
+      { text: 'Add another', onPress: () => { setPosition(''); setSerial(''); setBrand(''); setSize(''); setCost(''); setKmFit(''); setTread(''); setPhotos([]) } },
       { text: 'Done', onPress: () => router.back() },
     ])
   }
@@ -135,6 +138,9 @@ export default function TyreChangeScreen() {
 
           <Text style={[styles.label, { textAlign }]}>Reason for change (optional)</Text>
           <TextInput style={[styles.input, styles.textarea, { textAlign }]} placeholder="e.g. Worn out, puncture, scheduled rotation" placeholderTextColor="#94a3b8" value={removalReason} onChangeText={setRemovalReason} multiline />
+
+          <Text style={[styles.label, { textAlign }]}>Photos (optional)</Text>
+          <PhotoCapture value={photos} onChange={setPhotos} tint="#0284c7" />
 
           <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={submit} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : (

@@ -30,19 +30,26 @@ export default function AppLayout() {
   const { user, loading, profile } = useAuth()
   const { t } = useLanguage()
   const [accidentBadge, setAccidentBadge] = useState(0)
+  const [homeBadge, setHomeBadge] = useState(0)
 
   useNetworkSync()
 
   const loadBadges = useCallback(async () => {
     if (!user) return
-    let q = supabase.from('accidents').select('id', { count: 'exact', head: true }).neq('status', 'closed')
-    if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
-    const { count } = await q
-    setAccidentBadge(count ?? 0)
+    const cc = profile?.country
+    const withC = (q: any) => cc ? q.or(`country.eq.${cc},country.is.null`) : q
+    const [acc, task, alert] = await Promise.all([
+      withC(supabase.from('accidents').select('id', { count: 'exact', head: true }).neq('status', 'closed')),
+      withC(supabase.from('corrective_actions').select('id', { count: 'exact', head: true }).neq('status', 'Closed')),
+      withC(supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('risk_level', 'Critical')),
+    ])
+    setAccidentBadge(acc.count ?? 0)
+    setHomeBadge((task.count ?? 0) + (alert.count ?? 0))
   }, [user, profile?.country])
 
   useEffect(() => { loadBadges() }, [loadBadges])
   useRealtime('accidents', loadBadges, { enabled: !!user })
+  useRealtime('corrective_actions', loadBadges, { enabled: !!user })
 
   if (loading) {
     return (
@@ -86,7 +93,10 @@ export default function AppLayout() {
                 />
               ),
               tabBarActiveTintColor: tab.activeTint ?? '#16a34a',
-              tabBarBadge: tab.name === 'accident/dashboard' && accidentBadge > 0 ? accidentBadge : undefined,
+              tabBarBadge:
+                tab.name === 'accident/dashboard' && accidentBadge > 0 ? accidentBadge
+                : tab.name === 'index' && homeBadge > 0 ? homeBadge
+                : undefined,
               tabBarBadgeStyle: { backgroundColor: '#dc2626', fontSize: 10, fontWeight: '700' },
               href: allowed ? undefined : null,
             }}
@@ -105,6 +115,7 @@ export default function AppLayout() {
       <Tabs.Screen name="tyre-change"     options={{ href: null }} />
       <Tabs.Screen name="stock"           options={{ href: null }} />
       <Tabs.Screen name="rca"             options={{ href: null }} />
+      <Tabs.Screen name="overview"        options={{ href: null }} />
       <Tabs.Screen name="inspection/[id]" options={{ href: null }} />
       <Tabs.Screen name="accident/report" options={{ href: null }} />
       <Tabs.Screen name="accident/[id]"   options={{ href: null }} />

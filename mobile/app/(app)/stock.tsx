@@ -33,7 +33,10 @@ const STATUS_COLOR: Record<string, string> = { Critical: '#dc2626', Low: '#ea580
 
 export default function StockScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
+  const STATUS_LABEL: Record<string, string> = {
+    OK: t('modules.stock.ok'), Low: t('modules.stock.lowS'), Critical: t('modules.stock.criticalS'),
+  }
   const router = useRouter()
   const [rows, setRows] = useState<StockItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -75,7 +78,7 @@ export default function StockScreen() {
       updated_at: new Date().toISOString(),
     }).eq('id', item.id)
     setBusyId(null)
-    if (error) { Alert.alert('Update failed', error.message); load() }
+    if (error) { Alert.alert(t('modules.stock.updateFailed'), error.message); load() }
   }
 
   const shown = useMemo(() => {
@@ -96,19 +99,19 @@ export default function StockScreen() {
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>Stock</Text>
-          <Text style={[styles.sub, { textAlign }]}>{rows.length} items · {lowCount} need reorder</Text>
+          <Text style={[styles.title, { textAlign }]}>{t('modules.stock.title')}</Text>
+          <Text style={[styles.sub, { textAlign }]}>{rows.length} {t('modules.stock.items')} · {lowCount} {t('modules.stock.needReorder')}</Text>
         </View>
       </View>
 
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={18} color="#94a3b8" />
-        <TextInput style={[styles.search, { textAlign }]} placeholder="Search item or site…" placeholderTextColor="#94a3b8" value={query} onChangeText={setQuery} />
+        <TextInput style={[styles.search, { textAlign }]} placeholder={t('modules.stock.searchPh')} placeholderTextColor="#94a3b8" value={query} onChangeText={setQuery} />
       </View>
       <View style={styles.filters}>
         {(['all', 'low'] as FilterKey[]).map(f => (
           <TouchableOpacity key={f} style={[styles.chip, filter === f && styles.chipActive]} onPress={() => setFilter(f)}>
-            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f === 'all' ? 'All' : 'Low / Critical'}</Text>
+            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f === 'all' ? t('modules.stock.all') : t('modules.stock.low')}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -121,7 +124,7 @@ export default function StockScreen() {
           keyExtractor={i => i.id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
-          ListEmptyComponent={<View style={styles.empty}><Ionicons name="cube-outline" size={48} color="#cbd5e1" /><Text style={styles.emptyText}>No stock items</Text></View>}
+          ListEmptyComponent={<View style={styles.empty}><Ionicons name="cube-outline" size={48} color="#cbd5e1" /><Text style={styles.emptyText}>{t('modules.stock.none')}</Text></View>}
           renderItem={({ item }) => {
             const qty = item.stock_qty ?? 0
             const st = statusFor(qty, item.min_level, item.critical_level)
@@ -132,10 +135,10 @@ export default function StockScreen() {
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={[styles.cardTitle, { textAlign }]} numberOfLines={2}>{item.description ?? 'Item'}</Text>
                   <Text style={[styles.cardMeta, { textAlign }]}>
-                    {item.site ?? '—'}{item.min_level != null ? ` · min ${item.min_level}` : ''}
+                    {item.site ?? '—'}{item.min_level != null ? ` · ${t('modules.stock.min')} ${item.min_level}` : ''}
                   </Text>
                   <View style={[styles.statusBadge, { backgroundColor: sc + '1a' }]}>
-                    <Text style={[styles.statusText, { color: sc }]}>{st}</Text>
+                    <Text style={[styles.statusText, { color: sc }]}>{STATUS_LABEL[st] ?? st}</Text>
                   </View>
                 </View>
                 <View style={[styles.qtyBox, isRTL && styles.rowR]}>

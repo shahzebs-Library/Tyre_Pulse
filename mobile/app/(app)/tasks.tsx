@@ -30,15 +30,15 @@ interface Task {
 const PRIORITY_COLOR: Record<string, string> = {
   Critical: '#dc2626', High: '#ea580c', Medium: '#ca8a04', Low: '#16a34a',
 }
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'open', label: 'Open' },
-  { key: 'mine', label: 'Assigned to me' },
-  { key: 'all', label: 'All' },
+const FILTERS: { key: FilterKey; labelKey: string }[] = [
+  { key: 'open', labelKey: 'modules.tasks.filterOpen' },
+  { key: 'mine', labelKey: 'modules.tasks.filterMine' },
+  { key: 'all', labelKey: 'modules.tasks.filterAll' },
 ]
 
 export default function TasksScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
@@ -79,7 +79,7 @@ export default function TasksScreen() {
       .update({ status: 'Closed', resolved_at: new Date().toISOString(), closed_by: profile?.id ?? null })
       .eq('id', task.id)
     setBusyId(null)
-    if (error) { Alert.alert('Could not resolve', error.message); return }
+    if (error) { Alert.alert(t('modules.tasks.couldNotResolve'), error.message); return }
     load()
   }
 
@@ -100,8 +100,8 @@ export default function TasksScreen() {
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>Corrective Actions</Text>
-          <Text style={[styles.sub, { textAlign }]}>{openCount} open task{openCount === 1 ? '' : 's'}</Text>
+          <Text style={[styles.title, { textAlign }]}>{t('modules.tasks.title')}</Text>
+          <Text style={[styles.sub, { textAlign }]}>{openCount} {t('modules.tasks.open')}</Text>
         </View>
         {canResolve && (
           <TouchableOpacity style={styles.newBtn} onPress={() => router.push('/(app)/report-issue')}>
@@ -117,7 +117,7 @@ export default function TasksScreen() {
             style={[styles.chip, filter === f.key && styles.chipActive]}
             onPress={() => setFilter(f.key)}
           >
-            <Text style={[styles.chipText, filter === f.key && styles.chipTextActive]}>{f.label}</Text>
+            <Text style={[styles.chipText, filter === f.key && styles.chipTextActive]}>{t(f.labelKey)}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -133,7 +133,7 @@ export default function TasksScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="checkmark-done-circle-outline" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyText}>No tasks here</Text>
+              <Text style={styles.emptyText}>{t('modules.tasks.none')}</Text>
             </View>
           }
           renderItem={({ item }) => {
@@ -155,13 +155,13 @@ export default function TasksScreen() {
                     {item.due_date && (
                       <View style={[styles.badge, overdue && { backgroundColor: 'rgba(220,38,38,0.1)' }]}>
                         <Text style={[styles.badgeText, overdue && { color: '#dc2626' }]}>
-                          Due {new Date(item.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                          {t('modules.tasks.due')} {new Date(item.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                         </Text>
                       </View>
                     )}
                     {closed && (
                       <View style={[styles.badge, { backgroundColor: 'rgba(22,163,74,0.12)' }]}>
-                        <Text style={[styles.badgeText, { color: '#15803d' }]}>Resolved</Text>
+                        <Text style={[styles.badgeText, { color: '#15803d' }]}>{t('modules.tasks.resolved')}</Text>
                       </View>
                     )}
                   </View>

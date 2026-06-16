@@ -29,7 +29,7 @@ const RISK_COLOR: Record<string, string> = { Critical: '#dc2626', High: '#ea580c
 
 export default function AlertsScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const router = useRouter()
   const [rows, setRows] = useState<AlertRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -74,15 +74,15 @@ export default function AlertsScreen() {
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>Tyre Alerts</Text>
-          <Text style={[styles.sub, { textAlign }]}>{critCount} critical · {rows.length} flagged</Text>
+          <Text style={[styles.title, { textAlign }]}>{t('modules.alerts.title')}</Text>
+          <Text style={[styles.sub, { textAlign }]}>{critCount} {t('modules.alerts.criticalN')} · {rows.length} {t('modules.alerts.flagged')}</Text>
         </View>
       </View>
 
       <View style={styles.filters}>
         {(['all', 'Critical', 'High'] as FilterKey[]).map(f => (
           <TouchableOpacity key={f} style={[styles.chip, filter === f && styles.chipActive]} onPress={() => setFilter(f)}>
-            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f === 'all' ? 'All' : f}</Text>
+            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f === 'all' ? t('modules.alerts.all') : f === 'Critical' ? t('modules.alerts.critical') : t('modules.alerts.high')}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -98,7 +98,7 @@ export default function AlertsScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="shield-checkmark-outline" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyText}>No active alerts</Text>
+              <Text style={styles.emptyText}>{t('modules.alerts.none')}</Text>
             </View>
           }
           renderItem={({ item }) => {

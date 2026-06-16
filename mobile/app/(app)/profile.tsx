@@ -139,16 +139,16 @@ export default function ProfileScreen() {
         {(() => {
           const role = profile?.role
           const tools = [
-            { key: 'team',  label: 'Team',          icon: 'people-outline',  tint: '#1d4ed8', show: canManageUsers(role) || canAccessAdmin(role), go: () => router.push('/(app)/team') },
-            { key: 'users', label: 'Manage Users',  icon: 'person-add-outline', tint: '#7c3aed', show: canManageUsers(role), go: () => router.push('/(app)/admin/users') },
-            { key: 'admin', label: t('tabs.admin') || 'Admin Console', icon: 'shield-outline', tint: '#7c3aed', show: canAccessAdmin(role), go: () => router.push('/(app)/admin') },
-            { key: 'ai',    label: 'AI Assistant',  icon: 'sparkles-outline', tint: '#16a34a', show: canUseAI(role), go: () => router.push('/(app)/admin/ai-chat') },
-            { key: 'acc',   label: t('tabs.accident') || 'Accidents', icon: 'warning-outline', tint: '#ea580c', show: canViewAccidents(role), go: () => router.push('/(app)/accident/dashboard') },
+            { key: 'team',  label: t('modules.workspace.team'),          icon: 'people-outline',  tint: '#1d4ed8', show: canManageUsers(role) || canAccessAdmin(role), go: () => router.push('/(app)/team') },
+            { key: 'users', label: t('modules.workspace.manageUsers'),  icon: 'person-add-outline', tint: '#7c3aed', show: canManageUsers(role), go: () => router.push('/(app)/admin/users') },
+            { key: 'admin', label: t('modules.workspace.admin'), icon: 'shield-outline', tint: '#7c3aed', show: canAccessAdmin(role), go: () => router.push('/(app)/admin') },
+            { key: 'ai',    label: t('modules.workspace.ai'),  icon: 'sparkles-outline', tint: '#16a34a', show: canUseAI(role), go: () => router.push('/(app)/admin/ai-chat') },
+            { key: 'acc',   label: t('modules.workspace.accidents'), icon: 'warning-outline', tint: '#ea580c', show: canViewAccidents(role), go: () => router.push('/(app)/accident/dashboard') },
           ].filter(x => x.show)
           if (!tools.length) return null
           return (
             <>
-              <Text style={[styles.sectionTitle, { textAlign }]}>Workspace</Text>
+              <Text style={[styles.sectionTitle, { textAlign }]}>{t('modules.workspace.title')}</Text>
               <View style={styles.section}>
                 {tools.map((x, i) => (
                   <TouchableOpacity

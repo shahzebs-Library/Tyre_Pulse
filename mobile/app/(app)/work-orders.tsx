@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { saveRecord } from '../../lib/recordQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
@@ -35,7 +36,7 @@ const NEXT_STATUS: Record<string, string> = { open: 'In Progress', 'in progress'
 
 export default function WorkOrdersScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const router = useRouter()
   const [rows, setRows] = useState<WorkOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -73,10 +74,10 @@ export default function WorkOrdersScreen() {
 
   async function create() {
     if (saving) return
-    if (!asset.trim()) { Alert.alert('Missing asset', 'Enter the asset number.'); return }
+    if (!asset.trim()) { Alert.alert(t('modules.workOrders.missingAsset')); return }
     setSaving(true)
     const wono = `WO-${Date.now().toString().slice(-8)}`
-    const { error } = await supabase.from('work_orders').insert({
+    const res = await saveRecord('work_orders', {
       work_order_no: wono,
       asset_no: asset.trim(),
       work_type: workType,
@@ -90,7 +91,7 @@ export default function WorkOrdersScreen() {
       created_by: profile?.id ?? null,
     })
     setSaving(false)
-    if (error) { Alert.alert('Could not create', error.message); return }
+    if (res.offline) Alert.alert(t('modules.common.offlineSaved'))
     setShowForm(false); setAsset(''); setDesc(''); setWorkType('Tyre Change'); setPriority('Medium')
     load()
   }
@@ -123,8 +124,8 @@ export default function WorkOrdersScreen() {
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>Work Orders</Text>
-          <Text style={[styles.sub, { textAlign }]}>{openCount} active</Text>
+          <Text style={[styles.title, { textAlign }]}>{t('modules.workOrders.title')}</Text>
+          <Text style={[styles.sub, { textAlign }]}>{openCount} {t('modules.workOrders.active')}</Text>
         </View>
         {mayEdit && (
           <TouchableOpacity style={styles.newBtn} onPress={() => setShowForm(true)}>
@@ -136,7 +137,7 @@ export default function WorkOrdersScreen() {
       <View style={styles.filters}>
         {(['open', 'all'] as FilterKey[]).map(f => (
           <TouchableOpacity key={f} style={[styles.chip, filter === f && styles.chipActive]} onPress={() => setFilter(f)}>
-            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f === 'open' ? 'Active' : 'All'}</Text>
+            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f === 'open' ? t('modules.workOrders.filterActive') : t('modules.workOrders.filterAll')}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -149,7 +150,7 @@ export default function WorkOrdersScreen() {
           keyExtractor={i => i.id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
-          ListEmptyComponent={<View style={styles.empty}><Ionicons name="construct-outline" size={48} color="#cbd5e1" /><Text style={styles.emptyText}>No work orders</Text></View>}
+          ListEmptyComponent={<View style={styles.empty}><Ionicons name="construct-outline" size={48} color="#cbd5e1" /><Text style={styles.emptyText}>{t('modules.workOrders.none')}</Text></View>}
           renderItem={({ item }) => {
             const sc = STATUS_COLOR[(item.status ?? 'open').toLowerCase()] ?? '#64748b'
             const pc = PRI_COLOR[item.priority ?? ''] ?? '#64748b'
@@ -173,7 +174,7 @@ export default function WorkOrdersScreen() {
                     {busyId === item.id ? <ActivityIndicator size="small" color="#16a34a" /> : (
                       <>
                         <Ionicons name="arrow-forward-circle" size={20} color="#16a34a" />
-                        <Text style={styles.advText}>{next}</Text>
+                        <Text style={styles.advText}>{next === 'In Progress' ? t('modules.workOrders.inProgress') : t('modules.workOrders.completed')}</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -189,32 +190,32 @@ export default function WorkOrdersScreen() {
         <KeyboardAvoidingView style={styles.modalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.sheet}>
             <View style={[styles.sheetHead, isRTL && styles.rowR]}>
-              <Text style={styles.sheetTitle}>New Work Order</Text>
+              <Text style={styles.sheetTitle}>{t('modules.workOrders.new')}</Text>
               <TouchableOpacity onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color="#64748b" /></TouchableOpacity>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled">
-              <Text style={styles.label}>Asset No.</Text>
+              <Text style={styles.label}>{t('modules.common.asset')}</Text>
               <TextInput style={styles.input} placeholder="e.g. TM-001" placeholderTextColor="#94a3b8" value={asset} onChangeText={setAsset} autoCapitalize="characters" />
-              <Text style={styles.label}>Work type</Text>
+              <Text style={styles.label}>{t('modules.workOrders.workType')}</Text>
               <View style={styles.chipRow}>
                 {WORK_TYPES.map(w => (
                   <TouchableOpacity key={w} style={[styles.chip, workType === w && styles.chipActive]} onPress={() => setWorkType(w)}>
-                    <Text style={[styles.chipText, workType === w && styles.chipTextActive]}>{w}</Text>
+                    <Text style={[styles.chipText, workType === w && styles.chipTextActive]}>{t(`modules.workTypes.${w}`)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={styles.label}>Priority</Text>
+              <Text style={styles.label}>{t('modules.common.priority')}</Text>
               <View style={styles.chipRow}>
                 {(Object.keys(PRI_COLOR) as (keyof typeof PRI_COLOR)[]).map(p => (
                   <TouchableOpacity key={p} style={[styles.chip, priority === p && { backgroundColor: PRI_COLOR[p], borderColor: PRI_COLOR[p] }]} onPress={() => setPriority(p)}>
-                    <Text style={[styles.chipText, priority === p && styles.chipTextActive]}>{p}</Text>
+                    <Text style={[styles.chipText, priority === p && styles.chipTextActive]}>{t(`modules.priority.${p}`)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={styles.label}>Description</Text>
+              <Text style={styles.label}>{t('modules.common.details')}</Text>
               <TextInput style={[styles.input, styles.textarea]} placeholder="What needs doing…" placeholderTextColor="#94a3b8" value={desc} onChangeText={setDesc} multiline />
               <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={create} disabled={saving}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Create Work Order</Text>}
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>{t('modules.workOrders.create')}</Text>}
               </TouchableOpacity>
             </ScrollView>
           </View>

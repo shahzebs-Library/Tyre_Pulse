@@ -12,6 +12,7 @@
 import { useEffect, useRef } from 'react'
 import * as Network from 'expo-network'
 import { syncQueue } from '../lib/offlineQueue'
+import { syncRecordQueue } from '../lib/recordQueue'
 
 /** Minimum ms between auto-sync attempts to avoid hammering the API */
 const DEBOUNCE_MS = 3_000
@@ -29,6 +30,7 @@ export function useNetworkSync(): void {
     lastSync.current = now
     try {
       await syncQueue()
+      await syncRecordQueue()
     } catch {
       // Errors are handled inside syncQueue; swallow here to avoid unhandled rejections
     } finally {

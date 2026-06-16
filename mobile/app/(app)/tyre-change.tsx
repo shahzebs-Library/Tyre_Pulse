@@ -6,10 +6,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { saveRecord } from '../../lib/recordQueue'
 import PhotoCapture from '../../components/PhotoCapture'
 import { UserRole } from '../../lib/types'
 
@@ -18,7 +18,7 @@ const POSITIONS = ['FL', 'FR', 'RL', 'RR', 'RLO', 'RLI', 'RRO', 'RRI', 'Spare']
 
 export default function TyreChangeScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const router = useRouter()
   const params = useLocalSearchParams<{ asset?: string; site?: string; position?: string }>()
   const { allowed } = useRoleGuard(ROLES)
@@ -40,12 +40,12 @@ export default function TyreChangeScreen() {
 
   async function submit() {
     if (saving) return
-    if (!assetNo.trim()) { Alert.alert('Missing asset', 'Enter the asset number.'); return }
-    if (!position.trim()) { Alert.alert('Missing position', 'Select or enter the tyre position.'); return }
+    if (!assetNo.trim()) { Alert.alert(t('modules.tyreChange.savedTitle'), t('modules.tyreChange.missingAsset')); return }
+    if (!position.trim()) { Alert.alert(t('modules.tyreChange.savedTitle'), t('modules.tyreChange.missingPosition')); return }
     setSaving(true)
     const today = new Date().toISOString().split('T')[0]
     const sn = serial.trim() || null
-    const { error } = await supabase.from('tyre_records').insert({
+    const res = await saveRecord('tyre_records', {
       asset_no: assetNo.trim(),
       site: site.trim() || null,
       country: profile?.country ?? null,
@@ -65,10 +65,9 @@ export default function TyreChangeScreen() {
       photos: photos.filter(Boolean).length ? photos.filter(Boolean) : null,
     })
     setSaving(false)
-    if (error) { Alert.alert('Could not save', error.message); return }
-    Alert.alert('Tyre recorded', 'The new fitment has been saved.', [
-      { text: 'Add another', onPress: () => { setPosition(''); setSerial(''); setBrand(''); setSize(''); setCost(''); setKmFit(''); setTread(''); setPhotos([]) } },
-      { text: 'Done', onPress: () => router.back() },
+    Alert.alert(res.offline ? t('modules.common.offlineSaved') : t('modules.tyreChange.savedTitle'), t('modules.tyreChange.savedMsg'), [
+      { text: t('modules.tyreChange.addAnother'), onPress: () => { setPosition(''); setSerial(''); setBrand(''); setSize(''); setCost(''); setKmFit(''); setTread(''); setPhotos([]) } },
+      { text: t('modules.common.done'), onPress: () => router.back() },
     ])
   }
 
@@ -81,23 +80,23 @@ export default function TyreChangeScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
-        <Text style={[styles.title, { textAlign }]}>Record Tyre Change</Text>
+        <Text style={[styles.title, { textAlign }]}>{t('modules.tyreChange.title')}</Text>
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { textAlign }]}>Asset No.</Text>
+              <Text style={[styles.label, { textAlign }]}>{t('modules.common.asset')}</Text>
               <TextInput style={[styles.input, { textAlign }]} placeholder="TM-001" placeholderTextColor="#94a3b8" value={assetNo} onChangeText={setAssetNo} autoCapitalize="characters" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { textAlign }]}>Site</Text>
+              <Text style={[styles.label, { textAlign }]}>{t('modules.common.site')}</Text>
               <TextInput style={[styles.input, { textAlign }]} placeholder="Site" placeholderTextColor="#94a3b8" value={site} onChangeText={setSite} />
             </View>
           </View>
 
-          <Text style={[styles.label, { textAlign }]}>Position</Text>
+          <Text style={[styles.label, { textAlign }]}>{t('modules.tyreChange.position')}</Text>
           <View style={styles.chipRow}>
             {POSITIONS.map(p => (
               <TouchableOpacity key={p} style={[styles.chip, position === p && styles.chipActive]} onPress={() => setPosition(p)}>
@@ -105,11 +104,11 @@ export default function TyreChangeScreen() {
               </TouchableOpacity>
             ))}
           </View>
-          <TextInput style={[styles.input, { textAlign, marginTop: 8 }]} placeholder="Or type a custom position" placeholderTextColor="#94a3b8" value={position} onChangeText={setPosition} autoCapitalize="characters" />
+          <TextInput style={[styles.input, { textAlign, marginTop: 8 }]} placeholder={t('modules.tyreChange.customPosition')} placeholderTextColor="#94a3b8" value={position} onChangeText={setPosition} autoCapitalize="characters" />
 
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { textAlign }]}>Brand</Text>
+              <Text style={[styles.label, { textAlign }]}>{t('modules.common.brand')}</Text>
               <TextInput style={[styles.input, { textAlign }]} placeholder="Brand" placeholderTextColor="#94a3b8" value={brand} onChangeText={setBrand} />
             </View>
             <View style={{ flex: 1 }}>
@@ -118,35 +117,35 @@ export default function TyreChangeScreen() {
             </View>
           </View>
 
-          <Text style={[styles.label, { textAlign }]}>Serial No.</Text>
+          <Text style={[styles.label, { textAlign }]}>{t('modules.common.serial')}</Text>
           <TextInput style={[styles.input, { textAlign }]} placeholder="Tyre serial" placeholderTextColor="#94a3b8" value={serial} onChangeText={setSerial} autoCapitalize="characters" />
 
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { textAlign }]}>Cost</Text>
+              <Text style={[styles.label, { textAlign }]}>{t('modules.tyreChange.cost')}</Text>
               <TextInput style={[styles.input, { textAlign }]} placeholder="0" placeholderTextColor="#94a3b8" value={cost} onChangeText={setCost} keyboardType="numeric" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { textAlign }]}>Odometer (km)</Text>
+              <Text style={[styles.label, { textAlign }]}>{t('modules.tyreChange.odometer')}</Text>
               <TextInput style={[styles.input, { textAlign }]} placeholder="km" placeholderTextColor="#94a3b8" value={kmFit} onChangeText={setKmFit} keyboardType="numeric" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { textAlign }]}>Tread (mm)</Text>
+              <Text style={[styles.label, { textAlign }]}>{t('modules.tyreChange.tread')}</Text>
               <TextInput style={[styles.input, { textAlign }]} placeholder="mm" placeholderTextColor="#94a3b8" value={tread} onChangeText={setTread} keyboardType="numeric" />
             </View>
           </View>
 
-          <Text style={[styles.label, { textAlign }]}>Reason for change (optional)</Text>
-          <TextInput style={[styles.input, styles.textarea, { textAlign }]} placeholder="e.g. Worn out, puncture, scheduled rotation" placeholderTextColor="#94a3b8" value={removalReason} onChangeText={setRemovalReason} multiline />
+          <Text style={[styles.label, { textAlign }]}>{`${t('modules.tyreChange.reason')} ${t('modules.common.optional')}`}</Text>
+          <TextInput style={[styles.input, styles.textarea, { textAlign }]} placeholder={t('modules.tyreChange.reasonPh')} placeholderTextColor="#94a3b8" value={removalReason} onChangeText={setRemovalReason} multiline />
 
-          <Text style={[styles.label, { textAlign }]}>Photos (optional)</Text>
+          <Text style={[styles.label, { textAlign }]}>{`${t('modules.common.photos')} ${t('modules.common.optional')}`}</Text>
           <PhotoCapture value={photos} onChange={setPhotos} tint="#0284c7" />
 
           <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={submit} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : (
               <>
                 <Ionicons name="save" size={18} color="#fff" />
-                <Text style={styles.submitText}>Save Tyre Change</Text>
+                <Text style={styles.submitText}>{t('modules.tyreChange.save')}</Text>
               </>
             )}
           </TouchableOpacity>

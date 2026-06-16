@@ -44,7 +44,7 @@ function norm(role: string | null): string {
 
 export default function TeamScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const router = useRouter()
   const { allowed } = useRoleGuard(VIEW_ROLES)
   const [rows, setRows] = useState<Member[]>([])
@@ -97,15 +97,15 @@ export default function TeamScreen() {
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>Team</Text>
+          <Text style={[styles.title, { textAlign }]}>{t('modules.team.title')}</Text>
           <Text style={[styles.sub, { textAlign }]}>
-            {rows.length} member{rows.length === 1 ? '' : 's'}{pending > 0 ? ` · ${pending} pending` : ''}
+            {rows.length} {t('modules.team.members')}{pending > 0 ? ` · ${pending} ${t('modules.team.pending')}` : ''}
           </Text>
         </View>
         {mayManage && (
           <TouchableOpacity style={styles.manageBtn} onPress={() => router.push('/(app)/admin/users')}>
             <Ionicons name="settings-outline" size={16} color="#7c3aed" />
-            <Text style={styles.manageText}>Manage</Text>
+            <Text style={styles.manageText}>{t('modules.team.manage')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -114,7 +114,7 @@ export default function TeamScreen() {
         <Ionicons name="search" size={18} color="#94a3b8" />
         <TextInput
           style={[styles.search, { textAlign }]}
-          placeholder="Search name, role, site…"
+          placeholder={t('modules.team.searchPh')}
           placeholderTextColor="#94a3b8"
           value={query}
           onChangeText={setQuery}
@@ -132,7 +132,7 @@ export default function TeamScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="people-outline" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyText}>No members</Text>
+              <Text style={styles.emptyText}>{t('modules.team.none')}</Text>
             </View>
           }
           renderItem={({ item }) => {
@@ -148,11 +148,11 @@ export default function TeamScreen() {
                   <Text style={[styles.cardTitle, { textAlign }]}>{item.full_name ?? item.username ?? 'Unknown'}</Text>
                   <View style={[styles.badges, isRTL && styles.rowR]}>
                     <View style={[styles.roleBadge, { backgroundColor: rc + '1a' }]}>
-                      <Text style={[styles.roleText, { color: rc }]}>{ROLE_LABEL[rk] ?? item.role ?? '—'}</Text>
+                      <Text style={[styles.roleText, { color: rc }]}>{ROLE_LABEL[rk] ? t(`modules.teamRoles.${rk}`) : item.role ?? '—'}</Text>
                     </View>
                     {item.site && <Text style={styles.cardMeta}>{item.site}</Text>}
                     {item.approved === false && (
-                      <View style={styles.pendingBadge}><Text style={styles.pendingText}>Pending</Text></View>
+                      <View style={styles.pendingBadge}><Text style={styles.pendingText}>{t('modules.team.pending')}</Text></View>
                     )}
                   </View>
                 </View>

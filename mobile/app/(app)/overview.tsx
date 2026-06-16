@@ -34,7 +34,7 @@ function compact(n: number): string {
 
 export default function OverviewScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const router = useRouter()
   const { allowed } = useRoleGuard(ROLES)
   const [s, setS] = useState<Summary | null>(null)
@@ -65,10 +65,10 @@ export default function OverviewScreen() {
   const trendMax = Math.max(...trend.map(m => m.count), 1)
 
   const kpis = [
-    { label: 'Tyres', value: compact(s?.total_records ?? 0), icon: 'ellipse-outline', tint: '#2563eb' },
-    { label: 'Vehicles', value: compact(s?.distinct_assets ?? 0), icon: 'bus-outline', tint: '#0d9488' },
-    { label: 'High Risk', value: compact(s?.high_risk ?? 0), icon: 'alert-circle-outline', tint: '#dc2626' },
-    { label: 'Period Cost', value: compact(s?.total_cost ?? 0), icon: 'cash-outline', tint: '#7c3aed' },
+    { key: 'tyres', label: t('modules.overview.tyres'), value: compact(s?.total_records ?? 0), icon: 'ellipse-outline', tint: '#2563eb' },
+    { key: 'vehicles', label: t('modules.overview.vehicles'), value: compact(s?.distinct_assets ?? 0), icon: 'bus-outline', tint: '#0d9488' },
+    { key: 'highRisk', label: t('modules.overview.highRisk'), value: compact(s?.high_risk ?? 0), icon: 'alert-circle-outline', tint: '#dc2626' },
+    { key: 'periodCost', label: t('modules.overview.periodCost'), value: compact(s?.total_cost ?? 0), icon: 'cash-outline', tint: '#7c3aed' },
   ]
 
   return (
@@ -79,8 +79,8 @@ export default function OverviewScreen() {
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>Fleet Overview</Text>
-          <Text style={[styles.sub, { textAlign }]}>{profile?.country ?? 'All countries'}</Text>
+          <Text style={[styles.title, { textAlign }]}>{t('modules.overview.title')}</Text>
+          <Text style={[styles.sub, { textAlign }]}>{profile?.country ?? t('modules.overview.allCountries')}</Text>
         </View>
       </View>
 
@@ -93,7 +93,7 @@ export default function OverviewScreen() {
         >
           <View style={styles.kpiGrid}>
             {kpis.map(k => (
-              <View key={k.label} style={styles.kpiCard}>
+              <View key={k.key} style={styles.kpiCard}>
                 <View style={[styles.kpiIcon, { backgroundColor: k.tint + '14' }]}>
                   <Ionicons name={k.icon as any} size={18} color={k.tint} />
                 </View>
@@ -104,7 +104,7 @@ export default function OverviewScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={[styles.section, { textAlign }]}>Risk Distribution</Text>
+            <Text style={[styles.section, { textAlign }]}>{t('modules.overview.riskDist')}</Text>
             {risk.map(r => (
               <View key={r.level} style={styles.barRow}>
                 <Text style={styles.barLabel}>{r.level}</Text>
@@ -118,7 +118,7 @@ export default function OverviewScreen() {
 
           {sites.length > 0 && (
             <View style={styles.card}>
-              <Text style={[styles.section, { textAlign }]}>Top Sites by Volume</Text>
+              <Text style={[styles.section, { textAlign }]}>{t('modules.overview.topSites')}</Text>
               {sites.map(x => (
                 <View key={x.site} style={styles.barRow}>
                   <Text style={styles.barLabel} numberOfLines={1}>{x.site}</Text>
@@ -133,7 +133,7 @@ export default function OverviewScreen() {
 
           {trend.length > 0 && (
             <View style={styles.card}>
-              <Text style={[styles.section, { textAlign }]}>6-Month Trend</Text>
+              <Text style={[styles.section, { textAlign }]}>{t('modules.overview.trend')}</Text>
               <View style={styles.trendRow}>
                 {trend.map(m => (
                   <View key={m.month} style={styles.trendCol}>

@@ -117,29 +117,29 @@ export default function HomeScreen() {
   const primary = flags.inspect
     ? { title: t('home.startInspection'), subtitle: t('home.startSubtitle'), icon: 'add-circle', go: () => router.push('/(app)/inspection/new') }
     : isManager
-    ? { title: 'Fleet Overview', subtitle: 'KPIs, risk & cost at a glance', icon: 'stats-chart', go: () => router.push('/(app)/overview') }
+    ? { title: t('modules.home.primaryOverviewT'), subtitle: t('modules.home.primaryOverviewS'), icon: 'stats-chart', go: () => router.push('/(app)/overview') }
     : flags.reportAccident
-    ? { title: t('tabs.accident') || 'Report Accident', subtitle: 'Log a new incident', icon: 'warning', go: () => router.push('/(app)/accident/report') }
+    ? { title: t('modules.home.primaryAccidentT'), subtitle: t('modules.home.primaryAccidentS'), icon: 'warning', go: () => router.push('/(app)/accident/report') }
     : flags.accidents
-    ? { title: 'Open Dashboard', subtitle: 'Fleet accidents & claims', icon: 'grid', go: () => router.push('/(app)/accident/dashboard') }
-    : { title: t('home.alerts') || 'View Alerts', subtitle: 'Fleet tyre risks', icon: 'alert-circle', go: () => router.push('/(app)/alerts') }
+    ? { title: t('modules.home.primaryDashT'), subtitle: t('modules.home.primaryDashS'), icon: 'grid', go: () => router.push('/(app)/accident/dashboard') }
+    : { title: t('modules.home.primaryAlertsT'), subtitle: t('modules.home.primaryAlertsS'), icon: 'alert-circle', go: () => router.push('/(app)/alerts') }
 
   // Module tiles, filtered by role; `count` drives a badge
   const modules = [
-    { key: 'overview', label: 'Overview',                     icon: 'stats-chart-outline',  tint: '#2563eb', show: isManager,        count: 0,              go: () => router.push('/(app)/overview') },
+    { key: 'overview', label: t('modules.home.overview'),     icon: 'stats-chart-outline',  tint: '#2563eb', show: isManager,        count: 0,              go: () => router.push('/(app)/overview') },
     { key: 'tasks',    label: t('home.tasks') || 'Tasks',     icon: 'checkbox-outline',     tint: '#16a34a', show: true,             count: openTasks,      go: () => router.push('/(app)/tasks') },
     { key: 'alerts',   label: t('home.alerts') || 'Alerts',   icon: 'alert-circle-outline', tint: '#dc2626', show: true,             count: criticalAlerts, go: () => router.push('/(app)/alerts') },
-    { key: 'vehicles', label: 'Vehicles',                     icon: 'bus-outline',          tint: '#0d9488', show: true,             count: 0,              go: () => router.push('/(app)/vehicles') },
-    { key: 'workorders', label: 'Work Orders',                icon: 'construct-outline',    tint: '#ca8a04', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/work-orders') },
-    { key: 'tyrechange', label: 'Tyre Change',                icon: 'sync-circle-outline',  tint: '#0284c7', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/tyre-change') },
-    { key: 'stock',    label: 'Stock',                        icon: 'cube-outline',         tint: '#9333ea', show: true,             count: 0,              go: () => router.push('/(app)/stock') },
-    { key: 'report',   label: 'Report Issue',                 icon: 'flag-outline',         tint: '#e11d48', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/report-issue') },
+    { key: 'vehicles', label: t('modules.home.vehicles'),     icon: 'bus-outline',          tint: '#0d9488', show: true,             count: 0,              go: () => router.push('/(app)/vehicles') },
+    { key: 'workorders', label: t('modules.home.workOrders'), icon: 'construct-outline',    tint: '#ca8a04', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/work-orders') },
+    { key: 'tyrechange', label: t('modules.home.tyreChange'), icon: 'sync-circle-outline',  tint: '#0284c7', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/tyre-change') },
+    { key: 'stock',    label: t('modules.home.stock'),        icon: 'cube-outline',         tint: '#9333ea', show: true,             count: 0,              go: () => router.push('/(app)/stock') },
+    { key: 'report',   label: t('modules.home.reportIssue'),  icon: 'flag-outline',         tint: '#e11d48', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/report-issue') },
     { key: 'history',  label: t('tabs.history') || 'History',  icon: 'time-outline',         tint: '#2563eb', show: true,             count: 0,              go: () => router.push('/(app)/history') },
     { key: 'accident', label: t('tabs.accident') || 'Accidents', icon: 'warning-outline',    tint: '#ea580c', show: flags.accidents,  count: openAccidents,  go: () => router.push('/(app)/accident/dashboard') },
-    { key: 'rca',      label: 'Root Cause',                   icon: 'git-network-outline',  tint: '#7c3aed', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/rca') },
+    { key: 'rca',      label: t('modules.home.rca'),          icon: 'git-network-outline',  tint: '#7c3aed', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/rca') },
     { key: 'scan',     label: t('home.scanAsset') || 'Scan',   icon: 'scan-outline',         tint: '#0891b2', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/scanner') },
-    { key: 'team',     label: 'Team',                          icon: 'people-outline',       tint: '#1d4ed8', show: canManageUsers(role) || flags.admin, count: 0, go: () => router.push('/(app)/team') },
-    { key: 'ai',       label: 'AI Assistant',                  icon: 'sparkles-outline',     tint: '#7c3aed', show: flags.ai,         count: 0,              go: () => router.push('/(app)/admin/ai-chat') },
+    { key: 'team',     label: t('modules.home.team'),          icon: 'people-outline',       tint: '#1d4ed8', show: canManageUsers(role) || flags.admin, count: 0, go: () => router.push('/(app)/team') },
+    { key: 'ai',       label: t('modules.home.ai'),            icon: 'sparkles-outline',     tint: '#7c3aed', show: flags.ai,         count: 0,              go: () => router.push('/(app)/admin/ai-chat') },
     { key: 'admin',    label: t('tabs.admin') || 'Admin',      icon: 'shield-outline',       tint: '#7c3aed', show: flags.admin,      count: 0,              go: () => router.push('/(app)/admin') },
   ].filter(m => m.show)
 
@@ -162,7 +162,7 @@ export default function HomeScreen() {
               <Text style={[styles.date, { textAlign }]}>{today}</Text>
               {role && (
                 <View style={styles.roleChip}>
-                  <Text style={styles.roleChipText}>{roleLabel[role] ?? role}</Text>
+                  <Text style={styles.roleChipText}>{t(`modules.roles.${role}`) !== `modules.roles.${role}` ? t(`modules.roles.${role}`) : (roleLabel[role] ?? role)}</Text>
                 </View>
               )}
             </View>
@@ -191,12 +191,12 @@ export default function HomeScreen() {
           ) : (
             <TouchableOpacity style={styles.statCard} activeOpacity={0.85} onPress={() => router.push('/(app)/tasks')}>
               <Text style={styles.statNumber}>{openTasks}</Text>
-              <Text style={styles.statLabel}>{t('home.tasks') || 'Open Tasks'}</Text>
+              <Text style={styles.statLabel}>{t('modules.home.openTasks')}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.statCard} activeOpacity={0.85} onPress={() => router.push('/(app)/alerts')}>
             <Text style={[styles.statNumber, criticalAlerts > 0 && { color: '#dc2626' }]}>{criticalAlerts}</Text>
-            <Text style={styles.statLabel}>{t('home.alerts') || 'Critical'}</Text>
+            <Text style={styles.statLabel}>{t('modules.home.critical')}</Text>
           </TouchableOpacity>
           <View style={styles.statCard}>
             <Ionicons name="location" size={20} color="#16a34a" />

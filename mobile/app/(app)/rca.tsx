@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { saveRecord } from '../../lib/recordQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
@@ -33,7 +34,7 @@ const FACTORS = [
 
 export default function RcaScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const router = useRouter()
   const params = useLocalSearchParams<{ asset?: string; site?: string; serial?: string; brand?: string }>()
   const [rows, setRows] = useState<Rca[]>([])
@@ -79,9 +80,9 @@ export default function RcaScreen() {
 
   async function create() {
     if (saving) return
-    if (!rootCause.trim()) { Alert.alert('Missing root cause', 'Describe the identified root cause.'); return }
+    if (!rootCause.trim()) { Alert.alert(t('modules.rca.missingCause')); return }
     setSaving(true)
-    const { error } = await supabase.from('rca_records').insert({
+    const res = await saveRecord('rca_records', {
       asset_no: asset.trim() || null,
       tyre_serial: serial.trim() || null,
       brand: brand.trim() || null,
@@ -95,7 +96,7 @@ export default function RcaScreen() {
       created_by: profile?.id ?? null,
     })
     setSaving(false)
-    if (error) { Alert.alert('Could not save', error.message); return }
+    if (res.offline) Alert.alert(t('modules.common.offlineSaved'))
     setShowForm(false); setRootCause(''); setFactors([]); setKm(''); setSerial(''); setPhotos([])
     load()
   }
@@ -108,8 +109,8 @@ export default function RcaScreen() {
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>Root Cause Analysis</Text>
-          <Text style={[styles.sub, { textAlign }]}>{rows.length} record{rows.length === 1 ? '' : 's'}</Text>
+          <Text style={[styles.title, { textAlign }]}>{t('modules.rca.title')}</Text>
+          <Text style={[styles.sub, { textAlign }]}>{rows.length} {t('modules.rca.records')}</Text>
         </View>
         {mayCreate && (
           <TouchableOpacity style={styles.newBtn} onPress={() => setShowForm(true)}>
@@ -126,7 +127,7 @@ export default function RcaScreen() {
           keyExtractor={i => i.id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
-          ListEmptyComponent={<View style={styles.empty}><Ionicons name="search-outline" size={48} color="#cbd5e1" /><Text style={styles.emptyText}>No analyses yet</Text></View>}
+          ListEmptyComponent={<View style={styles.empty}><Ionicons name="search-outline" size={48} color="#cbd5e1" /><Text style={styles.emptyText}>{t('modules.rca.none')}</Text></View>}
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.rcaIcon}><Ionicons name="git-network-outline" size={18} color="#7c3aed" /></View>
@@ -151,44 +152,44 @@ export default function RcaScreen() {
         <KeyboardAvoidingView style={styles.modalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.sheet}>
             <View style={[styles.sheetHead, isRTL && styles.rowR]}>
-              <Text style={styles.sheetTitle}>New Analysis</Text>
+              <Text style={styles.sheetTitle}>{t('modules.rca.new')}</Text>
               <TouchableOpacity onPress={() => setShowForm(false)}><Ionicons name="close" size={24} color="#64748b" /></TouchableOpacity>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled">
               <View style={styles.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Asset No.</Text>
+                  <Text style={styles.label}>{t('modules.common.asset')}</Text>
                   <TextInput style={styles.input} placeholder="TM-001" placeholderTextColor="#94a3b8" value={asset} onChangeText={setAsset} autoCapitalize="characters" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Serial</Text>
+                  <Text style={styles.label}>{t('modules.common.serial')}</Text>
                   <TextInput style={styles.input} placeholder="Tyre serial" placeholderTextColor="#94a3b8" value={serial} onChangeText={setSerial} autoCapitalize="characters" />
                 </View>
               </View>
               <View style={styles.row2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Brand</Text>
+                  <Text style={styles.label}>{t('modules.common.brand')}</Text>
                   <TextInput style={styles.input} placeholder="Brand" placeholderTextColor="#94a3b8" value={brand} onChangeText={setBrand} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Km at failure</Text>
+                  <Text style={styles.label}>{t('modules.rca.kmFailure')}</Text>
                   <TextInput style={styles.input} placeholder="km" placeholderTextColor="#94a3b8" value={km} onChangeText={setKm} keyboardType="numeric" />
                 </View>
               </View>
-              <Text style={styles.label}>Contributing factors</Text>
+              <Text style={styles.label}>{t('modules.rca.factors')}</Text>
               <View style={styles.chipRow}>
                 {FACTORS.map(f => (
                   <TouchableOpacity key={f} style={[styles.chip, factors.includes(f) && styles.chipActive]} onPress={() => toggleFactor(f)}>
-                    <Text style={[styles.chipText, factors.includes(f) && styles.chipTextActive]}>{f}</Text>
+                    <Text style={[styles.chipText, factors.includes(f) && styles.chipTextActive]}>{t(`modules.factors.${f}`)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
-              <Text style={styles.label}>Root cause</Text>
-              <TextInput style={[styles.input, styles.textarea]} placeholder="What caused the failure…" placeholderTextColor="#94a3b8" value={rootCause} onChangeText={setRootCause} multiline />
-              <Text style={styles.label}>Photos</Text>
+              <Text style={styles.label}>{t('modules.rca.rootCause')}</Text>
+              <TextInput style={[styles.input, styles.textarea]} placeholder={t('modules.rca.rootCausePh')} placeholderTextColor="#94a3b8" value={rootCause} onChangeText={setRootCause} multiline />
+              <Text style={styles.label}>{t('modules.common.photos')}</Text>
               <PhotoCapture value={photos} onChange={setPhotos} tint="#7c3aed" />
               <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={create} disabled={saving}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Analysis</Text>}
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>{t('modules.rca.save')}</Text>}
               </TouchableOpacity>
             </ScrollView>
           </View>

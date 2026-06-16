@@ -6,10 +6,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { saveRecord } from '../../lib/recordQueue'
 import PhotoCapture from '../../components/PhotoCapture'
 import { UserRole } from '../../lib/types'
 
@@ -22,10 +22,16 @@ const DUE_PRESETS = [
   { label: '1 week', days: 7 },
   { label: '2 weeks', days: 14 },
 ]
+const DUE_LABEL_KEY: Record<string, string> = {
+  'No date': 'modules.reportIssue.dueNone',
+  '3 days': 'modules.reportIssue.due3',
+  '1 week': 'modules.reportIssue.due1w',
+  '2 weeks': 'modules.reportIssue.due2w',
+}
 
 export default function ReportIssueScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const router = useRouter()
   const params = useLocalSearchParams<{ asset?: string; site?: string; serial?: string }>()
   const { allowed } = useRoleGuard(ROLES)
@@ -43,10 +49,10 @@ export default function ReportIssueScreen() {
 
   async function submit() {
     if (saving) return
-    if (!title.trim()) { Alert.alert('Missing title', 'Please describe the issue briefly.'); return }
+    if (!title.trim()) { Alert.alert(t('modules.reportIssue.raisedTitle'), t('modules.reportIssue.missingTitle')); return }
     setSaving(true)
     const due = dueDays != null ? new Date(Date.now() + dueDays * 86400000).toISOString() : null
-    const { error } = await supabase.from('corrective_actions').insert({
+    const res = await saveRecord('corrective_actions', {
       title: title.trim(),
       priority,
       site: site.trim() || null,
@@ -61,8 +67,7 @@ export default function ReportIssueScreen() {
       created_by: profile?.id ?? null,
     })
     setSaving(false)
-    if (error) { Alert.alert('Could not submit', error.message); return }
-    Alert.alert('Issue raised', 'The corrective action has been created.', [
+    Alert.alert(res.offline ? t('modules.common.offlineSaved') : t('modules.reportIssue.raisedTitle'), t('modules.reportIssue.raisedMsg'), [
       { text: 'OK', onPress: () => router.replace('/(app)/tasks') },
     ])
   }
@@ -76,21 +81,21 @@ export default function ReportIssueScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
-        <Text style={[styles.title, { textAlign }]}>Report an Issue</Text>
+        <Text style={[styles.title, { textAlign }]}>{t('modules.reportIssue.title')}</Text>
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Text style={[styles.label, { textAlign }]}>What's the problem?</Text>
+          <Text style={[styles.label, { textAlign }]}>{t('modules.reportIssue.problem')}</Text>
           <TextInput
             style={[styles.input, { textAlign }]}
-            placeholder="e.g. Rapid wear on front-left tyre"
+            placeholder={t('modules.reportIssue.problemPh')}
             placeholderTextColor="#94a3b8"
             value={title}
             onChangeText={setTitle}
           />
 
-          <Text style={[styles.label, { textAlign }]}>Priority</Text>
+          <Text style={[styles.label, { textAlign }]}>{t('modules.common.priority')}</Text>
           <View style={styles.chipRow}>
             {PRIORITIES.map(p => (
               <TouchableOpacity
@@ -98,23 +103,23 @@ export default function ReportIssueScreen() {
                 style={[styles.chip, priority === p && { backgroundColor: PRI_COLOR[p], borderColor: PRI_COLOR[p] }]}
                 onPress={() => setPriority(p)}
               >
-                <Text style={[styles.chipText, priority === p && styles.chipTextActive]}>{p}</Text>
+                <Text style={[styles.chipText, priority === p && styles.chipTextActive]}>{t(`modules.priority.${p}`)}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { textAlign }]}>Site</Text>
+              <Text style={[styles.label, { textAlign }]}>{t('modules.common.site')}</Text>
               <TextInput style={[styles.input, { textAlign }]} placeholder="Site" placeholderTextColor="#94a3b8" value={site} onChangeText={setSite} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { textAlign }]}>Asset No.</Text>
+              <Text style={[styles.label, { textAlign }]}>{t('modules.common.asset')}</Text>
               <TextInput style={[styles.input, { textAlign }]} placeholder="Asset" placeholderTextColor="#94a3b8" value={assetNo} onChangeText={setAssetNo} autoCapitalize="characters" />
             </View>
           </View>
 
-          <Text style={[styles.label, { textAlign }]}>Due in</Text>
+          <Text style={[styles.label, { textAlign }]}>{t('modules.reportIssue.dueIn')}</Text>
           <View style={styles.chipRow}>
             {DUE_PRESETS.map(d => (
               <TouchableOpacity
@@ -122,29 +127,29 @@ export default function ReportIssueScreen() {
                 style={[styles.chip, dueDays === d.days && styles.chipActiveGreen]}
                 onPress={() => setDueDays(d.days)}
               >
-                <Text style={[styles.chipText, dueDays === d.days && styles.chipTextActive]}>{d.label}</Text>
+                <Text style={[styles.chipText, dueDays === d.days && styles.chipTextActive]}>{t(DUE_LABEL_KEY[d.label])}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={[styles.label, { textAlign }]}>Details (optional)</Text>
+          <Text style={[styles.label, { textAlign }]}>{`${t('modules.common.details')} ${t('modules.common.optional')}`}</Text>
           <TextInput
             style={[styles.input, styles.textarea, { textAlign }]}
-            placeholder="Anything else the team should know…"
+            placeholder={t('modules.reportIssue.detailsPh')}
             placeholderTextColor="#94a3b8"
             value={description}
             onChangeText={setDescription}
             multiline
           />
 
-          <Text style={[styles.label, { textAlign }]}>Photos (optional)</Text>
+          <Text style={[styles.label, { textAlign }]}>{`${t('modules.common.photos')} ${t('modules.common.optional')}`}</Text>
           <PhotoCapture value={photos} onChange={setPhotos} tint="#e11d48" />
 
           <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={submit} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : (
               <>
                 <Ionicons name="send" size={18} color="#fff" />
-                <Text style={styles.submitText}>Raise Issue</Text>
+                <Text style={styles.submitText}>{t('modules.reportIssue.raise')}</Text>
               </>
             )}
           </TouchableOpacity>

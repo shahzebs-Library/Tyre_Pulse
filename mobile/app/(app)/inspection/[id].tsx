@@ -31,7 +31,7 @@ const RISK_COLOR: Record<string, string> = {
 
 export default function InspectionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const router = useRouter()
   const { width } = useWindowDimensions()
   const [insp, setInsp] = useState<Inspection | null>(null)
@@ -65,33 +65,33 @@ export default function InspectionDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
-        <Text style={[styles.title, { textAlign }]} numberOfLines={1}>Inspection</Text>
+        <Text style={[styles.title, { textAlign }]} numberOfLines={1}>{t('modules.inspectionDetail.title')}</Text>
       </View>
 
       {loading ? (
         <ActivityIndicator color="#16a34a" style={{ marginTop: 40 }} />
       ) : !insp ? (
-        <View style={styles.empty}><Ionicons name="document-outline" size={48} color="#cbd5e1" /><Text style={styles.emptyText}>Not found</Text></View>
+        <View style={styles.empty}><Ionicons name="document-outline" size={48} color="#cbd5e1" /><Text style={styles.emptyText}>{t('modules.inspectionDetail.notFound')}</Text></View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.card}>
             <View style={[styles.cardTop, isRTL && styles.rowR]}>
               <Text style={[styles.iTitle, { textAlign }]} numberOfLines={2}>{insp.title}</Text>
               {insp.locked && (
-                <View style={styles.lockBadge}><Ionicons name="lock-closed" size={11} color="#64748b" /><Text style={styles.lockText}>Locked</Text></View>
+                <View style={styles.lockBadge}><Ionicons name="lock-closed" size={11} color="#64748b" /><Text style={styles.lockText}>{t('modules.inspectionDetail.locked')}</Text></View>
               )}
             </View>
             <View style={styles.metaGrid}>
-              <Meta icon="bus-outline" label="Asset" value={insp.asset_no} />
-              <Meta icon="location-outline" label="Site" value={insp.site} />
-              <Meta icon="calendar-outline" label="Date" value={insp.inspection_date} />
-              <Meta icon="person-outline" label="Inspector" value={insp.inspector} />
+              <Meta icon="bus-outline" label={t('modules.inspectionDetail.asset')} value={insp.asset_no} />
+              <Meta icon="location-outline" label={t('modules.inspectionDetail.site')} value={insp.site} />
+              <Meta icon="calendar-outline" label={t('modules.inspectionDetail.date')} value={insp.inspection_date} />
+              <Meta icon="person-outline" label={t('modules.inspectionDetail.inspector')} value={insp.inspector} />
             </View>
           </View>
 
           {shownPositions.length > 0 && (
             <View style={styles.card}>
-              <Text style={[styles.section, { textAlign }]}>Tyre Layout</Text>
+              <Text style={[styles.section, { textAlign }]}>{t('modules.inspectionDetail.tyreLayout')}</Text>
               <View style={{ alignItems: 'center' }}>
                 <VehicleTyreDiagram
                   vehicleType={insp.vehicle_type ?? ''}
@@ -106,9 +106,9 @@ export default function InspectionDetailScreen() {
           )}
 
           <View style={styles.card}>
-            <Text style={[styles.section, { textAlign }]}>Tyre Conditions ({Object.keys(conditions).length})</Text>
+            <Text style={[styles.section, { textAlign }]}>{`${t('modules.inspectionDetail.conditions')} (${Object.keys(conditions).length})`}</Text>
             {Object.keys(conditions).length === 0 ? (
-              <Text style={styles.muted}>No tyre data recorded.</Text>
+              <Text style={styles.muted}>{t('modules.inspectionDetail.noData')}</Text>
             ) : (
               Object.entries(conditions).map(([pos, c]: [string, any]) => {
                 const rk = riskOf(c)
@@ -132,7 +132,7 @@ export default function InspectionDetailScreen() {
 
           {insp.notes ? (
             <View style={styles.card}>
-              <Text style={[styles.section, { textAlign }]}>Notes</Text>
+              <Text style={[styles.section, { textAlign }]}>{t('modules.inspectionDetail.notes')}</Text>
               <Text style={[styles.notes, { textAlign }]}>{insp.notes}</Text>
             </View>
           ) : null}

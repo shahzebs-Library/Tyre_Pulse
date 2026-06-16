@@ -32,7 +32,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function VehiclesScreen() {
   const { profile } = useAuth()
-  const { isRTL } = useLanguage()
+  const { t, isRTL } = useLanguage()
   const router = useRouter()
   const [rows, setRows] = useState<Vehicle[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,8 +83,8 @@ export default function VehiclesScreen() {
           <Ionicons name={isRTL ? 'arrow-forward' : 'arrow-back'} size={22} color="#0f172a" />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { textAlign }]}>Vehicles</Text>
-          <Text style={[styles.sub, { textAlign }]}>{rows.length} in fleet</Text>
+          <Text style={[styles.title, { textAlign }]}>{t('modules.vehicles.title')}</Text>
+          <Text style={[styles.sub, { textAlign }]}>{rows.length} {t('modules.vehicles.inFleet')}</Text>
         </View>
       </View>
 
@@ -92,7 +92,7 @@ export default function VehiclesScreen() {
         <Ionicons name="search" size={18} color="#94a3b8" />
         <TextInput
           style={[styles.search, { textAlign }]}
-          placeholder="Search asset, make, type, site…"
+          placeholder={t('modules.vehicles.searchPh')}
           placeholderTextColor="#94a3b8"
           value={query}
           onChangeText={setQuery}
@@ -110,7 +110,7 @@ export default function VehiclesScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="bus-outline" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyText}>No vehicles found</Text>
+              <Text style={styles.emptyText}>{t('modules.vehicles.none')}</Text>
             </View>
           }
           renderItem={({ item }) => {

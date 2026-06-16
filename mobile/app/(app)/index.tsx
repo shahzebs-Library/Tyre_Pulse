@@ -11,6 +11,8 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { getQueue, getPendingCount, syncQueue } from '../../lib/offlineQueue'
 import { supabase } from '../../lib/supabase'
 import SyncBanner from '../../components/SyncBanner'
+import { useRealtime } from '../../hooks/useRealtime'
+import { canViewAccidents } from '../../lib/permissions'
 
 export default function HomeScreen() {
   const { profile } = useAuth()
@@ -58,6 +60,9 @@ export default function HomeScreen() {
   }, [profile?.id])
 
   useEffect(() => { load() }, [load])
+  // Live updates — new inspections/alerts/tasks reflect without manual refresh.
+  useRealtime('inspections', load)
+  useRealtime('corrective_actions', load)
 
   async function onRefresh() {
     setRefreshing(true)
@@ -160,6 +165,25 @@ export default function HomeScreen() {
             color="#94a3b8"
           />
         </TouchableOpacity>
+
+        {/* Modules */}
+        <View style={styles.modulesGrid}>
+          {[
+            { key: 'tasks',    label: t('home.tasks') || 'Tasks',    icon: 'checkbox-outline',  tint: '#16a34a', go: () => router.push('/(app)/tasks') },
+            { key: 'alerts',   label: t('home.alerts') || 'Alerts',  icon: 'alert-circle-outline', tint: '#dc2626', go: () => router.push('/(app)/alerts') },
+            { key: 'history',  label: t('tabs.history') || 'History', icon: 'time-outline',      tint: '#2563eb', go: () => router.push('/(app)/history') },
+            ...(canViewAccidents(profile?.role)
+              ? [{ key: 'accident', label: t('tabs.accident') || 'Accidents', icon: 'warning-outline', tint: '#ea580c', go: () => router.push('/(app)/accident/dashboard') }]
+              : []),
+          ].map(m => (
+            <TouchableOpacity key={m.key} style={styles.moduleCard} onPress={m.go} activeOpacity={0.85}>
+              <View style={[styles.moduleIcon, { backgroundColor: m.tint + '14' }]}>
+                <Ionicons name={m.icon as any} size={22} color={m.tint} />
+              </View>
+              <Text style={styles.moduleLabel}>{m.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {/* Recent */}
         {recentInspections.length > 0 && (
@@ -305,6 +329,15 @@ const styles = StyleSheet.create({
   },
   scanTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
   scanSubtitle: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  modulesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  moduleCard: {
+    width: '47%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#fff', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+  },
+  moduleIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  moduleLabel: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
   section: { gap: 10 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionHeaderRTL: { flexDirection: 'row-reverse' },

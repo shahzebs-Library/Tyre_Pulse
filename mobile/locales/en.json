@@ -52,6 +52,8 @@
     "startSubtitle": "Tap to begin tyre checklist",
     "recentInspections": "Recent Inspections",
     "viewAll": "View all",
+    "tasks": "Tasks",
+    "alerts": "Alerts",
     "pending": "Pending",
     "failed": "Failed",
     "synced": "Synced",

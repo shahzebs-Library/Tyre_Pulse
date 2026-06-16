@@ -79,6 +79,8 @@ export default function AppLayout() {
 
       {/* Hidden routes */}
       <Tabs.Screen name="scanner"         options={{ href: null }} />
+      <Tabs.Screen name="tasks"           options={{ href: null }} />
+      <Tabs.Screen name="alerts"          options={{ href: null }} />
       <Tabs.Screen name="accident/report" options={{ href: null }} />
       <Tabs.Screen name="accident/[id]"   options={{ href: null }} />
       <Tabs.Screen name="admin/ai-chat"   options={{ href: null }} />

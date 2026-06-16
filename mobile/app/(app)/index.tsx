@@ -12,7 +12,9 @@ import { getQueue, getPendingCount, syncQueue } from '../../lib/offlineQueue'
 import { supabase } from '../../lib/supabase'
 import SyncBanner from '../../components/SyncBanner'
 import { useRealtime } from '../../hooks/useRealtime'
-import { canViewAccidents } from '../../lib/permissions'
+import {
+  canViewAccidents, canInspect, canAccessAdmin, canUseAI, canReportAccident,
+} from '../../lib/permissions'
 
 export default function HomeScreen() {
   const { profile } = useAuth()
@@ -22,6 +24,8 @@ export default function HomeScreen() {
   const [recentInspections, setRecentInspections] = useState<any[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [todayCount, setTodayCount] = useState(0)
+  const [openTasks, setOpenTasks] = useState(0)
+  const [criticalAlerts, setCriticalAlerts] = useState(0)
 
   const today = new Date().toLocaleDateString(isRTL ? 'ar-SA' : 'en-GB', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -57,7 +61,16 @@ export default function HomeScreen() {
 
     const combined = [...offlineItems, ...(dbItems ?? [])].slice(0, 5)
     setRecentInspections(combined)
-  }, [profile?.id])
+
+    // Lightweight fleet counts (head-only) for role-adaptive stats
+    const cc = profile?.country
+    let taskQ = supabase.from('corrective_actions').select('id', { count: 'exact', head: true }).neq('status', 'Closed')
+    let alertQ = supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('risk_level', 'Critical')
+    if (cc) { taskQ = taskQ.or(`country.eq.${cc},country.is.null`); alertQ = alertQ.or(`country.eq.${cc},country.is.null`) }
+    const [{ count: tCount }, { count: aCount }] = await Promise.all([taskQ, alertQ])
+    setOpenTasks(tCount ?? 0)
+    setCriticalAlerts(aCount ?? 0)
+  }, [profile?.id, profile?.country])
 
   useEffect(() => { load() }, [load])
   // Live updates — new inspections/alerts/tasks reflect without manual refresh.
@@ -81,6 +94,40 @@ export default function HomeScreen() {
 
   const textAlign = isRTL ? 'right' : 'left'
 
+  // ── Role-adaptive surface: each user sees their own actions/modules ──────────
+  const role = profile?.role
+  const flags = {
+    inspect: canInspect(role),
+    accidents: canViewAccidents(role),
+    reportAccident: canReportAccident(role),
+    admin: canAccessAdmin(role),
+    ai: canUseAI(role),
+  }
+  const roleLabel: Record<string, string> = {
+    admin: 'Administrator', manager: 'Manager', director: 'Director',
+    inspector: 'Inspector', tyre_man: 'Tyre Technician', driver: 'Driver', viewer: 'Viewer',
+  }
+
+  // Primary call-to-action chosen by what the role actually does
+  const primary = flags.inspect
+    ? { title: t('home.startInspection'), subtitle: t('home.startSubtitle'), icon: 'add-circle', go: () => router.push('/(app)/inspection/new') }
+    : flags.reportAccident
+    ? { title: t('tabs.accident') || 'Report Accident', subtitle: 'Log a new incident', icon: 'warning', go: () => router.push('/(app)/accident/report') }
+    : flags.accidents
+    ? { title: 'Open Dashboard', subtitle: 'Fleet accidents & claims', icon: 'grid', go: () => router.push('/(app)/accident/dashboard') }
+    : { title: t('home.alerts') || 'View Alerts', subtitle: 'Fleet tyre risks', icon: 'alert-circle', go: () => router.push('/(app)/alerts') }
+
+  // Module tiles, filtered by role
+  const modules = [
+    { key: 'tasks',    label: t('home.tasks') || 'Tasks',     icon: 'checkbox-outline',     tint: '#16a34a', show: true,             go: () => router.push('/(app)/tasks') },
+    { key: 'alerts',   label: t('home.alerts') || 'Alerts',   icon: 'alert-circle-outline', tint: '#dc2626', show: true,             go: () => router.push('/(app)/alerts') },
+    { key: 'history',  label: t('tabs.history') || 'History',  icon: 'time-outline',         tint: '#2563eb', show: true,             go: () => router.push('/(app)/history') },
+    { key: 'accident', label: t('tabs.accident') || 'Accidents', icon: 'warning-outline',    tint: '#ea580c', show: flags.accidents,  go: () => router.push('/(app)/accident/dashboard') },
+    { key: 'scan',     label: t('home.scanAsset') || 'Scan',   icon: 'scan-outline',         tint: '#0891b2', show: flags.inspect,    go: () => router.push('/(app)/scanner') },
+    { key: 'ai',       label: 'AI Assistant',                  icon: 'sparkles-outline',     tint: '#7c3aed', show: flags.ai,         go: () => router.push('/(app)/admin/ai-chat') },
+    { key: 'admin',    label: t('tabs.admin') || 'Admin',      icon: 'shield-outline',       tint: '#7c3aed', show: flags.admin,      go: () => router.push('/(app)/admin') },
+  ].filter(m => m.show)
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#f0f5f1" />
@@ -96,7 +143,14 @@ export default function HomeScreen() {
         <View style={[styles.header, isRTL && styles.headerRTL]}>
           <View>
             <Text style={[styles.greeting, { textAlign }]}>{greeting}, {firstName} 👋</Text>
-            <Text style={[styles.date, { textAlign }]}>{today}</Text>
+            <View style={[styles.subRow, isRTL && styles.headerRTL]}>
+              <Text style={[styles.date, { textAlign }]}>{today}</Text>
+              {role && (
+                <View style={styles.roleChip}>
+                  <Text style={styles.roleChipText}>{roleLabel[role] ?? role}</Text>
+                </View>
+              )}
+            </View>
           </View>
           {pendingCount > 0 && (
             <View style={styles.pendingBadge}>
@@ -106,38 +160,47 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Stats row */}
+        {/* Stats row — field users see inspection stats, managers see fleet stats */}
         <View style={styles.statsRow}>
+          {flags.inspect ? (
+            <>
+              <View style={styles.statCard}>
+                <Text style={styles.statNumber}>{todayCount}</Text>
+                <Text style={styles.statLabel}>{t('home.today')}</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={[styles.statNumber, pendingCount > 0 && { color: '#f59e0b' }]}>{pendingCount}</Text>
+                <Text style={styles.statLabel}>{t('home.pendingSync')}</Text>
+              </View>
+            </>
+          ) : (
+            <TouchableOpacity style={styles.statCard} activeOpacity={0.85} onPress={() => router.push('/(app)/tasks')}>
+              <Text style={styles.statNumber}>{openTasks}</Text>
+              <Text style={styles.statLabel}>{t('home.tasks') || 'Open Tasks'}</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.statCard} activeOpacity={0.85} onPress={() => router.push('/(app)/alerts')}>
+            <Text style={[styles.statNumber, criticalAlerts > 0 && { color: '#dc2626' }]}>{criticalAlerts}</Text>
+            <Text style={styles.statLabel}>{t('home.alerts') || 'Critical'}</Text>
+          </TouchableOpacity>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{todayCount}</Text>
-            <Text style={styles.statLabel}>{t('home.today')}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={[styles.statNumber, pendingCount > 0 && { color: '#f59e0b' }]}>
-              {pendingCount}
-            </Text>
-            <Text style={styles.statLabel}>{t('home.pendingSync')}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="checkmark-circle" size={22} color="#16a34a" />
-            <Text style={styles.statLabel}>
-              {profile?.site ?? t('home.allSites')}
-            </Text>
+            <Ionicons name="location" size={20} color="#16a34a" />
+            <Text style={styles.statLabel}>{profile?.site ?? t('home.allSites')}</Text>
           </View>
         </View>
 
-        {/* Primary CTA */}
+        {/* Primary CTA — adapts to the user's role */}
         <TouchableOpacity
           style={styles.ctaButton}
-          onPress={() => router.push('/(app)/inspection/new')}
+          onPress={primary.go}
           activeOpacity={0.88}
         >
           <View style={styles.ctaIcon}>
-            <Ionicons name="add-circle" size={28} color="#fff" />
+            <Ionicons name={primary.icon as any} size={28} color="#fff" />
           </View>
           <View style={styles.ctaText}>
-            <Text style={styles.ctaTitle}>{t('home.startInspection')}</Text>
-            <Text style={styles.ctaSubtitle}>{t('home.startSubtitle')}</Text>
+            <Text style={styles.ctaTitle}>{primary.title}</Text>
+            <Text style={styles.ctaSubtitle}>{primary.subtitle}</Text>
           </View>
           <Ionicons
             name={isRTL ? 'arrow-back-circle' : 'arrow-forward-circle'}
@@ -146,7 +209,8 @@ export default function HomeScreen() {
           />
         </TouchableOpacity>
 
-        {/* Secondary: Scanner */}
+        {/* Secondary: Scanner — only for inspection-capable roles */}
+        {flags.inspect && (
         <TouchableOpacity
           style={styles.scanButton}
           onPress={() => router.push('/(app)/scanner')}
@@ -165,17 +229,11 @@ export default function HomeScreen() {
             color="#94a3b8"
           />
         </TouchableOpacity>
+        )}
 
-        {/* Modules */}
+        {/* Modules — filtered to the user's role */}
         <View style={styles.modulesGrid}>
-          {[
-            { key: 'tasks',    label: t('home.tasks') || 'Tasks',    icon: 'checkbox-outline',  tint: '#16a34a', go: () => router.push('/(app)/tasks') },
-            { key: 'alerts',   label: t('home.alerts') || 'Alerts',  icon: 'alert-circle-outline', tint: '#dc2626', go: () => router.push('/(app)/alerts') },
-            { key: 'history',  label: t('tabs.history') || 'History', icon: 'time-outline',      tint: '#2563eb', go: () => router.push('/(app)/history') },
-            ...(canViewAccidents(profile?.role)
-              ? [{ key: 'accident', label: t('tabs.accident') || 'Accidents', icon: 'warning-outline', tint: '#ea580c', go: () => router.push('/(app)/accident/dashboard') }]
-              : []),
-          ].map(m => (
+          {modules.map(m => (
             <TouchableOpacity key={m.key} style={styles.moduleCard} onPress={m.go} activeOpacity={0.85}>
               <View style={[styles.moduleIcon, { backgroundColor: m.tint + '14' }]}>
                 <Ionicons name={m.icon as any} size={22} color={m.tint} />
@@ -251,6 +309,9 @@ const styles = StyleSheet.create({
   headerRTL: { flexDirection: 'row-reverse' },
   greeting: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
   date: { fontSize: 13, color: '#64748b', marginTop: 3 },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  roleChip: { backgroundColor: 'rgba(22,163,74,0.1)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 2 },
+  roleChipText: { fontSize: 10, fontWeight: '800', color: '#15803d', letterSpacing: 0.3 },
   pendingBadge: {
     alignItems: 'center',
     backgroundColor: 'rgba(245,158,11,0.12)',

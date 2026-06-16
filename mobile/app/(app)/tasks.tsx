@@ -103,6 +103,11 @@ export default function TasksScreen() {
           <Text style={[styles.title, { textAlign }]}>Corrective Actions</Text>
           <Text style={[styles.sub, { textAlign }]}>{openCount} open task{openCount === 1 ? '' : 's'}</Text>
         </View>
+        {canResolve && (
+          <TouchableOpacity style={styles.newBtn} onPress={() => router.push('/(app)/report-issue')}>
+            <Ionicons name="add" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.filters}>
@@ -184,6 +189,7 @@ const styles = StyleSheet.create({
   backBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },
   title: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
   sub: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  newBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center' },
   filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' },
   chipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },

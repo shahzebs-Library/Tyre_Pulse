@@ -126,6 +126,8 @@ export default function HomeScreen() {
     { key: 'tasks',    label: t('home.tasks') || 'Tasks',     icon: 'checkbox-outline',     tint: '#16a34a', show: true,             count: openTasks,      go: () => router.push('/(app)/tasks') },
     { key: 'alerts',   label: t('home.alerts') || 'Alerts',   icon: 'alert-circle-outline', tint: '#dc2626', show: true,             count: criticalAlerts, go: () => router.push('/(app)/alerts') },
     { key: 'vehicles', label: 'Vehicles',                     icon: 'bus-outline',          tint: '#0d9488', show: true,             count: 0,              go: () => router.push('/(app)/vehicles') },
+    { key: 'workorders', label: 'Work Orders',                icon: 'construct-outline',    tint: '#ca8a04', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/work-orders') },
+    { key: 'report',   label: 'Report Issue',                 icon: 'flag-outline',         tint: '#e11d48', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/report-issue') },
     { key: 'history',  label: t('tabs.history') || 'History',  icon: 'time-outline',         tint: '#2563eb', show: true,             count: 0,              go: () => router.push('/(app)/history') },
     { key: 'accident', label: t('tabs.accident') || 'Accidents', icon: 'warning-outline',    tint: '#ea580c', show: flags.accidents,  count: openAccidents,  go: () => router.push('/(app)/accident/dashboard') },
     { key: 'scan',     label: t('home.scanAsset') || 'Scan',   icon: 'scan-outline',         tint: '#0891b2', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/scanner') },

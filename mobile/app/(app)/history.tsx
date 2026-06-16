@@ -4,6 +4,7 @@ import {
   RefreshControl, StatusBar, ActivityIndicator, TextInput,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { getQueue, syncQueue } from '../../lib/offlineQueue'
@@ -32,6 +33,7 @@ const FILTERS: FilterKey[] = ['all', 'synced', 'pending', 'failed']
 export default function HistoryScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
+  const router = useRouter()
   const [items, setItems] = useState<HistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -132,8 +134,14 @@ export default function HistoryScreen() {
       : item.sync_status === 'pending' ? t('common.pending')
       : t('common.failed')
 
+    const openable = !item.isOffline
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={openable ? 0.7 : 1}
+        disabled={!openable}
+        onPress={() => openable && router.push(`/(app)/inspection/${item.id}`)}
+      >
         <View style={styles.cardLeft}>
           <View style={styles.cardIcon}>
             <Ionicons name="document-text-outline" size={20} color="#16a34a" />
@@ -172,7 +180,7 @@ export default function HistoryScreen() {
             </View>
           )}
         </View>
-      </View>
+      </TouchableOpacity>
     )
   }
 

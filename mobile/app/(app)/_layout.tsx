@@ -1,3 +1,4 @@
+import { useEffect, useState, useCallback } from 'react'
 import { Tabs, Redirect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { View, Text, StyleSheet } from 'react-native'
@@ -5,6 +6,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { ActivityIndicator } from 'react-native'
 import { useNetworkSync } from '../../hooks/useNetworkSync'
+import { useRealtime } from '../../hooks/useRealtime'
+import { supabase } from '../../lib/supabase'
 import { TAB_BAR } from '../../lib/permissions'
 
 // Custom tab bar icon with active background pill
@@ -26,8 +29,20 @@ function TabIcon({
 export default function AppLayout() {
   const { user, loading, profile } = useAuth()
   const { t } = useLanguage()
+  const [accidentBadge, setAccidentBadge] = useState(0)
 
   useNetworkSync()
+
+  const loadBadges = useCallback(async () => {
+    if (!user) return
+    let q = supabase.from('accidents').select('id', { count: 'exact', head: true }).neq('status', 'closed')
+    if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
+    const { count } = await q
+    setAccidentBadge(count ?? 0)
+  }, [user, profile?.country])
+
+  useEffect(() => { loadBadges() }, [loadBadges])
+  useRealtime('accidents', loadBadges, { enabled: !!user })
 
   if (loading) {
     return (
@@ -71,6 +86,8 @@ export default function AppLayout() {
                 />
               ),
               tabBarActiveTintColor: tab.activeTint ?? '#16a34a',
+              tabBarBadge: tab.name === 'accident/dashboard' && accidentBadge > 0 ? accidentBadge : undefined,
+              tabBarBadgeStyle: { backgroundColor: '#dc2626', fontSize: 10, fontWeight: '700' },
               href: allowed ? undefined : null,
             }}
           />
@@ -87,6 +104,8 @@ export default function AppLayout() {
       <Tabs.Screen name="report-issue"    options={{ href: null }} />
       <Tabs.Screen name="tyre-change"     options={{ href: null }} />
       <Tabs.Screen name="stock"           options={{ href: null }} />
+      <Tabs.Screen name="rca"             options={{ href: null }} />
+      <Tabs.Screen name="inspection/[id]" options={{ href: null }} />
       <Tabs.Screen name="accident/report" options={{ href: null }} />
       <Tabs.Screen name="accident/[id]"   options={{ href: null }} />
       <Tabs.Screen name="admin/ai-chat"   options={{ href: null }} />

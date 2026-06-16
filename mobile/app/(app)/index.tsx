@@ -132,6 +132,7 @@ export default function HomeScreen() {
     { key: 'report',   label: 'Report Issue',                 icon: 'flag-outline',         tint: '#e11d48', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/report-issue') },
     { key: 'history',  label: t('tabs.history') || 'History',  icon: 'time-outline',         tint: '#2563eb', show: true,             count: 0,              go: () => router.push('/(app)/history') },
     { key: 'accident', label: t('tabs.accident') || 'Accidents', icon: 'warning-outline',    tint: '#ea580c', show: flags.accidents,  count: openAccidents,  go: () => router.push('/(app)/accident/dashboard') },
+    { key: 'rca',      label: 'Root Cause',                   icon: 'git-network-outline',  tint: '#7c3aed', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/rca') },
     { key: 'scan',     label: t('home.scanAsset') || 'Scan',   icon: 'scan-outline',         tint: '#0891b2', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/scanner') },
     { key: 'team',     label: 'Team',                          icon: 'people-outline',       tint: '#1d4ed8', show: canManageUsers(role) || flags.admin, count: 0, go: () => router.push('/(app)/team') },
     { key: 'ai',       label: 'AI Assistant',                  icon: 'sparkles-outline',     tint: '#7c3aed', show: flags.ai,         count: 0,              go: () => router.push('/(app)/admin/ai-chat') },

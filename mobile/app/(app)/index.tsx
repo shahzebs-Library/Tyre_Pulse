@@ -13,7 +13,7 @@ import { supabase } from '../../lib/supabase'
 import SyncBanner from '../../components/SyncBanner'
 import { useRealtime } from '../../hooks/useRealtime'
 import {
-  canViewAccidents, canInspect, canAccessAdmin, canUseAI, canReportAccident,
+  canViewAccidents, canInspect, canAccessAdmin, canUseAI, canReportAccident, canManageUsers,
 } from '../../lib/permissions'
 
 export default function HomeScreen() {
@@ -26,6 +26,7 @@ export default function HomeScreen() {
   const [todayCount, setTodayCount] = useState(0)
   const [openTasks, setOpenTasks] = useState(0)
   const [criticalAlerts, setCriticalAlerts] = useState(0)
+  const [openAccidents, setOpenAccidents] = useState(0)
 
   const today = new Date().toLocaleDateString(isRTL ? 'ar-SA' : 'en-GB', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -67,9 +68,12 @@ export default function HomeScreen() {
     let taskQ = supabase.from('corrective_actions').select('id', { count: 'exact', head: true }).neq('status', 'Closed')
     let alertQ = supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('risk_level', 'Critical')
     if (cc) { taskQ = taskQ.or(`country.eq.${cc},country.is.null`); alertQ = alertQ.or(`country.eq.${cc},country.is.null`) }
-    const [{ count: tCount }, { count: aCount }] = await Promise.all([taskQ, alertQ])
+    let accQ = supabase.from('accidents').select('id', { count: 'exact', head: true }).neq('status', 'closed')
+    if (cc) accQ = accQ.or(`country.eq.${cc},country.is.null`)
+    const [{ count: tCount }, { count: aCount }, { count: accCount }] = await Promise.all([taskQ, alertQ, accQ])
     setOpenTasks(tCount ?? 0)
     setCriticalAlerts(aCount ?? 0)
+    setOpenAccidents(accCount ?? 0)
   }, [profile?.id, profile?.country])
 
   useEffect(() => { load() }, [load])
@@ -117,15 +121,17 @@ export default function HomeScreen() {
     ? { title: 'Open Dashboard', subtitle: 'Fleet accidents & claims', icon: 'grid', go: () => router.push('/(app)/accident/dashboard') }
     : { title: t('home.alerts') || 'View Alerts', subtitle: 'Fleet tyre risks', icon: 'alert-circle', go: () => router.push('/(app)/alerts') }
 
-  // Module tiles, filtered by role
+  // Module tiles, filtered by role; `count` drives a badge
   const modules = [
-    { key: 'tasks',    label: t('home.tasks') || 'Tasks',     icon: 'checkbox-outline',     tint: '#16a34a', show: true,             go: () => router.push('/(app)/tasks') },
-    { key: 'alerts',   label: t('home.alerts') || 'Alerts',   icon: 'alert-circle-outline', tint: '#dc2626', show: true,             go: () => router.push('/(app)/alerts') },
-    { key: 'history',  label: t('tabs.history') || 'History',  icon: 'time-outline',         tint: '#2563eb', show: true,             go: () => router.push('/(app)/history') },
-    { key: 'accident', label: t('tabs.accident') || 'Accidents', icon: 'warning-outline',    tint: '#ea580c', show: flags.accidents,  go: () => router.push('/(app)/accident/dashboard') },
-    { key: 'scan',     label: t('home.scanAsset') || 'Scan',   icon: 'scan-outline',         tint: '#0891b2', show: flags.inspect,    go: () => router.push('/(app)/scanner') },
-    { key: 'ai',       label: 'AI Assistant',                  icon: 'sparkles-outline',     tint: '#7c3aed', show: flags.ai,         go: () => router.push('/(app)/admin/ai-chat') },
-    { key: 'admin',    label: t('tabs.admin') || 'Admin',      icon: 'shield-outline',       tint: '#7c3aed', show: flags.admin,      go: () => router.push('/(app)/admin') },
+    { key: 'tasks',    label: t('home.tasks') || 'Tasks',     icon: 'checkbox-outline',     tint: '#16a34a', show: true,             count: openTasks,      go: () => router.push('/(app)/tasks') },
+    { key: 'alerts',   label: t('home.alerts') || 'Alerts',   icon: 'alert-circle-outline', tint: '#dc2626', show: true,             count: criticalAlerts, go: () => router.push('/(app)/alerts') },
+    { key: 'vehicles', label: 'Vehicles',                     icon: 'bus-outline',          tint: '#0d9488', show: true,             count: 0,              go: () => router.push('/(app)/vehicles') },
+    { key: 'history',  label: t('tabs.history') || 'History',  icon: 'time-outline',         tint: '#2563eb', show: true,             count: 0,              go: () => router.push('/(app)/history') },
+    { key: 'accident', label: t('tabs.accident') || 'Accidents', icon: 'warning-outline',    tint: '#ea580c', show: flags.accidents,  count: openAccidents,  go: () => router.push('/(app)/accident/dashboard') },
+    { key: 'scan',     label: t('home.scanAsset') || 'Scan',   icon: 'scan-outline',         tint: '#0891b2', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/scanner') },
+    { key: 'team',     label: 'Team',                          icon: 'people-outline',       tint: '#1d4ed8', show: canManageUsers(role) || flags.admin, count: 0, go: () => router.push('/(app)/team') },
+    { key: 'ai',       label: 'AI Assistant',                  icon: 'sparkles-outline',     tint: '#7c3aed', show: flags.ai,         count: 0,              go: () => router.push('/(app)/admin/ai-chat') },
+    { key: 'admin',    label: t('tabs.admin') || 'Admin',      icon: 'shield-outline',       tint: '#7c3aed', show: flags.admin,      count: 0,              go: () => router.push('/(app)/admin') },
   ].filter(m => m.show)
 
   return (
@@ -237,6 +243,11 @@ export default function HomeScreen() {
             <TouchableOpacity key={m.key} style={styles.moduleCard} onPress={m.go} activeOpacity={0.85}>
               <View style={[styles.moduleIcon, { backgroundColor: m.tint + '14' }]}>
                 <Ionicons name={m.icon as any} size={22} color={m.tint} />
+                {m.count > 0 && (
+                  <View style={[styles.moduleBadge, { backgroundColor: m.tint }]}>
+                    <Text style={styles.moduleBadgeText}>{m.count > 99 ? '99+' : m.count}</Text>
+                  </View>
+                )}
               </View>
               <Text style={styles.moduleLabel}>{m.label}</Text>
             </TouchableOpacity>
@@ -398,6 +409,8 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
   },
   moduleIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  moduleBadge: { position: 'absolute', top: -6, right: -6, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
+  moduleBadgeText: { fontSize: 9, fontWeight: '800', color: '#fff' },
   moduleLabel: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
   section: { gap: 10 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

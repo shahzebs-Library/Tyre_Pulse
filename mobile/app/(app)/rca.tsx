@@ -11,7 +11,8 @@ import { saveRecord } from '../../lib/recordQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
-import { canInspect } from '../../lib/permissions'
+import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { canDoRca } from '../../lib/permissions'
 import PhotoCapture from '../../components/PhotoCapture'
 
 interface Rca {
@@ -53,8 +54,9 @@ export default function RcaScreen() {
   const [photos, setPhotos] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
+  const { allowed } = useRoleGuard(['inspector', 'admin', 'manager', 'director'])
   const textAlign = isRTL ? 'right' : 'left'
-  const mayCreate = canInspect(profile?.role)
+  const mayCreate = canDoRca(profile?.role)
 
   const load = useCallback(async () => {
     let q = supabase
@@ -100,6 +102,8 @@ export default function RcaScreen() {
     setShowForm(false); setRootCause(''); setFactors([]); setKm(''); setSerial(''); setPhotos([])
     load()
   }
+
+  if (!allowed) return null
 
   return (
     <SafeAreaView style={styles.safe}>

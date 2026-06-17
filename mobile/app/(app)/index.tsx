@@ -14,6 +14,7 @@ import SyncBanner from '../../components/SyncBanner'
 import { useRealtime } from '../../hooks/useRealtime'
 import {
   canViewAccidents, canInspect, canAccessAdmin, canUseAI, canReportAccident, canManageUsers,
+  canViewFleet, canManageWorkOrders, canDoRca, canManageStock, canViewOverview,
 } from '../../lib/permissions'
 
 export default function HomeScreen() {
@@ -126,18 +127,18 @@ export default function HomeScreen() {
 
   // Module tiles, filtered by role; `count` drives a badge
   const modules = [
-    { key: 'overview', label: t('modules.home.overview'),     icon: 'stats-chart-outline',  tint: '#2563eb', show: isManager,        count: 0,              go: () => router.push('/(app)/overview') },
-    { key: 'tasks',    label: t('home.tasks') || 'Tasks',     icon: 'checkbox-outline',     tint: '#16a34a', show: true,             count: openTasks,      go: () => router.push('/(app)/tasks') },
-    { key: 'alerts',   label: t('home.alerts') || 'Alerts',   icon: 'alert-circle-outline', tint: '#dc2626', show: true,             count: criticalAlerts, go: () => router.push('/(app)/alerts') },
-    { key: 'vehicles', label: t('modules.home.vehicles'),     icon: 'bus-outline',          tint: '#0d9488', show: true,             count: 0,              go: () => router.push('/(app)/vehicles') },
-    { key: 'workorders', label: t('modules.home.workOrders'), icon: 'construct-outline',    tint: '#ca8a04', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/work-orders') },
-    { key: 'tyrechange', label: t('modules.home.tyreChange'), icon: 'sync-circle-outline',  tint: '#0284c7', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/tyre-change') },
-    { key: 'stock',    label: t('modules.home.stock'),        icon: 'cube-outline',         tint: '#9333ea', show: true,             count: 0,              go: () => router.push('/(app)/stock') },
-    { key: 'report',   label: t('modules.home.reportIssue'),  icon: 'flag-outline',         tint: '#e11d48', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/report-issue') },
-    { key: 'history',  label: t('tabs.history') || 'History',  icon: 'time-outline',         tint: '#2563eb', show: true,             count: 0,              go: () => router.push('/(app)/history') },
-    { key: 'accident', label: t('tabs.accident') || 'Accidents', icon: 'warning-outline',    tint: '#ea580c', show: flags.accidents,  count: openAccidents,  go: () => router.push('/(app)/accident/dashboard') },
-    { key: 'rca',      label: t('modules.home.rca'),          icon: 'git-network-outline',  tint: '#7c3aed', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/rca') },
-    { key: 'scan',     label: t('home.scanAsset') || 'Scan',   icon: 'scan-outline',         tint: '#0891b2', show: flags.inspect,    count: 0,              go: () => router.push('/(app)/scanner') },
+    { key: 'overview', label: t('modules.home.overview'),     icon: 'stats-chart-outline',  tint: '#2563eb', show: canViewOverview(role),     count: 0,              go: () => router.push('/(app)/overview') },
+    { key: 'tasks',    label: t('home.tasks') || 'Tasks',     icon: 'checkbox-outline',     tint: '#16a34a', show: canViewFleet(role),        count: openTasks,      go: () => router.push('/(app)/tasks') },
+    { key: 'alerts',   label: t('home.alerts') || 'Alerts',   icon: 'alert-circle-outline', tint: '#dc2626', show: canViewFleet(role),        count: criticalAlerts, go: () => router.push('/(app)/alerts') },
+    { key: 'vehicles', label: t('modules.home.vehicles'),     icon: 'bus-outline',          tint: '#0d9488', show: canViewFleet(role),        count: 0,              go: () => router.push('/(app)/vehicles') },
+    { key: 'workorders', label: t('modules.home.workOrders'), icon: 'construct-outline',    tint: '#ca8a04', show: canManageWorkOrders(role), count: 0,              go: () => router.push('/(app)/work-orders') },
+    { key: 'tyrechange', label: t('modules.home.tyreChange'), icon: 'sync-circle-outline',  tint: '#0284c7', show: flags.inspect,            count: 0,              go: () => router.push('/(app)/tyre-change') },
+    { key: 'stock',    label: t('modules.home.stock'),        icon: 'cube-outline',         tint: '#9333ea', show: canManageStock(role),      count: 0,              go: () => router.push('/(app)/stock') },
+    { key: 'report',   label: t('modules.home.reportIssue'),  icon: 'flag-outline',         tint: '#e11d48', show: flags.inspect,            count: 0,              go: () => router.push('/(app)/report-issue') },
+    { key: 'history',  label: t('tabs.history') || 'History',  icon: 'time-outline',         tint: '#2563eb', show: true,                     count: 0,              go: () => router.push('/(app)/history') },
+    { key: 'accident', label: t('tabs.accident') || 'Accidents', icon: 'warning-outline',    tint: '#ea580c', show: flags.accidents,          count: openAccidents,  go: () => router.push('/(app)/accident/dashboard') },
+    { key: 'rca',      label: t('modules.home.rca'),          icon: 'git-network-outline',  tint: '#7c3aed', show: canDoRca(role),            count: 0,              go: () => router.push('/(app)/rca') },
+    { key: 'scan',     label: t('home.scanAsset') || 'Scan',   icon: 'scan-outline',         tint: '#0891b2', show: flags.inspect,            count: 0,              go: () => router.push('/(app)/scanner') },
     { key: 'team',     label: t('modules.home.team'),          icon: 'people-outline',       tint: '#1d4ed8', show: canManageUsers(role) || flags.admin, count: 0, go: () => router.push('/(app)/team') },
     { key: 'ai',       label: t('modules.home.ai'),            icon: 'sparkles-outline',     tint: '#7c3aed', show: flags.ai,         count: 0,              go: () => router.push('/(app)/admin/ai-chat') },
     { key: 'admin',    label: t('tabs.admin') || 'Admin',      icon: 'shield-outline',       tint: '#7c3aed', show: flags.admin,      count: 0,              go: () => router.push('/(app)/admin') },

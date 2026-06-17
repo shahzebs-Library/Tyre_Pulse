@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { canInspect } from '../../lib/permissions'
+import { useRoleGuard } from '../../hooks/useRoleGuard'
 
 interface Vehicle {
   id: string
@@ -39,6 +40,7 @@ export default function VehiclesScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [query, setQuery] = useState('')
 
+  const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
   const textAlign = isRTL ? 'right' : 'left'
   const mayInspect = canInspect(profile?.role)
 
@@ -74,6 +76,8 @@ export default function VehiclesScreen() {
       v.site?.toLowerCase().includes(s),
     )
   }, [rows, query])
+
+  if (!allowed) return null
 
   return (
     <SafeAreaView style={styles.safe}>

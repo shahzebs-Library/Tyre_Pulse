@@ -10,7 +10,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
-import { canInspect } from '../../lib/permissions'
+import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { canManageStock } from '../../lib/permissions'
 
 interface StockItem {
   id: string
@@ -45,8 +46,9 @@ export default function StockScreen() {
   const [query, setQuery] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
 
+  const { allowed } = useRoleGuard(['admin', 'manager', 'director'])
   const textAlign = isRTL ? 'right' : 'left'
-  const mayAdjust = canInspect(profile?.role)
+  const mayAdjust = canManageStock(profile?.role)
 
   const load = useCallback(async () => {
     let q = supabase
@@ -90,6 +92,8 @@ export default function StockScreen() {
   }, [rows, filter, query])
 
   const lowCount = useMemo(() => rows.filter(r => ['Low', 'Critical'].includes(statusFor(r.stock_qty ?? 0, r.min_level, r.critical_level))).length, [rows])
+
+  if (!allowed) return null
 
   return (
     <SafeAreaView style={styles.safe}>

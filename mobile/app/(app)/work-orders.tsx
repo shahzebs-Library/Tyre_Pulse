@@ -11,7 +11,8 @@ import { saveRecord } from '../../lib/recordQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
-import { canInspect } from '../../lib/permissions'
+import { useRoleGuard } from '../../hooks/useRoleGuard'
+import { canManageWorkOrders } from '../../lib/permissions'
 
 interface WorkOrder {
   id: string
@@ -52,8 +53,9 @@ export default function WorkOrdersScreen() {
   const [desc, setDesc] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const { allowed } = useRoleGuard(['inspector', 'admin', 'manager', 'director'])
   const textAlign = isRTL ? 'right' : 'left'
-  const mayEdit = canInspect(profile?.role)
+  const mayEdit = canManageWorkOrders(profile?.role)
 
   const load = useCallback(async () => {
     let q = supabase
@@ -115,6 +117,8 @@ export default function WorkOrdersScreen() {
     return rows.filter(w => !['completed', 'closed'].includes((w.status ?? '').toLowerCase()))
   }, [rows, filter])
   const openCount = useMemo(() => rows.filter(w => !['completed', 'closed'].includes((w.status ?? '').toLowerCase())).length, [rows])
+
+  if (!allowed) return null
 
   return (
     <SafeAreaView style={styles.safe}>

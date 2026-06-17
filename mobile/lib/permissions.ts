@@ -11,20 +11,52 @@
 import { UserRole, isAdminOrAbove, isAdmin } from './types'
 
 // ── Capability predicates ───────────────────────────────────────────────────
+// Role scopes (least-privilege):
+//   tyre_man  → inspections, tyre change, scan, vehicles(view), alerts, tasks,
+//               report issue, history  (NO accidents dashboard / stock / work
+//               orders / RCA / overview / team / AI / admin)
+//   inspector → tyre_man scope + accidents + RCA + work orders
+//   manager/director → all operational + overview/reports + stock (NOT user mgmt)
+//   admin     → everything incl. user management + admin console
 
-/** Field staff who record tyre inspections. */
+/** Field staff who record tyre inspections, tyre changes, scans. */
 export function canInspect(role: UserRole | null | undefined): boolean {
   return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
 }
 
-/** Anyone operational may file an accident/incident report. */
+/** Field staff may file an accident report. */
 export function canReportAccident(role: UserRole | null | undefined): boolean {
-  return role != null
+  return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
 }
 
-/** Who can open the accident dashboard tab. */
+/** Accident dashboard / list — review surface. Tyre techs excluded. */
 export function canViewAccidents(role: UserRole | null | undefined): boolean {
-  return role != null
+  return role === 'inspector' || isAdminOrAbove(role)
+}
+
+/** Browse vehicles & raise tasks/alerts — operational field staff. */
+export function canViewFleet(role: UserRole | null | undefined): boolean {
+  return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
+}
+
+/** Maintenance work orders. */
+export function canManageWorkOrders(role: UserRole | null | undefined): boolean {
+  return role === 'inspector' || isAdminOrAbove(role)
+}
+
+/** Root-cause analysis. */
+export function canDoRca(role: UserRole | null | undefined): boolean {
+  return role === 'inspector' || isAdminOrAbove(role)
+}
+
+/** Stock / inventory management — management only. */
+export function canManageStock(role: UserRole | null | undefined): boolean {
+  return isAdminOrAbove(role)
+}
+
+/** Fleet KPI overview / reports — management only. */
+export function canViewOverview(role: UserRole | null | undefined): boolean {
+  return isAdminOrAbove(role)
 }
 
 /** Elevated management console (admin snapshot, AI, reviews). */

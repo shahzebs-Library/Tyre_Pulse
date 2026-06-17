@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
+import { useRoleGuard } from '../../hooks/useRoleGuard'
 import { canInspect } from '../../lib/permissions'
 
 type FilterKey = 'open' | 'mine' | 'all'
@@ -46,6 +47,7 @@ export default function TasksScreen() {
   const [filter, setFilter] = useState<FilterKey>('open')
   const [busyId, setBusyId] = useState<string | null>(null)
 
+  const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
   const textAlign = isRTL ? 'right' : 'left'
   const canResolve = canInspect(profile?.role)
   const myName = profile?.full_name ?? profile?.username ?? ''
@@ -91,6 +93,8 @@ export default function TasksScreen() {
   }, [tasks, filter, myName])
 
   const openCount = useMemo(() => tasks.filter(t => (t.status ?? '').toLowerCase() !== 'closed').length, [tasks])
+
+  if (!allowed) return null
 
   return (
     <SafeAreaView style={styles.safe}>

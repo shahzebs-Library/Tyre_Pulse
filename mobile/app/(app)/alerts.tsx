@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
+import { useRoleGuard } from '../../hooks/useRoleGuard'
 
 type FilterKey = 'all' | 'Critical' | 'High'
 
@@ -36,6 +37,7 @@ export default function AlertsScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [filter, setFilter] = useState<FilterKey>('all')
 
+  const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
   const textAlign = isRTL ? 'right' : 'left'
 
   const load = useCallback(async () => {
@@ -65,6 +67,8 @@ export default function AlertsScreen() {
     [rows, filter],
   )
   const critCount = useMemo(() => rows.filter(r => r.risk_level === 'Critical').length, [rows])
+
+  if (!allowed) return null
 
   return (
     <SafeAreaView style={styles.safe}>

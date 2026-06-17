@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Tabs, Redirect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { ActivityIndicator } from 'react-native'
@@ -27,7 +27,7 @@ function TabIcon({
 }
 
 export default function AppLayout() {
-  const { user, loading, profile } = useAuth()
+  const { user, loading, profile, signOut } = useAuth()
   const { t } = useLanguage()
   const [accidentBadge, setAccidentBadge] = useState(0)
   const [homeBadge, setHomeBadge] = useState(0)
@@ -60,6 +60,12 @@ export default function AppLayout() {
   }
 
   if (!user) return <Redirect href="/(auth)/login" />
+
+  // Access gate — admin controls entry. A locked or not-yet-approved account
+  // cannot use the app until an admin grants/restores access.
+  if (profile && (profile.approved === false || profile.locked === true)) {
+    return <AccessGate locked={profile.locked === true} onSignOut={signOut} />
+  }
 
   const role = profile?.role ?? null
 
@@ -125,7 +131,34 @@ export default function AppLayout() {
   )
 }
 
+// Shown when an account is locked or not yet approved by an admin.
+function AccessGate({ locked, onSignOut }: { locked: boolean; onSignOut: () => void }) {
+  return (
+    <View style={styles.gate}>
+      <View style={[styles.gateIcon, { backgroundColor: locked ? 'rgba(220,38,38,0.1)' : 'rgba(245,158,11,0.12)' }]}>
+        <Ionicons name={locked ? 'lock-closed' : 'hourglass-outline'} size={34} color={locked ? '#dc2626' : '#d97706'} />
+      </View>
+      <Text style={styles.gateTitle}>{locked ? 'Access Revoked' : 'Awaiting Approval'}</Text>
+      <Text style={styles.gateMsg}>
+        {locked
+          ? 'Your access has been disabled by an administrator. Please contact your admin.'
+          : 'Your account is pending admin approval. You will get access once an administrator approves it.'}
+      </Text>
+      <TouchableOpacity style={styles.gateBtn} onPress={onSignOut}>
+        <Ionicons name="log-out-outline" size={18} color="#fff" />
+        <Text style={styles.gateBtnText}>Sign Out</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
+  gate: { flex: 1, backgroundColor: '#f0f5f1', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 14 },
+  gateIcon: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
+  gateTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
+  gateMsg: { fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 21 },
+  gateBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#16a34a', borderRadius: 14, paddingHorizontal: 22, paddingVertical: 13, marginTop: 8 },
+  gateBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
   tabBar: {
     backgroundColor: '#fff',
     borderTopColor: 'rgba(0,0,0,0.06)',

@@ -9,6 +9,7 @@ export interface Profile {
   site: string | null
   country: string | null
   approved: boolean
+  locked?: boolean | null
 }
 
 /**

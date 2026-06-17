@@ -27,6 +27,7 @@ interface UserProfile {
   role: string | null
   site: string | null
   approved: boolean
+  locked: boolean | null
   created_at: string
   pending_reason: string | null
 }
@@ -57,7 +58,7 @@ export default function UserManagementScreen() {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, username, employee_id, role, site, approved, created_at, pending_reason')
+      .select('id, full_name, username, employee_id, role, site, approved, locked, created_at, pending_reason')
       .order('approved', { ascending: true }) // pending first
       .order('created_at', { ascending: false })
       .limit(200)
@@ -141,6 +142,33 @@ export default function UserManagementScreen() {
           },
         })),
         { text: 'Cancel', style: 'cancel' },
+      ]
+    )
+  }
+
+  async function toggleLock(user: UserProfile) {
+    const willLock = !user.locked
+    Alert.alert(
+      willLock ? 'Revoke Access' : 'Restore Access',
+      willLock
+        ? `Disable access for ${user.full_name ?? user.username ?? 'this user'}? They won't be able to use the app until restored.`
+        : `Restore access for ${user.full_name ?? user.username ?? 'this user'}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: willLock ? 'Revoke' : 'Restore',
+          style: willLock ? 'destructive' : 'default',
+          onPress: async () => {
+            setActing(user.id)
+            const { error } = await supabase
+              .from('profiles')
+              .update({ locked: willLock })
+              .eq('id', user.id)
+            setActing(null)
+            if (error) Alert.alert('Error', 'Failed to update access.')
+            else setUsers(prev => prev.map(u => u.id === user.id ? { ...u, locked: willLock } : u))
+          },
+        },
       ]
     )
   }
@@ -261,6 +289,12 @@ export default function UserManagementScreen() {
                         <Text style={styles.pendingBadgeText}>Pending</Text>
                       </View>
                     )}
+                    {user.approved && user.locked && (
+                      <View style={styles.revokedBadge}>
+                        <Ionicons name="lock-closed" size={10} color="#dc2626" />
+                        <Text style={styles.revokedBadgeText}>Revoked</Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* Meta row */}
@@ -314,6 +348,24 @@ export default function UserManagementScreen() {
                         {isActing
                           ? <ActivityIndicator size="small" color="#fff" />
                           : <><Ionicons name="checkmark-outline" size={16} color="#fff" /><Text style={styles.approveBtnText}>Approve</Text></>
+                        }
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* Access control for approved users (not self) */}
+                  {user.approved && user.id !== profile?.id && (
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity
+                        style={user.locked ? styles.approveBtn : styles.rejectBtn}
+                        onPress={() => toggleLock(user)}
+                        disabled={isActing}
+                      >
+                        {isActing
+                          ? <ActivityIndicator size="small" color={user.locked ? '#fff' : '#dc2626'} />
+                          : user.locked
+                            ? <><Ionicons name="lock-open-outline" size={16} color="#fff" /><Text style={styles.approveBtnText}>Restore Access</Text></>
+                            : <><Ionicons name="lock-closed-outline" size={16} color="#dc2626" /><Text style={styles.rejectBtnText}>Revoke Access</Text></>
                         }
                       </TouchableOpacity>
                     </View>
@@ -374,6 +426,8 @@ const styles = StyleSheet.create({
   username:     { fontSize: 11, color: '#94a3b8' },
   pendingBadge: { backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   pendingBadgeText: { fontSize: 10, fontWeight: '700', color: '#d97706' },
+  revokedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#fee2e2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  revokedBadgeText: { fontSize: 10, fontWeight: '700', color: '#dc2626' },
 
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   roleChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },

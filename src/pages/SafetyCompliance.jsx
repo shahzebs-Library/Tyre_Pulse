@@ -636,7 +636,7 @@ export default function SafetyCompliance() {
                       {inspections.slice(0, 30).map(r => (
                         <tr key={r.id} className="border-b border-gray-800 hover:bg-gray-800/50">
                           <td className="px-4 py-3 text-white font-medium">{r.asset_no || '—'}</td>
-                          <td className="px-4 py-3 text-gray-300">{r.inspector_name || '—'}</td>
+                          <td className="px-4 py-3 text-gray-300">{r.inspector || '—'}</td>
                           <td className="px-4 py-3 text-gray-400">{fmtDate(r.inspection_date)}</td>
                           <td className="px-4 py-3 text-gray-400">{r.site || '—'}</td>
                           <td className="px-4 py-3">{r.tread_depth != null ? <CheckCircle size={14} className="text-green-400" /> : <XCircle size={14} className="text-red-400" />}</td>

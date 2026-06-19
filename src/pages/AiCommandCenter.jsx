@@ -437,7 +437,7 @@ export default function AiCommandCenter() {
 
         supabase
           .from('inspections')
-          .select('asset_no, scheduled_date, completed_date, status, findings, site, inspector_name')
+          .select('asset_no, scheduled_date, completed_date, status, findings, site, inspector')
           .gte('scheduled_date', cutoffStr)
           .order('scheduled_date', { ascending: false })
           .limit(200),

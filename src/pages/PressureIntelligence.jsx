@@ -210,7 +210,7 @@ export default function PressureIntelligence() {
         const [{ data: ins }, { data: tr }] = await Promise.all([
           fetchAllPages((from, to) => supabase
             .from('inspections')
-            .select('id,asset_no,tyre_serial,position,pressure_reading,tread_depth,inspector_name,inspection_date,site,country,notes')
+            .select('id,asset_no,tyre_serial,pressure_reading,inspector,inspection_date,site,country,notes')
             .order('inspection_date', { ascending: false })
             .range(from, to)),
           fetchAllPages((from, to) => supabase
@@ -239,14 +239,14 @@ export default function PressureIntelligence() {
         source:      'inspection',
         asset_no:    r.asset_no,
         serial:      r.tyre_serial,
-        position:    r.position,
+        position:    null,
         reading:     Number(r.pressure_reading),
-        inspector:   r.inspector_name,
+        inspector:   r.inspector,
         date:        r.inspection_date,
         site:        r.site,
         country:     r.country,
         notes:       r.notes,
-        tread_depth: r.tread_depth,
+        tread_depth: null,
       }))
 
     const fromTyres = (tyreRecords || [])

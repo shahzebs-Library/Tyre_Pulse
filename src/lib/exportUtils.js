@@ -1518,7 +1518,7 @@ export function exportDailyExecutivePdf(data, filename) {
 }
 
 // ── PowerPoint Export — light executive theme, native editable charts ─────────
-export async function exportToPptx(data, filename = 'Operations_Report') {
+export async function exportToPptx(data, filename = 'TyrePulse_Report') {
   const pptx = new pptxgen()
   pptx.layout = 'LAYOUT_WIDE'
   pptx.theme = { headFontFace: 'Arial', bodyFontFace: 'Arial' }
@@ -1582,6 +1582,40 @@ export async function exportToPptx(data, filename = 'Operations_Report') {
     dataLabelColor: INK, dataLabelFontSize: 9, dataLabelFontBold: true, dataLabelFontFace: 'Arial',
     ...extra,
   })
+
+  // ── Chart safety layer ──────────────────────────────────────────────────────
+  // PowerPoint refuses to open a deck if any chart cell is NaN/Infinity or a
+  // label is empty/null (invalid OOXML). Coerce every value to a finite number
+  // and every label to a non-empty string, keep series aligned, and substitute a
+  // clean "no data" note rather than emit a broken chart.
+  function cleanSeries(series) {
+    return (series || []).map(s => {
+      const rawLabels = Array.isArray(s.labels) ? s.labels : []
+      const rawValues = Array.isArray(s.values) ? s.values : []
+      const len = Math.max(rawLabels.length, rawValues.length)
+      const labels = []
+      const values = []
+      for (let i = 0; i < len; i++) {
+        const lbl = rawLabels[i]
+        const n = Number(rawValues[i])
+        labels.push(lbl == null || String(lbl).trim() === '' ? '—' : String(lbl))
+        values.push(Number.isFinite(n) ? n : 0)
+      }
+      return { ...s, labels, values }
+    })
+  }
+  function safeChart(slide, type, series, opts) {
+    const clean = cleanSeries(series)
+    const hasData = clean.some(s => s.values.length && s.values.some(v => v !== 0))
+    if (!hasData) {
+      slide.addText('No data available for this period', {
+        x: opts.x, y: opts.y, w: opts.w, h: Math.min(opts.h, 0.6),
+        fontSize: 11, italic: true, color: MUTED, align: 'center', valign: 'middle',
+      })
+      return
+    }
+    slide.addChart(type, clean, opts)
+  }
 
   // Derived metrics
   const totalT   = data.totalTyres || 0
@@ -1673,14 +1707,14 @@ export async function exportToPptx(data, filename = 'Operations_Report') {
     kpis.forEach((k, i) => kpiTile(s, 0.4 + i * (kw + 0.25), 1.35, kw, k.l, k.v, k.c, k.s))
 
     sectionTitle(s, 0.4, 3.3, 'Fleet Condition')
-    s.addChart(pptx.ChartType.doughnut,
+    safeChart(s, pptx.ChartType.doughnut,
       [{ name: 'Condition', labels: ['Within Spec', 'High Risk'], values: [good, high] }],
       cOpts({ x: 0.4, y: 3.75, w: 5.2, h: 3.0, holeSize: 62, chartColors: [EMER, CRIM], showLegend: true, legendPos: 'r', legendColor: SLATE, legendFontSize: 10, showValue: true, dataLabelFormatCode: '#,##0', showPercent: false }))
 
     if (data.riskBreakdown?.length) {
       sectionTitle(s, 6.4, 3.3, 'Risk Distribution')
       const rColors = { Critical: CRIM, High: SCAR, Medium: GOLD, Low: EMER }
-      s.addChart(pptx.ChartType.bar,
+      safeChart(s, pptx.ChartType.bar,
         [{ name: 'Tyres', labels: data.riskBreakdown.map(r => r.level), values: data.riskBreakdown.map(r => r.count) }],
         cOpts({ x: 6.4, y: 3.75, w: 6.55, h: 3.0, barDir: 'bar', showValue: true,
           chartColors: data.riskBreakdown.map(r => rColors[r.level] || SLATE) }))
@@ -1697,7 +1731,7 @@ export async function exportToPptx(data, filename = 'Operations_Report') {
     kpiTile(s, 3.45, 1.35, 2.9, 'Period Average', String(avg), VIOLET, `${trend.length} periods`)
     kpiTile(s, 6.5, 1.35, 2.9, 'Trend', `${trendDelta > 0 ? '+' : ''}${trendDelta}`, trendDelta > 0 ? CRIM : EMER, `${trendDir} vs first`)
     kpiTile(s, 9.55, 1.35, 3.4, 'Peak Period', String(Math.max(...trend.map(m => m.count))), GOLD, 'highest volume')
-    s.addChart(pptx.ChartType.area,
+    safeChart(s, pptx.ChartType.area,
       [{ name: 'Tyre Issues', labels: trend.map(m => m.month), values: trend.map(m => m.count) }],
       cOpts({ x: 0.4, y: 3.25, w: 12.55, h: 3.55, chartColors: [INDIGO], chartColorsOpacity: 35,
         lineSize: 2.5, lineSmooth: true, showValue: true,
@@ -1712,14 +1746,14 @@ export async function exportToPptx(data, filename = 'Operations_Report') {
     if (data.topSites?.length) {
       sectionTitle(s, 0.4, 1.25, 'Top Sites by Consumption')
       const top = data.topSites.slice(0, 8)
-      s.addChart(pptx.ChartType.bar,
+      safeChart(s, pptx.ChartType.bar,
         [{ name: 'Tyres', labels: top.map(t => t.site), values: top.map(t => t.count) }],
         cOpts({ x: 0.4, y: 1.7, w: 7.1, h: 5.0, barDir: 'bar', showValue: true, chartColors: [SKY] }))
     }
     if (data.categoryBreakdown?.length) {
       sectionTitle(s, 7.9, 1.25, 'Category Mix')
       const cats = data.categoryBreakdown.slice(0, 6)
-      s.addChart(pptx.ChartType.doughnut,
+      safeChart(s, pptx.ChartType.doughnut,
         [{ name: 'Categories', labels: cats.map(c => c.category), values: cats.map(c => c.count) }],
         cOpts({ x: 7.7, y: 1.7, w: 5.3, h: 5.0, holeSize: 55, showLegend: true, legendPos: 'b', legendColor: SLATE, legendFontSize: 9, showPercent: true, showValue: false, dataLabelColor: 'FFFFFF', dataLabelFontSize: 9 }))
     }
@@ -1733,15 +1767,15 @@ export async function exportToPptx(data, filename = 'Operations_Report') {
     if (data.costBySite?.length) {
       sectionTitle(s, 0.4, 1.25, `Cost by Site (${currency})`)
       const cs = data.costBySite.slice(0, 8)
-      s.addChart(pptx.ChartType.bar,
-        [{ name: 'Cost', labels: cs.map(c => c.site), values: cs.map(c => Math.round(c.cost)) }],
+      safeChart(s, pptx.ChartType.bar,
+        [{ name: 'Cost', labels: cs.map(c => c.site), values: cs.map(c => Math.round(Number(c.cost) || 0)) }],
         cOpts({ x: 0.4, y: 1.7, w: 7.1, h: 5.0, barDir: 'bar', showValue: true, chartColors: [VIOLET],
           dataLabelFormatCode: '#,##0' }))
     }
     if (data.topBrands?.length) {
       sectionTitle(s, 7.9, 1.25, 'Brand Performance')
       const tb = data.topBrands.slice(0, 8)
-      s.addChart(pptx.ChartType.bar,
+      safeChart(s, pptx.ChartType.bar,
         [{ name: 'Tyres', labels: tb.map(b => b.brand), values: tb.map(b => b.count) }],
         cOpts({ x: 7.7, y: 1.7, w: 5.3, h: 5.0, barDir: 'bar', showValue: true, chartColors: [GOLD] }))
     }

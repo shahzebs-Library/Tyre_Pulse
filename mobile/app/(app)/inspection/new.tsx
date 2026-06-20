@@ -204,6 +204,7 @@ export default function NewInspectionScreen() {
       tyre_conditions: tyreData,
       notes,
       status: 'Done',
+      country: profile?.country ?? null,
     }
 
     try {

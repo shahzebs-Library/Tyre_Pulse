@@ -866,6 +866,15 @@ export default function UploadData() {
   // ── Upload ──────────────────────────────────────────────────────────────────
 
   async function upload() {
+    // Country is authoritative from the top-bar selection. Every uploaded row is
+    // stamped with this one country, so a file can never mix countries or land in
+    // the wrong one. A specific country must be selected (not "All").
+    if (activeCountry === 'All') {
+      setError('Select a specific country in the top bar before uploading. Every row will be stamped with that country so your data never mixes.')
+      return
+    }
+    const uploadCountry = activeCountry
+
     setStep('uploading')
     setProgress({ done: 0, total: rows.length })
     const batchId = crypto.randomUUID()
@@ -879,7 +888,8 @@ export default function UploadData() {
         category:    row.category    || null,
         qty:         parseFloat(row.qty)         || 0,
         unit_cost:   parseFloat(row.unit_cost)   || 0,
-        site:        row.site     || activeCountry || null,
+        site:        row.site     || uploadCountry || null,
+        country:     uploadCountry,
         location:    row.location || null,
         min_level:   parseFloat(row.min_level)   || 0,
         reorder_qty: parseFloat(row.reorder_qty) || 0,
@@ -902,11 +912,12 @@ export default function UploadData() {
 
     await saveColumnMapping(fingerprintHeaders(headers))
 
-    const defaultCountry = activeCountry !== 'All' ? activeCountry : 'KSA'
     let records = buildRows(headers, rows, mapping).map(r => ({
       ...r,
-      country:         (r.country && String(r.country).trim()) || defaultCountry,
-      region:          profile?.region ?? defaultCountry,
+      // Force the selected country onto every row — ignore any country column in
+      // the file so an upload can never mix or mislabel countries.
+      country:         uploadCountry,
+      region:          profile?.region ?? uploadCountry,
       uploaded_by:     profile?.id,
       upload_batch_id: batchId,
     }))
@@ -947,7 +958,7 @@ export default function UploadData() {
 
     if (classifyLog.length > 0) await supabase.from('cleaning_log').insert(classifyLog.map((entry, i) => ({ ...entry, tyre_record_id: insertedIds[i] ?? null })))
 
-    await supabase.from('upload_history').insert({ file_names: [fileName], records_added: added, records_skipped: skipped + (skipDupes ? dupes.length : 0), skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? defaultCountry, uploaded_by: profile?.id, batch_id: batchId })
+    await supabase.from('upload_history').insert({ file_names: [fileName], records_added: added, records_skipped: skipped + (skipDupes ? dupes.length : 0), skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? uploadCountry, country: uploadCountry, uploaded_by: profile?.id, batch_id: batchId })
     await logAuditEvent({ action: 'UPLOAD', tableName: 'tyre_records', recordCount: added, details: { filename: fileName, rowCount: added, skippedCount: skipped + (skipDupes ? dupes.length : 0), country: activeCountry, batch_id: batchId } })
 
     // Bump use_count on any synonyms that were exercised in this upload

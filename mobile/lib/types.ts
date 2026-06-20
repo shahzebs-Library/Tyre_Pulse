@@ -70,6 +70,8 @@ export interface InspectionPayload {
   tyre_conditions: Record<string, TyrePositionData>
   notes: string
   status: string
+  /** Stamped from the creator's profile so records never mix across countries */
+  country: string | null
 }
 
 export interface OfflineInspection {

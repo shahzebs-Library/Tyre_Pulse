@@ -137,6 +137,7 @@ export default function AccidentReportScreen() {
         photos:                 photoUrls.filter(u => u),
         notes:                  draft.notes || null,
         status:                 'reported',
+        country:                profile?.country ?? null,
       }
 
       const { error } = await supabase.from('accidents').insert(payload)

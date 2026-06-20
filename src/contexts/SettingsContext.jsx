@@ -23,14 +23,23 @@ export function SettingsProvider({ children }) {
   })
   const [activeCountry, setActiveCountryInternal] = useState('All')
 
+  // A user's country may be stored as a string ("KSA") or, for multi-country
+  // users, an array. Resolve the primary country consistently.
+  const primaryCountry = (p) => {
+    const c = Array.isArray(p?.country) ? p.country[0] : p?.country
+    return c && String(c).trim() ? String(c).trim() : null
+  }
+
   function setActiveCountry(c) {
-    if (profile && profile.role !== 'Admin' && profile.country?.length > 0) return
+    // Non-admins with an assigned country are locked to it.
+    if (profile && profile.role !== 'Admin' && primaryCountry(profile)) return
     setActiveCountryInternal(c)
   }
 
   useEffect(() => {
-    if (profile && profile.role !== 'Admin' && profile.country?.length > 0) {
-      setActiveCountryInternal(profile.country[0])
+    const c = primaryCountry(profile)
+    if (profile && profile.role !== 'Admin' && c) {
+      setActiveCountryInternal(c)
     }
   }, [profile])
 

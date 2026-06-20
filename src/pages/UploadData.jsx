@@ -1521,8 +1521,27 @@ export default function UploadData() {
                   </tbody>
                 </table>
               </div>
+              {activeCountry === 'All' ? (
+                <div className="mt-4 mb-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+                  <p className="text-amber-300 text-sm font-semibold">Select a country before uploading</p>
+                  <p className="text-amber-200/80 text-xs mt-1">
+                    Pick a specific country in the top bar (KSA / UAE / Egypt). Every row will be stamped with it so your data never mixes.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-4 mb-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2">
+                  <p className="text-emerald-300 text-sm">
+                    Uploading to <span className="font-bold">{activeCountry}</span> — every row will be stamped with this country.
+                  </p>
+                </div>
+              )}
+              {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
               <div className="flex gap-3 mt-4">
-                <button onClick={upload} className="btn-primary flex items-center gap-2">
+                <button
+                  onClick={upload}
+                  disabled={activeCountry === 'All'}
+                  className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <Upload size={16} /> Upload {(skipDupes ? rows.length - dupes.length : rows.length).toLocaleString()} Records
                 </button>
                 <button onClick={() => setStep('mapping')} className="btn-secondary">Back</button>

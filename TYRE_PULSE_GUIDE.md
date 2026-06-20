@@ -87,7 +87,61 @@ and enforced in the database, not just the UI.
 
 ---
 
-## 4. Web modules
+## 4. Screenshots
+
+Screenshots are **real captures of your own app and data** — generated on demand,
+never mockups. They are not committed by default (data is environment-specific),
+so generate them locally:
+
+```bash
+# one-time
+npm i -D playwright
+npx playwright install chromium
+
+# run the app, then capture (in a second terminal)
+npm run dev
+SHOT_ID=admin@yourco.com SHOT_PW=yourpassword npm run screenshots
+```
+
+PNGs land in `docs/screenshots/` and the images below render automatically.
+Capture **after** loading data for at least one country so screens aren't empty.
+
+| Env | Meaning | Default |
+|-----|---------|---------|
+| `SHOT_ID` | Login identifier (email / username / employee id) | — (required) |
+| `SHOT_PW` | Login password | — (required) |
+| `SHOT_BASE` | App URL | `http://localhost:5173` |
+| `SHOT_WIDTH` / `SHOT_HEIGHT` | Viewport size | `1440` / `900` |
+
+### Dashboard
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Tyre Records
+![Tyre Records](docs/screenshots/tyre-records.png)
+
+### Upload Data
+![Upload Data](docs/screenshots/upload.png)
+
+### Reports & Executive Report
+![Reports](docs/screenshots/reports.png)
+![Executive Report](docs/screenshots/executive-report.png)
+
+### Inspections & Pressure Intelligence
+![Inspections](docs/screenshots/inspections.png)
+![Pressure Intelligence](docs/screenshots/pressure-intelligence.png)
+
+### Accidents, Work Orders & Safety
+![Accidents](docs/screenshots/accidents.png)
+![Work Orders](docs/screenshots/work-orders.png)
+![Safety & Compliance](docs/screenshots/safety-compliance.png)
+
+### AI Command Center & Audit Trail
+![AI Command Center](docs/screenshots/ai-command-center.png)
+![Audit Trail](docs/screenshots/audit-trail.png)
+
+---
+
+## 5. Web modules
 
 Every screen has real data, search, filters, actions, and loading/empty/error
 states.
@@ -115,7 +169,7 @@ states.
 
 ---
 
-## 5. Mobile app
+## 6. Mobile app
 
 Role-adaptive home screen — each user sees only what their role allows.
 
@@ -132,7 +186,7 @@ Role-adaptive home screen — each user sees only what their role allows.
 
 ---
 
-## 6. Clean-slate test flow (recommended first run)
+## 7. Clean-slate test flow (recommended first run)
 
 1. **Admin → Users** — give every user a **country**.
 2. Top bar → **KSA**:
@@ -149,7 +203,7 @@ Role-adaptive home screen — each user sees only what their role allows.
 
 ---
 
-## 7. Data integrity guarantees
+## 8. Data integrity guarantees
 
 - **No country mixing** — country is stamped by the system, never by the file.
 - **No duplicates** — re-uploads are detected and can be skipped.
@@ -159,7 +213,7 @@ Role-adaptive home screen — each user sees only what their role allows.
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|

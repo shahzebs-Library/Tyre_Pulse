@@ -10,6 +10,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "screenshots": "node scripts/capture-screenshots.mjs",
     "generate-icons": "node scripts/generate-icons.js"
   },
   "dependencies": {

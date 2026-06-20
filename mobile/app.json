@@ -65,6 +65,13 @@
       "typedRoutes": true
     },
     "scheme": "tyrepulse-inspector",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3ed4e62f-e91f-4c78-b1eb-9b7310c08255",
+      "fallbackToCacheTimeout": 0
+    },
     "extra": {
       "router": {
         "origin": false

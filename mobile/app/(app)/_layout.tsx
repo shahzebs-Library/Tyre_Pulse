@@ -127,6 +127,7 @@ export default function AppLayout() {
       <Tabs.Screen name="accident/[id]"   options={{ href: null }} />
       <Tabs.Screen name="admin/ai-chat"   options={{ href: null }} />
       <Tabs.Screen name="admin/users"     options={{ href: null }} />
+      <Tabs.Screen name="admin/approvals" options={{ href: null }} />
     </Tabs>
   )
 }

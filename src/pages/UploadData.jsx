@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen,
   AlertTriangle, Package, ChevronRight, Layers, Table2, Eye,
-  Rocket, Info, Zap, Search, Database,
+  Rocket, Info, Zap, Search, Database, Clock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -885,6 +885,23 @@ export default function UploadData() {
 
   // ── Upload ──────────────────────────────────────────────────────────────────
 
+  // Non-admin uploads are staged for admin approval instead of going live.
+  const isAdminUploader = profile?.role === 'Admin'
+  async function submitForApproval({ batchId, country, uploadType, targetTable, rows: shapedRows }) {
+    return supabase.from('pending_uploads').insert({
+      batch_id:      batchId,
+      uploaded_by:   profile?.id,
+      uploader_name: profile?.full_name || profile?.username || null,
+      country,
+      upload_type:   uploadType,
+      target_table:  targetTable,
+      file_name:     fileName,
+      row_count:     shapedRows.length,
+      rows:          shapedRows,
+      status:        'pending',
+    })
+  }
+
   async function upload() {
     // Country is authoritative from the top-bar selection. Every uploaded row is
     // stamped with this one country, so a file can never mix countries or land in
@@ -916,6 +933,13 @@ export default function UploadData() {
         supplier:    row.supplier || null,
         notes:       row.notes    || null,
       }))
+      if (!isAdminUploader) {
+        const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'stock', targetTable: 'stock_records', rows: stockRows })
+        if (pErr) { setError('Could not submit for approval: ' + pErr.message); setStep('preview'); return }
+        setResult({ pending: true, submitted: stockRows.length, added: 0, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipLog: [] })
+        setStep('done')
+        return
+      }
       const CHUNK = 500
       let added = 0
       for (let i = 0; i < stockRows.length; i += CHUNK) {
@@ -963,6 +987,16 @@ export default function UploadData() {
 
     const autoClassifiedCount = records.filter(r => r.cleaned).length
     const needsReviewCount    = records.length - autoClassifiedCount
+
+    // Non-admins: stage the fully-prepared rows for admin approval, don't go live.
+    if (!isAdminUploader) {
+      const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'tyres', targetTable: 'tyre_records', rows: records })
+      if (pErr) { setError('Could not submit for approval: ' + pErr.message); setStep('preview'); return }
+      setResult({ pending: true, submitted: records.length, added: 0, skipped: 0, skipLog: [], autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0, extraColCount: unmappedSource.length })
+      setStep('done')
+      return
+    }
+
     const BATCH = 500
     let added = 0, skipped = 0
     const skipLog = []
@@ -1582,15 +1616,21 @@ export default function UploadData() {
           <motion.div key="done" initial={{ opacity:0, scale:0.97 }} animate={{ opacity:1, scale:1 }} className="card">
             <div className="flex items-center gap-3 mb-6">
               <motion.div initial={{ scale:0 }} animate={{ scale:1 }} transition={{ type:'spring', stiffness:300, delay:0.1 }}>
-                <CheckCircle size={32} className="text-green-400" style={{ filter: 'drop-shadow(0 0 12px rgba(74,222,128,0.6))' }} />
+                {result.pending
+                  ? <Clock size={32} className="text-amber-400" style={{ filter: 'drop-shadow(0 0 12px rgba(251,191,36,0.6))' }} />
+                  : <CheckCircle size={32} className="text-green-400" style={{ filter: 'drop-shadow(0 0 12px rgba(74,222,128,0.6))' }} />}
               </motion.div>
               <div>
-                <h2 className="text-xl font-bold text-white">Upload Complete</h2>
-                <p className="text-gray-500 text-sm">Records imported and classified successfully</p>
+                <h2 className="text-xl font-bold text-white">{result.pending ? 'Submitted for Approval' : 'Upload Complete'}</h2>
+                <p className="text-gray-500 text-sm">
+                  {result.pending
+                    ? `${(result.submitted ?? 0).toLocaleString()} ${result.pending ? 'records' : ''} sent to an administrator — they will appear once approved.`
+                    : 'Records imported and classified successfully'}
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <Tile label="Records Added"   value={result.added}               color="green" />
+              <Tile label={result.pending ? 'Records Submitted' : 'Records Added'} value={result.pending ? result.submitted : result.added} color={result.pending ? 'yellow' : 'green'} />
               <Tile label="Auto-Classified" value={result.autoClassifiedCount} color="blue" />
               <Tile label="Need Review"     value={result.needsReviewCount}    color="yellow" />
               <Tile label="Dupes Skipped"   value={result.dupesSkipped}        color="gray" />

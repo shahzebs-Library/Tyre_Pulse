@@ -653,41 +653,61 @@ export default function UploadData() {
     setError('')
     const ext = (file.name.split('.').pop() || '').toLowerCase()
     const isText = ['csv', 'tsv', 'txt'].includes(ext)
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
-      try {
-        if (isText) {
-          // Delimited text — sniff delimiter so semicolon/tab files aren't collapsed.
-          const text = typeof ev.target.result === 'string'
-            ? ev.target.result
-            : new TextDecoder('utf-8').decode(ev.target.result)
-          wbRef.current = null
-          await loadFromExtract(extractAoa(parseDelimitedText(text)))
-          return
-        }
 
-        // Binary workbook (xlsx/xls/xlsm/xlsb/ods) — array buffer is the most reliable.
-        const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true })
+    const reader = new FileReader()
+    // Without this, a file that fails to read (open in Excel, too large, blocked)
+    // would silently do nothing — the upload box would just sit there.
+    reader.onerror = () =>
+      setError(`Could not read "${file.name}". It may be open in another program, too large, or corrupted — close it elsewhere and try again.`)
+
+    reader.onload = async (ev) => {
+      const buf = ev.target.result
+
+      // Delimited text (CSV/TSV/TXT, or anything that decodes to text rows).
+      const tryText = async () => {
+        const text = typeof buf === 'string' ? buf : new TextDecoder('utf-8').decode(buf)
+        if (!text.trim()) throw new Error('no text content')
+        wbRef.current = null
+        await loadFromExtract(extractAoa(parseDelimitedText(text)))
+      }
+
+      // Binary workbook (xlsx/xls/xlsm/xlsb/ods). XLSX also reads CSV bytes, so
+      // this doubles as a fallback for mislabelled or oddly-encoded text files.
+      const tryBinary = async () => {
+        const wb = XLSX.read(buf, { type: typeof buf === 'string' ? 'binary' : 'array', cellDates: true })
+        if (!wb.SheetNames?.length) throw new Error('workbook has no sheets')
         wbRef.current = wb
 
-        if (wb.SheetNames.length > 1) {
-          const opts = wb.SheetNames.map(name => {
-            const t = extractTable(wb.Sheets[name])               // header-aware row count
-            const likelyPivot = t.rows.length < 3 && t.headers.length > 15
-            return { name, rows: t.rows.length, selected: t.rows.length > 0 && !likelyPivot, likelyPivot }
-          })
-          setSheetOptions(opts)
-          setStep('sheets')
+        const opts = wb.SheetNames.map(name => {
+          const t = extractTable(wb.Sheets[name])
+          const likelyPivot = t.rows.length < 3 && t.headers.length > 15
+          return { name, rows: t.rows.length, selected: t.rows.length > 0 && !likelyPivot, likelyPivot }
+        })
+        const withData = opts.filter(o => o.rows > 0)
+        // Skip the sheet picker when only one sheet actually holds data — many
+        // ERP exports carry one data tab plus title/metadata/pivot tabs.
+        if (withData.length <= 1) {
+          const target = withData[0]?.name ?? wb.SheetNames[0]
+          await loadFromExtract(extractTable(wb.Sheets[target]))
           return
         }
+        setSheetOptions(opts)
+        setStep('sheets')
+      }
 
-        await loadFromExtract(extractTable(wb.Sheets[wb.SheetNames[0]]))
+      try {
+        // Prefer the path matching the extension, fall back to the other so a
+        // .csv that is really an .xlsx (or vice-versa) still imports.
+        if (isText) { try { await tryText() } catch { await tryBinary() } }
+        else        { try { await tryBinary() } catch { await tryText() } }
       } catch (err) {
-        setError('Failed to parse file: ' + err.message)
+        setError(`Could not read "${file.name}" as a spreadsheet or CSV. If it opens in Excel, re-save it as .xlsx or .csv and upload again. (${err.message})`)
       }
     }
-    if (isText) reader.readAsText(file)
-    else reader.readAsArrayBuffer(file)
+
+    // Always read as ArrayBuffer — works for both binary workbooks and text
+    // (TextDecoder derives the text), and lets either path act as a fallback.
+    reader.readAsArrayBuffer(file)
   }
 
   // Re-pick the header row from the raw preview and re-map.

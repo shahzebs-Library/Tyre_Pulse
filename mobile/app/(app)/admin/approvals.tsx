@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
 import { useAdminGuard } from '../../../hooks/useRoleGuard'
+import { COUNTRIES } from '../../../lib/types'
 
 interface PendingUpload {
   id: string
@@ -96,6 +97,30 @@ export default function UploadApprovalsScreen() {
             else { setItems(prev => prev.map(x => x.id === p.id ? { ...x, status: 'approved' } : x)) }
           },
         },
+      ]
+    )
+  }
+
+  // Quick correction on mobile: re-stamp the whole batch (and every row) to the
+  // right country before approving. Detailed per-cell edits are on the web.
+  function correctCountry(p: PendingUpload) {
+    Alert.alert(
+      'Set Country for Batch',
+      `Currently: ${p.country ?? 'none'}. This stamps every row with the chosen country.`,
+      [
+        ...COUNTRIES.map(c => ({
+          text: c,
+          onPress: async () => {
+            setActing(p.id)
+            const newRows = (Array.isArray(p.rows) ? p.rows : []).map(r => ({ ...r, country: c }))
+            const { error } = await supabase.from('pending_uploads')
+              .update({ rows: newRows, country: c }).eq('id', p.id)
+            setActing(null)
+            if (error) Alert.alert('Error', error.message)
+            else setItems(prev => prev.map(x => x.id === p.id ? { ...x, rows: newRows, country: c } : x))
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
       ]
     )
   }
@@ -218,7 +243,15 @@ export default function UploadApprovalsScreen() {
 
                   <View style={styles.chips}>
                     <View style={styles.chip}><Ionicons name="person-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{p.uploader_name || 'Unknown'}</Text></View>
-                    <View style={styles.chip}><Ionicons name="earth-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{p.country || '—'}</Text></View>
+                    {p.status === 'pending' ? (
+                      <TouchableOpacity style={[styles.chip, styles.chipEditable]} onPress={() => correctCountry(p)} disabled={busy}>
+                        <Ionicons name="earth-outline" size={11} color="#0891b2" />
+                        <Text style={[styles.chipText, { color: '#0891b2', fontWeight: '700' }]}>{p.country || 'Set country'}</Text>
+                        <Ionicons name="chevron-down" size={10} color="#0891b2" />
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.chip}><Ionicons name="earth-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{p.country || '—'}</Text></View>
+                    )}
                     <View style={styles.chip}><Ionicons name="time-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{new Date(p.created_at).toLocaleDateString()}</Text></View>
                   </View>
 
@@ -272,6 +305,7 @@ const styles = StyleSheet.create({
   statusText:  { fontSize: 10, fontWeight: '700' },
   chips:  { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip:   { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#f8fafc' },
+  chipEditable: { backgroundColor: '#ecfeff', borderWidth: 1, borderColor: '#a5f3fc' },
   chipText: { fontSize: 11, color: '#64748b' },
   actionRow:  { flexDirection: 'row', gap: 8, marginTop: 2 },
   rejectBtn:  { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 10, borderWidth: 1.5, borderColor: '#fecaca', backgroundColor: '#fff5f5' },

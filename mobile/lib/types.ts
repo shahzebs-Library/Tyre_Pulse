@@ -1,5 +1,10 @@
 export type UserRole = 'admin' | 'manager' | 'director' | 'inspector' | 'tyre_man' | 'reporter'
 
+/** Countries the platform operates in — mirrors the web SettingsContext list.
+ *  A user's country drives data isolation and stamps their mobile-created rows. */
+export const COUNTRIES = ['KSA', 'UAE', 'Egypt'] as const
+export type Country = (typeof COUNTRIES)[number]
+
 export interface Profile {
   id: string
   full_name: string | null

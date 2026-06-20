@@ -143,7 +143,7 @@ export default function Comparison() {
     const maxYear = Math.max(periodA.year, periodB.year)
     const { data } = await fetchAllPages((from, to) => supabase
       .from('tyre_records')
-      .select('issue_date, cost, site, brand')
+      .select('issue_date, cost:cost_per_tyre, site, brand')
       .gte('issue_date', `${minYear}-01-01`)
       .lte('issue_date', `${maxYear}-12-31`)
       .range(from, to))

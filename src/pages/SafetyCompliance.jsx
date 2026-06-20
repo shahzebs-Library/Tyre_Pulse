@@ -92,7 +92,7 @@ export default function SafetyCompliance() {
           return q.range(rFrom, rTo)
         }, { max: 200000 }),
         fetchAllPages((rFrom, rTo) => supabase.from('inspections').select('*').gte('inspection_date', from.slice(0,10)).range(rFrom, rTo), { max: 200000 }),
-        supabase.from('accidents').select('*').gte('date', from.slice(0,10)),
+        supabase.from('accidents').select('*').gte('incident_date', from.slice(0,10)),
       ]
       const [tr, insp, acc] = await Promise.all(queries)
       setTyreRecords(tr.data || [])

@@ -30,7 +30,7 @@ export function useInspections(filters = {}) {
     queryFn: async () => {
       let q = supabase.from('inspections').select('*')
       if (filters.status)     q = q.eq('status', filters.status)
-      if (filters.vehicle_id) q = q.eq('vehicle_id', filters.vehicle_id)
+      if (filters.asset_no)   q = q.eq('asset_no', filters.asset_no)
       const { data, error } = await q.order('inspection_date', { ascending: false })
       if (error) throw error
       return data ?? []
@@ -62,7 +62,7 @@ export function useVehicles(filters = {}) {
       let q = supabase.from('vehicle_fleet').select('*')
       if (filters.status)  q = q.eq('status', filters.status)
       if (filters.country) q = q.eq('country', filters.country)
-      const { data, error } = await q.order('vehicle_number')
+      const { data, error } = await q.order('fleet_number')
       if (error) throw error
       return data ?? []
     },

@@ -390,7 +390,7 @@ export default function WorkshopManagement() {
     try {
       let q = supabase
         .from('work_orders')
-        .select('id,work_order_no,asset_no,status,priority,work_type,site,assigned_to,labour_cost,parts_cost,total_cost,created_at,completed_at,scheduled_date,description,parts_used')
+        .select('id,work_order_no,asset_no,status,priority,work_type,site,assigned_to:technician_name,labour_cost,parts_cost,total_cost,created_at,completed_at,scheduled_date:target_completion,description,parts_used')
         .order('created_at', { ascending: false })
 
       if (site)     q = q.eq('site', site)

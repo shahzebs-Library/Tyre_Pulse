@@ -50,7 +50,7 @@ export default function TyreScanCamera({ onClose, onResult }) {
       // Primary: tyre serial lookup
       const { data: tyreData } = await supabase
         .from('tyre_records')
-        .select('id,serial_no,asset_no,brand,site,status,tread_depth,pressure,risk_level,cost')
+        .select('id,serial_no,asset_no,brand,site,status,tread_depth,pressure:pressure_reading,risk_level,cost:cost_per_tyre')
         .ilike('serial_no', serial)
         .limit(1)
         .maybeSingle()

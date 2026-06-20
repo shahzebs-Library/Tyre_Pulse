@@ -304,15 +304,15 @@ export default function ExecutiveReport() {
         // dataset (otherwise totals/KPIs are computed on a 1000-row sample).
         const [rRes, iRes, aRes, fRes] = await Promise.all([
           fetchAllPages((from, to) => applyCountry(supabase.from('tyre_records').select(
-            'id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,qty,issue_date,tread_depth,country'
+            'id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,qty,issue_date,tread_depth,pressure_reading,country'
           ), activeCountry).order('issue_date', { ascending: false }).range(from, to), { max: 200000 }),
-          fetchAllPages((from, to) => supabase.from('inspections').select(
-            'id,asset_no,site,status,scheduled_date,completed_date,findings'
-          ).order('scheduled_date', { ascending: false }).range(from, to), { max: 50000 }),
-          fetchAllPages((from, to) => supabase.from('corrective_actions').select(
-            'id,site,status,priority,title,created_at,resolved_at'
-          ).order('created_at', { ascending: false }).range(from, to), { max: 50000 }),
-          supabase.from('vehicle_fleet').select('asset_no,site,vehicle_type,monthly_tyre_budget').then(
+          fetchAllPages((from, to) => applyCountry(supabase.from('inspections').select(
+            'id,asset_no,site,status,scheduled_date,completed_date,findings,country'
+          ), activeCountry).order('scheduled_date', { ascending: false }).range(from, to), { max: 50000 }),
+          fetchAllPages((from, to) => applyCountry(supabase.from('corrective_actions').select(
+            'id,site,status,priority,title,created_at,resolved_at,country'
+          ), activeCountry).order('created_at', { ascending: false }).range(from, to), { max: 50000 }),
+          applyCountry(supabase.from('vehicle_fleet').select('asset_no,site,vehicle_type,monthly_tyre_budget,country'), activeCountry).then(
             res => ({ data: res.data || [], error: null })
           ).catch(() => ({ data: [], error: null })),
         ])
@@ -887,10 +887,10 @@ export default function ExecutiveReport() {
     const wb = XLSX.utils.book_new()
 
     const kpiRows = [
-      { KPI: 'Fleet Avg CPK', Value: kpis.cpk.fleetAvgCpk.toFixed(6), Unit: `${currency}/km` },
-      { KPI: 'Median CPK', Value: kpis.cpk.medianCpk.toFixed(6), Unit: `${currency}/km` },
-      { KPI: 'Fleet Avg Tyre Life', Value: Math.round(kpis.avgTyreLife.avgKm), Unit: 'km' },
-      { KPI: 'Inspection Compliance', Value: kpis.inspectionCompliance.compliancePct.toFixed(1), Unit: '%' },
+      { KPI: 'Fleet Avg CPK', Value: Number(kpis.cpk.fleetAvgCpk || 0).toFixed(6), Unit: `${currency}/km` },
+      { KPI: 'Median CPK', Value: Number(kpis.cpk.medianCpk || 0).toFixed(6), Unit: `${currency}/km` },
+      { KPI: 'Fleet Avg Tyre Life', Value: Math.round(Number(kpis.avgTyreLife.avgKm) || 0), Unit: 'km' },
+      { KPI: 'Inspection Compliance', Value: Number(kpis.inspectionCompliance.compliancePct || 0).toFixed(1), Unit: '%' },
       { KPI: 'Failure Rate', Value: (kpis.failureRate.failureRate * 100).toFixed(1), Unit: '%' },
       { KPI: 'Critical Rate', Value: (kpis.failureRate.criticalRate * 100).toFixed(1), Unit: '%' },
       { KPI: 'Scrap Rate', Value: (kpis.scrapRate.scrapRate * 100).toFixed(1), Unit: '%' },

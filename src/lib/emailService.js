@@ -51,10 +51,15 @@ export function generateReportPdf(title, subtitle, columns, rows, summaryRows = 
   }
 
   // ── Main data table ──────────────────────────────────────────────────────────
+  // Coerce every cell to a string so a stray number/undefined/object from a
+  // caller can never make jsPDF-autoTable throw and break the emailed report.
+  const safeBody = (rows || []).map(row =>
+    Array.isArray(row) ? row.map(c => (c == null ? '' : String(c))) : row
+  )
   autoTable(doc, {
     startY,
     head: [columns],
-    body: rows,
+    body: safeBody,
     theme: 'striped',
     styles: {
       fontSize: 8,

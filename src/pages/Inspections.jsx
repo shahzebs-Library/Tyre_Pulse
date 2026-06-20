@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
@@ -380,10 +381,13 @@ export default function Inspections() {
 
   async function load() {
     setLoading(true)
-    let q = supabase.from('inspections').select('*').order('scheduled_date', { ascending: false })
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    if (profile?.role === 'Tyre Man' && profile?.id) q = q.eq('created_by', profile.id)
-    const { data } = await q
+    // Paginate past the 1000-row cap so the list AND its exports are complete.
+    const { data } = await fetchAllPages((from, to) => {
+      let q = supabase.from('inspections').select('*').order('scheduled_date', { ascending: false }).range(from, to)
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      if (profile?.role === 'Tyre Man' && profile?.id) q = q.eq('created_by', profile.id)
+      return q
+    }, { max: 100000 })
     const today = new Date().toISOString().split('T')[0]
     const enriched = (data || []).map(r => ({
       ...r,

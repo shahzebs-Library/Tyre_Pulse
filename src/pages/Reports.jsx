@@ -163,13 +163,15 @@ export default function Reports() {
       if (reportType === 'Inspection Report') {
         const buildInsp = () => {
           let q = supabase.from('inspections').select('*')
-          if (dateFrom)       q = q.gte('inspection_date', dateFrom)
-          if (dateTo)         q = q.lte('inspection_date', dateTo)
+          // scheduled_date is always populated; inspection_date can be null, so
+          // filtering/sorting on it would silently drop those inspections.
+          if (dateFrom)       q = q.gte('scheduled_date', dateFrom)
+          if (dateTo)         q = q.lte('scheduled_date', dateTo)
           if (filterSite)     q = q.ilike('site', `%${filterSite}%`)
           if (filterCountry)  q = q.eq('country', filterCountry)
           if (filterInspType) q = q.eq('inspection_type', filterInspType)
           if (!filterCountry) q = applyCountry(q, activeCountry)
-          return q.order('inspection_date', { ascending: false })
+          return q.order('scheduled_date', { ascending: false })
         }
         const { data } = await fetchAllPages((from, to) => buildInsp().range(from, to), { max: 100000 })
         rows = data ?? []

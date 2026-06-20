@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import AccidentDetailModal from '../components/AccidentDetailModal'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -203,9 +204,12 @@ export default function Accidents() {
 
   const loadRecords = useCallback(async () => {
     setLoading(true)
-    let q = supabase.from('accidents').select('*').order('incident_date', { ascending: false })
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    const { data, error: err } = await q
+    // Paginate past the 1000-row cap so the list AND its exports are complete.
+    const { data, error: err } = await fetchAllPages((from, to) => {
+      let q = supabase.from('accidents').select('*').order('incident_date', { ascending: false }).range(from, to)
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      return q
+    }, { max: 100000 })
     if (err) setError(err.message)
     else setRecords(data ?? [])
     setLoading(false)

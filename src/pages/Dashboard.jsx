@@ -191,14 +191,8 @@ export default function Dashboard() {
   useEffect(() => { applyShortcut('This Month') }, [])
   useEffect(() => { load() }, [activeCountry, dateFrom, dateTo])
 
-  // Refresh when the user returns to the tab (e.g. after uploading data),
-  // so newly-added records appear without changing filters.
-  useEffect(() => {
-    const onFocus = () => load()
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCountry, dateFrom, dateTo])
+  // Note: no window-focus reload — it made the page appear to refresh on its
+  // own when switching tabs. Use the manual Refresh button to re-pull on demand.
 
   async function load() {
     setLoading(true)

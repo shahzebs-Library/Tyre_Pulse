@@ -151,7 +151,15 @@ export default function AiChatScreen() {
           max_tokens: 1200,
         },
       })
-      const reply = error ? 'Unable to reach AI. Check your connection.' : (data?.content ?? 'No response.')
+      let reply: string
+      if (error) {
+        // Surface the function's real error (e.g. missing API key)
+        let detail = error.message
+        try { const body = await (error as any).context?.json?.(); if (body?.error) detail = body.error } catch { /* keep */ }
+        reply = `AI unavailable: ${detail}`
+      } else {
+        reply = (data as any)?.error ? `AI unavailable: ${(data as any).error}` : ((data as any)?.content ?? 'No response.')
+      }
       setMessages(prev => [
         ...prev.slice(0, -1),
         { role: 'assistant', content: reply, agent },

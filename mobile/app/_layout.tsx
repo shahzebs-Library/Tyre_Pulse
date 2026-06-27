@@ -8,6 +8,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { AuthProvider } from '../contexts/AuthContext'
 import { LanguageProvider } from '../contexts/LanguageContext'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 
 SplashScreen.preventAutoHideAsync().catch(() => {})
 
@@ -33,14 +34,16 @@ export default function RootLayout() {
   if (!ready) return null
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <LanguageProvider>
-          <AuthProvider>
-            <Stack screenOptions={{ headerShown: false }} />
-          </AuthProvider>
-        </LanguageProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <LanguageProvider>
+            <AuthProvider>
+              <Stack screenOptions={{ headerShown: false }} />
+            </AuthProvider>
+          </LanguageProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   )
 }

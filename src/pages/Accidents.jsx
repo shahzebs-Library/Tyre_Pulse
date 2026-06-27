@@ -9,6 +9,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { resolveStorageUrl } from '../lib/storageRefs'
 import * as XLSX from 'xlsx'
 import { Bar } from 'react-chartjs-2'
 import {
@@ -1294,7 +1295,7 @@ export default function Accidents() {
                   <div className="flex flex-wrap gap-2 mt-2">
                     {form.photos.map((src, i) => (
                       <div key={i} className="relative">
-                        <img src={src} alt={`Photo ${i + 1}`} className="h-16 w-16 object-cover rounded border border-gray-700" />
+                        <PhotoPreview src={src} alt={`Photo ${i + 1}`} className="h-16 w-16 object-cover rounded border border-gray-700" />
                         <button
                           type="button"
                           onClick={() => removePhoto(i)}
@@ -1478,4 +1479,22 @@ export default function Accidents() {
       )}
     </div>
   )
+}
+
+function PhotoPreview({ src, alt, className }) {
+  const [resolved, setResolved] = useState(src)
+
+  useEffect(() => {
+    let mounted = true
+    resolveStorageUrl(src).then(url => {
+      if (mounted) setResolved(url || '')
+    })
+    return () => { mounted = false }
+  }, [src])
+
+  if (!resolved) {
+    return <div className={`${className} bg-gray-800 flex items-center justify-center text-[10px] text-gray-500`}>Photo</div>
+  }
+
+  return <img src={resolved} alt={alt} className={className} />
 }

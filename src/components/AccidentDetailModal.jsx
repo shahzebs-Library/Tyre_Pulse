@@ -15,6 +15,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../lib/formatters'
 import { describeAuditRow } from '../lib/auditDiff'
+import { resolveStorageUrls } from '../lib/storageRefs'
 
 const RECOVERY_SOURCES = ['none', 'insurer', 'third_party', 'driver', 'warranty']
 const RECOVERY_SOURCE_LABELS = { none: 'None', insurer: 'Insurer', third_party: 'Third Party', driver: 'Driver', warranty: 'Warranty' }
@@ -186,6 +187,16 @@ export default function AccidentDetailModal({ accidentId, onClose, onChanged }) 
 
 function OverviewTab({ acc }) {
   const photos = Array.isArray(acc.photos) ? acc.photos.filter(Boolean) : []
+  const [resolvedPhotos, setResolvedPhotos] = useState([])
+
+  useEffect(() => {
+    let mounted = true
+    resolveStorageUrls(photos).then(urls => {
+      if (mounted) setResolvedPhotos(urls)
+    })
+    return () => { mounted = false }
+  }, [JSON.stringify(photos)])
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -204,11 +215,11 @@ function OverviewTab({ acc }) {
           <p className="text-sm text-gray-300 leading-relaxed mt-1">{acc.description}</p>
         </div>
       )}
-      {photos.length > 0 && (
+      {resolvedPhotos.length > 0 && (
         <div>
-          <p className="label mb-2">Photos ({photos.length})</p>
+          <p className="label mb-2">Photos ({resolvedPhotos.length})</p>
           <div className="flex flex-wrap gap-2">
-            {photos.map((src, i) => (
+            {resolvedPhotos.map((src, i) => (
               <a key={i} href={src} target="_blank" rel="noreferrer">
                 <img src={src} alt={`Photo ${i + 1}`} className="h-20 w-20 object-cover rounded border border-gray-700 hover:border-green-500 transition-colors" />
               </a>

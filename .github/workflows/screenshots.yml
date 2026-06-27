@@ -1,0 +1,92 @@
+name: Take Play Store Screenshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: 'App login email'
+        required: true
+      password:
+        description: 'App login password'
+        required: true
+
+jobs:
+  screenshots:
+    name: Capture phone screenshots
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        run: npm install -g playwright && npx playwright install chromium --with-deps
+
+      - name: Take screenshots
+        env:
+          APP_EMAIL: ${{ github.event.inputs.email }}
+          APP_PASSWORD: ${{ github.event.inputs.password }}
+        run: |
+          cat > /tmp/screenshots.mjs << 'SCRIPT'
+          import { chromium } from 'playwright';
+          import { mkdirSync } from 'fs';
+
+          const DIR = 'play-store-screenshots';
+          mkdirSync(DIR, { recursive: true });
+
+          const EMAIL = process.env.APP_EMAIL;
+          const PASSWORD = process.env.APP_PASSWORD;
+          const BASE = 'https://tyre-pulse-peach.vercel.app';
+
+          // Google Play phone screenshot: 1080x1920 (9:16 portrait)
+          const browser = await chromium.launch({ args: ['--no-sandbox'] });
+          const ctx = await browser.newContext({
+            viewport: { width: 1080, height: 1920 },
+            deviceScaleFactor: 1,
+          });
+          const page = await ctx.newPage();
+
+          // ── Screenshot 1: Login screen ──────────────────────────────────
+          await page.goto(BASE, { waitUntil: 'networkidle', timeout: 30000 });
+          await page.waitForTimeout(1500);
+          await page.screenshot({ path: `${DIR}/1_login.png` });
+          console.log('✓ 1_login.png');
+
+          // ── Log in ──────────────────────────────────────────────────────
+          await page.fill('input[type="email"], input[name="email"], input[placeholder*="email" i]', EMAIL);
+          await page.fill('input[type="password"], input[name="password"], input[placeholder*="password" i]', PASSWORD);
+          await page.click('button[type="submit"], button:has-text("Sign in"), button:has-text("Login")');
+          await page.waitForURL(`${BASE}/**`, { timeout: 15000 }).catch(() => {});
+          await page.waitForTimeout(3000);
+
+          // ── Screenshot 2: Dashboard ─────────────────────────────────────
+          await page.screenshot({ path: `${DIR}/2_dashboard.png` });
+          console.log('✓ 2_dashboard.png');
+
+          // ── Screenshot 3: Tyre Records or Inspections ──────────────────
+          const navLinks = ['/tyre-records', '/inspections', '/vehicles', '/reports'];
+          for (const link of navLinks) {
+            try {
+              await page.goto(`${BASE}${link}`, { waitUntil: 'networkidle', timeout: 15000 });
+              await page.waitForTimeout(2000);
+              await page.screenshot({ path: `${DIR}/3_records.png` });
+              console.log(`✓ 3_records.png (${link})`);
+              break;
+            } catch { continue; }
+          }
+
+          await browser.close();
+          console.log('All screenshots saved to:', DIR);
+          SCRIPT
+          node /tmp/screenshots.mjs
+
+      - name: Upload screenshots as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: play-store-screenshots
+          path: play-store-screenshots/
+          retention-days: 7

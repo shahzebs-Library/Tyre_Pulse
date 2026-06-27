@@ -19,6 +19,7 @@ import { CONDITION_META, CONDITIONS, SHOW_TREAD_DEPTH } from '../lib/tyreConditi
 import { lookupTyreBySerial, TyreLookupRecord } from '../lib/tyreLookup'
 import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
+import { storageRef } from '../lib/storageRefs'
 
 type UploadState = 'idle' | 'uploading' | 'done' | 'error'
 type LookupState = 'idle' | 'searching' | 'found' | 'none'
@@ -95,8 +96,7 @@ export default function TyreEditor({ data, onChange }: Props) {
 
       if (uploadError) throw uploadError
 
-      const { data: urlData } = supabase.storage.from('tyre-photos').getPublicUrl(path)
-      update({ photo_url: urlData.publicUrl })
+      update({ photo_url: storageRef('tyre-photos', path) })
       setUploadState('done')
     } catch (err) {
       console.warn('[TyrePulse] Photo upload failed:', err)

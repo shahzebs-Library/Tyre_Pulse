@@ -80,17 +80,6 @@ export default function AiChatScreen() {
   const { profile } = useAuth()
   const router = useRouter()
 
-  if (guardLoading || !allowed) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color="#7c3aed" />
-        </View>
-      </SafeAreaView>
-    )
-  }
-
   const [agent, setAgent]       = useState<AgentKey>('analyst')
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput]       = useState('')
@@ -100,6 +89,8 @@ export default function AiChatScreen() {
 
   // Pre-load fleet context once
   useEffect(() => {
+    if (!allowed) return
+
     async function buildContext() {
       const [accRes, alertRes, inspRes] = await Promise.all([
         supabase.from('accidents').select('severity, status, site').limit(200),
@@ -123,7 +114,18 @@ export default function AiChatScreen() {
       )
     }
     buildContext()
-  }, [])
+  }, [allowed, profile?.full_name, profile?.role])
+
+  if (guardLoading || !allowed) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color="#7c3aed" />
+        </View>
+      </SafeAreaView>
+    )
+  }
 
   async function send(text?: string) {
     const q = (text ?? input).trim()

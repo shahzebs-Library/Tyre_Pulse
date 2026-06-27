@@ -1,11 +1,13 @@
 {
   "name": "tyrepulse-inspector",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
+    "typecheck": "tsc --noEmit",
+    "doctor": "expo-doctor",
     "build:android:preview": "eas build --platform android --profile preview",
     "build:android:production": "eas build --platform android --profile production",
     "submit:android": "eas submit --platform android --profile production --latest",
@@ -16,7 +18,7 @@
     "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "@supabase/supabase-js": "^2.45.4",
+    "@supabase/supabase-js": "^2.108.2",
     "expo": "~54.0.0",
     "expo-asset": "~12.0.13",
     "expo-build-properties": "~1.0.10",
@@ -28,9 +30,9 @@
     "expo-linking": "~8.0.12",
     "expo-network": "~8.0.8",
     "expo-print": "~15.0.7",
-    "expo-sharing": "~14.0.7",
     "expo-router": "~6.0.24",
     "expo-secure-store": "~15.0.8",
+    "expo-sharing": "~14.0.7",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-updates": "~29.0.18",
@@ -49,5 +51,8 @@
     "@types/react": "~19.1.10",
     "babel-preset-expo": "~54.0.10",
     "typescript": "~5.9.2"
+  },
+  "overrides": {
+    "undici": "^6.27.0"
   }
 }

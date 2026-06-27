@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto'
 import { createClient } from '@supabase/supabase-js'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import Constants from 'expo-constants'
+import { secureStorage } from './secureStorage'
 
 // Resolve connection config: EAS-injected env first, then app.json `extra`
 // fallback so a built APK always has a valid Supabase connection even if the
@@ -19,15 +19,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('[TyrePulse] Missing Supabase config — set EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY or app.json extra.')
 }
 
-const storageAdapter = {
-  getItem: async (key: string) => await AsyncStorage.getItem(key),
-  setItem: async (key: string, value: string) => await AsyncStorage.setItem(key, value),
-  removeItem: async (key: string) => await AsyncStorage.removeItem(key),
-}
-
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: storageAdapter,
+    storage: secureStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

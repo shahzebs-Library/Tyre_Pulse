@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
+import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import AccidentPhotoGrid from '../../../components/AccidentPhotoGrid'
 import {
   VehicleFleet, AccidentDraft, AccidentType, AccidentSeverity,
@@ -33,6 +34,7 @@ const TYPES: AccidentType[] = [
 const SEVERITIES: AccidentSeverity[] = ['minor', 'moderate', 'severe', 'fatal']
 
 export default function AccidentReportScreen() {
+  const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector', 'tyre_man'])
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const router = useRouter()
@@ -51,10 +53,10 @@ export default function AccidentReportScreen() {
   const backIcon    = isRTL ? 'arrow-forward' : 'arrow-back'
   const forwardIcon = isRTL ? 'arrow-back' : 'arrow-forward'
 
-  useEffect(() => { loadSites() }, [])
+  useEffect(() => { if (allowed) loadSites() }, [allowed])
   useEffect(() => {
-    if (draft.site) loadVehicles(draft.site)
-  }, [draft.site])
+    if (allowed && draft.site) loadVehicles(draft.site)
+  }, [allowed, draft.site])
 
   async function loadSites() {
     const { data } = await supabase.from('vehicle_fleet').select('site').order('site')
@@ -183,6 +185,17 @@ export default function AccidentReportScreen() {
   }
 
   // ── STEP 1: Incident Details ───────────────────────────────────────────────
+  if (guardLoading || !allowed) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="dark-content" backgroundColor="#fff5f5" />
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#dc2626" />
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   if (step === 'step1') {
     const selectedVehicle = vehicles.find(v => v.asset_no === draft.asset_no) ?? null
 
@@ -596,6 +609,7 @@ const TYPE_ICONS: Record<AccidentType, any> = {
 
 const styles = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: '#fff5f5' },
+  loader:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
   successSafe: { justifyContent: 'center', alignItems: 'center', padding: 32 },
   scroll:  { flex: 1 },
   content: { padding: 16, paddingBottom: 48, gap: 16 },

@@ -7,6 +7,7 @@
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
 import { supabase } from './supabase'
+import { resolveStorageUrls } from './storageRefs'
 import {
   AccidentRecord, AccidentPart, AccidentRemark,
   CLAIM_STATUS_LABELS, PART_STATUS_LABELS,
@@ -34,7 +35,7 @@ export async function exportAccidentPdf(accident: AccidentRecord): Promise<void>
   const partsTotal = parts.reduce((s, p) => s + (Number(p.total_cost) || 0), 0)
   const grossCost = (Number(accident.estimated_damage_cost) || 0) + partsTotal
   const netCost = Math.max(0, grossCost - (Number(accident.recovered_amount) || 0))
-  const photos = Array.isArray(accident.photos) ? accident.photos.filter(u => u && /^https?:/.test(u)) : []
+  const photos = await resolveStorageUrls(Array.isArray(accident.photos) ? accident.photos.filter(Boolean) : [])
 
   const partsRows = parts.length
     ? parts.map(p => `<tr>

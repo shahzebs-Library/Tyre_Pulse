@@ -1,29 +1,24 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, jsonResponse, requireApprovedRole } from '../_shared/auth.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders(req) })
   }
 
   try {
+    const auth = await requireApprovedRole(req, ['admin', 'manager', 'director'])
+    if (auth instanceof Response) return auth
+
     const { text, model = 'text-embedding-3-small' } = await req.json()
 
     if (!text || typeof text !== 'string') {
-      return new Response(JSON.stringify({ error: 'Missing or invalid required field: text' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return jsonResponse(req, { error: 'Missing or invalid required field: text' }, 400)
     }
 
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')
     if (!OPENAI_API_KEY) {
-      return new Response(JSON.stringify({ error: 'OPENAI_API_KEY not configured' }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      return jsonResponse(req, { error: 'OPENAI_API_KEY not configured' }, 500)
     }
 
     const response = await fetch('https://api.openai.com/v1/embeddings', {
@@ -48,13 +43,9 @@ serve(async (req) => {
 
     if (!embedding) throw new Error('No embedding returned')
 
-    return new Response(JSON.stringify({ embedding }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return jsonResponse(req, { embedding })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return jsonResponse(req, { error: message }, 500)
   }
 })

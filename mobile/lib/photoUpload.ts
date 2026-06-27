@@ -8,6 +8,7 @@
 
 import * as FileSystem from 'expo-file-system'
 import { supabase } from './supabase'
+import { storageRef } from './storageRefs'
 
 /**
  * Upload a locally captured photo to Supabase Storage.
@@ -50,8 +51,7 @@ export async function uploadInspectionPhoto(
       return null
     }
 
-    const { data } = supabase.storage.from('inspection-photos').getPublicUrl(path)
-    return data?.publicUrl ?? null
+    return storageRef('inspection-photos', path)
   } catch (err: any) {
     console.warn('[photoUpload] Unexpected error:', err?.message)
     return null
@@ -80,8 +80,7 @@ export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<
       .upload(path, bytes, { contentType, upsert: true })
     if (error) { console.warn('[photoUpload] accident upload error:', error.message); return null }
 
-    const { data } = supabase.storage.from('tyre-photos').getPublicUrl(path)
-    return data?.publicUrl ?? null
+    return storageRef('tyre-photos', path)
   } catch (err: any) {
     console.warn('[photoUpload] accident upload failed:', err?.message)
     return null

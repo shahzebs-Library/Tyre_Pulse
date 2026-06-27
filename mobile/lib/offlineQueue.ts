@@ -1,13 +1,13 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { OfflineInspection, InspectionPayload } from './types'
 import { supabase } from './supabase'
 import { uploadAllPositionPhotos } from './photoUpload'
+import { secureStorage } from './secureStorage'
 
 const QUEUE_KEY = 'tp_inspection_queue_v1'
 
 export async function getQueue(): Promise<OfflineInspection[]> {
   try {
-    const raw = await AsyncStorage.getItem(QUEUE_KEY)
+    const raw = await secureStorage.getItem(QUEUE_KEY)
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
@@ -15,7 +15,7 @@ export async function getQueue(): Promise<OfflineInspection[]> {
 }
 
 async function saveQueue(queue: OfflineInspection[]): Promise<void> {
-  await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
+  await secureStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
 }
 
 export async function enqueueInspection(payload: InspectionPayload): Promise<string> {

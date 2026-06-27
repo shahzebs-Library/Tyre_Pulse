@@ -19,6 +19,7 @@ export function useRoleGuard(allowedRoles: UserRole[]): { allowed: boolean; load
   const { profile, loading } = useAuth()
   const router = useRouter()
   const [allowed, setAllowed] = useState(false)
+  const allowedRolesKey = allowedRoles.join('|')
 
   useEffect(() => {
     if (loading) return
@@ -28,11 +29,12 @@ export function useRoleGuard(allowedRoles: UserRole[]): { allowed: boolean; load
 
     if (!permitted) {
       // Redirect to home — user lacks required role
+      setAllowed(false)
       router.replace('/')
     } else {
       setAllowed(true)
     }
-  }, [loading, profile?.role])
+  }, [allowedRolesKey, loading, profile?.role, router])
 
   return { allowed, loading }
 }

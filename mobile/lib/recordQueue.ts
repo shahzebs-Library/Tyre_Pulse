@@ -10,8 +10,8 @@
  * permanent public URLs; an offline submit keeps the local photo URLs and
  * they upload on the next successful sync attempt by the screen itself.
  */
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from './supabase'
+import { secureStorage } from './secureStorage'
 
 const KEY = 'tp_record_queue_v1'
 
@@ -29,7 +29,7 @@ export interface QueuedRecord {
 
 export async function getRecordQueue(): Promise<QueuedRecord[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY)
+    const raw = await secureStorage.getItem(KEY)
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
@@ -37,7 +37,7 @@ export async function getRecordQueue(): Promise<QueuedRecord[]> {
 }
 
 async function save(queue: QueuedRecord[]): Promise<void> {
-  await AsyncStorage.setItem(KEY, JSON.stringify(queue))
+  await secureStorage.setItem(KEY, JSON.stringify(queue))
 }
 
 export async function enqueueRecord(table: string, payload: Record<string, any>): Promise<string> {

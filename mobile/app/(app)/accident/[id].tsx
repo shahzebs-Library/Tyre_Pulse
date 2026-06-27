@@ -19,9 +19,11 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
+import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import AccidentClaimsPanel from '../../../components/AccidentClaimsPanel'
 import { describeAuditRow, AuditRow } from '../../../lib/auditDiff'
 import { exportAccidentPdf } from '../../../lib/accidentPdf'
+import { resolveStorageUrls } from '../../../lib/storageRefs'
 import {
   AccidentRecord, AccidentStatus,
   SEVERITY_COLORS, STATUS_COLORS,
@@ -45,6 +47,7 @@ const TYPE_ICONS: Record<string, string> = {
 
 export default function AccidentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
+  const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector'])
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const router = useRouter()
@@ -60,6 +63,7 @@ export default function AccidentDetailScreen() {
   const [aiResult, setAiResult]             = useState<string | null>(null)
   const [showAiModal, setShowAiModal]       = useState(false)
   const [exporting, setExporting]           = useState(false)
+  const [photoUrls, setPhotoUrls]           = useState<string[]>([])
 
   async function handleExportPdf() {
     if (!accident || exporting) return
@@ -79,7 +83,7 @@ export default function AccidentDetailScreen() {
   const canSeeAudit     = isAdminOrAbove(role)
 
   const load = useCallback(async () => {
-    if (!id) return
+    if (!allowed || !id) return
     const [accRes, auditRes] = await Promise.all([
       supabase.from('accidents').select('*').eq('id', id).single(),
       canSeeAudit
@@ -92,10 +96,12 @@ export default function AccidentDetailScreen() {
       router.back()
       return
     }
-    setAccident(accRes.data as AccidentRecord)
+    const loadedAccident = accRes.data as AccidentRecord
+    setAccident(loadedAccident)
+    setPhotoUrls(await resolveStorageUrls(Array.isArray(loadedAccident.photos) ? loadedAccident.photos.filter(Boolean) : []))
     setAuditLog((auditRes.data ?? []) as AuditRow[])
     setLoading(false)
-  }, [id, canSeeAudit])
+  }, [allowed, id, canSeeAudit])
 
   useEffect(() => { load() }, [load])
 
@@ -203,7 +209,7 @@ Risk Level: [Critical / High / Medium / Low]
     )
   }
 
-  if (loading) {
+  if (guardLoading || !allowed || loading) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff5f5" />
@@ -218,7 +224,7 @@ Risk Level: [Critical / High / Medium / Low]
 
   const sevColor    = SEVERITY_COLORS[accident.severity]
   const statusColor = STATUS_COLORS[accident.status]
-  const photos: string[] = Array.isArray(accident.photos) ? accident.photos.filter(Boolean) : []
+  const photos: string[] = photoUrls
 
   return (
     <SafeAreaView style={styles.safe}>

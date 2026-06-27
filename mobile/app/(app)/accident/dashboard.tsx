@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
+import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import {
   AccidentRecord, AccidentSeverity,
   SEVERITY_COLORS, STATUS_COLORS,
@@ -28,6 +29,7 @@ type FilterTab = 'all' | 'mine'
 const SEVERITY_ORDER: AccidentSeverity[] = ['minor', 'moderate', 'severe', 'fatal']
 
 export default function AccidentDashboardScreen() {
+  const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector'])
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const router = useRouter()
@@ -44,6 +46,8 @@ export default function AccidentDashboardScreen() {
   const elevated  = isAdminOrAbove(profile?.role ?? null)
 
   const load = useCallback(async () => {
+    if (!allowed) return
+
     try {
       let query = supabase
         .from('accidents')
@@ -69,7 +73,7 @@ export default function AccidentDashboardScreen() {
     } finally {
       setLoading(false)
     }
-  }, [filterTab, siteFilter, profile?.id, elevated])
+  }, [allowed, filterTab, siteFilter, profile?.id, elevated])
 
   useEffect(() => { load() }, [load])
 
@@ -101,7 +105,7 @@ export default function AccidentDashboardScreen() {
       )
     : accidents
 
-  if (loading) {
+  if (guardLoading || !allowed || loading) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="dark-content" backgroundColor="#fff5f5" />

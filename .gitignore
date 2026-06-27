@@ -7,3 +7,4 @@ dist/
 .playwright-mcp/
 .idea/
 mobile/expo-start*.log
+.mcp.local.json

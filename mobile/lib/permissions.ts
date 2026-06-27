@@ -141,6 +141,13 @@ export const TAB_BAR: TabDescriptor[] = [
     visible: canViewReports,
   },
   {
+    name: 'ai/index',
+    labelKey: 'tabs.ai',
+    icon: 'sparkles-outline',
+    activeTint: '#7c3aed',
+    visible: canUseAI,
+  },
+  {
     name: 'admin/index',
     labelKey: 'tabs.admin',
     icon: 'shield-outline',

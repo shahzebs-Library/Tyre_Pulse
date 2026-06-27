@@ -36,7 +36,7 @@ export async function uploadInspectionPhoto(
 
     // Read file as base64 — required for RN where Blob is not a true File
     const base64 = await FileSystem.readAsStringAsync(localUri, {
-      encoding: FileSystem.EncodingType.Base64,
+      encoding: 'base64' as any,
     })
 
     const bytes = decodeBase64(base64)
@@ -72,7 +72,7 @@ export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
     const path = `accidents/${Date.now()}_${index}.${ext}`
 
-    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 })
+    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' as any })
     const bytes = decodeBase64(base64)
 
     const { error } = await supabase.storage

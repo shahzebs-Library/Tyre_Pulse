@@ -36,8 +36,11 @@
   "tabs": {
     "home": "Home",
     "inspect": "Inspect",
+    "records": "Records",
     "accident": "Accident",
-    "history": "History",
+    "workorders": "Actions",
+    "analytics": "Analytics",
+    "reports": "Reports",
     "admin": "Admin",
     "profile": "Profile"
   },

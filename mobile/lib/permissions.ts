@@ -47,6 +47,36 @@ export function canReviewAccidents(role: UserRole | null | undefined): boolean {
   return isAdminOrAbove(role)
 }
 
+/** Tyre records list — all roles with operational access. */
+export function canViewRecords(role: UserRole | null | undefined): boolean {
+  return role === 'inspector' || role === 'tyre_man' || role === 'reporter' || isAdminOrAbove(role)
+}
+
+/** Can edit tyre records inline (admin and manager). */
+export function canEditRecords(role: UserRole | null | undefined): boolean {
+  return role === 'admin' || role === 'manager'
+}
+
+/** Fleet analytics — management roles only. */
+export function canViewAnalytics(role: UserRole | null | undefined): boolean {
+  return isAdminOrAbove(role)
+}
+
+/** Corrective actions / work orders — field staff + management. */
+export function canViewWorkOrders(role: UserRole | null | undefined): boolean {
+  return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
+}
+
+/** Can update work order status. */
+export function canUpdateWorkOrders(role: UserRole | null | undefined): boolean {
+  return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
+}
+
+/** PDF report generation — management + reporter. */
+export function canViewReports(role: UserRole | null | undefined): boolean {
+  return isAdminOrAbove(role) || role === 'reporter'
+}
+
 // ── Navigation model ────────────────────────────────────────────────────────
 //
 // The tab bar is rendered from this descriptor so a single change here keeps
@@ -79,6 +109,12 @@ export const TAB_BAR: TabDescriptor[] = [
     visible: canInspect,
   },
   {
+    name: 'records/index',
+    labelKey: 'tabs.records',
+    icon: 'layers-outline',
+    visible: canViewRecords,
+  },
+  {
     name: 'accident/dashboard',
     labelKey: 'tabs.accident',
     icon: 'warning-outline',
@@ -86,10 +122,23 @@ export const TAB_BAR: TabDescriptor[] = [
     visible: canViewAccidents,
   },
   {
-    name: 'history',
-    labelKey: 'tabs.history',
-    icon: 'time-outline',
-    visible: () => true,
+    name: 'workorders/index',
+    labelKey: 'tabs.workorders',
+    icon: 'construct-outline',
+    visible: canViewWorkOrders,
+  },
+  {
+    name: 'analytics/index',
+    labelKey: 'tabs.analytics',
+    icon: 'bar-chart-outline',
+    activeTint: '#3b82f6',
+    visible: canViewAnalytics,
+  },
+  {
+    name: 'reports/index',
+    labelKey: 'tabs.reports',
+    icon: 'document-text-outline',
+    visible: canViewReports,
   },
   {
     name: 'admin/index',

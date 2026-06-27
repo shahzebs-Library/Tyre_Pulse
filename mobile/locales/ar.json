@@ -36,7 +36,11 @@
   "tabs": {
     "home": "الرئيسية",
     "inspect": "فحص",
+    "records": "السجلات",
     "accident": "حادثة",
+    "workorders": "الإجراءات",
+    "analytics": "التحليلات",
+    "reports": "التقارير",
     "history": "السجل",
     "admin": "الإدارة",
     "profile": "الملف الشخصي"

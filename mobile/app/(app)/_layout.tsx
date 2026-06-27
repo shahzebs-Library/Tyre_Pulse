@@ -73,11 +73,12 @@ export default function AppLayout() {
       })}
 
       {/* Hidden routes — reachable via router.push but never in the tab bar */}
-      <Tabs.Screen name="scanner"         options={{ href: null }} />
-      <Tabs.Screen name="accident/report" options={{ href: null }} />
-      <Tabs.Screen name="accident/[id]"   options={{ href: null }} />
-      <Tabs.Screen name="admin/ai-chat"   options={{ href: null }} />
-      <Tabs.Screen name="admin/users"     options={{ href: null }} />
+      <Tabs.Screen name="scanner"            options={{ href: null }} />
+      <Tabs.Screen name="accident/report"    options={{ href: null }} />
+      <Tabs.Screen name="accident/[id]"      options={{ href: null }} />
+      <Tabs.Screen name="admin/ai-chat"      options={{ href: null }} />
+      <Tabs.Screen name="admin/users"        options={{ href: null }} />
+      <Tabs.Screen name="records/[id]"       options={{ href: null }} />
     </Tabs>
   )
 }

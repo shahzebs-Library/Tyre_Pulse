@@ -185,7 +185,7 @@ export default function AdminDashboardScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#7c3aed" />}
       >
-        {/* ── Quick actions ─────────────────────────────────────────────── */}
+        {/* ── Quick actions row 1: operational ─────────────────────────── */}
         <View style={styles.quickRow}>
           <QuickAction
             icon="sparkles-outline"
@@ -199,26 +199,54 @@ export default function AdminDashboardScreen() {
             <QuickAction
               icon="people-outline"
               label="Users"
-              sublabel={stats!.pendingUsers > 0 ? `${stats!.pendingUsers} pending` : 'Manage'}
+              sublabel={stats != null && stats.pendingUsers > 0 ? `${stats.pendingUsers} pending` : 'Manage'}
               color="#2563eb"
               bg="#eff6ff"
-              badge={stats!.pendingUsers > 0 ? stats!.pendingUsers : undefined}
+              badge={stats != null && stats.pendingUsers > 0 ? stats.pendingUsers : undefined}
               onPress={() => router.push('/(app)/admin/users')}
             />
           )}
           <QuickAction
             icon="warning-outline"
             label="Accidents"
-            sublabel={`${stats!.openAccidents} open`}
+            sublabel={stats != null ? `${stats.openAccidents} open` : '—'}
             color="#dc2626"
             bg="#fff5f5"
-            badge={stats!.criticalAccidents > 0 ? stats!.criticalAccidents : undefined}
+            badge={stats != null && stats.criticalAccidents > 0 ? stats.criticalAccidents : undefined}
             onPress={() => router.push('/(app)/accident/dashboard')}
           />
         </View>
 
+        {/* ── Quick actions row 2: fleet management ─────────────────────── */}
+        <View style={styles.quickRow}>
+          <QuickAction
+            icon="location-outline"
+            label="Sites & Fleet"
+            sublabel="Add vehicles & sites"
+            color="#0284c7"
+            bg="#f0f9ff"
+            onPress={() => router.push('/(app)/admin/sites')}
+          />
+          <QuickAction
+            icon="bar-chart-outline"
+            label="Analytics"
+            sublabel="Fleet insights"
+            color="#059669"
+            bg="#f0fdf4"
+            onPress={() => router.push('/(app)/analytics')}
+          />
+          <QuickAction
+            icon="document-text-outline"
+            label="Reports"
+            sublabel="Export & review"
+            color="#b45309"
+            bg="#fffbeb"
+            onPress={() => router.push('/(app)/reports')}
+          />
+        </View>
+
         {/* ── Closures awaiting approval (elevated) ────────────────────── */}
-        {stats!.pendingClosures > 0 && (
+        {stats != null && stats.pendingClosures > 0 && (
           <TouchableOpacity
             style={styles.closureBanner}
             onPress={() => router.push('/(app)/accident/dashboard')}
@@ -238,7 +266,7 @@ export default function AdminDashboardScreen() {
         )}
 
         {/* ── Pending approval banner (admin only) ─────────────────────── */}
-        {isAdmin(profile?.role) && stats!.pendingUsers > 0 && (
+        {isAdmin(profile?.role) && stats != null && stats.pendingUsers > 0 && (
           <TouchableOpacity
             style={styles.approvalBanner}
             onPress={() => router.push('/(app)/admin/users')}
@@ -326,7 +354,7 @@ export default function AdminDashboardScreen() {
         )}
 
         {/* ── No critical items ─────────────────────────────────────────── */}
-        {accidents.length === 0 && alerts.length === 0 && stats!.pendingUsers === 0 && (
+        {accidents.length === 0 && alerts.length === 0 && (stats == null || stats.pendingUsers === 0) && (
           <View style={styles.allClear}>
             <Ionicons name="checkmark-circle" size={52} color="#34d399" />
             <Text style={styles.allClearTitle}>All Clear</Text>

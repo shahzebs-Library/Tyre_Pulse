@@ -38,12 +38,15 @@ export default function NewInspectionScreen() {
   const { allowed } = useRoleGuard(INSPECT_ROLES)
 
   const [step, setStep] = useState<Step>('header')
-  const [sites, setSites] = useState<string[]>([])
+  const [sites, setSites] = useState<{ name: string; country: string }[]>([])
   const [vehicles, setVehicles] = useState<VehicleFleet[]>([])
   const [filteredVehicles, setFilteredVehicles] = useState<VehicleFleet[]>([])
   const [vehicleQuery, setVehicleQuery] = useState('')
   const [selectedSite, setSelectedSite] = useState(params.site ?? profile?.site ?? '')
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleFleet | null>(null)
+  const [manualAsset, setManualAsset] = useState('')
+  const [manualVehicleType, setManualVehicleType] = useState('Truck')
+  const [useManualEntry, setUseManualEntry] = useState(false)
   const [odometer, setOdometer] = useState('')
   const [headerNotes, setHeaderNotes] = useState('')
   const [loadingVehicles, setLoadingVehicles] = useState(false)
@@ -109,14 +112,15 @@ export default function NewInspectionScreen() {
   }, [filteredVehicles, params.asset, selectedVehicle])
 
   useEffect(() => {
-    if (selectedVehicle) {
-      const pos = getPositionsForVehicle(selectedVehicle.vehicle_type)
+    const v = selectedVehicle ?? (useManualEntry && manualAsset ? getEffectiveVehicle() : null)
+    if (v) {
+      const pos = getPositionsForVehicle(v.vehicle_type)
       setPositions(pos)
       const initialData: Record<string, TyrePositionData> = {}
       pos.forEach(p => { initialData[p] = emptyTyrePosition(p) })
       setTyreData(initialData)
     }
-  }, [selectedVehicle])
+  }, [selectedVehicle, useManualEntry, manualVehicleType])
 
   // Pre-fill from a scanned tyre (serial + position). Runs once positions exist.
   useEffect(() => {
@@ -142,13 +146,50 @@ export default function NewInspectionScreen() {
   }, [positions, params.tyreSerial, params.tyrePosition, t])
 
   async function loadSites() {
-    const { data } = await supabase
+    // Primary: dedicated sites table (created by migration)
+    const { data: sitesData } = await supabase
+      .from('sites')
+      .select('name, country')
+      .eq('active', true)
+      .order('country')
+      .order('name')
+
+    // Fallback: distinct sites from vehicle_fleet
+    const { data: fleetData } = await supabase
       .from('vehicle_fleet')
-      .select('site')
+      .select('site, country')
+      .not('site', 'is', null)
       .order('site')
-    if (data) {
-      const unique = [...new Set(data.map(r => r.site).filter(Boolean))] as string[]
-      setSites(unique)
+
+    const fromSitesTable: { name: string; country: string }[] =
+      (sitesData ?? []).map((s: any) => ({ name: s.name, country: s.country ?? '' }))
+
+    const fromFleet: { name: string; country: string }[] = []
+    const seen = new Set(fromSitesTable.map(s => s.name))
+    ;(fleetData ?? []).forEach((r: any) => {
+      if (r.site && !seen.has(r.site)) {
+        fromFleet.push({ name: r.site, country: r.country ?? '' })
+        seen.add(r.site)
+      }
+    })
+
+    const all = [...fromSitesTable, ...fromFleet]
+
+    // Always include profile site as a fallback entry if not listed
+    if (profile?.site && !seen.has(profile.site)) {
+      all.unshift({ name: profile.site, country: '' })
+    }
+
+    setSites(all)
+
+    // Auto-select: scanner param → profile site → first in list
+    const autoSite = params.site ?? profile?.site ?? (all.length === 1 ? all[0].name : '')
+    if (autoSite && !selectedSite) {
+      setSelectedSite(autoSite)
+    } else if (!selectedSite && all.length > 0 && !params.site) {
+      // If profile has a site always pre-select it
+      const profileSiteEntry = all.find(s => s.name === profile?.site)
+      if (profileSiteEntry) setSelectedSite(profileSiteEntry.name)
     }
   }
 
@@ -175,16 +216,42 @@ export default function NewInspectionScreen() {
       Alert.alert(t('inspection.alertRequired'), t('inspection.alertSelectSite'))
       return false
     }
-    if (!selectedVehicle) {
+    if (!useManualEntry && !selectedVehicle) {
       Alert.alert(t('inspection.alertRequired'), t('inspection.alertSelectVehicle'))
+      return false
+    }
+    if (useManualEntry && !manualAsset.trim()) {
+      Alert.alert(t('inspection.alertRequired'), 'Please enter an asset / vehicle number.')
       return false
     }
     return true
   }
 
+  // When using manual entry, build a synthetic VehicleFleet-like object
+  function getEffectiveVehicle(): VehicleFleet | null {
+    if (selectedVehicle) return selectedVehicle
+    if (useManualEntry && manualAsset.trim()) {
+      return {
+        id: 'manual',
+        asset_no: manualAsset.trim().toUpperCase(),
+        vehicle_type: manualVehicleType,
+        make: '',
+        model: '',
+        site: selectedSite,
+        country: '',
+        region: '',
+        status: 'active',
+      } as any
+    }
+    return null
+  }
+
   async function handleSubmit() {
     if (submitting) return
     setSubmitting(true)
+
+    const effectiveVehicle = getEffectiveVehicle()
+    if (!effectiveVehicle) { setSubmitting(false); return }
 
     const inspectionDate = new Date().toISOString().split('T')[0]
     const odo = odometer.trim()
@@ -194,8 +261,8 @@ export default function NewInspectionScreen() {
     const payload = {
       title: `Daily Tyre Inspection — ${selectedSite} — ${inspectionDate}`,
       site: selectedSite,
-      asset_no: selectedVehicle!.asset_no,
-      vehicle_type: selectedVehicle!.vehicle_type,
+      asset_no: effectiveVehicle.asset_no,
+      vehicle_type: effectiveVehicle.vehicle_type,
       inspector: profile?.full_name ?? profile?.username ?? 'Inspector',
       created_by: profile?.id ?? null,
       inspection_date: inspectionDate,
@@ -251,93 +318,185 @@ export default function NewInspectionScreen() {
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <Text style={[styles.stepTitle, { textAlign }]}>{t('inspection.stepTitle')}</Text>
 
-            {/* Site */}
+            {/* ── Site picker ──────────────────────────────────────────────── */}
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.siteLabel')}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
-                <View style={styles.chipRow}>
-                  {sites.map(s => (
-                    <TouchableOpacity
-                      key={s}
-                      style={[styles.chip, selectedSite === s && styles.chipActive]}
-                      onPress={() => { setSelectedSite(s); setSelectedVehicle(null) }}
-                    >
-                      <Text style={[styles.chipText, selectedSite === s && styles.chipTextActive]}>{s}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
+
+              {sites.length === 0 ? (
+                /* No sites in DB yet — let user type one */
+                <TextInput
+                  style={[styles.input, { textAlign }]}
+                  value={selectedSite}
+                  onChangeText={v => { setSelectedSite(v); setSelectedVehicle(null) }}
+                  placeholder="Type your site name…"
+                  placeholderTextColor="#94a3b8"
+                  autoCapitalize="words"
+                />
+              ) : (
+                /* Group by country */
+                (() => {
+                  const byCountry: Record<string, string[]> = {}
+                  sites.forEach(s => {
+                    const c = s.country || 'Other'
+                    if (!byCountry[c]) byCountry[c] = []
+                    byCountry[c].push(s.name)
+                  })
+                  return Object.entries(byCountry).map(([country, names]) => (
+                    <View key={country} style={{ marginTop: 8 }}>
+                      {Object.keys(byCountry).length > 1 && (
+                        <Text style={styles.countryLabel}>{country}</Text>
+                      )}
+                      <View style={styles.siteGrid}>
+                        {names.map(name => (
+                          <TouchableOpacity
+                            key={name}
+                            style={[styles.siteChip, selectedSite === name && styles.siteChipActive]}
+                            onPress={() => { setSelectedSite(name); setSelectedVehicle(null); setUseManualEntry(false) }}
+                            activeOpacity={0.75}
+                          >
+                            <Ionicons
+                              name="location-outline"
+                              size={13}
+                              color={selectedSite === name ? '#fff' : '#64748b'}
+                            />
+                            <Text style={[styles.siteChipText, selectedSite === name && styles.siteChipTextActive]}>
+                              {name}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  ))
+                })()
+              )}
             </View>
 
-            {/* Vehicle */}
+            {/* ── Vehicle picker ───────────────────────────────────────────── */}
             {selectedSite ? (
               <View style={styles.field}>
                 <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.vehicleLabel')}</Text>
 
-                {/* Vehicle search */}
-                <View style={[styles.searchBox, isRTL && styles.searchBoxRTL]}>
-                  <Ionicons name="search-outline" size={18} color="#94a3b8" />
-                  <TextInput
-                    style={[styles.searchInput, { textAlign }]}
-                    value={vehicleQuery}
-                    onChangeText={setVehicleQuery}
-                    placeholder={t('inspection.vehicleSearchPlaceholder')}
-                    placeholderTextColor="#94a3b8"
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                    returnKeyType="search"
-                  />
-                  {vehicleQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setVehicleQuery('')}>
-                      <Ionicons name="close-circle" size={18} color="#cbd5e1" />
-                    </TouchableOpacity>
-                  )}
-                </View>
+                {!useManualEntry && (
+                  <>
+                    <View style={[styles.searchBox, isRTL && styles.searchBoxRTL]}>
+                      <Ionicons name="search-outline" size={18} color="#94a3b8" />
+                      <TextInput
+                        style={[styles.searchInput, { textAlign }]}
+                        value={vehicleQuery}
+                        onChangeText={setVehicleQuery}
+                        placeholder={t('inspection.vehicleSearchPlaceholder')}
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        returnKeyType="search"
+                      />
+                      {vehicleQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setVehicleQuery('')}>
+                          <Ionicons name="close-circle" size={18} color="#cbd5e1" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
 
-                {loadingVehicles ? (
-                  <ActivityIndicator size="small" color="#16a34a" style={{ marginTop: 8 }} />
-                ) : shownVehicles.length === 0 ? (
-                  <View style={styles.vehicleEmpty}>
-                    <Ionicons name="car-outline" size={20} color="#cbd5e1" />
-                    <Text style={styles.vehicleEmptyText}>
-                      {vehicleQuery
-                        ? t('inspection.vehicleNoMatch')
-                        : t('inspection.vehicleNone')}
-                    </Text>
-                  </View>
-                ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }} keyboardShouldPersistTaps="handled">
-                    <View style={styles.chipRow}>
-                      {shownVehicles.map(v => (
+                    {loadingVehicles ? (
+                      <ActivityIndicator size="small" color="#16a34a" style={{ marginTop: 10 }} />
+                    ) : shownVehicles.length === 0 ? (
+                      <View style={styles.vehicleEmpty}>
+                        <Ionicons name="car-outline" size={28} color="#cbd5e1" />
+                        <Text style={styles.vehicleEmptyText}>
+                          {vehicleQuery ? t('inspection.vehicleNoMatch') : 'No vehicles registered for this site.'}
+                        </Text>
+                        {!vehicleQuery && (
+                          <TouchableOpacity
+                            style={styles.manualEntryBtn}
+                            onPress={() => setUseManualEntry(true)}
+                          >
+                            <Ionicons name="pencil-outline" size={14} color="#16a34a" />
+                            <Text style={styles.manualEntryText}>Enter asset manually</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ) : (
+                      <>
+                        <View style={styles.vehicleGrid}>
+                          {shownVehicles.map(v => (
+                            <TouchableOpacity
+                              key={v.id}
+                              style={[styles.vehicleCard, selectedVehicle?.id === v.id && styles.vehicleCardActive]}
+                              onPress={() => setSelectedVehicle(v)}
+                              activeOpacity={0.75}
+                            >
+                              <Ionicons
+                                name="bus-outline"
+                                size={20}
+                                color={selectedVehicle?.id === v.id ? '#fff' : '#16a34a'}
+                              />
+                              <Text style={[styles.vehicleCardAsset, selectedVehicle?.id === v.id && { color: '#fff' }]}>
+                                {v.asset_no}
+                              </Text>
+                              <Text style={[styles.vehicleCardType, selectedVehicle?.id === v.id && { color: 'rgba(255,255,255,0.75)' }]}>
+                                {v.vehicle_type}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
                         <TouchableOpacity
-                          key={v.id}
-                          style={[styles.chip, selectedVehicle?.id === v.id && styles.chipActive]}
-                          onPress={() => setSelectedVehicle(v)}
+                          style={styles.manualEntryBtn}
+                          onPress={() => setUseManualEntry(true)}
                         >
-                          <Text style={[styles.chipText, selectedVehicle?.id === v.id && styles.chipTextActive]}>
-                            {v.asset_no}
-                          </Text>
-                          <Text style={[styles.chipSub, selectedVehicle?.id === v.id && { color: 'rgba(255,255,255,0.7)' }]}>
-                            {v.vehicle_type}
-                          </Text>
+                          <Ionicons name="pencil-outline" size={14} color="#64748b" />
+                          <Text style={[styles.manualEntryText, { color: '#64748b' }]}>Not listed? Enter manually</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </>
+                )}
+
+                {/* Manual asset entry */}
+                {useManualEntry && (
+                  <View style={{ gap: 10 }}>
+                    <View style={styles.manualHeader}>
+                      <Text style={styles.manualHeaderText}>Manual entry</Text>
+                      <TouchableOpacity onPress={() => setUseManualEntry(false)}>
+                        <Text style={{ fontSize: 12, color: '#3b82f6', fontWeight: '600' }}>← Back to list</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput
+                      style={[styles.input, { textAlign }]}
+                      value={manualAsset}
+                      onChangeText={setManualAsset}
+                      placeholder="Asset / Vehicle number (e.g. TRK-001)"
+                      placeholderTextColor="#94a3b8"
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                    />
+                    <Text style={styles.fieldLabel}>Vehicle Type</Text>
+                    <View style={styles.chipRow}>
+                      {['Truck', 'Bus', 'Trailer', 'Crane', 'Forklift', 'Pickup', 'SUV', 'Other'].map(vt => (
+                        <TouchableOpacity
+                          key={vt}
+                          style={[styles.chip, manualVehicleType === vt && styles.chipActive]}
+                          onPress={() => setManualVehicleType(vt)}
+                        >
+                          <Text style={[styles.chipText, manualVehicleType === vt && styles.chipTextActive]}>{vt}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
-                  </ScrollView>
+                  </View>
                 )}
               </View>
             ) : null}
 
-            {/* Selected vehicle info */}
-            {selectedVehicle && (
+            {/* Selected vehicle summary */}
+            {(selectedVehicle || (useManualEntry && manualAsset.trim())) && (
               <View style={[styles.vehicleInfo, isRTL && styles.vehicleInfoRTL]}>
                 <Ionicons name="bus-outline" size={18} color="#16a34a" />
                 <Text style={[styles.vehicleInfoText, { textAlign }]}>
-                  {selectedVehicle.asset_no} · {selectedVehicle.vehicle_type}
-                  {selectedVehicle.make ? ` · ${selectedVehicle.make}` : ''}
+                  {selectedVehicle
+                    ? `${selectedVehicle.asset_no} · ${selectedVehicle.vehicle_type}${selectedVehicle.make ? ` · ${selectedVehicle.make}` : ''}`
+                    : `${manualAsset.trim().toUpperCase()} · ${manualVehicleType} (manual)`}
                 </Text>
                 <Text style={styles.vehiclePositionCount}>
-                  {getPositionsForVehicle(selectedVehicle.vehicle_type).length} {t('inspection.tyres')}
+                  {getPositionsForVehicle(selectedVehicle?.vehicle_type ?? manualVehicleType).length} {t('inspection.tyres')}
                 </Text>
               </View>
             )}
@@ -395,9 +554,25 @@ export default function NewInspectionScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.nextBtn, (!selectedSite || !selectedVehicle) && styles.nextBtnDisabled]}
-              onPress={() => validateHeader() && setStep('tyres')}
-              disabled={!selectedSite || !selectedVehicle}
+              style={[
+                styles.nextBtn,
+                (!selectedSite || (!selectedVehicle && (!useManualEntry || !manualAsset.trim()))) && styles.nextBtnDisabled,
+              ]}
+              onPress={() => {
+                if (validateHeader()) {
+                  const v = getEffectiveVehicle()
+                  if (v && v.id !== (selectedVehicle?.id)) {
+                    // apply manual vehicle to positions
+                    const pos = getPositionsForVehicle(v.vehicle_type)
+                    setPositions(pos)
+                    const initialData: Record<string, TyrePositionData> = {}
+                    pos.forEach(p => { initialData[p] = emptyTyrePosition(p) })
+                    setTyreData(initialData)
+                  }
+                  setStep('tyres')
+                }
+              }}
+              disabled={!selectedSite || (!selectedVehicle && (!useManualEntry || !manualAsset.trim()))}
             >
               <Text style={styles.nextBtnText}>{t('inspection.nextButton')}</Text>
               <Ionicons name={forwardIcon} size={18} color="#fff" />
@@ -768,4 +943,48 @@ const styles = StyleSheet.create({
     maxWidth: 280,
     marginTop: 4,
   },
+
+  // ── Site picker ─────────────────────────────────────────────────────────────
+  countryLabel: {
+    fontSize: 10, fontWeight: '700', color: '#94a3b8',
+    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6,
+  },
+  siteGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  siteChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: '#fff', borderRadius: 12,
+    borderWidth: 1.5, borderColor: '#e2e8f0',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
+  },
+  siteChipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
+  siteChipText: { fontSize: 14, fontWeight: '700', color: '#374151' },
+  siteChipTextActive: { color: '#fff' },
+
+  // ── Vehicle grid ─────────────────────────────────────────────────────────────
+  vehicleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  vehicleCard: {
+    alignItems: 'center', gap: 4,
+    paddingHorizontal: 14, paddingVertical: 12,
+    backgroundColor: '#fff', borderRadius: 14,
+    borderWidth: 1.5, borderColor: '#e2e8f0', minWidth: 80,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
+  },
+  vehicleCardActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
+  vehicleCardAsset: { fontSize: 13, fontWeight: '800', color: '#0f172a' },
+  vehicleCardType:  { fontSize: 10, color: '#94a3b8', fontWeight: '500' },
+
+  // ── Manual entry ─────────────────────────────────────────────────────────────
+  manualEntryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 10, alignSelf: 'center',
+  },
+  manualEntryText: { fontSize: 13, color: '#16a34a', fontWeight: '600' },
+  manualHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 2,
+  },
+  manualHeaderText: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
 })

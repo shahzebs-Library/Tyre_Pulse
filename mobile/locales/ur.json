@@ -36,7 +36,12 @@
   "tabs": {
     "home": "ہوم",
     "inspect": "معائنہ",
+    "records": "ریکارڈز",
     "accident": "حادثہ",
+    "workorders": "اقدامات",
+    "analytics": "تجزیات",
+    "reports": "رپورٹس",
+    "ai": "فلیٹ اے آئی",
     "history": "تاریخ",
     "admin": "ایڈمن",
     "profile": "پروفائل"

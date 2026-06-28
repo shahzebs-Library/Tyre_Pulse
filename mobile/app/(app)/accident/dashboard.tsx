@@ -55,8 +55,8 @@ export default function AccidentDashboardScreen() {
         .order('created_at', { ascending: false })
         .limit(200)
 
-      if (filterTab === 'mine') {
-        query = query.eq('reported_by', profile?.id ?? '')
+      if (filterTab === 'mine' && profile?.id) {
+        query = query.eq('reported_by', profile.id)
       }
       if (elevated && siteFilter !== 'all') {
         query = query.eq('site', siteFilter)

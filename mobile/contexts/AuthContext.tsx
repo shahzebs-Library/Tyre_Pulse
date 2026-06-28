@@ -1,12 +1,10 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import type { User, AuthError } from '@supabase/supabase-js'
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
+import type { User, AuthError, RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { Profile, normaliseRole } from '../lib/types'
 
 interface AuthContextType {
-  /** Supabase auth user — null when signed out */
   user: User | null
-  /** Extended profile row from the `profiles` table — null until fetched */
   profile: Profile | null
   loading: boolean
   signIn: (identifier: string, password: string) => Promise<{ error: AuthError | Error | null }>
@@ -16,21 +14,48 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser]       = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const profileChannelRef     = useRef<RealtimeChannel | null>(null)
+
+  // Subscribe to realtime updates on this user's profile row so any role/field
+  // change made by an admin is applied immediately without requiring re-login.
+  function subscribeToProfile(userId: string) {
+    if (profileChannelRef.current) {
+      supabase.removeChannel(profileChannelRef.current)
+    }
+    profileChannelRef.current = supabase
+      .channel(`profile:${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
+        (payload) => {
+          const updated = payload.new as Record<string, any>
+          setProfile({ ...updated, role: normaliseRole(updated.role) } as Profile)
+        }
+      )
+      .subscribe()
+  }
+
+  function unsubscribeFromProfile() {
+    if (profileChannelRef.current) {
+      supabase.removeChannel(profileChannelRef.current)
+      profileChannelRef.current = null
+    }
+  }
 
   useEffect(() => {
     let mounted = true
 
-    // Resolve `loading` from the (local) session as fast as possible. The
-    // profile is fetched in the background so a slow/offline network can never
-    // hang the app on the loading spinner.
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
         if (!mounted) return
         setUser(session?.user ?? null)
-        if (session?.user) fetchProfile(session.user.id)
+        if (session?.user) {
+          fetchProfile(session.user.id)
+          subscribeToProfile(session.user.id)
+        }
       })
       .catch(() => {})
       .finally(() => { if (mounted) setLoading(false) })
@@ -38,19 +63,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
-      else setProfile(null)
+      if (session?.user) {
+        fetchProfile(session.user.id)
+        subscribeToProfile(session.user.id)
+      } else {
+        setProfile(null)
+        unsubscribeFromProfile()
+      }
       setLoading(false)
     })
 
-    return () => { mounted = false; subscription.unsubscribe() }
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+      unsubscribeFromProfile()
+    }
   }, [])
 
   async function fetchProfile(userId: string) {
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
       if (data) {
-        // Normalise role from DB casing ("Admin", "Tyre Man") → app convention ("admin", "tyre_man")
         setProfile({ ...data, role: normaliseRole(data.role) } as Profile)
       } else {
         setProfile(null)

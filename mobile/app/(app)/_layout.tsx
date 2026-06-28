@@ -110,7 +110,7 @@ export default function AppLayout() {
         )
       })}
 
-      {/* Hidden routes */}
+      {/* Hidden routes — reachable via router.push but never in the tab bar */}
       <Tabs.Screen name="scanner"         options={{ href: null }} />
       <Tabs.Screen name="tasks"           options={{ href: null }} />
       <Tabs.Screen name="alerts"          options={{ href: null }} />
@@ -128,6 +128,8 @@ export default function AppLayout() {
       <Tabs.Screen name="admin/ai-chat"   options={{ href: null }} />
       <Tabs.Screen name="admin/users"     options={{ href: null }} />
       <Tabs.Screen name="admin/approvals" options={{ href: null }} />
+      <Tabs.Screen name="admin/sites"     options={{ href: null }} />
+      <Tabs.Screen name="records/[id]"    options={{ href: null }} />
     </Tabs>
   )
 }

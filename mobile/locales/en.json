@@ -36,8 +36,12 @@
   "tabs": {
     "home": "Home",
     "inspect": "Inspect",
+    "records": "Records",
     "accident": "Accident",
-    "history": "History",
+    "workorders": "Actions",
+    "analytics": "Analytics",
+    "reports": "Reports",
+    "ai": "Fleet AI",
     "admin": "Admin",
     "profile": "Profile"
   },

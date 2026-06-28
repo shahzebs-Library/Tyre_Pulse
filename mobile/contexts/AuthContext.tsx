@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchProfile(userId: string) {
     try {
-      const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+      const { data } = await supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,created_at').eq('id', userId).maybeSingle()
       if (data) {
         // Enforce locked / unapproved accounts on the client immediately
         if (data.locked === true || data.approved === false) {

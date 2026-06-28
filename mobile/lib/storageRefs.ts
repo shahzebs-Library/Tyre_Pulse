@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 
 const REF_PREFIX = 'tp-storage://'
-const SIGNED_URL_TTL_SECONDS = 60 * 60
+const SIGNED_URL_TTL_SECONDS = 15 * 60 // 15 minutes — short window limits exposure if URL is captured
 
 export function storageRef(bucket: string, path: string): string {
   return `${REF_PREFIX}${bucket}/${path}`
@@ -32,7 +32,7 @@ export async function resolveStorageUrl(value: string | null | undefined): Promi
     .createSignedUrl(ref.path, SIGNED_URL_TTL_SECONDS)
 
   if (error) {
-    console.warn('[storageRefs] Failed to create signed URL:', error.message)
+    if (__DEV__) console.warn('[storageRefs] Failed to create signed URL:', error.message)
     return null
   }
 

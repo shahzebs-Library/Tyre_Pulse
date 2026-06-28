@@ -108,7 +108,7 @@ export function AuthProvider({ children }) {
 
   async function fetchProfile(userId) {
     const [profileRes, permsRes, factorsRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,created_at').eq('id', userId).single(),
       supabase.rpc('get_user_module_permissions'),
       supabase.auth.mfa.listFactors(),
     ])

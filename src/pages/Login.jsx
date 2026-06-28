@@ -214,6 +214,8 @@ export default function Login() {
   const [focusedField, setFocusedField] = useState(null)
   const [isOnline, setIsOnline]       = useState(navigator.onLine)
   const [mfaState, setMfaState]       = useState(null) // { factorId } when MFA challenge needed
+  const [loginAttempts, setLoginAttempts] = useState(0)
+  const [cooldownUntil, setCooldownUntil] = useState(0)
 
   // Track network status
   useEffect(() => {
@@ -236,6 +238,12 @@ export default function Login() {
   async function handleLogin(e) {
     e.preventDefault()
     if (!isOnline) { setError('No internet connection. Please check your network.'); return }
+    const now = Date.now()
+    if (cooldownUntil > now) {
+      const secs = Math.ceil((cooldownUntil - now) / 1000)
+      setError(`Too many attempts. Please wait ${secs} second${secs !== 1 ? 's' : ''}.`)
+      return
+    }
     setError(''); setLoading(true)
     const result = await signIn(identifier, password)
     if (result?.mfaRequired) {
@@ -249,7 +257,20 @@ export default function Login() {
       setLoading(false)
       return
     }
-    if (result) { setError(result.message || 'Login failed'); setLoading(false) }
+    if (result) {
+      const next = loginAttempts + 1
+      setLoginAttempts(next)
+      // Exponential backoff: 5s after 3 fails, 15s after 5, 60s after 7+
+      if (next >= 7)      setCooldownUntil(Date.now() + 60_000)
+      else if (next >= 5) setCooldownUntil(Date.now() + 15_000)
+      else if (next >= 3) setCooldownUntil(Date.now() +  5_000)
+      setError(result.message || 'Login failed')
+      setLoading(false)
+      return
+    }
+    // Success — reset counters
+    setLoginAttempts(0)
+    setCooldownUntil(0)
     // on success: useEffect above handles navigation once AuthContext resolves user + profile
   }
 

@@ -6,10 +6,10 @@ import {
 } from 'chart.js'
 import { Doughnut } from 'react-chartjs-2'
 import {
-  ClipboardList, Plus, Search, Filter, Download, Upload,
+  ClipboardList, Plus, Search, Upload,
   FileText, FileSpreadsheet, Edit2, Trash2, X, Save,
   CheckCircle, AlertTriangle, AlertOctagon, HelpCircle,
-  ChevronLeft, ChevronRight, Tag, Gauge, Layers, Shield,
+  ChevronLeft, ChevronRight, Tag, Shield,
   RefreshCw, History, Zap, Truck, Info, BarChart3,
   ClipboardCheck, Wrench, BookOpen,
 } from 'lucide-react'
@@ -131,34 +131,43 @@ const CHART_OPTS = {
   },
 }
 
-// ── localStorage helpers ───────────────────────────────────────────────────────
+// ── Spec normalization helpers ─────────────────────────────────────────────────
 
-function loadSpecs() {
-  try { return JSON.parse(localStorage.getItem('tp_tyre_specs') || '[]') } catch { return [] }
+// Convert a form/default object into a DB-ready row (whitelisted columns only).
+function specToRow(form, { country = null, createdBy = null } = {}) {
+  const toNum = v => {
+    if (v === '' || v == null) return null
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
+  const row = {
+    vehicle_type: String(form.vehicle_type ?? '').trim(),
+    position: form.position ?? 'Steer',
+    approved_sizes: Array.isArray(form.approved_sizes) ? form.approved_sizes : [],
+    approved_brands: Array.isArray(form.approved_brands) ? form.approved_brands : [],
+    min_load_index: toNum(form.min_load_index),
+    min_speed_index: form.min_speed_index || null,
+    recommended_pressure: toNum(form.recommended_pressure),
+    min_tread_depth: toNum(form.min_tread_depth),
+    notes: form.notes?.trim() ? form.notes.trim() : null,
+  }
+  if (country != null) row.country = country
+  if (createdBy != null) row.created_by = createdBy
+  return row
 }
-function saveSpecs(specs) {
-  localStorage.setItem('tp_tyre_specs', JSON.stringify(specs))
-}
-function loadHistory() {
-  try { return JSON.parse(localStorage.getItem('tp_spec_history') || '[]') } catch { return [] }
-}
-function saveHistory(history) {
-  localStorage.setItem('tp_spec_history', JSON.stringify(history.slice(-100)))
-}
-function addHistoryEvent(action, user, specObj, changedField = null, oldVal = null, newVal = null) {
-  const history = loadHistory()
-  history.push({
-    id: uuidv4(),
-    date: new Date().toISOString(),
-    action,
-    user: user || 'Unknown',
-    vehicle_type: specObj?.vehicle_type || '',
-    position: specObj?.position || '',
-    changed_field: changedField || '',
-    old_value: oldVal != null ? String(oldVal) : '',
-    new_value: newVal != null ? String(newVal) : '',
-  })
-  saveHistory(history)
+
+// Convert a DB row into the form/UI shape (numeric fields -> '' when null for inputs).
+function rowToSpec(row) {
+  return {
+    ...row,
+    approved_sizes: row.approved_sizes ?? [],
+    approved_brands: row.approved_brands ?? [],
+    min_load_index: row.min_load_index ?? '',
+    min_speed_index: row.min_speed_index ?? '',
+    recommended_pressure: row.recommended_pressure ?? '',
+    min_tread_depth: row.min_tread_depth ?? '',
+    notes: row.notes ?? '',
+  }
 }
 
 // ── Tag input component ────────────────────────────────────────────────────────
@@ -272,7 +281,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', loadi
 
 // ── Spec Form Modal ────────────────────────────────────────────────────────────
 
-function SpecFormModal({ spec, onClose, onSave, isAdmin }) {
+function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
   const [form, setForm] = useState(spec ?? {
     vehicle_type: '',
     position: 'Steer',
@@ -443,15 +452,16 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin }) {
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors">
+              <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-gray-400 hover:text-white disabled:opacity-50 text-sm transition-colors">
                 Cancel
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2 rounded-lg transition-colors"
+                disabled={saving}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm px-5 py-2 rounded-lg transition-colors"
               >
-                <Save size={14} />
-                {spec?.id ? 'Update Specification' : 'Save Specification'}
+                {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+                {saving ? 'Saving...' : spec?.id ? 'Update Specification' : 'Save Specification'}
               </button>
             </div>
           </form>
@@ -503,26 +513,40 @@ function DeleteConfirmModal({ spec, onClose, onConfirm }) {
 
 // ── Raise Work Order Modal ─────────────────────────────────────────────────────
 
-function RaiseWorkOrderModal({ asset, violations, onClose }) {
+function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose }) {
   const [done, setDone] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault()
-    const existing = JSON.parse(localStorage.getItem('tp_work_orders') || '[]')
-    const wo = {
-      id: uuidv4(),
-      wo_number: `WO-SPEC-${Date.now()}`,
-      asset_no: asset.asset_no,
-      site: asset.site,
-      type: 'Tyre Change',
-      priority: 'High',
-      status: 'Open',
-      description: `Non-conforming tyre fitment detected. ${violations.join('; ')}`,
-      created_at: new Date().toISOString(),
-      source: 'Spec Compliance',
+    setError('')
+    setSaving(true)
+    try {
+      // Whitelisted columns only (verified against public.work_orders schema).
+      const payload = {
+        asset_no: asset.asset_no,
+        work_type: 'Tyre Change',
+        priority: 'High',
+        status: 'Open',
+        description: `Non-conforming tyre fitment detected. ${violations.join('; ')}`,
+        site: asset.site || null,
+        country: country || null,
+        created_by: createdBy || null,
+      }
+
+      // Server-side sequential WO number; fall back to year-based sequence.
+      const { data: woNo } = await supabase.rpc('generate_work_order_no')
+      payload.work_order_no = woNo || `WO-${new Date().getFullYear()}-${Date.now()}`
+
+      const { error: insErr } = await supabase.from('work_orders').insert(payload)
+      if (insErr) throw insErr
+      setDone(true)
+    } catch (err) {
+      setError(err.message || 'Failed to raise work order')
+    } finally {
+      setSaving(false)
     }
-    localStorage.setItem('tp_work_orders', JSON.stringify([wo, ...existing]))
-    setDone(true)
   }
 
   return (
@@ -563,10 +587,16 @@ function RaiseWorkOrderModal({ asset, violations, onClose }) {
                   </div>
                 ))}
               </div>
+              {error && (
+                <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2 mb-4">
+                  <AlertTriangle size={14} /> {error}
+                </div>
+              )}
               <form onSubmit={submit} className="flex justify-end gap-3">
-                <button type="button" onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors">Cancel</button>
-                <button type="submit" className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white text-sm px-5 py-2 rounded-lg transition-colors">
-                  <Wrench size={14} /> Create Work Order
+                <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-gray-400 hover:text-white disabled:opacity-50 text-sm transition-colors">Cancel</button>
+                <button type="submit" disabled={saving} className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm px-5 py-2 rounded-lg transition-colors">
+                  {saving ? <RefreshCw size={14} className="animate-spin" /> : <Wrench size={14} />}
+                  {saving ? 'Creating...' : 'Create Work Order'}
                 </button>
               </form>
             </>
@@ -580,12 +610,16 @@ function RaiseWorkOrderModal({ asset, violations, onClose }) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function TyreSpecifications() {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const { activeCountry } = useSettings()
   const isAdmin = profile?.role === 'Admin'
+  const country = activeCountry && activeCountry !== 'All' ? activeCountry : null
 
   const [activeTab, setActiveTab] = useState('library')
   const [specs, setSpecs] = useState([])
+  const [loadingSpecs, setLoadingSpecs] = useState(true)
+  const [specsError, setSpecsError] = useState('')
+  const [savingSpec, setSavingSpec] = useState(false)
   const [tyreRecords, setTyreRecords] = useState([])
   const [fleetMaster, setFleetMaster] = useState([])
   const [loadingRecords, setLoadingRecords] = useState(true)
@@ -611,12 +645,49 @@ export default function TyreSpecifications() {
   const [importError, setImportError] = useState('')
   const importRef = useRef()
 
+  // ── In-session audit log (DB does not persist spec history) ──────────────────
+
+  const logHistory = useCallback((action, specObj, changedField = null, oldVal = null, newVal = null) => {
+    setHistory(prev => [...prev, {
+      id: uuidv4(),
+      date: new Date().toISOString(),
+      action,
+      user: profile?.email || 'Unknown',
+      vehicle_type: specObj?.vehicle_type || '',
+      position: specObj?.position || '',
+      changed_field: changedField || '',
+      old_value: oldVal != null ? String(oldVal) : '',
+      new_value: newVal != null ? String(newVal) : '',
+    }].slice(-100))
+  }, [profile?.email])
+
+  // ── Load specs from Supabase ─────────────────────────────────────────────────
+
+  const fetchSpecs = useCallback(async () => {
+    setLoadingSpecs(true)
+    setSpecsError('')
+    try {
+      let q = supabase
+        .from('tyre_specifications')
+        .select('id, vehicle_type, position, approved_sizes, approved_brands, min_load_index, min_speed_index, recommended_pressure, min_tread_depth, notes, country, created_by, created_at, updated_at')
+      if (country) q = q.or(`country.eq.${country},country.is.null`)
+      const { data, error } = await q.order('vehicle_type', { ascending: true }).order('position', { ascending: true })
+      if (error) throw error
+      setSpecs((data ?? []).map(rowToSpec))
+    } catch (e) {
+      setSpecsError(e.message || 'Failed to load specifications')
+      setSpecs([])
+    } finally {
+      setLoadingSpecs(false)
+    }
+  }, [country])
+
   // ── Load data ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    setSpecs(loadSpecs())
-    setHistory(loadHistory())
+    fetchSpecs()
     fetchLiveData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCountry])
 
   async function fetchLiveData() {
@@ -780,49 +851,60 @@ export default function TyreSpecifications() {
 
   // ── CRUD operations ───────────────────────────────────────────────────────────
 
-  function handleSaveSpec(form) {
-    const existing = specs.find(s => s.id === editingSpec?.id)
-    const now = new Date().toISOString()
-
-    if (existing) {
-      const updated = specs.map(s => s.id === existing.id ? { ...s, ...form, updated_at: now } : s)
-      saveSpecs(updated)
-      setSpecs(updated)
-      addHistoryEvent('Edit', profile?.email, form, 'Spec Update', JSON.stringify(existing), JSON.stringify(form))
-    } else {
-      const newSpec = { ...form, id: uuidv4(), created_at: now, updated_at: now }
-      const updated = [...specs, newSpec]
-      saveSpecs(updated)
-      setSpecs(updated)
-      addHistoryEvent('Add', profile?.email, form)
+  async function handleSaveSpec(form) {
+    setSavingSpec(true)
+    setSpecsError('')
+    try {
+      const existing = editingSpec?.id ? specs.find(s => s.id === editingSpec.id) : null
+      if (existing) {
+        const row = { ...specToRow(form, { country }), updated_at: new Date().toISOString() }
+        const { error } = await supabase.from('tyre_specifications').update(row).eq('id', existing.id)
+        if (error) throw error
+        logHistory('Edit', form, 'Spec Update', JSON.stringify(existing), JSON.stringify(form))
+      } else {
+        const row = specToRow(form, { country, createdBy: user?.id })
+        const { error } = await supabase.from('tyre_specifications').insert(row)
+        if (error) throw error
+        logHistory('Add', form)
+      }
+      await fetchSpecs()
+      setShowSpecModal(false)
+      setEditingSpec(null)
+    } catch (e) {
+      setSpecsError(e.message || 'Failed to save specification')
+    } finally {
+      setSavingSpec(false)
     }
-
-    setShowSpecModal(false)
-    setEditingSpec(null)
-    setHistory(loadHistory())
   }
 
-  function handleDeleteSpec() {
-    const updated = specs.filter(s => s.id !== deletingSpec.id)
-    saveSpecs(updated)
-    setSpecs(updated)
-    addHistoryEvent('Delete', profile?.email, deletingSpec)
-    setDeletingSpec(null)
-    setHistory(loadHistory())
+  async function handleDeleteSpec() {
+    const target = deletingSpec
+    setSpecsError('')
+    try {
+      const { error } = await supabase.from('tyre_specifications').delete().eq('id', target.id)
+      if (error) throw error
+      logHistory('Delete', target)
+      await fetchSpecs()
+    } catch (e) {
+      setSpecsError(e.message || 'Failed to delete specification')
+    } finally {
+      setDeletingSpec(null)
+    }
   }
 
-  function importQuickDefault(def) {
-    const existing = specs.find(s =>
-      s.vehicle_type === def.vehicle_type && s.position === def.position
-    )
-    if (existing) return
-    const now = new Date().toISOString()
-    const newSpec = { ...def, id: uuidv4(), created_at: now, updated_at: now }
-    const updated = [...specs, newSpec]
-    saveSpecs(updated)
-    setSpecs(updated)
-    addHistoryEvent('Quick Setup Import', profile?.email, newSpec)
-    setHistory(loadHistory())
+  async function importQuickDefault(def) {
+    const exists = specs.find(s => s.vehicle_type === def.vehicle_type && s.position === def.position)
+    if (exists) return
+    setSpecsError('')
+    try {
+      const row = specToRow(def, { country, createdBy: user?.id })
+      const { error } = await supabase.from('tyre_specifications').insert(row)
+      if (error) throw error
+      logHistory('Quick Setup Import', def)
+      await fetchSpecs()
+    } catch (e) {
+      setSpecsError(e.message || 'Failed to import default')
+    }
   }
 
   // ── Import from Excel ─────────────────────────────────────────────────────────
@@ -832,12 +914,11 @@ export default function TyreSpecifications() {
     if (!file) return
     setImportError('')
     const reader = new FileReader()
-    reader.onload = ev => {
+    reader.onload = async ev => {
       try {
         const wb = XLSX.read(ev.target.result, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const rows = XLSX.utils.sheet_to_json(ws)
-        const now = new Date().toISOString()
         const imported = []
         rows.forEach(row => {
           const vt = row['Vehicle Type'] || row['vehicle_type']
@@ -845,29 +926,25 @@ export default function TyreSpecifications() {
           if (!vt || !pos) return
           const sizes = String(row['Approved Sizes'] || row['approved_sizes'] || '').split(',').map(s => s.trim()).filter(Boolean)
           const brands = String(row['Approved Brands'] || row['approved_brands'] || '').split(',').map(s => s.trim()).filter(Boolean)
-          imported.push({
-            id: uuidv4(),
+          imported.push(specToRow({
             vehicle_type: String(vt).trim(),
             position: String(pos).trim(),
             approved_sizes: sizes,
             approved_brands: brands,
-            min_load_index: Number(row['Min Load Index'] || row['min_load_index'] || 0) || '',
+            min_load_index: row['Min Load Index'] || row['min_load_index'] || '',
             min_speed_index: String(row['Min Speed Index'] || row['min_speed_index'] || ''),
-            recommended_pressure: Number(row['Recommended Pressure'] || row['recommended_pressure'] || 0) || '',
-            min_tread_depth: Number(row['Min Tread Depth'] || row['min_tread_depth'] || 0) || '',
+            recommended_pressure: row['Recommended Pressure'] || row['recommended_pressure'] || '',
+            min_tread_depth: row['Min Tread Depth'] || row['min_tread_depth'] || '',
             notes: String(row['Notes'] || row['notes'] || ''),
-            created_at: now,
-            updated_at: now,
-          })
+          }, { country, createdBy: user?.id }))
         })
         if (imported.length === 0) { setImportError('No valid rows found. Check column headers.'); return }
-        const updated = [...specs, ...imported]
-        saveSpecs(updated)
-        setSpecs(updated)
-        addHistoryEvent('Import', profile?.email, { vehicle_type: `${imported.length} specs`, position: 'Bulk Import' })
-        setHistory(loadHistory())
-      } catch {
-        setImportError('Failed to parse file. Ensure it is a valid .xlsx file.')
+        const { error } = await supabase.from('tyre_specifications').insert(imported)
+        if (error) throw error
+        logHistory('Import', { vehicle_type: `${imported.length} specs`, position: 'Bulk Import' })
+        await fetchSpecs()
+      } catch (err) {
+        setImportError(err.message || 'Failed to parse file. Ensure it is a valid .xlsx file.')
       }
     }
     reader.readAsBinaryString(file)
@@ -998,11 +1075,11 @@ export default function TyreSpecifications() {
               <FileText size={14} /> PDF Report
             </button>
             <button
-              onClick={fetchLiveData}
-              disabled={loadingRecords}
+              onClick={() => { fetchSpecs(); fetchLiveData() }}
+              disabled={loadingRecords || loadingSpecs}
               className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
             >
-              <RefreshCw size={14} className={loadingRecords ? 'animate-spin' : ''} />
+              <RefreshCw size={14} className={(loadingRecords || loadingSpecs) ? 'animate-spin' : ''} />
             </button>
           </div>
         }
@@ -1015,12 +1092,20 @@ export default function TyreSpecifications() {
         </div>
       )}
 
+      {specsError && !loadingSpecs && (
+        <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
+          <AlertTriangle size={14} /> {specsError}
+          <button onClick={fetchSpecs} className="ml-auto flex items-center gap-1 text-red-200 hover:text-white"><RefreshCw size={13} /> Retry</button>
+          <button onClick={() => setSpecsError('')}><X size={14} /></button>
+        </div>
+      )}
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={ClipboardList} label="Total Spec Profiles" value={specs.length} color="text-blue-400" loading={false} sub={`${typeOptions.length} vehicle types`} />
+        <KpiCard icon={ClipboardList} label="Total Spec Profiles" value={specs.length} color="text-blue-400" loading={loadingSpecs} sub={`${typeOptions.length} vehicle types`} />
         <KpiCard icon={Shield} label="Fleet Compliance Rate" value={`${kpis.complianceRate}%`} color={kpis.complianceRate >= 80 ? 'text-green-400' : kpis.complianceRate >= 60 ? 'text-yellow-400' : 'text-red-400'} loading={loadingRecords} sub={`${kpis.approved} of ${kpis.total} fitments`} />
         <KpiCard icon={AlertOctagon} label="Non-Conforming Fitments" value={kpis.nonConforming} color={kpis.nonConforming === 0 ? 'text-green-400' : 'text-orange-400'} loading={loadingRecords} sub="size or brand violations" />
-        <KpiCard icon={Truck} label="Vehicle Types Covered" value={kpis.vehicleTypesCovered} color="text-purple-400" loading={false} sub={`${specs.length} total spec entries`} />
+        <KpiCard icon={Truck} label="Vehicle Types Covered" value={kpis.vehicleTypesCovered} color="text-purple-400" loading={loadingSpecs} sub={`${specs.length} total spec entries`} />
       </div>
 
       {/* Tabs */}
@@ -1072,7 +1157,21 @@ export default function TyreSpecifications() {
             </div>
 
             {/* Spec Cards */}
-            {filteredSpecs.length === 0 ? (
+            {loadingSpecs ? (
+              <div className="bg-gray-900 border border-gray-800 rounded-xl py-16 text-center">
+                <RefreshCw size={28} className="animate-spin text-gray-600 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">Loading specifications...</p>
+              </div>
+            ) : specsError ? (
+              <div className="bg-gray-900 border border-red-800 rounded-xl py-16 text-center">
+                <AlertOctagon size={40} className="text-red-500 mx-auto mb-3" />
+                <p className="text-red-300 font-medium mb-1">Failed to Load Specifications</p>
+                <p className="text-gray-500 text-sm mb-4 max-w-md mx-auto">{specsError}</p>
+                <button onClick={fetchSpecs} className="flex items-center gap-2 mx-auto bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-4 py-2 rounded-lg border border-gray-700 transition-colors">
+                  <RefreshCw size={14} /> Retry
+                </button>
+              </div>
+            ) : filteredSpecs.length === 0 ? (
               <div className="bg-gray-900 border border-gray-800 rounded-xl py-16 text-center">
                 <ClipboardList size={40} className="text-gray-700 mx-auto mb-3" />
                 <p className="text-gray-400 font-medium mb-1">No Specification Profiles</p>
@@ -1555,6 +1654,7 @@ export default function TyreSpecifications() {
           onClose={() => { setShowSpecModal(false); setEditingSpec(null) }}
           onSave={handleSaveSpec}
           isAdmin={isAdmin}
+          saving={savingSpec}
         />
       )}
 
@@ -1570,6 +1670,8 @@ export default function TyreSpecifications() {
         <RaiseWorkOrderModal
           asset={workOrderAsset}
           violations={workOrderAsset.violations}
+          country={country}
+          createdBy={user?.id}
           onClose={() => setWorkOrderAsset(null)}
         />
       )}

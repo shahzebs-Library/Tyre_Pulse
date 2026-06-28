@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // StockReplenishment.jsx — Automated Stock Replenishment Intelligence · /stock-replenishment
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -11,9 +11,9 @@ import {
 import { Bar, Line } from 'react-chartjs-2'
 import {
   Package, AlertTriangle, TrendingDown, TrendingUp, ShoppingCart,
-  RefreshCw, Loader2, Search, X, Plus, Minus, FileText,
+  RefreshCw, Loader2, Search, X, Plus, FileText,
   FileSpreadsheet, ChevronDown, ChevronUp, Edit2, CheckCircle,
-  Clock, BarChart2, Layers, Zap, ExternalLink, Filter,
+  Clock, BarChart2, Layers, Zap, ExternalLink,
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -97,7 +97,7 @@ function UrgencyBadge({ urgency }) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function StockReplenishment() {
   const { activeCurrency, activeCountry } = useSettings()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
 
   // ── Raw data ───────────────────────────────────────────────────────────────
   const [stockData, setStockData]           = useState([])
@@ -119,7 +119,8 @@ export default function StockReplenishment() {
 
   // ── Order Generator state ──────────────────────────────────────────────────
   const [orderLines, setOrderLines]         = useState([])
-  const [orderSelections, setOrderSelections] = useState(new Set())
+  const [creatingPO, setCreatingPO]         = useState(false)
+  const [poResult, setPoResult]             = useState(null) // { type:'success'|'error', message }
 
   // ── Inline qty edit in matrix ──────────────────────────────────────────────
   const [editingQty, setEditingQty]         = useState({}) // key → overridden qty
@@ -133,12 +134,19 @@ export default function StockReplenishment() {
       ninety.setDate(ninety.getDate() - 90)
       const ninetyStr = ninety.toISOString().slice(0, 10)
 
+      const hasCountry = activeCountry && activeCountry !== 'All'
+
+      let stockQuery = supabase.from('stock').select('*')
+      if (hasCountry) stockQuery = stockQuery.or(`country.eq.${activeCountry},country.is.null`)
+
       const [stockRes, tyreRes] = await Promise.all([
-        supabase.from('stock').select('*'),
-        fetchAllPages((from, to) =>
-          supabase.from('tyre_records').select('site,brand,size,issue_date,cost_per_tyre')
-            .gte('issue_date', ninetyStr).range(from, to)
-        , { max: 200000 }),
+        stockQuery,
+        fetchAllPages((from, to) => {
+          let q = supabase.from('tyre_records').select('site,brand,size,issue_date,cost_per_tyre,country')
+            .gte('issue_date', ninetyStr)
+          if (hasCountry) q = q.or(`country.eq.${activeCountry},country.is.null`)
+          return q.range(from, to)
+        }, { max: 200000 }),
       ])
 
       if (stockRes.error) throw stockRes.error
@@ -152,7 +160,7 @@ export default function StockReplenishment() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeCountry])
 
   useEffect(() => { load() }, [load])
 
@@ -191,15 +199,22 @@ export default function StockReplenishment() {
     return stockData.map(item => {
       const cKey = `${item.site}||${item.brand}||${item.size}`
       const cosKey = `${item.brand}||${item.size}`
+
+      // Real column is `quantity`. There is no `qty_on_order` column on `stock`,
+      // so on-order is treated as 0 (managed in the Procurement module).
+      const qtyInStock = Number.isFinite(parseInt(item.quantity)) ? parseInt(item.quantity) : 0
+      const qtyOnOrder = 0
+      const available  = qtyInStock + qtyOnOrder
+
       const consumptionPerMonth = consumptionMap[cKey] || 0
       const consumptionPerDay   = consumptionPerMonth / 30
       const daysRemaining       = consumptionPerDay < 0.001
-        ? (item.qty_in_stock > 0 ? 9999 : 0)
-        : Math.round(item.qty_in_stock / consumptionPerDay)
+        ? (available > 0 ? 9999 : 0)
+        : Math.round(available / consumptionPerDay)
 
-      // 2-month buffer suggested order
+      // 2-month buffer suggested order (net of stock already on hand / on order)
       const buffer2Month        = consumptionPerMonth * 2
-      const suggestedQty        = Math.max(0, Math.round(buffer2Month - item.qty_in_stock))
+      const suggestedQty        = Math.max(0, Math.round(buffer2Month - available))
 
       // unit cost: prefer stock table, fallback avg from tyre_records
       const unitCost = parseFloat(item.unit_cost) > 0
@@ -211,6 +226,8 @@ export default function StockReplenishment() {
 
       return {
         ...item,
+        qtyInStock,
+        qtyOnOrder,
         consumptionPerMonth,
         consumptionPerDay,
         daysRemaining,
@@ -231,9 +248,10 @@ export default function StockReplenishment() {
   // ── Filtered + sorted matrix ───────────────────────────────────────────────
   const filteredMatrix = useMemo(() => {
     let rows = [...matrixRows]
+    // Country filtering is applied server-side (null-safe via `.or(country.eq/.is.null)`).
+    // Keep a defensive client-side guard that never drops null-country rows.
     if (activeCountry && activeCountry !== 'All') {
-      // If stock table has a country column, filter by it; otherwise filter by site pattern
-      rows = rows.filter(r => !r.country || r.country === activeCountry)
+      rows = rows.filter(r => r.country == null || r.country === activeCountry)
     }
     if (siteFilter !== 'All') rows = rows.filter(r => r.site === siteFilter)
     if (search.trim()) {
@@ -266,7 +284,7 @@ export default function StockReplenishment() {
     const avgDays         = validRows.length
       ? Math.round(validRows.reduce((s, r) => s + r.daysRemaining, 0) / validRows.length)
       : 0
-    const criticalStockouts = matrixRows.filter(r => r.qty_in_stock <= 0).length
+    const criticalStockouts = matrixRows.filter(r => r.qtyInStock <= 0).length
     const overstocked       = matrixRows.filter(r => r.daysRemaining > 180 && r.daysRemaining !== 9999).length
     return { needsReorder, totalReorderVal, avgDays, criticalStockouts, overstocked }
   }, [matrixRows, editingQty])
@@ -535,6 +553,80 @@ export default function StockReplenishment() {
     doc.save(`replenishment-po-${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
+  // ── Create Purchase Order (persist to purchase_orders) ─────────────────────
+  const handleCreatePurchaseOrder = useCallback(async () => {
+    if (orderLines.length === 0) {
+      setPoResult({ type: 'error', message: 'Add at least one order line before creating a PO.' })
+      return
+    }
+    // A single PO requires a single vendor — derive from the first supplied supplier.
+    const vendorName = (orderLines.find(l => l.supplier?.trim())?.supplier || '').trim()
+    if (!vendorName) {
+      setPoResult({ type: 'error', message: 'Enter a supplier name on at least one line to set the PO vendor.' })
+      return
+    }
+
+    setCreatingPO(true)
+    setPoResult(null)
+    try {
+      // Build items jsonb in the same shape the Procurement module consumes.
+      const items = orderLines.map(l => ({
+        brand:        (l.brand || '').toString().trim(),
+        size:         (l.size || '').toString().trim(),
+        site:         (l.site || '').toString().trim() || null,
+        quantity:     parseInt(l.qty) || 0,
+        unit_price:   parseFloat(l.unitCost) || 0,
+        received_qty: 0,
+        supplier:     (l.supplier || '').toString().trim() || null,
+      }))
+
+      const subtotal     = items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
+      const tax_amount   = 0
+      const total_amount = subtotal + tax_amount
+
+      // Generate PO number via RPC, fall back to client-side sequence.
+      let poNumber
+      const { data: poNo, error: rpcErr } = await supabase.rpc('generate_po_number')
+      if (rpcErr || !poNo) {
+        poNumber = `PO-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
+      } else {
+        poNumber = poNo
+      }
+
+      const poCountry = activeCountry && activeCountry !== 'All' ? activeCountry : null
+      const poSite    = items.find(it => it.site)?.site || null
+
+      // Whitelisted insert — only known purchase_orders columns.
+      const payload = {
+        po_number:     poNumber,
+        vendor_name:   vendorName,
+        supplier_name: vendorName,
+        order_date:    new Date().toISOString().slice(0, 10),
+        status:        'Draft',
+        priority:      'Normal',
+        items,
+        subtotal,
+        tax_amount,
+        total_amount,
+        site:          poSite,
+        country:       poCountry,
+        requested_by:  profile?.full_name || profile?.email || user?.email || null,
+        created_by:    profile?.id || user?.id || null,
+        notes:         'Generated from Stock Replenishment intelligence.',
+      }
+
+      const { error: insErr } = await supabase.from('purchase_orders').insert(payload)
+      if (insErr) throw insErr
+
+      setPoResult({ type: 'success', message: `Purchase order ${poNumber} created as Draft. Manage it in Procurement.` })
+      setOrderLines([])
+    } catch (e) {
+      setPoResult({ type: 'error', message: e.message || 'Failed to create purchase order.' })
+    } finally {
+      setCreatingPO(false)
+    }
+  }, [orderLines, activeCountry, profile, user])
+
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -611,9 +703,15 @@ export default function StockReplenishment() {
       {/* ── Error ────────────────────────────────────────────────────────────── */}
       {error && (
         <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">
-          <AlertTriangle size={18} />
+          <AlertTriangle size={18} className="flex-shrink-0" />
           <span className="text-sm">{error}</span>
-          <button onClick={() => setError(null)} className="ml-auto">
+          <button
+            onClick={load}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-red-800/40 border border-red-600 rounded-lg text-red-200 text-xs hover:bg-red-800/70 transition-colors"
+          >
+            <RefreshCw size={13} />Retry
+          </button>
+          <button onClick={() => setError(null)} className="text-red-300 hover:text-white">
             <X size={16} />
           </button>
         </div>
@@ -774,8 +872,8 @@ export default function StockReplenishment() {
                           { label: 'Brand',        field: 'brand'         },
                           { label: 'Size',         field: 'size'          },
                           { label: 'Site',         field: 'site'          },
-                          { label: 'In Stock',     field: 'qty_in_stock'  },
-                          { label: 'On Order',     field: 'qty_on_order'  },
+                          { label: 'In Stock',     field: 'qtyInStock'    },
+                          { label: 'On Order',     field: 'qtyOnOrder'    },
                           { label: 'Daily Usage',  field: 'consumptionPerDay' },
                           { label: 'Days Left',    field: 'days_remaining' },
                           { label: 'Suggest Qty',  field: 'suggestedQty'  },
@@ -819,12 +917,12 @@ export default function StockReplenishment() {
                             <td className="px-4 py-3 text-gray-300 font-mono text-xs">{row.size || '—'}</td>
                             <td className="px-4 py-3 text-gray-400">{row.site || '—'}</td>
                             <td className="px-4 py-3 text-center">
-                              <span className={row.qty_in_stock <= 0 ? 'text-red-400 font-bold' : 'text-white'}>
-                                {row.qty_in_stock ?? 0}
+                              <span className={row.qtyInStock <= 0 ? 'text-red-400 font-bold' : 'text-white'}>
+                                {row.qtyInStock ?? 0}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-center text-yellow-400">
-                              {row.qty_on_order ?? 0}
+                              {row.qtyOnOrder ?? 0}
                             </td>
                             <td className="px-4 py-3 text-center text-gray-400">
                               {row.consumptionPerDay > 0
@@ -1203,9 +1301,41 @@ export default function StockReplenishment() {
               )}
             </div>
 
+            {/* PO creation result banner */}
+            {poResult && (
+              <div className={`rounded-xl p-4 flex items-center gap-3 border text-sm ${
+                poResult.type === 'success'
+                  ? 'bg-emerald-900/20 border-emerald-700 text-emerald-300'
+                  : 'bg-red-900/30 border-red-700 text-red-300'
+              }`}>
+                {poResult.type === 'success'
+                  ? <CheckCircle size={18} className="flex-shrink-0" />
+                  : <AlertTriangle size={18} className="flex-shrink-0" />}
+                <span>{poResult.message}</span>
+                {poResult.type === 'success' && (
+                  <a href="/procurement" className="ml-2 inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300">
+                    <ExternalLink size={14} />Open Procurement
+                  </a>
+                )}
+                <button onClick={() => setPoResult(null)} className="ml-auto text-gray-400 hover:text-white">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
             {/* Export actions */}
             {orderLines.length > 0 && (
               <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleCreatePurchaseOrder}
+                  disabled={creatingPO}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-emerald-700 border border-emerald-600 text-white text-sm font-semibold rounded-xl hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {creatingPO
+                    ? <Loader2 size={16} className="animate-spin" />
+                    : <ShoppingCart size={16} />}
+                  {creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
+                </button>
                 <button
                   onClick={exportOrderExcel}
                   className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm font-medium rounded-xl transition-colors"

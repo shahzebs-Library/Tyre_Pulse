@@ -13,6 +13,7 @@ import {
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
@@ -61,20 +62,20 @@ const BASE_OPTS = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#1f2937',
+      backgroundColor: 'var(--panel-2)',
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
-      borderColor: '#374151',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
     },
   },
   scales: {
     x: {
-      grid: { color: 'rgba(255,255,255,0.06)' },
+      grid: { color:'var(--text-muted)' },
       ticks: { color: '#6b7280', font: { size: 10 } },
     },
     y: {
-      grid: { color: 'rgba(255,255,255,0.06)' },
+      grid: { color:'var(--text-muted)' },
       ticks: { color: '#6b7280', font: { size: 10 } },
     },
   },
@@ -209,15 +210,14 @@ export default function ForecastingEngine() {
         const cf = activeCountry !== 'All' ? activeCountry : null
 
         const [recRes, fleetRes] = await Promise.all([
-          (() => {
+          fetchAllPages((from, to) => {
             let q = supabase
               .from('tyre_records')
               .select('id,asset_no,site,brand,position,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,risk_level,category')
-              .limit(10000)
               .order('issue_date', { ascending: true })
             if (cf) q = q.eq('country', cf)
-            return q
-          })(),
+            return q.range(from, to)
+          }),
           (() => {
             let q = supabase
               .from('vehicle_fleet')

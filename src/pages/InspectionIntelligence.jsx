@@ -554,7 +554,7 @@ export default function InspectionIntelligence() {
     datasets: [{
       data: typeDistribution.map(([, c]) => c),
       backgroundColor: typeDistribution.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]),
-      borderColor: '#111827',
+      borderColor: 'var(--panel)',
       borderWidth: 2,
     }],
   }), [typeDistribution])
@@ -981,7 +981,7 @@ export default function InspectionIntelligence() {
 
         {inspectorScores.length === 0 ? (
           <div className="px-5 py-10 text-center text-gray-500 text-sm">
-            Inspector data will appear once <code className="text-gray-400 bg-gray-800 px-1 rounded">inspector_name</code> is captured in inspections
+            Inspector data will appear once the <code className="text-gray-400 bg-gray-800 px-1 rounded">inspector</code> field is captured in inspections
           </div>
         ) : (
           <div className="overflow-x-auto">

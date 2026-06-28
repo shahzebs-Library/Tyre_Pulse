@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   Chart as ChartJS,
@@ -51,7 +52,7 @@ const CHART_BASE = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
     tooltip: {
-      backgroundColor: '#111827',
+      backgroundColor: 'var(--panel)',
       titleColor: '#f3f4f6',
       bodyColor: '#9ca3af',
       borderColor: 'rgba(34,197,94,0.25)',
@@ -59,8 +60,8 @@ const CHART_BASE = {
     },
   },
   scales: {
-    x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
-    y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
+    x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
+    y: { grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
   },
 }
 
@@ -185,12 +186,14 @@ export default function DowntimeTracker() {
     else setLoading(true)
     setError(null)
     try {
-      let q = supabase
-        .from('tyre_records')
-        .select('id,asset_no,serial_number,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,position,reason_for_removal')
-        .order('issue_date', { ascending: false })
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data: tyreData, error: tyreErr } = await q
+      const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id,asset_no,serial_number,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,position,reason_for_removal')
+          .order('issue_date', { ascending: false })
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q.range(from, to)
+      })
       if (tyreErr) throw tyreErr
       setTyreRecords(tyreData || [])
 
@@ -387,7 +390,7 @@ export default function DowntimeTracker() {
       datasets: [{
         data: labels.map(l => map[l]),
         backgroundColor: labels.map(l => CAUSE_COLORS[l] || '#6b7280'),
-        borderColor: '#111827',
+        borderColor: 'var(--panel)',
         borderWidth: 2,
       }],
     }
@@ -711,16 +714,16 @@ export default function DowntimeTracker() {
     indexAxis: 'y',
     plugins: { ...CHART_BASE.plugins, legend: { labels: { color: '#9ca3af', font: { size: 11 } } } },
     scales: {
-      x: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
-      y: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 10 }, maxTicksLimit: 14 } },
+      x: { stacked: true, grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
+      y: { stacked: true, grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 10 }, maxTicksLimit: 14 } },
     },
   }
 
   const costBarOpts = {
     ...CHART_BASE,
     scales: {
-      x: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
-      y: { id: 'y', stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#6b7280', font: { size: 11 }, callback: v => fmtCurrency(v, sym) } },
+      x: { stacked: true, grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 11 } } },
+      y: { id: 'y', stacked: true, grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280', font: { size: 11 }, callback: v => fmtCurrency(v, sym) } },
       y2: { id: 'y2', position: 'right', grid: { display: false }, ticks: { color: '#22c55e', font: { size: 11 }, callback: v => fmtCurrency(v, sym) } },
     },
   }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { AXLE_GROUPS, GROUP_ICONS, normalizePosition } from '../lib/tyrePositions'
@@ -45,8 +46,8 @@ const BAR_OPTS = (horizontal = false) => ({
   indexAxis: horizontal ? 'y' : 'x',
   plugins: { legend: { display: false } },
   scales: {
-    x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
-    y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
+    x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
+    y: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 11 } } },
   },
 })
 
@@ -158,15 +159,16 @@ export default function PositionIntelligence() {
     setLoading(true)
     setError(null)
     try {
-      let q = supabase
-        .from('tyre_records')
-        .select('id,issue_date,asset_no,brand,site,country,cost_per_tyre,qty,risk_level,km_at_fitment,km_at_removal,position,category,remarks')
-        .order('issue_date', { ascending: false })
-
       const country = countryChip !== 'All' ? countryChip : (activeCountry !== 'All' ? activeCountry : null)
-      if (country) q = q.eq('country', country)
 
-      const { data, error: err } = await q
+      const { data, error: err } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id,issue_date,asset_no,brand,site,country,cost_per_tyre,qty,risk_level,km_at_fitment,km_at_removal,position,category,remarks')
+          .order('issue_date', { ascending: false })
+        if (country) q = q.eq('country', country)
+        return q.range(from, to)
+      })
       if (err) throw err
       setRecords(data || [])
     } catch (e) {
@@ -697,11 +699,11 @@ export default function PositionIntelligence() {
                   },
                   scales: {
                     x: {
-                      grid: { color: 'rgba(255,255,255,0.04)' },
+                      grid: { color:'var(--text-muted)' },
                       ticks: { color: '#9ca3af', font: { size: 10 } },
                     },
                     y: {
-                      grid: { color: 'rgba(255,255,255,0.04)' },
+                      grid: { color:'var(--text-muted)' },
                       ticks: { color: '#9ca3af', font: { size: 10 } },
                     },
                   },
@@ -728,9 +730,9 @@ export default function PositionIntelligence() {
                     },
                   },
                   scales: {
-                    x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
+                    x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
                     y: {
-                      grid: { color: 'rgba(255,255,255,0.04)' },
+                      grid: { color:'var(--text-muted)' },
                       ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${v}%` },
                     },
                   },
@@ -760,9 +762,9 @@ export default function PositionIntelligence() {
                       },
                     },
                     scales: {
-                      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
+                      x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
                       y: {
-                        grid: { color: 'rgba(255,255,255,0.04)' },
+                        grid: { color:'var(--text-muted)' },
                         ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${(v / 1000).toFixed(0)}k` },
                       },
                     },
@@ -814,7 +816,7 @@ export default function PositionIntelligence() {
             <table className="min-w-full text-xs">
               <thead>
                 <tr>
-                  <th className="table-header text-left pr-4 py-2 sticky left-0 bg-[#070f09] z-10">Site</th>
+                  <th className="table-header text-left pr-4 py-2 sticky left-0 bg-[var(--surface-1)] z-10">Site</th>
                   {POSITIONS.map(pos => (
                     <th key={pos} className="table-header text-center px-3 py-2 whitespace-nowrap">
                       {POSITION_ICONS[pos]} {pos}
@@ -825,7 +827,7 @@ export default function PositionIntelligence() {
               <tbody>
                 {heatMapData.matrix.map((row, i) => (
                   <tr key={row.site} className={i % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.02]'}>
-                    <td className="table-cell pr-4 py-2 font-medium text-gray-300 sticky left-0 bg-[#070f09] z-10 whitespace-nowrap">
+                    <td className="table-cell pr-4 py-2 font-medium text-gray-300 sticky left-0 bg-[var(--surface-1)] z-10 whitespace-nowrap">
                       {row.site}
                     </td>
                     {POSITIONS.map(pos => {

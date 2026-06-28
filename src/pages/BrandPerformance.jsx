@@ -13,6 +13,7 @@ import PageHeader from '../components/ui/PageHeader'
 import { ChartModal } from '../components/ChartModal'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { fetchAllPages } from '../lib/fetchAll'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -46,12 +47,14 @@ export default function BrandPerformance() {
   const chartRef = useRef(null)
 
   useEffect(() => {
-    let q = supabase
-      .from('tyre_records')
-      .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty,description,remarks')
-      .order('issue_date')
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    q.then(({ data }) => { setRecords(data || []); setLoading(false) })
+    fetchAllPages((from, to) => {
+      let q = supabase
+        .from('tyre_records')
+        .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty,description,remarks')
+        .order('issue_date')
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      return q.range(from, to)
+    }).then(({ data }) => { setRecords(data || []); setLoading(false) })
   }, [activeCountry])
 
   const uniqueSites = useMemo(() => {

@@ -463,7 +463,7 @@ export default function InspectionPlanner() {
     try {
       let inspQ = supabase
         .from('inspections')
-        .select('id, asset_no, tyre_serial, inspection_date, inspector_name, site, country, tread_depth, pressure_reading, position')
+        .select('id, asset_no, tyre_serial, inspection_date, inspector, site, country, pressure_reading')
         .order('inspection_date', { ascending: false })
 
       let tyreQ = supabase
@@ -476,7 +476,9 @@ export default function InspectionPlanner() {
       }
 
       const [inspRes, tyreRes] = await Promise.all([inspQ, tyreQ])
-      setInspections(inspRes.data || [])
+      // Normalise DB column `inspector` to the app-wide `inspector_name` shape so
+      // every downstream consumer (schedule, exports, analytics) reads one field.
+      setInspections((inspRes.data || []).map(r => ({ ...r, inspector_name: r.inspector })))
       setTyreRecords(tyreRes.data || [])
     } finally {
       setRefreshing(false)
@@ -885,7 +887,7 @@ export default function InspectionPlanner() {
     maintainAspectRatio: false,
     plugins: {
       legend: { position: 'top', labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
-      tooltip: { backgroundColor: '#1f2937', titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+      tooltip: { backgroundColor: 'var(--panel-2)', titleColor: '#f9fafb', bodyColor: '#d1d5db' },
     },
     scales: {
       x: { ticks: { color: '#6b7280' }, grid: { color: '#1f2937' } },

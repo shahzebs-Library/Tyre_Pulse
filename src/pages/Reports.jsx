@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { applyCountry } from '../lib/countryFilter'
+import { fetchAllPages } from '../lib/fetchAll'
 import EmailReportModal from '../components/EmailReportModal'
 
 const REPORT_TYPES = [
@@ -58,7 +59,7 @@ function applyShortcut(label, setDateFrom, setDateTo, setDateShortcut) {
 }
 
 export default function Reports() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
   const [step, setStep]               = useState('type')
   const [reportType, setReportType]   = useState('')
   const [dateFrom, setDateFrom]       = useState('')
@@ -160,37 +161,39 @@ export default function Reports() {
       let rows = []
 
       if (reportType === 'Inspection Report') {
-        let q = supabase.from('inspections').select('*')
-        if (dateFrom)         q = q.gte('inspection_date', dateFrom)
-        if (dateTo)           q = q.lte('inspection_date', dateTo)
-        if (filterSite)       q = q.ilike('site', `%${filterSite}%`)
-        if (filterCountry)    q = q.eq('country', filterCountry)
-        if (filterInspType)   q = q.eq('inspection_type', filterInspType)
-        if (!filterCountry)   q = applyCountry(q, activeCountry)
-        const { data } = await q.order('inspection_date', { ascending: false }).limit(5000)
+        const buildInsp = () => {
+          let q = supabase.from('inspections').select('*')
+          // scheduled_date is always populated; inspection_date can be null, so
+          // filtering/sorting on it would silently drop those inspections.
+          if (dateFrom)       q = q.gte('scheduled_date', dateFrom)
+          if (dateTo)         q = q.lte('scheduled_date', dateTo)
+          if (filterSite)     q = q.ilike('site', `%${filterSite}%`)
+          if (filterCountry)  q = q.eq('country', filterCountry)
+          if (filterInspType) q = q.eq('inspection_type', filterInspType)
+          if (!filterCountry) q = applyCountry(q, activeCountry)
+          return q.order('scheduled_date', { ascending: false })
+        }
+        const { data } = await fetchAllPages((from, to) => buildInsp().range(from, to), { max: 100000 })
         rows = data ?? []
       } else {
-        let q = supabase.from('tyre_records').select(
-          'issue_date,asset_no,brand,description,serial_no,site,country,cost_per_tyre,qty,risk_level,remarks'
-        )
-        if (dateFrom)      q = q.gte('issue_date', dateFrom)
-        if (dateTo)        q = q.lte('issue_date', dateTo)
-        if (filterSite)    q = q.ilike('site', `%${filterSite}%`)
-        if (filterCountry) q = q.eq('country', filterCountry)
-        if (!filterCountry) q = applyCountry(q, activeCountry)
-
-        if (reportType === 'Vehicle History' && filterAsset)
-          q = q.ilike('asset_no', `%${filterAsset}%`)
-
-        if ((reportType === 'Cost Analysis' || reportType === 'Tyre Replacement Log') && filterBrand)
-          q = q.ilike('brand', `%${filterBrand}%`)
-
-        if (reportType === 'Risk Summary')
-          q = q.in('risk_level', filterRiskLevels.length ? filterRiskLevels : RISK_LEVELS)
-
-        q = q.order('issue_date', { ascending: false })
-
-        const { data } = await q.limit(5000)
+        const buildTyre = () => {
+          let q = supabase.from('tyre_records').select(
+            'issue_date,asset_no,brand,description,serial_no,site,country,cost_per_tyre,qty,risk_level,remarks'
+          )
+          if (dateFrom)      q = q.gte('issue_date', dateFrom)
+          if (dateTo)        q = q.lte('issue_date', dateTo)
+          if (filterSite)    q = q.ilike('site', `%${filterSite}%`)
+          if (filterCountry) q = q.eq('country', filterCountry)
+          if (!filterCountry) q = applyCountry(q, activeCountry)
+          if (reportType === 'Vehicle History' && filterAsset)
+            q = q.ilike('asset_no', `%${filterAsset}%`)
+          if ((reportType === 'Cost Analysis' || reportType === 'Tyre Replacement Log') && filterBrand)
+            q = q.ilike('brand', `%${filterBrand}%`)
+          if (reportType === 'Risk Summary')
+            q = q.in('risk_level', filterRiskLevels.length ? filterRiskLevels : RISK_LEVELS)
+          return q.order('issue_date', { ascending: false })
+        }
+        const { data } = await fetchAllPages((from, to) => buildTyre().range(from, to), { max: 100000 })
         const raw = data ?? []
 
         if (reportType === 'Vehicle History') {
@@ -270,7 +273,9 @@ export default function Reports() {
       columns,
       `TyrePulse · ${reportType}`,
       `TyrePulse_${reportType.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}`,
-      'landscape'
+      'landscape',
+      '',
+      { currency: activeCurrency },
     )
   }
 

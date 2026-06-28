@@ -67,7 +67,14 @@ export default function ConsoleDashboard() {
     setAiTrend(Object.values(byDay))
   }
 
-  const S = stats ?? {}
+  const U = stats?.users ?? {}
+  const O = stats?.organisations ?? {}
+  const A = stats?.assets ?? {}
+  const aiStats = {
+    calls_today: aiTrend.at(-1)?.calls ?? 0,
+    tokens_month: aiTrend.reduce((s, d) => s + d.tokens, 0),
+    cost_month:   aiTrend.reduce((s, d) => s + d.cost, 0),
+  }
 
   return (
     <div className="space-y-6 max-w-7xl">
@@ -84,28 +91,19 @@ export default function ConsoleDashboard() {
         </button>
       </div>
 
-      {/* ── Maintenance mode alert ── */}
-      {S.maintenance_mode && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-950/50 border border-red-700/50">
-          <AlertTriangle size={18} className="text-red-400 flex-shrink-0" />
-          <p className="text-sm text-red-300 font-semibold">Maintenance Mode is ACTIVE — regular users see the maintenance screen</p>
-          <button onClick={() => navigate('/console/config')} className="ml-auto text-xs text-red-300 underline hover:text-red-200">Manage</button>
-        </div>
-      )}
-
       {/* ── KPI grid ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard icon={Users}      label="Total Users"       value={S.total_users}        sub={`${S.pending_approvals ?? 0} pending`}  color="blue"   onClick={() => navigate('/console/users')} />
-        <KpiCard icon={Building2}  label="Organisations"     value={S.total_orgs}         sub={`${S.active_orgs ?? 0} active`}         color="purple" onClick={() => navigate('/console/organisations')} />
-        <KpiCard icon={Shield}     label="Locked Accounts"   value={S.locked_users}       sub="require attention"                      color="red"    onClick={() => navigate('/console/users')} />
-        <KpiCard icon={Clock}      label="Active Today"      value={S.active_users_today} sub="unique sessions"                        color="green" />
+        <KpiCard icon={Users}      label="Total Users"     value={U.total}       sub={`${U.pending ?? 0} pending approval`}  color="blue"   onClick={() => navigate('/console/users')} />
+        <KpiCard icon={Building2}  label="Organisations"   value={O.total}       sub={`${O.active ?? 0} active`}             color="purple" onClick={() => navigate('/console/organisations')} />
+        <KpiCard icon={Shield}     label="Locked Accounts" value={U.locked ?? 0} sub="require attention"                     color="red"    onClick={() => navigate('/console/users')} />
+        <KpiCard icon={Clock}      label="New This Week"   value={U.new_week}    sub={`${U.new_today ?? 0} new today`}       color="green" />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard icon={Database}   label="Tyre Records"      value={fmtNum(S.total_tyre_records)} sub="total across all orgs" color="orange" />
-        <KpiCard icon={AlertTriangle} label="Accidents"      value={fmtNum(S.total_accidents)}    sub="logged incidents"      color="red" />
-        <KpiCard icon={CheckCircle}   label="Inspections"    value={fmtNum(S.total_inspections)}  sub="completed"             color="green" />
-        <KpiCard icon={Zap}        label="AI Calls Today"    value={S.ai_calls_today}             sub={`${fmtTokens(S.ai_tokens_month)} tokens this month`} color="yellow" onClick={() => navigate('/console/ai-usage')} />
+        <KpiCard icon={Database}      label="Tyre Records"   value={fmtNum(A.tyres)}        sub="total across all orgs" color="orange" />
+        <KpiCard icon={CheckCircle}   label="Inspections"    value={fmtNum(A.inspections)}  sub="all time"              color="green" />
+        <KpiCard icon={TrendingUp}    label="Vehicles"       value={fmtNum(A.vehicles)}     sub="registered"            color="blue" />
+        <KpiCard icon={Zap}           label="AI Calls"       value={aiStats.calls_today}    sub={`${fmtTokens(aiStats.tokens_month)} tokens (7d)`} color="yellow" onClick={() => navigate('/console/ai-usage')} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -191,12 +189,12 @@ export default function ConsoleDashboard() {
         {aiTrend.length > 0 && (
           <div className="flex gap-6 mt-3 pt-3 border-t border-gray-800">
             <div>
-              <p className="text-xs text-gray-500">This month tokens</p>
-              <p className="text-sm font-semibold text-white">{fmtTokens(S.ai_tokens_month)}</p>
+              <p className="text-xs text-gray-500">7-day tokens</p>
+              <p className="text-sm font-semibold text-white">{fmtTokens(aiStats.tokens_month)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Estimated cost</p>
-              <p className="text-sm font-semibold text-orange-300">${Number(S.ai_cost_month ?? 0).toFixed(4)}</p>
+              <p className="text-sm font-semibold text-orange-300">${aiStats.cost_month.toFixed(4)}</p>
             </div>
           </div>
         )}

@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
-import { isAdminOrAbove, isAdmin } from '../../../lib/types'
+import { isAdminOrAbove } from '../../../lib/types'
 import { canUpdateWorkOrders } from '../../../lib/permissions'
 
 type WorkOrderStatus = 'Open' | 'In Progress' | 'Resolved' | 'Closed'

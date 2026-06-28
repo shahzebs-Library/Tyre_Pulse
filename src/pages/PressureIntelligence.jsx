@@ -16,6 +16,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 
 ChartJS.register(
@@ -50,10 +51,10 @@ const chartOpts = (horizontal = false, xLabel = '', yLabel = '') => ({
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 10 } } },
     tooltip: {
-      backgroundColor: '#111827',
+      backgroundColor: 'var(--panel)',
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
-      borderColor: '#374151',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
     },
   },
@@ -207,14 +208,16 @@ export default function PressureIntelligence() {
       setError(null)
       try {
         const [{ data: ins }, { data: tr }] = await Promise.all([
-          supabase
+          fetchAllPages((from, to) => supabase
             .from('inspections')
-            .select('id,asset_no,tyre_serial,position,pressure_reading,tread_depth,inspector_name,inspection_date,site,country,notes')
-            .order('inspection_date', { ascending: false }),
-          supabase
+            .select('id,asset_no,tyre_serial,pressure_reading,inspector,inspection_date,site,country,notes')
+            .order('inspection_date', { ascending: false })
+            .range(from, to)),
+          fetchAllPages((from, to) => supabase
             .from('tyre_records')
             .select('id,asset_no,serial_number,position,pressure_reading,brand,size,site,country,issue_date,risk_level')
-            .order('issue_date', { ascending: false }),
+            .order('issue_date', { ascending: false })
+            .range(from, to)),
         ])
         setInspections(ins || [])
         setTyreRecords(tr || [])
@@ -236,14 +239,14 @@ export default function PressureIntelligence() {
         source:      'inspection',
         asset_no:    r.asset_no,
         serial:      r.tyre_serial,
-        position:    r.position,
+        position:    null,
         reading:     Number(r.pressure_reading),
-        inspector:   r.inspector_name,
+        inspector:   r.inspector,
         date:        r.inspection_date,
         site:        r.site,
         country:     r.country,
         notes:       r.notes,
-        tread_depth: r.tread_depth,
+        tread_depth: null,
       }))
 
     const fromTyres = (tyreRecords || [])
@@ -347,10 +350,10 @@ export default function PressureIntelligence() {
       legend: { display: false },
       annotation: {},
       tooltip: {
-        backgroundColor: '#111827',
+        backgroundColor: 'var(--panel)',
         titleColor: '#f9fafb',
         bodyColor: '#d1d5db',
-        borderColor: '#374151',
+        borderColor: 'var(--hairline)',
         borderWidth: 1,
       },
     },
@@ -396,10 +399,10 @@ export default function PressureIntelligence() {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#111827',
+        backgroundColor: 'var(--panel)',
         titleColor: '#f9fafb',
         bodyColor: '#d1d5db',
-        borderColor: '#374151',
+        borderColor: 'var(--hairline)',
         borderWidth: 1,
         callbacks: {
           label: ctx => ` ${ctx.parsed.x.toFixed(1)}%`,
@@ -671,7 +674,7 @@ export default function PressureIntelligence() {
     maintainAspectRatio: false,
     plugins: {
       legend: { labels: { color: '#9ca3af', font: { size: 10 } } },
-      tooltip: { backgroundColor: '#111827', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: '#374151', borderWidth: 1 },
+      tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1 },
     },
     scales: {
       x: { grid: { color: 'rgba(31,41,55,0.8)' }, ticks: { color: '#9ca3af', font: { size: 10 } } },
@@ -1029,7 +1032,7 @@ export default function PressureIntelligence() {
                       ...chartOpts(false, '', 'Avg Pressure (PSI)'),
                       plugins: {
                         legend: { labels: { color: '#9ca3af', font: { size: 10 } } },
-                        tooltip: { backgroundColor: '#111827', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: '#374151', borderWidth: 1 },
+                        tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db', borderColor: 'var(--hairline)', borderWidth: 1 },
                       },
                     }}
                   />

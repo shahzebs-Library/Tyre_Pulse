@@ -16,6 +16,7 @@ import {
   Eye, ChevronDown, ChevronUp, Radio,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -202,7 +203,7 @@ function TyreDot({ tyre, label }) {
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 rounded-lg p-2 text-xs whitespace-nowrap shadow-xl pointer-events-none">
           <p className="text-white font-semibold">{label}</p>
           <p className="text-gray-400">{tyre.brand ?? '—'}</p>
-          {tyre.tread_depth != null && <p className="text-gray-400">Tread: {tyre.tread_depth}mm</p>}
+          {/* tread_depth disabled — re-enable when ready */}
           {tyre.pressure_reading != null && <p className="text-gray-400">PSI: {tyre.pressure_reading}</p>}
           <p style={{ color: riskColor(tyre.risk_level) }}>{tyre.risk_level}</p>
         </div>
@@ -448,15 +449,17 @@ export default function LiveFleetStatus() {
           .from('fleet_master')
           .select('asset_no,fleet_number,make,model,vehicle_type,site,status,operator_name'),
 
-        supabase
+        fetchAllPages((from, to) => supabase
           .from('tyre_records')
           .select('asset_no,risk_level,tread_depth,pressure_reading,position,site,issue_date,removal_date,brand,serial_number,size')
-          .is('removal_date', null),
+          .is('removal_date', null)
+          .range(from, to)),
 
-        supabase
+        fetchAllPages((from, to) => supabase
           .from('inspections')
           .select('asset_no,scheduled_date,status,inspection_type')
-          .order('scheduled_date', { ascending: false }),
+          .order('scheduled_date', { ascending: false })
+          .range(from, to)),
 
         supabase
           .from('alerts')
@@ -666,8 +669,8 @@ export default function LiveFleetStatus() {
   const hasFilters = siteFilter !== 'All' || statusFilter !== 'All' || search
 
   const chartTooltipDefaults = {
-    backgroundColor: '#111827',
-    borderColor: '#374151',
+    backgroundColor: 'var(--panel)',
+    borderColor: 'var(--hairline)',
     borderWidth: 1,
     titleColor: '#f9fafb',
     bodyColor: '#9ca3af',

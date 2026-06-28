@@ -1,20 +1,27 @@
 import 'react-native-url-polyfill/auto'
 import { createClient } from '@supabase/supabase-js'
-import * as SecureStore from 'expo-secure-store'
+import Constants from 'expo-constants'
+import { secureStorage } from './secureStorage'
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!
+// Resolve connection config: EAS-injected env first, then app.json `extra`
+// fallback so a built APK always has a valid Supabase connection even if the
+// env injection path changes. The anon key is public-safe (RLS enforces access).
+const extra = (Constants.expoConfig?.extra ?? (Constants as any).manifest?.extra ?? {}) as {
+  supabaseUrl?: string
+  supabaseAnonKey?: string
+}
 
-// Hardware-backed secure storage (Keystore on Android, Keychain on iOS)
-const SecureStoreAdapter = {
-  getItem: (key: string) => SecureStore.getItemAsync(key),
-  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? extra.supabaseUrl ?? ''
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? extra.supabaseAnonKey ?? ''
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  // Surfaces misconfiguration loudly in dev/logs instead of failing silently.
+  console.error('[TyrePulse] Missing Supabase config — set EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY or app.json extra.')
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: SecureStoreAdapter,
+    storage: secureStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

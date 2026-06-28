@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
-import { computeAssetMetrics, bucketByMonth, linearRegression, recordCost } from '../lib/analyticsEngine'
+import { bucketByMonth, linearRegression, recordCost } from '../lib/analyticsEngine'
 import { BarChart2, Download, FileText } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -25,7 +25,9 @@ const RISK_BADGE = {
 
 export default function FleetAnalytics() {
   const { activeCountry, activeCurrency } = useSettings()
-  const [records, setRecords]   = useState([])
+  const [assetMetrics, setAssetMetrics] = useState([])
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [selectedRecords, setSelectedRecords] = useState([])
   const [loading, setLoading]   = useState(true)
   const [search, setSearch]     = useState('')
   const [selected, setSelected] = useState(null)
@@ -35,12 +37,23 @@ export default function FleetAnalytics() {
   const [siteFilter, setSiteFilter] = useState('')
 
   useEffect(() => {
-    let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: false })
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    q.then(({ data }) => { setRecords(data || []); setLoading(false) })
+    setLoading(true)
+    supabase.rpc('report_asset_metrics', { p_country: activeCountry, p_from: null, p_to: null })
+      .then(({ data }) => {
+        const m = data || []
+        setAssetMetrics(m)
+        setTotalRecords(m.reduce((s, a) => s + (a.count || 0), 0))
+        setLoading(false)
+      })
   }, [activeCountry])
 
-  const assetMetrics = useMemo(() => computeAssetMetrics(records), [records])
+  // Lazy-load the selected asset's raw rows for the detail view.
+  useEffect(() => {
+    if (!selected) { setSelectedRecords([]); return }
+    let q = supabase.from('tyre_records').select('*').eq('asset_no', selected).order('issue_date', { ascending: false })
+    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+    q.then(({ data }) => setSelectedRecords(data || []))
+  }, [selected, activeCountry])
 
   const sorted = useMemo(() => {
     const arr = [...assetMetrics]
@@ -51,10 +64,10 @@ export default function FleetAnalytics() {
     return arr
   }, [assetMetrics, sortBy])
 
-  // Unique sites derived from raw records
+  // Unique sites derived from per-asset metrics
   const allSites = useMemo(() =>
-    [...new Set(records.map(r => r.site).filter(Boolean))].sort(),
-    [records]
+    [...new Set(assetMetrics.flatMap(a => a.sites || []))].sort(),
+    [assetMetrics]
   )
 
   const filtered = useMemo(() => {
@@ -77,7 +90,9 @@ export default function FleetAnalytics() {
     </div>
   )
 
-  const selectedAsset = selected ? assetMetrics.find(a => a.assetNo === selected) : null
+  const selectedAsset = selected
+    ? { ...assetMetrics.find(a => a.assetNo === selected), records: selectedRecords }
+    : null
 
   return (
     <div className="space-y-6">
@@ -92,7 +107,7 @@ export default function FleetAnalytics() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Assets',    value: assetMetrics.length,       color: 'text-blue-400' },
-          { label: 'Total Records',   value: records.length.toLocaleString(), color: 'text-white' },
+          { label: 'Total Records',   value: totalRecords.toLocaleString(), color: 'text-white' },
           { label: 'High Freq Assets',
             value: assetMetrics.filter(a => a.failureFreqPerMonth > 2).length,
             color: 'text-red-400' },

@@ -6,6 +6,19 @@ function resolveVehicleType(vt) {
   if (!vt) return 'Pickup'
   if (LAYOUTS[vt]) return vt                                             // exact match
   const s = vt.toLowerCase().trim()
+
+  // Plate-number prefix detection — first 2 alpha chars of asset_no
+  const prefix = (vt.match(/^[A-Za-z]+/) || [''])[0].toUpperCase().slice(0, 2)
+  const PREFIX_MAP = {
+    TM: 'Tri-mixer',
+    PM: 'Concrete pump',
+    WL: 'Wheel loader',
+    SL: 'Skid loader',
+    PL: 'Pickup',
+  }
+  if (PREFIX_MAP[prefix]) return PREFIX_MAP[prefix]
+
+  // Keyword fallback
   if (s.includes('tri') || s.includes('mixer'))            return 'Tri-mixer'
   if (s.includes('concrete') || s.includes('pump'))        return 'Concrete pump'
   if (s.includes('wheel') && s.includes('load'))           return 'Wheel loader'

@@ -15,17 +15,20 @@ import {
   TrendingUp, BookOpen, Zap, Database, Wrench, Calendar,
   Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
-  Recycle, Radio, PackagePlus,
+  Recycle, Radio, PackagePlus, CalendarCheck2, BellRing,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
 import { syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
 import { useWakeLock } from '../hooks/useWakeLock'
+import { useRealtimeSync } from '../hooks/useRealtime'
 import TpLogo from '../assets/logo.svg'
 import InstallPwaPrompt from './InstallPwaPrompt'
 import NotificationCenter from './NotificationCenter'
 import GlobalSearch from './GlobalSearch'
 import MobileBottomNav from './MobileBottomNav'
+import CommandPalette from './CommandPalette'
+import { useCommandPalette } from '../contexts/CommandPaletteContext'
 
 // Roles that have access to restricted nav groups
 const INTELLIGENCE_ROLES = ['Admin']
@@ -70,6 +73,7 @@ const NAV_GROUPS = [
       { to: '/scrap',               label: 'Scrap Management',    icon: FileWarning },
       { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
       { to: '/reports',             label: 'Reports',             icon: FileText },
+      { to: '/scheduled-reports',   label: 'Scheduled Reports',   icon: CalendarCheck2 },
     ],
   },
   {
@@ -113,7 +117,8 @@ const NAV_GROUPS = [
       { to: '/live-fleet',              label: 'Live Fleet Status',       icon: Radio },
       { to: '/compliance',              label: 'Compliance Dashboard',    icon: Shield },
       { to: '/retread',                 label: 'Retread Management',      icon: Recycle },
-      { to: '/alerts',          label: 'Alerts',          icon: Bell },
+      { to: '/alerts',              label: 'Alerts',              icon: Bell },
+      { to: '/alert-thresholds',   label: 'Alert Thresholds',    icon: BellRing },
       { to: '/anomalies',       label: 'Anomaly Scan',    icon: AlertTriangle, adminOnly: true },
       { to: '/vehicle-history', label: 'Vehicle History', icon: Car,           adminOnly: true },
       { to: '/serial-tracker',  label: 'Serial Tracker',  icon: ScanLine },
@@ -126,6 +131,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/cleaning',     label: 'Data Cleaning',    icon: Wand2,         adminOnly: true },
       { to: '/upload',       label: 'Upload Data',      icon: Upload },
+      { to: '/upload-approvals', label: 'Upload Approvals', icon: ClipboardList, adminOnly: true },
       { to: '/custom-data',  label: 'Custom Data',      icon: Database },
       { to: '/audit',        label: 'Audit Trail',      icon: ClipboardList, adminOnly: true },
       { to: '/settings',     label: 'Settings',         icon: Settings },
@@ -335,11 +341,15 @@ const SIDEBAR_EXPANDED = 240
 const SIDEBAR_COLLAPSED = 54
 
 export default function Layout({ children }) {
+  useRealtimeSync()
+
   const { profile, signOut }                = useAuth()
   const { activeCountry, setActiveCountry } = useSettings()
   const { theme, toggleTheme }              = useTheme()
   const navigate     = useNavigate()
   const location     = useLocation()
+
+  const { setOpen: setCmdOpen } = useCommandPalette()
 
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < 768,
@@ -415,12 +425,12 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     function onKeyDown(e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setGlobalSearchOpen(v => !v) }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setCmdOpen(v => !v) }
       if (e.key === 'Escape') { setGlobalSearchOpen(false); setSearchOpen(false); setQuery('') }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [setCmdOpen])
 
   useEffect(() => {
     if (searchOpen && searchRef.current) setTimeout(() => searchRef.current?.focus(), 50)
@@ -851,7 +861,7 @@ export default function Layout({ children }) {
           className="fixed top-0 left-0 right-0 z-30 flex items-center gap-2 px-3"
           style={{
             height: 52,
-            background: 'rgba(3,8,5,0.97)',
+            background: 'var(--panel-deep)',
             borderBottom: '1px solid rgba(22,163,74,0.12)',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
@@ -942,6 +952,9 @@ export default function Layout({ children }) {
       {/* Global search */}
       <GlobalSearch isOpen={globalSearchOpen} onClose={() => setGlobalSearchOpen(false)} />
 
+      {/* Command palette — Ctrl/Cmd+K */}
+      <CommandPalette />
+
       {/* ── Search palette ───────────────────────────────────────────────────── */}
       <AnimatePresence>
         {searchOpen && (
@@ -957,7 +970,7 @@ export default function Layout({ children }) {
             <motion.div
               className="w-full max-w-xl overflow-hidden"
               style={{
-                background: 'linear-gradient(145deg, rgba(6,13,8,0.99) 0%, rgba(3,8,5,0.99) 100%)',
+                background: 'linear-gradient(145deg, rgba(6,13,8,0.99) 0%, var(--panel-deep) 100%)',
                 border: '1px solid rgba(22,163,74,0.28)',
                 borderRadius: 20,
                 boxShadow: '0 0 80px rgba(22,163,74,0.16), 0 32px 100px rgba(0,0,0,0.85)',

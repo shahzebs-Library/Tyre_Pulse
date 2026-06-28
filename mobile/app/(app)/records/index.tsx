@@ -7,18 +7,16 @@
  *   inspector / tyre_man / reporter → own site only, read-only
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
   TextInput, RefreshControl, StatusBar, ActivityIndicator,
   Modal, ScrollView,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
-import { canEditRecords, canViewRecords } from '../../../lib/permissions'
 import { isAdminOrAbove } from '../../../lib/types'
 
 const PAGE = 30
@@ -55,10 +53,8 @@ interface TyreRecord {
 
 export default function RecordsScreen() {
   const { profile } = useAuth()
-  const router = useRouter()
   const role = profile?.role ?? null
   const elevated = isAdminOrAbove(role)
-  const canEdit  = canEditRecords(role)
 
   const [records, setRecords]     = useState<TyreRecord[]>([])
   const [loading, setLoading]     = useState(true)

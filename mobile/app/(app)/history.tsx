@@ -4,12 +4,14 @@ import {
   RefreshControl, StatusBar, ActivityIndicator, TextInput,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { getQueue, syncQueue } from '../../lib/offlineQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import SyncBanner from '../../components/SyncBanner'
+import { useRealtime } from '../../hooks/useRealtime'
 
 type SyncStatus = 'synced' | 'pending' | 'failed'
 type FilterKey = 'all' | SyncStatus
@@ -23,6 +25,7 @@ interface HistoryItem {
   sync_status: SyncStatus
   isOffline?: boolean
   tyre_count?: number
+  locked?: boolean
 }
 
 const FILTERS: FilterKey[] = ['all', 'synced', 'pending', 'failed']
@@ -30,6 +33,7 @@ const FILTERS: FilterKey[] = ['all', 'synced', 'pending', 'failed']
 export default function HistoryScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
+  const router = useRouter()
   const [items, setItems] = useState<HistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -56,7 +60,7 @@ export default function HistoryScreen() {
     if (profile?.id) {
       const { data: dbItems } = await supabase
         .from('inspections')
-        .select('id, title, site, asset_no, inspection_date, tyre_conditions')
+        .select('id, title, site, asset_no, inspection_date, tyre_conditions, locked')
         .eq('created_by', profile.id)
         .order('created_at', { ascending: false })
         .limit(100)
@@ -69,6 +73,7 @@ export default function HistoryScreen() {
         inspection_date: i.inspection_date,
         sync_status: 'synced' as const,
         tyre_count: Object.keys(i.tyre_conditions ?? {}).length,
+        locked: i.locked === true,
       }))
     }
 
@@ -77,6 +82,7 @@ export default function HistoryScreen() {
   }, [profile?.id])
 
   useEffect(() => { load() }, [load])
+  useRealtime('inspections', load)
 
   async function onRefresh() {
     setRefreshing(true)
@@ -128,8 +134,14 @@ export default function HistoryScreen() {
       : item.sync_status === 'pending' ? t('common.pending')
       : t('common.failed')
 
+    const openable = !item.isOffline
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={openable ? 0.7 : 1}
+        disabled={!openable}
+        onPress={() => openable && router.push(`/(app)/inspection/${item.id}`)}
+      >
         <View style={styles.cardLeft}>
           <View style={styles.cardIcon}>
             <Ionicons name="document-text-outline" size={20} color="#16a34a" />
@@ -156,11 +168,19 @@ export default function HistoryScreen() {
             ) : null}
           </View>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-          <Ionicons name={status.icon as any} size={13} color={status.text} />
-          <Text style={[styles.statusText, { color: status.text }]}>{statusLabel}</Text>
+        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+          <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+            <Ionicons name={status.icon as any} size={13} color={status.text} />
+            <Text style={[styles.statusText, { color: status.text }]}>{statusLabel}</Text>
+          </View>
+          {item.locked && (
+            <View style={styles.lockBadge}>
+              <Ionicons name="lock-closed" size={11} color="#64748b" />
+              <Text style={styles.lockText}>Locked</Text>
+            </View>
+          )}
         </View>
-      </View>
+      </TouchableOpacity>
     )
   }
 
@@ -355,6 +375,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   statusText: { fontSize: 10, fontWeight: '700' },
+  lockBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(100,116,139,0.1)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  lockText: { fontSize: 9, fontWeight: '700', color: '#64748b' },
   empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#94a3b8' },
   emptyText: { fontSize: 13, color: '#cbd5e1', textAlign: 'center' },

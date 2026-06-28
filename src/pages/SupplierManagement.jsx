@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -48,7 +49,7 @@ const CHART_DEFAULTS = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#1f2937',
+      backgroundColor: 'var(--panel-2)',
       titleColor: '#f3f4f6',
       bodyColor: '#9ca3af',
       borderColor: 'rgba(59,130,246,0.3)',
@@ -56,8 +57,8 @@ const CHART_DEFAULTS = {
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
   },
 }
 
@@ -355,9 +356,9 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
       r: {
         min: 0, max: 100,
         ticks: { color: '#6b7280', font: { size: 10 }, stepSize: 25 },
-        grid: { color: 'rgba(255,255,255,0.08)' },
+        grid: { color:'var(--text-muted)' },
         pointLabels: { color: '#9ca3af', font: { size: 11 } },
-        angleLines: { color: 'rgba(255,255,255,0.08)' },
+        angleLines: { color:'var(--text-muted)' },
       },
     },
   }
@@ -584,9 +585,10 @@ export default function SupplierManagement() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const { data, error: err } = await supabase
+    const { data, error: err } = await fetchAllPages((from, to) => supabase
       .from('tyre_records')
       .select('id, brand, cost_per_tyre, issue_date, site, country, position, km_at_fitment, km_at_removal, risk_level, size, serial_number, asset_no')
+      .range(from, to))
     if (err) { setError(err.message); setLoading(false); return }
     setRecords(data || [])
     setLoading(false)
@@ -1095,9 +1097,9 @@ export default function SupplierManagement() {
                             r: {
                               min: 0, max: 100,
                               ticks: { color: '#6b7280', font: { size: 10 }, stepSize: 25 },
-                              grid: { color: 'rgba(255,255,255,0.08)' },
+                              grid: { color:'var(--text-muted)' },
                               pointLabels: { color: '#9ca3af', font: { size: 11 } },
-                              angleLines: { color: 'rgba(255,255,255,0.08)' },
+                              angleLines: { color:'var(--text-muted)' },
                             },
                           },
                         }} />

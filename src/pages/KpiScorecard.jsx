@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import {
@@ -58,7 +59,7 @@ export default function KpiScorecard() {
       const cf = activeCountry !== 'All' ? activeCountry : null
       const flt = q => cf ? q.eq('country', cf) : q
       const [r, a, t] = await Promise.all([
-        flt(supabase.from('tyre_records').select('id,issue_date,risk_level,cost_per_tyre,qty,created_at,country,site').order('issue_date')),
+        fetchAllPages((from, to) => flt(supabase.from('tyre_records').select('id,issue_date,risk_level,cost_per_tyre,qty,created_at,country,site').order('issue_date')).range(from, to), { max: 200000 }),
         flt(supabase.from('corrective_actions').select('id,due_date,status,country').neq('status', 'Closed')),
         supabase.from('kpi_targets').select('*').eq('year', yearFilter),
       ])
@@ -120,13 +121,15 @@ export default function KpiScorecard() {
       const lastDay = new Date(Number(y), Number(mo), 0).getDate()
       const yoyEnd = `${lastYoyMonth}-${lastDay}`
       const cf = activeCountry !== 'All' ? activeCountry : null
-      let q = supabase
-        .from('tyre_records')
-        .select('id,issue_date,risk_level,cost_per_tyre,qty,created_at,country,site')
-        .gte('issue_date', yoyStart)
-        .lte('issue_date', yoyEnd)
-      if (cf) q = q.eq('country', cf)
-      const { data } = await q
+      const { data } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id,issue_date,risk_level,cost_per_tyre,qty,created_at,country,site')
+          .gte('issue_date', yoyStart)
+          .lte('issue_date', yoyEnd)
+        if (cf) q = q.eq('country', cf)
+        return q.range(from, to)
+      }, { max: 200000 })
       setYoyRecords(data || [])
       setYoyLoading(false)
     }

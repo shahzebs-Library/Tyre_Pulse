@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
-import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff } from 'lucide-react'
+import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
+import SignaturePad from '../components/SignaturePad'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
@@ -71,7 +74,7 @@ function normVT(vt) {
 // Infer vehicle type from asset number prefix (TM→Tri-mixer, MO→Concrete pump, etc.)
 function inferVehicleTypeFromAsset(assetNo) {
   const prefix = ((assetNo || '').match(/^[A-Za-z]+/) || [''])[0].toUpperCase().substring(0, 2)
-  const map = { TM: 'Tri-mixer', MO: 'Concrete pump', WL: 'Wheel loader', SL: 'Skid loader', PL: 'Pickup', BH: 'Bus' }
+  const map = { TM: 'Tri-mixer', PM: 'Concrete pump', WL: 'Wheel loader', SL: 'Skid loader', PL: 'Pickup', BH: 'Bus' }
   return map[prefix] || null
 }
 
@@ -124,6 +127,97 @@ const CHECKLIST_LABELS = {
   },
 }
 
+// Column widths for the virtual inspection table grid
+const INSP_COL_WIDTHS = [110, 200, 110, 110, 100, 90, 100, 120, 240]
+
+// ── Approval email HTML builder ────────────────────────────────────────────────
+function buildApprovalEmailHtml({ assetNo, inspector, date, site, odometer, hourMeter, notes, approvalLink, signature }) {
+  const sigBlock = signature
+    ? `<img src="${signature}" alt="Inspector Signature" style="max-width:220px;border:1px solid #e5e7eb;border-radius:8px;margin-top:8px;" />`
+    : '<p style="color:#9ca3af;font-style:italic;">No digital signature captured</p>'
+
+  const rows = [
+    ['Asset / Vehicle', assetNo || '—'],
+    ['Inspection Date', date || '—'],
+    ['Site', site || '—'],
+    ['Inspector', inspector || '—'],
+    odometer ? ['Odometer (km)', odometer] : null,
+    hourMeter ? ['Hour Meter (hrs)', hourMeter] : null,
+  ].filter(Boolean)
+
+  const tableRows = rows.map(([k, v]) => `
+    <tr>
+      <td style="padding:8px 12px;color:#6b7280;font-size:13px;border-bottom:1px solid #f3f4f6;">${k}</td>
+      <td style="padding:8px 12px;color:#111827;font-size:13px;font-weight:600;border-bottom:1px solid #f3f4f6;">${v}</td>
+    </tr>`).join('')
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#15803d 0%,#166534 100%);padding:28px 32px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:40px;height:40px;background:rgba(255,255,255,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+          <span style="color:#fff;font-size:20px;">🔍</span>
+        </div>
+        <div>
+          <h1 style="margin:0;color:#fff;font-size:18px;font-weight:700;">Tyre Pulse</h1>
+          <p style="margin:0;color:#bbf7d0;font-size:13px;">Inspection Approval Request</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:32px;">
+      <p style="margin:0 0 8px;color:#374151;font-size:15px;font-weight:600;">Your approval is required</p>
+      <p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.6;">
+        An inspection checklist has been submitted and requires your review and digital signature before it can be finalised.
+      </p>
+
+      <!-- Details table -->
+      <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+        <div style="background:#f9fafb;padding:10px 12px;border-bottom:1px solid #e5e7eb;">
+          <span style="font-size:12px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:0.05em;">Inspection Details</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">${tableRows}</table>
+      </div>
+
+      ${notes ? `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;margin-bottom:24px;">
+        <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#166534;">Inspector Notes</p>
+        <p style="margin:0;font-size:13px;color:#374151;">${notes}</p>
+      </div>` : ''}
+
+      <!-- Inspector Signature -->
+      <div style="margin-bottom:24px;">
+        <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:0.05em;">Inspector Signature</p>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+          ${sigBlock}
+        </div>
+      </div>
+
+      <!-- CTA -->
+      <a href="${approvalLink}"
+        style="display:block;text-align:center;background:#15803d;color:#fff;text-decoration:none;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:700;margin-bottom:16px;">
+        Review &amp; Sign Inspection →
+      </a>
+
+      <p style="margin:0;text-align:center;color:#9ca3af;font-size:12px;">
+        This link requires you to be logged in to Tyre Pulse.<br>
+        If the button doesn't work, copy this URL: <span style="color:#15803d;word-break:break-all;">${approvalLink}</span>
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
+      <p style="margin:0;color:#9ca3af;font-size:12px;">Tyre Pulse Fleet Intelligence · This is an automated message</p>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
 export default function Inspections() {
   const { profile, loading: authLoading } = useAuth()
   const { activeCountry } = useSettings()
@@ -143,6 +237,16 @@ export default function Inspections() {
   useEffect(() => {
     if (isTyreMan || searchParams.get('asset')) setActiveTab('checklist')
   }, [isTyreMan, searchParams])
+
+  // Approver landing: ?approve=<inspection_id>
+  useEffect(() => {
+    const approveId = searchParams.get('approve')
+    if (!approveId || authLoading) return
+    supabase.from('inspections').select('*').eq('id', approveId).single()
+      .then(({ data }) => {
+        if (data) { setApproveTarget(data); setShowApproveModal(true) }
+      })
+  }, [searchParams, authLoading])
   const [raisingAction, setRaisingAction] = useState(null)
   const [selectedTyre, setSelectedTyre]   = useState(null)
   const fileRef = useRef(null)
@@ -164,6 +268,32 @@ export default function Inspections() {
   const [clLookingUp, setClLookingUp] = useState(false)
   const [clOffline, setClOffline]     = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
+  // Hour meter + odometer
+  const [clOdometer, setClOdometer]   = useState('')
+  const [clHourMeter, setClHourMeter] = useState('')
+  // Multi-photo
+  const [clPhotos, setClPhotos]       = useState([]) // array of base64 strings
+  const cameraInputRef                = useRef(null)
+  const galleryInputRef               = useRef(null)
+  // Signature
+  const [clSignature, setClSignature]         = useState(null) // base64 PNG
+  const [showSignaturePad, setShowSignaturePad] = useState(false)
+  // Approval workflow
+  const [clApprovalStatus, setClApprovalStatus] = useState('done') // 'done' | 'pending_approval' | 'approved'
+  const [clApproverEmail, setClApproverEmail]   = useState('')
+  const [showApprovalForm, setShowApprovalForm] = useState(false)
+  const [clSendingEmail, setClSendingEmail]     = useState(false)
+  const [clEmailSent, setClEmailSent]           = useState(false)
+  // Approver landing modal (when manager opens ?approve=<id> link)
+  const [approveTarget, setApproveTarget]       = useState(null)
+  const [showApproveModal, setShowApproveModal] = useState(false)
+  const [approverSig, setApproverSig]           = useState(null)
+  const [showApproverPad, setShowApproverPad]   = useState(false)
+  const [approveSubmitting, setApproveSubmitting] = useState(false)
+  const [approveMsg, setApproveMsg]             = useState(null)
+  // Mobile PDF preview
+  const [pdfBlobUrl, setPdfBlobUrl]   = useState(null)
+  const [showPdfPreview, setShowPdfPreview] = useState(false)
   const diagramRef     = useRef(null)
   const [clSelectedPos, setClSelectedPos] = useState(null)
   // Row PDF export: render the live diagram offscreen, then capture its SVG.
@@ -180,6 +310,9 @@ export default function Inspections() {
     }, 80)
     return () => { cancelled = true; clearTimeout(t) }
   }, [pdfRow])
+
+  // Virtual scroll ref for the inspections table
+  const tableParentRef = useRef(null)
 
   // PWA — Screen Wake Lock during inspection
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
@@ -248,10 +381,13 @@ export default function Inspections() {
 
   async function load() {
     setLoading(true)
-    let q = supabase.from('inspections').select('*').order('scheduled_date', { ascending: false })
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    if (profile?.role === 'Tyre Man' && profile?.id) q = q.eq('created_by', profile.id)
-    const { data } = await q
+    // Paginate past the 1000-row cap so the list AND its exports are complete.
+    const { data } = await fetchAllPages((from, to) => {
+      let q = supabase.from('inspections').select('*').order('scheduled_date', { ascending: false }).range(from, to)
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      if (profile?.role === 'Tyre Man' && profile?.id) q = q.eq('created_by', profile.id)
+      return q
+    }, { max: 100000 })
     const today = new Date().toISOString().split('T')[0]
     const enriched = (data || []).map(r => ({
       ...r,
@@ -309,6 +445,14 @@ export default function Inspections() {
     filtered.forEach(r => { c[r.status] = (c[r.status] || 0) + 1 })
     return c
   }, [filtered])
+
+  // Virtualizer for the inspections table
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => tableParentRef.current,
+    estimateSize: () => 52,
+    overscan: 10,
+  })
 
   function handlePhotoChange(e) {
     const file = e.target.files?.[0]
@@ -405,7 +549,7 @@ export default function Inspections() {
       site: clSite,
       asset_no: clAsset.trim(),
       scheduled_date: clDate,
-      status: 'Done',
+      status: clApprovalStatus === 'pending_approval' ? 'In Progress' : 'Done',
       completed_date: clDate,
       inspector: clInspector,
       tyre_conditions: clPositions,
@@ -414,6 +558,13 @@ export default function Inspections() {
       notes: clNotes,
       country: activeCountry !== 'All' ? activeCountry : null,
       created_by: profile?.id ?? null,
+      // Extended fields
+      odometer_km: clOdometer ? parseFloat(clOdometer) : null,
+      hour_meter: clHourMeter ? parseFloat(clHourMeter) : null,
+      photo_data: clPhotos.length > 0 ? clPhotos[0] : null, // primary photo (DB compat)
+      inspector_signature: clSignature || null,
+      approval_status: clApprovalStatus,
+      approver_email: clApproverEmail || null,
     }
 
     // Vibrate on save attempt (success signal pattern)
@@ -445,7 +596,7 @@ export default function Inspections() {
     setClSaving(false)
   }
 
-  async function exportChecklistPdf() {
+  async function exportChecklistPdf(preview = false) {
     if (!clSaved) return
     const tyreData = clPositions.length > 0 ? clPositions
       : (clSaved.tyre_conditions || (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })())
@@ -479,6 +630,8 @@ export default function Inspections() {
       ['Inspector',      clInspector || clSaved.inspector || 'n/a'],
       ['Date',           clDate || clSaved.scheduled_date || 'n/a'],
       ['Tyre Count',     String(tyreData.length)],
+      ['Odometer (km)',  clOdometer || clSaved.odometer_km || 'n/a'],
+      ['Hour Meter',     clHourMeter || clSaved.hour_meter || 'n/a'],
     ]
     const colW = (pw - mx * 2) / 3
     infoItems.forEach(([label, value], i) => {
@@ -495,7 +648,8 @@ export default function Inspections() {
       doc.setFont('helvetica', 'bold')
       doc.text(String(value), ix, iy + 5)
     })
-    y += 30
+    const infoRows = Math.ceil(infoItems.length / 3)
+    y += infoRows * 12 + 6
 
     // ── Vehicle diagram — capture actual SVG rendered in the DOM ───────────────
     const svgEl = diagramRef.current?.querySelector('svg')
@@ -594,19 +748,82 @@ export default function Inspections() {
       finalY += lines.length * 4.5 + 6
     }
 
-    // ── Signature line ──────────────────────────────────────────────────────────
-    if (finalY + 25 < ph - 15) {
-      finalY += 4
+    // ── Photos (if any) ─────────────────────────────────────────────────────────
+    const photos = clPhotos.length > 0 ? clPhotos : (clSaved.photo_data ? [clSaved.photo_data] : [])
+    if (photos.length > 0) {
+      if (finalY + 60 > ph - 20) { doc.addPage(); finalY = 20 }
+      doc.setTextColor(31, 41, 55)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Photos', mx, finalY)
+      finalY += 5
+      const photoW = 40
+      const photoH = 30
+      const photoCols = Math.floor((pw - mx * 2) / (photoW + 4))
+      for (let pi = 0; pi < Math.min(photos.length, 6); pi++) {
+        const col = pi % photoCols
+        const row = Math.floor(pi / photoCols)
+        const px = mx + col * (photoW + 4)
+        const py = finalY + row * (photoH + 4)
+        try {
+          doc.addImage(photos[pi], 'JPEG', px, py, photoW, photoH)
+          doc.setDrawColor(209, 213, 219)
+          doc.setLineWidth(0.3)
+          doc.rect(px, py, photoW, photoH)
+        } catch { /* skip bad image */ }
+      }
+      const photoRows = Math.ceil(Math.min(photos.length, 6) / photoCols)
+      finalY += photoRows * (photoH + 4) + 6
+    }
+
+    // ── Signature section ───────────────────────────────────────────────────────
+    const sigH = 24
+    const sigW = 70
+    if (finalY + sigH + 20 > ph - 15) { doc.addPage(); finalY = 20 }
+    finalY += 4
+    doc.setTextColor(31, 41, 55)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Signatures', mx, finalY)
+    finalY += 5
+
+    const sig = clSignature || clSaved.inspector_signature
+    if (sig) {
+      // Inspector signature image
+      doc.setDrawColor(209, 213, 219)
+      doc.setLineWidth(0.3)
+      doc.rect(mx, finalY, sigW, sigH)
+      try { doc.addImage(sig, 'PNG', mx, finalY, sigW, sigH) } catch { /* skip */ }
+      doc.setFontSize(7)
+      doc.setTextColor(107, 114, 128)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Inspector: ${clInspector || clSaved.inspector || ''}`, mx, finalY + sigH + 4)
+      doc.text(new Date().toLocaleDateString('en-GB'), mx + sigW - 1, finalY + sigH + 4, { align: 'right' })
+    } else {
+      // Blank line fallback
       doc.setDrawColor(156, 163, 175)
       doc.setLineWidth(0.5)
-      doc.line(mx, finalY + 10, mx + 65, finalY + 10)
-      doc.line(mx + 75, finalY + 10, mx + 140, finalY + 10)
-      doc.setTextColor(107, 114, 128)
+      doc.line(mx, finalY + sigH, mx + sigW, finalY + sigH)
       doc.setFontSize(7.5)
+      doc.setTextColor(107, 114, 128)
       doc.setFont('helvetica', 'normal')
-      doc.text('Inspector Signature', mx, finalY + 15)
-      doc.text(`Name: ${clInspector || '________________'}`, mx + 75, finalY + 15)
+      doc.text('Inspector Signature', mx, finalY + sigH + 4)
     }
+
+    // Approver signature box (blank pending)
+    const approverX = mx + sigW + 15
+    doc.setDrawColor(209, 213, 219)
+    doc.setLineWidth(0.3)
+    doc.rect(approverX, finalY, sigW, sigH)
+    doc.setFontSize(8)
+    doc.setTextColor(156, 163, 175)
+    doc.text('Approver Signature', approverX + 2, finalY + 10)
+    doc.setFontSize(7)
+    doc.text(clApproverEmail ? `Sent to: ${clApproverEmail}` : 'Pending', approverX + 2, finalY + 16)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Approved by / التوقيع', approverX, finalY + sigH + 4)
+
+    finalY += sigH + 10
 
     // ── Footer on every page ────────────────────────────────────────────────────
     const totalPages = doc.internal.getNumberOfPages()
@@ -624,7 +841,15 @@ export default function Inspections() {
       doc.text(`${i} / ${totalPages}`, pw - mx, ph - 4, { align: 'right' })
     }
 
-    doc.save(`TyrePulse_Checklist_${clAsset || clSaved.asset_no || 'report'}.pdf`)
+    if (preview) {
+      const blob = doc.output('blob')
+      const url = URL.createObjectURL(blob)
+      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl)
+      setPdfBlobUrl(url)
+      setShowPdfPreview(true)
+    } else {
+      doc.save(`TyrePulse_Checklist_${clAsset || clSaved.asset_no || 'report'}.pdf`)
+    }
   }
 
   if (loading || authLoading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading…</div>
@@ -640,6 +865,13 @@ export default function Inspections() {
   const defaultType = activeTab === 'observations' ? 'Site Observation'
     : activeTab === 'training' ? 'Safety Training'
     : 'Routine'
+
+  // Shared grid style for virtual inspection rows
+  const inspGridStyle = {
+    display: 'grid',
+    gridTemplateColumns: INSP_COL_WIDTHS.map(w => `${w}px`).join(' '),
+    alignItems: 'center',
+  }
 
   return (
     <div className="space-y-6">
@@ -738,10 +970,44 @@ export default function Inspections() {
               <p className="text-gray-400 text-sm mb-4">
                 Inspection for <span className="text-white font-mono">{clSaved.asset_no}</span> on {clSaved.scheduled_date}{clOffline ? ' is queued for upload.' : ' has been saved.'}
               </p>
+              {/* Summary badges */}
+              <div className="flex flex-wrap gap-2 mb-2">
+                {clPositions.filter(p => p.condition === 'Good').length > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-green-900/30 text-green-400 border border-green-700/40">
+                    ✓ {clPositions.filter(p => p.condition === 'Good').length} Good
+                  </span>
+                )}
+                {clPositions.filter(p => p.condition === 'Wear').length > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-yellow-900/30 text-yellow-400 border border-yellow-700/40">
+                    ⚠ {clPositions.filter(p => p.condition === 'Wear').length} Wear
+                  </span>
+                )}
+                {clPositions.filter(p => p.condition === 'Damage' || p.condition === 'Puncture').length > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-700/40">
+                    ✗ {clPositions.filter(p => p.condition === 'Damage' || p.condition === 'Puncture').length} Critical
+                  </span>
+                )}
+                {clSignature && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-blue-900/30 text-blue-400 border border-blue-700/40">
+                    ✍ Signed
+                  </span>
+                )}
+                {clPhotos.length > 0 && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-purple-900/30 text-purple-400 border border-purple-700/40">
+                    📷 {clPhotos.length} photo{clPhotos.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+
               <div className="flex gap-3 flex-wrap">
                 {!clOffline && (
-                  <button onClick={exportChecklistPdf} className="btn-secondary flex items-center gap-2 text-sm">
+                  <button onClick={() => exportChecklistPdf(false)} className="btn-secondary flex items-center gap-2 text-sm">
                     <FileText size={14} /> {CHECKLIST_LABELS[lang].export}
+                  </button>
+                )}
+                {!clOffline && (
+                  <button onClick={() => exportChecklistPdf(true)} className="btn-secondary flex items-center gap-2 text-sm">
+                    <ExternalLink size={14} /> Preview PDF
                   </button>
                 )}
                 {!clOffline && navigator.share && (
@@ -757,11 +1023,107 @@ export default function Inspections() {
                     <Share2 size={14} /> Share
                   </button>
                 )}
-                <button onClick={() => { setClSaved(null); setClOffline(false); setClAsset(''); setClPositions([]); setClFleetInfo(null); setClNotes('') }}
+                {!clOffline && (
+                  <button
+                    onClick={() => setShowApprovalForm(v => !v)}
+                    className="btn-secondary flex items-center gap-2 text-sm"
+                    style={{ borderColor: '#6366f1', color: '#818cf8' }}
+                  >
+                    <Send size={14} /> Send for Approval
+                  </button>
+                )}
+                <button onClick={() => {
+                  setClSaved(null); setClOffline(false); setClAsset(''); setClPositions([])
+                  setClFleetInfo(null); setClNotes(''); setClOdometer(''); setClHourMeter('')
+                  setClPhotos([]); setClSignature(null); setClApprovalStatus('done')
+                  setClApproverEmail(''); setShowApprovalForm(false)
+                  if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); setPdfBlobUrl(null) }
+                  setShowPdfPreview(false)
+                }}
                   className="btn-primary text-sm">
                   New Checklist
                 </button>
               </div>
+
+              {/* Approval workflow panel */}
+              {showApprovalForm && !clOffline && (
+                <div className="mt-3 p-4 rounded-xl" style={{ background: 'var(--panel-3)', border: '1px solid #4338ca' }}>
+                  <h4 className="text-sm font-semibold text-indigo-300 mb-3 flex items-center gap-2">
+                    <Send size={14} /> Send for Manager Approval
+                  </h4>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="label text-indigo-300">Approver Email</label>
+                      <input
+                        type="email"
+                        className="input"
+                        placeholder="manager@company.com"
+                        value={clApproverEmail}
+                        onChange={e => setClApproverEmail(e.target.value)}
+                        style={{ background: '#312e81', borderColor: '#4338ca', color: '#e0e7ff' }}
+                      />
+                    </div>
+                    <p className="text-xs text-indigo-300/70">
+                      The approver will receive a link to view this inspection and add their digital signature. Both signatures will appear in the final PDF.
+                    </p>
+                    <button
+                      disabled={!clApproverEmail.trim() || clSendingEmail}
+                      onClick={async () => {
+                        if (!clSaved?.id) return
+                        setClSendingEmail(true)
+                        // Update DB status
+                        await supabase.from('inspections').update({
+                          approval_status: 'pending_approval',
+                          approver_email: clApproverEmail,
+                          status: 'In Progress',
+                        }).eq('id', clSaved.id)
+                        // Build approval link
+                        const approvalLink = `${window.location.origin}/inspections?approve=${clSaved.id}`
+                        // Send email via Edge Function
+                        await supabase.functions.invoke('send-email', {
+                          body: {
+                            to: clApproverEmail,
+                            subject: `Inspection Approval Required — Asset ${clSaved.asset_no || clAsset}`,
+                            body: buildApprovalEmailHtml({
+                              assetNo: clSaved.asset_no || clAsset,
+                              inspector: clInspector || profile?.full_name || '',
+                              date: clDate,
+                              site: clSite,
+                              odometer: clOdometer,
+                              hourMeter: clHourMeter,
+                              notes: clNotes,
+                              approvalLink,
+                              signature: clSignature,
+                            }),
+                          },
+                        })
+                        setClSendingEmail(false)
+                        setClEmailSent(true)
+                        setClApprovalStatus('pending_approval')
+                        setShowApprovalForm(false)
+                      }}
+                      className="btn-primary text-sm w-full disabled:opacity-50"
+                      style={{ background: '#4338ca' }}
+                    >
+                      {clSendingEmail
+                        ? <><span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" /> Sending…</>
+                        : <><Send size={13} className="inline mr-1" /> Send Approval Request</>
+                      }
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {clApprovalStatus === 'pending_approval' && !showApprovalForm && (
+                <div className="mt-3 px-3 py-2 rounded-xl flex items-center gap-2 text-sm"
+                  style={{ background: 'var(--panel-3)', border: '1px solid #4338ca', color: '#a5b4fc' }}>
+                  <Send size={14} />
+                  <span>
+                    {clEmailSent ? '✓ Approval email sent to' : 'Awaiting approval from'}{' '}
+                    <strong>{clApproverEmail}</strong>
+                  </span>
+                </div>
+              )}
             </div>
           ) : (
             <div
@@ -968,6 +1330,130 @@ export default function Inspections() {
                 </p>
               )}
 
+              {/* Odometer + Hour Meter */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label flex items-center gap-1.5"><Gauge size={12} className="text-gray-400" /> Odometer (km)</label>
+                  <input type="number" className="input" placeholder="e.g. 123456" min="0"
+                    value={clOdometer} onChange={e => setClOdometer(e.target.value)} />
+                </div>
+                <div>
+                  <label className="label flex items-center gap-1.5"><Clock size={12} className="text-gray-400" /> Hour Meter (hrs)</label>
+                  <input type="number" className="input" placeholder="e.g. 4521" min="0"
+                    value={clHourMeter} onChange={e => setClHourMeter(e.target.value)} />
+                </div>
+              </div>
+
+              {/* Photo capture */}
+              <div>
+                <label className="label flex items-center gap-1.5"><Camera size={12} className="text-gray-400" /> Photos</label>
+                <div className="flex gap-2 flex-wrap mb-2">
+                  {clPhotos.map((src, i) => (
+                    <div key={i} className="relative">
+                      <img src={src} alt={`photo-${i}`}
+                        style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--hairline)' }} />
+                      <button
+                        onClick={() => setClPhotos(ps => ps.filter((_, j) => j !== i))}
+                        style={{
+                          position: 'absolute', top: -6, right: -6, width: 18, height: 18,
+                          borderRadius: '50%', background: '#ef4444', border: 'none',
+                          color:'var(--panel-ink)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >×</button>
+                    </div>
+                  ))}
+                  {clPhotos.length < 6 && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
+                        style={{ background: '#0c4a6e', border: '1.5px solid #0369a1', color: '#7dd3fc' }}
+                      >
+                        <Camera size={13} /> Camera
+                      </button>
+                      <button
+                        onClick={() => galleryInputRef.current?.click()}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
+                        style={{ background: 'var(--panel-3)', border: '1.5px solid #4338ca', color: '#a5b4fc' }}
+                      >
+                        <ImageIcon size={13} /> Gallery
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const reader = new FileReader()
+                    reader.onload = ev => {
+                      // Compress via canvas
+                      const img = new Image()
+                      img.onload = () => {
+                        const MAX = 800
+                        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+                        const canvas = document.createElement('canvas')
+                        canvas.width = img.width * scale
+                        canvas.height = img.height * scale
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+                        setClPhotos(ps => [...ps, canvas.toDataURL('image/jpeg', 0.75)])
+                      }
+                      img.src = ev.target.result
+                    }
+                    reader.readAsDataURL(file)
+                    e.target.value = ''
+                  }}
+                />
+                <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden"
+                  onChange={e => {
+                    Array.from(e.target.files || []).slice(0, 6 - clPhotos.length).forEach(file => {
+                      const reader = new FileReader()
+                      reader.onload = ev => {
+                        const img = new Image()
+                        img.onload = () => {
+                          const MAX = 800
+                          const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+                          const canvas = document.createElement('canvas')
+                          canvas.width = img.width * scale
+                          canvas.height = img.height * scale
+                          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+                          setClPhotos(ps => [...ps, canvas.toDataURL('image/jpeg', 0.75)])
+                        }
+                        img.src = ev.target.result
+                      }
+                      reader.readAsDataURL(file)
+                    })
+                    e.target.value = ''
+                  }}
+                />
+              </div>
+
+              {/* Inspector Signature */}
+              <div>
+                <label className="label flex items-center gap-1.5"><PenLine size={12} className="text-gray-400" /> Inspector Signature</label>
+                {clSignature ? (
+                  <div className="flex items-center gap-3">
+                    <img src={clSignature} alt="signature"
+                      style={{ height: 56, maxWidth: 180, background: '#fff', borderRadius: 8, border: '1px solid var(--hairline)', padding: 4 }} />
+                    <div>
+                      <p className="text-xs text-green-400 font-semibold">✓ Signed — {clInspector}</p>
+                      <button onClick={() => setClSignature(null)}
+                        className="text-xs text-gray-500 hover:text-red-400 transition-colors mt-0.5">
+                        Clear signature
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowSignaturePad(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold w-full"
+                    style={{ background: '#1a2e1a', border: '1.5px dashed #16a34a', color: '#4ade80' }}
+                  >
+                    <PenLine size={15} /> Tap to Sign
+                  </button>
+                )}
+              </div>
+
               <div>
                 <label className="label">{CHECKLIST_LABELS[lang].notes}</label>
                 <textarea className="input h-20 resize-none" placeholder="General observations..."
@@ -1000,6 +1486,216 @@ export default function Inspections() {
         </div>
       )}
 
+      {/* Signature Pad Modal */}
+      {showSignaturePad && (
+        <SignaturePad
+          label="Inspector Signature"
+          inspectorName={clInspector}
+          employeeId={profile?.employee_id || ''}
+          onSave={dataUrl => { setClSignature(dataUrl); setShowSignaturePad(false) }}
+          onClose={() => setShowSignaturePad(false)}
+        />
+      )}
+
+      {/* ── Approver Modal (opens when landing via ?approve=<id>) ── */}
+      {showApproveModal && approveTarget && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        }}>
+          <div style={{
+            background: 'var(--panel)', border: '1px solid var(--hairline)', borderRadius: 20,
+            width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
+            padding: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color:'var(--panel-ink)' }}>Approve Inspection</div>
+                <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                  Asset: <strong style={{ color: '#d1d5db' }}>{approveTarget.asset_no}</strong>
+                  {approveTarget.site ? ` · ${approveTarget.site}` : ''}
+                  {' · '}{approveTarget.inspection_date || approveTarget.scheduled_date}
+                </div>
+              </div>
+              <button onClick={() => { setShowApproveModal(false); setSearchParams({}) }}
+                style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Details */}
+            <div style={{ background: 'var(--panel-2)', borderRadius: 12, padding: 16, marginBottom: 16, fontSize: 13 }}>
+              {[
+                ['Inspector', approveTarget.inspector_name || approveTarget.inspector],
+                ['Type', approveTarget.inspection_type],
+                ['Odometer', approveTarget.odometer_km ? `${approveTarget.odometer_km} km` : null],
+                ['Hour Meter', approveTarget.hour_meter ? `${approveTarget.hour_meter} hrs` : null],
+                ['Notes', approveTarget.notes],
+              ].filter(([, v]) => v).map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <span style={{ color: '#6b7280', minWidth: 100 }}>{k}</span>
+                  <span style={{ color: '#d1d5db', fontWeight: 600 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Inspector signature preview */}
+            {approveTarget.inspector_signature && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>Inspector Signature</div>
+                <img src={approveTarget.inspector_signature} alt="Inspector signature"
+                  style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
+              </div>
+            )}
+
+            {/* Approver signature */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8 }}>Your Signature (Approver)</div>
+              {approverSig ? (
+                <div>
+                  <img src={approverSig} alt="Approver signature"
+                    style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
+                  <button onClick={() => setApproverSig(null)}
+                    style={{ display: 'block', marginTop: 6, fontSize: 11, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    Clear &amp; re-sign
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowApproverPad(true)}
+                  style={{
+                    width: '100%', padding: '14px', borderRadius: 12,
+                    border: '2px dashed var(--hairline)', background: 'var(--panel-2)',
+                    color: '#9ca3af', fontSize: 13, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}
+                >
+                  <span>✍</span> Tap to add your approval signature
+                </button>
+              )}
+            </div>
+
+            {/* Status message */}
+            {approveMsg && (
+              <div style={{
+                padding: '10px 14px', borderRadius: 10, marginBottom: 14, fontSize: 13,
+                background: approveMsg.type === 'ok' ? 'rgba(22,163,74,0.15)' : 'rgba(239,68,68,0.15)',
+                border: `1px solid ${approveMsg.type === 'ok' ? '#16a34a' : '#ef4444'}`,
+                color: approveMsg.type === 'ok' ? '#4ade80' : '#f87171',
+              }}>
+                {approveMsg.text}
+              </div>
+            )}
+
+            {/* Actions */}
+            {approveTarget.approval_status !== 'approved' && (
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={async () => {
+                    setApproveSubmitting(true)
+                    await supabase.from('inspections').update({
+                      approval_status: 'rejected',
+                      approved_at: new Date().toISOString(),
+                      approved_by: profile?.id,
+                    }).eq('id', approveTarget.id)
+                    setApproveMsg({ type: 'err', text: 'Inspection rejected.' })
+                    setApproveSubmitting(false)
+                  }}
+                  disabled={approveSubmitting}
+                  style={{
+                    flex: 1, padding: '11px', borderRadius: 10,
+                    border: '1.5px solid #ef4444', background: 'transparent',
+                    color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!approverSig) { setApproveMsg({ type: 'err', text: 'Please add your signature before approving.' }); return }
+                    setApproveSubmitting(true)
+                    await supabase.from('inspections').update({
+                      approval_status: 'approved',
+                      approver_signature: approverSig,
+                      approved_at: new Date().toISOString(),
+                      approved_by: profile?.id,
+                    }).eq('id', approveTarget.id)
+                    setApproveMsg({ type: 'ok', text: '✓ Inspection approved and signed.' })
+                    setApproveSubmitting(false)
+                    setApproveTarget(prev => ({ ...prev, approval_status: 'approved', approver_signature: approverSig }))
+                  }}
+                  disabled={approveSubmitting || !approverSig}
+                  style={{
+                    flex: 2, padding: '11px', borderRadius: 10, border: 'none',
+                    background: approverSig ? '#16a34a' : '#374151',
+                    color:'var(--panel-ink)', fontSize: 13, fontWeight: 700, cursor: approverSig ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  {approveSubmitting ? 'Saving…' : '✓ Approve & Sign'}
+                </button>
+              </div>
+            )}
+            {approveTarget.approval_status === 'approved' && (
+              <div style={{ textAlign: 'center', padding: '12px', borderRadius: 10, background: 'rgba(22,163,74,0.15)', border: '1px solid #16a34a', color: '#4ade80', fontWeight: 600 }}>
+                ✓ This inspection has been approved
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Approver Signature Pad */}
+      {showApproverPad && (
+        <SignaturePad
+          label="Approver Signature"
+          inspectorName={profile?.full_name || ''}
+          employeeId={profile?.employee_id || ''}
+          onSave={dataUrl => { setApproverSig(dataUrl); setShowApproverPad(false) }}
+          onClose={() => setShowApproverPad(false)}
+        />
+      )}
+
+      {/* Mobile PDF Preview Modal */}
+      {showPdfPreview && pdfBlobUrl && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9998,
+          background: 'rgba(0,0,0,0.9)',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 16px',
+            background: 'var(--panel)', borderBottom: '1px solid var(--hairline)',
+          }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color:'var(--panel-ink)' }}>
+              Inspection Report — {clSaved?.asset_no}
+            </span>
+            <div className="flex gap-2">
+              <a
+                href={pdfBlobUrl}
+                download={`TyrePulse_Checklist_${clSaved?.asset_no || 'report'}.pdf`}
+                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
+              >
+                <Download size={13} /> Download
+              </a>
+              <button
+                onClick={() => setShowPdfPreview(false)}
+                style={{ background: 'var(--hairline)', border: 'none', borderRadius: 8, color:'var(--panel-ink)', cursor: 'pointer', padding: '6px 10px' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+          <iframe
+            src={pdfBlobUrl}
+            style={{ flex: 1, border: 'none', background: '#fff' }}
+            title="Inspection PDF Preview"
+          />
+        </div>
+      )}
+
       {/* Status filter pills, search, and table — hidden in checklist mode */}
       {activeTab !== 'checklist' && <>
       <div className="flex flex-wrap gap-2">
@@ -1029,102 +1725,147 @@ export default function Inspections() {
         </select>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-800">
-              <th className="pb-2 pr-3">Type</th>
-              <th className="pb-2 pr-3">Title</th>
-              <th className="pb-2 pr-3">Site</th>
-              <th className="pb-2 pr-3">Asset</th>
-              <th className="pb-2 pr-3">Date</th>
-              <th className="pb-2 pr-3">Severity</th>
-              <th className="pb-2 pr-3">Status</th>
-              <th className="pb-2 pr-3">Inspector</th>
-              <th className="pb-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(r => {
-              const cfg    = STATUS_CONFIG[r.status] || STATUS_CONFIG.Scheduled
-              const sevCfg = SEV_CONFIG[r.severity]  || SEV_CONFIG.Medium
-              const isObs  = isObservationType(r.inspection_type)
-              const isTrn  = isTrainingType(r.inspection_type)
-              return (
-                <tr key={r.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                  <td className="py-2 pr-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                      isObs ? 'bg-purple-900/20 text-purple-400 border-purple-700/40'
-                      : isTrn ? 'bg-blue-900/20 text-blue-400 border-blue-700/40'
-                      : 'bg-gray-800 text-gray-400 border-gray-700'
-                    }`}>
-                      {r.inspection_type}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-3 text-white font-medium max-w-48 truncate" title={r.title}>
-                    {r.title}
-                    {r.photo_data && <Camera className="inline w-3 h-3 ml-1 text-gray-500" title="Has photo" />}
-                    {r.linked_action_id && <ClipboardList className="inline w-3 h-3 ml-1 text-yellow-400" title="Action raised" />}
-                  </td>
-                  <td className="py-2 pr-3 text-gray-300">{r.site}</td>
-                  <td className="py-2 pr-3 font-mono text-xs text-gray-400">{r.asset_no || '—'}</td>
-                  <td className="py-2 pr-3 text-gray-400 text-xs">{r.scheduled_date}</td>
-                  <td className="py-2 pr-3">
-                    {r.severity && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${sevCfg.bg} ${sevCfg.color} ${sevCfg.border}`}>
-                        {r.severity}
+      {/* Virtualised Table */}
+      <div className="card overflow-x-auto p-0">
+        {/* Sticky header */}
+        <div
+          className="text-left text-gray-400 border-b border-gray-800 bg-gray-900/60"
+          style={{ minWidth: `${INSP_COL_WIDTHS.reduce((a, b) => a + b, 0)}px` }}
+        >
+          <div style={inspGridStyle} className="px-0">
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Type</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Title</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Site</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Asset</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Date</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Severity</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Status</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Inspector</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Actions</div>
+          </div>
+        </div>
+
+        {/* Virtual scroll container */}
+        <div
+          ref={tableParentRef}
+          className="overflow-y-auto"
+          style={{
+            height: filtered.length === 0 ? 'auto' : '600px',
+            minWidth: `${INSP_COL_WIDTHS.reduce((a, b) => a + b, 0)}px`,
+          }}
+        >
+          {filtered.length === 0 ? (
+            <div className="py-12 text-center text-gray-500 text-sm">No records found</div>
+          ) : (
+            <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+              {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                const r = filtered[virtualRow.index]
+                const cfg    = STATUS_CONFIG[r.status] || STATUS_CONFIG.Scheduled
+                const sevCfg = SEV_CONFIG[r.severity]  || SEV_CONFIG.Medium
+                const isObs  = isObservationType(r.inspection_type)
+                const isTrn  = isTrainingType(r.inspection_type)
+
+                return (
+                  <div
+                    key={virtualRow.key}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                      height: `${virtualRow.size}px`,
+                      ...inspGridStyle,
+                    }}
+                    className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors"
+                  >
+                    {/* Type */}
+                    <div className="px-3 overflow-hidden">
+                      <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                        isObs ? 'bg-purple-900/20 text-purple-400 border-purple-700/40'
+                        : isTrn ? 'bg-blue-900/20 text-blue-400 border-blue-700/40'
+                        : 'bg-gray-800 text-gray-400 border-gray-700'
+                      }`}>
+                        {r.inspection_type}
                       </span>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-3 text-gray-400 text-xs">{r.inspector || r.attendees || '—'}</td>
-                  <td className="py-2">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {r.status !== 'Done' && r.status !== 'Cancelled' && (
-                        <button onClick={() => markDone(r.id)}
-                          className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-700/50 transition-colors">
-                          ✓ Done
-                        </button>
-                      )}
-                      {isObs && r.status === 'Done' && !r.linked_action_id && (
-                        <button onClick={() => setRaisingAction(r)}
-                          className="text-xs px-2 py-1 rounded bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 border border-yellow-700/40 transition-colors">
-                          Raise Action
-                        </button>
-                      )}
-                      {r.linked_action_id && (
-                        <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-500 border border-gray-700">
-                          Action ✓
+                    </div>
+
+                    {/* Title */}
+                    <div className="px-3 text-white font-medium text-sm truncate" title={r.title}>
+                      {r.title}
+                      {r.photo_data && <Camera className="inline w-3 h-3 ml-1 text-gray-500" title="Has photo" />}
+                      {r.linked_action_id && <ClipboardList className="inline w-3 h-3 ml-1 text-yellow-400" title="Action raised" />}
+                    </div>
+
+                    {/* Site */}
+                    <div className="px-3 text-gray-300 text-sm truncate">{r.site}</div>
+
+                    {/* Asset */}
+                    <div className="px-3 font-mono text-xs text-gray-400 truncate">{r.asset_no || '—'}</div>
+
+                    {/* Date */}
+                    <div className="px-3 text-gray-400 text-xs tabular-nums">{r.scheduled_date}</div>
+
+                    {/* Severity */}
+                    <div className="px-3">
+                      {r.severity && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${sevCfg.bg} ${sevCfg.color} ${sevCfg.border}`}>
+                          {r.severity}
                         </span>
                       )}
-                      <button onClick={() => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} })}
-                        className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors">
-                        Edit
-                      </button>
-                      <button onClick={() => setPdfRow(r)} disabled={!!pdfRow}
-                        className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors disabled:opacity-50"
-                        title="Export detailed PDF with live tyre diagram">
-                        <FileText size={11} className="inline" />
-                      </button>
-                      <button onClick={() => setDeleteId(r.id)}
-                        className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-800/50 transition-colors">
-                        Del
-                      </button>
                     </div>
-                  </td>
-                </tr>
-              )
-            })}
-            {filtered.length === 0 && (
-              <tr><td colSpan={9} className="py-12 text-center text-gray-500">No records found</td></tr>
-            )}
-          </tbody>
-        </table>
+
+                    {/* Status */}
+                    <div className="px-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+                        {r.status}
+                      </span>
+                    </div>
+
+                    {/* Inspector */}
+                    <div className="px-3 text-gray-400 text-xs truncate">{r.inspector || r.attendees || '—'}</div>
+
+                    {/* Actions */}
+                    <div className="px-3">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {r.status !== 'Done' && r.status !== 'Cancelled' && (
+                          <button onClick={() => markDone(r.id)}
+                            className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-700/50 transition-colors whitespace-nowrap">
+                            ✓ Done
+                          </button>
+                        )}
+                        {isObs && r.status === 'Done' && !r.linked_action_id && (
+                          <button onClick={() => setRaisingAction(r)}
+                            className="text-xs px-2 py-1 rounded bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 border border-yellow-700/40 transition-colors whitespace-nowrap">
+                            Raise Action
+                          </button>
+                        )}
+                        {r.linked_action_id && (
+                          <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-500 border border-gray-700 whitespace-nowrap">
+                            Action ✓
+                          </span>
+                        )}
+                        <button onClick={() => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} })}
+                          className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors">
+                          Edit
+                        </button>
+                        <button onClick={() => exportInspectionDetailPdf(r)}
+                          className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
+                          title="Export detailed PDF with tyre diagram">
+                          <FileText size={11} className="inline" />
+                        </button>
+                        <button onClick={() => setDeleteId(r.id)}
+                          className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-800/50 transition-colors">
+                          Del
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
       </>}
 
@@ -1487,35 +2228,36 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
             })}
           </div>
 
-          {/* psi + tread */}
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            {[
-              { label: L.pressure, field: 'pressure', mode: 'numeric', ph: 'PSI'  },
-              { label: L.tread,    field: 'treadDepth', mode: 'decimal', ph: 'mm' },
-            ].map(({ label, field, mode, ph }) => (
-              <div key={field}>
-                <label className="text-[11px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#9ca3af' }}>
-                  {label}
-                </label>
-                <input
-                  type="number"
-                  inputMode={mode}
-                  placeholder={ph}
-                  value={pos[field]}
-                  onChange={e => onUpdate(field, e.target.value)}
-                  className="w-full px-3 py-3 rounded-xl text-sm font-semibold"
-                  style={{
-                    background: '#f9fafb',
-                    border: '1.5px solid #e5e7eb',
-                    color: '#111827',
-                    outline: 'none',
-                  }}
-                  onFocus={e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }}
-                  onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none' }}
-                />
-              </div>
-            ))}
+          {/* psi */}
+          <div className="mb-5">
+            <label className="text-[11px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#9ca3af' }}>
+              {L.pressure}
+            </label>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="PSI"
+              value={pos.pressure}
+              onChange={e => onUpdate('pressure', e.target.value)}
+              className="w-full px-3 py-3 rounded-xl text-sm font-semibold"
+              style={{ background: '#f9fafb', border: '1.5px solid #e5e7eb', color: '#111827', outline: 'none' }}
+              onFocus={e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }}
+              onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none' }}
+            />
           </div>
+          {/* tread disabled — re-enable when data collection is ready
+          <div className="mb-5">
+            <label className="text-[11px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#9ca3af' }}>
+              {L.tread}
+            </label>
+            <input type="number" inputMode="decimal" placeholder="mm" value={pos.treadDepth}
+              onChange={e => onUpdate('treadDepth', e.target.value)}
+              className="w-full px-3 py-3 rounded-xl text-sm font-semibold"
+              style={{ background: '#f9fafb', border: '1.5px solid #e5e7eb', color: '#111827', outline: 'none' }}
+              onFocus={e => { e.target.style.borderColor = '#22c55e'; e.target.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.12)' }}
+              onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none' }}
+            />
+          </div> */}
 
           {/* navigation */}
           <div className="flex gap-2.5">

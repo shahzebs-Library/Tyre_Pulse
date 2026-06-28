@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -51,7 +52,7 @@ const CHART_BASE = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#1f2937',
+      backgroundColor: 'var(--panel-2)',
       titleColor: '#f3f4f6',
       bodyColor: '#9ca3af',
       borderColor: 'rgba(22,163,74,0.3)',
@@ -59,8 +60,8 @@ const CHART_BASE = {
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
   },
 }
 
@@ -177,11 +178,13 @@ export default function TyreSizeAnalysis() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    let q = supabase
-      .from('tyre_records')
-      .select('id,asset_no,serial_number,size,brand,position,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,site,country,tread_depth,issue_date')
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    q.then(({ data, error: err }) => {
+    fetchAllPages((from, to) => {
+      let q = supabase
+        .from('tyre_records')
+        .select('id,asset_no,serial_number,size,brand,position,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,site,country,tread_depth,issue_date')
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      return q.range(from, to)
+    }).then(({ data, error: err }) => {
       if (err) { setError(err.message); setLoading(false); return }
       setRecords(data || [])
       setLoading(false)
@@ -311,7 +314,7 @@ export default function TyreSizeAnalysis() {
       datasets: [{
         data,
         backgroundColor: [...PALETTE, '#4b5563'],
-        borderColor: '#111827',
+        borderColor: 'var(--panel)',
         borderWidth: 2,
       }],
     }
@@ -326,7 +329,7 @@ export default function TyreSizeAnalysis() {
         labels: { color: '#9ca3af', font: { size: 11 }, padding: 12, boxWidth: 12 },
       },
       tooltip: {
-        backgroundColor: '#1f2937',
+        backgroundColor: 'var(--panel-2)',
         titleColor: '#f3f4f6',
         bodyColor: '#9ca3af',
         callbacks: {

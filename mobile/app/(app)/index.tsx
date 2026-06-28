@@ -10,11 +10,10 @@
  * DB data in parallel (skeleton while waiting).
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  RefreshControl, StatusBar, Platform, useWindowDimensions,
-  Animated,
+  RefreshControl, StatusBar, Platform, Animated,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -26,7 +25,6 @@ import { supabase } from '../../lib/supabase'
 import SyncBanner from '../../components/SyncBanner'
 import { SkeletonBox, SkeletonStatRow, SkeletonList } from '../../components/SkeletonLoader'
 import { isAdminOrAbove, UserRole } from '../../lib/types'
-import { canViewAnalytics, canViewReports, canViewWorkOrders, canUseAI } from '../../lib/permissions'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -131,7 +129,6 @@ export default function HomeScreen() {
   const { profile } = useAuth()
   const { t, isRTL } = useLanguage()
   const router = useRouter()
-  const { width } = useWindowDimensions()
 
   const [pendingCount, setPendingCount]         = useState(0)
   const [recentInspections, setRecentInspections] = useState<InspectionItem[]>([])

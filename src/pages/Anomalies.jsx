@@ -7,6 +7,7 @@ import {
 } from '../lib/anomalyEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { fetchAllPages } from '../lib/fetchAll'
 import { Download, FileText, Search, AlertTriangle } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -127,12 +128,14 @@ export default function Anomalies() {
   })
 
   useEffect(() => {
-    let q = supabase
-      .from('tyre_records')
-      .select('id,issue_date,asset_no,serial_no,brand,site,risk_level,cost_per_tyre,qty,description')
-      .order('issue_date', { ascending: true })
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    q.then(({ data }) => { setRecords(data || []); setHasRun(false); setAnomalies([]); setLoading(false) })
+    fetchAllPages((from, to) => {
+      let q = supabase
+        .from('tyre_records')
+        .select('id,issue_date,asset_no,serial_no,brand,site,risk_level,cost_per_tyre,qty,description')
+        .order('issue_date', { ascending: true })
+      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      return q.range(from, to)
+    }).then(({ data }) => { setRecords(data || []); setHasRun(false); setAnomalies([]); setLoading(false) })
   }, [activeCountry])
 
   function runDetection() {

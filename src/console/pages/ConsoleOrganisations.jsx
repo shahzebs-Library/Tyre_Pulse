@@ -51,9 +51,11 @@ export default function ConsoleOrganisations() {
 
   async function loadOrgStats(orgId) {
     if (orgStats[orgId]) return
+    // tyre_records is country-scoped, not organisation-scoped, so a per-org tyre
+    // count isn't available from the data model — report the platform total.
     const [{ count: users }, { count: tyres }] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('organisation_id', orgId),
-      supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('organisation_id', orgId),
+      supabase.from('tyre_records').select('id', { count: 'exact', head: true }),
     ])
     setOrgStats(prev => ({ ...prev, [orgId]: { users: users ?? 0, tyres: tyres ?? 0 } }))
   }

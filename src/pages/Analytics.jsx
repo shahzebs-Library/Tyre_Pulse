@@ -7,6 +7,7 @@ import {
   bucketByMonth, monthlyTrendWithForecast, sum, recordCost,
 } from '../lib/analyticsEngine'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { fetchAllPages } from '../lib/fetchAll'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend, Filler,
@@ -63,12 +64,14 @@ export default function Analytics() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      let q = supabase
-        .from('tyre_records')
-        .select('id,issue_date,brand,site,asset_no,category,risk_level,cost_per_tyre,qty,created_at')
-        .order('issue_date', { ascending: true })
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data } = await q
+      const { data } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id,issue_date,brand,site,asset_no,category,risk_level,cost_per_tyre,qty,created_at')
+          .order('issue_date', { ascending: true })
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q.range(from, to)
+      })
       setRecords(data || [])
       setLoading(false)
     }

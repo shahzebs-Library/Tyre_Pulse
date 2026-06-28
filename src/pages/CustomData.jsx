@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact } from '../lib/formatters'
@@ -172,13 +173,13 @@ export default function CustomData() {
     setBackfillRunning(true)
     setBackfillResult(null)
 
-    // Fetch all records where this extra_field exists but canonical column is null
-    const { data: batch, error } = await supabase
+    // Fetch ALL records where this extra_field exists but canonical column is null
+    const { data: batch, error } = await fetchAllPages((from, to) => supabase
       .from('tyre_records')
       .select('id, extra_fields')
       .not('extra_fields->>' + backfillKey, 'is', null)
       .is(backfillTarget, null)
-      .limit(5000)
+      .range(from, to))
 
     if (error) { setBackfillRunning(false); return }
 
@@ -201,14 +202,14 @@ export default function CustomData() {
   // ── Export extra_fields data ──────────────────────────────────────────────
 
   async function exportExtraFields() {
-    // Fetch all records with extra_fields
-    const { data } = await supabase
+    // Fetch ALL records with extra_fields
+    const { data } = await fetchAllPages((from, to) => supabase
       .from('tyre_records')
       .select('id, asset_no, serial_no, issue_date, site, brand, country, extra_fields')
       .not('extra_fields', 'eq', '{}')
       .not('extra_fields', 'is', null)
       .order('issue_date', { ascending: false })
-      .limit(50000)
+      .range(from, to))
 
     if (!data?.length) return
 

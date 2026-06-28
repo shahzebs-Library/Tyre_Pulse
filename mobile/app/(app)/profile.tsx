@@ -4,10 +4,12 @@ import {
   ScrollView, StatusBar, ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage, Language } from '../../contexts/LanguageContext'
 import { getPendingCount, syncQueue, retryFailed, clearSynced, getQueue } from '../../lib/offlineQueue'
+import { canAccessAdmin, canManageUsers, canUseAI, canViewAccidents } from '../../lib/permissions'
 
 const LANG_OPTIONS: { code: Language; labelKey: string }[] = [
   { code: 'en', labelKey: 'language.english' },
@@ -18,6 +20,7 @@ const LANG_OPTIONS: { code: Language; labelKey: string }[] = [
 export default function ProfileScreen() {
   const { profile, signOut } = useAuth()
   const { t, language, setLanguage, isRTL } = useLanguage()
+  const router = useRouter()
   const [pending, setPending] = useState(0)
   const [syncing, setSyncing] = useState(false)
   const [queueTotal, setQueueTotal] = useState(0)
@@ -131,6 +134,40 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+
+        {/* Workspace — role-specific shortcuts */}
+        {(() => {
+          const role = profile?.role
+          const tools = [
+            { key: 'team',  label: t('modules.workspace.team'),          icon: 'people-outline',  tint: '#1d4ed8', show: canManageUsers(role) || canAccessAdmin(role), go: () => router.push('/(app)/team') },
+            { key: 'users', label: t('modules.workspace.manageUsers'),  icon: 'person-add-outline', tint: '#7c3aed', show: canManageUsers(role), go: () => router.push('/(app)/admin/users') },
+            { key: 'admin', label: t('modules.workspace.admin'), icon: 'shield-outline', tint: '#7c3aed', show: canAccessAdmin(role), go: () => router.push('/(app)/admin') },
+            { key: 'ai',    label: t('modules.workspace.ai'),  icon: 'sparkles-outline', tint: '#16a34a', show: canUseAI(role), go: () => router.push('/(app)/admin/ai-chat') },
+            { key: 'acc',   label: t('modules.workspace.accidents'), icon: 'warning-outline', tint: '#ea580c', show: canViewAccidents(role), go: () => router.push('/(app)/accident/dashboard') },
+          ].filter(x => x.show)
+          if (!tools.length) return null
+          return (
+            <>
+              <Text style={[styles.sectionTitle, { textAlign }]}>{t('modules.workspace.title')}</Text>
+              <View style={styles.section}>
+                {tools.map((x, i) => (
+                  <TouchableOpacity
+                    key={x.key}
+                    style={[styles.toolRow, isRTL && styles.detailRowRTL, i > 0 && styles.toolDivider]}
+                    onPress={x.go}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.toolIcon, { backgroundColor: x.tint + '14' }]}>
+                      <Ionicons name={x.icon as any} size={18} color={x.tint} />
+                    </View>
+                    <Text style={[styles.toolLabel, { textAlign }]}>{x.label}</Text>
+                    <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={18} color="#cbd5e1" />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )
+        })()}
 
         {/* Language section */}
         <Text style={[styles.sectionTitle, { textAlign }]}>{t('language.sectionTitle')}</Text>
@@ -273,6 +310,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
+  toolRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  toolDivider: { borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
+  toolIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  toolLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#0f172a' },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',

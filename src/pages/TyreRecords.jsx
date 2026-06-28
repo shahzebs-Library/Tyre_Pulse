@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -7,10 +8,13 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { applyCountry } from '../lib/countryFilter'
 import { ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { useInvalidate } from '../hooks/useSupabaseQuery'
+import { useBulkSelect } from '../hooks/useBulkSelect'
+import BulkActionBar from '../components/BulkActionBar'
 import {
   Search, ChevronLeft, ChevronRight, Eye, FileSpreadsheet,
   FileText, Plus, Edit2, Trash2, Save, X, Check, AlertTriangle,
-  CircleDot, Loader2,
+  CircleDot, Loader2, Download,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import FilterBar from '../components/ui/FilterBar'
@@ -35,9 +39,13 @@ const EMPTY_FORM = (defaultCost = 1200, country = 'KSA') => ({
 
 const EMPTY_BULK = { site: '', brand: '', cost_per_tyre: '', risk_level: '', category: '' }
 
+// Column definitions for the virtual grid — widths must sum to 100% or use fixed px
+const COL_WIDTHS = [40, 96, 110, 130, 96, 100, 100, 100, 88, 88, 72, 80]
+
 export default function TyreRecords() {
   const { profile } = useAuth()
   const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const invalidate = useInvalidate()
 
   const [records, setRecords]         = useState([])
   const [total, setTotal]             = useState(0)
@@ -51,8 +59,6 @@ export default function TyreRecords() {
   const [brandFilter, setBrandFilter] = useState('')
   const [riskFilter, setRiskFilter]   = useState('')
 
-  const [selected, setSelected]       = useState(new Set())
-
   const [detailRecord, setDetailRecord]   = useState(null)
   const [editRecord, setEditRecord]       = useState(null)
   const [showBulkEdit, setShowBulkEdit]   = useState(false)
@@ -61,6 +67,22 @@ export default function TyreRecords() {
   const [formError, setFormError]         = useState('')
   const [form, setForm]                   = useState(() => EMPTY_FORM())
   const [bulkForm, setBulkForm]           = useState(EMPTY_BULK)
+
+  // Bulk selection — driven by the current page's records
+  const {
+    selected,
+    selectedRows,
+    toggle,
+    toggleAll,
+    clear,
+    isSelected,
+    isAllSelected,
+    isSomeSelected,
+    count: bulkCount,
+  } = useBulkSelect(records, 'id')
+
+  // Virtual scroll ref for the tbody scroll container
+  const parentRef = useRef(null)
 
   useEffect(() => { loadFilters() }, [])
   useEffect(() => { loadRecords() }, [page, search, siteFilter, brandFilter, riskFilter, activeCountry])
@@ -91,24 +113,19 @@ export default function TyreRecords() {
     const { data, count } = await q
     setRecords(data ?? [])
     setTotal(count ?? 0)
-    setSelected(new Set())
+    clear()
     setLoading(false)
   }, [page, search, siteFilter, brandFilter, riskFilter, activeCountry])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
-  const allOnPageSelected = records.length > 0 && records.every(r => selected.has(r.id))
 
-  function toggleSelectAll() {
-    if (allOnPageSelected) {
-      setSelected(s => { const n = new Set(s); records.forEach(r => n.delete(r.id)); return n })
-    } else {
-      setSelected(s => { const n = new Set(s); records.forEach(r => n.add(r.id)); return n })
-    }
-  }
-
-  function toggleRow(id) {
-    setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
-  }
+  // Virtualizer for the current page's records
+  const rowVirtualizer = useVirtualizer({
+    count: loading ? 8 : records.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 52,
+    overscan: 5,
+  })
 
   function openAdd() {
     setForm(EMPTY_FORM(appSettings.cost_per_tyre, activeCountry !== 'All' ? activeCountry : 'KSA'))
@@ -174,7 +191,7 @@ export default function TyreRecords() {
     }
     setShowBulkEdit(false)
     setBulkForm(EMPTY_BULK)
-    setSelected(new Set())
+    clear()
     loadRecords()
     setSaving(false)
   }
@@ -187,10 +204,50 @@ export default function TyreRecords() {
       await supabase.from('tyre_records').delete().in('id', ids.slice(i, i + BATCH))
     }
     setShowDeleteConfirm(false)
-    setSelected(new Set())
+    clear()
     loadRecords()
     loadFilters()
     setSaving(false)
+  }
+
+  async function handleBulkExport(rows) {
+    const headers = ['Issue Date', 'Asset No', 'Serial No', 'Brand', 'Site', 'MIS No', 'Job Card', 'Risk Level', 'Cost', 'Category', 'Remarks']
+    const csv = [
+      headers.join(','),
+      ...rows.map(r => [
+        r.issue_date ?? '',
+        r.asset_no ?? '',
+        r.serial_no ?? '',
+        r.brand ?? '',
+        r.site ?? '',
+        r.mis_number ?? '',
+        r.job_card ?? '',
+        r.risk_level ?? '',
+        r.cost_per_tyre ?? '',
+        r.category ?? '',
+        r.remarks ?? '',
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `tyres_export_${Date.now()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    clear()
+  }
+
+  async function handleBulkScrap(rows) {
+    if (!window.confirm(`Mark ${rows.length} tyre record${rows.length !== 1 ? 's' : ''} as Scrapped? This cannot be undone.`)) return
+    const ids = rows.map(r => r.id)
+    const BATCH = 200
+    for (let i = 0; i < ids.length; i += BATCH) {
+      await supabase.from('tyre_records').update({ status: 'Scrapped' }).in('id', ids.slice(i, i + BATCH))
+    }
+    invalidate(['tyres'])
+    loadRecords()
+    clear()
   }
 
   const EXPORT_COLS = [
@@ -219,6 +276,13 @@ export default function TyreRecords() {
   }
 
   function F(field) { return e => setForm(f => ({ ...f, [field]: e.target.value })) }
+
+  // Shared column header style — mirrors the virtual row grid
+  const headerGridStyle = {
+    display: 'grid',
+    gridTemplateColumns: COL_WIDTHS.map(w => `${w}px`).join(' '),
+    alignItems: 'center',
+  }
 
   return (
     <div className="space-y-5">
@@ -261,123 +325,168 @@ export default function TyreRecords() {
       {/* Table */}
       <div className="rounded-2xl border border-[var(--border-dim)] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-2 border-b border-[var(--border-dim)]">
-                <th className="px-4 py-3 w-10">
+          {/* Sticky header row */}
+          <div className="bg-surface-2 border-b border-[var(--border-dim)] px-0" style={{ minWidth: `${COL_WIDTHS.reduce((a, b) => a + b, 0)}px` }}>
+            <div style={headerGridStyle} className="px-0">
+              {/* Checkbox header */}
+              <div className="px-4 py-3 flex items-center">
+                <div
+                  onClick={toggleAll}
+                  className={cn(
+                    'w-4 h-4 rounded border transition-all flex items-center justify-center cursor-pointer',
+                    isAllSelected ? 'bg-brand border-brand' : 'border-[var(--border-dim)] hover:border-brand/40'
+                  )}
+                  ref={el => { if (el) el.dataset.indeterminate = isSomeSelected ? 'true' : 'false' }}
+                >
+                  {isAllSelected && <Check size={10} className="text-white" />}
+                  {isSomeSelected && !isAllSelected && <div className="w-2 h-0.5 bg-orange-400 rounded-full" />}
+                </div>
+              </div>
+              {['Date','Asset No','Serial No','Brand','Site','MIS No','Job Card','Risk','Cost','CPK',''].map(h => (
+                <div key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider whitespace-nowrap">{h}</div>
+              ))}
+            </div>
+          </div>
+
+          {/* Virtualised body */}
+          <div
+            ref={parentRef}
+            className="overflow-y-auto"
+            style={{ height: '520px', minWidth: `${COL_WIDTHS.reduce((a, b) => a + b, 0)}px` }}
+          >
+            {loading ? (
+              // Skeleton rows — not virtualised (only 8 items, short-lived)
+              <div>
+                {Array.from({ length: 8 }).map((_, i) => (
                   <div
-                    onClick={toggleSelectAll}
-                    className={cn(
-                      'w-4 h-4 rounded border transition-all flex items-center justify-center cursor-pointer',
-                      allOnPageSelected ? 'bg-brand border-brand' : 'border-[var(--border-dim)] hover:border-brand/40'
-                    )}
+                    key={`sk-${i}`}
+                    className="border-b border-[var(--border-subtle)]"
+                    style={{ ...headerGridStyle, height: 52 }}
                   >
-                    {allOnPageSelected && <Check size={10} className="text-white" />}
+                    <div className="px-4"><div className="w-4 h-4 rounded bg-gray-800/40 animate-pulse" /></div>
+                    <div className="px-4"><div className="h-3 w-20 rounded bg-gray-800/40 animate-pulse" /></div>
+                    <div className="px-4"><div className="h-3 w-24 rounded bg-gray-800/40 animate-pulse" /></div>
+                    <div className="px-4"><div className="h-3 w-28 rounded bg-gray-800/40 animate-pulse" /></div>
+                    <div className="px-4"><div className="h-3 w-16 rounded bg-gray-800/40 animate-pulse" /></div>
+                    <div className="px-4"><div className="h-3 w-20 rounded bg-gray-800/40 animate-pulse" /></div>
+                    <div className="px-4"><div className="h-3 w-18 rounded bg-gray-800/40 animate-pulse" /></div>
+                    <div className="px-4"><div className="h-3 w-18 rounded bg-gray-800/40 animate-pulse" /></div>
+                    <div className="px-4"><div className="h-5 w-16 rounded-full bg-gray-800/40 animate-pulse" /></div>
+                    <div className="px-4"><div className="h-3 w-16 rounded bg-gray-800/40 animate-pulse" /></div>
+                    <div className="px-4"><div className="h-3 w-12 rounded bg-gray-800/40 animate-pulse" /></div>
+                    <div className="px-4"><div className="flex gap-2"><div className="w-7 h-7 rounded-lg bg-gray-800/40 animate-pulse" /><div className="w-7 h-7 rounded-lg bg-gray-800/40 animate-pulse" /></div></div>
                   </div>
-                </th>
-                {['Date','Asset No','Serial No','Brand','Site','MIS No','Job Card','Risk','Cost','CPK',''].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              <AnimatePresence mode="wait">
-                {loading ? (
-                  <>
-                    {Array.from({ length: 8 }).map((_, i) => (
-                      <tr key={`sk-${i}`} className="border-b border-[var(--border-subtle)]">
-                        <td className="px-4 py-3"><div className="w-4 h-4 rounded bg-gray-800/40 animate-pulse" /></td>
-                        <td className="px-4 py-3"><div className="h-3 w-20 rounded bg-gray-800/40 animate-pulse" /></td>
-                        <td className="px-4 py-3"><div className="h-3 w-24 rounded bg-gray-800/40 animate-pulse" /></td>
-                        <td className="px-4 py-3"><div className="h-3 w-28 rounded bg-gray-800/40 animate-pulse" /></td>
-                        <td className="px-4 py-3"><div className="h-3 w-16 rounded bg-gray-800/40 animate-pulse" /></td>
-                        <td className="px-4 py-3"><div className="h-3 w-20 rounded bg-gray-800/40 animate-pulse" /></td>
-                        <td className="px-4 py-3"><div className="h-3 w-18 rounded bg-gray-800/40 animate-pulse" /></td>
-                        <td className="px-4 py-3"><div className="h-3 w-18 rounded bg-gray-800/40 animate-pulse" /></td>
-                        <td className="px-4 py-3"><div className="h-5 w-16 rounded-full bg-gray-800/40 animate-pulse" /></td>
-                        <td className="px-4 py-3"><div className="h-3 w-16 rounded bg-gray-800/40 animate-pulse" /></td>
-                        <td className="px-4 py-3"><div className="h-3 w-12 rounded bg-gray-800/40 animate-pulse" /></td>
-                        <td className="px-4 py-3"><div className="flex gap-2"><div className="w-7 h-7 rounded-lg bg-gray-800/40 animate-pulse" /><div className="w-7 h-7 rounded-lg bg-gray-800/40 animate-pulse" /></div></td>
-                      </tr>
-                    ))}
-                  </>
-                ) : records.length === 0 ? (
-                  <motion.tr key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                    <td colSpan={12} className="py-16 text-center">
-                      <div className="flex flex-col items-center gap-3 text-muted">
-                        <CircleDot className="w-8 h-8 opacity-20" />
-                        <span className="text-sm">No records found</span>
+              </div>
+            ) : records.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 text-muted py-16">
+                <CircleDot className="w-8 h-8 opacity-20" />
+                <span className="text-sm">No records found</span>
+              </div>
+            ) : (
+              <div
+                style={{
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  position: 'relative',
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                  const r = records[virtualRow.index]
+                  const rowSelected = isSelected(r.id)
+                  const cpk = r.km_at_fitment && r.km_at_removal && r.km_at_removal > r.km_at_fitment
+                    ? ((r.cost_per_tyre ?? appSettings.cost_per_tyre) / (r.km_at_removal - r.km_at_fitment)).toFixed(3)
+                    : null
+
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualRow.start}px)`,
+                        height: `${virtualRow.size}px`,
+                        ...headerGridStyle,
+                      }}
+                      className={cn(
+                        'border-b border-[var(--border-subtle)] transition-colors cursor-default',
+                        rowSelected ? 'bg-[rgba(22,163,74,0.06)]' : 'bg-surface-0 hover:bg-surface-1'
+                      )}
+                    >
+                      {/* Checkbox */}
+                      <div className="px-4" onClick={() => toggle(r.id)}>
+                        <div className={cn(
+                          'w-4 h-4 rounded border transition-all flex items-center justify-center cursor-pointer',
+                          rowSelected ? 'bg-brand border-brand' : 'border-[var(--border-dim)] hover:border-brand/40'
+                        )}>
+                          {rowSelected && <Check size={10} className="text-white" />}
+                        </div>
                       </div>
-                    </td>
-                  </motion.tr>
-                ) : (
-                  records.map((r, i) => {
-                    const isSelected = selected.has(r.id)
-                    const cpk = r.km_at_fitment && r.km_at_removal && r.km_at_removal > r.km_at_fitment
-                      ? ((r.cost_per_tyre ?? appSettings.cost_per_tyre) / (r.km_at_removal - r.km_at_fitment)).toFixed(3)
-                      : null
-                    return (
-                      <motion.tr
-                        key={r.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: i * 0.012, duration: 0.2 }}
-                        className={cn(
-                          'border-b border-[var(--border-subtle)] transition-colors cursor-default',
-                          isSelected ? 'bg-[rgba(22,163,74,0.06)]' : 'bg-surface-0 hover:bg-surface-1'
-                        )}
-                      >
-                        <td className="px-4 py-3" onClick={() => toggleRow(r.id)}>
-                          <div className={cn(
-                            'w-4 h-4 rounded border transition-all flex items-center justify-center cursor-pointer',
-                            isSelected ? 'bg-brand border-brand' : 'border-[var(--border-dim)] hover:border-brand/40'
-                          )}>
-                            {isSelected && <Check size={10} className="text-white" />}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-muted text-xs tabular-nums">{r.issue_date ?? '—'}</td>
-                        <td className="px-4 py-3 font-semibold text-white">{r.asset_no ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs font-mono">{r.serial_no ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-300">{r.brand ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-400">{r.site ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.mis_number ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.job_card ?? '—'}</td>
-                        <td className="px-4 py-3">
-                          {r.risk_level
-                            ? <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium border', RISK_STYLE[r.risk_level] ?? 'bg-surface-3 text-muted border-[var(--border-dim)]')}>{r.risk_level}</span>
-                            : <span className="text-muted">—</span>}
-                        </td>
-                        <td className="px-4 py-3 text-gray-300 text-xs tabular-nums">
-                          {formatCurrencyCompact(r.cost_per_tyre ?? appSettings.cost_per_tyre, activeCurrency)}
-                        </td>
-                        <td className="px-4 py-3 text-xs tabular-nums">
-                          {cpk
-                            ? <span className="text-brand-bright">{cpk}</span>
-                            : <span className="text-muted">N/A</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setDetailRecord(r)}
-                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-brand-bright hover:bg-[rgba(22,163,74,0.10)] transition-all"
-                            >
-                              <Eye size={14} />
-                            </button>
-                            <button
-                              onClick={() => openEdit(r)}
-                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-yellow-400 hover:bg-yellow-500/10 transition-all"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    )
-                  })
-                )}
-              </AnimatePresence>
-            </tbody>
-          </table>
+
+                      {/* Date */}
+                      <div className="px-4 text-muted text-xs tabular-nums truncate">{r.issue_date ?? '—'}</div>
+
+                      {/* Asset No */}
+                      <div className="px-4 font-semibold text-white text-sm truncate">{r.asset_no ?? '—'}</div>
+
+                      {/* Serial No */}
+                      <div className="px-4 text-gray-400 text-xs font-mono truncate">{r.serial_no ?? '—'}</div>
+
+                      {/* Brand */}
+                      <div className="px-4 text-gray-300 text-sm truncate">{r.brand ?? '—'}</div>
+
+                      {/* Site */}
+                      <div className="px-4 text-gray-400 text-sm truncate">{r.site ?? '—'}</div>
+
+                      {/* MIS No */}
+                      <div className="px-4 text-gray-400 text-xs truncate">{r.mis_number ?? '—'}</div>
+
+                      {/* Job Card */}
+                      <div className="px-4 text-gray-400 text-xs truncate">{r.job_card ?? '—'}</div>
+
+                      {/* Risk */}
+                      <div className="px-4">
+                        {r.risk_level
+                          ? <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium border', RISK_STYLE[r.risk_level] ?? 'bg-surface-3 text-muted border-[var(--border-dim)]')}>{r.risk_level}</span>
+                          : <span className="text-muted">—</span>}
+                      </div>
+
+                      {/* Cost */}
+                      <div className="px-4 text-gray-300 text-xs tabular-nums">
+                        {formatCurrencyCompact(r.cost_per_tyre ?? appSettings.cost_per_tyre, activeCurrency)}
+                      </div>
+
+                      {/* CPK */}
+                      <div className="px-4 text-xs tabular-nums">
+                        {cpk
+                          ? <span className="text-brand-bright">{cpk}</span>
+                          : <span className="text-muted">N/A</span>}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="px-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setDetailRecord(r)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-brand-bright hover:bg-[rgba(22,163,74,0.10)] transition-all"
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <button
+                            onClick={() => openEdit(r)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-yellow-400 hover:bg-yellow-500/10 transition-all"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Pagination */}
@@ -408,38 +517,35 @@ export default function TyreRecords() {
       </div>
 
       {/* Bulk action bar */}
-      <AnimatePresence>
-        {selected.size > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 24 }}
-            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-5 py-3 rounded-2xl bg-surface-3/95 backdrop-blur-xl border border-[var(--border-bright)] shadow-float"
-          >
-            <span className="text-white font-semibold text-sm">{selected.size} selected</span>
-            <div className="w-px h-4 bg-[var(--border-dim)]" />
-            <button
-              onClick={() => { setBulkForm(EMPTY_BULK); setShowBulkEdit(true) }}
-              className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-200 transition-colors"
-            >
-              <Edit2 size={14} /> Bulk Edit
-            </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="flex items-center gap-1.5 text-sm text-red-400 hover:text-red-300 transition-colors"
-            >
-              <Trash2 size={14} /> Delete
-            </button>
-            <button
-              onClick={() => setSelected(new Set())}
-              className="flex items-center gap-1.5 text-sm text-muted hover:text-white transition-colors"
-            >
-              <X size={14} /> Clear
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <BulkActionBar
+        count={bulkCount}
+        onClear={clear}
+        entityLabel="record"
+        actions={[
+          {
+            label: 'Bulk Edit',
+            icon: Edit2,
+            onClick: () => { setBulkForm(EMPTY_BULK); setShowBulkEdit(true) },
+          },
+          {
+            label: 'Export Selected',
+            icon: Download,
+            onClick: () => handleBulkExport(selectedRows),
+          },
+          {
+            label: 'Mark as Scrapped',
+            icon: Trash2,
+            variant: 'danger',
+            onClick: () => handleBulkScrap(selectedRows),
+          },
+          {
+            label: 'Delete',
+            icon: Trash2,
+            variant: 'danger',
+            onClick: () => setShowDeleteConfirm(true),
+          },
+        ]}
+      />
 
       {/* Detail modal */}
       {detailRecord && (
@@ -559,7 +665,7 @@ export default function TyreRecords() {
 
       {/* Bulk edit modal */}
       {showBulkEdit && (
-        <Modal title={`Bulk Edit · ${selected.size} records`} onClose={() => setShowBulkEdit(false)}>
+        <Modal title={`Bulk Edit · ${bulkCount} records`} onClose={() => setShowBulkEdit(false)}>
           <p className="text-sm text-muted mb-4">Leave blank to keep existing values unchanged.</p>
           <form onSubmit={saveBulkEdit} className="space-y-3">
             <div>
@@ -592,7 +698,7 @@ export default function TyreRecords() {
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {saving ? 'Updating…' : `Update ${selected.size} Records`}
+                {saving ? 'Updating…' : `Update ${bulkCount} Records`}
               </button>
               <button type="button" onClick={() => setShowBulkEdit(false)} className="btn-secondary">Cancel</button>
             </div>
@@ -606,14 +712,14 @@ export default function TyreRecords() {
           <div className="flex gap-3 mb-5 p-4 rounded-xl bg-red-500/8 border border-red-500/20">
             <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-white font-semibold">Delete {selected.size} record{selected.size !== 1 ? 's' : ''}?</p>
+              <p className="text-white font-semibold">Delete {bulkCount} record{bulkCount !== 1 ? 's' : ''}?</p>
               <p className="text-muted text-sm mt-1">This action is permanent and cannot be undone.</p>
             </div>
           </div>
           <div className="flex gap-3">
             <button onClick={deleteSelected} disabled={saving} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              {saving ? 'Deleting…' : `Delete ${selected.size} Records`}
+              {saving ? 'Deleting…' : `Delete ${bulkCount} Records`}
             </button>
             <button onClick={() => setShowDeleteConfirm(false)} className="btn-secondary">Cancel</button>
           </div>

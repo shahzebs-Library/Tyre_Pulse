@@ -40,7 +40,7 @@ export default function MobileBottomNav({ alertCount, onMenuOpen }) {
       aria-label="Mobile navigation"
       className="fixed bottom-0 left-0 right-0 z-30 md:hidden"
       style={{
-        background: 'rgba(3,8,5,0.97)',
+        background: 'var(--panel-deep)',
         borderTop: '1px solid rgba(22,163,74,0.14)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',

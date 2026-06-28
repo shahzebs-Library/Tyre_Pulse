@@ -29,6 +29,7 @@ interface Stats {
   inspThisWeek:     number
   pendingUsers:     number
   pendingClosures:  number
+  pendingUploads:   number
 }
 
 interface RecentAccident {
@@ -76,7 +77,7 @@ export default function AdminDashboardScreen() {
 
     const [
       vehiclesRes, accidentsRes, alertsRes, inspRes, usersRes,
-      recentAccRes, activeAlertRes, closuresRes,
+      recentAccRes, activeAlertRes, closuresRes, uploadsRes,
     ] = await Promise.all([
       supabase.from('vehicle_fleet').select('id', { count: 'exact', head: true }),
       supabase.from('accidents').select('severity, status'),
@@ -96,6 +97,7 @@ export default function AdminDashboardScreen() {
         .order('created_at', { ascending: false })
         .limit(5),
       supabase.from('accidents').select('id', { count: 'exact', head: true }).eq('closure_status', 'pending_closure'),
+      supabase.from('pending_uploads').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     ])
 
     const accData = accidentsRes.data ?? []
@@ -108,6 +110,7 @@ export default function AdminDashboardScreen() {
       inspThisWeek:      inspRes.count ?? 0,
       pendingUsers:      usersRes.count ?? 0,
       pendingClosures:   closuresRes.count ?? 0,
+      pendingUploads:    uploadsRes.count ?? 0,
     })
     setAccidents((recentAccRes.data ?? []) as RecentAccident[])
     setAlerts((activeAlertRes.data ?? []) as ActiveAlert[])
@@ -204,6 +207,17 @@ export default function AdminDashboardScreen() {
               bg="#eff6ff"
               badge={stats != null && stats.pendingUsers > 0 ? stats.pendingUsers : undefined}
               onPress={() => router.push('/(app)/admin/users')}
+            />
+          )}
+          {isAdmin(profile?.role) && (
+            <QuickAction
+              icon="cloud-upload-outline"
+              label="Approvals"
+              sublabel={stats!.pendingUploads > 0 ? `${stats!.pendingUploads} pending` : 'Uploads'}
+              color="#16a34a"
+              bg="#f0fdf4"
+              badge={stats!.pendingUploads > 0 ? stats!.pendingUploads : undefined}
+              onPress={() => router.push('/(app)/admin/approvals')}
             />
           )}
           <QuickAction

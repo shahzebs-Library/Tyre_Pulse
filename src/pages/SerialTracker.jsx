@@ -212,7 +212,7 @@ export default function SerialTracker() {
         batch.map(async serial => {
           const { data } = await supabase
             .from('tyre_records')
-            .select('serial_no, issue_date, asset_no, cost')
+            .select('serial_no, issue_date, asset_no, cost:cost_per_tyre')
             .eq('serial_no', serial)
             .order('issue_date', { ascending: true })
           if (!data || data.length === 0) {

@@ -103,8 +103,19 @@ function FormattedResponse({ text }) {
   return <div className="space-y-0.5">{elements}</div>
 }
 
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 function renderInline(text) {
-  return text
+  // Escape all HTML first — prevents XSS from AI-generated content
+  const safe = escapeHtml(text)
+  return safe
     .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
     .replace(/\*(.+?)\*/g, '<em class="text-gray-200">$1</em>')
     .replace(/`(.+?)`/g, '<code class="bg-gray-700 text-emerald-300 px-1 py-0.5 rounded text-xs font-mono">$1</code>')
@@ -426,7 +437,7 @@ export default function AiCommandCenter() {
 
         supabase
           .from('inspections')
-          .select('asset_no, scheduled_date, completed_date, status, findings, site, inspector_name')
+          .select('asset_no, scheduled_date, completed_date, status, findings, site, inspector')
           .gte('scheduled_date', cutoffStr)
           .order('scheduled_date', { ascending: false })
           .limit(200),

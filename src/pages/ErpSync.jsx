@@ -213,7 +213,7 @@ function SeverityBadge({ severity }) {
 
 function StatCard({ icon: Icon, label, value, sub, color = '#22c55e' }) {
   return (
-    <div className="rounded-xl p-4 flex flex-col gap-1" style={{ background: 'rgba(17,24,39,0.8)', border: '1px solid rgba(255,255,255,0.06)' }}>
+    <div className="rounded-xl p-4 flex flex-col gap-1" style={{ background: 'var(--panel-overlay)', border: '1px solid rgba(255,255,255,0.06)' }}>
       <div className="flex items-center gap-2 mb-1">
         <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${color}18`, border: `1px solid ${color}30` }}>
           <Icon size={15} style={{ color }} />
@@ -282,10 +282,10 @@ export default function ErpSync() {
     plugins: {
       legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 11 }, padding: 14, boxWidth: 12 } },
       tooltip: {
-        backgroundColor: '#111827',
+        backgroundColor: 'var(--panel)',
         titleColor: '#f9fafb',
         bodyColor: '#d1d5db',
-        borderColor: '#374151',
+        borderColor: 'var(--hairline)',
         borderWidth: 1,
         callbacks: {
           label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString()} records`,
@@ -437,7 +437,7 @@ export default function ErpSync() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.07 }}
               className="rounded-xl p-4 flex flex-col gap-3"
-              style={{ background: 'rgba(17,24,39,0.8)', border: `1px solid ${erp.status === 'Connected' ? 'rgba(22,163,74,0.18)' : 'rgba(255,255,255,0.06)'}` }}
+              style={{ background: 'var(--panel-overlay)', border: `1px solid ${erp.status === 'Connected' ? 'rgba(22,163,74,0.18)' : 'rgba(255,255,255,0.06)'}` }}
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2.5">
@@ -518,7 +518,7 @@ export default function ErpSync() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr style={{ background: 'rgba(17,24,39,0.9)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <tr style={{ background: 'var(--panel-overlay)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   <th className="px-4 py-2.5 text-left text-gray-500 font-semibold uppercase tracking-wider">ERP Field</th>
                   <th className="px-4 py-2.5 text-left text-gray-500 font-semibold uppercase tracking-wider">TyrePulse Field</th>
                   <th className="px-4 py-2.5 text-left text-gray-500 font-semibold uppercase tracking-wider hidden sm:table-cell">Data Type</th>
@@ -564,7 +564,7 @@ export default function ErpSync() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr style={{ background: 'rgba(17,24,39,0.9)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <tr style={{ background: 'var(--panel-overlay)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                     <th className="px-3 py-2.5 text-left text-gray-500 font-semibold uppercase tracking-wider">Sync ID</th>
                     <th className="px-3 py-2.5 text-left text-gray-500 font-semibold uppercase tracking-wider hidden md:table-cell">Source</th>
                     <th className="px-3 py-2.5 text-left text-gray-500 font-semibold uppercase tracking-wider hidden sm:table-cell">Started</th>
@@ -607,7 +607,7 @@ export default function ErpSync() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-2.5" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(17,24,39,0.9)' }}>
+              <div className="flex items-center justify-between px-4 py-2.5" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: 'var(--panel-overlay)' }}>
                 <span className="text-[11px] text-gray-600">
                   Page {historyPage + 1} of {totalPages} · {filteredHistory.length} entries
                 </span>
@@ -631,7 +631,7 @@ export default function ErpSync() {
           <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
             <Shield size={14} className="text-green-400" /> Data Validation
           </h2>
-          <div className="rounded-xl p-4 mb-4" style={{ background: 'rgba(17,24,39,0.8)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--panel-overlay)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <p className="text-[11px] text-gray-600 mb-3">Last sync validation — {(validationChart.valid + validationChart.warning + validationChart.error).toLocaleString()} total records</p>
             <div style={{ height: 200 }}>
               <Doughnut data={doughnutData} options={doughnutOptions} />
@@ -654,12 +654,12 @@ export default function ErpSync() {
 
           {/* Validation failure list */}
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-            <div className="px-3 py-2" style={{ background: 'rgba(17,24,39,0.9)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="px-3 py-2" style={{ background: 'var(--panel-overlay)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Validation Failures</p>
             </div>
             <div className="divide-y divide-gray-800/60">
               {VALIDATION_FAILURES.map(f => (
-                <div key={f.field} className="px-3 py-2 flex items-start gap-2" style={{ background: 'rgba(9,11,17,0.5)' }}>
+                <div key={f.field} className="px-3 py-2 flex items-start gap-2" style={{ background: 'var(--panel-deep)' }}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <span className="font-mono text-[11px] text-yellow-300 font-medium">{f.field}</span>
@@ -687,7 +687,7 @@ export default function ErpSync() {
           {ERP_SYSTEMS.map(erp => {
             const open = expandedErp === erp.id
             return (
-              <div key={erp.id} className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(17,24,39,0.7)' }}>
+              <div key={erp.id} className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)', background: 'var(--panel-overlay)' }}>
                 {/* Accordion header */}
                 <button
                   onClick={() => setExpandedErp(open ? null : erp.id)}

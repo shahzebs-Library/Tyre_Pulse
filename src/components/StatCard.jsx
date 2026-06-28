@@ -132,7 +132,7 @@ export default function StatCard({
       )}
 
       {/* label */}
-      <p className="text-[10.5px] font-700 uppercase tracking-[0.08em] text-gray-500 mb-2 leading-none">
+      <p className="text-label mb-2 leading-none">
         {label}
       </p>
 
@@ -141,7 +141,7 @@ export default function StatCard({
 
       {/* sub */}
       {sub && (
-        <p className="text-xs text-gray-500 mt-2 leading-snug">
+        <p className="text-caption mt-2 leading-snug">
           {sub}
         </p>
       )}

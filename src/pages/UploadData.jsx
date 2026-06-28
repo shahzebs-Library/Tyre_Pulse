@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen,
   AlertTriangle, Package, ChevronRight, Layers, Table2, Eye,
-  Rocket, Info, Zap, Search, Database,
+  Rocket, Info, Zap, Search, Database, Clock,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -457,18 +457,82 @@ function cleanHeaders(arr) {
 }
 
 /**
- * Convert a worksheet to { headers, rows } using smart header detection.
- * rows are arrays aligned to headers, with fully-empty rows removed.
+ * Build { headers, rows, headerRow, aoa } from an array-of-arrays with robust
+ * fallbacks so a sheet that clearly contains data never resolves to "empty".
+ * Pass `forcedHeaderRow` to override detection (used by the header-row picker).
  */
-function extractTable(ws) {
-  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-  if (aoa.length === 0) return { headers: [], rows: [], headerRow: 0 }
-  const hIdx    = detectHeaderRow(aoa)
-  const headers = cleanHeaders(aoa[hIdx] || [])
-  const rows    = aoa.slice(hIdx + 1)
-    .map(r => headers.map((_, i) => r[i] ?? ''))
-    .filter(r => r.some(c => c !== '' && c != null))
-  return { headers, rows, headerRow: hIdx }
+function extractAoa(aoa, forcedHeaderRow = null) {
+  if (!aoa || aoa.length === 0) return { headers: [], rows: [], headerRow: 0, aoa: [] }
+  const firstPopulated = aoa.findIndex(r => (r || []).some(c => c != null && String(c).trim() !== ''))
+
+  const build = (idx) => {
+    const headers = cleanHeaders(aoa[idx] || [])
+    const rows = aoa.slice(idx + 1)
+      .map(r => headers.map((_, i) => r[i] ?? ''))
+      .filter(r => r.some(c => c !== '' && c != null))
+    return { headers, rows }
+  }
+
+  let hIdx = forcedHeaderRow != null ? forcedHeaderRow : detectHeaderRow(aoa)
+  let { headers, rows } = build(hIdx)
+
+  // Fallback 1 — detection found no data rows: use the first populated row.
+  if (forcedHeaderRow == null && rows.length === 0 && firstPopulated >= 0 && firstPopulated !== hIdx) {
+    hIdx = firstPopulated
+    ;({ headers, rows } = build(hIdx))
+  }
+  // Fallback 2 — still nothing: take the densest row in the first 30 as header.
+  if (forcedHeaderRow == null && rows.length === 0 && firstPopulated >= 0) {
+    let densest = firstPopulated, max = -1
+    for (let i = 0; i < Math.min(aoa.length, 30); i++) {
+      const n = (aoa[i] || []).filter(c => c != null && String(c).trim() !== '').length
+      if (n > max) { max = n; densest = i }
+    }
+    hIdx = densest
+    ;({ headers, rows } = build(hIdx))
+  }
+  return { headers, rows, headerRow: hIdx, aoa }
+}
+
+function aoaFromWorksheet(ws) {
+  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+}
+
+/** Convert a worksheet → { headers, rows, headerRow, aoa } via smart detection. */
+function extractTable(ws, forcedHeaderRow = null) {
+  return extractAoa(aoaFromWorksheet(ws), forcedHeaderRow)
+}
+
+/** Sniff the delimiter of a CSV/TSV/TXT file (comma, semicolon, tab, pipe). */
+function sniffDelimiter(text) {
+  const line = text.split(/\r?\n/).find(l => l.trim() !== '') || ''
+  const counts = { ',': 0, ';': 0, '\t': 0, '|': 0 }
+  for (const ch of line) if (ch in counts) counts[ch]++
+  const [best, n] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
+  return n > 0 ? best : ','
+}
+
+/** Parse delimited text → array-of-arrays, honouring quoted fields. Robust to
+ *  semicolon/tab/pipe files that the default CSV reader would collapse to 1 col. */
+function parseDelimitedText(text) {
+  const delim = sniffDelimiter(text)
+  const aoa = []
+  for (const line of text.split(/\r?\n/)) {
+    if (line === '') { aoa.push([]); continue }
+    const out = []; let cur = '', q = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (q) {
+        if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++ } else q = false }
+        else cur += ch
+      } else if (ch === '"') q = true
+      else if (ch === delim) { out.push(cur); cur = '' }
+      else cur += ch
+    }
+    out.push(cur)
+    aoa.push(out)
+  }
+  return aoa
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -493,6 +557,11 @@ export default function UploadData() {
   const [uploadType, setUploadType] = useState('tyres')
   const [sheetOptions, setSheetOptions] = useState([])
   const [mappingScores, setMappingScores]   = useState({})  // { canonicalKey: { score, band } }
+  const [rawAoa, setRawAoa]                 = useState([])   // active sheet rows → raw preview + header override
+  const [headerRowIdx, setHeaderRowIdx]     = useState(0)
+  const [useAI, setUseAI]                   = useState(false) // optional AI cleaning (default OFF)
+  const [quality, setQuality]               = useState([])   // per-field data-quality report
+  const [cleanPreview, setCleanPreview]     = useState(null) // cleaning summary shown before approve
 
   // Duplicate detection
   const [dupes, setDupes]         = useState([])
@@ -562,46 +631,90 @@ export default function UploadData() {
     setStep('mapping')
   }
 
+  // Resolve a single extracted table → mapping step (with raw preview + header
+  // override). Only hard-fails when the sheet genuinely has no populated cells.
+  async function loadFromExtract(t) {
+    const hasAnyCell = (t.aoa || []).some(r => (r || []).some(c => c != null && String(c).trim() !== ''))
+    if (!hasAnyCell) { setError('This file/sheet has no readable cells.'); return }
+    setRawAoa(t.aoa || [])
+    setHeaderRowIdx(t.headerRow ?? 0)
+    if (uploadType === 'auto') {
+      const detected = guessFileType(t.headers)
+      if (detected === 'fleet') { setUploadType('fleet'); return }
+      setUploadType('tyres')
+    }
+    await applyHeaders(t.headers, t.rows)
+  }
+
   async function handleFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
     setFileName(file.name)
     setError('')
+    const ext = (file.name.split('.').pop() || '').toLowerCase()
+    const isText = ['csv', 'tsv', 'txt'].includes(ext)
+
     const reader = new FileReader()
+    // Without this, a file that fails to read (open in Excel, too large, blocked)
+    // would silently do nothing — the upload box would just sit there.
+    reader.onerror = () =>
+      setError(`Could not read "${file.name}". It may be open in another program, too large, or corrupted — close it elsewhere and try again.`)
+
     reader.onload = async (ev) => {
-      try {
-        const wb = XLSX.read(ev.target.result, { type: 'binary', cellDates: true })
+      const buf = ev.target.result
+
+      // Delimited text (CSV/TSV/TXT, or anything that decodes to text rows).
+      const tryText = async () => {
+        const text = typeof buf === 'string' ? buf : new TextDecoder('utf-8').decode(buf)
+        if (!text.trim()) throw new Error('no text content')
+        wbRef.current = null
+        await loadFromExtract(extractAoa(parseDelimitedText(text)))
+      }
+
+      // Binary workbook (xlsx/xls/xlsm/xlsb/ods). XLSX also reads CSV bytes, so
+      // this doubles as a fallback for mislabelled or oddly-encoded text files.
+      const tryBinary = async () => {
+        const wb = XLSX.read(buf, { type: typeof buf === 'string' ? 'binary' : 'array', cellDates: true })
+        if (!wb.SheetNames?.length) throw new Error('workbook has no sheets')
         wbRef.current = wb
 
-        if (wb.SheetNames.length > 1) {
-          const opts = wb.SheetNames.map(name => {
-            const sheetRows = XLSX.utils.sheet_to_json(wb.Sheets[name])
-            const allKeys = Object.keys(wb.Sheets[name]).filter(k => !k.startsWith('!'))
-            const colCount = new Set(allKeys.map(k => k.replace(/\d+/, ''))).size
-            const likelyPivot = sheetRows.length < 15 && colCount > 15
-            return { name, rows: sheetRows.length, selected: !likelyPivot, likelyPivot }
-          })
-          setSheetOptions(opts)
-          setStep('sheets')
+        const opts = wb.SheetNames.map(name => {
+          const t = extractTable(wb.Sheets[name])
+          const likelyPivot = t.rows.length < 3 && t.headers.length > 15
+          return { name, rows: t.rows.length, selected: t.rows.length > 0 && !likelyPivot, likelyPivot }
+        })
+        const withData = opts.filter(o => o.rows > 0)
+        // Skip the sheet picker when only one sheet actually holds data — many
+        // ERP exports carry one data tab plus title/metadata/pivot tabs.
+        if (withData.length <= 1) {
+          const target = withData[0]?.name ?? wb.SheetNames[0]
+          await loadFromExtract(extractTable(wb.Sheets[target]))
           return
         }
+        setSheetOptions(opts)
+        setStep('sheets')
+      }
 
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const { headers: hdrs, rows: dataRows } = extractTable(ws)
-        if (hdrs.length === 0 || dataRows.length === 0) { setError('File is empty or has no data rows'); return }
-
-        if (uploadType === 'auto') {
-          const detected = guessFileType(hdrs)
-          if (detected === 'fleet') { setUploadType('fleet'); return }
-          setUploadType('tyres')
-        }
-
-        await applyHeaders(hdrs, dataRows)
+      try {
+        // Prefer the path matching the extension, fall back to the other so a
+        // .csv that is really an .xlsx (or vice-versa) still imports.
+        if (isText) { try { await tryText() } catch { await tryBinary() } }
+        else        { try { await tryBinary() } catch { await tryText() } }
       } catch (err) {
-        setError('Failed to parse file: ' + err.message)
+        setError(`Could not read "${file.name}" as a spreadsheet or CSV. If it opens in Excel, re-save it as .xlsx or .csv and upload again. (${err.message})`)
       }
     }
-    reader.readAsBinaryString(file)
+
+    // Always read as ArrayBuffer — works for both binary workbooks and text
+    // (TextDecoder derives the text), and lets either path act as a fallback.
+    reader.readAsArrayBuffer(file)
+  }
+
+  // Re-pick the header row from the raw preview and re-map.
+  async function changeHeaderRow(idx) {
+    setHeaderRowIdx(idx)
+    const t = extractAoa(rawAoa, idx)
+    await applyHeaders(t.headers, t.rows)
   }
 
   // ── Row building ────────────────────────────────────────────────────────────
@@ -646,6 +759,43 @@ export default function UploadData() {
     setSkipIds(new Set())
     setDupCheck(null)
 
+    // ── Data-quality report (across the whole file) ──────────────────────────
+    const total = built.length || 1
+    const q = activeFields.filter(f => mapping[f.key]).map(f => {
+      const filled = built.filter(r => r[f.key] != null && r[f.key] !== '').length
+      let invalid = 0
+      if (DATE_FIELDS.has(f.key) || NUMERIC_FIELDS.has(f.key)) {
+        const idx = headers.indexOf(mapping[f.key])
+        if (idx >= 0) rows.forEach(r => {
+          const raw = r[idx]
+          const has = raw != null && String(raw).trim() !== ''
+          const parsed = DATE_FIELDS.has(f.key) ? parseDate(raw) : parseNumeric(raw)
+          if (has && parsed == null) invalid++
+        })
+      }
+      let dupes = 0
+      if (f.key === 'serial_no') {
+        const counts = {}
+        built.forEach(r => { if (r.serial_no) counts[r.serial_no] = (counts[r.serial_no] || 0) + 1 })
+        dupes = Object.values(counts).filter(n => n > 1).reduce((a, n) => a + (n - 1), 0)
+      }
+      return { key: f.key, label: f.label, required: !!f.required, fillPct: Math.round((filled / total) * 100), invalid, dupes }
+    })
+    setQuality(q)
+
+    // ── Cleaning preview (rule-based, sampled) ───────────────────────────────
+    if (uploadType === 'tyres') {
+      const sample = batchClassify(built.slice(0, 2000).map((r, i) => ({ id: i, description: r.description, remarks: r.remarks })))
+      const auto = sample.filter(c => c.confidence !== 'Low').length
+      const examples = sample.slice(0, 4).map((c, i) => ({
+        text: [built[i]?.description, built[i]?.remarks].filter(Boolean).join(' · ').slice(0, 60) || '—',
+        category: c.category, risk: c.risk_level, conf: c.confidence,
+      }))
+      setCleanPreview({ total: sample.length, auto, review: sample.length - auto, examples })
+    } else {
+      setCleanPreview(null)
+    }
+
     const serials = [...new Set(built.map(r => r.serial_no).filter(Boolean))]
     if (serials.length > 0 && uploadType === 'tyres') {
       const BATCH = 500
@@ -678,6 +828,49 @@ export default function UploadData() {
     setStep('preview')
   }
 
+  // ── Optional AI cleaning of low-confidence rows (off by default) ────────────
+  // Routes the rule-based "need review" rows through the secure chat-ai edge
+  // function (server-side Anthropic key). Bounded + chunked; on any failure the
+  // rule-based result is kept. Never writes unknown columns to tyre_records.
+  async function aiRefineLowConfidence(records) {
+    const targets = []
+    records.forEach((r, i) => { if (!r.cleaned) targets.push(i) })
+    const slice = targets.slice(0, 200)        // cost cap
+    const CHUNK = 25
+    for (let i = 0; i < slice.length; i += CHUNK) {
+      const idxs = slice.slice(i, i + CHUNK)
+      const items = idxs.map((idx, j) => ({
+        i: j,
+        text: [records[idx].description, records[idx].remarks].filter(Boolean).join(' | ').slice(0, 180),
+      })).filter(it => it.text)
+      if (items.length === 0) continue
+      try {
+        const { data, error } = await supabase.functions.invoke('chat-ai', {
+          body: {
+            system: 'You are a tyre maintenance data classifier. Reply with ONLY a JSON array, no prose.',
+            user: `For each record return {"i":<index>,"category":<short tyre issue category>,"risk_level":<one of Low|Medium|High|Critical>}. Records:\n${JSON.stringify(items)}`,
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 1024,
+          },
+        })
+        if (error || !data?.content) continue
+        const m = String(data.content).match(/\[[\s\S]*\]/)
+        if (!m) continue
+        JSON.parse(m[0]).forEach(a => {
+          const idx = idxs[a.i]
+          if (idx == null) return
+          records[idx] = {
+            ...records[idx],
+            category:   a.category   || records[idx].category,
+            risk_level: a.risk_level || records[idx].risk_level,
+            cleaned:    true,
+          }
+        })
+      } catch { /* keep rule-based result for this chunk */ }
+    }
+    return records
+  }
+
   // ── Save column mapping ─────────────────────────────────────────────────────
 
   async function saveColumnMapping(fp) {
@@ -692,7 +885,33 @@ export default function UploadData() {
 
   // ── Upload ──────────────────────────────────────────────────────────────────
 
+  // Non-admin uploads are staged for admin approval instead of going live.
+  const isAdminUploader = profile?.role === 'Admin'
+  async function submitForApproval({ batchId, country, uploadType, targetTable, rows: shapedRows }) {
+    return supabase.from('pending_uploads').insert({
+      batch_id:      batchId,
+      uploaded_by:   profile?.id,
+      uploader_name: profile?.full_name || profile?.username || null,
+      country,
+      upload_type:   uploadType,
+      target_table:  targetTable,
+      file_name:     fileName,
+      row_count:     shapedRows.length,
+      rows:          shapedRows,
+      status:        'pending',
+    })
+  }
+
   async function upload() {
+    // Country is authoritative from the top-bar selection. Every uploaded row is
+    // stamped with this one country, so a file can never mix countries or land in
+    // the wrong one. A specific country must be selected (not "All").
+    if (activeCountry === 'All') {
+      setError('Select a specific country in the top bar before uploading. Every row will be stamped with that country so your data never mixes.')
+      return
+    }
+    const uploadCountry = activeCountry
+
     setStep('uploading')
     setProgress({ done: 0, total: rows.length })
     const batchId = crypto.randomUUID()
@@ -706,13 +925,21 @@ export default function UploadData() {
         category:    row.category    || null,
         qty:         parseFloat(row.qty)         || 0,
         unit_cost:   parseFloat(row.unit_cost)   || 0,
-        site:        row.site     || activeCountry || null,
+        site:        row.site     || uploadCountry || null,
+        country:     uploadCountry,
         location:    row.location || null,
         min_level:   parseFloat(row.min_level)   || 0,
         reorder_qty: parseFloat(row.reorder_qty) || 0,
         supplier:    row.supplier || null,
         notes:       row.notes    || null,
       }))
+      if (!isAdminUploader) {
+        const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'stock', targetTable: 'stock_records', rows: stockRows })
+        if (pErr) { setError('Could not submit for approval: ' + pErr.message); setStep('preview'); return }
+        setResult({ pending: true, submitted: stockRows.length, added: 0, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipLog: [] })
+        setStep('done')
+        return
+      }
       const CHUNK = 500
       let added = 0
       for (let i = 0; i < stockRows.length; i += CHUNK) {
@@ -729,11 +956,12 @@ export default function UploadData() {
 
     await saveColumnMapping(fingerprintHeaders(headers))
 
-    const defaultCountry = activeCountry !== 'All' ? activeCountry : 'KSA'
     let records = buildRows(headers, rows, mapping).map(r => ({
       ...r,
-      country:         (r.country && String(r.country).trim()) || defaultCountry,
-      region:          profile?.region ?? defaultCountry,
+      // Force the selected country onto every row — ignore any country column in
+      // the file so an upload can never mix or mislabel countries.
+      country:         uploadCountry,
+      region:          profile?.region ?? uploadCountry,
       uploaded_by:     profile?.id,
       upload_batch_id: batchId,
     }))
@@ -754,8 +982,21 @@ export default function UploadData() {
       return { ...r, category: c?.category ?? null, risk_level: c?.risk_level ?? null, remarks_cleaned: c?.remarks_cleaned ?? null, cleaned: auto }
     })
 
-    const autoClassifiedCount = classifyLog.length
+    // Optional AI pass to refine low-confidence rows (opt-in).
+    if (useAI) records = await aiRefineLowConfidence(records)
+
+    const autoClassifiedCount = records.filter(r => r.cleaned).length
     const needsReviewCount    = records.length - autoClassifiedCount
+
+    // Non-admins: stage the fully-prepared rows for admin approval, don't go live.
+    if (!isAdminUploader) {
+      const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'tyres', targetTable: 'tyre_records', rows: records })
+      if (pErr) { setError('Could not submit for approval: ' + pErr.message); setStep('preview'); return }
+      setResult({ pending: true, submitted: records.length, added: 0, skipped: 0, skipLog: [], autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0, extraColCount: unmappedSource.length })
+      setStep('done')
+      return
+    }
+
     const BATCH = 500
     let added = 0, skipped = 0
     const skipLog = []
@@ -771,7 +1012,7 @@ export default function UploadData() {
 
     if (classifyLog.length > 0) await supabase.from('cleaning_log').insert(classifyLog.map((entry, i) => ({ ...entry, tyre_record_id: insertedIds[i] ?? null })))
 
-    await supabase.from('upload_history').insert({ file_names: [fileName], records_added: added, records_skipped: skipped + (skipDupes ? dupes.length : 0), skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? defaultCountry, uploaded_by: profile?.id, batch_id: batchId })
+    await supabase.from('upload_history').insert({ file_names: [fileName], records_added: added, records_skipped: skipped + (skipDupes ? dupes.length : 0), skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? uploadCountry, country: uploadCountry, uploaded_by: profile?.id, batch_id: batchId })
     await logAuditEvent({ action: 'UPLOAD', tableName: 'tyre_records', recordCount: added, details: { filename: fileName, rowCount: added, skippedCount: skipped + (skipDupes ? dupes.length : 0), country: activeCountry, batch_id: batchId } })
 
     // Bump use_count on any synonyms that were exercised in this upload
@@ -796,6 +1037,7 @@ export default function UploadData() {
     setSavedMappingId(null); setMappingSource('auto'); setDupes([]); setSkipDupes(true)
     setDupCheck(null); setSkipIds(new Set()); setDupReview(false)
     setUploadType('tyres'); setSheetOptions([]); setSearchMapping('')
+    setRawAoa([]); setHeaderRowIdx(0); setUseAI(false); setQuality([]); setCleanPreview(null)
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -905,15 +1147,15 @@ export default function UploadData() {
                     </motion.div>
                     <div className="text-center">
                       <p className="text-xl font-semibold text-white mb-1">{dragging ? 'Drop to upload' : 'Drop your Excel or CSV file here'}</p>
-                      <p className="text-gray-500 text-sm">or click to browse · .xlsx, .xls, .csv supported</p>
+                      <p className="text-gray-500 text-sm">or click to browse · Excel, OpenDocument, CSV/TSV supported</p>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-600">
-                      <span className="px-2 py-1 bg-gray-800/60 rounded">.xlsx</span>
-                      <span className="px-2 py-1 bg-gray-800/60 rounded">.xls</span>
-                      <span className="px-2 py-1 bg-gray-800/60 rounded">.csv</span>
+                    <div className="flex items-center gap-2 text-xs text-gray-600 flex-wrap justify-center">
+                      {['.xlsx', '.xls', '.xlsm', '.xlsb', '.ods', '.csv', '.tsv', '.txt'].map(x => (
+                        <span key={x} className="px-2 py-1 bg-gray-800/60 rounded">{x}</span>
+                      ))}
                     </div>
                   </div>
-                  <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
+                  <input ref={fileRef} type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt" className="hidden" onChange={handleFile} />
                   {error && <p className="text-red-400 text-sm text-center pb-4">{error}</p>}
                 </motion.div>
               </>
@@ -981,6 +1223,50 @@ export default function UploadData() {
                 </span>
               )}
             </div>
+
+            {/* Raw file preview + header-row override — see exactly what was read */}
+            {rawAoa.length > 0 && (
+              <div className="card">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                  <div>
+                    <h2 className="text-base font-semibold text-white">File Preview</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">If the wrong row was detected as the header, pick the correct one — the table re-maps instantly.</p>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-gray-400">
+                    Header row:
+                    <select
+                      className="input text-xs py-1"
+                      value={headerRowIdx}
+                      onChange={e => changeHeaderRow(Number(e.target.value))}
+                    >
+                      {rawAoa.slice(0, 15).map((r, i) => {
+                        const label = (r || []).filter(c => c != null && String(c).trim() !== '').slice(0, 4).join(' | ').slice(0, 50)
+                        return <option key={i} value={i}>Row {i + 1}{label ? ` — ${label}` : ' (empty)'}</option>
+                      })}
+                    </select>
+                  </label>
+                </div>
+                <div className="overflow-x-auto border border-gray-800 rounded-lg">
+                  <table className="text-xs">
+                    <tbody>
+                      {rawAoa.slice(0, 8).map((r, ri) => (
+                        <tr key={ri} className={ri === headerRowIdx ? 'bg-green-900/30' : ri < headerRowIdx ? 'opacity-40' : ''}>
+                          <td className="px-2 py-1 text-gray-600 border-r border-gray-800 sticky left-0 bg-inherit">{ri + 1}</td>
+                          {(r || []).slice(0, 12).map((c, ci) => (
+                            <td key={ci} className={`px-2 py-1 whitespace-nowrap ${ri === headerRowIdx ? 'text-green-300 font-semibold' : 'text-gray-400'}`}>
+                              {c == null || c === '' ? '·' : String(c).slice(0, 24)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {rows.length === 0 && (
+                  <p className="text-xs text-yellow-400 mt-2">No data rows detected below the current header row — try selecting a different header row above.</p>
+                )}
+              </div>
+            )}
 
             {/* Completeness indicator */}
             <div className={`rounded-xl px-4 py-3 flex items-center gap-3 border ${
@@ -1182,6 +1468,79 @@ export default function UploadData() {
               <p className="text-sm text-blue-300">Records will be auto-classified on upload. High/Medium confidence results are marked cleaned instantly. Low confidence records are flagged for review in Data Cleaning.</p>
             </div>
 
+            {/* Data-quality report */}
+            {quality.length > 0 && (
+              <div className="card">
+                <div className="flex items-center gap-2 mb-3">
+                  <Database size={15} className="text-green-400" />
+                  <h2 className="text-base font-semibold text-white">Data Quality</h2>
+                  <span className="text-xs text-gray-500">· {rows.length.toLocaleString()} rows analysed</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr>
+                      <th className="table-header">Field</th>
+                      <th className="table-header">Filled</th>
+                      <th className="table-header">Invalid</th>
+                      <th className="table-header">In-file dupes</th>
+                    </tr></thead>
+                    <tbody>
+                      {quality.map(qf => (
+                        <tr key={qf.key}>
+                          <td className="table-cell">{qf.label}{qf.required && <span className="text-red-400 ml-0.5">*</span>}</td>
+                          <td className="table-cell">
+                            <span className={qf.fillPct >= 90 ? 'text-green-400' : qf.fillPct >= 50 ? 'text-yellow-400' : qf.required ? 'text-red-400' : 'text-gray-400'}>
+                              {qf.fillPct}%
+                            </span>
+                          </td>
+                          <td className="table-cell">{qf.invalid > 0 ? <span className="text-orange-400">{qf.invalid}</span> : <span className="text-gray-600">0</span>}</td>
+                          <td className="table-cell">{qf.dupes > 0 ? <span className="text-yellow-400">{qf.dupes}</span> : <span className="text-gray-600">0</span>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {quality.some(qf => qf.required && qf.fillPct < 50) && (
+                  <p className="text-xs text-red-400 mt-2">⚠ A required field is under 50% filled — check the column mapping or header row before uploading.</p>
+                )}
+              </div>
+            )}
+
+            {/* Cleaning preview + optional AI model */}
+            {cleanPreview && (
+              <div className="card">
+                <div className="flex items-center gap-2 mb-3">
+                  <Wand2 size={15} className="text-purple-400" />
+                  <h2 className="text-base font-semibold text-white">Cleaning Preview</h2>
+                </div>
+                <div className="flex flex-wrap gap-4 text-sm mb-3">
+                  <span className="text-green-400">{cleanPreview.auto.toLocaleString()} auto-classified</span>
+                  <span className="text-yellow-400">{cleanPreview.review.toLocaleString()} need review</span>
+                  <span className="text-gray-500">of {cleanPreview.total.toLocaleString()} sampled</span>
+                </div>
+                {cleanPreview.examples.length > 0 && (
+                  <div className="space-y-1 mb-3">
+                    {cleanPreview.examples.map((ex, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className="text-gray-400 truncate max-w-xs">{ex.text}</span>
+                        <ChevronRight size={11} className="text-gray-600 flex-shrink-0" />
+                        <span className="text-gray-300">{ex.category || '—'}</span>
+                        {ex.risk && <span className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">{ex.risk}</span>}
+                        <span className={`px-1.5 py-0.5 rounded ${ex.conf === 'Low' ? 'bg-yellow-900/40 text-yellow-400' : 'bg-green-900/40 text-green-400'}`}>{ex.conf}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <label className="flex items-start gap-2 cursor-pointer border-t border-gray-800 pt-3">
+                  <input type="checkbox" className="accent-purple-500 mt-0.5" checked={useAI} onChange={e => setUseAI(e.target.checked)} />
+                  <span className="text-sm text-gray-300">
+                    Clean low-confidence rows with AI
+                    <span className="text-xs text-gray-500 block">Routes the {cleanPreview.review.toLocaleString()} "need review" rows through the secure chat-ai function (Claude) for better category/risk. Uses AI tokens — off by default.</span>
+                  </span>
+                </label>
+              </div>
+            )}
+
             <div className="card">
               <h2 className="text-base font-semibold text-white mb-4">Preview (first 5 rows)</h2>
               <div className="overflow-x-auto">
@@ -1196,8 +1555,27 @@ export default function UploadData() {
                   </tbody>
                 </table>
               </div>
+              {activeCountry === 'All' ? (
+                <div className="mt-4 mb-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+                  <p className="text-amber-300 text-sm font-semibold">Select a country before uploading</p>
+                  <p className="text-amber-200/80 text-xs mt-1">
+                    Pick a specific country in the top bar (KSA / UAE / Egypt). Every row will be stamped with it so your data never mixes.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-4 mb-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2">
+                  <p className="text-emerald-300 text-sm">
+                    Uploading to <span className="font-bold">{activeCountry}</span> — every row will be stamped with this country.
+                  </p>
+                </div>
+              )}
+              {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
               <div className="flex gap-3 mt-4">
-                <button onClick={upload} className="btn-primary flex items-center gap-2">
+                <button
+                  onClick={upload}
+                  disabled={activeCountry === 'All'}
+                  className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   <Upload size={16} /> Upload {(skipDupes ? rows.length - dupes.length : rows.length).toLocaleString()} Records
                 </button>
                 <button onClick={() => setStep('mapping')} className="btn-secondary">Back</button>
@@ -1238,15 +1616,21 @@ export default function UploadData() {
           <motion.div key="done" initial={{ opacity:0, scale:0.97 }} animate={{ opacity:1, scale:1 }} className="card">
             <div className="flex items-center gap-3 mb-6">
               <motion.div initial={{ scale:0 }} animate={{ scale:1 }} transition={{ type:'spring', stiffness:300, delay:0.1 }}>
-                <CheckCircle size={32} className="text-green-400" style={{ filter: 'drop-shadow(0 0 12px rgba(74,222,128,0.6))' }} />
+                {result.pending
+                  ? <Clock size={32} className="text-amber-400" style={{ filter: 'drop-shadow(0 0 12px rgba(251,191,36,0.6))' }} />
+                  : <CheckCircle size={32} className="text-green-400" style={{ filter: 'drop-shadow(0 0 12px rgba(74,222,128,0.6))' }} />}
               </motion.div>
               <div>
-                <h2 className="text-xl font-bold text-white">Upload Complete</h2>
-                <p className="text-gray-500 text-sm">Records imported and classified successfully</p>
+                <h2 className="text-xl font-bold text-white">{result.pending ? 'Submitted for Approval' : 'Upload Complete'}</h2>
+                <p className="text-gray-500 text-sm">
+                  {result.pending
+                    ? `${(result.submitted ?? 0).toLocaleString()} ${result.pending ? 'records' : ''} sent to an administrator — they will appear once approved.`
+                    : 'Records imported and classified successfully'}
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <Tile label="Records Added"   value={result.added}               color="green" />
+              <Tile label={result.pending ? 'Records Submitted' : 'Records Added'} value={result.pending ? result.submitted : result.added} color={result.pending ? 'yellow' : 'green'} />
               <Tile label="Auto-Classified" value={result.autoClassifiedCount} color="blue" />
               <Tile label="Need Review"     value={result.needsReviewCount}    color="yellow" />
               <Tile label="Dupes Skipped"   value={result.dupesSkipped}        color="gray" />

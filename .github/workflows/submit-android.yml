@@ -1,0 +1,52 @@
+name: Submit Android to Google Play (Internal)
+
+# Submits the latest completed EAS build to the Play Console "internal" track.
+# Run this after the "Release to Google Play" build workflow completes, or
+# whenever you want to push an already-built AAB to Play without rebuilding.
+#
+# Required GitHub secrets:
+#   EXPO_TOKEN                  - Expo access token
+#   GOOGLE_SERVICE_ACCOUNT_KEY  - Full JSON of the Play Console service account
+
+on:
+  workflow_dispatch:
+
+jobs:
+  submit:
+    name: Submit latest AAB to Play internal track
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Write Google service account key
+        working-directory: mobile
+        env:
+          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+        run: |
+          if [ -z "$GOOGLE_SERVICE_ACCOUNT_KEY" ]; then
+            echo "::error::GOOGLE_SERVICE_ACCOUNT_KEY secret is not set. Add it in GitHub → Settings → Secrets → Actions."
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT_KEY" > google-service-account.json
+
+      - name: Submit latest build to Play internal track
+        working-directory: mobile
+        run: eas submit --platform android --latest --profile production --non-interactive

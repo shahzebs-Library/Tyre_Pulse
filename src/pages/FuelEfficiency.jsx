@@ -18,6 +18,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -46,8 +47,8 @@ const CHART_OPTS = {
   plugins: {
     legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#111827',
-      borderColor: '#374151',
+      backgroundColor: 'var(--panel)',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
@@ -132,14 +133,16 @@ export default function FuelEfficiency() {
     setError(null)
     try {
       const [{ data: recs, error: rErr }, { data: insp, error: iErr }] = await Promise.all([
-        supabase
+        fetchAllPages((from, to) => supabase
           .from('tyre_records')
           .select('id,asset_no,serial_number,position,tread_depth,pressure_reading,risk_level,km_at_fitment,km_at_removal,site,country,brand,issue_date')
-          .match(activeCountry && activeCountry !== 'All' ? { country: activeCountry } : {}),
-        supabase
+          .match(activeCountry && activeCountry !== 'All' ? { country: activeCountry } : {})
+          .range(from, to)),
+        fetchAllPages((from, to) => supabase
           .from('inspections')
           .select('id,asset_no,pressure_reading,tread_depth,position,inspection_date,site')
-          .match(activeCountry && activeCountry !== 'All' ? { country: activeCountry } : {}),
+          .match(activeCountry && activeCountry !== 'All' ? { country: activeCountry } : {})
+          .range(from, to)),
       ])
       if (rErr) throw rErr
       setRecords(recs ?? [])
@@ -728,7 +731,7 @@ export default function FuelEfficiency() {
                         cutout: '75%',
                         plugins: {
                           legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 11 } } },
-                          tooltip: { backgroundColor: '#111827', titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+                          tooltip: { backgroundColor: 'var(--panel)', titleColor: '#f9fafb', bodyColor: '#d1d5db' },
                         },
                       }}
                     />

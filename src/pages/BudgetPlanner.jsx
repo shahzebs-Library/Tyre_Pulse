@@ -13,6 +13,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import PageHeader from '../components/ui/PageHeader'
+import { fetchAllPages } from '../lib/fetchAll'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, CheckCircle,
   ChevronDown, ChevronUp, Download, RefreshCw, Loader2, FileSpreadsheet,
@@ -37,7 +38,7 @@ const CHART_BASE = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#1f2937',
+      backgroundColor: 'var(--panel-2)',
       titleColor: '#f3f4f6',
       bodyColor: '#9ca3af',
       borderColor: 'rgba(59,130,246,0.3)',
@@ -45,8 +46,8 @@ const CHART_BASE = {
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
   },
 }
 
@@ -112,11 +113,13 @@ export default function BudgetPlanner() {
     setLoading(true)
     setError(null)
     try {
-      let q = supabase
-        .from('tyre_records')
-        .select('id, asset_no, cost_per_tyre, issue_date, site, country, brand, position, risk_level, km_at_fitment, km_at_removal')
-      if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data, error: err } = await q
+      const { data, error: err } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id, asset_no, cost_per_tyre, issue_date, site, country, brand, position, risk_level, km_at_fitment, km_at_removal')
+        if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q.range(from, to)
+      })
       if (err) throw err
       setRecords(data ?? [])
     } catch (e) {
@@ -410,7 +413,7 @@ export default function BudgetPlanner() {
       datasets: [{
         data: top.map(b => b.thisYear),
         backgroundColor: PALETTE.slice(0, top.length),
-        borderColor: '#111827',
+        borderColor: 'var(--panel)',
         borderWidth: 2,
       }],
     }
@@ -423,7 +426,7 @@ export default function BudgetPlanner() {
       datasets: [{
         data: top.map(b => b.lastYear),
         backgroundColor: PALETTE.slice(0, top.length),
-        borderColor: '#111827',
+        borderColor: 'var(--panel)',
         borderWidth: 2,
       }],
     }

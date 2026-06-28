@@ -8,6 +8,7 @@ import {
 } from 'chart.js'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
+import { fetchAllPages } from '../lib/fetchAll'
 import {
   GitCompare, Download, FileText, TrendingUp, TrendingDown, Minus,
   ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw,
@@ -26,7 +27,7 @@ const CHART_OPTS = {
   maintainAspectRatio: false,
   plugins: {
     legend: { labels: { color: '#9ca3af', boxWidth: 10, padding: 12 } },
-    tooltip: { backgroundColor: '#1f2937', titleColor: '#fff', bodyColor: '#9ca3af', borderColor: '#374151', borderWidth: 1, padding: 10 },
+    tooltip: { backgroundColor: 'var(--panel-2)', titlecolor:'var(--panel-ink)', bodyColor: '#9ca3af', borderColor: 'var(--hairline)', borderWidth: 1, padding: 10 },
   },
   scales: {
     x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: '#1f2937' } },
@@ -140,11 +141,12 @@ export default function Comparison() {
     setLoading(true)
     const minYear = Math.min(periodA.year, periodB.year)
     const maxYear = Math.max(periodA.year, periodB.year)
-    const { data } = await supabase
+    const { data } = await fetchAllPages((from, to) => supabase
       .from('tyre_records')
-      .select('issue_date, cost, site, brand')
+      .select('issue_date, cost:cost_per_tyre, site, brand')
       .gte('issue_date', `${minYear}-01-01`)
       .lte('issue_date', `${maxYear}-12-31`)
+      .range(from, to))
     setRecords(data ?? [])
     setRan(true)
     setLoading(false)

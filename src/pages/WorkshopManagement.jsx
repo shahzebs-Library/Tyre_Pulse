@@ -35,7 +35,7 @@ const CHART_DEFAULTS = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
     tooltip: {
-      backgroundColor: '#1f2937',
+      backgroundColor: 'var(--panel-2)',
       titleColor: '#f3f4f6',
       bodyColor: '#9ca3af',
       borderColor: 'rgba(59,130,246,0.3)',
@@ -43,8 +43,8 @@ const CHART_DEFAULTS = {
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
   },
 }
 
@@ -390,7 +390,7 @@ export default function WorkshopManagement() {
     try {
       let q = supabase
         .from('work_orders')
-        .select('id,work_order_no,asset_no,status,priority,work_type,site,assigned_to,labour_cost,parts_cost,total_cost,created_at,completed_at,scheduled_date,description,parts_used')
+        .select('id,work_order_no,asset_no,status,priority,work_type,site,assigned_to:technician_name,labour_cost,parts_cost,total_cost,created_at,completed_at,scheduled_date:target_completion,description,parts_used')
         .order('created_at', { ascending: false })
 
       if (site)     q = q.eq('site', site)

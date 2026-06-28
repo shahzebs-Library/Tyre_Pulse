@@ -51,7 +51,7 @@ const CHART_OPTS = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } },
     tooltip: {
-      backgroundColor: '#1f2937',
+      backgroundColor: 'var(--panel-2)',
       titleColor: '#f3f4f6',
       bodyColor: '#9ca3af',
       borderColor: 'rgba(59,130,246,0.3)',
@@ -59,8 +59,8 @@ const CHART_OPTS = {
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
   },
 }
 const DONUT_OPTS = {
@@ -167,8 +167,7 @@ function TyrePositionDiagram({ tyres = [] }) {
 }
 
 // ── Asset Detail Drawer ────────────────────────────────────────────────────────
-function AssetDrawer({ asset, tyresByAsset, workOrders, currency, onClose }) {
-  const tyres = tyresByAsset[asset.asset_no] ?? []
+function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
   const activeTyres = tyres.filter(t => !t.km_at_removal)
   const totalCost = tyres.reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0), 0)
 
@@ -573,7 +572,8 @@ export default function AssetManagement() {
 
   // ── data state ───────────────────────────────────────────────────────────────
   const [assets, setAssets] = useState([])
-  const [tyreRecords, setTyreRecords] = useState([])
+  const [overview, setOverview] = useState([])
+  const [drawerTyres, setDrawerTyres] = useState([])
   const [workOrders, setWorkOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -608,15 +608,15 @@ export default function AssetManagement() {
   async function loadAll() {
     setLoading(true)
     try {
-      const [assetsRes, tyresRes, woRes] = await Promise.allSettled([
+      const [assetsRes, ovRes, woRes] = await Promise.allSettled([
         supabase.from('fleet_master').select('*').order('asset_no'),
-        supabase.from('tyre_records').select('id,asset_no,serial_number,position,brand,size,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,tread_depth,site,country'),
+        supabase.rpc('report_asset_overview', { p_country: activeCountry }),
         supabase.from('work_orders').select('id,asset_no,status,total_cost,created_at,work_type'),
       ])
 
       let rawAssets = assetsRes.status === 'fulfilled' ? (assetsRes.value.data ?? []) : []
-      const rawTyres = tyresRes.status === 'fulfilled' ? (tyresRes.value.data ?? []) : []
-      const rawWOs   = woRes.status === 'fulfilled' ? (woRes.value.data ?? []) : []
+      const ov     = ovRes.status === 'fulfilled' ? (ovRes.value.data ?? []) : []
+      const rawWOs = woRes.status === 'fulfilled' ? (woRes.value.data ?? []) : []
 
       // Merge localStorage fallback
       const lsAssets = JSON.parse(localStorage.getItem(LS_KEY) || '[]')
@@ -627,19 +627,13 @@ export default function AssetManagement() {
         lsAssets.forEach(a => { if (!existing.has(a.asset_no)) rawAssets.push(a) })
       }
 
-      // If fleet_master is empty, synthesize from tyre_records
-      if (rawAssets.length === 0 && rawTyres.length > 0) {
-        const seen = {}
-        rawTyres.forEach(t => {
-          if (t.asset_no && !seen[t.asset_no]) {
-            seen[t.asset_no] = {
-              id: null, asset_no: t.asset_no, vehicle_type: null,
-              make: null, model: null, year: null,
-              site: t.site, country: t.country, active: true,
-            }
-          }
-        })
-        rawAssets = Object.values(seen)
+      // If fleet_master is empty, synthesize from the per-asset overview
+      if (rawAssets.length === 0 && ov.length > 0) {
+        rawAssets = ov.map(o => ({
+          id: null, asset_no: o.asset_no, vehicle_type: null,
+          make: null, model: null, year: null,
+          site: o.site, country: o.country, active: true,
+        }))
       }
 
       // Apply country filter
@@ -648,51 +642,46 @@ export default function AssetManagement() {
         : rawAssets.filter(a => a.country === activeCountry)
 
       setAssets(filtered)
-      setTyreRecords(rawTyres)
+      setOverview(ov)
       setWorkOrders(rawWOs)
     } finally {
       setLoading(false)
     }
   }
 
+  // Lazy-load the open asset's tyres for the detail drawer.
+  useEffect(() => {
+    if (!drawerAsset) { setDrawerTyres([]); return }
+    supabase.from('tyre_records')
+      .select('id,asset_no,serial_number,position,brand,size,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,tread_depth,site,country')
+      .eq('asset_no', drawerAsset.asset_no)
+      .then(({ data }) => setDrawerTyres(data || []))
+  }, [drawerAsset])
+
   // ── derived data ──────────────────────────────────────────────────────────────
-  const tyresByAsset = useMemo(() => {
+  const overviewMap = useMemo(() => {
     const map = {}
-    tyreRecords.forEach(t => {
-      if (!t.asset_no) return
-      if (!map[t.asset_no]) map[t.asset_no] = []
-      map[t.asset_no].push(t)
-    })
+    overview.forEach(o => { if (o.asset_no) map[o.asset_no] = o })
     return map
-  }, [tyreRecords])
+  }, [overview])
 
   const enrichedAssets = useMemo(() => {
     const now = Date.now()
     return assets.map(a => {
-      const tyres = tyresByAsset[a.asset_no] ?? []
-      const activeTyres = tyres.filter(t => !t.km_at_removal)
-      const worst = worstRisk(activeTyres) ?? worstRisk(tyres)
-      const ytdStart = new Date(new Date().getFullYear(), 0, 1)
-      const ytdCost = tyres
-        .filter(t => t.issue_date && new Date(t.issue_date) >= ytdStart)
-        .reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0), 0)
-      const latestDate = tyres.reduce((latest, t) => {
-        if (!t.issue_date) return latest
-        return !latest || t.issue_date > latest ? t.issue_date : latest
-      }, null)
-      const score = healthScore(activeTyres.length ? activeTyres : tyres, latestDate)
+      const o = overviewMap[a.asset_no] || {}
+      const latestDate = o.latest_date ?? null
       return {
         ...a,
-        _tyres: tyres,
-        _activeTyres: activeTyres,
-        _worstRisk: worst,
-        _ytdCost: ytdCost,
+        _activeCount: o.active_tyres ?? 0,
+        _totalCount: o.total_tyres ?? 0,
+        _worstRisk: o.worst_risk ?? null,
+        _ytdCost: Number(o.ytd_cost) || 0,
         _latestDate: latestDate,
         _noRecentRecord: !latestDate || (now - new Date(latestDate).getTime()) > 60 * 86_400_000,
-        _healthScore: score,
+        _healthScore: o.health_score ?? 0,
       }
     })
-  }, [assets, tyresByAsset])
+  }, [assets, overviewMap])
 
   // ── filter + sort ─────────────────────────────────────────────────────────────
   const filteredAssets = useMemo(() => {
@@ -801,7 +790,7 @@ export default function AssetManagement() {
       site: a.site ?? '',
       country: a.country ?? '',
       active: a.active ? 'Active' : 'Inactive',
-      active_tyres: a._activeTyres.length,
+      active_tyres: a._activeCount,
       worst_risk: a._worstRisk ?? '',
       ytd_cost: a._ytdCost ?? 0,
       last_service: fmtDate(a._latestDate),
@@ -824,7 +813,7 @@ export default function AssetManagement() {
         make: `${a.make ?? ''} ${a.model ?? ''}`.trim() || '—',
         year: a.year ?? '—',
         site: a.site ?? '—',
-        active_tyres: a._activeTyres.length,
+        active_tyres: a._activeCount,
         worst_risk: a._worstRisk ?? '—',
         ytd_cost: fmtCurrency(a._ytdCost, activeCurrency),
         last_service: fmtDate(a._latestDate),
@@ -1033,9 +1022,9 @@ export default function AssetManagement() {
                               <td className="px-4 py-3 text-gray-400">{a.year ?? '—'}</td>
                               <td className="px-4 py-3 text-gray-400 max-w-[120px] truncate">{a.site ?? '—'}</td>
                               <td className="px-4 py-3 text-center">
-                                <span className="font-semibold text-white">{a._activeTyres.length}</span>
-                                {a._tyres.length > a._activeTyres.length && (
-                                  <span className="text-gray-600 text-xs ml-1">/{a._tyres.length}</span>
+                                <span className="font-semibold text-white">{a._activeCount}</span>
+                                {a._totalCount > a._activeCount && (
+                                  <span className="text-gray-600 text-xs ml-1">/{a._totalCount}</span>
                                 )}
                               </td>
                               <td className="px-4 py-3">
@@ -1268,7 +1257,7 @@ export default function AssetManagement() {
                                 {a._worstRisk}
                               </span>
                             )}
-                            <span className="text-xs text-gray-500">{a._activeTyres.length} tyres</span>
+                            <span className="text-xs text-gray-500">{a._activeCount} tyres</span>
                             <Eye className="w-4 h-4 text-gray-600 hover:text-blue-400" />
                           </div>
                         </div>
@@ -1291,7 +1280,7 @@ export default function AssetManagement() {
               onClick={() => setDrawerAsset(null)} />
             <AssetDrawer
               asset={drawerAsset}
-              tyresByAsset={tyresByAsset}
+              tyres={drawerTyres}
               workOrders={workOrders}
               currency={activeCurrency}
               onClose={() => setDrawerAsset(null)}

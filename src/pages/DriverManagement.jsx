@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
@@ -19,7 +20,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CHART_THEME = {
-  gridColor: 'rgba(255,255,255,0.06)',
+  gridcolor:'var(--text-muted)',
   tickColor: '#6b7280',
   tooltipBg: '#1f2937',
 }
@@ -180,7 +181,7 @@ function barOptions(horizontal = false) {
       legend: { display: false },
       tooltip: {
         backgroundColor: CHART_THEME.tooltipBg,
-        titleColor: '#fff',
+        titlecolor:'var(--panel-ink)',
         bodyColor: '#d1d5db',
         padding: 10,
         cornerRadius: 8,
@@ -521,19 +522,18 @@ export default function DriverManagement() {
     setLoading(true)
     setError(null)
     try {
-      let q = supabase
-        .from('tyre_records')
-        .select(
-          'id,asset_no,asset_number,serial_no,brand,site,country,driver_name,driver_id,' +
-          'cost_per_tyre,km_at_fitment,km_at_removal,risk_level,removal_reason,issue_date,category'
-        )
-        .limit(20000)
-
-      if (activeCountry && activeCountry !== 'All') {
-        q = q.eq('country', activeCountry)
-      }
-
-      const { data, error: err } = await q
+      const { data, error: err } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select(
+            'id,asset_no,asset_number,serial_no,brand,site,country,driver_name,driver_id,' +
+            'cost_per_tyre,km_at_fitment,km_at_removal,risk_level,removal_reason,issue_date,category'
+          )
+        if (activeCountry && activeCountry !== 'All') {
+          q = q.eq('country', activeCountry)
+        }
+        return q.range(from, to)
+      })
       if (err) throw err
       setRecords(data || [])
     } catch (e) {

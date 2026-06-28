@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
@@ -46,7 +47,7 @@ const CHART_DEFAULTS = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#1f2937',
+      backgroundColor: 'var(--panel-2)',
       titleColor: '#f3f4f6',
       bodyColor: '#9ca3af',
       borderColor: 'rgba(22,163,74,0.3)',
@@ -54,8 +55,8 @@ const CHART_DEFAULTS = {
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
   },
 }
 
@@ -137,21 +138,23 @@ export default function CostCenter() {
     setLoading(true)
     setError(null)
     try {
-      let q = supabase
-        .from('tyre_records')
-        .select(
-          'id, asset_number, asset_no, brand, site, country, cost_per_tyre, ' +
-          'km_at_fitment, km_at_removal, risk_level, removal_reason, category, ' +
-          'created_at, tyre_position, position'
-        )
+      const { data, error: err } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select(
+            'id, asset_number, asset_no, brand, site, country, cost_per_tyre, ' +
+            'km_at_fitment, km_at_removal, risk_level, removal_reason, category, ' +
+            'created_at, tyre_position, position'
+          )
 
-      if (activeCountry && activeCountry !== 'All') {
-        q = q.eq('country', activeCountry)
-      }
-      if (dateFrom) q = q.gte('created_at', dateFrom)
-      if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
+        if (activeCountry && activeCountry !== 'All') {
+          q = q.eq('country', activeCountry)
+        }
+        if (dateFrom) q = q.gte('created_at', dateFrom)
+        if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
 
-      const { data, error: err } = await q.order('created_at', { ascending: false })
+        return q.order('created_at', { ascending: false }).range(from, to)
+      }, { max: 200000 })
       if (err) throw err
       setRecords(data ?? [])
     } catch (e) {
@@ -522,6 +525,8 @@ export default function CostCenter() {
         'Cost Center — Cost by Site',
         'CostCenter_Report',
         'landscape',
+        '',
+        { currency: activeCurrency },
       )
     } finally { setExporting(false) }
   }
@@ -661,7 +666,7 @@ export default function CostCenter() {
           {/* ── 2. Dimension Tabs ────────────────────────────────────────────── */}
           <div
             className="rounded-xl border border-gray-800 overflow-hidden"
-            style={{ background: 'rgba(8,15,10,0.8)' }}
+            style={{ background: 'var(--panel-deep)' }}
           >
             {/* Tab bar */}
             <div className="flex border-b border-gray-800">
@@ -876,7 +881,7 @@ export default function CostCenter() {
           {/* ── 3. Breakdown Charts ──────────────────────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             {/* Doughnut */}
-            <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'rgba(8,15,10,0.8)' }}>
+            <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'var(--panel-deep)' }}>
               <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
                 <PieChart size={15} className="text-green-400" />
                 Cost Distribution by Site
@@ -902,7 +907,7 @@ export default function CostCenter() {
             </div>
 
             {/* Top Assets horizontal bar */}
-            <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'rgba(8,15,10,0.8)' }}>
+            <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'var(--panel-deep)' }}>
               <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
                 <Award size={15} className="text-purple-400" />
                 Top 10 Costliest Assets
@@ -928,7 +933,7 @@ export default function CostCenter() {
             </div>
 
             {/* Monthly trend with MA */}
-            <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'rgba(8,15,10,0.8)' }}>
+            <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'var(--panel-deep)' }}>
               <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
                 <TrendingUp size={15} className="text-blue-400" />
                 Monthly Spend + 3-Month MA
@@ -954,7 +959,7 @@ export default function CostCenter() {
           </div>
 
           {/* ── 4. Anomaly Detection ─────────────────────────────────────────── */}
-          <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'rgba(8,15,10,0.8)' }}>
+          <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'var(--panel-deep)' }}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
                 <AlertTriangle size={15} className="text-yellow-400" />
@@ -1005,7 +1010,7 @@ export default function CostCenter() {
           </div>
 
           {/* ── 5. ROI Calculator ────────────────────────────────────────────── */}
-          <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'rgba(8,15,10,0.8)' }}>
+          <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'var(--panel-deep)' }}>
             <h3 className="text-sm font-semibold text-gray-200 mb-1 flex items-center gap-2">
               <Zap size={15} className="text-yellow-400" />
               Maintenance ROI Calculator

@@ -20,6 +20,7 @@ import {
   linearRegression, computeSiteMetrics, computeBrandMetrics,
   computeAssetMetrics, computeSeasonalTrends, recordCost, recordCpk,
 } from '../lib/analyticsEngine'
+import { fetchAllPages } from '../lib/fetchAll'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -66,16 +67,16 @@ const BASE_OPTS = {
   plugins: {
     legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#1f2937',
+      backgroundColor: 'var(--panel-2)',
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
-      borderColor: '#374151',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
     },
   },
   scales: {
-    x: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#6b7280' } },
-    y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#6b7280' } },
+    x: { grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280' } },
+    y: { grid: { color:'var(--text-muted)' }, ticks: { color: '#6b7280' } },
   },
 }
 
@@ -238,13 +239,14 @@ export default function AdvancedAnalytics() {
       setLoading(true)
       setError(null)
       try {
-        let q = supabase
-          .from('tyre_records')
-          .select('id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,tread_depth,pressure_reading')
-          .order('issue_date', { ascending: true })
-          .limit(10000)
-        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-        const { data, error: err } = await q
+        const { data, error: err } = await fetchAllPages((from, to) => {
+          let q = supabase
+            .from('tyre_records')
+            .select('id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,tread_depth,pressure_reading')
+            .order('issue_date', { ascending: true })
+          if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+          return q.range(from, to)
+        })
         if (err) throw err
         setRecords(data || [])
       } catch (e) {

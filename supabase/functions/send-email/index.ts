@@ -1,25 +1,21 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, jsonResponse, requireApprovedRole } from '../_shared/auth.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders(req) })
   }
 
   try {
+    const auth = await requireApprovedRole(req, ['admin', 'manager', 'director'])
+    if (auth instanceof Response) return auth
+
     const { to, subject, body, attachmentBase64, attachmentName, attachmentType } = await req.json()
 
     // Validate required fields
     if (!to || !subject || !body) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: to, subject, body' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return jsonResponse(req, { error: 'Missing required fields: to, subject, body' }, 400)
     }
 
     const recipients = Array.isArray(to) ? to : [to]
@@ -28,20 +24,14 @@ serve(async (req) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     const invalidEmails = recipients.filter((email: string) => !emailRegex.test(email))
     if (invalidEmails.length > 0) {
-      return new Response(
-        JSON.stringify({ error: `Invalid email addresses: ${invalidEmails.join(', ')}` }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return jsonResponse(req, { error: `Invalid email addresses: ${invalidEmails.join(', ')}` }, 400)
     }
 
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
     const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'reports@tyrepulse.app'
 
     if (!RESEND_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: 'RESEND_API_KEY not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return jsonResponse(req, { error: 'RESEND_API_KEY not configured' }, 500)
     }
 
     const payload: Record<string, unknown> = {
@@ -96,15 +86,9 @@ serve(async (req) => {
       // Non-fatal: audit log failure should not block email delivery response
     }
 
-    return new Response(
-      JSON.stringify({ success: true, id: data.id }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, { success: true, id: data.id })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return jsonResponse(req, { error: message }, 500)
   }
 })

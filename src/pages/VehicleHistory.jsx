@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, countBy, sum } from '../lib/analyticsEngine'
 import { detectAnomalies, ANOMALY_TYPES } from '../lib/anomalyEngine'
@@ -253,9 +254,11 @@ export default function VehicleHistory() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: true })
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data } = await q
+      const { data } = await fetchAllPages((from, to) => {
+        let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: true })
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q.range(from, to)
+      }, { max: 200000 })
       const rows = data || []
       setAllRecords(rows)
       const uniqSites = [...new Set(rows.map(r => r.site).filter(Boolean))].sort()
@@ -1377,9 +1380,10 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-sm text-gray-300 w-20">{p.position}</span>
                     {p.brand && <span className="text-xs text-gray-500">{p.brand}</span>}
+                    {/* serial_no disabled — re-enable when ready
                     {p.serial_no && (
                       <span className="text-[10px] font-mono text-gray-600">{p.serial_no}</span>
-                    )}
+                    )} */}
                   </div>
                   <span className={`text-xs font-medium ${forecastClass}`}>{forecastText}</span>
                 </div>

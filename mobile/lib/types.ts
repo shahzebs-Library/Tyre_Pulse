@@ -1,5 +1,10 @@
 export type UserRole = 'admin' | 'manager' | 'director' | 'inspector' | 'tyre_man' | 'reporter'
 
+/** Countries the platform operates in — mirrors the web SettingsContext list.
+ *  A user's country drives data isolation and stamps their mobile-created rows. */
+export const COUNTRIES = ['KSA', 'UAE', 'Egypt'] as const
+export type Country = (typeof COUNTRIES)[number]
+
 export interface Profile {
   id: string
   full_name: string | null
@@ -9,6 +14,7 @@ export interface Profile {
   site: string | null
   country: string | null
   approved: boolean
+  locked?: boolean | null
 }
 
 /**
@@ -40,7 +46,7 @@ export interface VehicleFleet {
   model?: string
 }
 
-export type TyreCondition = 'Good' | 'Worn' | 'Damaged' | 'Flat' | 'Missing'
+export type TyreCondition = 'Good' | 'Worn' | 'Damaged' | 'Puncture' | 'Flat' | 'Missing'
 
 export interface TyrePositionData {
   position: string
@@ -69,6 +75,8 @@ export interface InspectionPayload {
   tyre_conditions: Record<string, TyrePositionData>
   notes: string
   status: string
+  /** Stamped from the creator's profile so records never mix across countries */
+  country: string | null
 }
 
 export interface OfflineInspection {

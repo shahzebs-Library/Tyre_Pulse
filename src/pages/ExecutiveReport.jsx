@@ -33,6 +33,8 @@ import {
 } from '../lib/kpiEngine'
 import { useSettings } from '../contexts/SettingsContext'
 import { applyCountry } from '../lib/countryFilter'
+import { fetchAllPages } from '../lib/fetchAll'
+import { recordCost } from '../lib/analyticsEngine'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -48,8 +50,8 @@ const CHART_DARK = {
   plugins: {
     legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#111827',
-      borderColor: '#374151',
+      backgroundColor: 'var(--panel)',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
@@ -181,7 +183,7 @@ function computeRootCauses(records) {
   records.forEach(r => {
     const key = classifyRootCause(r)
     counts[key].count += 1
-    counts[key].cost += Number(r.cost_per_tyre) || 0
+    counts[key].cost += recordCost(r)
   })
   const total = records.length
   return RC_CATEGORIES.map(cat => ({
@@ -298,17 +300,19 @@ export default function ExecutiveReport() {
       setLoading(true)
       setError(null)
       try {
+        // Paginate past the PostgREST 1000-row cap so analytics see the FULL
+        // dataset (otherwise totals/KPIs are computed on a 1000-row sample).
         const [rRes, iRes, aRes, fRes] = await Promise.all([
-          applyCountry(supabase.from('tyre_records').select(
-            'id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,tread_depth,country'
-          ), activeCountry).limit(10000),
-          supabase.from('inspections').select(
-            'id,asset_no,site,status,scheduled_date,completed_date,findings'
-          ).limit(5000),
-          supabase.from('corrective_actions').select(
-            'id,site,status,priority,title,created_at,resolved_at'
-          ).limit(2000),
-          supabase.from('vehicle_fleet').select('asset_no,site,vehicle_type,monthly_tyre_budget').then(
+          fetchAllPages((from, to) => applyCountry(supabase.from('tyre_records').select(
+            'id,asset_no,site,brand,position,risk_level,category,findings,km_at_fitment,km_at_removal,cost_per_tyre,qty,issue_date,tread_depth,pressure_reading,country'
+          ), activeCountry).order('issue_date', { ascending: false }).range(from, to), { max: 200000 }),
+          fetchAllPages((from, to) => applyCountry(supabase.from('inspections').select(
+            'id,asset_no,site,status,scheduled_date,completed_date,findings,country'
+          ), activeCountry).order('scheduled_date', { ascending: false }).range(from, to), { max: 50000 }),
+          fetchAllPages((from, to) => applyCountry(supabase.from('corrective_actions').select(
+            'id,site,status,priority,title,created_at,resolved_at,country'
+          ), activeCountry).order('created_at', { ascending: false }).range(from, to), { max: 50000 }),
+          applyCountry(supabase.from('vehicle_fleet').select('asset_no,site,vehicle_type,monthly_tyre_budget,country'), activeCountry).then(
             res => ({ data: res.data || [], error: null })
           ).catch(() => ({ data: [], error: null })),
         ])
@@ -350,7 +354,7 @@ export default function ExecutiveReport() {
 
   // ── Financial computations ────────────────────────────────────────────────
   const totalSpend = useMemo(() =>
-    periodRecords.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0), 0),
+    periodRecords.reduce((s, r) => s + recordCost(r), 0),
     [periodRecords]
   )
 
@@ -371,7 +375,7 @@ export default function ExecutiveReport() {
     periodRecords.forEach(r => {
       if (!r.asset_no) return
       if (!byAsset[r.asset_no]) byAsset[r.asset_no] = { asset_no: r.asset_no, site: r.site, cost: 0, count: 0 }
-      byAsset[r.asset_no].cost  += Number(r.cost_per_tyre) || 0
+      byAsset[r.asset_no].cost  += recordCost(r)
       byAsset[r.asset_no].count += 1
     })
     return Object.values(byAsset).sort((a, b) => b.cost - a.cost).slice(0, 5)
@@ -382,7 +386,7 @@ export default function ExecutiveReport() {
     periodRecords.forEach(r => {
       const site = r.site || 'Unknown'
       if (!by[site]) by[site] = 0
-      by[site] += Number(r.cost_per_tyre) || 0
+      by[site] += recordCost(r)
     })
     return Object.entries(by).map(([site, cost]) => ({ site, cost })).sort((a, b) => b.cost - a.cost)
   }, [periodRecords])
@@ -392,7 +396,7 @@ export default function ExecutiveReport() {
     periodRecords.forEach(r => {
       const brand = r.brand || 'Unknown'
       if (!by[brand]) by[brand] = 0
-      by[brand] += Number(r.cost_per_tyre) || 0
+      by[brand] += recordCost(r)
     })
     return Object.entries(by).map(([brand, cost]) => ({ brand, cost })).sort((a, b) => b.cost - a.cost).slice(0, 8)
   }, [periodRecords])
@@ -883,10 +887,10 @@ export default function ExecutiveReport() {
     const wb = XLSX.utils.book_new()
 
     const kpiRows = [
-      { KPI: 'Fleet Avg CPK', Value: kpis.cpk.fleetAvgCpk.toFixed(6), Unit: `${currency}/km` },
-      { KPI: 'Median CPK', Value: kpis.cpk.medianCpk.toFixed(6), Unit: `${currency}/km` },
-      { KPI: 'Fleet Avg Tyre Life', Value: Math.round(kpis.avgTyreLife.avgKm), Unit: 'km' },
-      { KPI: 'Inspection Compliance', Value: kpis.inspectionCompliance.compliancePct.toFixed(1), Unit: '%' },
+      { KPI: 'Fleet Avg CPK', Value: Number(kpis.cpk.fleetAvgCpk || 0).toFixed(6), Unit: `${currency}/km` },
+      { KPI: 'Median CPK', Value: Number(kpis.cpk.medianCpk || 0).toFixed(6), Unit: `${currency}/km` },
+      { KPI: 'Fleet Avg Tyre Life', Value: Math.round(Number(kpis.avgTyreLife.avgKm) || 0), Unit: 'km' },
+      { KPI: 'Inspection Compliance', Value: Number(kpis.inspectionCompliance.compliancePct || 0).toFixed(1), Unit: '%' },
       { KPI: 'Failure Rate', Value: (kpis.failureRate.failureRate * 100).toFixed(1), Unit: '%' },
       { KPI: 'Critical Rate', Value: (kpis.failureRate.criticalRate * 100).toFixed(1), Unit: '%' },
       { KPI: 'Scrap Rate', Value: (kpis.scrapRate.scrapRate * 100).toFixed(1), Unit: '%' },

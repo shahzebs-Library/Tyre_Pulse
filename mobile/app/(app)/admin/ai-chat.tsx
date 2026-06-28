@@ -80,17 +80,6 @@ export default function AiChatScreen() {
   const { profile } = useAuth()
   const router = useRouter()
 
-  if (guardLoading || !allowed) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color="#7c3aed" />
-        </View>
-      </SafeAreaView>
-    )
-  }
-
   const [agent, setAgent]       = useState<AgentKey>('analyst')
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput]       = useState('')
@@ -100,6 +89,8 @@ export default function AiChatScreen() {
 
   // Pre-load fleet context once
   useEffect(() => {
+    if (!allowed) return
+
     async function buildContext() {
       const [accRes, alertRes, inspRes] = await Promise.all([
         supabase.from('accidents').select('severity, status, site').limit(200),
@@ -123,7 +114,18 @@ export default function AiChatScreen() {
       )
     }
     buildContext()
-  }, [])
+  }, [allowed, profile?.full_name, profile?.role])
+
+  if (guardLoading || !allowed) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color="#7c3aed" />
+        </View>
+      </SafeAreaView>
+    )
+  }
 
   async function send(text?: string) {
     const q = (text ?? input).trim()
@@ -151,7 +153,15 @@ export default function AiChatScreen() {
           max_tokens: 1200,
         },
       })
-      const reply = error ? 'Unable to reach AI. Check your connection.' : (data?.content ?? 'No response.')
+      let reply: string
+      if (error) {
+        // Surface the function's real error (e.g. missing API key)
+        let detail = error.message
+        try { const body = await (error as any).context?.json?.(); if (body?.error) detail = body.error } catch { /* keep */ }
+        reply = `AI unavailable: ${detail}`
+      } else {
+        reply = (data as any)?.error ? `AI unavailable: ${(data as any).error}` : ((data as any)?.content ?? 'No response.')
+      }
       setMessages(prev => [
         ...prev.slice(0, -1),
         { role: 'assistant', content: reply, agent },

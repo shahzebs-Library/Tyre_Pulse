@@ -1,13 +1,26 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
+
+// Role-based defaults used when no DB permissions have been configured yet
+const ROLE_DEFAULTS = {
+  Admin:    () => true,
+  Manager:  k => !['user_management','erp_sync','data_cleaning','audit_trail'].includes(k),
+  Director: k => !['user_management','erp_sync','data_cleaning','audit_trail'].includes(k),
+  Inspector: k => ['dashboard','tyre_records','inspections','alerts','fleet_master','gate_pass','daily_ops'].includes(k),
+  'Tyre Man': k => ['dashboard','tyre_records','inspections','alerts','stock','work_orders','gate_pass'].includes(k),
+  Reporter: k => ['dashboard','analytics','kpi_scorecard','reports','executive_report','tyre_records'].includes(k),
+  Driver:   k => ['dashboard','inspections','alerts'].includes(k),
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const profileChannelRef = useRef(null)
+  const [modulePerms, setModulePerms] = useState(null)
+  const [mfaEnabled, setMfaEnabled] = useState(false)
 
   // Idle timeout — sign out after 30 minutes of inactivity
   const IDLE_MS = 30 * 60 * 1000
@@ -82,6 +95,7 @@ export function AuthProvider({ children }) {
       } else {
         setProfile(null)
         unsubscribeFromProfile()
+        setMfaEnabled(false)
         setLoading(false)
       }
     })
@@ -93,10 +107,39 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function fetchProfile(userId) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    setProfile(data)
+    const [profileRes, permsRes, factorsRes] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.rpc('get_user_module_permissions'),
+      supabase.auth.mfa.listFactors(),
+    ])
+
+    const p = profileRes.data
+    // Enforce locked / unapproved accounts immediately on the client
+    if (p && (p.locked === true || p.approved === false)) {
+      await supabase.auth.signOut()
+      localStorage.setItem('tp_access_revoked', '1')
+      setProfile(null)
+      setModulePerms({})
+      setLoading(false)
+      return
+    }
+
+    setProfile(p)
+    setModulePerms(permsRes.data ?? {})
+    setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)
     setLoading(false)
   }
+
+  const hasPermission = useCallback((moduleKey) => {
+    if (!profile) return false
+    if (profile.role === 'Admin') return true
+    // If DB permissions loaded and non-empty, use them
+    if (modulePerms && Object.keys(modulePerms).length > 0) {
+      return modulePerms[moduleKey] === true
+    }
+    // Fall back to hardcoded role defaults
+    return (ROLE_DEFAULTS[profile.role] ?? (() => false))(moduleKey)
+  }, [profile, modulePerms])
 
   async function signIn(identifier, password) {
     let email = identifier.trim()
@@ -110,7 +153,14 @@ export function AuthProvider({ children }) {
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return error
+    if (error) return error
+
+    // Check whether MFA challenge is still required for this session
+    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (aalData?.nextLevel === 'aal2' && aalData?.currentLevel !== 'aal2') {
+      return { mfaRequired: true }
+    }
+    return null
   }
 
   async function signOut() {
@@ -118,7 +168,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled }}>
       {children}
     </AuthContext.Provider>
   )

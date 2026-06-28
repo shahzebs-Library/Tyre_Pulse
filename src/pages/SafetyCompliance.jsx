@@ -21,6 +21,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -37,7 +38,7 @@ const CHART_OPTS = {
   maintainAspectRatio: false,
   plugins: {
     legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
-    tooltip: { backgroundColor: '#111827', borderColor: '#374151', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
+    tooltip: { backgroundColor: 'var(--panel)', borderColor: 'var(--hairline)', borderWidth: 1, titleColor: '#f9fafb', bodyColor: '#d1d5db' },
   },
   scales: {
     x: { ticks: { color: '#9ca3af', font: { size: 11 } }, grid: { color: '#1f2937' } },
@@ -85,9 +86,13 @@ export default function SafetyCompliance() {
       const from = cutoff.toISOString()
 
       const queries = [
-        supabase.from('tyre_records').select('*').gte('created_at', from).then(r => country ? supabase.from('tyre_records').select('*').gte('created_at', from).eq('country', country) : r),
-        supabase.from('inspections').select('*').gte('inspection_date', from.slice(0,10)),
-        supabase.from('accidents').select('*').gte('date', from.slice(0,10)),
+        fetchAllPages((rFrom, rTo) => {
+          let q = supabase.from('tyre_records').select('*').gte('created_at', from)
+          if (country) q = q.eq('country', country)
+          return q.range(rFrom, rTo)
+        }, { max: 200000 }),
+        fetchAllPages((rFrom, rTo) => supabase.from('inspections').select('*').gte('inspection_date', from.slice(0,10)).range(rFrom, rTo), { max: 200000 }),
+        supabase.from('accidents').select('*').gte('incident_date', from.slice(0,10)),
       ]
       const [tr, insp, acc] = await Promise.all(queries)
       setTyreRecords(tr.data || [])
@@ -195,7 +200,7 @@ export default function SafetyCompliance() {
       datasets: [{
         data: Object.values(riskDist),
         backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#3b82f6'],
-        borderColor: '#1f2937', borderWidth: 2,
+        borderColor: 'var(--panel-2)', borderWidth: 2,
       }],
     }
   }, [compliance])
@@ -631,7 +636,7 @@ export default function SafetyCompliance() {
                       {inspections.slice(0, 30).map(r => (
                         <tr key={r.id} className="border-b border-gray-800 hover:bg-gray-800/50">
                           <td className="px-4 py-3 text-white font-medium">{r.asset_no || '—'}</td>
-                          <td className="px-4 py-3 text-gray-300">{r.inspector_name || '—'}</td>
+                          <td className="px-4 py-3 text-gray-300">{r.inspector || '—'}</td>
                           <td className="px-4 py-3 text-gray-400">{fmtDate(r.inspection_date)}</td>
                           <td className="px-4 py-3 text-gray-400">{r.site || '—'}</td>
                           <td className="px-4 py-3">{r.tread_depth != null ? <CheckCircle size={14} className="text-green-400" /> : <XCircle size={14} className="text-red-400" />}</td>

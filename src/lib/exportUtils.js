@@ -46,6 +46,96 @@ const nowStr  = () => formatDate(new Date(), 'All')
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 
+// ── Executive intelligence derivation (business meaning, not raw data) ───────────
+// These convert the report data object into narrative, business insights, and a
+// forward-looking outlook so every report leads with decisions, not tables.
+function _deriveNarrative(data) {
+  const totalT = data.totalTyres || 0
+  const crit   = data.criticalTyres || 0
+  const warn   = data.warningTyres || 0
+  const good   = data.goodTyres || 0
+  const comp   = data.pressureCompliance ?? (totalT ? Math.round((good / totalT) * 100) : 0)
+  const critShare = totalT ? Math.round((crit / totalT) * 100) : 0
+  const actions   = data.openActions?.length || 0
+  const highAct   = (data.openActions || []).filter(a => /crit|high/i.test(a.priority || '')).length
+  const vAlert    = data.vehiclesWithAlerts || 0
+  const vTotal    = data.totalVehicles || 0
+  const spend     = data.monthlySpend || 0
+  const insp      = pct(data.inspectionsCompleted, data.inspectionsScheduled)
+
+  const tone   = (critShare >= 15 || comp < 70) ? 'crit'
+               : (critShare >= 5  || comp < 85) ? 'warn' : 'good'
+  const status = tone === 'crit' ? 'Requires Immediate Attention'
+               : tone === 'warn' ? 'Stable — Monitoring Advised'
+               : 'Healthy — Within Target'
+
+  const p1 = `The fleet ${tone === 'crit' ? 'requires immediate attention' : tone === 'warn' ? 'is stable but warrants close monitoring' : 'is healthy and operating within target parameters'}. `
+    + `Of ${totalT.toLocaleString()} monitored tyre records, ${good.toLocaleString()} (${comp}%) sit within safe operating limits, `
+    + `while ${crit.toLocaleString()} (${critShare}%) are classified critical and ${warn.toLocaleString()} show elevated wear. `
+    + (vTotal ? `${vAlert} of ${vTotal} vehicles currently carry one or more active alerts.` : '')
+
+  const money = spend > 0
+    ? ` Tyre spend for the period totals ${fmtCurr(spend)}${data.ytdSpend ? `, with ${fmtCurr(data.ytdSpend)} year to date` : ''}.`
+    : ''
+  const p2 = `${actions} corrective action${actions === 1 ? '' : 's'} ${actions === 1 ? 'is' : 'are'} open`
+    + `${highAct ? `, including ${highAct} high priority` : ''}.`
+    + money
+    + ` Inspection completion stands at ${insp || 0}%.`
+
+  const action = crit > 0
+    ? `Replace ${crit} critical tyre${crit === 1 ? '' : 's'} before next deployment and resolve ${highAct} high-priority action${highAct === 1 ? '' : 's'}.`
+    : comp < 85
+      ? `Raise pressure and tread compliance from ${comp}% toward the 90% target through scheduled inspections.`
+      : `Sustain the preventive inspection cadence to hold compliance above 90%.`
+
+  return { status, tone, paragraphs: [p1, p2], action }
+}
+
+function _deriveBusinessInsights(data) {
+  const out = []
+  const sites = data.siteBreakdown || []
+  if (sites.length) {
+    const worst = [...sites].sort((a, b) => (b.alerts || 0) - (a.alerts || 0))[0]
+    if (worst && (worst.alerts || 0) > 0)
+      out.push({ label: 'Highest-Risk Site', value: worst.name, sub: `${worst.alerts} alerts · ${worst.compliance ?? 0}% compliant`, tone: 'crit' })
+    const best = [...sites].filter(s => s.compliance != null).sort((a, b) => (b.compliance || 0) - (a.compliance || 0))[0]
+    if (best) out.push({ label: 'Most Reliable Site', value: best.name, sub: `${best.compliance}% compliance`, tone: 'good' })
+  }
+  const defs = data.topDefects || []
+  if (defs.length) out.push({ label: 'Top Defect Pattern', value: String(defs[0].type).slice(0, 24), sub: `${defs[0].count} occurrences`, tone: 'warn' })
+  const totalT = data.totalTyres || 1
+  if ((data.criticalTyres || 0) > 0)
+    out.push({ label: 'Critical Exposure', value: `${data.criticalTyres} tyres`, sub: `${Math.round((data.criticalTyres / totalT) * 100)}% of fleet`, tone: 'crit' })
+  if ((data.monthlySpend || 0) > 0)
+    out.push({ label: 'Period Tyre Spend', value: fmtCurr(data.monthlySpend), sub: data.ytdSpend ? `${fmtCurr(data.ytdSpend)} YTD` : 'current period', tone: 'info' })
+  const acts = data.openActions || []
+  if (acts.length) {
+    const hi = acts.filter(a => /crit|high/i.test(a.priority || '')).length
+    out.push({ label: 'Action Backlog', value: `${acts.length} open`, sub: hi ? `${hi} high priority` : 'all routine', tone: hi ? 'warn' : 'info' })
+  }
+  return out.slice(0, 6)
+}
+
+function _deriveForecast(data) {
+  const out = []
+  const ytd = data.ytdSpend || 0
+  const monthIdx = (new Date()).getMonth() + 1
+  if (ytd > 0) {
+    const runRate = ytd / monthIdx
+    out.push({ label: 'Next-Month Spend', value: fmtCurr(runRate), conf: 'Medium', note: 'YTD run-rate' })
+    out.push({ label: 'Projected Annual', value: fmtCurr(runRate * 12), conf: 'Medium', note: 'Linear extrapolation' })
+  } else if ((data.monthlySpend || 0) > 0) {
+    out.push({ label: 'Projected Annual', value: fmtCurr(data.monthlySpend * 12), conf: 'Low', note: 'From current month' })
+  }
+  const repl = (data.criticalTyres || 0) + Math.round((data.warningTyres || 0) * 0.5)
+  if (repl > 0) out.push({ label: 'Replacements Due', value: `~${repl} tyres`, conf: 'High', note: 'Critical + 50% high-risk' })
+  const comp = data.pressureCompliance ?? 0
+  out.push({ label: 'Compliance Outlook', value: comp < 85 ? 'Below target' : 'On target', conf: 'Medium', note: `Currently ${comp}%` })
+  return out.slice(0, 4)
+}
+
+const _TONE_RGB = { crit: P.crimson, warn: P.scarlet, good: P.emerald, info: P.indigo }
+
 // Serialize a DOM SVG element to a PNG data URL at given scale
 async function svgToPngDataUrl(svgEl, scale = 2, bgColor = '#0A0F1E') {
   return new Promise((resolve) => {
@@ -360,35 +450,250 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
 }
 
 // ── Excel Export ───────────────────────────────────────────────────────────────
-export function exportToExcel(rows, columns, headers, filename = 'export', sheetName = 'Sheet1') {
+export function exportToExcel(rows, columns, headers, filename = 'export', sheetName = 'Data', opts = {}) {
+  rows = Array.isArray(rows) ? rows : []
+  const currency = opts.currency || 'SAR'
+  const wb = XLSX.utils.book_new()
+
+  // ── Sheet 1: Summary (analytical, built from the loaded/filtered rows) ──
+  if (rows.length > 0) {
+    const aoa = []
+    aoa.push([opts.title || filename])
+    aoa.push(['Generated', nowStr()])
+    if (opts.dateRange) aoa.push(['Date range', opts.dateRange])
+    if (opts.company)   aoa.push(['Organisation', opts.company])
+    if (opts.meta) Object.entries(opts.meta).forEach(([k, v]) => aoa.push([k, v]))
+    aoa.push(['Total records', rows.length])
+    aoa.push([])
+
+    const riskKey = columns.find(k => /risk/i.test(k))
+    const catPriority = ['site', 'branch', 'country', 'brand', 'category', 'type', 'vendor', 'supplier',
+      'workshop', 'liab', 'stage', 'status', 'severity', 'responsible', 'owner', 'position']
+    let catKey = null
+    for (const p of catPriority) { catKey = columns.find(k => k.toLowerCase().includes(p)); if (catKey) break }
+    const numKeys = columns.filter(k => _colIsNumeric(rows, k))
+
+    if (riskKey) {
+      aoa.push(['Risk Distribution']); aoa.push(['Level', 'Count', '% of total'])
+      _countBy(rows, riskKey).forEach(([k, c]) => aoa.push([k, c, `${pct(c, rows.length)}%`]))
+      aoa.push([])
+    }
+    if (catKey && catKey !== riskKey) {
+      const hdr = headers[columns.indexOf(catKey)] || catKey
+      aoa.push([`${hdr} Breakdown (Top 15)`]); aoa.push([hdr, 'Count', '% of total'])
+      _countBy(rows, catKey).slice(0, 15).forEach(([k, c]) => aoa.push([k, c, `${pct(c, rows.length)}%`]))
+      aoa.push([])
+    }
+    if (numKeys.length) {
+      aoa.push(['Numeric Summary']); aoa.push(['Metric', 'Total', 'Average'])
+      numKeys.slice(0, 8).forEach(k => {
+        const hdr = headers[columns.indexOf(k)] || k
+        const tot = _sumBy(rows, k)
+        const isMoney = /cost|amount|price|spend|value|budget|claim|deduct|recover/i.test(k)
+        const fm = v => isMoney ? `${currency} ${Math.round(v).toLocaleString()}` : Math.round(v * 100) / 100
+        aoa.push([hdr, fm(tot), fm(tot / rows.length)])
+      })
+      aoa.push([])
+    }
+
+    const wsSum = XLSX.utils.aoa_to_sheet(aoa)
+    wsSum['!cols'] = [{ wch: 34 }, { wch: 22 }, { wch: 14 }]
+    XLSX.utils.book_append_sheet(wb, wsSum, 'Summary')
+  }
+
+  // ── Sheet 2: Data (frozen header + auto-filter) ──
   const displayRows = rows.map(r => Object.fromEntries(columns.map((col, i) => [headers[i], r[col] ?? ''])))
   const ws = XLSX.utils.json_to_sheet(displayRows, { header: headers })
-  ws['!cols'] = headers.map((h, i) => {
+  ws['!cols'] = headers.map((h) => {
     const maxLen = Math.max(h.length, ...displayRows.map(r => String(r[h] ?? '').length))
-    return { wch: Math.min(maxLen + 2, 40) }
+    return { wch: Math.min(maxLen + 2, 44) }
   })
-  const wb = XLSX.utils.book_new()
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(0, displayRows.length), c: Math.max(0, headers.length - 1) } }) }
+  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' }
   XLSX.utils.book_append_sheet(wb, ws, sheetName)
+
   XLSX.writeFile(wb, `${filename}.xlsx`)
 }
 
-// ── PDF Table Export ───────────────────────────────────────────────────────────
-export function exportToPdf(rows, columns, title, filename = 'report', orientation = 'landscape', company = '') {
+// ── Data analysis helpers (auto-summarise any tabular dataset) ──────────────────
+function _parseNum(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  if (v == null) return null
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ''))
+  return Number.isFinite(n) ? n : null
+}
+function _colIsNumeric(rows, key) {
+  let num = 0, seen = 0
+  for (const r of rows) {
+    const v = r[key]
+    if (v === '' || v == null) continue
+    seen++
+    if (_parseNum(v) != null) num++
+    if (seen >= 60) break
+  }
+  return seen > 0 && num / seen >= 0.75
+}
+function _countBy(rows, key) {
+  const m = new Map()
+  for (const r of rows) {
+    const v = r[key]
+    if (v === '' || v == null) continue
+    const s = String(v).trim()
+    if (!s) continue
+    m.set(s, (m.get(s) || 0) + 1)
+  }
+  return [...m.entries()].sort((a, b) => b[1] - a[1])
+}
+function _sumBy(rows, key) { return rows.reduce((s, r) => s + (_parseNum(r[key]) || 0), 0) }
+function _sumByGroup(rows, groupKey, valKey) {
+  const m = new Map()
+  for (const r of rows) {
+    const g = r[groupKey]
+    if (g === '' || g == null) continue
+    const k = String(g).trim(); if (!k) continue
+    m.set(k, (m.get(k) || 0) + (_parseNum(r[valKey]) || 0))
+  }
+  return [...m.entries()].filter(e => e[1] > 0).sort((a, b) => b[1] - a[1])
+}
+const _RISK_RGB_PDF = { critical: P.crimson, high: P.scarlet, medium: P.gold, low: P.emerald, none: P.ghost }
+
+// Clean horizontal bar chart (vector — crisp at any zoom). entries: [[label, value]]
+function _hBarChart(doc, x, y, w, h, entries, accentRgb, fmt) {
+  if (!entries.length) return
+  const max   = Math.max(...entries.map(e => e[1]), 1)
+  const rowH  = Math.min(10, h / entries.length)
+  const labelW = Math.min(46, w * 0.36)
+  const barX  = x + labelW
+  const valW  = 20
+  const barMaxW = w - labelW - valW
+  entries.forEach((e, i) => {
+    const by = y + i * rowH
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.steel)
+    doc.text(String(e[0]).slice(0, 24), x, by + rowH / 2 + 1)
+    doc.setFillColor(...P.cloud)
+    doc.roundedRect(barX, by + rowH * 0.18, barMaxW, rowH * 0.6, 1, 1, 'F')
+    const bw = Math.max(1.5, barMaxW * (e[1] / max))
+    const rgb = typeof accentRgb === 'function' ? accentRgb(e[0], i) : accentRgb
+    doc.setFillColor(...rgb)
+    doc.roundedRect(barX, by + rowH * 0.18, bw, rowH * 0.6, 1, 1, 'F')
+    doc.setFontSize(6.8); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ghost)
+    doc.text(fmt ? fmt(e[1]) : e[1].toLocaleString(), barX + barMaxW + 2, by + rowH / 2 + 1)
+  })
+}
+
+// ── PDF Report Export — auto KPI summary + charts, then the data table ───────────
+export function exportToPdf(rows, columns, title, filename = 'report', orientation = 'landscape', company = '', opts = {}) {
   const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
-  const pw = doc.internal.pageSize.width
-  const ph = doc.internal.pageSize.height
+  const PW  = doc.internal.pageSize.width
+  rows = Array.isArray(rows) ? rows : []
+  const currency = opts.currency || 'SAR'
 
-  _pageHeader(doc, title, `${rows.length} records`, company)
+  // ── Detect dataset structure ──
+  const riskCol = columns.find(c => /risk/i.test(c.header || '') || /risk/i.test(c.key || ''))
+  const catPriority = ['site', 'branch', 'depot', 'location', 'country', 'brand', 'make', 'manufacturer',
+    'category', 'type', 'vendor', 'supplier', 'workshop', 'position', 'axle', 'status', 'severity', 'driver']
+  let catCol = null
+  for (const p of catPriority) {
+    catCol = columns.find(c => (c.key || '').toLowerCase().includes(p) || (c.header || '').toLowerCase().includes(p))
+    if (catCol) break
+  }
+  const numCols = columns.filter(c => _colIsNumeric(rows, c.key))
+  const costCol = numCols.find(c => /cost|amount|price|sar|spend|value|total|budget|expense/i.test((c.key || '') + (c.header || ''))) || numCols[0]
 
-  const usableW = orientation === 'landscape' ? 237 : 170
+  const showSummary = rows.length > 0 && (riskCol || catCol || costCol)
+
+  // ── PAGE 1: ANALYTICAL SUMMARY ──
+  if (showSummary) {
+    _pageHeader(doc, title, `${rows.length.toLocaleString()} records · ${nowStr()}`, company)
+    let y = 30
+
+    // KPI cards
+    const cards = [{ v: rows.length.toLocaleString(), l: 'Total Records', rgb: P.indigo }]
+    let critN = 0, highN = 0
+    if (riskCol) {
+      const rc  = _countBy(rows, riskCol.key)
+      const get = lvl => rc.find(([k]) => k.toLowerCase() === lvl)?.[1] || 0
+      critN = get('critical'); highN = get('high')
+      cards.push({ v: critN, l: 'Critical', rgb: P.crimson })
+      cards.push({ v: highN, l: 'High Risk', rgb: P.scarlet })
+    }
+    if (catCol) cards.push({ v: _countBy(rows, catCol.key).length, l: `Distinct ${catCol.header}`, rgb: P.violet })
+    if (costCol) {
+      const tot = _sumBy(rows, costCol.key)
+      cards.push({ v: fmtCurr(tot, currency), l: `Total ${costCol.header}`, rgb: P.gold })
+      cards.push({ v: fmtCurr(tot / Math.max(1, rows.length), currency), l: `Avg ${costCol.header}`, rgb: P.emerald })
+    }
+    const cardsRow = cards.slice(0, 6)
+    const cw = (PW - 28 - (cardsRow.length - 1) * 4) / cardsRow.length
+    cardsRow.forEach((c, i) => _kpiBox(doc, 14 + i * (cw + 4), y, cw, 26, c.v, c.l, null, c.rgb))
+    y += 33
+
+    // Charts — two columns
+    const half = (PW - 28 - 8) / 2
+    const chartY = y + 6
+    const chartH = 74
+
+    // Left chart: category breakdown
+    if (catCol) {
+      const cats = _countBy(rows, catCol.key).slice(0, 8)
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text(`${catCol.header} Breakdown (Top ${cats.length})`, 14, y)
+      _hBarChart(doc, 14, chartY, half, chartH, cats, P.indigo)
+    }
+    // Right chart: risk distribution, else cost-by-category, else numeric top contributors
+    const rx = 14 + half + 8
+    if (riskCol) {
+      const order = ['Critical', 'High', 'Medium', 'Low']
+      const rc = _countBy(rows, riskCol.key)
+      const entries = order.map(o => [o, rc.find(([k]) => k.toLowerCase() === o.toLowerCase())?.[1] || 0]).filter(e => e[1] > 0)
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text('Risk Distribution', rx, y)
+      _hBarChart(doc, rx, chartY, half, chartH, entries, lbl => _RISK_RGB_PDF[String(lbl).toLowerCase()] || P.ghost)
+    } else if (costCol && catCol) {
+      const byCat = _sumByGroup(rows, catCol.key, costCol.key).slice(0, 8)
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text(`${costCol.header} by ${catCol.header} (Top ${byCat.length})`, rx, y)
+      _hBarChart(doc, rx, chartY, half, chartH, byCat, P.gold, v => fmtCurr(v, currency))
+    } else if (numCols.length > 1) {
+      const alt = numCols.find(c => c.key !== costCol?.key)
+      if (alt && catCol) {
+        const byCat = _sumByGroup(rows, catCol.key, alt.key).slice(0, 8)
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+        doc.text(`${alt.header} by ${catCol.header}`, rx, y)
+        _hBarChart(doc, rx, chartY, half, chartH, byCat, P.violet)
+      }
+    }
+
+    // Auto narrative
+    let ny = chartY + chartH + 8
+    const bits = [`Dataset contains ${rows.length.toLocaleString()} records.`]
+    if (riskCol && (critN + highN) > 0) bits.push(`${critN} critical and ${highN} high-risk items require attention (${pct(critN + highN, rows.length)}% of total).`)
+    if (catCol) {
+      const top = _countBy(rows, catCol.key)[0]
+      if (top) bits.push(`${top[0]} leads ${catCol.header.toLowerCase()} with ${top[1]} records (${pct(top[1], rows.length)}%).`)
+    }
+    if (costCol) bits.push(`Total ${costCol.header.toLowerCase()} is ${fmtCurr(_sumBy(rows, costCol.key), currency)}.`)
+    const narr = doc.splitTextToSize(bits.join(' '), PW - 36)
+    doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
+    doc.roundedRect(14, ny, PW - 28, narr.length * 4.4 + 8, 2, 2, 'FD')
+    doc.setFillColor(...P.indigo); doc.roundedRect(14, ny, 3, narr.length * 4.4 + 8, 1.5, 1.5, 'F')
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.steel)
+    doc.text(narr, 20, ny + 6)
+
+    _pageFooter(doc, 1, null, company)
+    doc.addPage()
+  }
+
+  // ── DATA TABLE (operational detail) ──
+  const usableW = orientation === 'landscape' ? 269 : 182
   const colW = columns.map(c => {
     const k = (c.key ?? '').toLowerCase(), h = (c.header ?? '').toLowerCase()
-    if (k.includes('id') || k === 'qty')                              return 22
-    if (k.includes('risk') || h.includes('risk'))                    return 28
-    if (k.includes('remark') || k.includes('note') || k.includes('description')) return 50
-    if (k.includes('date') || k.includes('month'))                   return 28
-    if (k.includes('cost') || k.includes('sar'))                     return 30
-    if (k.includes('site') || k.includes('brand'))                   return 32
+    if (k.includes('id') || k === 'qty')                                            return 22
+    if (k.includes('risk') || h.includes('risk'))                                   return 28
+    if (k.includes('remark') || k.includes('note') || k.includes('description'))    return 50
+    if (k.includes('date') || k.includes('month'))                                  return 28
+    if (k.includes('cost') || k.includes('sar'))                                    return 30
+    if (k.includes('site') || k.includes('brand'))                                  return 32
     return 30
   })
   const rawTotal = colW.reduce((s, w) => s + w, 0)
@@ -397,14 +702,14 @@ export function exportToPdf(rows, columns, title, filename = 'report', orientati
   const riskIdx = columns.findIndex(c => /risk/i.test(c.header ?? '') || /risk_level/i.test(c.key ?? ''))
 
   autoTable(doc, {
-    startY: 28,
+    startY: showSummary ? 30 : 28,
+    margin: { left: 14, right: 14, top: 28 },
     head: [columns.map(c => c.header)],
     body: rows.map(r => columns.map(c => String(r[c.key] ?? ''))),
     styles: { fontSize: 7.5, cellPadding: 2.5, overflow: 'linebreak', textColor: [20, 20, 30] },
     headStyles: { fillColor: P.steel, textColor: P.white, fontStyle: 'bold', fontSize: 8 },
     alternateRowStyles: { fillColor: P.cloud },
     columnStyles: Object.fromEntries(scaledW.map((w, i) => [i, { cellWidth: w }])),
-    margin: { left: 14, right: 14 },
     didParseCell: riskIdx >= 0 ? (data) => {
       if (data.section !== 'body' || data.column.index !== riskIdx) return
       const v = String(data.cell.raw ?? '').trim().toLowerCase()
@@ -413,7 +718,10 @@ export function exportToPdf(rows, columns, title, filename = 'report', orientati
       else if (v === 'medium') { data.cell.styles.fillColor = P.yCream; data.cell.styles.textColor = P.ochre }
       else if (v === 'low') { data.cell.styles.fillColor = P.eCream; data.cell.styles.textColor = P.emerald }
     } : undefined,
-    didDrawPage: (data) => { _pageFooter(doc, data.pageNumber, null, company) },
+    didDrawPage: () => {
+      _pageHeader(doc, title, `${rows.length.toLocaleString()} records · ${nowStr()}`, company)
+      _pageFooter(doc, doc.internal.getNumberOfPages(), null, company)
+    },
   })
 
   doc.save(`${filename}.pdf`)
@@ -855,10 +1163,103 @@ export function exportDailyExecutivePdf(data, filename) {
     kpis.forEach((k, i) => _kpiBox(doc, PW - 195 + i * 47, 30, 42, 38, k.v, k.l, null, k.rgb))
   }
 
-  // ── PAGE 2: EXECUTIVE SUMMARY ──────────────────────────────────────────────
+  // ── PAGE 2: EXECUTIVE SUMMARY (narrative-first, 60-second read) ─────────────
   doc.addPage()
   {
-    lsHeader('Executive Summary', P.indigo)
+    const narrative = data.narrative || _deriveNarrative(data)
+    const biz       = data.businessInsights || _deriveBusinessInsights(data)
+    const forecast  = data.forecast || _deriveForecast(data)
+    const toneRgb   = _TONE_RGB[narrative.tone] || P.indigo
+
+    lsHeader('Executive Summary', toneRgb)
+    let y = 32
+
+    // Status banner
+    doc.setFillColor(toneRgb[0] * 0.12 + 224, toneRgb[1] * 0.12 + 224, toneRgb[2] * 0.12 + 224)
+    doc.setDrawColor(...toneRgb); doc.setLineWidth(0.4)
+    doc.roundedRect(14, y, PW - 28, 13, 2, 2, 'FD')
+    doc.setFillColor(...toneRgb)
+    doc.roundedRect(14, y, 3.5, 13, 1.5, 1.5, 'F')
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ghost)
+    doc.text('FLEET STATUS', 22, y + 5)
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...toneRgb)
+    doc.text(narrative.status.toUpperCase(), 22, y + 10.5)
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+    doc.text(`${period} · ${siteLabel} · ${date}`, PW - 18, y + 8, { align: 'right' })
+    y += 18
+
+    // Narrative ("what happened / why / what matters")
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text('Situation Overview', 14, y); y += 4
+    const narrLines = []
+    ;(narrative.paragraphs || []).forEach(p => { doc.splitTextToSize(p, PW - 36).forEach(l => narrLines.push(l)) })
+    const narrH = narrLines.length * 4.4 + 9
+    doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
+    doc.roundedRect(14, y, PW - 28, narrH, 2, 2, 'FD')
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.steel)
+    doc.text(narrLines, 20, y + 6)
+    y += narrH + 6
+
+    // Business insights (decisions, not raw data)
+    if (biz.length) {
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.text('Business Insights', 14, y); y += 4
+      const cols = Math.min(3, biz.length)
+      const rows = Math.ceil(biz.length / cols)
+      const bw = (PW - 28 - (cols - 1) * 4) / cols
+      const bh = 22
+      biz.forEach((b, i) => {
+        const r = Math.floor(i / cols), c = i % cols
+        const bx = 14 + c * (bw + 4), by = y + r * (bh + 4)
+        const rgb = _TONE_RGB[b.tone] || P.indigo
+        doc.setFillColor(...P.white); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
+        doc.roundedRect(bx, by, bw, bh, 2, 2, 'FD')
+        doc.setFillColor(...rgb); doc.roundedRect(bx, by, 3, bh, 1.5, 1.5, 'F')
+        doc.setFontSize(6.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ghost)
+        doc.text(String(b.label).toUpperCase(), bx + 6, by + 6)
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(...rgb)
+        doc.text(doc.splitTextToSize(String(b.value), bw - 10)[0], bx + 6, by + 13)
+        doc.setFontSize(6.8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+        doc.text(doc.splitTextToSize(String(b.sub || ''), bw - 10)[0] || '', bx + 6, by + 18.5)
+      })
+      y += rows * (bh + 4) + 4
+    }
+
+    // Predictive outlook + priority action (two columns)
+    const colW = (PW - 28 - 6) / 2
+    const fy = y
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text('Predictive Outlook', 14, fy)
+    let py = fy + 4
+    ;(forecast || []).slice(0, 4).forEach(f => {
+      doc.setFillColor(...P.cloud); doc.roundedRect(14, py, colW, 9.5, 1.5, 1.5, 'F')
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+      doc.text(String(f.label), 18, py + 6)
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.steel)
+      doc.text(String(f.value), 14 + colW - 28, py + 6, { align: 'right' })
+      doc.setFontSize(5.6); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.indigo)
+      doc.text(String(f.conf || '').toUpperCase(), 14 + colW - 4, py + 6, { align: 'right' })
+      py += 11.5
+    })
+
+    // Priority action callout (right column)
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.text('Priority Action', 14 + colW + 6, fy)
+    const actX = 14 + colW + 6
+    const actLines = doc.splitTextToSize(narrative.action || '', colW - 12)
+    const actH = Math.max(20, actLines.length * 4.6 + 10)
+    doc.setFillColor(toneRgb[0] * 0.1, toneRgb[1] * 0.1, toneRgb[2] * 0.1)
+    doc.setDrawColor(...toneRgb); doc.setLineWidth(0.4)
+    doc.roundedRect(actX, fy + 4, colW, actH, 2, 2, 'FD')
+    doc.setFillColor(...toneRgb); doc.roundedRect(actX, fy + 4, 3, actH, 1.5, 1.5, 'F')
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.steel)
+    doc.text(actLines, actX + 7, fy + 11)
+  }
+
+  // ── PAGE 3: KPI COMMAND CENTER ─────────────────────────────────────────────
+  doc.addPage()
+  {
+    lsHeader('KPI Command Center', P.indigo)
     let y = 32
 
     const totalT = data.totalTyres || 1
@@ -1116,204 +1517,314 @@ export function exportDailyExecutivePdf(data, filename) {
   doc.save(`${safeF}.pdf`)
 }
 
-// ── PowerPoint Export (Enhanced, no AI branding) ──────────────────────────────
-export async function exportToPptx(data, filename = 'Operations_Report') {
+// ── PowerPoint Export — light executive theme, native editable charts ─────────
+export async function exportToPptx(data, filename = 'TyrePulse_Report') {
   const pptx = new pptxgen()
   pptx.layout = 'LAYOUT_WIDE'
+  pptx.theme = { headFontFace: 'Arial', bodyFontFace: 'Arial' }
 
-  const DARK   = '080C1C'
-  const SLATE  = '0F1730'
-  const STEEL  = '1E2940'
+  // Light, corporate-executive palette (high readability on white)
+  const BG     = 'F6F8FC'   // slide background
+  const CARD   = 'FFFFFF'   // panels / tiles
+  const PANEL  = 'F1F5F9'   // soft fills
+  const BORDER = 'E2E8F0'
+  const INK    = '0F172A'   // primary text
+  const SUBTLE = '475569'   // secondary text
+  const MUTED  = '94A3B8'   // tertiary text
+  const SHADOW = { type: 'outer', color: 'C7D0DE', blur: 7, offset: 2, angle: 90, opacity: 0.45 }
+
+  // Brand accents (saturated, AA-contrast on white)
   const INDIGO = '4F46E5'
-  const VIOLET = '6D28D9'
-  const GOLD   = 'F59E0B'
-  const WHITE  = 'FFFFFF'
-  const MIST   = '94A3B8'
-  const GHOST  = '64748B'
-  const CRIM   = '991B1B'
-  const SCAR   = 'C2410C'
-  const EMER   = '065F46'
-  const company = data.company || 'Fleet Operations'
+  const VIOLET = '7C3AED'
+  const GOLD   = 'D97706'
+  const EMER   = '059669'
+  const CRIM   = 'DC2626'
+  const SCAR   = 'EA580C'
+  const SKY    = '0284C7'
+  const TEAL   = '0D9488'
+  const SLATE  = '334155'
+  const CHART_COLORS = [INDIGO, EMER, GOLD, SKY, VIOLET, TEAL, SCAR, CRIM]
 
-  function header(slide, title, accent = INDIGO) {
-    slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 1.1, fill: { color: SLATE } })
-    slide.addShape(pptx.ShapeType.rect, { x: 0, y: 1.1, w: 13.33, h: 0.06, fill: { color: accent } })
-    slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.06, h: 1.1, fill: { color: accent } })
-    slide.addText(company.toUpperCase(), { x: 0.2, y: 0.08, w: 10, h: 0.32, fontSize: 9, bold: true, color: GOLD, fontFace: 'Arial' })
-    slide.addText(title, { x: 0.2, y: 0.38, w: 10, h: 0.6, fontSize: 18, bold: true, color: WHITE, fontFace: 'Arial' })
-    slide.addText(nowStr(), { x: 11.0, y: 0.4, w: 2.2, h: 0.4, fontSize: 9, color: GHOST, align: 'right', fontFace: 'Arial' })
+  const company  = data.company || 'Fleet Operations'
+  const period   = data.period || 'Management Summary'
+  const currency = data.currency || 'SAR'
+
+  const rect = pptx.ShapeType.rect
+  function header(slide, title, subtitle, accent = INDIGO) {
+    slide.background = { color: BG }
+    slide.addShape(rect, { x: 0, y: 0, w: 13.33, h: 1.02, fill: { color: CARD } })
+    slide.addShape(rect, { x: 0, y: 1.02, w: 13.33, h: 0.045, fill: { color: accent } })
+    slide.addShape(rect, { x: 0, y: 0, w: 0.14, h: 1.02, fill: { color: accent } })
+    slide.addText(company.toUpperCase(), { x: 0.4, y: 0.14, w: 9, h: 0.3, fontSize: 9, bold: true, color: accent, charSpacing: 2 })
+    slide.addText(title, { x: 0.4, y: 0.4, w: 9.5, h: 0.55, fontSize: 21, bold: true, color: INK })
+    if (subtitle) slide.addText(subtitle, { x: 10.0, y: 0.2, w: 2.9, h: 0.3, fontSize: 8.5, color: MUTED, align: 'right' })
+    slide.addText(`${period}  ·  ${nowStr()}`, { x: 10.0, y: 0.5, w: 2.9, h: 0.4, fontSize: 8.5, color: MUTED, align: 'right' })
   }
-  function kpiTile(slide, x, y, w, label, value, color) {
-    slide.addShape(pptx.ShapeType.rect, { x, y, w, h: 1.4, fill: { color: STEEL }, line: { color, width: 1 }, rounding: true })
-    slide.addShape(pptx.ShapeType.rect, { x, y, w, h: 0.07, fill: { color } })
-    slide.addText(String(value ?? '—'), { x, y: y + 0.12, w, h: 0.7, fontSize: 26, bold: true, color, align: 'center', fontFace: 'Arial' })
-    slide.addText(label, { x, y: y + 0.85, w, h: 0.45, fontSize: 10, color: MIST, align: 'center', fontFace: 'Arial' })
+  function footer(slide, idx) {
+    slide.addText(`${company}  ·  Fleet Operations Report  ·  Confidential`, { x: 0.4, y: 7.15, w: 9, h: 0.3, fontSize: 7.5, color: MUTED })
+    slide.addText(String(idx), { x: 12.4, y: 7.15, w: 0.6, h: 0.3, fontSize: 7.5, color: MUTED, align: 'right' })
   }
+  function kpiTile(slide, x, y, w, label, value, color, sub) {
+    slide.addShape(rect, { x, y, w, h: 1.55, fill: { color: CARD }, line: { color: BORDER, width: 1 }, rounding: true, shadow: SHADOW })
+    slide.addShape(rect, { x, y, w, h: 0.09, fill: { color } })
+    slide.addText(String(label).toUpperCase(), { x: x + 0.18, y: y + 0.2, w: w - 0.36, h: 0.3, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
+    slide.addText(String(value ?? '—'), { x: x + 0.18, y: y + 0.46, w: w - 0.36, h: 0.62, fontSize: 27, bold: true, color })
+    if (sub) slide.addText(String(sub), { x: x + 0.18, y: y + 1.1, w: w - 0.36, h: 0.35, fontSize: 9, color: SUBTLE })
+  }
+  function sectionTitle(slide, x, y, text, color = INK) {
+    slide.addText(text, { x, y, w: 6.5, h: 0.4, fontSize: 13, bold: true, color })
+  }
+  const cOpts = (extra = {}) => ({
+    showLegend: false, showTitle: false, chartColors: CHART_COLORS, chartColorsOpacity: 95,
+    catAxisLabelColor: SUBTLE, catAxisLabelFontSize: 9, catAxisLabelFontFace: 'Arial',
+    valAxisLabelColor: MUTED, valAxisLabelFontSize: 9, valAxisLabelFontFace: 'Arial',
+    valGridLine: { color: BORDER, size: 0.5 }, catGridLine: { style: 'none' },
+    dataLabelColor: INK, dataLabelFontSize: 9, dataLabelFontBold: true, dataLabelFontFace: 'Arial',
+    ...extra,
+  })
 
-  // Slide 1: Cover
-  const s1 = pptx.addSlide()
-  s1.background = { color: DARK }
-  s1.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.09, h: 7.5, fill: { color: INDIGO } })
-  s1.addShape(pptx.ShapeType.rect, { x: 0, y: 7.41, w: 13.33, h: 0.09, fill: { color: INDIGO } })
-  s1.addText(company.toUpperCase() + '  ·  FLEET OPERATIONS', { x: 0.5, y: 1.0, w: 9, h: 0.5, fontSize: 11, bold: true, color: GOLD, fontFace: 'Arial' })
-  s1.addText('Operations Report', { x: 0.5, y: 1.6, w: 9, h: 1.5, fontSize: 44, bold: true, color: WHITE, fontFace: 'Arial' })
-  s1.addText(data.period ?? 'Management Summary', { x: 0.5, y: 3.2, w: 9, h: 0.7, fontSize: 18, color: MIST, fontFace: 'Arial' })
-  s1.addText(`Report Date: ${nowStr()}`, { x: 0.5, y: 6.7, w: 9, h: 0.4, fontSize: 10, color: GHOST, fontFace: 'Arial' })
-
-  const coverKpis = [
-    { l: 'Vehicles', v: data.totalVehicles ?? 0, c: INDIGO },
-    { l: 'Tyres',    v: data.totalTyres ?? 0,    c: EMER },
-    { l: 'Critical', v: data.highRisk ?? 0,       c: CRIM },
-    { l: 'Actions',  v: typeof data.openActions === 'number' ? data.openActions : data.openActions?.length ?? 0, c: GOLD },
-  ]
-  coverKpis.forEach((k, i) => kpiTile(s1, 9.8, 0.8 + i * 1.6, 3.1, k.l, k.v, k.c))
-
-  // Slide 2: KPIs
-  const s2 = pptx.addSlide()
-  s2.background = { color: DARK }
-  header(s2, 'Executive KPI Summary', INDIGO)
-  const kpis2 = [
-    { l: 'Total Tyres',   v: data.totalTyres?.toLocaleString() ?? '0',  c: INDIGO },
-    { l: 'Total Cost',    v: fmtCurr(data.totalCost),                    c: VIOLET },
-    { l: 'High Risk',     v: data.highRisk?.toLocaleString() ?? '0',     c: CRIM },
-    { l: 'Open Actions',  v: String(typeof data.openActions === 'number' ? data.openActions : data.openActions?.length ?? 0), c: GOLD },
-  ]
-  kpis2.forEach((k, i) => kpiTile(s2, 0.3 + i * 3.2, 1.3, 3.0, k.l, k.v, k.c))
-
-  const totalT2 = data.totalTyres || 1
-  const critPct = pct(data.highRisk, totalT2)
-  s2.addText('Fleet Condition', { x: 0.4, y: 3.1, w: 12, h: 0.45, fontSize: 14, bold: true, color: WHITE, fontFace: 'Arial' })
-  s2.addShape(pptx.ShapeType.rect, { x: 0.4, y: 3.6, w: 12.5, h: 0.4, fill: { color: '374151' }, rounding: true })
-  if (100 - critPct > 0) s2.addShape(pptx.ShapeType.rect, { x: 0.4, y: 3.6, w: 12.5 * ((100 - critPct) / 100), h: 0.4, fill: { color: EMER }, rounding: true })
-  if (critPct > 0) s2.addShape(pptx.ShapeType.rect, { x: 0.4 + 12.5 * ((100 - critPct) / 100), y: 3.6, w: 12.5 * (critPct / 100), h: 0.4, fill: { color: CRIM } })
-
-  // Slide 3: Top Sites
-  if (data.topSites?.length) {
-    const s3 = pptx.addSlide()
-    s3.background = { color: DARK }
-    header(s3, 'Top Sites by Consumption', INDIGO)
-    const rows3 = data.topSites.slice(0, 12).map((s, i) => [
-      { text: String(i + 1), options: { color: GHOST, fontSize: 11 } },
-      { text: s.site, options: { color: WHITE, fontSize: 11, bold: i < 3 } },
-      { text: String(s.count), options: { color: i === 0 ? GOLD : WHITE, fontSize: 11, bold: i < 3, align: 'right' } },
-    ])
-    s3.addTable(
-      [[{ text: '#', options: { bold: true, color: WHITE, fill: STEEL } }, { text: 'Site', options: { bold: true, color: WHITE, fill: STEEL } }, { text: 'Tyres', options: { bold: true, color: WHITE, fill: STEEL, align: 'right' } }], ...rows3],
-      { x: 0.5, y: 1.3, w: 7, colW: [0.5, 5, 1.5], border: { type: 'none' }, fill: '111827', fontSize: 11 }
-    )
-    const maxSite = Math.max(...data.topSites.map(s => s.count), 1)
-    data.topSites.slice(0, 8).forEach((s, i) => {
-      const bh = (s.count / maxSite) * 4.2
-      const bx = 8.1 + i * 0.62
-      s3.addShape(pptx.ShapeType.rect, { x: bx, y: 5.3 - bh, w: 0.48, h: bh, fill: { color: i === 0 ? GOLD : INDIGO }, rounding: true })
-      s3.addText(String(s.count), { x: bx - 0.05, y: 5.3 - bh - 0.32, w: 0.6, h: 0.3, fontSize: 8, color: WHITE, align: 'center', fontFace: 'Arial' })
-      s3.addText(s.site.split(' ')[0], { x: bx - 0.1, y: 5.3, w: 0.7, h: 0.4, fontSize: 7, color: GHOST, align: 'center', fontFace: 'Arial' })
+  // ── Chart safety layer ──────────────────────────────────────────────────────
+  // PowerPoint refuses to open a deck if any chart cell is NaN/Infinity or a
+  // label is empty/null (invalid OOXML). Coerce every value to a finite number
+  // and every label to a non-empty string, keep series aligned, and substitute a
+  // clean "no data" note rather than emit a broken chart.
+  function cleanSeries(series) {
+    return (series || []).map(s => {
+      const rawLabels = Array.isArray(s.labels) ? s.labels : []
+      const rawValues = Array.isArray(s.values) ? s.values : []
+      const len = Math.max(rawLabels.length, rawValues.length)
+      const labels = []
+      const values = []
+      for (let i = 0; i < len; i++) {
+        const lbl = rawLabels[i]
+        const n = Number(rawValues[i])
+        labels.push(lbl == null || String(lbl).trim() === '' ? '—' : String(lbl))
+        values.push(Number.isFinite(n) ? n : 0)
+      }
+      return { ...s, labels, values }
     })
   }
-
-  // Slide 4: Risk Breakdown
-  if (data.riskBreakdown?.length) {
-    const s4 = pptx.addSlide()
-    s4.background = { color: DARK }
-    header(s4, 'Risk Level Breakdown', CRIM)
-    const total4 = data.riskBreakdown.reduce((s, r) => s + r.count, 0)
-    const rColors = { Critical: CRIM, High: SCAR, Medium: GOLD, Low: EMER }
-    let ry = 1.4
-    data.riskBreakdown.forEach(r => {
-      const pctV = total4 > 0 ? r.count / total4 : 0
-      const col  = rColors[r.level] ?? GHOST
-      s4.addText(r.level, { x: 0.5, y: ry, w: 2.2, h: 0.38, fontSize: 13, color: col, fontFace: 'Arial' })
-      s4.addText(`${Math.round(pctV * 100)}%`, { x: 2.8, y: ry, w: 1, h: 0.38, fontSize: 11, color: GHOST, align: 'right', fontFace: 'Arial' })
-      s4.addShape(pptx.ShapeType.rect, { x: 3.9, y: ry + 0.05, w: 5.5, h: 0.28, fill: { color: '374151' } })
-      if (pctV > 0) s4.addShape(pptx.ShapeType.rect, { x: 3.9, y: ry + 0.05, w: Math.max(0.05, 5.5 * pctV), h: 0.28, fill: { color: col } })
-      s4.addText(String(r.count), { x: 9.6, y: ry, w: 1, h: 0.38, fontSize: 13, color: WHITE, align: 'right', fontFace: 'Arial' })
-      ry += 0.65
-    })
-  }
-
-  // Slide 5: Monthly Trend
-  if (data.monthlyTrend?.length) {
-    const s5 = pptx.addSlide()
-    s5.background = { color: DARK }
-    header(s5, 'Monthly Consumption Trend', VIOLET)
-    const maxV = Math.max(...data.monthlyTrend.map(m => m.count), 1)
-    const cH = 4.0, cY = 1.5, cX = 0.4
-    const bW = 12.5 / data.monthlyTrend.length * 0.66
-    const gap = 12.5 / data.monthlyTrend.length * 0.34
-    data.monthlyTrend.forEach((m, i) => {
-      const bH = Math.max(0.04, (m.count / maxV) * cH)
-      const x  = cX + i * (bW + gap)
-      const y  = cY + (cH - bH)
-      s5.addShape(pptx.ShapeType.rect, { x, y, w: bW, h: bH, fill: { color: i === data.monthlyTrend.length - 1 ? GOLD : INDIGO }, rounding: true })
-      s5.addText(String(m.count), { x: x - 0.05, y: y - 0.32, w: bW + 0.1, h: 0.3, fontSize: 9, color: WHITE, align: 'center', fontFace: 'Arial' })
-      s5.addText(m.month, { x: x - 0.1, y: cY + cH + 0.08, w: bW + 0.2, h: 0.35, fontSize: 9, color: GHOST, align: 'center', fontFace: 'Arial' })
-    })
-    // Average trend line
-    const avg = data.monthlyTrend.reduce((s, m) => s + m.count, 0) / data.monthlyTrend.length
-    const avgY = cY + cH - (avg / maxV) * cH
-    s5.addShape(pptx.ShapeType.line, { x: cX, y: avgY, w: 12.5, h: 0, line: { color: GOLD, width: 1.2, dashType: 'dash' } })
-    s5.addText(`Avg ${Math.round(avg)}`, { x: 9.5, y: avgY - 0.3, w: 2, h: 0.3, fontSize: 9, color: GOLD, fontFace: 'Arial' })
-  }
-
-  // Slide 6: Open Actions + Brands
-  {
-    const s6 = pptx.addSlide()
-    s6.background = { color: DARK }
-    header(s6, 'Open Actions & Brand Performance', SCAR)
-    if (data.recentActions?.length) {
-      const rows6 = data.recentActions.slice(0, 10).map(a => {
-        const priColor = { Critical: CRIM, High: SCAR, Medium: GOLD, Low: EMER }[a.priority] ?? WHITE
-        return [
-          { text: a.title, options: { color: WHITE, fontSize: 9 } },
-          { text: a.site ?? '—', options: { color: GHOST, fontSize: 9 } },
-          { text: a.priority ?? '—', options: { color: priColor, fontSize: 9, bold: true } },
-          { text: a.status ?? '—', options: { color: GHOST, fontSize: 9 } },
-        ]
+  function safeChart(slide, type, series, opts) {
+    const clean = cleanSeries(series)
+    const hasData = clean.some(s => s.values.length && s.values.some(v => v !== 0))
+    if (!hasData) {
+      slide.addText('No data available for this period', {
+        x: opts.x, y: opts.y, w: opts.w, h: Math.min(opts.h, 0.6),
+        fontSize: 11, italic: true, color: MUTED, align: 'center', valign: 'middle',
       })
-      s6.addTable(
-        [[{ text: 'Title', options: { bold: true, color: WHITE, fill: STEEL } }, { text: 'Site', options: { bold: true, color: WHITE, fill: STEEL } }, { text: 'Priority', options: { bold: true, color: WHITE, fill: STEEL } }, { text: 'Status', options: { bold: true, color: WHITE, fill: STEEL } }], ...rows6],
-        { x: 0.4, y: 1.3, w: 7.5, colW: [3.8, 1.5, 1.2, 1.0], border: { type: 'none' }, fill: '111827', fontSize: 9 }
-      )
+      return
+    }
+    slide.addChart(type, clean, opts)
+  }
+
+  // Derived metrics
+  const totalT   = data.totalTyres || 0
+  const high     = data.highRisk || 0
+  const good     = Math.max(0, totalT - high)
+  const highShare = totalT ? Math.round((high / totalT) * 100) : 0
+  const compliance = totalT ? Math.round((good / totalT) * 100) : 0
+  const acts     = typeof data.openActions === 'number' ? data.openActions : (data.openActions?.length || 0)
+  const tone     = highShare >= 15 ? CRIM : highShare >= 5 ? SCAR : EMER
+  const statusTxt = highShare >= 15 ? 'Requires Immediate Attention'
+                  : highShare >= 5  ? 'Stable — Monitoring Advised'
+                  : 'Healthy — Within Target'
+  const trend    = data.monthlyTrend || []
+  const trendDelta = trend.length >= 2 ? trend[trend.length - 1].count - trend[0].count : 0
+  const trendDir = trendDelta > 0 ? 'rising' : trendDelta < 0 ? 'easing' : 'flat'
+  let slideNo = 0
+
+  // ── Slide 1: Cover ─────────────────────────────────────────────────────────
+  const s1 = pptx.addSlide()
+  s1.background = { color: CARD }
+  s1.addShape(rect, { x: 0, y: 0, w: 4.55, h: 7.5, fill: { color: 'F1F4FB' } })
+  s1.addShape(rect, { x: 0, y: 0, w: 0.18, h: 7.5, fill: { color: INDIGO } })
+  s1.addShape(rect, { x: 4.55, y: 0, w: 0.03, h: 7.5, fill: { color: BORDER } })
+  s1.addText(company.toUpperCase(), { x: 0.6, y: 1.5, w: 8, h: 0.5, fontSize: 12, bold: true, color: INDIGO, charSpacing: 2 })
+  s1.addText('Fleet Operations Report', { x: 0.58, y: 2.1, w: 9, h: 1.6, fontSize: 42, bold: true, color: INK })
+  s1.addText(period, { x: 0.6, y: 3.75, w: 8.5, h: 0.6, fontSize: 18, color: SLATE })
+  s1.addShape(rect, { x: 0.62, y: 4.5, w: 1.6, h: 0.06, fill: { color: GOLD } })
+  s1.addText(`Generated ${nowStr()}${data.generatedBy ? `   ·   Prepared by ${data.generatedBy}` : ''}`, { x: 0.6, y: 4.7, w: 8.5, h: 0.4, fontSize: 11, color: MUTED })
+  s1.addText('CONFIDENTIAL — FOR MANAGEMENT REVIEW', { x: 0.6, y: 6.8, w: 8, h: 0.4, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
+  const coverKpis = [
+    { l: 'Vehicles', v: (data.totalVehicles ?? 0).toLocaleString(), c: INDIGO },
+    { l: 'Tyres',    v: totalT.toLocaleString(),                     c: EMER },
+    { l: 'Critical', v: high.toLocaleString(),                       c: CRIM },
+    { l: 'Actions',  v: String(acts),                                c: GOLD },
+  ]
+  coverKpis.forEach((k, i) => kpiTile(s1, 9.35, 0.85 + i * 1.62, 3.4, k.l, k.v, k.c))
+
+  // ── Slide 2: Executive Summary (narrative-first) ───────────────────────────
+  {
+    const se = pptx.addSlide(); slideNo++
+    header(se, 'Executive Summary', '60-second read', tone)
+    se.addShape(rect, { x: 0.4, y: 1.3, w: 12.55, h: 0.95, fill: { color: CARD }, line: { color: tone, width: 1.25 }, rounding: true, shadow: SHADOW })
+    se.addShape(rect, { x: 0.4, y: 1.3, w: 0.1, h: 0.95, fill: { color: tone } })
+    se.addText('FLEET STATUS', { x: 0.65, y: 1.4, w: 4, h: 0.3, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
+    se.addText(statusTxt, { x: 0.65, y: 1.67, w: 9, h: 0.45, fontSize: 18, bold: true, color: tone })
+    se.addText(`Compliance ${compliance}%`, { x: 9.5, y: 1.55, w: 3.2, h: 0.5, fontSize: 16, bold: true, color: compliance >= 85 ? EMER : SCAR, align: 'right' })
+
+    sectionTitle(se, 0.4, 2.5, 'Situation Overview')
+    const bullets = [
+      { text: `${totalT.toLocaleString()} tyre records monitored; ${good.toLocaleString()} (${compliance}%) within safe limits, ${high.toLocaleString()} (${highShare}%) high-risk or critical.`, options: { bullet: { code: '2022' }, color: SLATE, fontSize: 12.5, paraSpaceAfter: 10 } },
+      { text: `${acts} corrective action${acts === 1 ? '' : 's'} open and awaiting resolution.`, options: { bullet: { code: '2022' }, color: SLATE, fontSize: 12.5, paraSpaceAfter: 10 } },
+      { text: trend.length >= 2 ? `Issue volume is ${trendDir} (${trendDelta > 0 ? '+' : ''}${trendDelta}) across the last ${trend.length} periods.` : `Period tyre cost totals ${fmtCurr(data.totalCost, currency)}.`, options: { bullet: { code: '2022' }, color: SLATE, fontSize: 12.5, paraSpaceAfter: 10 } },
+      { text: highShare >= 5 ? `Priority: action ${high} high-risk tyres and clear the ${acts}-item backlog.` : `Priority: sustain preventive inspections to hold risk below 5%.`, options: { bullet: { code: '2022' }, color: GOLD, fontSize: 12.5, bold: true } },
+    ]
+    se.addText(bullets, { x: 0.55, y: 2.95, w: 7.0, h: 3.6, valign: 'top' })
+
+    sectionTitle(se, 8.0, 2.5, 'Business Insights')
+    const topSite = (data.topSites || [])[0]
+    const topCat  = (data.categoryBreakdown || [])[0]
+    const chips = [
+      topSite ? { l: 'Highest-Volume Site', v: topSite.site, s: `${topSite.count} records`, c: SCAR } : null,
+      topCat  ? { l: 'Top Category', v: topCat.category, s: `${topCat.count} records`, c: INDIGO } : null,
+      { l: 'Period Tyre Cost', v: fmtCurr(data.totalCost, currency), s: period, c: VIOLET },
+      { l: 'Critical Exposure', v: `${high} tyres`, s: `${highShare}% of fleet`, c: tone },
+    ].filter(Boolean)
+    chips.forEach((ch, i) => {
+      const cy = 2.95 + i * 0.95
+      se.addShape(rect, { x: 8.0, y: cy, w: 4.95, h: 0.82, fill: { color: CARD }, line: { color: BORDER, width: 1 }, rounding: true, shadow: SHADOW })
+      se.addShape(rect, { x: 8.0, y: cy, w: 0.08, h: 0.82, fill: { color: ch.c } })
+      se.addText(String(ch.l).toUpperCase(), { x: 8.2, y: cy + 0.08, w: 4.6, h: 0.25, fontSize: 8, bold: true, color: MUTED, charSpacing: 1 })
+      se.addText(String(ch.v), { x: 8.2, y: cy + 0.32, w: 3.3, h: 0.42, fontSize: 15, bold: true, color: ch.c })
+      se.addText(String(ch.s), { x: 11.3, y: cy + 0.34, w: 1.55, h: 0.4, fontSize: 8.5, color: SUBTLE, align: 'right' })
+    })
+    footer(se, slideNo)
+  }
+
+  // ── Slide 3: KPI Command Center (tiles + condition doughnut) ───────────────
+  {
+    const s = pptx.addSlide(); slideNo++
+    header(s, 'KPI Command Center', 'Performance at a glance', INDIGO)
+    const kpis = [
+      { l: 'Total Tyres', v: totalT.toLocaleString(), c: INDIGO, s: 'all positions' },
+      { l: 'Total Cost',  v: fmtCurr(data.totalCost, currency), c: VIOLET, s: period },
+      { l: 'High Risk',   v: high.toLocaleString(), c: CRIM, s: `${highShare}% of fleet` },
+      { l: 'Compliance',  v: `${compliance}%`, c: compliance >= 85 ? EMER : SCAR, s: 'within spec' },
+      { l: 'Open Actions',v: String(acts), c: GOLD, s: 'pending' },
+    ]
+    const kw = (12.55 - 4 * 0.25) / 5
+    kpis.forEach((k, i) => kpiTile(s, 0.4 + i * (kw + 0.25), 1.35, kw, k.l, k.v, k.c, k.s))
+
+    sectionTitle(s, 0.4, 3.3, 'Fleet Condition')
+    safeChart(s, pptx.ChartType.doughnut,
+      [{ name: 'Condition', labels: ['Within Spec', 'High Risk'], values: [good, high] }],
+      cOpts({ x: 0.4, y: 3.75, w: 5.2, h: 3.0, holeSize: 62, chartColors: [EMER, CRIM], showLegend: true, legendPos: 'r', legendColor: SLATE, legendFontSize: 10, showValue: true, dataLabelFormatCode: '#,##0', showPercent: false }))
+
+    if (data.riskBreakdown?.length) {
+      sectionTitle(s, 6.4, 3.3, 'Risk Distribution')
+      const rColors = { Critical: CRIM, High: SCAR, Medium: GOLD, Low: EMER }
+      safeChart(s, pptx.ChartType.bar,
+        [{ name: 'Tyres', labels: data.riskBreakdown.map(r => r.level), values: data.riskBreakdown.map(r => r.count) }],
+        cOpts({ x: 6.4, y: 3.75, w: 6.55, h: 3.0, barDir: 'bar', showValue: true,
+          chartColors: data.riskBreakdown.map(r => rColors[r.level] || SLATE) }))
+    }
+    footer(s, slideNo)
+  }
+
+  // ── Slide 4: Consumption Trend (native area/line) ──────────────────────────
+  if (trend.length) {
+    const s = pptx.addSlide(); slideNo++
+    header(s, 'Consumption & Trend Analysis', 'Volume over time', VIOLET)
+    const avg = Math.round(trend.reduce((a, m) => a + m.count, 0) / trend.length)
+    kpiTile(s, 0.4, 1.35, 2.9, 'Latest Period', String(trend[trend.length - 1].count), INDIGO, trend[trend.length - 1].month)
+    kpiTile(s, 3.45, 1.35, 2.9, 'Period Average', String(avg), VIOLET, `${trend.length} periods`)
+    kpiTile(s, 6.5, 1.35, 2.9, 'Trend', `${trendDelta > 0 ? '+' : ''}${trendDelta}`, trendDelta > 0 ? CRIM : EMER, `${trendDir} vs first`)
+    kpiTile(s, 9.55, 1.35, 3.4, 'Peak Period', String(Math.max(...trend.map(m => m.count))), GOLD, 'highest volume')
+    safeChart(s, pptx.ChartType.area,
+      [{ name: 'Tyre Issues', labels: trend.map(m => m.month), values: trend.map(m => m.count) }],
+      cOpts({ x: 0.4, y: 3.25, w: 12.55, h: 3.55, chartColors: [INDIGO], chartColorsOpacity: 35,
+        lineSize: 2.5, lineSmooth: true, showValue: true,
+        valAxisMinVal: 0, dataLabelPosition: 't' }))
+    footer(s, slideNo)
+  }
+
+  // ── Slide 5: Sites & Categories ────────────────────────────────────────────
+  if (data.topSites?.length || data.categoryBreakdown?.length) {
+    const s = pptx.addSlide(); slideNo++
+    header(s, 'Sites & Category Analysis', 'Where consumption concentrates', SKY)
+    if (data.topSites?.length) {
+      sectionTitle(s, 0.4, 1.25, 'Top Sites by Consumption')
+      const top = data.topSites.slice(0, 8)
+      safeChart(s, pptx.ChartType.bar,
+        [{ name: 'Tyres', labels: top.map(t => t.site), values: top.map(t => t.count) }],
+        cOpts({ x: 0.4, y: 1.7, w: 7.1, h: 5.0, barDir: 'bar', showValue: true, chartColors: [SKY] }))
+    }
+    if (data.categoryBreakdown?.length) {
+      sectionTitle(s, 7.9, 1.25, 'Category Mix')
+      const cats = data.categoryBreakdown.slice(0, 6)
+      safeChart(s, pptx.ChartType.doughnut,
+        [{ name: 'Categories', labels: cats.map(c => c.category), values: cats.map(c => c.count) }],
+        cOpts({ x: 7.7, y: 1.7, w: 5.3, h: 5.0, holeSize: 55, showLegend: true, legendPos: 'b', legendColor: SLATE, legendFontSize: 9, showPercent: true, showValue: false, dataLabelColor: 'FFFFFF', dataLabelFontSize: 9 }))
+    }
+    footer(s, slideNo)
+  }
+
+  // ── Slide 6: Cost & Brand Performance ──────────────────────────────────────
+  if (data.topBrands?.length || data.costBySite?.length) {
+    const s = pptx.addSlide(); slideNo++
+    header(s, 'Cost & Vendor Performance', 'Spend concentration', GOLD)
+    if (data.costBySite?.length) {
+      sectionTitle(s, 0.4, 1.25, `Cost by Site (${currency})`)
+      const cs = data.costBySite.slice(0, 8)
+      safeChart(s, pptx.ChartType.bar,
+        [{ name: 'Cost', labels: cs.map(c => c.site), values: cs.map(c => Math.round(Number(c.cost) || 0)) }],
+        cOpts({ x: 0.4, y: 1.7, w: 7.1, h: 5.0, barDir: 'bar', showValue: true, chartColors: [VIOLET],
+          dataLabelFormatCode: '#,##0' }))
     }
     if (data.topBrands?.length) {
-      const maxBrand = Math.max(...data.topBrands.map(b => b.count), 1)
-      s6.addText('Brand Performance', { x: 8.2, y: 1.3, w: 5, h: 0.4, fontSize: 12, bold: true, color: WHITE, fontFace: 'Arial' })
-      data.topBrands.slice(0, 8).forEach((b, i) => {
-        const bx = 8.2, by = 1.8 + i * 0.64
-        s6.addText(b.brand.slice(0, 14), { x: bx, y: by, w: 2.0, h: 0.5, fontSize: 10, color: WHITE, fontFace: 'Arial' })
-        s6.addShape(pptx.ShapeType.rect, { x: bx + 2.1, y: by + 0.08, w: 3.8, h: 0.32, fill: { color: '374151' } })
-        const bw = 3.8 * (b.count / maxBrand)
-        if (bw > 0) s6.addShape(pptx.ShapeType.rect, { x: bx + 2.1, y: by + 0.08, w: bw, h: 0.32, fill: { color: INDIGO } })
-        s6.addText(String(b.count), { x: bx + 6.2, y: by, w: 0.8, h: 0.5, fontSize: 10, color: GHOST, align: 'right', fontFace: 'Arial' })
-      })
+      sectionTitle(s, 7.9, 1.25, 'Brand Performance')
+      const tb = data.topBrands.slice(0, 8)
+      safeChart(s, pptx.ChartType.bar,
+        [{ name: 'Tyres', labels: tb.map(b => b.brand), values: tb.map(b => b.count) }],
+        cOpts({ x: 7.7, y: 1.7, w: 5.3, h: 5.0, barDir: 'bar', showValue: true, chartColors: [GOLD] }))
     }
+    footer(s, slideNo)
   }
 
-  // Slide 7: Insights & Recommendations
+  // ── Slide 7: Open Actions (light table) ────────────────────────────────────
+  if (data.recentActions?.length) {
+    const s = pptx.addSlide(); slideNo++
+    header(s, 'Open Corrective Actions', `${data.recentActions.length} tracked`, SCAR)
+    const priCol = { Critical: CRIM, High: SCAR, Medium: GOLD, Low: EMER }
+    const head = ['Action', 'Site', 'Priority', 'Status'].map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: SLATE }, fontSize: 11, align: 'left' } }))
+    const rows = data.recentActions.slice(0, 14).map((a, i) => ([
+      { text: a.title || '—', options: { color: INK, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
+      { text: a.site || '—', options: { color: SUBTLE, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
+      { text: a.priority || '—', options: { color: priCol[a.priority] || SUBTLE, bold: true, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
+      { text: a.status || '—', options: { color: SUBTLE, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
+    ]))
+    s.addTable([head, ...rows], { x: 0.4, y: 1.35, w: 12.55, colW: [6.8, 2.6, 1.7, 1.45], border: { type: 'solid', color: BORDER, pt: 0.5 }, rowH: 0.34, valign: 'middle' })
+    footer(s, slideNo)
+  }
+
+  // ── Slide 8: Insights & Recommendations ────────────────────────────────────
   if (data.insights?.length || data.recommendations?.length) {
-    const s7 = pptx.addSlide()
-    s7.background = { color: DARK }
-    header(s7, 'Operational Insights & Actions', INDIGO)
+    const s = pptx.addSlide(); slideNo++
+    header(s, 'Insights & Recommended Actions', 'What to do next', INDIGO)
     if (data.insights?.length) {
-      s7.addText('INTELLIGENCE', { x: 0.4, y: 1.3, w: 6, h: 0.4, fontSize: 11, bold: true, color: GOLD, fontFace: 'Arial' })
+      sectionTitle(s, 0.4, 1.25, 'Operational Intelligence', INDIGO)
       data.insights.slice(0, 4).forEach((ins, i) => {
-        s7.addShape(pptx.ShapeType.rect, { x: 0.4, y: 1.8 + i * 1.1, w: 6, h: 0.95, fill: { color: '1E2940' }, line: { color: INDIGO, width: 0.5 }, rounding: true })
-        s7.addShape(pptx.ShapeType.rect, { x: 0.4, y: 1.8 + i * 1.1, w: 0.05, h: 0.95, fill: { color: INDIGO } })
-        s7.addText(ins, { x: 0.6, y: 1.85 + i * 1.1, w: 5.6, h: 0.85, fontSize: 9.5, color: 'C7D2FE', wrap: true, fontFace: 'Arial' })
+        const y = 1.75 + i * 1.18
+        s.addShape(rect, { x: 0.4, y, w: 6.1, h: 1.0, fill: { color: CARD }, line: { color: BORDER, width: 1 }, rounding: true, shadow: SHADOW })
+        s.addShape(rect, { x: 0.4, y, w: 0.08, h: 1.0, fill: { color: INDIGO } })
+        s.addText(ins, { x: 0.62, y: y + 0.1, w: 5.75, h: 0.8, fontSize: 10, color: SLATE, valign: 'middle' })
       })
     }
     if (data.recommendations?.length) {
       const priCol = { Critical: CRIM, High: SCAR, Medium: GOLD, Low: EMER }
-      s7.addText('ACTION PLAN', { x: 7.0, y: 1.3, w: 6, h: 0.4, fontSize: 11, bold: true, color: GOLD, fontFace: 'Arial' })
+      sectionTitle(s, 6.9, 1.25, 'Priority Action Plan', GOLD)
       data.recommendations.slice(0, 4).forEach((rec, i) => {
-        const col = priCol[rec.priority] ?? INDIGO
-        s7.addShape(pptx.ShapeType.rect, { x: 7.0, y: 1.8 + i * 1.1, w: 6.0, h: 0.95, fill: { color: '1E2940' }, line: { color: col, width: 0.5 }, rounding: true })
-        s7.addText((rec.priority ?? 'Medium').toUpperCase(), { x: 7.05, y: 1.82 + i * 1.1, w: 1.1, h: 0.28, fontSize: 7, bold: true, color: col, fontFace: 'Arial' })
-        s7.addText(rec.text, { x: 7.05, y: 2.05 + i * 1.1, w: 5.8, h: 0.62, fontSize: 9, color: 'BFDBFE', wrap: true, fontFace: 'Arial' })
+        const y = 1.75 + i * 1.18
+        const col = priCol[rec.priority] || INDIGO
+        s.addShape(rect, { x: 6.9, y, w: 6.05, h: 1.0, fill: { color: CARD }, line: { color: col, width: 1 }, rounding: true, shadow: SHADOW })
+        s.addShape(rect, { x: 6.9, y, w: 1.0, h: 0.3, fill: { color: col }, rounding: true })
+        s.addText((rec.priority || 'Medium').toUpperCase(), { x: 6.9, y: y + 0.03, w: 1.0, h: 0.25, fontSize: 7.5, bold: true, color: 'FFFFFF', align: 'center' })
+        s.addText(rec.text, { x: 8.0, y: y + 0.08, w: 4.85, h: 0.85, fontSize: 9.5, color: SLATE, valign: 'middle' })
       })
     }
+    footer(s, slideNo)
   }
 
   await pptx.writeFile({ fileName: `${filename}.pptx` })
 }
-

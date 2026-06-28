@@ -5,28 +5,43 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // ─────────────────────────────────────────────────────────────────────────────
 vi.mock('xlsx', () => {
   const jsonToSheet = vi.fn(() => ({ '!cols': [] }))
-  const bookNew    = vi.fn(() => ({}))
-  const bookAppend = vi.fn()
-  const writeFile  = vi.fn()
-  return {
-    default: { utils: { json_to_sheet: jsonToSheet, book_new: bookNew, book_append_sheet: bookAppend }, writeFile },
-    utils:   { json_to_sheet: jsonToSheet, book_new: bookNew, book_append_sheet: bookAppend },
-    writeFile,
+  const aoaToSheet  = vi.fn(() => ({ '!cols': [] }))
+  const bookNew     = vi.fn(() => ({}))
+  const bookAppend  = vi.fn()
+  const encodeRange = vi.fn(() => 'A1:Z1')
+  const writeFile   = vi.fn()
+  const utils = {
+    json_to_sheet: jsonToSheet,
+    aoa_to_sheet:  aoaToSheet,
+    book_new:      bookNew,
+    book_append_sheet: bookAppend,
+    encode_range:  encodeRange,
   }
+  return { default: { utils, writeFile }, utils, writeFile }
 })
 
 vi.mock('jspdf', () => {
-  const mockDoc = {
-    setFillColor:  vi.fn(),
-    rect:          vi.fn(),
-    setTextColor:  vi.fn(),
-    setFontSize:   vi.fn(),
-    setFont:       vi.fn(),
-    text:          vi.fn(),
-    save:          vi.fn(),
-    internal:      { pageSize: { width: 297, height: 210 } },
+  // Robust doc stub: any drawing/layout method (rect, roundedRect, setDrawColor,
+  // line, addPage, …) resolves to a no-op spy, while the few properties the code
+  // reads back (internal dimensions, lastAutoTable.finalY) return real values.
+  const makeDoc = () => {
+    const data = {
+      internal: { pageSize: { width: 297, height: 210 }, getNumberOfPages: () => 1 },
+      lastAutoTable: { finalY: 40 },
+      splitTextToSize: (txt) => String(txt ?? '').split('\n'),
+      getTextWidth: () => 10,
+      save: vi.fn(),
+    }
+    const cache = new Map()
+    return new Proxy(data, {
+      get(target, prop) {
+        if (prop in target) return target[prop]
+        if (!cache.has(prop)) cache.set(prop, vi.fn())
+        return cache.get(prop)
+      },
+    })
   }
-  return { default: vi.fn(() => mockDoc) }
+  return { default: vi.fn(() => makeDoc()) }
 })
 
 vi.mock('jspdf-autotable', () => ({
@@ -38,10 +53,12 @@ vi.mock('pptxgenjs', () => {
     addShape: vi.fn(),
     addText:  vi.fn(),
     addTable: vi.fn(),
+    addChart: vi.fn(),
   }
   const mockPptx = {
     layout:      '',
     ShapeType:   { rect: 'rect' },
+    ChartType:   { doughnut: 'doughnut', bar: 'bar', area: 'area', line: 'line', pie: 'pie' },
     addSlide:    vi.fn(() => ({ ...mockSlide, background: {} })),
     writeFile:   vi.fn(() => Promise.resolve()),
   }
@@ -154,8 +171,11 @@ describe('exportToExcel — column width calculation', () => {
     // We need the actual ws object returned by json_to_sheet to check !cols
     // json_to_sheet is mocked but returns a plain object; we can inspect what writeFile receives
     exportToExcel(rows, columns, headers, 'test')
-    // Verify book_append_sheet was called with a worksheet object
-    expect(XLSX.utils.book_append_sheet).toHaveBeenCalledOnce()
+    // Verify the data worksheet was appended (a Summary sheet precedes it when
+    // rows are present, so assert the final append targets the Data sheet).
+    expect(XLSX.utils.book_append_sheet).toHaveBeenCalled()
+    const appendCalls = XLSX.utils.book_append_sheet.mock.calls
+    expect(appendCalls[appendCalls.length - 1][2]).toBe('Data')
   })
 
   it('appends sheet to workbook with correct sheet name', () => {
@@ -215,9 +235,11 @@ describe('exportToPdf — PDF generation', () => {
 
     exportToPdf(rows, columns, 'Sites Report', 'sites')
 
-    expect(autoTable).toHaveBeenCalledOnce()
-    const [, tableOptions] = autoTable.mock.calls[0]
-    // body should contain the mapped row data
+    expect(autoTable).toHaveBeenCalled()
+    // The main data table is the final autoTable call (analytical summary tables
+    // precede it). Read the last call's body for the mapped row data.
+    const dataCall = autoTable.mock.calls[autoTable.mock.calls.length - 1]
+    const [, tableOptions] = dataCall
     expect(tableOptions.body).toEqual([['Riyadh', '5']])
   })
 
@@ -227,8 +249,10 @@ describe('exportToPdf — PDF generation', () => {
 
     exportToPdf(rows, columns, 'Report', 'test')
 
-    const [, tableOptions] = autoTable.mock.calls[0]
-    expect(tableOptions.body[0][1]).toBe(' ')
+    const dataCall = autoTable.mock.calls[autoTable.mock.calls.length - 1]
+    const [, tableOptions] = dataCall
+    // Missing/null cells render as an empty string in the data table body.
+    expect(tableOptions.body[0][1]).toBe('')
   })
 
   it('passes column headers as first element of head array', () => {
@@ -351,7 +375,7 @@ describe('formatSAR — currency formatting logic (via exportToPptx)', () => {
       r.value?.addText?.mock?.calls ?? []
     )
     const sarTexts = allAddTextCalls.filter(([txt]) => typeof txt === 'string' && txt.startsWith('SAR'))
-    expect(sarTexts.some(([txt]) => txt === 'SAR 2.5M')).toBe(true)
+    expect(sarTexts.some(([txt]) => txt === 'SAR 2.50M')).toBe(true)
   })
 
   it('formats value >= 1,000 as "SAR XK"', async () => {
@@ -368,7 +392,7 @@ describe('formatSAR — currency formatting logic (via exportToPptx)', () => {
       r.value?.addText?.mock?.calls ?? []
     )
     const sarTexts = allAddTextCalls.filter(([txt]) => typeof txt === 'string' && txt.startsWith('SAR'))
-    expect(sarTexts.some(([txt]) => txt === 'SAR 75K')).toBe(true)
+    expect(sarTexts.some(([txt]) => txt === 'SAR 75.0k')).toBe(true)
   })
 
   it('formats value 0 / falsy as "SAR 0"', async () => {

@@ -58,7 +58,7 @@ export async function retrieveVehicleContext(assetNo) {
 
     supabase
       .from('inspections')
-      .select('asset_no, scheduled_date, completed_date, status, findings, site, inspector_name')
+      .select('asset_no, scheduled_date, completed_date, status, findings, site, inspector')
       .eq('asset_no', assetNo)
       .order('scheduled_date', { ascending: false })
       .limit(20),
@@ -177,7 +177,7 @@ export async function retrieveInspectionContext(site = null, limit = 200, months
 
   let query = supabase
     .from('inspections')
-    .select('asset_no, scheduled_date, completed_date, status, findings, site, inspector_name')
+    .select('asset_no, scheduled_date, completed_date, status, findings, site, inspector')
     .gte('scheduled_date', cutoff)
     .order('scheduled_date', { ascending: false })
     .limit(limit)

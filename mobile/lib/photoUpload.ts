@@ -8,6 +8,7 @@
 
 import * as FileSystem from 'expo-file-system'
 import { supabase } from './supabase'
+import { storageRef } from './storageRefs'
 
 /**
  * Upload a locally captured photo to Supabase Storage.
@@ -36,7 +37,7 @@ export async function uploadInspectionPhoto(
 
     // Read file as base64 — required for RN where Blob is not a true File
     const base64 = await FileSystem.readAsStringAsync(localUri, {
-      encoding: 'base64' as any,
+      encoding: 'base64',
     })
 
     const bytes = decodeBase64(base64)
@@ -50,8 +51,7 @@ export async function uploadInspectionPhoto(
       return null
     }
 
-    const { data } = supabase.storage.from('inspection-photos').getPublicUrl(path)
-    return data?.publicUrl ?? null
+    return storageRef('inspection-photos', path)
   } catch (err: any) {
     console.warn('[photoUpload] Unexpected error:', err?.message)
     return null
@@ -78,7 +78,7 @@ export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<
     const rand = Math.random().toString(36).slice(2, 6)
     const path = `accidents/${uid}/${Date.now()}_${index}_${rand}.${ext}`
 
-    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' as any })
+    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' })
     const bytes = decodeBase64(base64)
 
     const { error } = await supabase.storage

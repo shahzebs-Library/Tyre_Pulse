@@ -1,0 +1,70 @@
+name: Release to Google Play (Internal)
+
+# Builds a production AAB on EAS and submits it to the Play Console "internal"
+# testing track. Testers on that track receive the update automatically from
+# the Play Store — no APK sharing, no manual installs.
+#
+# Trigger: manually (Actions -> Run workflow) or by pushing a tag like
+# `mobile-v1.1.0`. Each run auto-increments the Android versionCode (EAS remote
+# versioning), so Play always accepts the new build.
+#
+# Required GitHub secrets:
+#   EXPO_TOKEN                  - Expo access token (expo.dev -> Account -> Access tokens)
+#   GOOGLE_SERVICE_ACCOUNT_KEY - full JSON of a Google Cloud service account with
+#                                "Release to testing tracks" permission in Play Console.
+# If GOOGLE_SERVICE_ACCOUNT_KEY is not set, the workflow only builds the AAB
+# (download it from the EAS build page for the first manual upload).
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'mobile-v*'
+
+jobs:
+  release:
+    name: Build AAB + submit to Play internal
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Write Google service account key (if provided)
+        working-directory: mobile
+        env:
+          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+        run: |
+          if [ -n "$GOOGLE_SERVICE_ACCOUNT_KEY" ]; then
+            printf '%s' "$GOOGLE_SERVICE_ACCOUNT_KEY" > google-service-account.json
+            echo "SUBMIT=1" >> "$GITHUB_ENV"
+          else
+            echo "No service account key set — will build only (no submit)."
+            echo "SUBMIT=0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build AAB and auto-submit to Play (internal)
+        if: env.SUBMIT == '1'
+        working-directory: mobile
+        run: eas build --platform android --profile production --auto-submit --non-interactive
+
+      - name: Build AAB only (no submit)
+        if: env.SUBMIT == '0'
+        working-directory: mobile
+        run: eas build --platform android --profile production --non-interactive

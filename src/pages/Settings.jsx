@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { Save, User, Settings2, Bell, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock } from 'lucide-react'
+import { Save, User, Settings2, Bell, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { sendReportEmail } from '../lib/emailService'
+import TwoFactorSetup from '../components/TwoFactorSetup'
 
 const ROLE_BADGE = {
   Admin:   'bg-purple-900/50 text-purple-300 border border-purple-700/50',
@@ -95,7 +96,7 @@ function getInitials(name) {
 }
 
 export default function Settings() {
-  const { profile, user } = useAuth()
+  const { profile, user, mfaEnabled, setMfaEnabled } = useAuth()
   const { appSettings: globalSettings, refreshSettings, setActiveCountry, activeCountry } = useSettings()
   const isAdmin    = profile?.role === 'Admin'
   const isTyreMan  = profile?.role === 'Tyre Man'
@@ -147,6 +148,12 @@ export default function Settings() {
   const [pwConfirm, setPwConfirm] = useState('')
   const [savingPw, setSavingPw]   = useState(false)
   const [pwMsg, setPwMsg]         = useState('')
+
+  // 2FA management
+  const [showMfaSetup, setShowMfaSetup]         = useState(false)
+  const [removingMfa, setRemovingMfa]           = useState(false)
+  const [mfaMsg, setMfaMsg]                     = useState('')
+  const [confirmRemoveMfa, setConfirmRemoveMfa] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('tp_scheduled_reports', JSON.stringify(schedules))
@@ -380,12 +387,33 @@ export default function Settings() {
     setTimeout(() => setPwMsg(''), 4000)
   }
 
+  async function handleRemoveMfa() {
+    setRemovingMfa(true)
+    setMfaMsg('')
+    try {
+      const { data: factors } = await supabase.auth.mfa.listFactors()
+      const factor = factors?.totp?.[0]
+      if (!factor) throw new Error('No active TOTP factor found')
+      const { error } = await supabase.auth.mfa.unenroll({ factorId: factor.id })
+      if (error) throw error
+      setMfaEnabled(false)
+      setMfaMsg('Two-factor authentication removed')
+    } catch (err) {
+      setMfaMsg('Failed: ' + (err.message ?? 'Unknown error'))
+    } finally {
+      setRemovingMfa(false)
+      setConfirmRemoveMfa(false)
+      setTimeout(() => setMfaMsg(''), 5000)
+    }
+  }
+
   const initials = getInitials(profileForm.full_name || profile?.full_name)
   const role     = profile?.role ?? 'Viewer'
 
   // ── TyreMan: simplified profile-only view ──────────────────────────────────
   if (isTyreMan) {
     return (
+      <>
       <div className="space-y-5">
         <PageHeader
           title="Profile & Settings"
@@ -491,6 +519,17 @@ export default function Settings() {
           </form>
         </div>
 
+        {/* 2FA */}
+        <TwoFactorCard
+          mfaEnabled={mfaEnabled}
+          onEnable={() => setShowMfaSetup(true)}
+          confirmRemoveMfa={confirmRemoveMfa}
+          setConfirmRemoveMfa={setConfirmRemoveMfa}
+          onRemove={handleRemoveMfa}
+          removing={removingMfa}
+          msg={mfaMsg}
+        />
+
         {/* About */}
         <div className="card">
           <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-3"><Info size={16} /> About</h2>
@@ -501,6 +540,12 @@ export default function Settings() {
           </div>
         </div>
       </div>
+      <TwoFactorSetup
+        open={showMfaSetup}
+        onClose={() => setShowMfaSetup(false)}
+        onSuccess={() => { setMfaEnabled(true); setShowMfaSetup(false) }}
+      />
+      </>
     )
   }
 
@@ -1086,6 +1131,17 @@ export default function Settings() {
         )}
       </div>
 
+      {/* Two-Factor Authentication */}
+      <TwoFactorCard
+        mfaEnabled={mfaEnabled}
+        onEnable={() => setShowMfaSetup(true)}
+        confirmRemoveMfa={confirmRemoveMfa}
+        setConfirmRemoveMfa={setConfirmRemoveMfa}
+        onRemove={handleRemoveMfa}
+        removing={removingMfa}
+        msg={mfaMsg}
+      />
+
       {/* About */}
       <div className="card">
         <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-3"><Info size={16} /> About</h2>
@@ -1094,6 +1150,109 @@ export default function Settings() {
           <p><span className="text-gray-500">Support:</span> Report an issue via the help menu</p>
         </div>
       </div>
+
+      <TwoFactorSetup
+        open={showMfaSetup}
+        onClose={() => setShowMfaSetup(false)}
+        onSuccess={() => { setMfaEnabled(true); setShowMfaSetup(false) }}
+      />
+    </div>
+  )
+}
+
+/* ── Shared 2FA card ──────────────────────────────────────────────────────── */
+function TwoFactorCard({ mfaEnabled, onEnable, confirmRemoveMfa, setConfirmRemoveMfa, onRemove, removing, msg }) {
+  return (
+    <div className="card space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold text-white flex items-center gap-2">
+          <Shield size={16} className="text-orange-400" /> Two-Factor Authentication
+        </h2>
+        {mfaEnabled ? (
+          <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-green-900/40 text-green-400 border border-green-700/40 font-semibold">
+            <ShieldCheck size={12} /> Enabled
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-gray-800 text-gray-500 border border-gray-700 font-semibold">
+            <ShieldOff size={12} /> Disabled
+          </span>
+        )}
+      </div>
+
+      <p className="text-gray-400 text-xs leading-relaxed">
+        Two-factor authentication adds an extra layer of security. After entering your password, you will be asked for a code from your authenticator app.
+      </p>
+
+      {mfaEnabled ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 px-4 py-3 bg-green-950/30 border border-green-800/30 rounded-xl">
+            <ShieldCheck size={16} className="text-green-400 shrink-0" />
+            <p className="text-green-300 text-sm">Your account is protected with TOTP two-factor authentication.</p>
+          </div>
+
+          {!confirmRemoveMfa ? (
+            <button
+              type="button"
+              onClick={() => setConfirmRemoveMfa(true)}
+              className="inline-flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl bg-red-950/30 border border-red-800/40 text-red-400 hover:bg-red-950/50 transition-colors font-medium"
+            >
+              <ShieldOff size={14} /> Remove 2FA
+            </button>
+          ) : (
+            <div className="bg-red-950/20 border border-red-800/40 rounded-xl p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-red-300 text-sm font-semibold">Remove two-factor authentication?</p>
+                  <p className="text-red-400/70 text-xs mt-1 leading-relaxed">
+                    This will remove the extra security layer from your account. You can re-enable it at any time.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmRemoveMfa(false)}
+                  className="flex-1 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={onRemove}
+                  disabled={removing}
+                  className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:bg-red-900/50 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                >
+                  {removing
+                    ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Removing…</>
+                    : 'Yes, Remove 2FA'
+                  }
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 px-4 py-3 bg-orange-950/20 border border-orange-800/25 rounded-xl">
+            <Shield size={16} className="text-orange-400/70 shrink-0" />
+            <p className="text-orange-300/80 text-xs leading-relaxed">
+              We recommend enabling 2FA for all accounts. It takes less than a minute to set up.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onEnable}
+            className="inline-flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-white transition-colors font-semibold"
+          >
+            <Shield size={14} /> Enable Two-Factor Authentication
+          </button>
+        </div>
+      )}
+
+      {msg && (
+        <p className={`text-sm ${msg.startsWith('Failed') ? 'text-red-400' : 'text-green-400'}`}>{msg}</p>
+      )}
     </div>
   )
 }

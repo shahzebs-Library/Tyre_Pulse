@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { supabase } from '../lib/supabase'
 import TpLogo from '../assets/logo.svg'
+import TwoFactorChallenge from '../components/TwoFactorChallenge'
 
 /* ── CSS injected once ────────────────────────────────────────────────────── */
 const STYLES = `
@@ -182,9 +183,14 @@ const FEATURES = [
 ]
 
 export default function Login() {
-  const { signIn }         = useAuth()
+  const { signIn, user, loading: authLoading } = useAuth()
   const { isDark, toggleTheme } = useTheme()
   const navigate            = useNavigate()
+
+  // Navigate to dashboard once auth state resolves — avoids race with async fetchProfile
+  useEffect(() => {
+    if (!authLoading && user) navigate('/', { replace: true })
+  }, [user, authLoading, navigate])
 
   const [tab, setTab]                 = useState('login')
   const [idMode, setIdMode]           = useState('email')
@@ -207,6 +213,7 @@ export default function Login() {
   const [forgotLoading, setForgotLoading] = useState(false)
   const [focusedField, setFocusedField] = useState(null)
   const [isOnline, setIsOnline]       = useState(navigator.onLine)
+  const [mfaState, setMfaState]       = useState(null) // { factorId } when MFA challenge needed
 
   // Track network status
   useEffect(() => {
@@ -218,7 +225,11 @@ export default function Login() {
   }, [])
 
   const sessionExpired = localStorage.getItem('tp_session_expired') === '1'
-  useEffect(() => { if (sessionExpired) localStorage.removeItem('tp_session_expired') }, [])
+  const accessRevoked  = localStorage.getItem('tp_access_revoked')  === '1'
+  useEffect(() => {
+    if (sessionExpired) localStorage.removeItem('tp_session_expired')
+    if (accessRevoked)  localStorage.removeItem('tp_access_revoked')
+  }, [])
 
   const currentMode = ID_MODES.find(m => m.value === idMode)
 
@@ -226,8 +237,20 @@ export default function Login() {
     e.preventDefault()
     if (!isOnline) { setError('No internet connection. Please check your network.'); return }
     setError(''); setLoading(true)
-    const err = await signIn(identifier, password)
-    if (err) { setError(err.message); setLoading(false) } else navigate('/')
+    const result = await signIn(identifier, password)
+    if (result?.mfaRequired) {
+      const { data: factors } = await supabase.auth.mfa.listFactors()
+      const factor = factors?.totp?.[0]
+      if (factor) {
+        setMfaState({ factorId: factor.id })
+      } else {
+        setError('MFA is required but no authenticator factor found.')
+      }
+      setLoading(false)
+      return
+    }
+    if (result) { setError(result.message || 'Login failed'); setLoading(false) }
+    // on success: useEffect above handles navigation once AuthContext resolves user + profile
   }
 
   async function handleSignup(e) {
@@ -288,8 +311,8 @@ export default function Login() {
     <>
       <style>{STYLES}</style>
 
-      {/* Force dark on login page regardless of stored theme */}
-      <div style={{ minHeight:'100vh', display:'flex', background:'#060e08', position:'relative', overflow:'hidden' }}>
+      {/* Page background follows the theme; the auth card stays a premium panel */}
+      <div style={{ minHeight:'100vh', display:'flex', background:'var(--login-bg)', position:'relative', overflow:'hidden' }}>
 
         {/* ── Background layers ──────────────────────────────────────────── */}
         {/* Deep radial glow */}
@@ -453,6 +476,28 @@ export default function Login() {
             )}
           </AnimatePresence>
 
+          {/* Access revoked banner */}
+          <AnimatePresence>
+            {accessRevoked && (
+              <motion.div
+                initial={{ opacity:0, y:-8, height:0 }}
+                animate={{ opacity:1, y:0, height:'auto' }}
+                exit={{ opacity:0, height:0 }}
+                style={{
+                  display:'flex', alignItems:'center', gap:8,
+                  padding:'10px 14px', borderRadius:12, marginBottom:12,
+                  fontSize:13, color:'#fca5a5',
+                  background:'rgba(239,68,68,0.08)',
+                  border:'1px solid rgba(239,68,68,0.25)',
+                  width:'100%', maxWidth:420,
+                }}
+              >
+                <AlertCircle size={14} style={{flexShrink:0}}/>
+                Your account access has been suspended. Contact your administrator.
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Main card */}
           <motion.div
             initial={{ opacity:1, y:20, scale:0.98 }}
@@ -461,11 +506,11 @@ export default function Login() {
             style={{ width:'100%', maxWidth:420 }}
           >
             <div style={{
-              background:'rgba(6,16,9,0.88)',
-              border:'1.5px solid rgba(22,163,74,0.22)',
+              background:'var(--login-card-bg)',
+              border:'1.5px solid var(--login-card-border)',
               borderRadius:24,
               padding:'28px 28px 32px',
-              boxShadow:'0 0 0 1px rgba(74,222,128,0.04), 0 32px 80px rgba(0,0,0,0.7), 0 0 60px rgba(22,163,74,0.08)',
+              boxShadow:'var(--login-card-shadow)',
               backdropFilter:'blur(32px)',
               position:'relative',
               overflow:'hidden',
@@ -871,6 +916,14 @@ export default function Login() {
           .mobile-brand { display: none !important; }
         }
       `}</style>
+
+      {/* MFA challenge modal — shown after password succeeds but AAL2 is required */}
+      <TwoFactorChallenge
+        open={!!mfaState}
+        factorId={mfaState?.factorId}
+        onSuccess={() => { setMfaState(null) }}
+        onCancel={() => { setMfaState(null); setLoading(false) }}
+      />
     </>
   )
 }

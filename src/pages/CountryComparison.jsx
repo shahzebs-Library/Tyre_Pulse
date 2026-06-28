@@ -1,25 +1,24 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
-import { computeCountryMetrics, sum } from '../lib/analyticsEngine'
 import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText, Award } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
-  Title, Tooltip, Legend,
+  LineElement, PointElement, Title, Tooltip, Legend,
 } from 'chart.js'
-import { Bar } from 'react-chartjs-2'
+import { Bar, Line } from 'react-chartjs-2'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
 const COLOR_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#f97316']
 const COUNTRY_CURRENCY_MAP = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
 
 const BAR_OPTS = {
   responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1f2937', titleColor: '#fff', bodyColor: '#9ca3af' } },
+  plugins: { legend: { display: false }, tooltip: { backgroundColor: 'var(--panel-2)', titlecolor:'var(--panel-ink)', bodyColor: '#9ca3af' } },
   scales: {
     x: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280', font: { size: 11 } } },
     y: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280', font: { size: 11 } } },
@@ -64,27 +63,31 @@ function overdueColor(n) {
 
 export default function CountryComparison() {
   const { appSettings } = useSettings()
-  const [records, setRecords]   = useState([])
+  const [countryMetrics, setCountryMetrics] = useState([])
   const [actions, setActions]   = useState([])
+  const [trends, setTrends]     = useState([])   // [{country, month, cnt, cost}]
   const [loading, setLoading]   = useState(true)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
+  const [trendMetric, setTrendMetric] = useState('cnt') // 'cnt' | 'cost'
   const [selectedCountries, setSelectedCountries] = useState(new Set(COUNTRIES))
 
   useEffect(() => {
     async function load() {
-      const [tRes, aRes] = await Promise.all([
-        supabase.from('tyre_records').select(
-          'id,country,site,brand,category,risk_level,cost_per_tyre,qty,issue_date,km_at_fitment,km_at_removal'
-        ),
+      setLoading(true)
+      // Server-side per-country aggregates (accurate over the full dataset, fast).
+      const [mRes, aRes, tRes] = await Promise.all([
+        supabase.rpc('report_country_metrics', { p_from: dateFrom || null, p_to: dateTo || null }),
         supabase.from('corrective_actions').select('id,country,status,due_date,priority'),
+        supabase.rpc('report_country_trends', { p_from: dateFrom || null, p_to: dateTo || null }),
       ])
-      setRecords(tRes.data ?? [])
+      setCountryMetrics(mRes.data ?? [])
       setActions(aRes.data ?? [])
+      setTrends(tRes.data ?? [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [dateFrom, dateTo])
 
   // Dynamic color map based on available countries
   const countryColorMap = useMemo(() => {
@@ -93,16 +96,30 @@ export default function CountryComparison() {
     return map
   }, [])
 
-  const filteredRecords = useMemo(() => {
-    let arr = records
-    if (dateFrom) arr = arr.filter(r => r.issue_date && r.issue_date >= dateFrom)
-    if (dateTo)   arr = arr.filter(r => r.issue_date && r.issue_date <= dateTo)
-    return arr
-  }, [records, dateFrom, dateTo])
+  // Always represent every configured country so the comparison shows all of
+  // them side-by-side (zero-filled when a country has no data yet) instead of
+  // collapsing to whichever single country happens to have records.
+  const allMetrics = useMemo(() => {
+    const now = new Date()
+    const byCountry = Object.fromEntries(countryMetrics.map(m => [m.country, m]))
+    const zero = (country) => ({
+      country, count: 0, totalCost: 0, avgCostPerTyre: 0, avgCpk: null,
+      highRiskPct: null, siteCount: 0, brandCount: 0,
+    })
+    return COUNTRIES.map(country => {
+      const m = byCountry[country] || zero(country)
+      const openActions = actions.filter(a => (a.country || 'KSA') === country && a.status !== 'Closed').length
+      const overdueActions = actions.filter(a =>
+        (a.country || 'KSA') === country && a.status !== 'Closed' &&
+        a.due_date && new Date(a.due_date) < now
+      ).length
+      return { ...m, country, openActions, overdueActions }
+    })
+  }, [countryMetrics, actions])
 
-  const allMetrics = useMemo(
-    () => computeCountryMetrics(filteredRecords, actions, appSettings.cost_per_tyre),
-    [filteredRecords, actions, appSettings.cost_per_tyre]
+  const hasAnyData = useMemo(
+    () => allMetrics.some(m => (m.count || 0) > 0) || countryMetrics.length > 0,
+    [allMetrics, countryMetrics]
   )
 
   const metrics = useMemo(
@@ -159,6 +176,56 @@ export default function CountryComparison() {
     }],
   }
 
+  // ── Trend comparison (monthly & yearly, multi-country) ──────────────────────
+  const selList = useMemo(() => COUNTRIES.filter(c => selectedCountries.has(c)), [selectedCountries])
+
+  const monthlyTrendData = useMemo(() => {
+    const months = [...new Set(trends.map(t => t.month))].sort()
+    const byCM = {}
+    trends.forEach(t => { (byCM[t.country] ??= {})[t.month] = Number(t[trendMetric]) || 0 })
+    const fmt = m => { const d = new Date(m); return d.toLocaleString('en', { month: 'short', year: '2-digit' }) }
+    return {
+      labels: months.map(fmt),
+      datasets: selList.map(c => ({
+        label: c,
+        data: months.map(m => byCM[c]?.[m] ?? 0),
+        borderColor: countryColorMap[c] ?? '#6b7280',
+        backgroundColor: (countryColorMap[c] ?? '#6b7280') + '33',
+        tension: 0.3, pointRadius: 2, borderWidth: 2, fill: false,
+      })),
+    }
+  }, [trends, selList, trendMetric, countryColorMap])
+
+  const yearlyTrendData = useMemo(() => {
+    const years = new Set(); const byCY = {}
+    trends.forEach(t => {
+      const y = new Date(t.month).getFullYear(); years.add(y)
+      byCY[t.country] = byCY[t.country] || {}
+      byCY[t.country][y] = (byCY[t.country][y] || 0) + (Number(t[trendMetric]) || 0)
+    })
+    const yrs = [...years].sort()
+    return {
+      labels: yrs.map(String),
+      datasets: selList.map(c => ({
+        label: c,
+        data: yrs.map(y => byCY[c]?.[y] ?? 0),
+        backgroundColor: countryColorMap[c] ?? '#6b7280',
+        borderRadius: 4,
+      })),
+    }
+  }, [trends, selList, trendMetric, countryColorMap])
+
+  const hasTrend = trends.length > 0
+  const TREND_OPTS = {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { display: true, labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12 } } },
+    scales: {
+      x: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280', font: { size: 10 }, maxRotation: 0, autoSkip: true } },
+      y: { grid: { color: '#1a2030' }, ticks: { color: '#6b7280', font: { size: 10 } }, beginAtZero: true },
+    },
+  }
+
   if (loading) return (
     <div className="space-y-5">
       <PageHeader title="Country Comparison" subtitle="Loading fleet data…" icon={Globe} />
@@ -169,7 +236,7 @@ export default function CountryComparison() {
     </div>
   )
 
-  if (allMetrics.length === 0) return (
+  if (!hasAnyData) return (
     <div className="space-y-5">
       <PageHeader title="Country Comparison" subtitle="No country data available" icon={Globe} />
       <div className="card py-16 flex flex-col items-center gap-3">
@@ -406,6 +473,47 @@ export default function CountryComparison() {
             <Bar data={openActionsChartData} options={BAR_OPTS} />
           </div>
         </div>
+      </div>
+
+      {/* ── Trend comparison (monthly & yearly) ── */}
+      <div className="card">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+              <TrendingUp size={15} className="text-blue-400" /> Trend Comparison
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">Monthly & yearly {trendMetric === 'cnt' ? 'volume' : 'cost'} across countries</p>
+          </div>
+          <div className="flex gap-1 bg-gray-800/40 rounded-lg p-1">
+            {[['cnt', 'Records'], ['cost', 'Cost']].map(([k, label]) => (
+              <button key={k} onClick={() => setTrendMetric(k)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${trendMetric === k ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {!hasTrend ? (
+          <div className="py-12 text-center text-gray-600 text-sm">
+            No dated records yet — upload tyre records with an issue date to see monthly &amp; yearly trends.
+          </div>
+        ) : (
+          <div className="grid lg:grid-cols-3 gap-5">
+            <div className="lg:col-span-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Monthly Trend</p>
+              <div style={{ height: 240 }}>
+                <Line data={monthlyTrendData} options={TREND_OPTS} />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Year-over-Year</p>
+              <div style={{ height: 240 }}>
+                <Bar data={yearlyTrendData} options={TREND_OPTS} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -20,7 +20,14 @@ export async function callAiEdgeFunction(
     const { data, error } = await supabase.functions.invoke('chat-ai', {
       body: { system: systemPrompt, user: userPrompt, model, max_tokens: maxTokens },
     })
-    if (error) throw error
+    if (error) {
+      // Surface the function's real error body (e.g. "ANTHROPIC_API_KEY is not set")
+      let detail = error.message
+      try { const body = await error.context?.json?.(); if (body?.error) detail = body.error } catch { /* keep message */ }
+      console.error('[callAiEdgeFunction] Error:', detail)
+      return `AI unavailable: ${detail}`
+    }
+    if (data?.error) return `AI unavailable: ${data.error}`
     return data?.content ?? 'No response generated.'
   } catch (err) {
     console.error('[callAiEdgeFunction] Error:', err)

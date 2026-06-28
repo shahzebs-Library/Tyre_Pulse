@@ -16,6 +16,7 @@ import {
   BarChart2, Filter,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -221,14 +222,14 @@ export default function FleetHealthBoard() {
     setError(null)
 
     try {
-      let q = supabase
-        .from('tyre_records')
-        .select('id,asset_no,serial_number,position,tread_depth,pressure_reading,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,size')
-        .is('km_at_removal', null)
-
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-
-      const { data, error: err } = await q
+      const { data, error: err } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id,asset_no,serial_number,position,tread_depth,pressure_reading,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,size')
+          .is('km_at_removal', null)
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q.range(from, to)
+      })
       if (err) throw err
 
       setRawRecords(data ?? [])
@@ -367,7 +368,7 @@ export default function FleetHealthBoard() {
   }, [trendData])
 
   const TICK = { color: '#6b7280', font: { size: 10 } }
-  const GRID = { color: 'rgba(255,255,255,0.04)' }
+  const GRID = { color:'var(--text-muted)' }
 
   const trendOpts = {
     responsive: true,
@@ -375,8 +376,8 @@ export default function FleetHealthBoard() {
     plugins: {
       legend: { display: false },
       tooltip: {
-        backgroundColor: '#111827',
-        borderColor: '#374151',
+        backgroundColor: 'var(--panel)',
+        borderColor: 'var(--hairline)',
         borderWidth: 1,
         titleColor: '#f9fafb',
         bodyColor: '#9ca3af',

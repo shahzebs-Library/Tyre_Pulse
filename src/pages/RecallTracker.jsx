@@ -19,6 +19,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -34,8 +35,8 @@ const CHART_OPTS = {
   plugins: {
     legend: { labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } },
     tooltip: {
-      backgroundColor: '#111827',
-      borderColor: '#374151',
+      backgroundColor: 'var(--panel)',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
       titleColor: '#f9fafb',
       bodyColor: '#d1d5db',
@@ -172,9 +173,10 @@ export default function RecallTracker() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data } = await supabase
+      const { data } = await fetchAllPages((from, to) => supabase
         .from('tyre_records')
         .select('id, asset_no, serial_number, brand, size, position, site, country, tread_depth, risk_level, issue_date, km_at_fitment, km_at_removal')
+        .range(from, to))
       setTyres(data ?? [])
       setLoading(false)
     }

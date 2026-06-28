@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package } from 'lucide-react'
@@ -84,10 +85,11 @@ export default function StockManagement() {
     // Load velocity data from tyre_records (last 3 months)
     const threeMonthsAgo = new Date()
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
-    const { data: velData } = await supabase
+    const { data: velData } = await fetchAllPages((from, to) => supabase
       .from('tyre_records')
       .select('site, qty, issue_date')
       .gte('issue_date', threeMonthsAgo.toISOString().slice(0, 10))
+      .range(from, to))
 
     // Group by site and sum qty
     const siteQtyMap = {}

@@ -170,39 +170,68 @@ function Toggle({ checked, onChange }) {
 
 // ─── Migration SQL snippet ────────────────────────────────────────────────────
 
-const MIGRATION_SQL = `-- Fix: Allow Admins to update any profile row
+const MIGRATION_SQL = `-- Run MIGRATIONS_V22.sql in the Supabase SQL Editor.
+-- That file adds the locked column, hardens get_my_role(), and updates
+-- admin_update_profile to accept p_locked. Paste the full V22 file content.
+
+-- Quick inline version (if you need it without the full file):
+alter table public.profiles add column if not exists locked boolean not null default false;
+
 drop policy if exists "profiles_admin_update" on public.profiles;
 create policy "profiles_admin_update"
   on public.profiles for update
   using (public.get_my_role() = 'Admin');
 
--- Security-definer RPC fallback for admin profile edits
 create or replace function public.admin_update_profile(
-  p_user_id    uuid,
-  p_full_name  text    default null,
-  p_username   text    default null,
-  p_employee_id text   default null,
-  p_role       text    default null,
-  p_country    text[]  default null,
-  p_region     text    default null,
-  p_approved   boolean default null
+  p_user_id     uuid,
+  p_full_name   text    default null,
+  p_username    text    default null,
+  p_employee_id text    default null,
+  p_role        text    default null,
+  p_country     text[]  default null,
+  p_region      text    default null,
+  p_site        text    default null,
+  p_phone       text    default null,
+  p_notes       text    default null,
+  p_approved    boolean default null,
+  p_locked      boolean default null
 )
-returns void language plpgsql security definer set search_path = public as $$
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_role text;
 begin
-  if (select get_my_role()) <> 'Admin' then
-    raise exception 'Permission denied: Admin role required';
+  v_role := (select role from public.profiles where id = auth.uid() limit 1);
+  if v_role is distinct from 'Admin' then
+    return jsonb_build_object('success', false, 'error', 'Permission denied');
   end if;
-  update profiles set
+  if p_user_id = auth.uid() and p_locked = true then
+    return jsonb_build_object('success', false, 'error', 'Cannot lock your own account');
+  end if;
+  update public.profiles set
     full_name   = coalesce(p_full_name,   full_name),
     username    = coalesce(p_username,    username),
     employee_id = coalesce(p_employee_id, employee_id),
     role        = coalesce(p_role,        role),
     country     = case when p_country is not null then p_country else country end,
     region      = coalesce(p_region,      region),
+    site        = coalesce(p_site,        site),
+    phone       = coalesce(p_phone,       phone),
+    notes       = coalesce(p_notes,       notes),
     approved    = coalesce(p_approved,    approved),
+    locked      = coalesce(p_locked,      locked),
     updated_at  = now()
   where id = p_user_id;
+  return jsonb_build_object('success', true);
 end;
+$$;
+
+-- Also harden get_my_role() to block locked / unapproved users
+create or replace function public.get_my_role()
+returns text language sql stable security definer set search_path = public as $$
+  select role from public.profiles
+   where id = auth.uid()
+     and locked = false
+     and (approved is null or approved = true)
+   limit 1;
 $$;
 
 grant execute on function public.admin_update_profile to authenticated;`

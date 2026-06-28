@@ -32,6 +32,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
         (payload) => {
           const updated = payload.new as Record<string, any>
+          // Enforce lockout/approval changes applied by admins in real time
+          if (updated.locked === true || updated.approved === false) {
+            supabase.auth.signOut()
+            return
+          }
           setProfile({ ...updated, role: normaliseRole(updated.role) } as Profile)
         }
       )
@@ -84,6 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
       if (data) {
+        // Enforce locked / unapproved accounts on the client immediately
+        if (data.locked === true || data.approved === false) {
+          await supabase.auth.signOut()
+          return
+        }
         setProfile({ ...data, role: normaliseRole(data.role) } as Profile)
       } else {
         setProfile(null)
@@ -105,7 +115,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return { error }
+    if (error) {
+      // Return a generic message for all Supabase auth failures to prevent
+      // user enumeration — the specific reason is logged server-side by GoTrue.
+      return { error: new Error('Invalid credentials. Please try again.') }
+    }
+    return { error: null }
   }
 
   async function signOut() {

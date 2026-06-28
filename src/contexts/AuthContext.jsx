@@ -124,6 +124,10 @@ export function AuthProvider({ children }) {
       return
     }
 
+    // Clear stale flags from previous sessions or lockouts
+    localStorage.removeItem('tp_session_expired')
+    localStorage.removeItem('tp_access_revoked')
+
     setProfile(p)
     setModulePerms(permsRes.data ?? {})
     setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)

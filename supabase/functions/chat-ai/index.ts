@@ -11,7 +11,9 @@ serve(async (req) => {
     if (auth instanceof Response) return auth
 
     const body = await req.json()
-    const { system, user, messages, model = 'claude-haiku-4-5-20251001', max_tokens = 2000 } = body
+    const { system, user, messages, max_tokens = 2000 } = body
+    // Model is locked server-side — never accept client-supplied value
+    const MODEL = 'claude-haiku-4-5-20251001'
     const safeMaxTokens = Math.min(Math.max(Number(max_tokens) || 1000, 1), 2000)
 
     // Support both single-turn (user string) and multi-turn (messages array)
@@ -25,7 +27,8 @@ serve(async (req) => {
 
     const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
     if (!ANTHROPIC_API_KEY) {
-      return jsonResponse(req, { error: 'ANTHROPIC_API_KEY not configured' }, 500)
+      console.error('[chat-ai] ANTHROPIC_API_KEY not configured')
+      return jsonResponse(req, { error: 'AI service temporarily unavailable' }, 500)
     }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -36,7 +39,7 @@ serve(async (req) => {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model,
+        model: MODEL,
         max_tokens: safeMaxTokens,
         ...(system ? { system } : {}),
         messages: messageArray,
@@ -44,8 +47,9 @@ serve(async (req) => {
     })
 
     if (!response.ok) {
-      const err = await response.text()
-      throw new Error(`API error: ${response.status} ${err}`)
+      const errText = await response.text()
+      console.error(`[chat-ai] Upstream API error ${response.status}:`, errText)
+      return jsonResponse(req, { error: 'AI service temporarily unavailable' }, 502)
     }
 
     const data = await response.json()
@@ -53,7 +57,7 @@ serve(async (req) => {
 
     return jsonResponse(req, { content })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return jsonResponse(req, { error: message }, 500)
+    console.error('[chat-ai] Unhandled error:', err)
+    return jsonResponse(req, { error: 'AI service temporarily unavailable' }, 500)
   }
 })

@@ -36,7 +36,7 @@ export async function uploadInspectionPhoto(
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
-    const info = await FileSystem.getInfoAsync(localUri, { size: true })
+    const info = await FileSystem.getInfoAsync(localUri)
     if (info.exists && (info as any).size > MAX_PHOTO_BYTES) return null
 
     // Build deterministic storage path:  inspections/<id>/<position>_<timestamp>.<ext>
@@ -83,7 +83,7 @@ export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
-    const info = await FileSystem.getInfoAsync(localUri, { size: true })
+    const info = await FileSystem.getInfoAsync(localUri)
     if (info.exists && (info as any).size > MAX_PHOTO_BYTES) return null
 
     // Collision-resistant path: include user uid + timestamp + random suffix

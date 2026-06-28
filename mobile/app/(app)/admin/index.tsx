@@ -9,7 +9,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  StatusBar, ActivityIndicator, RefreshControl,
+  StatusBar, ActivityIndicator, RefreshControl, Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -122,7 +122,7 @@ export default function AdminDashboardScreen() {
     setRefreshing(false)
   }
 
-  if (guardLoading || !allowed || loading) {
+  if (guardLoading || !allowed) {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar barStyle="light-content" backgroundColor="#4c1d95" />
@@ -154,17 +154,30 @@ export default function AdminDashboardScreen() {
           </Text>
         </View>
 
-        {/* ── KPI strip ──────────────────────────────────────────────────── */}
-        <View style={styles.kpiStrip}>
-          <KpiPill icon="car-outline"       label="Fleet"     value={stats!.totalVehicles}    color="#a78bfa" />
-          <KpiPill icon="warning-outline"   label="Open Acc"  value={stats!.openAccidents}    color="#fbbf24" alert={stats!.openAccidents > 0} />
-          <KpiPill icon="notifications-outline" label="Alerts" value={stats!.activeAlerts}  color="#f87171" alert={stats!.criticalAlerts > 0} />
-          <KpiPill icon="clipboard-outline" label="Insp/Wk"   value={stats!.inspThisWeek}    color="#34d399" />
-          <KpiPill icon="lock-closed-outline" label="Closures" value={stats!.pendingClosures} color="#fbbf24" alert={stats!.pendingClosures > 0} />
-          {isAdmin(profile?.role) && (
-            <KpiPill icon="people-outline"  label="Pending"   value={stats!.pendingUsers}     color="#60a5fa" alert={stats!.pendingUsers > 0} />
-          )}
-        </View>
+        {/* ── KPI grid (2×3) — replaces cramped horizontal strip ─────────── */}
+        {loading ? (
+          <View style={styles.kpiGrid}>
+            {[0,1,2,3,4,5].map(i => (
+              <View key={i} style={styles.kpiCard}>
+                <View style={{ width: 20, height: 20, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+                <View style={{ width: 30, height: 18, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.15)', marginTop: 5 }} />
+                <View style={{ width: 44, height: 9, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.1)', marginTop: 4 }} />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.kpiGrid}>
+            <KpiCard icon="car-outline"           label="Fleet"      value={stats!.totalVehicles}    color="#a78bfa" />
+            <KpiCard icon="warning-outline"        label="Open Acc"   value={stats!.openAccidents}    color="#fbbf24" alert={stats!.openAccidents > 0} />
+            <KpiCard icon="notifications-outline"  label="Alerts"     value={stats!.activeAlerts}     color="#f87171" alert={stats!.criticalAlerts > 0} />
+            <KpiCard icon="clipboard-outline"      label="Insp/Wk"    value={stats!.inspThisWeek}     color="#34d399" />
+            <KpiCard icon="lock-closed-outline"    label="Closures"   value={stats!.pendingClosures}  color="#fbbf24" alert={stats!.pendingClosures > 0} />
+            {isAdmin(profile?.role)
+              ? <KpiCard icon="people-outline" label="Pending" value={stats!.pendingUsers} color="#60a5fa" alert={stats!.pendingUsers > 0} />
+              : <KpiCard icon="flame-outline"  label="Critical" value={stats!.criticalAccidents} color="#f87171" alert={stats!.criticalAccidents > 0} />
+            }
+          </View>
+        )}
       </View>
 
       <ScrollView
@@ -176,11 +189,11 @@ export default function AdminDashboardScreen() {
         <View style={styles.quickRow}>
           <QuickAction
             icon="sparkles-outline"
-            label="AI Chat"
-            sublabel="Ask fleet AI"
+            label="Fleet AI"
+            sublabel="Ask anything"
             color="#7c3aed"
             bg="#f5f3ff"
-            onPress={() => router.push('/(app)/admin/ai-chat')}
+            onPress={() => router.push('/(app)/ai/index')}
           />
           {isAdmin(profile?.role) && (
             <QuickAction
@@ -329,14 +342,14 @@ export default function AdminDashboardScreen() {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function KpiPill({ icon, label, value, color, alert }: {
+function KpiCard({ icon, label, value, color, alert }: {
   icon: string; label: string; value: number; color: string; alert?: boolean
 }) {
   return (
-    <View style={styles.kpiPill}>
-      <Ionicons name={icon as any} size={14} color={color} />
-      <Text style={[styles.kpiPillValue, { color: alert ? '#fbbf24' : '#fff' }]}>{value}</Text>
-      <Text style={styles.kpiPillLabel}>{label}</Text>
+    <View style={styles.kpiCard}>
+      <Ionicons name={icon as any} size={16} color={color} />
+      <Text style={[styles.kpiCardValue, alert && { color: '#fbbf24' }]}>{value}</Text>
+      <Text style={styles.kpiCardLabel}>{label}</Text>
     </View>
   )
 }
@@ -386,12 +399,12 @@ const styles = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: '#f8f5ff' },
   loader:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll:  { flex: 1 },
-  content: { padding: 16, gap: 14, paddingBottom: 40 },
+  content: { padding: 16, gap: 14, paddingBottom: Platform.OS === 'ios' ? 24 : 16 },
 
   // Header
   header: {
     backgroundColor: '#4c1d95',
-    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20,
     gap: 16,
   },
   headerTop:   { flexDirection: 'row', alignItems: 'flex-start' },
@@ -400,11 +413,14 @@ const styles = StyleSheet.create({
   roleText:    { fontSize: 11, color: '#a78bfa', fontWeight: '600' },
   dateText:    { fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: '500' },
 
-  // KPI strip
-  kpiStrip:   { flexDirection: 'row', gap: 8 },
-  kpiPill:    { flex: 1, alignItems: 'center', gap: 3 },
-  kpiPillValue:{ fontSize: 16, fontWeight: '800', color: '#fff' },
-  kpiPillLabel:{ fontSize: 9, color: 'rgba(255,255,255,0.55)', fontWeight: '600', textAlign: 'center' },
+  // KPI grid (2×3)
+  kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  kpiCard: {
+    width: '30.5%', alignItems: 'center', gap: 3, paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12,
+  },
+  kpiCardValue: { fontSize: 18, fontWeight: '800', color: '#fff' },
+  kpiCardLabel: { fontSize: 9, color: 'rgba(255,255,255,0.6)', fontWeight: '600', textAlign: 'center' },
 
   // Quick actions
   quickRow: { flexDirection: 'row', gap: 10 },

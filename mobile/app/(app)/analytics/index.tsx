@@ -8,7 +8,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, StatusBar, ActivityIndicator,
+  RefreshControl, StatusBar, ActivityIndicator, Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
@@ -152,11 +152,35 @@ export default function AnalyticsScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#3b82f6" /></View>
+        <ScrollView contentContainerStyle={styles.content}>
+          {/* Skeleton KPI grid */}
+          <View style={styles.kpiGrid}>
+            {[0,1,2,3].map(i => (
+              <View key={i} style={[kpiStyles.card, { borderTopColor: '#e2e8f0' }]}>
+                <View style={{ width: 18, height: 18, borderRadius: 4, backgroundColor: '#e2e8f0' }} />
+                <View style={{ width: 36, height: 18, borderRadius: 4, backgroundColor: '#e2e8f0', marginVertical: 4 }} />
+                <View style={{ width: 54, height: 10, borderRadius: 3, backgroundColor: '#f1f5f9' }} />
+              </View>
+            ))}
+          </View>
+          <View style={styles.kpiGrid}>
+            {[0,1,2,3].map(i => (
+              <View key={i} style={[kpiStyles.card, { borderTopColor: '#e2e8f0' }]}>
+                <View style={{ width: 18, height: 18, borderRadius: 4, backgroundColor: '#e2e8f0' }} />
+                <View style={{ width: 36, height: 18, borderRadius: 4, backgroundColor: '#e2e8f0', marginVertical: 4 }} />
+                <View style={{ width: 54, height: 10, borderRadius: 3, backgroundColor: '#f1f5f9' }} />
+              </View>
+            ))}
+          </View>
+          {[120, 160, 140].map((h, i) => (
+            <View key={i} style={[styles.card, { height: h }]} />
+          ))}
+        </ScrollView>
       ) : (
         <ScrollView
           contentContainerStyle={styles.content}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3b82f6" />}
+          showsVerticalScrollIndicator={false}
         >
           {/* KPI row 1 */}
           <View style={styles.kpiGrid}>
@@ -169,22 +193,27 @@ export default function AnalyticsScreen() {
             <KpiCard icon="trending-up-outline" label="Avg Cost/Tyre" value={`SAR ${Math.round(kpi!.avgCostPerTyre).toLocaleString()}`} color="#f59e0b" />
             <KpiCard icon="flame-outline"       label="High Risk"     value={kpi!.highCount.toString()} color="#ea580c" />
             <KpiCard icon="construct-outline"   label="Open Actions"  value={kpi!.openActions.toString()} color="#0ea5e9" />
-            <KpiCard icon="checkmark-circle-outline" label="Low Risk" value={(kpi!.totalRecords - kpi!.criticalCount - kpi!.highCount).toString()} color="#16a34a" />
+            <KpiCard icon="checkmark-circle-outline" label="Safe"     value={(kpi!.totalRecords - kpi!.criticalCount - kpi!.highCount).toString()} color="#16a34a" />
           </View>
 
-          {/* Risk breakdown */}
+          {/* Risk breakdown — with % labels inside bars */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Risk Breakdown</Text>
-            <View style={{ gap: 10 }}>
+            <View style={{ gap: 12 }}>
               {byRisk.map(r => {
                 const pct = kpi!.totalRecords > 0 ? r.count / kpi!.totalRecords : 0
+                const pctLabel = `${Math.round(pct * 100)}%`
                 return (
-                  <View key={r.risk} style={styles.barRow}>
-                    <Text style={styles.barLabel}>{r.risk}</Text>
+                  <View key={r.risk}>
+                    <View style={styles.barMeta}>
+                      <View style={[styles.riskDot, { backgroundColor: RISK_COLOR[r.risk] }]} />
+                      <Text style={styles.barLabel}>{r.risk}</Text>
+                      <Text style={[styles.barValue, { color: RISK_COLOR[r.risk] }]}>{r.count}</Text>
+                      <Text style={styles.pctLabel}>{pctLabel}</Text>
+                    </View>
                     <View style={styles.barTrack}>
                       <View style={[styles.barFill, { width: `${Math.round(pct * 100)}%`, backgroundColor: RISK_COLOR[r.risk] }]} />
                     </View>
-                    <Text style={[styles.barValue, { color: RISK_COLOR[r.risk] }]}>{r.count}</Text>
                   </View>
                 )
               })}
@@ -195,14 +224,19 @@ export default function AnalyticsScreen() {
           {bySite.length > 0 && (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Top Sites by Cost (SAR)</Text>
-              <View style={{ gap: 10 }}>
-                {bySite.map(s => (
-                  <View key={s.site} style={styles.barRow}>
-                    <Text style={styles.barLabel} numberOfLines={1}>{s.site}</Text>
+              <View style={{ gap: 12 }}>
+                {bySite.map((s, idx) => (
+                  <View key={s.site}>
+                    <View style={styles.barMeta}>
+                      <Text style={styles.rankNum}>#{idx + 1}</Text>
+                      <Text style={styles.barLabel} numberOfLines={1}>{s.site}</Text>
+                      <Text style={[styles.barValue, { color: '#3b82f6' }]}>
+                        {s.cost >= 1000 ? `${(s.cost / 1000).toFixed(0)}k` : Math.round(s.cost).toString()}
+                      </Text>
+                    </View>
                     <View style={styles.barTrack}>
                       <View style={[styles.barFill, { width: `${Math.round((s.cost / maxCost) * 100)}%`, backgroundColor: '#3b82f6' }]} />
                     </View>
-                    <Text style={styles.barValue}>{(s.cost / 1000).toFixed(0)}k</Text>
                   </View>
                 ))}
               </View>
@@ -213,14 +247,17 @@ export default function AnalyticsScreen() {
           {byBrand.length > 0 && (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Top Brands by Volume</Text>
-              <View style={{ gap: 10 }}>
-                {byBrand.map(b => (
-                  <View key={b.brand} style={styles.barRow}>
-                    <Text style={styles.barLabel} numberOfLines={1}>{b.brand}</Text>
+              <View style={{ gap: 12 }}>
+                {byBrand.map((b, idx) => (
+                  <View key={b.brand}>
+                    <View style={styles.barMeta}>
+                      <Text style={styles.rankNum}>#{idx + 1}</Text>
+                      <Text style={styles.barLabel} numberOfLines={1}>{b.brand}</Text>
+                      <Text style={[styles.barValue, { color: '#8b5cf6' }]}>{b.count}</Text>
+                    </View>
                     <View style={styles.barTrack}>
                       <View style={[styles.barFill, { width: `${Math.round((b.count / maxBrand) * 100)}%`, backgroundColor: '#8b5cf6' }]} />
                     </View>
-                    <Text style={styles.barValue}>{b.count}</Text>
                   </View>
                 ))}
               </View>
@@ -273,19 +310,22 @@ const styles = StyleSheet.create({
   periodText:      { fontSize: 12, fontWeight: '700', color: '#94a3b8' },
   periodTextActive:{ color: '#fff' },
 
-  content: { padding: 16, gap: 14, paddingBottom: 40 },
+  content: { padding: 16, gap: 14, paddingBottom: Platform.OS === 'ios' ? 24 : 16 },
   kpiGrid: { flexDirection: 'row', gap: 8 },
 
   card: {
     backgroundColor: '#fff', borderRadius: 14, padding: 16,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, gap: 12,
+    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, gap: 14,
   },
   cardTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
 
-  barRow:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  barLabel: { fontSize: 12, color: '#374151', width: 70 },
-  barTrack: { flex: 1, height: 8, backgroundColor: '#f1f5f9', borderRadius: 4, overflow: 'hidden' },
-  barFill:  { height: 8, borderRadius: 4, minWidth: 4 },
-  barValue: { fontSize: 12, fontWeight: '700', color: '#64748b', width: 36, textAlign: 'right' },
+  barMeta:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  riskDot:  { width: 8, height: 8, borderRadius: 4 },
+  barLabel: { flex: 1, fontSize: 12, color: '#374151', fontWeight: '600' },
+  barTrack: { height: 10, backgroundColor: '#f1f5f9', borderRadius: 6, overflow: 'hidden' },
+  barFill:  { height: 10, borderRadius: 6, minWidth: 6 },
+  barValue: { fontSize: 12, fontWeight: '800', color: '#64748b', minWidth: 32, textAlign: 'right' },
+  pctLabel: { fontSize: 11, color: '#94a3b8', fontWeight: '600', minWidth: 30, textAlign: 'right' },
+  rankNum:  { fontSize: 11, color: '#94a3b8', fontWeight: '700', minWidth: 20 },
 })

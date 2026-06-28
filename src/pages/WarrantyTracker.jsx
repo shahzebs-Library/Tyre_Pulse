@@ -29,7 +29,6 @@ ChartJS.register(
   PointElement, ArcElement, Title, Tooltip, Legend,
 )
 
-const LS_KEY = 'tp_warranty_claims'
 const PAGE_SIZE = 20
 
 const FAILURE_TYPES = [
@@ -93,14 +92,6 @@ const FAILURE_PALETTE = [
 ]
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-
-function uuid() {
-  return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()
-}
-
-function nowISO() {
-  return new Date().toISOString()
-}
 
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -193,19 +184,41 @@ export default function WarrantyTracker() {
   const [roiAvgCost, setRoiAvgCost]         = useState('')
   const [expandedRow, setExpandedRow]       = useState(null)
 
-  const loadClaims = useCallback(() => {
+  const [claimsError, setClaimsError] = useState('')
+
+  const loadClaims = useCallback(async () => {
     try {
-      const raw = localStorage.getItem(LS_KEY)
-      setClaims(raw ? JSON.parse(raw) : [])
-    } catch {
+      setClaimsError('')
+      const { data, error } = await supabase
+        .from('warranty_claims')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setClaims(data ?? [])
+    } catch (e) {
+      setClaimsError('Could not load warranty claims. Please retry.')
       setClaims([])
     }
   }, [])
 
-  const saveClaims = useCallback((list) => {
-    localStorage.setItem(LS_KEY, JSON.stringify(list))
-    setClaims(list)
-  }, [])
+  // Persist a single claim (insert or update) then refresh from the server so
+  // the list always reflects committed state — no optimistic divergence.
+  const upsertClaim = useCallback(async (row, id) => {
+    if (id) {
+      const { error } = await supabase.from('warranty_claims').update(row).eq('id', id)
+      if (error) throw error
+    } else {
+      const { error } = await supabase.from('warranty_claims').insert(row)
+      if (error) throw error
+    }
+    await loadClaims()
+  }, [loadClaims])
+
+  const removeClaim = useCallback(async (id) => {
+    const { error } = await supabase.from('warranty_claims').delete().eq('id', id)
+    if (error) throw error
+    await loadClaims()
+  }, [loadClaims])
 
   useEffect(() => {
     loadClaims()
@@ -414,54 +427,62 @@ export default function WarrantyTracker() {
     return 0
   }, [form.km_at_fitment, form.km_at_removal])
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!form.serial_number.trim()) { setFormError('Serial number is required.'); return }
     if (!form.brand.trim()) { setFormError('Brand is required.'); return }
     if (!form.failure_type) { setFormError('Failure type is required.'); return }
     setSaving(true)
+    setFormError('')
     try {
-      const current = [...claims]
-      if (editClaim) {
-        const idx = current.findIndex(c => c.id === editClaim.id)
-        if (idx !== -1) {
-          current[idx] = {
-            ...current[idx],
-            ...form,
-            km_at_fitment: Number(form.km_at_fitment) || 0,
-            km_at_removal: Number(form.km_at_removal) || 0,
-            km_run: kmRun,
-            expected_life_km: Number(form.expected_life_km) || 100000,
-            credit_amount: Number(form.credit_amount) || 0,
-          }
-        }
-      } else {
-        const newClaim = {
-          id: uuid(),
-          claim_no: generateClaimNo(current),
-          ...form,
-          km_at_fitment: Number(form.km_at_fitment) || 0,
-          km_at_removal: Number(form.km_at_removal) || 0,
-          km_run: kmRun,
-          expected_life_km: Number(form.expected_life_km) || 100000,
-          credit_amount: Number(form.credit_amount) || 0,
-          created_at: nowISO(),
-        }
-        current.unshift(newClaim)
+      // Whitelist only real columns — never spread unknown form keys into the row
+      const base = {
+        serial_number: form.serial_number.trim(),
+        brand: form.brand.trim(),
+        size: form.size || null,
+        asset_no: form.asset_no || null,
+        site: form.site || null,
+        country: form.country || profile?.country || null,
+        fitment_date: form.fitment_date || null,
+        removal_date: form.removal_date || null,
+        km_at_fitment: Number(form.km_at_fitment) || 0,
+        km_at_removal: Number(form.km_at_removal) || 0,
+        km_run: kmRun,
+        expected_life_km: Number(form.expected_life_km) || 100000,
+        failure_type: form.failure_type,
+        supplier: form.supplier || null,
+        notes: form.notes || null,
+        claim_status: form.claim_status || 'Submitted',
+        credit_amount: Number(form.credit_amount) || 0,
+        credit_date: form.credit_date || null,
       }
-      saveClaims(current)
+      if (editClaim) {
+        await upsertClaim(base, editClaim.id)
+      } else {
+        await upsertClaim({
+          ...base,
+          claim_no: generateClaimNo(claims),
+          created_by: profile?.id ?? null,
+        })
+      }
       setShowAdd(false)
       setEditClaim(null)
       setForm(EMPTY_FORM)
+    } catch (e) {
+      setFormError(e?.message || 'Could not save the claim. Please retry.')
     } finally {
       setSaving(false)
     }
-  }, [claims, editClaim, form, kmRun, saveClaims])
+  }, [claims, editClaim, form, kmRun, upsertClaim, profile])
 
-  const handleDelete = useCallback((id) => {
+  const handleDelete = useCallback(async (id) => {
     if (!window.confirm('Delete this warranty claim?')) return
-    saveClaims(claims.filter(c => c.id !== id))
-    setDrawer(null)
-  }, [claims, saveClaims])
+    try {
+      await removeClaim(id)
+      setDrawer(null)
+    } catch (e) {
+      window.alert(e?.message || 'Could not delete the claim.')
+    }
+  }, [removeClaim])
 
   const exportPDF = useCallback(() => {
     const doc = new jsPDF({ orientation: 'landscape' })
@@ -782,6 +803,14 @@ export default function WarrantyTracker() {
             {loading ? (
               <div className="flex items-center justify-center py-16">
                 <Loader2 size={28} className="animate-spin text-blue-400" />
+              </div>
+            ) : claimsError ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <AlertTriangle size={40} className="text-red-500" />
+                <p className="text-red-400">{claimsError}</p>
+                <button onClick={() => loadClaims()} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-white">
+                  Retry
+                </button>
               </div>
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">

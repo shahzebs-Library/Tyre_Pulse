@@ -18,19 +18,21 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const profileChannelRef = useRef(null)
+  const profileChannelRef  = useRef(null)
+  const lastActivityRef    = useRef(Date.now())
   const [modulePerms, setModulePerms] = useState(null)
   const [mfaEnabled, setMfaEnabled] = useState(false)
 
-  // Idle timeout — sign out after 30 minutes of inactivity
+  // Idle timeout — sign out after 30 minutes of inactivity.
+  // Uses an in-memory ref instead of localStorage so the timer cannot be
+  // bypassed by a user opening DevTools and modifying localStorage values.
   const IDLE_MS = 30 * 60 * 1000
   useEffect(() => {
     function resetTimer() {
-      localStorage.setItem('tp_last_activity', Date.now().toString())
+      lastActivityRef.current = Date.now()
     }
     function checkIdle() {
-      const last = parseInt(localStorage.getItem('tp_last_activity') || '0', 10)
-      if (last && Date.now() - last > IDLE_MS) {
+      if (Date.now() - lastActivityRef.current > IDLE_MS) {
         supabase.auth.signOut()
         localStorage.setItem('tp_session_expired', '1')
       }

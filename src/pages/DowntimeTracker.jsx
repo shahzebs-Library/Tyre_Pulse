@@ -27,12 +27,16 @@ ChartJS.register(
   PointElement, ArcElement, Title, Tooltip, Legend, Filler,
 )
 
-// ── Constants ────────────────────────────────────────────────────────────────
-const DOWNTIME_RATE = 850          // cost per hour in base currency
-const SHIFT_HOURS   = 8            // hours per shift day
-const BUDGET_THRESHOLD = 50000     // monthly budget threshold
+// ── Assumptions / Constants ──────────────────────────────────────────────────
+// These are ESTIMATION assumptions, not measured facts. Where the `settings`
+// table exposes overrides they are applied at runtime (see component body).
+const DEFAULT_DOWNTIME_RATE = 850  // assumed cost per hour of downtime (base currency)
+const SHIFT_HOURS   = 8            // assumed productive hours per shift-day
+const BUDGET_THRESHOLD = 50000     // monthly budget threshold (reference line)
 const TARGET_AVAILABILITY = 95     // industry benchmark %
 
+// Assumed downtime hours per removal event by severity — used only as a fallback
+// when a linked work order does not provide actual opened/completed timestamps.
 const SEVERITY_HOURS = { Critical: 4, High: 3, Medium: 2, Low: 2 }
 const SEVERITY_WEIGHT = { Critical: 3, High: 2, Medium: 1, Low: 0.5 }
 
@@ -111,8 +115,21 @@ function monthLabel(ym) {
   return new Date(+y, +m - 1, 1).toLocaleString('default', { month: 'short', year: '2-digit' })
 }
 
-function downtimeHours(record) {
-  return SEVERITY_HOURS[record.risk_level] ?? 2
+// Actual downtime hours from a work order's opened/completed timestamps.
+// Returns null when either timestamp is missing or the span is non-positive.
+function workOrderHours(wo) {
+  if (!wo || !wo.opened_at || !wo.completed_at) return null
+  const h = (new Date(wo.completed_at) - new Date(wo.opened_at)) / 3600000
+  return h > 0 ? h : null
+}
+
+// Downtime hours for a tyre-removal event. Prefers ACTUAL hours from a matched
+// work order (keyed on asset_no); falls back to the per-severity ESTIMATE.
+// Returns { hours, actual } so callers can flag estimated vs measured values.
+function downtimeHours(record, actualByAsset) {
+  const actual = actualByAsset && record.asset_no ? actualByAsset.get(record.asset_no) : undefined
+  if (actual != null) return { hours: actual, actual: true }
+  return { hours: SEVERITY_HOURS[record.risk_level] ?? 2, actual: false }
 }
 
 function causeLabel(record) {
@@ -157,7 +174,14 @@ function ChartCard({ title, children, onExpand }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function DowntimeTracker() {
-  const { activeCurrency, activeCountry } = useSettings()
+  const { activeCurrency, activeCountry, appSettings } = useSettings()
+
+  // Cost/hour assumption — overridable via the `downtime_rate` setting key.
+  const downtimeRate = useMemo(() => {
+    const v = Number(appSettings?.downtime_rate)
+    return Number.isFinite(v) && v > 0 ? v : DEFAULT_DOWNTIME_RATE
+  }, [appSettings])
+  const rateIsCustom = downtimeRate !== DEFAULT_DOWNTIME_RATE
 
   const [tyreRecords, setTyreRecords]   = useState([])
   const [workOrders, setWorkOrders]     = useState([])
@@ -197,10 +221,11 @@ export default function DowntimeTracker() {
       if (tyreErr) throw tyreErr
       setTyreRecords(tyreData || [])
 
-      // Try work_orders (may not exist)
+      // Try work_orders (may be empty). opened_at/completed_at give ACTUAL
+      // downtime duration; created_at retained for period filtering.
       const { data: woData, error: woErr } = await supabase
         .from('work_orders')
-        .select('id,asset_no,work_type,created_at,completed_at,status,priority,total_cost,site')
+        .select('id,asset_no,work_type,created_at,opened_at,completed_at,status,priority,total_cost,site')
         .order('created_at', { ascending: false })
       if (!woErr && woData) {
         setWorkOrders(woData)
@@ -242,6 +267,26 @@ export default function DowntimeTracker() {
     })
   }, [workOrders, hasWorkOrders, cutoff, siteFilter])
 
+  // Map asset_no → average ACTUAL downtime hours derived from work orders that
+  // carry both opened_at and completed_at. Used to replace the per-severity
+  // estimate for those assets; assets without WO timestamps stay estimated.
+  const actualByAsset = useMemo(() => {
+    const acc = new Map()
+    filteredWO.forEach(wo => {
+      const h = workOrderHours(wo)
+      if (h == null || !wo.asset_no) return
+      const cur = acc.get(wo.asset_no) || { sum: 0, n: 0 }
+      cur.sum += h; cur.n += 1
+      acc.set(wo.asset_no, cur)
+    })
+    const out = new Map()
+    acc.forEach((v, k) => out.set(k, v.sum / v.n))
+    return out
+  }, [filteredWO])
+
+  // True when at least one displayed event uses actual (measured) work-order hours.
+  const usingActual = actualByAsset.size > 0
+
   // Unique filter options
   const sites     = useMemo(() => [...new Set(tyreRecords.map(r => r.site).filter(Boolean))].sort(), [tyreRecords])
   const countries = useMemo(() => [...new Set(tyreRecords.map(r => r.country).filter(Boolean))].sort(), [tyreRecords])
@@ -249,8 +294,8 @@ export default function DowntimeTracker() {
   // ── KPI Computations ────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
     const totalEvents = filtered.length
-    const totalHours  = filtered.reduce((s, r) => s + downtimeHours(r), 0)
-    const totalCost   = totalHours * DOWNTIME_RATE
+    const totalHours  = filtered.reduce((s, r) => s + downtimeHours(r, actualByAsset).hours, 0)
+    const totalCost   = totalHours * downtimeRate
     const downDays    = totalHours / SHIFT_HOURS
 
     const uniqueVehicles = new Set(filtered.map(r => r.asset_no).filter(Boolean)).size
@@ -286,7 +331,7 @@ export default function DowntimeTracker() {
     const mttr = mttrCount > 0 ? mttrSum / mttrCount : 0
 
     return { totalEvents, totalHours, totalCost, availability, mttr, uniqueVehicles }
-  }, [filtered, cutoff])
+  }, [filtered, cutoff, actualByAsset, downtimeRate])
 
   // ── Availability Trend (last 12 months) ─────────────────────────────────────
   const availabilityTrend = useMemo(() => {
@@ -299,13 +344,13 @@ export default function DowntimeTracker() {
     }
     return months.map(ym => {
       const monthRecords = tyreRecords.filter(r => isoYearMonth(r.issue_date) === ym)
-      const hours = monthRecords.reduce((s, r) => s + downtimeHours(r), 0)
+      const hours = monthRecords.reduce((s, r) => s + downtimeHours(r, actualByAsset).hours, 0)
       const days  = daysInMonth(ym)
       const totalVD = vCount * days
       const downDays = hours / SHIFT_HOURS
       return Math.min(100, ((totalVD - downDays) / totalVD) * 100)
     })
-  }, [tyreRecords])
+  }, [tyreRecords, actualByAsset])
 
   const availabilityTrendData = useMemo(() => {
     const months = last12Months()
@@ -343,7 +388,7 @@ export default function DowntimeTracker() {
     filtered.forEach(r => {
       const s = r.site || 'Unknown'
       if (!map[s]) map[s] = { planned: 0, unplanned: 0 }
-      const h = downtimeHours(r)
+      const h = downtimeHours(r, actualByAsset).hours
       if (r.risk_level === 'Critical' || r.risk_level === 'High') map[s].unplanned += h
       else map[s].planned += h
     })
@@ -368,7 +413,7 @@ export default function DowntimeTracker() {
         },
       ],
     }
-  }, [filtered])
+  }, [filtered, actualByAsset])
 
   // ── Downtime by Cause ────────────────────────────────────────────────────────
   const causeData = useMemo(() => {
@@ -405,8 +450,8 @@ export default function DowntimeTracker() {
       const recs = filtered.filter(r => isoYearMonth(r.issue_date) === ym)
       let p = 0, u = 0
       recs.forEach(r => {
-        const h = downtimeHours(r)
-        const cost = h * DOWNTIME_RATE
+        const h = downtimeHours(r, actualByAsset).hours
+        const cost = h * downtimeRate
         if (r.risk_level === 'Critical' || r.risk_level === 'High') u += cost
         else p += cost
       })
@@ -447,7 +492,7 @@ export default function DowntimeTracker() {
         },
       ],
     }
-  }, [filtered])
+  }, [filtered, actualByAsset, downtimeRate])
 
   // ── Vehicles by Downtime Table ────────────────────────────────────────────────
   const vehicleTable = useMemo(() => {
@@ -455,10 +500,10 @@ export default function DowntimeTracker() {
     filtered.forEach(r => {
       if (!r.asset_no) return
       if (!map[r.asset_no]) map[r.asset_no] = { asset: r.asset_no, site: r.site || '—', events: [], totalHours: 0, totalCost: 0, severitySum: 0 }
-      const h = downtimeHours(r)
+      const h = downtimeHours(r, actualByAsset).hours
       map[r.asset_no].events.push(r.issue_date)
       map[r.asset_no].totalHours += h
-      map[r.asset_no].totalCost  += h * DOWNTIME_RATE
+      map[r.asset_no].totalCost  += h * downtimeRate
       map[r.asset_no].severitySum += SEVERITY_WEIGHT[r.risk_level] ?? 1
     })
 
@@ -498,7 +543,7 @@ export default function DowntimeTracker() {
       })
       .slice(0, 20)
       .map(r => ({ ...r, isHigh: r.eventCount > fleetAvgEvents * 2 && fleetAvgEvents > 0 }))
-  }, [filtered, sortCol, sortDir, cutoff])
+  }, [filtered, sortCol, sortDir, cutoff, actualByAsset, downtimeRate])
 
   // ── Heatmap ──────────────────────────────────────────────────────────────────
   const heatmap = useMemo(() => {
@@ -509,7 +554,7 @@ export default function DowntimeTracker() {
       const ym = isoYearMonth(r.issue_date)
       if (!ym || !months.includes(ym)) return
       const key = `${r.asset_no}::${ym}`
-      map[key] = (map[key] || 0) + downtimeHours(r)
+      map[key] = (map[key] || 0) + downtimeHours(r, actualByAsset).hours
     })
 
     const allVehicles = [...new Set(filtered.map(r => r.asset_no).filter(Boolean))]
@@ -519,7 +564,7 @@ export default function DowntimeTracker() {
       .slice(0, 10)
 
     return { months, rows: byTotal.map(v => ({ asset: v.asset, cells: months.map(m => map[`${v.asset}::${m}`] || 0) })) }
-  }, [filtered])
+  }, [filtered, actualByAsset])
 
   // ── Recommendations ──────────────────────────────────────────────────────────
   const recommendations = useMemo(() => {
@@ -609,7 +654,7 @@ export default function DowntimeTracker() {
     doc.text('TYREPULSE · Fleet Downtime & Availability Report', 14, 10)
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} | Period: ${period} | ${hasWorkOrders ? 'Actual' : 'Estimated'} Data`, 14, 17)
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} | Period: ${period} | ${usingActual ? 'Actual + Estimated' : 'Estimated'} Data`, 14, 17)
 
     // KPI summary
     doc.setFontSize(11)
@@ -627,6 +672,12 @@ export default function DowntimeTracker() {
       `MTTR: ${kpis.mttr > 0 ? kpis.mttr.toFixed(0) + ' h avg between events' : 'N/A'}`,
     ]
     kpiText.forEach((t, i) => doc.text(t, 14 + (i % 3) * 90, 37 + Math.floor(i / 3) * 7))
+    doc.setTextColor(120, 120, 120)
+    doc.setFontSize(7.5)
+    doc.text(
+      `Basis: downtime hours are ${usingActual ? 'actual (work-order open→complete) where available, otherwise ' : ''}estimated per severity (Critical 4h, High 3h, Medium/Low 2h). Cost @ ${sym} ${downtimeRate}/hr${rateIsCustom ? ' (configured)' : ' (default assumption)'}.`,
+      14, 37 + Math.ceil(kpiText.length / 3) * 7 + 2, { maxWidth: 269 },
+    )
 
     // Vehicle table
     autoTable(doc, {
@@ -672,24 +723,27 @@ export default function DowntimeTracker() {
 
   // ── Export Excel ──────────────────────────────────────────────────────────────
   function handleExportExcel() {
-    const rows = filtered.map(r => ({
-      asset_no:             r.asset_no || '',
-      site:                 r.site || '',
-      country:              r.country || '',
-      risk_level:           r.risk_level || '',
-      issue_date:           r.issue_date || '',
-      reason_for_removal:   r.reason_for_removal || '',
-      brand:                r.brand || '',
-      position:             r.position || '',
-      estimated_hours:      downtimeHours(r),
-      downtime_cost:        (downtimeHours(r) * DOWNTIME_RATE).toFixed(2),
-      cause:                causeLabel(r),
-      data_source:          hasWorkOrders ? 'Actual' : 'Estimated',
-    }))
+    const rows = filtered.map(r => {
+      const dt = downtimeHours(r, actualByAsset)
+      return {
+        asset_no:             r.asset_no || '',
+        site:                 r.site || '',
+        country:              r.country || '',
+        risk_level:           r.risk_level || '',
+        issue_date:           r.issue_date || '',
+        reason_for_removal:   r.reason_for_removal || '',
+        brand:                r.brand || '',
+        position:             r.position || '',
+        downtime_hours:       +dt.hours.toFixed(2),
+        downtime_cost:        (dt.hours * downtimeRate).toFixed(2),
+        cause:                causeLabel(r),
+        data_source:          dt.actual ? 'Actual (work order)' : 'Estimated (severity)',
+      }
+    })
     exportToExcel(
       rows,
-      ['asset_no', 'site', 'country', 'risk_level', 'issue_date', 'reason_for_removal', 'brand', 'position', 'estimated_hours', 'downtime_cost', 'cause', 'data_source'],
-      ['Asset No', 'Site', 'Country', 'Risk Level', 'Issue Date', 'Reason for Removal', 'Brand', 'Position', 'Est. Hours', `Downtime Cost (${sym})`, 'Cause', 'Data Source'],
+      ['asset_no', 'site', 'country', 'risk_level', 'issue_date', 'reason_for_removal', 'brand', 'position', 'downtime_hours', 'downtime_cost', 'cause', 'data_source'],
+      ['Asset No', 'Site', 'Country', 'Risk Level', 'Issue Date', 'Reason for Removal', 'Brand', 'Position', 'Downtime Hours', `Downtime Cost (${sym})`, 'Cause', 'Data Source'],
       `downtime-events-${new Date().toISOString().slice(0, 10)}`,
       'Downtime Events',
     )
@@ -786,8 +840,10 @@ export default function DowntimeTracker() {
       <PageHeader
         title="Fleet Downtime & Availability"
         subtitle={<>
-          {hasWorkOrders ? 'Actual work order data' : 'Estimated from tyre removal events'}
-          {!hasWorkOrders && <span className="ml-2 px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-[10px] rounded font-semibold">ESTIMATED</span>}
+          {usingActual ? 'Actual work-order durations where available, otherwise estimated from tyre removal events' : 'Estimated from tyre removal events'}
+          <span className="ml-2 px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-[10px] rounded font-semibold">
+            {usingActual ? 'ACTUAL + ESTIMATED' : 'ESTIMATED'}
+          </span>
         </>}
         icon={AlertTriangle}
         actions={<>
@@ -878,10 +934,27 @@ export default function DowntimeTracker() {
         </div>
       </div>
 
+      {/* Estimation basis banner */}
+      <div className="flex items-start gap-2.5 bg-yellow-500/5 border border-yellow-500/20 rounded-2xl px-4 py-3">
+        <AlertCircle size={15} className="text-yellow-400 shrink-0 mt-0.5" />
+        <p className="text-xs text-gray-400 leading-relaxed">
+          <span className="text-yellow-400 font-semibold">Estimated figures.</span>{' '}
+          Downtime hours are{' '}
+          {usingActual
+            ? 'taken from actual work-order durations (opened → completed) where a matching work order exists, and otherwise '
+            : ''}
+          estimated per severity — Critical 4h, High 3h, Medium/Low 2h per tyre-removal event.
+          Downtime cost is modelled at{' '}
+          <span className="text-gray-200 font-medium">{sym} {downtimeRate.toLocaleString()}/hr</span>{' '}
+          {rateIsCustom ? '(configured via settings)' : '(default assumption — set a "downtime_rate" key in Settings to override)'},
+          assuming {SHIFT_HOURS} productive hours per shift-day. These are planning estimates, not invoiced downtime.
+        </p>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard
-          label="Fleet Availability"
+          label="Fleet Availability (Est.)"
           value={`${kpis.availability.toFixed(2)}%`}
           sub={kpis.availability >= TARGET_AVAILABILITY ? `Above ${TARGET_AVAILABILITY}% target` : `Below ${TARGET_AVAILABILITY}% benchmark`}
           icon={Activity}
@@ -895,21 +968,21 @@ export default function DowntimeTracker() {
           color="orange"
         />
         <StatCard
-          label="Total Downtime Hours"
+          label="Total Downtime Hours (Est.)"
           value={fmtHours(kpis.totalHours)}
-          sub={`${(kpis.totalHours / SHIFT_HOURS).toFixed(1)} shift-days lost`}
+          sub={`${(kpis.totalHours / SHIFT_HOURS).toFixed(1)} shift-days · ${usingActual ? 'actual + severity est.' : 'severity estimate'}`}
           icon={Clock}
           color="yellow"
         />
         <StatCard
-          label="Downtime Cost"
+          label="Downtime Cost (Est.)"
           value={fmtCurrency(kpis.totalCost, sym)}
-          sub={`@ ${sym} ${DOWNTIME_RATE}/hr · ${hasWorkOrders ? 'Actual' : 'Est.'}`}
+          sub={`@ ${sym} ${downtimeRate.toLocaleString()}/hr · ${rateIsCustom ? 'configured' : 'assumed'}`}
           icon={DollarSign}
           color="red"
         />
         <StatCard
-          label="MTTR"
+          label="MTTR (Est.)"
           value={kpis.mttr > 0 ? `${Math.round(kpis.mttr)} h` : 'N/A'}
           sub="Mean time between tyre events per vehicle"
           icon={BarChart2}

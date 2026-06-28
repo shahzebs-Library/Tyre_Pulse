@@ -24,9 +24,10 @@ interface Props {
   photos: string[]           // array of public URLs (or local URIs before upload)
   localUris: string[]        // parallel array of local preview URIs
   onPhotosChange: (urls: string[], localUris: string[]) => void
+  onUploadingChange?: (isUploading: boolean) => void
 }
 
-export default function AccidentPhotoGrid({ photos, localUris, onPhotosChange }: Props) {
+export default function AccidentPhotoGrid({ photos, localUris, onPhotosChange, onUploadingChange }: Props) {
   const { t } = useLanguage()
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
 
@@ -60,6 +61,7 @@ export default function AccidentPhotoGrid({ photos, localUris, onPhotosChange }:
 
     // Upload in background (base64 → public bucket; reliable in Expo/RN)
     setUploadingIndex(newIndex)
+    onUploadingChange?.(true)
     try {
       const publicUrl = await uploadAccidentPhoto(localUri, newIndex)
       const finalUrls = [...newUrls]
@@ -71,6 +73,7 @@ export default function AccidentPhotoGrid({ photos, localUris, onPhotosChange }:
       }
     } finally {
       setUploadingIndex(null)
+      onUploadingChange?.(false)
     }
   }
 

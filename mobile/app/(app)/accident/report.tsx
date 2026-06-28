@@ -40,12 +40,15 @@ export default function AccidentReportScreen() {
 
   const [step, setStep] = useState<Step>('step1')
   const [draft, setDraft] = useState<AccidentDraft>(emptyAccidentDraft())
-  const [photoUrls, setPhotoUrls]       = useState<string[]>([])
+  const [photoUrls, setPhotoUrls]         = useState<string[]>([])
   const [photoLocalUris, setPhotoLocalUris] = useState<string[]>([])
-  const [sites, setSites]               = useState<string[]>([])
-  const [vehicles, setVehicles]         = useState<VehicleFleet[]>([])
+  const [photosUploading, setPhotosUploading] = useState(false)
+  const [sites, setSites]                 = useState<string[]>([])
+  const [vehicles, setVehicles]           = useState<VehicleFleet[]>([])
   const [loadingVehicles, setLoadingVehicles] = useState(false)
-  const [submitting, setSubmitting]     = useState(false)
+  const [submitting, setSubmitting]       = useState(false)
+  const [manualAsset, setManualAsset]     = useState('')
+  const [useManualEntry, setUseManualEntry] = useState(false)
 
   const textAlign   = isRTL ? 'right' : 'left'
   const backIcon    = isRTL ? 'arrow-forward' : 'arrow-back'
@@ -57,10 +60,33 @@ export default function AccidentReportScreen() {
   }, [draft.site])
 
   async function loadSites() {
-    const { data } = await supabase.from('vehicle_fleet').select('site').order('site')
-    if (data) {
-      const unique = [...new Set(data.map(r => r.site).filter(Boolean))] as string[]
+    // 1. Try sites table (primary source)
+    const { data: sitesData } = await supabase
+      .from('sites').select('name').eq('active', true).order('name')
+    if (sitesData && sitesData.length > 0) {
+      const names = sitesData.map((s: any) => s.name as string)
+      setSites(names)
+      // Auto-select: profile.site match → single site → nothing
+      const profMatch = profile?.site && names.includes(profile.site) ? profile.site : null
+      const autoSite = profMatch ?? (names.length === 1 ? names[0] : null)
+      if (autoSite) update({ site: autoSite })
+      return
+    }
+    // 2. Fallback: vehicle_fleet.site
+    const { data: fleetData } = await supabase
+      .from('vehicle_fleet').select('site').order('site')
+    if (fleetData && fleetData.length > 0) {
+      const unique = [...new Set(fleetData.map((r: any) => r.site).filter(Boolean))] as string[]
       setSites(unique)
+      const profMatch = profile?.site && unique.includes(profile.site) ? profile.site : null
+      const autoSite = profMatch ?? (unique.length === 1 ? unique[0] : null)
+      if (autoSite) update({ site: autoSite })
+      return
+    }
+    // 3. Fallback: profile.site only
+    if (profile?.site) {
+      setSites([profile.site])
+      update({ site: profile.site })
     }
   }
 
@@ -81,12 +107,16 @@ export default function AccidentReportScreen() {
 
   // ── Validation ────────────────────────────────────────────────────────────
 
+  function getEffectiveAssetNo(): string {
+    return useManualEntry ? manualAsset.trim() : draft.asset_no
+  }
+
   function validateStep1(): boolean {
     if (!draft.site) {
       Alert.alert(t('accident.alertRequired'), t('accident.alertSelectSite'))
       return false
     }
-    if (!draft.asset_no) {
+    if (!getEffectiveAssetNo()) {
       Alert.alert(t('accident.alertRequired'), t('accident.alertSelectVehicle'))
       return false
     }
@@ -98,7 +128,8 @@ export default function AccidentReportScreen() {
   }
 
   function validateStep3(): boolean {
-    if (photoUrls.length === 0) {
+    const uploadedPhotos = photoUrls.filter(u => u && u.startsWith('http'))
+    if (uploadedPhotos.length === 0) {
       Alert.alert(t('accident.alertRequired'), t('accident.alertPhoto'))
       return false
     }
@@ -113,10 +144,11 @@ export default function AccidentReportScreen() {
     setSubmitting(true)
 
     try {
-      const selectedVehicle = vehicles.find(v => v.asset_no === draft.asset_no)
+      const effectiveAsset = getEffectiveAssetNo()
+      const selectedVehicle = vehicles.find(v => v.asset_no === effectiveAsset)
       const payload = {
         site:                   draft.site,
-        asset_no:               draft.asset_no,
+        asset_no:               effectiveAsset,
         vehicle_id:             selectedVehicle?.id ?? null,
         reported_by:            profile?.id ?? null,
         reporter_name:          profile?.full_name ?? profile?.username ?? null,
@@ -134,7 +166,7 @@ export default function AccidentReportScreen() {
         estimated_damage_cost:  draft.estimated_damage_cost
                                   ? parseFloat(draft.estimated_damage_cost)
                                   : null,
-        photos:                 photoUrls.filter(u => u),
+        photos:                 photoUrls.filter(u => u && u.startsWith('http')),
         notes:                  draft.notes || null,
         status:                 'reported',
       }
@@ -249,25 +281,56 @@ export default function AccidentReportScreen() {
                 <Text style={[styles.fieldLabel, { textAlign }]}>{t('accident.vehicleLabel')}</Text>
                 {loadingVehicles ? (
                   <ActivityIndicator size="small" color="#dc2626" style={{ marginTop: 8 }} />
+                ) : useManualEntry ? (
+                  <View style={{ gap: 8 }}>
+                    <TextInput
+                      style={[styles.input, { textAlign }]}
+                      value={manualAsset}
+                      onChangeText={setManualAsset}
+                      placeholder="Enter asset / vehicle number"
+                      placeholderTextColor="#94a3b8"
+                      autoCapitalize="characters"
+                    />
+                    <TouchableOpacity
+                      onPress={() => { setUseManualEntry(false); setManualAsset('') }}
+                      style={styles.manualToggle}
+                    >
+                      <Ionicons name="list-outline" size={14} color="#dc2626" />
+                      <Text style={styles.manualToggleText}>Select from list</Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.chipRow}>
-                      {vehicles.map(v => (
-                        <TouchableOpacity
-                          key={v.id}
-                          style={[styles.chip, draft.asset_no === v.asset_no && styles.chipActive]}
-                          onPress={() => update({ asset_no: v.asset_no, vehicle_id: v.id })}
-                        >
-                          <Text style={[styles.chipText, draft.asset_no === v.asset_no && styles.chipTextActive]}>
-                            {v.asset_no}
-                          </Text>
-                          <Text style={[styles.chipSub, draft.asset_no === v.asset_no && { color: 'rgba(255,255,255,0.7)' }]}>
-                            {v.vehicle_type}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </ScrollView>
+                  <View style={{ gap: 8 }}>
+                    {vehicles.length > 0 ? (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        <View style={styles.chipRow}>
+                          {vehicles.map(v => (
+                            <TouchableOpacity
+                              key={v.id}
+                              style={[styles.chip, draft.asset_no === v.asset_no && styles.chipActive]}
+                              onPress={() => update({ asset_no: v.asset_no, vehicle_id: v.id })}
+                            >
+                              <Text style={[styles.chipText, draft.asset_no === v.asset_no && styles.chipTextActive]}>
+                                {v.asset_no}
+                              </Text>
+                              <Text style={[styles.chipSub, draft.asset_no === v.asset_no && { color: 'rgba(255,255,255,0.7)' }]}>
+                                {v.vehicle_type}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </ScrollView>
+                    ) : (
+                      <Text style={styles.hintText}>No vehicles registered for this site.</Text>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => { setUseManualEntry(true); update({ asset_no: '', vehicle_id: null }) }}
+                      style={styles.manualToggle}
+                    >
+                      <Ionicons name="create-outline" size={14} color="#dc2626" />
+                      <Text style={styles.manualToggleText}>Enter asset number manually</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             ) : null}
@@ -351,9 +414,9 @@ export default function AccidentReportScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.nextBtn, (!draft.site || !draft.asset_no) && styles.nextBtnDisabled]}
+              style={[styles.nextBtn, (!draft.site || !getEffectiveAssetNo()) && styles.nextBtnDisabled]}
               onPress={() => validateStep1() && setStep('step2')}
-              disabled={!draft.site || !draft.asset_no}
+              disabled={!draft.site || !getEffectiveAssetNo()}
             >
               <Text style={styles.nextBtnText}>{t('accident.nextBtn')}</Text>
               <Ionicons name={forwardIcon} size={18} color="#fff" />
@@ -520,18 +583,25 @@ export default function AccidentReportScreen() {
               <AccidentPhotoGrid
                 photos={photoUrls}
                 localUris={photoLocalUris}
-                onPhotosChange={(urls, uris) => {
-                  setPhotoUrls(urls)
-                  setPhotoLocalUris(uris)
-                }}
+                onPhotosChange={(urls, uris) => { setPhotoUrls(urls); setPhotoLocalUris(uris) }}
+                onUploadingChange={setPhotosUploading}
               />
             </View>
+            {photosUploading && (
+              <View style={styles.uploadingRow}>
+                <ActivityIndicator size="small" color="#dc2626" />
+                <Text style={styles.uploadingText}>Uploading photo…</Text>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity
-            style={[styles.submitBtn, (submitting || photoUrls.length === 0) && styles.nextBtnDisabled]}
+            style={[
+              styles.submitBtn,
+              (submitting || photosUploading || photoUrls.filter(u => u?.startsWith('http')).length === 0) && styles.nextBtnDisabled,
+            ]}
             onPress={handleSubmit}
-            disabled={submitting || photoUrls.length === 0}
+            disabled={submitting || photosUploading || photoUrls.filter(u => u?.startsWith('http')).length === 0}
           >
             {submitting
               ? <ActivityIndicator size="small" color="#fff" />
@@ -555,7 +625,7 @@ export default function AccidentReportScreen() {
       <Text style={styles.successTitle}>{t('accident.submittedTitle')}</Text>
       <Text style={styles.successSubtitle}>{t('accident.submittedSubtitle')}</Text>
       <Text style={styles.successMeta}>
-        {draft.asset_no} · {draft.site}{'\n'}
+        {getEffectiveAssetNo()} · {draft.site}{'\n'}
         {draft.incident_date}
       </Text>
 
@@ -680,6 +750,17 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '700', color: '#374151' },
   chipTextActive: { color: '#fff' },
   chipSub: { fontSize: 10, color: '#94a3b8', marginTop: 2 },
+
+  // Manual entry
+  manualToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 8,
+  },
+  manualToggleText: { fontSize: 12, color: '#dc2626', fontWeight: '600' },
+
+  // Upload progress
+  uploadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  uploadingText: { fontSize: 12, color: '#94a3b8' },
 
   // Toggle rows
   toggleRow: {

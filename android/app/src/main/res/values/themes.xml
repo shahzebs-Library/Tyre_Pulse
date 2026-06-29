@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base theme: Compose drives the real UI; this provides the splash/window. -->
+    <style name="Theme.TyrePulse" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#16a34a</item>
+        <item name="android:windowBackground">#f0f5f1</item>
+    </style>
+</resources>

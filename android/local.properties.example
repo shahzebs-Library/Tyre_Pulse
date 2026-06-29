@@ -1,0 +1,11 @@
+# Copy to local.properties (gitignored) and fill in. Android Studio sets sdk.dir
+# automatically; the tyrepulse.* keys feed BuildConfig (see app/build.gradle.kts).
+
+# Android SDK location (Android Studio writes this for you).
+# sdk.dir=/home/you/Android/Sdk
+
+# App configuration — the anon key is RLS-protected but must not be committed.
+tyrepulse.supabaseUrl=https://YOUR_REF.supabase.co
+tyrepulse.supabaseAnonKey=your-supabase-anon-key
+# Go API base URL. From the Android emulator, 10.0.2.2 reaches the host machine.
+tyrepulse.apiBaseUrl=http://10.0.2.2:8080

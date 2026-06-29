@@ -37,7 +37,6 @@ const MIN_INTERVAL         = 10_000
 const MAX_INTERVAL         = 40_000
 const DUE_SOON_BUFFER      = 2_000
 const WEAR_IMBALANCE_MM    = 3
-const LS_KEY               = 'tp_rotation_schedule'
 
 const CHART_DEFAULTS = {
   responsive: true,
@@ -294,27 +293,31 @@ function buildRotationAnalytics(records, interval) {
     .map(([site, d]) => ({ site, pct: Math.round((d.compliant / d.total) * 100), total: d.total, compliant: d.compliant }))
     .sort((a, b) => b.pct - a.pct)
 
-  // Monthly compliance trend (estimate from rotation dates in last 12 months)
+  // Monthly rotation activity — derived from actual detected rotation events
+  // (position changes in tyre_records) over the trailing 12 months. No synthetic
+  // variance: each bucket is a real count of rotations performed that month.
   const now = new Date()
-  const monthlyCompliance = Array.from({ length: 12 }, (_, i) => {
-    const refDate = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
+  const monthlyRotations = Array.from({ length: 12 }, (_, i) => {
+    const refDate  = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
     const nextDate = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 1)
-    const compliantInMonth = vehicles.filter(v => {
-      if (!v.lastRotationDate) return false
-      const rd = new Date(v.lastRotationDate)
-      return rd >= refDate && rd < nextDate
-    }).length
-    // Fallback: use overall compliance with slight variance for visual interest
-    const base = compliancePct + (i - 6) * 0.8 + (compliantInMonth > 0 ? 5 : 0)
-    return Math.max(0, Math.min(100, Math.round(base)))
+    let count = 0
+    Object.values(rotationsDetected).forEach(evts => {
+      evts.forEach(ev => {
+        if (!ev.date) return
+        const rd = new Date(ev.date)
+        if (rd >= refDate && rd < nextDate) count++
+      })
+    })
+    return count
   })
+  const hasMonthlyRotations = monthlyRotations.some(c => c > 0)
 
   return {
     vehicles,
     total, compliant, overdue, compliancePct,
     avgInterval, costSavings,
     avgLifeWith, avgLifeWithout,
-    siteCompliance, monthlyCompliance,
+    siteCompliance, monthlyRotations, hasMonthlyRotations,
     effCost,
   }
 }
@@ -534,9 +537,12 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
     vehicle?.status === 'Overdue' ? 'Critical' : vehicle?.status === 'Due Soon' ? 'High' : 'Medium'
   )
 
-  function handleSave() {
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    if (saving) return
+    setSaving(true)
     const entry = {
-      id: `rot-${Date.now()}`,
       asset: vehicle.asset,
       site:  vehicle.site,
       scheduledDate: date,
@@ -544,12 +550,13 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
       notes,
       currentKm: vehicle.currentKm,
       status: 'Open',
-      createdAt: new Date().toISOString(),
     }
-    const existing = JSON.parse(localStorage.getItem(LS_KEY) || '[]')
-    localStorage.setItem(LS_KEY, JSON.stringify([...existing, entry]))
-    onSave(entry)
-    onClose()
+    try {
+      await onSave(entry)
+      onClose()
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -637,8 +644,8 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
             <button onClick={onClose} className="flex-1 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm transition-colors">
               Cancel
             </button>
-            <button onClick={handleSave} className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors">
-              Save to Schedule
+            <button onClick={handleSave} disabled={saving} className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
+              {saving ? 'Saving…' : 'Save to Schedule'}
             </button>
           </div>
         </motion.div>
@@ -660,7 +667,10 @@ export default function RotationSchedule() {
   const [statusFilter, setStatusFilter] = useState('All')
   const [drawerVehicle, setDrawerVehicle] = useState(null)
   const [modalVehicle,  setModalVehicle]  = useState(null)
-  const [schedules, setSchedules] = useState(() => JSON.parse(localStorage.getItem(LS_KEY) || '[]'))
+  const [schedules, setSchedules] = useState([])
+  const [schedLoading, setSchedLoading] = useState(true)
+  const [schedError,   setSchedError]   = useState(null)
+  const [schedBusy,    setSchedBusy]    = useState(false)
   const [activeTab, setActiveTab] = useState('status') // 'status' | 'schedule' | 'impact'
   const [sortCol,   setSortCol]   = useState('status')
   const [sortAsc,   setSortAsc]   = useState(true)
@@ -692,6 +702,104 @@ export default function RotationSchedule() {
   }, [activeCountry])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // ── Schedule persistence (Supabase: tyre_rotations) ─────────────────────────
+  // DB rows are snake_case; the UI/exports below consume a camelCase shape, so we
+  // normalise on read and whitelist columns on write.
+  const mapRow = useCallback((r) => ({
+    id: r.id,
+    asset: r.asset_no,
+    site: r.site,
+    scheduledDate: r.scheduled_date,
+    priority: r.priority,
+    notes: r.notes,
+    currentKm: r.current_km,
+    status: r.status,
+    createdAt: r.created_at,
+  }), [])
+
+  const fetchSchedules = useCallback(async () => {
+    setSchedLoading(true)
+    setSchedError(null)
+    try {
+      let query = supabase
+        .from('tyre_rotations')
+        .select('id,asset_no,site,scheduled_date,priority,status,notes,current_km,country,created_at')
+        .order('scheduled_date', { ascending: true })
+      if (activeCountry && activeCountry !== 'All') {
+        query = query.or(`country.eq.${activeCountry},country.is.null`)
+      }
+      const { data, error: err } = await query
+      if (err) throw err
+      setSchedules((data || []).map(mapRow))
+    } catch (e) {
+      setSchedError(e.message || 'Failed to load schedule')
+    } finally {
+      setSchedLoading(false)
+    }
+  }, [activeCountry, mapRow])
+
+  useEffect(() => { fetchSchedules() }, [fetchSchedules])
+
+  // Insert one or more schedule entries, then refresh from DB.
+  const createSchedules = useCallback(async (entries) => {
+    if (!entries.length) return
+    setSchedBusy(true)
+    setSchedError(null)
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      const uid = userData?.user?.id ?? null
+      const rows = entries.map(e => ({
+        asset_no: e.asset,
+        site: e.site,
+        scheduled_date: e.scheduledDate,
+        priority: e.priority,
+        status: e.status || 'Open',
+        notes: e.notes || null,
+        current_km: e.currentKm ?? null,
+        country: (activeCountry && activeCountry !== 'All') ? activeCountry : null,
+        created_by: uid,
+      }))
+      const { error: err } = await supabase.from('tyre_rotations').insert(rows)
+      if (err) throw err
+      await fetchSchedules()
+    } catch (e) {
+      setSchedError(e.message || 'Failed to save schedule')
+    } finally {
+      setSchedBusy(false)
+    }
+  }, [activeCountry, fetchSchedules])
+
+  const updateScheduleStatus = useCallback(async (id, status) => {
+    setSchedBusy(true)
+    setSchedError(null)
+    try {
+      const { error: err } = await supabase
+        .from('tyre_rotations')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (err) throw err
+      await fetchSchedules()
+    } catch (e) {
+      setSchedError(e.message || 'Failed to update schedule')
+    } finally {
+      setSchedBusy(false)
+    }
+  }, [fetchSchedules])
+
+  const removeSchedule = useCallback(async (id) => {
+    setSchedBusy(true)
+    setSchedError(null)
+    try {
+      const { error: err } = await supabase.from('tyre_rotations').delete().eq('id', id)
+      if (err) throw err
+      await fetchSchedules()
+    } catch (e) {
+      setSchedError(e.message || 'Failed to remove schedule')
+    } finally {
+      setSchedBusy(false)
+    }
+  }, [fetchSchedules])
 
   // ── Analytics ──────────────────────────────────────────────────────────────
   const analytics = useMemo(() => buildRotationAnalytics(records, interval), [records, interval])
@@ -738,28 +846,19 @@ export default function RotationSchedule() {
 
   // ── Charts ─────────────────────────────────────────────────────────────────
   const trendChartData = useMemo(() => {
-    if (!analytics) return null
+    if (!analytics || !analytics.hasMonthlyRotations) return null
     return {
       labels: MONTH_LABELS,
       datasets: [
         {
-          label: 'Compliance %',
-          data: analytics.monthlyCompliance,
+          label: 'Rotations Performed',
+          data: analytics.monthlyRotations,
           borderColor: '#10b981',
           backgroundColor: 'rgba(16,185,129,0.1)',
           fill: true,
           tension: 0.4,
           pointRadius: 4,
           pointBackgroundColor: '#10b981',
-        },
-        {
-          label: 'Target 90%',
-          data: Array(12).fill(90),
-          borderColor: '#f59e0b',
-          borderDash: [6, 3],
-          fill: false,
-          pointRadius: 0,
-          tension: 0,
         },
       ],
     }
@@ -899,12 +998,6 @@ export default function RotationSchedule() {
     }
 
     doc.save(`Rotation_Schedule_${new Date().toISOString().slice(0, 10)}.pdf`)
-  }
-
-  function removeSchedule(id) {
-    const updated = schedules.filter(s => s.id !== id)
-    setSchedules(updated)
-    localStorage.setItem(LS_KEY, JSON.stringify(updated))
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -1252,14 +1345,14 @@ export default function RotationSchedule() {
             {activeTab === 'charts' && (
               <motion.div key="charts" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  {/* Compliance Trend */}
+                  {/* Rotation Activity Trend */}
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="text-sm font-semibold text-white flex items-center gap-2">
                         <TrendingUp size={15} className="text-green-400" />
-                        Monthly Compliance Trend
+                        Monthly Rotation Activity
                       </h2>
-                      <span className="text-xs text-gray-500">Last 12 months · Target: 90%</span>
+                      <span className="text-xs text-gray-500">Last 12 months · Detected rotations</span>
                     </div>
                     {trendChartData ? (
                       <div className="h-64">
@@ -1269,13 +1362,13 @@ export default function RotationSchedule() {
                             ...CHART_DEFAULTS,
                             scales: {
                               ...CHART_DEFAULTS.scales,
-                              y: { ...CHART_DEFAULTS.scales.y, min: 0, max: 100, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => `${v}%` } },
+                              y: { ...CHART_DEFAULTS.scales.y, min: 0, ticks: { ...CHART_DEFAULTS.scales.y.ticks, precision: 0 } },
                             },
                           }}
                         />
                       </div>
                     ) : (
-                      <div className="h-64 flex items-center justify-center text-gray-500 text-sm">Insufficient data for trend</div>
+                      <div className="h-64 flex items-center justify-center text-gray-500 text-sm">No rotation events detected in the last 12 months</div>
                     )}
                   </div>
 
@@ -1509,7 +1602,6 @@ export default function RotationSchedule() {
                         const newEntries = upcomingVehicles
                           .filter(v => !schedules.find(s => s.asset === v.asset && s.status === 'Open'))
                           .map((v, i) => ({
-                            id: `rot-auto-${Date.now()}-${i}`,
                             asset: v.asset,
                             site: v.site,
                             scheduledDate: (() => { const d = new Date(today); d.setDate(d.getDate() + 3 + i * 2); return d.toISOString().slice(0, 10) })(),
@@ -1517,14 +1609,11 @@ export default function RotationSchedule() {
                             notes: `Auto-scheduled. ${v.status === 'Overdue' ? `Overdue by ${fmt(v.sinceLastKm - interval)} km.` : `Due in ${fmt(v.dueInKm)} km.`}`,
                             currentKm: v.currentKm,
                             status: 'Open',
-                            createdAt: new Date().toISOString(),
                           }))
-                        if (!newEntries.length) return
-                        const updated = [...schedules, ...newEntries]
-                        setSchedules(updated)
-                        localStorage.setItem(LS_KEY, JSON.stringify(updated))
+                        createSchedules(newEntries)
                       }}
-                      className="flex items-center gap-2 px-3 py-2 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-xs font-medium transition-colors"
+                      disabled={schedBusy}
+                      className="flex items-center gap-2 px-3 py-2 bg-blue-700 hover:bg-blue-600 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
                     >
                       <RotateCcw size={13} />
                       Auto-Schedule Overdue & Due Soon
@@ -1532,7 +1621,21 @@ export default function RotationSchedule() {
                   </div>
                 </div>
 
-                {schedules.length === 0 ? (
+                {schedError ? (
+                  <div className="bg-red-900/20 border border-red-800 rounded-xl p-8 text-center space-y-3">
+                    <AlertOctagon size={28} className="text-red-400 mx-auto" />
+                    <p className="text-red-300 font-medium">Failed to load schedule</p>
+                    <p className="text-red-400/70 text-sm">{schedError}</p>
+                    <button onClick={fetchSchedules} className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm transition-colors">
+                      Retry
+                    </button>
+                  </div>
+                ) : schedLoading ? (
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
+                    <RotateCcw size={32} className="text-blue-400 animate-spin mx-auto mb-3" />
+                    <p className="text-gray-400 text-sm">Loading scheduled rotations…</p>
+                  </div>
+                ) : schedules.length === 0 ? (
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
                     <Calendar size={40} className="text-gray-600 mx-auto mb-3" />
                     <p className="text-gray-400 font-medium">No rotations scheduled yet</p>
@@ -1581,19 +1684,17 @@ export default function RotationSchedule() {
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
                                   <button
-                                    onClick={() => {
-                                      const updated = schedules.map(e => e.id === s.id ? { ...e, status: 'Completed' } : e)
-                                      setSchedules(updated)
-                                      localStorage.setItem(LS_KEY, JSON.stringify(updated))
-                                    }}
-                                    className="p-1.5 bg-green-900/30 hover:bg-green-800/50 border border-green-800 text-green-400 rounded-lg transition-colors"
+                                    onClick={() => updateScheduleStatus(s.id, 'Completed')}
+                                    disabled={schedBusy}
+                                    className="p-1.5 bg-green-900/30 hover:bg-green-800/50 border border-green-800 text-green-400 rounded-lg transition-colors disabled:opacity-50"
                                     title="Mark completed"
                                   >
                                     <CheckCircle size={13} />
                                   </button>
                                   <button
                                     onClick={() => removeSchedule(s.id)}
-                                    className="p-1.5 bg-gray-800 hover:bg-red-900/30 border border-gray-700 hover:border-red-700 text-gray-400 hover:text-red-400 rounded-lg transition-colors"
+                                    disabled={schedBusy}
+                                    className="p-1.5 bg-gray-800 hover:bg-red-900/30 border border-gray-700 hover:border-red-700 text-gray-400 hover:text-red-400 rounded-lg transition-colors disabled:opacity-50"
                                     title="Remove"
                                   >
                                     <X size={13} />
@@ -1623,7 +1724,7 @@ export default function RotationSchedule() {
                                 <div className="text-gray-500">{s.site}</div>
                                 <div className="text-gray-500">{fmtDate(s.scheduledDate)}</div>
                               </div>
-                              <button onClick={() => removeSchedule(s.id)} className="p-1.5 text-gray-600 hover:text-gray-400 transition-colors">
+                              <button onClick={() => removeSchedule(s.id)} disabled={schedBusy} className="p-1.5 text-gray-600 hover:text-gray-400 transition-colors disabled:opacity-50">
                                 <X size={12} />
                               </button>
                             </div>
@@ -1647,7 +1748,7 @@ export default function RotationSchedule() {
         <ScheduleModal
           vehicle={modalVehicle}
           onClose={() => setModalVehicle(null)}
-          onSave={entry => setSchedules(prev => [...prev, entry])}
+          onSave={entry => createSchedules([entry])}
         />
       )}
     </div>

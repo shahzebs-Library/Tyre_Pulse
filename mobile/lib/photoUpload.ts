@@ -10,6 +10,9 @@ import * as FileSystem from 'expo-file-system'
 import { supabase } from './supabase'
 import { storageRef } from './storageRefs'
 
+const ALLOWED_EXTS = new Set(['jpg', 'jpeg', 'png', 'heic', 'heif'])
+const MAX_PHOTO_BYTES = 20 * 1024 * 1024 // 20 MB
+
 /**
  * Upload a locally captured photo to Supabase Storage.
  *
@@ -27,9 +30,14 @@ export async function uploadInspectionPhoto(
 
   try {
     const rawExt = localUri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    if (!ALLOWED_EXTS.has(rawExt)) return null
+
     // Normalise extension — some devices return HEIC; storage serves as jpeg
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
+
+    const info = await FileSystem.getInfoAsync(localUri)
+    if (info.exists && (info as any).size > MAX_PHOTO_BYTES) return null
 
     // Build deterministic storage path:  inspections/<id>/<position>_<timestamp>.<ext>
     const sanitisedPosition = tyrePosition.replace(/[^a-zA-Z0-9_-]/g, '_')
@@ -44,33 +52,41 @@ export async function uploadInspectionPhoto(
 
     const { error } = await supabase.storage
       .from('inspection-photos')
-      .upload(path, bytes, { contentType, upsert: true })
+      .upload(path, bytes, { contentType, upsert: false })
 
     if (error) {
-      console.warn('[photoUpload] Storage upload error:', error.message)
+      if (__DEV__) console.warn('[photoUpload] Storage upload error:', error.message)
       return null
     }
 
     return storageRef('inspection-photos', path)
   } catch (err: any) {
-    console.warn('[photoUpload] Unexpected error:', err?.message)
+    if (__DEV__) console.warn('[photoUpload] Unexpected error:', err?.message)
     return null
   }
 }
 
 /**
- * Upload a captured accident photo to the public `accident-photos` bucket.
+ * Upload a captured accident photo to the PRIVATE `accident-photos` bucket.
  * Uses base64 → Uint8Array (RN's fetch().blob() yields empty files in Expo).
- * Returns the permanent public URL, or null on failure.
+ * Returns a tp-storage:// ref (resolved to a short-lived signed URL on display
+ * via storageRefs.resolveStorageUrl) — never a permanent public URL — or null
+ * on failure.
  *
  * Path is collision-resistant: accidents/<uid>/<timestamp>_<index>_<random4>.<ext>
  */
 export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<string | null> {
-  if (!localUri || !localUri.startsWith('file://')) return localUri || null
+  // Reject anything that isn't a local file URI — never store http/data URIs directly
+  if (!localUri || !localUri.startsWith('file://')) return null
   try {
     const rawExt = localUri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    if (!ALLOWED_EXTS.has(rawExt)) return null
+
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
+
+    const info = await FileSystem.getInfoAsync(localUri)
+    if (info.exists && (info as any).size > MAX_PHOTO_BYTES) return null
 
     // Collision-resistant path: include user uid + timestamp + random suffix
     const { data: { user } } = await supabase.auth.getUser()
@@ -84,12 +100,15 @@ export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<
     const { error } = await supabase.storage
       .from('accident-photos')
       .upload(path, bytes, { contentType, upsert: false })
-    if (error) { console.warn('[photoUpload] accident upload error:', error.message); return null }
+    if (error) {
+      if (__DEV__) console.warn('[photoUpload] accident upload error:', error.message)
+      return null
+    }
 
-    const { data } = supabase.storage.from('accident-photos').getPublicUrl(path)
-    return data?.publicUrl ?? null
+    // Return a storage ref (resolved to signed URL on display) — keeps bucket private
+    return storageRef('accident-photos', path)
   } catch (err: any) {
-    console.warn('[photoUpload] accident upload failed:', err?.message)
+    if (__DEV__) console.warn('[photoUpload] accident upload failed:', err?.message)
     return null
   }
 }

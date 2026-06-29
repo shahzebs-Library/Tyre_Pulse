@@ -37,7 +37,10 @@ export default function LoginScreen() {
     try {
       const { error: signInError } = await signIn(identifier, password)
       if (signInError) {
-        setError(signInError.message ?? t('login.errorFailed'))
+        // Never surface raw Supabase error strings — they enable user enumeration
+        const msg = signInError.message ?? ''
+        const isCustom = msg.startsWith('No account found') || msg.startsWith('Account')
+        setError(isCustom ? msg : t('login.errorFailed'))
       }
     } finally {
       setLoading(false)

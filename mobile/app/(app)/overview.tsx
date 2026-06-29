@@ -40,15 +40,25 @@ export default function OverviewScreen() {
   const [s, setS] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const textAlign = isRTL ? 'right' : 'left'
 
   const load = useCallback(async () => {
-    const { data } = await supabase.rpc('report_tyre_summary', {
-      p_country: profile?.country ?? 'All', p_from: null, p_to: null,
-    })
-    setS(data as Summary)
-    setLoading(false)
+    try {
+      setError(null)
+      const { data, error: rpcErr } = await supabase.rpc('report_tyre_summary', {
+        p_country: profile?.country ?? 'All', p_from: null, p_to: null,
+      })
+      if (rpcErr) throw rpcErr
+      setS((data ?? null) as Summary | null)
+    } catch (e: any) {
+      if (__DEV__) console.warn('[overview] summary load failed:', e?.message)
+      setError('Could not load the summary. Pull down to retry.')
+      setS(null)
+    } finally {
+      setLoading(false)
+    }
   }, [profile?.country])
 
   useEffect(() => { if (allowed) load() }, [allowed, load])
@@ -86,6 +96,22 @@ export default function OverviewScreen() {
 
       {loading ? (
         <ActivityIndicator color="#16a34a" style={{ marginTop: 40 }} />
+      ) : error ? (
+        <ScrollView
+          contentContainerStyle={styles.stateWrap}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
+        >
+          <Ionicons name="cloud-offline-outline" size={40} color="#94a3b8" />
+          <Text style={styles.stateText}>{error}</Text>
+        </ScrollView>
+      ) : !s || (s.total_records ?? 0) === 0 ? (
+        <ScrollView
+          contentContainerStyle={styles.stateWrap}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
+        >
+          <Ionicons name="bar-chart-outline" size={40} color="#cbd5e1" />
+          <Text style={styles.stateText}>No tyre data yet for this country.</Text>
+        </ScrollView>
       ) : (
         <ScrollView
           contentContainerStyle={styles.content}
@@ -155,6 +181,8 @@ export default function OverviewScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f0f5f1' },
+  stateWrap: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12, minHeight: 300 },
+  stateText: { fontSize: 14, color: '#64748b', textAlign: 'center', fontWeight: '500' },
   rowR: { flexDirection: 'row-reverse' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16 },
   backBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' },

@@ -649,6 +649,10 @@ export default function UploadData() {
   async function handleFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 50 * 1024 * 1024) {
+      setError('File too large — maximum 50 MB. Split the file into smaller parts and upload separately.')
+      return
+    }
     setFileName(file.name)
     setError('')
     const ext = (file.name.split('.').pop() || '').toLowerCase()
@@ -956,7 +960,31 @@ export default function UploadData() {
 
     await saveColumnMapping(fingerprintHeaders(headers))
 
-    let records = buildRows(headers, rows, mapping).map(r => ({
+    // Trim strings and enforce field length caps to match DB constraints
+    function sanitiseRow(r) {
+      const cap = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : v)
+      return {
+        ...r,
+        serial_no:  cap(r.serial_no,  100),
+        asset_no:   cap(r.asset_no,   50),
+        position:   cap(r.position,   50),
+        brand:      cap(r.brand,      100),
+        size:       cap(r.size,       50),
+        site:       cap(r.site,       200),
+        remarks:    cap(r.remarks,    5000),
+        country:    cap(r.country,    10),
+        // Clamp numeric ranges to match DB constraints
+        tread_depth:      (r.tread_depth      != null && r.tread_depth      >= 0 && r.tread_depth      <= 50)  ? r.tread_depth      : null,
+        pressure_reading: (r.pressure_reading != null && r.pressure_reading >= 0 && r.pressure_reading <= 300) ? r.pressure_reading : null,
+        cost_per_tyre:    (r.cost_per_tyre    != null && r.cost_per_tyre    >= 0 && r.cost_per_tyre    <= 1e6) ? r.cost_per_tyre    : null,
+        // Cap extra_fields to 50 keys
+        extra_fields: r.extra_fields
+          ? Object.fromEntries(Object.entries(r.extra_fields).slice(0, 50))
+          : null,
+      }
+    }
+
+    let records = buildRows(headers, rows, mapping).map(r => sanitiseRow({
       ...r,
       // Force the selected country onto every row — ignore any country column in
       // the file so an upload can never mix or mislabel countries.

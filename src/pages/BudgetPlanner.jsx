@@ -28,6 +28,23 @@ ChartJS.register(
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+// Persistence model on the existing `budgets` table:
+// The UI works with a single ANNUAL figure per site plus one fleet-wide annual
+// budget — it does not edit 12 individual monthly rows. We map those onto the
+// table using a sentinel `month = 0` ("whole-year allocation") row per
+// (site, region, year). The column is `monthly_budget`, so we store the monthly
+// equivalent (annual / 12) and reconstruct annual = monthly_budget * 12 on load.
+// The fleet-wide annual budget uses the reserved site name ANNUAL_SITE.
+// `region` participates in the unique key (site, region, year, month) and is
+// NOT NULL, so we set region = country (fallback DEFAULT_REGION) for upserts.
+const ANNUAL_SITE = '__ANNUAL__'
+const ANNUAL_MONTH = 0
+const DEFAULT_REGION = 'KSA'
+// Whitelisted columns written to `budgets`.
+const BUDGET_WRITE_COLS = ['site', 'region', 'monthly_budget', 'year', 'month', 'created_by', 'country', 'status']
+const pickBudgetCols = (row) =>
+  BUDGET_WRITE_COLS.reduce((acc, k) => { if (row[k] !== undefined) acc[k] = row[k]; return acc }, {})
 const PALETTE = [
   '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
   '#ec4899','#14b8a6','#f97316','#6366f1','#84cc16',
@@ -89,11 +106,15 @@ export default function BudgetPlanner() {
   const [error, setError] = useState(null)
   const [exporting, setExporting] = useState(false)
 
-  // Site budget editing
+  // Site budget editing — siteBudgets holds ANNUAL amounts keyed by site name
   const [siteBudgets, setSiteBudgets] = useState({})
+  const [storedAnnual, setStoredAnnual] = useState(null) // fleet-wide annual override
+  const [budgetsLoading, setBudgetsLoading] = useState(true)
+  const [budgetsError, setBudgetsError] = useState(null)
   const [editingSite, setEditingSite] = useState(null)
   const [editValue, setEditValue] = useState('')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
 
   // Annual budget inline edit
   const [editingAnnual, setEditingAnnual] = useState(false)
@@ -105,8 +126,8 @@ export default function BudgetPlanner() {
   const [brandSwitchPct, setBrandSwitchPct] = useState(0)
   const [brandSwitchSaving, setBrandSwitchSaving] = useState(10)
 
-  const storageKey = `tp_site_budgets_${selectedYear}`
-  const annualStorageKey = `tp_annual_budget_${selectedYear}`
+  const budgetCountry = activeCountry && activeCountry !== 'All' ? activeCountry : null
+  const budgetRegion = budgetCountry || DEFAULT_REGION
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchRecords = useCallback(async () => {
@@ -131,13 +152,41 @@ export default function BudgetPlanner() {
 
   useEffect(() => { fetchRecords() }, [fetchRecords])
 
-  // Load persisted budgets
-  useEffect(() => {
+  // ── Load persisted budgets from Supabase ───────────────────────────────────
+  const fetchBudgets = useCallback(async () => {
+    setBudgetsLoading(true)
+    setBudgetsError(null)
     try {
-      const stored = localStorage.getItem(storageKey)
-      setSiteBudgets(stored ? JSON.parse(stored) : {})
-    } catch { setSiteBudgets({}) }
-  }, [storageKey])
+      // Annual sentinel rows (month = 0) for the selected year, null-safe country.
+      let q = supabase
+        .from('budgets')
+        .select('site, monthly_budget, year, month, country')
+        .eq('year', selectedYear)
+        .eq('month', ANNUAL_MONTH)
+      if (budgetCountry) q = q.or(`country.eq.${budgetCountry},country.is.null`)
+      const { data, error: err } = await q
+      if (err) throw err
+
+      const siteMap = {}
+      let annual = null
+      for (const row of data ?? []) {
+        // Stored value is the monthly equivalent; annual = monthly_budget * 12.
+        const annualVal = (parseFloat(row.monthly_budget) || 0) * 12
+        if (row.site === ANNUAL_SITE) annual = annualVal
+        else siteMap[row.site] = annualVal
+      }
+      setSiteBudgets(siteMap)
+      setStoredAnnual(annual)
+    } catch (e) {
+      setBudgetsError(e.message ?? 'Failed to load budgets')
+      setSiteBudgets({})
+      setStoredAnnual(null)
+    } finally {
+      setBudgetsLoading(false)
+    }
+  }, [selectedYear, budgetCountry])
+
+  useEffect(() => { fetchBudgets() }, [fetchBudgets])
 
   // ── Derived: normalise ─────────────────────────────────────────────────────
   const normalised = useMemo(() =>
@@ -189,13 +238,7 @@ export default function BudgetPlanner() {
     return Math.round(avg * 1.05) // 5% growth assumption
   }, [normalised, selectedYear])
 
-  const storedAnnual = useMemo(() => {
-    try {
-      const v = localStorage.getItem(annualStorageKey)
-      return v ? parseFloat(v) : null
-    } catch { return null }
-  }, [annualStorageKey, selectedYear])
-
+  // storedAnnual comes from the `budgets` ANNUAL sentinel row (state, loaded above).
   const annualBudget = storedAnnual ?? derivedAnnualFromHistorical
 
   // ── YTD & projections ─────────────────────────────────────────────────────
@@ -464,24 +507,57 @@ export default function BudgetPlanner() {
     setEditingSite(site)
     setEditValue(String(Math.round(currentBudget)))
   }
-  function cancelEditSite() { setEditingSite(null); setEditValue('') }
-  function saveEditSite(site) {
-    setSaving(true)
+  function cancelEditSite() { setEditingSite(null); setEditValue(''); setSaveError(null) }
+
+  // Persist an ANNUAL amount for a (site, region, year) sentinel row (month = 0).
+  // Stored as monthly_budget = annual / 12 to stay consistent with the column.
+  const upsertBudget = useCallback(async (site, annualAmount) => {
+    const row = pickBudgetCols({
+      site,
+      region: budgetRegion,
+      monthly_budget: annualAmount / 12,
+      year: selectedYear,
+      month: ANNUAL_MONTH,
+      created_by: profile?.id ?? null,
+      country: budgetCountry,
+      status: 'Draft',
+    })
+    // Unique index (site, region, year, month) → onConflict upsert.
+    const { error: err } = await supabase
+      .from('budgets')
+      .upsert(row, { onConflict: 'site,region,year,month' })
+    if (err) throw err
+  }, [budgetRegion, selectedYear, profile?.id, budgetCountry])
+
+  async function saveEditSite(site) {
     const val = parseFloat(editValue)
-    if (!isNaN(val) && val >= 0) {
-      const updated = { ...siteBudgets, [site]: val }
-      setSiteBudgets(updated)
-      try { localStorage.setItem(storageKey, JSON.stringify(updated)) } catch {}
+    if (isNaN(val) || val < 0) { setEditingSite(null); return }
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await upsertBudget(site, val)
+      setSiteBudgets(prev => ({ ...prev, [site]: val }))
+      setEditingSite(null)
+    } catch (e) {
+      setSaveError(e.message ?? 'Failed to save site budget')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
-    setEditingSite(null)
   }
 
-  function saveAnnualBudget() {
+  async function saveAnnualBudget() {
     const val = parseFloat(annualEditValue)
-    if (!isNaN(val) && val >= 0) {
-      try { localStorage.setItem(annualStorageKey, String(val)) } catch {}
+    if (isNaN(val) || val < 0) { setEditingAnnual(false); return }
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await upsertBudget(ANNUAL_SITE, val)
+      setStoredAnnual(val)
       setEditingAnnual(false)
+    } catch (e) {
+      setSaveError(e.message ?? 'Failed to save annual budget')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -699,20 +775,23 @@ export default function BudgetPlanner() {
     ? <ArrowDownRight className="w-4 h-4 text-green-400 inline" />
     : <ArrowUpRight className="w-4 h-4 text-red-400 inline" />
 
-  if (loading) return (
+  if (loading || budgetsLoading) return (
     <div className="flex items-center justify-center h-96">
       <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
       <span className="ml-3 text-gray-400">Loading budget data…</span>
     </div>
   )
 
-  if (error) return (
+  if (error || budgetsError) return (
     <div className="flex items-center justify-center h-96">
       <div className="bg-red-900/30 border border-red-800 rounded-xl p-6 text-center">
         <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
         <p className="text-red-300 font-medium">Failed to load data</p>
-        <p className="text-red-400/70 text-sm mt-1">{error}</p>
-        <button onClick={fetchRecords} className="mt-4 px-4 py-2 bg-red-800 hover:bg-red-700 text-white rounded-lg text-sm">Retry</button>
+        <p className="text-red-400/70 text-sm mt-1">{error || budgetsError}</p>
+        <button
+          onClick={() => { if (error) fetchRecords(); if (budgetsError) fetchBudgets() }}
+          className="mt-4 px-4 py-2 bg-red-800 hover:bg-red-700 text-white rounded-lg text-sm"
+        >Retry</button>
       </div>
     </div>
   )
@@ -775,6 +854,20 @@ export default function BudgetPlanner() {
         <span className="text-gray-600">|</span>
         <span className="text-gray-400">Projected YE: <span className={`font-semibold ${projectedYearEnd > annualBudget ? 'text-red-400' : 'text-green-400'}`}>{fmt(projectedYearEnd, activeCurrency)}</span></span>
       </motion.div>
+
+      {/* ── Save Error Banner ── */}
+      {saveError && (
+        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+          className="bg-red-900/30 border border-red-800 rounded-xl px-4 py-3 flex items-center justify-between gap-4 text-sm">
+          <span className="flex items-center gap-2 text-red-300">
+            <AlertTriangle className="w-4 h-4 text-red-400" />
+            {saveError}
+          </span>
+          <button onClick={() => setSaveError(null)} className="text-red-400 hover:text-red-200">
+            <X className="w-4 h-4" />
+          </button>
+        </motion.div>
+      )}
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -840,7 +933,9 @@ export default function BudgetPlanner() {
                     autoFocus
                     onKeyDown={e => { if (e.key === 'Enter') saveAnnualBudget(); if (e.key === 'Escape') setEditingAnnual(false) }}
                   />
-                  <button onClick={saveAnnualBudget} className="p-1 text-green-400 hover:text-green-300"><Save className="w-4 h-4" /></button>
+                  <button onClick={saveAnnualBudget} disabled={saving} className="p-1 text-green-400 hover:text-green-300 disabled:opacity-50">
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  </button>
                   <button onClick={() => setEditingAnnual(false)} className="p-1 text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
                 </div>
               ) : (
@@ -964,8 +1059,8 @@ export default function BudgetPlanner() {
                             autoFocus
                             onKeyDown={e => { if (e.key === 'Enter') saveEditSite(s.site); if (e.key === 'Escape') cancelEditSite() }}
                           />
-                          <button onClick={() => saveEditSite(s.site)} disabled={saving} className="p-1 text-green-400 hover:text-green-300">
-                            <Save className="w-4 h-4" />
+                          <button onClick={() => saveEditSite(s.site)} disabled={saving} className="p-1 text-green-400 hover:text-green-300 disabled:opacity-50">
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                           </button>
                           <button onClick={cancelEditSite} className="p-1 text-gray-500 hover:text-gray-300">
                             <X className="w-4 h-4" />

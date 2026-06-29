@@ -444,6 +444,17 @@ export default function PerformanceBenchmark() {
 
       {error && <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 text-sm">{error}</div>}
 
+      {/* Static-reference disclosure */}
+      <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-4 flex items-start gap-3">
+        <Info size={18} className="mt-0.5 shrink-0 text-amber-400" />
+        <p className="text-sm text-amber-200 leading-relaxed">
+          <span className="font-semibold">Benchmarks are a static industry reference, not live data.</span>{' '}
+          World-class / good / average / poor thresholds are fixed heavy-fleet
+          standards used to rate <em>your</em> fleet's actual KPIs. The radar's
+          non-"Your Fleet" rings are these reference targets, not measured competitors.
+        </p>
+      </div>
+
       {!fleetKpis && !loading && (
         <div className="text-center py-20">
           <Target size={48} className="mx-auto text-gray-700 mb-4" />

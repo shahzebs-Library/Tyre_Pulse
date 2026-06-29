@@ -48,7 +48,6 @@ const CHART_OPTS = {
   },
 }
 
-const LS_KEY = 'tp_recalls'
 
 const SEVERITY_CFG = {
   Critical: { text: 'text-red-400',    bg: 'bg-red-900/30',    border: 'border-red-700',    dot: 'bg-red-500',    pdfColor: [127, 29, 29] },
@@ -67,10 +66,6 @@ const SOURCE_OPTS  = ['Manufacturer', 'Internal', 'Government', 'Insurance']
 const STATUS_OPTS  = ['Active', 'Monitoring', 'Closed']
 const SEVERITY_OPTS = ['Critical', 'High', 'Medium', 'Low']
 const TAB_OPTS = ['Registry', 'Batch Detector', 'Timeline', 'Brand History', 'Analytics']
-
-function uuid() {
-  return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()
-}
 
 function daysBetween(a, b) {
   if (!a || !b) return null
@@ -151,19 +146,22 @@ export default function RecallTracker() {
   const bannerRef = useRef(null)
   const listRef   = useRef(null)
 
+  const [recallsError, setRecallsError] = useState('')
+
   // ── Load data ──────────────────────────────────────────────────────────────
-  const loadRecalls = useCallback(() => {
+  const loadRecalls = useCallback(async () => {
     try {
-      const raw = localStorage.getItem(LS_KEY)
-      setRecalls(raw ? JSON.parse(raw) : [])
+      setRecallsError('')
+      const { data, error } = await supabase
+        .from('recalls')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setRecalls(data ?? [])
     } catch {
+      setRecallsError('Could not load recall records. Please retry.')
       setRecalls([])
     }
-  }, [])
-
-  const saveRecalls = useCallback((list) => {
-    localStorage.setItem(LS_KEY, JSON.stringify(list))
-    setRecalls(list)
   }, [])
 
   useEffect(() => {
@@ -378,46 +376,69 @@ export default function RecallTracker() {
     setForm(f => ({ ...f, affected_sizes: f.affected_sizes.filter(x => x !== s) }))
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.recall_number.trim()) { setFormError('Recall number required'); return }
     if (!form.brand.trim()) { setFormError('Brand required'); return }
     if (!form.issue_date) { setFormError('Issue date required'); return }
     if (form.affected_sizes.length === 0) { setFormError('At least one affected size required'); return }
 
     setSaving(true)
+    setFormError('')
     try {
-      let next
-      if (editRecall) {
-        next = recalls.map(r => r.id === editRecall ? { ...r, ...form } : r)
-      } else {
-        const dupe = recalls.find(r => r.recall_number === form.recall_number.trim())
-        if (dupe) { setFormError('Recall number already exists'); setSaving(false); return }
-        next = [...recalls, {
-          ...form,
-          id: uuid(),
-          recall_number: form.recall_number.trim(),
-          brand: form.brand.trim(),
-          created_at: new Date().toISOString(),
-          closed_at: form.status === 'Closed' ? new Date().toISOString() : null,
-        }]
+      const row = {
+        recall_number: form.recall_number.trim(),
+        brand: form.brand.trim(),
+        affected_sizes: form.affected_sizes ?? [],
+        affected_serial_prefix: form.affected_serial_prefix || null,
+        issue_date: form.issue_date || null,
+        severity: form.severity || 'High',
+        description: form.description || null,
+        action_required: form.action_required || null,
+        source: form.source || 'Manufacturer',
+        status: form.status || 'Active',
+        country: form.country || profile?.country || null,
+        closed_at: form.status === 'Closed' ? new Date().toISOString() : null,
       }
-      saveRecalls(next)
+      if (editRecall) {
+        const { error } = await supabase.from('recalls').update(row).eq('id', editRecall)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('recalls').insert({ ...row, created_by: profile?.id ?? null })
+        if (error) {
+          // 23505 = unique_violation on (recall_number, country)
+          if (error.code === '23505') { setFormError('Recall number already exists'); setSaving(false); return }
+          throw error
+        }
+      }
+      await loadRecalls()
       setShowAddModal(false)
+    } catch (e) {
+      setFormError(e?.message || 'Could not save the recall. Please retry.')
     } finally {
       setSaving(false)
     }
   }
 
-  function handleClose(recallId) {
-    const next = recalls.map(r =>
-      r.id === recallId ? { ...r, status: 'Closed', closed_at: new Date().toISOString() } : r
-    )
-    saveRecalls(next)
+  async function handleClose(recallId) {
+    try {
+      const { error } = await supabase.from('recalls')
+        .update({ status: 'Closed', closed_at: new Date().toISOString() }).eq('id', recallId)
+      if (error) throw error
+      await loadRecalls()
+    } catch (e) {
+      window.alert(e?.message || 'Could not close the recall.')
+    }
   }
 
-  function handleDelete(recallId) {
+  async function handleDelete(recallId) {
     if (!window.confirm('Delete this recall record?')) return
-    saveRecalls(recalls.filter(r => r.id !== recallId))
+    try {
+      const { error } = await supabase.from('recalls').delete().eq('id', recallId)
+      if (error) throw error
+      await loadRecalls()
+    } catch (e) {
+      window.alert(e?.message || 'Could not delete the recall.')
+    }
   }
 
   // ── Drawer ────────────────────────────────────────────────────────────────
@@ -726,7 +747,16 @@ export default function RecallTracker() {
                       </td>
                     </tr>
                   )}
-                  {!loading && filtered.length === 0 && (
+                  {!loading && recallsError && (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-12 text-center">
+                        <AlertTriangle className="inline mb-2 text-red-500" size={32} />
+                        <p className="mt-1 text-red-400">{recallsError}</p>
+                        <button onClick={() => loadRecalls()} className="mt-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white">Retry</button>
+                      </td>
+                    </tr>
+                  )}
+                  {!loading && !recallsError && filtered.length === 0 && (
                     <tr>
                       <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
                         <ShieldCheck className="inline mb-2 text-green-600" size={32} />

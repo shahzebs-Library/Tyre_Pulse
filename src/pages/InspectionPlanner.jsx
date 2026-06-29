@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Calendar, ClipboardList, AlertTriangle, CheckCircle2, Clock, Users,
@@ -23,7 +23,6 @@ import * as XLSX from 'xlsx'
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const LS_KEY = 'tp_inspection_schedule'
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const INTERVAL_OPTIONS = [7, 14, 30, 60]
 
@@ -61,15 +60,40 @@ function fmtDisplay(ds) {
   return new Date(ds + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function loadSchedule() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]') } catch { return [] }
+// Map a DB `inspection_schedules` row to the app-wide schedule item shape.
+// The UI/exports use `inspection_date` and `type`; the DB uses
+// `scheduled_date` and `inspection_type`. Normalise on read.
+function dbRowToItem(r) {
+  return {
+    id: r.id,
+    asset_no: r.asset_no || '',
+    site: r.site || '',
+    inspection_date: r.scheduled_date || '',
+    inspection_time: r.inspection_time || '',
+    inspector_name: r.inspector_name || '',
+    type: r.inspection_type || 'Routine',
+    priority: r.priority || null,
+    status: r.status || 'Scheduled',
+    notes: r.notes || '',
+    country: r.country || null,
+    created_at: r.created_at || null,
+  }
 }
 
-function saveSchedule(items) {
-  localStorage.setItem(LS_KEY, JSON.stringify(items))
+// Map an app schedule item to a whitelisted DB write payload.
+function itemToDbPayload(item) {
+  return {
+    asset_no: item.asset_no || null,
+    site: item.site || null,
+    scheduled_date: item.inspection_date || null,
+    inspection_time: item.inspection_time || null,
+    inspector_name: item.inspector_name || null,
+    inspection_type: item.type || null,
+    priority: item.priority || null,
+    status: item.status || 'Scheduled',
+    notes: item.notes || null,
+  }
 }
-
-function genId() { return `sched_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` }
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 function KpiCard({ icon: Icon, label, value, sub, trend, color = 'blue', loading }) {
@@ -152,9 +176,11 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
   async function handleSave() {
     if (!form.asset_no || !form.inspection_date || !form.inspector_name) return
     setSaving(true)
-    const item = { ...form, id: prefill?.id || genId(), created_at: new Date().toISOString() }
-    await onSave(item)
+    // `id` present → update; absent → insert (DB assigns uuid + timestamps).
+    const item = { ...form, ...(prefill?.id ? { id: prefill.id } : {}) }
+    const ok = await onSave(item)
     setSaving(false)
+    return ok
   }
 
   return (
@@ -312,7 +338,6 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
     setSaving(true)
     const dates = buildDates()
     const items = selected.map((v, i) => ({
-      id: genId(),
       asset_no: v.asset_no,
       site: v.site || '',
       inspector_name: inspector,
@@ -321,7 +346,6 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
       type,
       notes: `Bulk scheduled — overdue by ${v.days_overdue} days`,
       status: 'Scheduled',
-      created_at: new Date().toISOString(),
     }))
     await onSave(items)
     setSaving(false)
@@ -438,7 +462,9 @@ export default function InspectionPlanner() {
   // Raw data
   const [inspections, setInspections] = useState([])
   const [tyreRecords, setTyreRecords] = useState([])
-  const [schedule, setSchedule] = useState(loadSchedule)
+  const [schedule, setSchedule] = useState([])
+  const [scheduleLoading, setScheduleLoading] = useState(true)
+  const [scheduleError, setScheduleError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -487,6 +513,34 @@ export default function InspectionPlanner() {
   }, [activeCountry])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // ── Schedule fetch (Supabase) ──────────────────────────────────────────────────
+  const fetchSchedule = useCallback(async () => {
+    setScheduleLoading(true)
+    setScheduleError(null)
+    try {
+      let q = supabase
+        .from('inspection_schedules')
+        .select('id, asset_no, site, scheduled_date, inspection_time, inspector_name, inspection_type, priority, status, notes, country, created_at')
+        .order('scheduled_date', { ascending: true })
+
+      if (activeCountry && activeCountry !== 'All') {
+        // Null-safe: include rows tagged for this country OR with no country set.
+        q = q.or(`country.eq.${activeCountry},country.is.null`)
+      }
+
+      const { data, error } = await q
+      if (error) throw error
+      setSchedule((data || []).map(dbRowToItem))
+    } catch (err) {
+      setScheduleError(err?.message || 'Failed to load inspection schedule.')
+      setSchedule([])
+    } finally {
+      setScheduleLoading(false)
+    }
+  }, [activeCountry])
+
+  useEffect(() => { fetchSchedule() }, [fetchSchedule])
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const today = todayStr()
@@ -744,45 +798,81 @@ export default function InspectionPlanner() {
       }))
   }, [schedule, inspections, today, calendarPeriod])
 
-  // ── Schedule CRUD ─────────────────────────────────────────────────────────────
-  function handleSaveSchedule(item) {
-    setSchedule(prev => {
-      const exists = prev.findIndex(s => s.id === item.id)
-      const updated = exists >= 0
-        ? prev.map(s => s.id === item.id ? item : s)
-        : [...prev, item]
-      saveSchedule(updated)
-      return updated
-    })
-    setModal(null)
-    setEditTarget(null)
-    setPrefillAsset(null)
+  // ── Schedule CRUD (Supabase) ──────────────────────────────────────────────────
+  // Country tag applied to new rows so they remain scoped under active filter.
+  const writeCountry = activeCountry && activeCountry !== 'All' ? activeCountry : null
+
+  async function handleSaveSchedule(item) {
+    try {
+      const payload = itemToDbPayload(item)
+      if (item.id) {
+        // Update existing schedule row.
+        const { error } = await supabase
+          .from('inspection_schedules')
+          .update(payload)
+          .eq('id', item.id)
+        if (error) throw error
+      } else {
+        // Insert new schedule row; DB assigns id + timestamps.
+        const { error } = await supabase
+          .from('inspection_schedules')
+          .insert({ ...payload, country: writeCountry, created_by: profile?.id || null })
+        if (error) throw error
+      }
+      await fetchSchedule()
+      setModal(null)
+      setEditTarget(null)
+      setPrefillAsset(null)
+      return true
+    } catch (err) {
+      setScheduleError(err?.message || 'Failed to save inspection.')
+      return false
+    }
   }
 
-  function handleBulkSave(items) {
-    setSchedule(prev => {
-      const updated = [...prev, ...items]
-      saveSchedule(updated)
-      return updated
-    })
-    setModal(null)
-    setSelectedBulk([])
+  async function handleBulkSave(items) {
+    try {
+      const rows = items.map(it => ({
+        ...itemToDbPayload(it),
+        country: writeCountry,
+        created_by: profile?.id || null,
+      }))
+      const { error } = await supabase.from('inspection_schedules').insert(rows)
+      if (error) throw error
+      await fetchSchedule()
+      setModal(null)
+      setSelectedBulk([])
+      return true
+    } catch (err) {
+      setScheduleError(err?.message || 'Failed to bulk-schedule inspections.')
+      return false
+    }
   }
 
-  function handleCancelSchedule(id) {
-    setSchedule(prev => {
-      const updated = prev.map(s => s.id === id ? { ...s, status: 'Cancelled' } : s)
-      saveSchedule(updated)
-      return updated
-    })
+  async function handleCancelSchedule(id) {
+    try {
+      const { error } = await supabase
+        .from('inspection_schedules')
+        .update({ status: 'Cancelled' })
+        .eq('id', id)
+      if (error) throw error
+      await fetchSchedule()
+    } catch (err) {
+      setScheduleError(err?.message || 'Failed to cancel inspection.')
+    }
   }
 
-  function handleDeleteSchedule(id) {
-    setSchedule(prev => {
-      const updated = prev.filter(s => s.id !== id)
-      saveSchedule(updated)
-      return updated
-    })
+  async function handleDeleteSchedule(id) {
+    try {
+      const { error } = await supabase
+        .from('inspection_schedules')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+      await fetchSchedule()
+    } catch (err) {
+      setScheduleError(err?.message || 'Failed to delete inspection.')
+    }
   }
 
   // ── Export ────────────────────────────────────────────────────────────────────
@@ -933,6 +1023,22 @@ export default function InspectionPlanner() {
           </button>
         </>}
       />
+
+      {/* Schedule load error banner */}
+      {scheduleError && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-red-950/40 border border-red-800/60 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-red-200">
+            <AlertTriangle size={16} className="text-red-400 shrink-0" />
+            <span>{scheduleError}</span>
+          </div>
+          <button
+            onClick={fetchSchedule}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg text-xs font-medium text-white transition-colors whitespace-nowrap self-start sm:self-auto"
+          >
+            <RefreshCw size={12} className={scheduleLoading ? 'animate-spin' : ''} />Retry
+          </button>
+        </div>
+      )}
 
       {/* Interval Config */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
@@ -1200,7 +1306,23 @@ export default function InspectionPlanner() {
                 </div>
               </div>
 
-              {calendarWeeks.length === 0 ? (
+              {(loading || scheduleLoading) ? (
+                <div className="p-8 text-center">
+                  <RefreshCw size={20} className="animate-spin text-blue-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-400">Loading inspection schedule…</p>
+                </div>
+              ) : scheduleError ? (
+                <div className="p-8 text-center">
+                  <AlertTriangle size={32} className="text-red-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-400 mb-3">{scheduleError}</p>
+                  <button
+                    onClick={fetchSchedule}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium text-white transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <RefreshCw size={13} />Retry
+                  </button>
+                </div>
+              ) : calendarWeeks.length === 0 ? (
                 <div className="p-8 text-center">
                   <Calendar size={32} className="text-gray-600 mx-auto mb-2" />
                   <p className="text-sm text-gray-400">No inspections scheduled for this period.</p>

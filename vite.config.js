@@ -89,41 +89,15 @@ export default defineConfig({
         skipWaiting: false,
         clientsClaim: true,
         runtimeCaching: [
-          // Supabase REST API — NetworkFirst, 5-minute cache as fallback
-          {
-            urlPattern: ({ url }) =>
-              url.hostname.includes('supabase.co') && url.pathname.startsWith('/rest/'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-rest-v1',
-              expiration: { maxEntries: 200, maxAgeSeconds: 5 * 60 },
-              networkTimeoutSeconds: 10,
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          // Supabase Auth — NetworkFirst, very short cache
-          {
-            urlPattern: ({ url }) =>
-              url.hostname.includes('supabase.co') && url.pathname.startsWith('/auth/'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-auth-v1',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 },
-              networkTimeoutSeconds: 5,
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          // Supabase Storage / CDN — CacheFirst, 24-hour TTL
-          {
-            urlPattern: ({ url }) =>
-              url.hostname.includes('supabase.co') && url.pathname.startsWith('/storage/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'supabase-storage-v1',
-              expiration: { maxEntries: 100, maxAgeSeconds: 24 * 60 * 60 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
+          // SECURITY: authenticated Supabase traffic is NEVER cached in the
+          // generic browser/SW cache. Previously /rest/ (data), /auth/, and
+          // /storage/ (private signed-URL files) were cached here — that risks
+          // one account seeing another's data after a device/account switch.
+          // These now go straight to the network (no runtimeCaching entry), and
+          // user-scoped app caches are cleared on logout (see AuthContext).
+          // Only the app shell (precache), local icons, fonts, and the offline
+          // write-queue below are cached.
+
           // Local icons / images — CacheFirst, 30 days
           {
             urlPattern: /\/icons\/.*\.png$/,
@@ -144,7 +118,9 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
-          // Supabase REST POST (inspection saves) — Background Sync offline queue
+          // Supabase REST POST (inspection saves) — Background Sync offline
+          // QUEUE. This is a write queue (NetworkOnly), not a response cache: no
+          // authenticated data is stored, only pending writes for replay.
           {
             urlPattern: ({ url, request }) =>
               url.hostname.includes('supabase.co') &&

@@ -47,6 +47,31 @@ components:
           items: { type: string }
         approved: { type: boolean }
         locked: { type: boolean }
+    Asset:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        asset_no: { type: string }
+        fleet_number: { type: string }
+        make: { type: string }
+        model: { type: string }
+        vehicle_type: { type: string }
+        site: { type: string }
+        country: { type: string }
+        status: { type: string }
+        is_active: { type: boolean }
+        current_km: { type: number }
+        tyre_size: { type: string }
+        created_at: { type: string, format: date-time }
+    AssetPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Asset' }
+        next_cursor:
+          type: string
+          description: Opaque keyset cursor; omitted on the last page.
 paths:
   /health:
     get:
@@ -90,3 +115,51 @@ paths:
           description: Account locked or not approved
         '404':
           description: Profile not found
+  /assets:
+    get:
+      summary: List fleet assets (scope-aware, cursor-paginated)
+      description: >
+        Returns assets the caller is permitted to see. Elevated roles
+        (admin/manager/director) see all; others are restricted to their
+        country scope. Backed by vehicle_fleet in Phase A.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: site, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string }, description: matches asset_no/make/model }
+      responses:
+        '200':
+          description: A page of assets
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AssetPage' }
+        '401': { description: Missing or invalid token }
+        '403': { description: Account locked or not approved }
+  /assets/{id}:
+    get:
+      summary: Get a single asset by id (scope-aware)
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The asset
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Asset' }
+        '401': { description: Missing or invalid token }
+        '404': { description: Not found or out of scope }

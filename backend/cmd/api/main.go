@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/shahzebs-library/tyrepulse/backend/internal/http"
+	"github.com/shahzebs-library/tyrepulse/backend/internal/modules/assets"
 	"github.com/shahzebs-library/tyrepulse/backend/internal/modules/identity"
 	"github.com/shahzebs-library/tyrepulse/backend/internal/platform/auth"
 	"github.com/shahzebs-library/tyrepulse/backend/internal/platform/config"
@@ -38,7 +39,9 @@ func main() {
 	defer db.Close()
 
 	verifier := auth.NewVerifier(cfg.SupabaseJWTSec)
-	identityHandler := identity.NewHandler(identity.NewRepository(db.Pool))
+	identityRepo := identity.NewRepository(db.Pool)
+	identityHandler := identity.NewHandler(identityRepo)
+	assetsHandler := assets.NewHandler(assets.NewRepository(db.Pool), identityRepo)
 
 	handler := httpapi.New(
 		httpapi.Deps{
@@ -47,6 +50,7 @@ func main() {
 			AllowedOrigins:  cfg.AllowedOrigins,
 			RateLimitPerMin: cfg.RateLimitPerMin,
 			IdentityHandler: identityHandler,
+			AssetsHandler:   assetsHandler,
 		},
 		httpserver.RequestID,
 		httpserver.Recover(logger),

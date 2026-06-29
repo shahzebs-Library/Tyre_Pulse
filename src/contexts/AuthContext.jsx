@@ -18,19 +18,21 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const profileChannelRef = useRef(null)
+  const profileChannelRef  = useRef(null)
+  const lastActivityRef    = useRef(Date.now())
   const [modulePerms, setModulePerms] = useState(null)
   const [mfaEnabled, setMfaEnabled] = useState(false)
 
-  // Idle timeout — sign out after 30 minutes of inactivity
+  // Idle timeout — sign out after 30 minutes of inactivity.
+  // Uses an in-memory ref instead of localStorage so the timer cannot be
+  // bypassed by a user opening DevTools and modifying localStorage values.
   const IDLE_MS = 30 * 60 * 1000
   useEffect(() => {
     function resetTimer() {
-      localStorage.setItem('tp_last_activity', Date.now().toString())
+      lastActivityRef.current = Date.now()
     }
     function checkIdle() {
-      const last = parseInt(localStorage.getItem('tp_last_activity') || '0', 10)
-      if (last && Date.now() - last > IDLE_MS) {
+      if (Date.now() - lastActivityRef.current > IDLE_MS) {
         supabase.auth.signOut()
         localStorage.setItem('tp_session_expired', '1')
       }
@@ -108,7 +110,7 @@ export function AuthProvider({ children }) {
 
   async function fetchProfile(userId) {
     const [profileRes, permsRes, factorsRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', userId).single(),
+      supabase.from('profiles').select('id,full_name,username,role,email,employee_id,site,country,approved,locked,created_at').eq('id', userId).single(),
       supabase.rpc('get_user_module_permissions'),
       supabase.auth.mfa.listFactors(),
     ])
@@ -123,6 +125,10 @@ export function AuthProvider({ children }) {
       setLoading(false)
       return
     }
+
+    // Clear stale flags from previous sessions or lockouts
+    localStorage.removeItem('tp_session_expired')
+    localStorage.removeItem('tp_access_revoked')
 
     setProfile(p)
     setModulePerms(permsRes.data ?? {})

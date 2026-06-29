@@ -15,9 +15,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
-    console.error('[ErrorBoundary] Caught error:', error.message)
-    console.error('[ErrorBoundary] Stack:', info.componentStack)
-    this.setState({ info: info.componentStack ?? '' })
+    // Log full details only in development — production logs are world-readable on Android
+    if (__DEV__) {
+      console.error('[ErrorBoundary] Caught error:', error.message)
+      console.error('[ErrorBoundary] Stack:', info.componentStack)
+    }
+    this.setState({ info: __DEV__ ? (info.componentStack ?? '') : '' })
   }
 
   reset = () => this.setState({ error: null, info: '' })
@@ -34,11 +37,13 @@ export class ErrorBoundary extends Component<Props, State> {
         <Text style={styles.title}>Something went wrong</Text>
         <Text style={styles.message}>{error.message}</Text>
 
-        <ScrollView style={styles.stack} showsVerticalScrollIndicator={false}>
-          <Text style={styles.stackText} selectable>
-            {error.stack ?? ''}{info ? `\n\nComponent stack:\n${info}` : ''}
-          </Text>
-        </ScrollView>
+        {__DEV__ && (
+          <ScrollView style={styles.stack} showsVerticalScrollIndicator={false}>
+            <Text style={styles.stackText} selectable>
+              {error.stack ?? ''}{info ? `\n\nComponent stack:\n${info}` : ''}
+            </Text>
+          </ScrollView>
+        )}
 
         <TouchableOpacity style={styles.btn} onPress={this.reset} activeOpacity={0.8}>
           <Ionicons name="refresh-outline" size={18} color="#fff" />

@@ -31,6 +31,16 @@ const CPK_BENCHMARK = 1.20
 const FAILURE_THRESHOLD = 0.15
 const TABS = ['Directory', 'Performance', 'Spend Analysis', 'Contracts', 'Recommendations']
 const RATINGS = ['Preferred', 'Approved', 'Under Review', 'Probation']
+// Categorical rating <-> numeric (rating column is numeric). Index is 1-based.
+const RATING_TO_NUM = RATINGS.reduce((acc, r, i) => { acc[r] = i + 1; return acc }, {})
+function ratingToNum(label) { return RATING_TO_NUM[label] ?? null }
+function numToRating(num) {
+  const idx = Math.round(Number(num)) - 1
+  return RATINGS[idx] || null
+}
+// Whitelisted writable columns
+const RATING_COLS = ['brand', 'rating', 'notes', 'country', 'created_by']
+const CONTRACT_COLS = ['supplier_name', 'contract_start', 'contract_end', 'payment_terms', 'price_per_unit', 'min_order', 'notes', 'country', 'created_by']
 const PALETTE = [
   '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
   '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
@@ -162,24 +172,19 @@ function computeRadarScores(metrics, allMetrics) {
   }
 }
 
-// ── Storage helpers ────────────────────────────────────────────────────────────
-function loadSupplierRatings() {
-  try { return JSON.parse(localStorage.getItem('tp_suppliers') || '{}') } catch { return {} }
+// ── Supabase persistence helpers ─────────────────────────────────────────────
+function pick(obj, cols) {
+  const out = {}
+  cols.forEach(k => { if (obj[k] !== undefined) out[k] = obj[k] })
+  return out
 }
-function saveSupplierRatings(obj) {
-  localStorage.setItem('tp_suppliers', JSON.stringify(obj))
-}
-function loadSupplierNotes(brand) {
-  return localStorage.getItem(`tp_supplier_notes_${brand}`) || ''
-}
-function saveSupplierNotes(brand, notes) {
-  localStorage.setItem(`tp_supplier_notes_${brand}`, notes)
-}
-function loadContracts() {
-  try { return JSON.parse(localStorage.getItem('tp_supplier_contracts') || '[]') } catch { return [] }
-}
-function saveContracts(contracts) {
-  localStorage.setItem('tp_supplier_contracts', JSON.stringify(contracts))
+
+// Country-scoped select for the (brand,country) / (supplier,country) rows.
+function applyCountryFilter(query, activeCountry) {
+  if (activeCountry && activeCountry !== 'All') {
+    return query.or(`country.eq.${activeCountry},country.is.null`)
+  }
+  return query
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -235,10 +240,16 @@ function ContractModal({ contract, onSave, onClose }) {
     supplier_name: '', contract_start: '', contract_end: '', payment_terms: '',
     price_per_unit: '', min_order: '', notes: '',
   })
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
   function set(k, v) { setForm(prev => ({ ...prev, [k]: v })) }
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault()
-    onSave({ ...form, id: form.id || `c_${Date.now()}` })
+    setSaving(true)
+    setSaveError(null)
+    const err = await onSave(form)
+    setSaving(false)
+    if (err) setSaveError(err)
   }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -288,9 +299,17 @@ function ContractModal({ contract, onSave, onClose }) {
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none" />
           </div>
+          {saveError && (
+            <div className="col-span-2 flex items-center gap-2 text-xs text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
+              <AlertTriangle size={13} className="flex-shrink-0" /> {saveError}
+            </div>
+          )}
           <div className="col-span-2 flex gap-2 justify-end pt-1">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-800 rounded-lg">Cancel</button>
-            <button type="submit" className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-500 rounded-lg font-medium">Save Contract</button>
+            <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-800 rounded-lg disabled:opacity-50">Cancel</button>
+            <button type="submit" disabled={saving} className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-500 rounded-lg font-medium flex items-center gap-1.5 disabled:opacity-50">
+              {saving && <Loader2 size={13} className="animate-spin" />}
+              {saving ? 'Saving…' : 'Save Contract'}
+            </button>
           </div>
         </form>
       </motion.div>
@@ -299,10 +318,12 @@ function ContractModal({ contract, onSave, onClose }) {
 }
 
 // ── Supplier Detail Drawer ─────────────────────────────────────────────────────
-function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onClose, onRatingChange }) {
+function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onClose, onRatingChange, onSaveNotes }) {
   const [page, setPage] = useState(0)
-  const [notes, setNotes] = useState(() => loadSupplierNotes(supplier.brand))
+  const [notes, setNotes] = useState(supplier.notes || '')
   const [noteSaved, setNoteSaved] = useState(false)
+  const [noteSaving, setNoteSaving] = useState(false)
+  const [noteError, setNoteError] = useState(null)
   const [radarKey] = useState(() => Math.random())
   const pageSize = 8
   const months = getLast12Months()
@@ -331,8 +352,14 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
   const pagedRecs = supplier.recs.slice(page * pageSize, (page + 1) * pageSize)
   const totalPages = Math.ceil(supplier.recs.length / pageSize)
 
-  function saveNotes() {
-    saveSupplierNotes(supplier.brand, notes)
+  useEffect(() => { setNotes(supplier.notes || ''); setNoteSaved(false); setNoteError(null) }, [supplier.brand, supplier.notes])
+
+  async function saveNotes() {
+    setNoteSaving(true)
+    setNoteError(null)
+    const err = await onSaveNotes(supplier.brand, notes)
+    setNoteSaving(false)
+    if (err) { setNoteError(err); return }
     setNoteSaved(true)
     setTimeout(() => setNoteSaved(false), 2000)
   }
@@ -550,10 +577,18 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
             placeholder="Add internal notes about this supplier..."
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
           />
-          <button onClick={saveNotes}
-            className={`mt-2 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${noteSaved ? 'bg-emerald-700 text-emerald-200' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'}`}>
-            {noteSaved ? 'Saved' : 'Save Notes'}
-          </button>
+          <div className="flex items-center gap-2 mt-2">
+            <button onClick={saveNotes} disabled={noteSaving}
+              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 ${noteSaved ? 'bg-emerald-700 text-emerald-200' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'}`}>
+              {noteSaving && <Loader2 size={11} className="animate-spin" />}
+              {noteSaving ? 'Saving…' : noteSaved ? 'Saved' : 'Save Notes'}
+            </button>
+            {noteError && (
+              <span className="text-xs text-red-400 flex items-center gap-1">
+                <AlertTriangle size={11} /> {noteError}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>
@@ -562,8 +597,8 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function SupplierManagement() {
-  const { activeCurrency } = useSettings()
-  const { profile } = useAuth()
+  const { activeCurrency, activeCountry } = useSettings()
+  const { user, profile } = useAuth()
   const isAdmin = profile?.role === 'Admin'
 
   const [records, setRecords] = useState([])
@@ -574,10 +609,14 @@ export default function SupplierManagement() {
   const [filterCountry, setFilterCountry] = useState('All')
   const [filterSite, setFilterSite] = useState('All')
   const [filterRating, setFilterRating] = useState('All')
-  const [ratings, setRatings] = useState(() => loadSupplierRatings())
+  // ratings: { [brand]: { label, notes, id } } — persisted in supplier_ratings
+  const [ratings, setRatings] = useState({})
+  const [ratingsError, setRatingsError] = useState(null)
   const [selectedSupplier, setSelectedSupplier] = useState(null)
   const [compareList, setCompareList] = useState([])
-  const [contracts, setContracts] = useState(() => loadContracts())
+  const [contracts, setContracts] = useState([])
+  const [contractsLoading, setContractsLoading] = useState(true)
+  const [contractsError, setContractsError] = useState(null)
   const [contractModal, setContractModal] = useState(null)
   const [contractSearch, setContractSearch] = useState('')
 
@@ -585,16 +624,47 @@ export default function SupplierManagement() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
-    const { data, error: err } = await fetchAllPages((from, to) => supabase
+    let q = supabase
       .from('tyre_records')
       .select('id, brand, cost_per_tyre, issue_date, site, country, position, km_at_fitment, km_at_removal, risk_level, size, serial_number, asset_no')
-      .range(from, to))
+    q = applyCountryFilter(q, activeCountry)
+    const { data, error: err } = await fetchAllPages((from, to) => q.range(from, to))
     if (err) { setError(err.message); setLoading(false); return }
     setRecords(data || [])
     setLoading(false)
-  }, [])
+  }, [activeCountry])
+
+  // Load supplier ratings/notes
+  const fetchRatings = useCallback(async () => {
+    setRatingsError(null)
+    let q = supabase.from('supplier_ratings').select('id, brand, rating, notes, country')
+    q = applyCountryFilter(q, activeCountry)
+    const { data, error: err } = await q
+    if (err) { setRatingsError(err.message); return }
+    const map = {}
+    ;(data || []).forEach(row => {
+      map[row.brand] = { id: row.id, label: numToRating(row.rating), notes: row.notes || '' }
+    })
+    setRatings(map)
+  }, [activeCountry])
+
+  // Load contracts
+  const fetchContracts = useCallback(async () => {
+    setContractsLoading(true)
+    setContractsError(null)
+    let q = supabase.from('supplier_contracts')
+      .select('id, supplier_name, contract_start, contract_end, payment_terms, price_per_unit, min_order, notes, country')
+      .order('created_at', { ascending: false })
+    q = applyCountryFilter(q, activeCountry)
+    const { data, error: err } = await q
+    if (err) { setContractsError(err.message); setContractsLoading(false); return }
+    setContracts(data || [])
+    setContractsLoading(false)
+  }, [activeCountry])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { fetchRatings() }, [fetchRatings])
+  useEffect(() => { fetchContracts() }, [fetchContracts])
 
   // Derived: unique values for filters
   const countries = useMemo(() => ['All', ...new Set(records.map(r => r.country).filter(Boolean))], [records])
@@ -614,8 +684,9 @@ export default function SupplierManagement() {
     const brands = [...new Set(filteredRecords.map(r => r.brand).filter(Boolean))]
     return brands.map(brand => {
       const m = computeSupplierMetrics(filteredRecords, brand)
-      const rating = ratings[brand] || autoRate(m)
-      return { ...m, rating }
+      const entry = ratings[brand]
+      const rating = entry?.label || autoRate(m)
+      return { ...m, rating, notes: entry?.notes || '' }
     })
   }, [filteredRecords, ratings])
 
@@ -650,14 +721,42 @@ export default function SupplierManagement() {
     }
   }, [allMetrics])
 
-  // Rating management
-  function handleRatingChange(brand, rating) {
-    const updated = { ...ratings, [brand]: rating }
-    setRatings(updated)
-    saveSupplierRatings(updated)
+  const scopedCountry = activeCountry && activeCountry !== 'All' ? activeCountry : null
+
+  // Upsert one supplier_ratings row per (brand, country), preserving the other field.
+  async function upsertRating(brand, { label, notes }) {
+    const existing = ratings[brand] || {}
+    const payload = pick({
+      brand,
+      rating: ratingToNum(label !== undefined ? label : existing.label),
+      notes: notes !== undefined ? notes : (existing.notes || ''),
+      country: scopedCountry,
+      created_by: user?.id || null,
+    }, RATING_COLS)
+    const { error: err } = await supabase
+      .from('supplier_ratings')
+      .upsert(payload, { onConflict: 'brand,country' })
+    if (err) return err.message
+    await fetchRatings()
+    return null
+  }
+
+  // Rating override (Admin)
+  async function handleRatingChange(brand, rating) {
+    const err = await upsertRating(brand, { label: rating })
+    if (err) { setRatingsError(err); return }
     if (selectedSupplier?.brand === brand) {
       setSelectedSupplier(prev => ({ ...prev, rating }))
     }
+  }
+
+  // Notes save (returns error string or null)
+  async function handleSaveNotes(brand, notes) {
+    const err = await upsertRating(brand, { notes })
+    if (!err && selectedSupplier?.brand === brand) {
+      setSelectedSupplier(prev => ({ ...prev, notes }))
+    }
+    return err
   }
 
   // Compare list
@@ -669,20 +768,36 @@ export default function SupplierManagement() {
     })
   }
 
-  // Contract management
-  function saveContract(contract) {
-    const updated = contracts.find(c => c.id === contract.id)
-      ? contracts.map(c => c.id === contract.id ? contract : c)
-      : [...contracts, contract]
-    setContracts(updated)
-    saveContracts(updated)
+  // Contract management — returns error string or null
+  async function saveContract(contract) {
+    const payload = pick({
+      supplier_name: contract.supplier_name?.trim() || '',
+      contract_start: contract.contract_start || null,
+      contract_end: contract.contract_end || null,
+      payment_terms: contract.payment_terms || null,
+      price_per_unit: contract.price_per_unit === '' || contract.price_per_unit == null ? null : Number(contract.price_per_unit),
+      min_order: contract.min_order === '' || contract.min_order == null ? null : Number(contract.min_order),
+      notes: contract.notes || null,
+      country: scopedCountry,
+      created_by: user?.id || null,
+    }, CONTRACT_COLS)
+
+    let err
+    if (contract.id) {
+      ;({ error: err } = await supabase.from('supplier_contracts').update(payload).eq('id', contract.id))
+    } else {
+      ;({ error: err } = await supabase.from('supplier_contracts').insert(payload))
+    }
+    if (err) return err.message
+    await fetchContracts()
     setContractModal(null)
+    return null
   }
 
-  function deleteContract(id) {
-    const updated = contracts.filter(c => c.id !== id)
-    setContracts(updated)
-    saveContracts(updated)
+  async function deleteContract(id) {
+    const { error: err } = await supabase.from('supplier_contracts').delete().eq('id', id)
+    if (err) { setContractsError(err.message); return }
+    await fetchContracts()
   }
 
   // Export
@@ -917,6 +1032,17 @@ export default function SupplierManagement() {
         <KpiCard icon={Award} label="Best CPK" value={kpiSummary.best?.brand || 'N/A'} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : '—'} color="text-emerald-400" />
         <KpiCard icon={AlertTriangle} label="Worst CPK" value={kpiSummary.worst?.brand || 'N/A'} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : '—'} color="text-red-400" />
       </div>
+
+      {/* Ratings persistence error banner */}
+      {ratingsError && (
+        <div className="flex items-center justify-between gap-3 bg-red-900/20 border border-red-800 rounded-xl px-4 py-2.5">
+          <div className="flex items-center gap-2 text-sm text-red-400">
+            <AlertTriangle size={15} className="flex-shrink-0" />
+            <span>Supplier ratings/notes could not be saved or loaded: {ratingsError}</span>
+          </div>
+          <button onClick={fetchRatings} className="px-3 py-1.5 bg-red-800/40 hover:bg-red-800/60 text-red-200 text-xs rounded-lg flex-shrink-0">Retry</button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
@@ -1258,7 +1384,18 @@ export default function SupplierManagement() {
               </button>
             </div>
 
-            {filteredContracts.length === 0 ? (
+            {contractsLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 size={28} className="animate-spin text-blue-500" />
+              </div>
+            ) : contractsError ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <AlertTriangle size={32} className="text-red-400 mb-2" />
+                <p className="text-red-400 font-medium">Failed to load contracts</p>
+                <p className="text-gray-500 text-sm mt-1">{contractsError}</p>
+                <button onClick={fetchContracts} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">Retry</button>
+              </div>
+            ) : filteredContracts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-600">
                 <FileCheck size={40} className="mb-3 opacity-30" />
                 <p className="font-medium">No contracts found</p>
@@ -1443,6 +1580,7 @@ export default function SupplierManagement() {
               isAdmin={isAdmin}
               onClose={() => setSelectedSupplier(null)}
               onRatingChange={handleRatingChange}
+              onSaveNotes={handleSaveNotes}
             />
           </>
         )}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -122,7 +122,6 @@ export default function FuelEfficiency() {
 
   // ── Data state ────────────────────────────────────────────────────────────
   const [records, setRecords] = useState([])
-  const [inspections, setInspections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
@@ -132,21 +131,16 @@ export default function FuelEfficiency() {
     setLoading(true)
     setError(null)
     try {
-      const [{ data: recs, error: rErr }, { data: insp, error: iErr }] = await Promise.all([
-        fetchAllPages((from, to) => supabase
+      const { data: recs, error: rErr } = await fetchAllPages((from, to) => {
+        let q = supabase
           .from('tyre_records')
           .select('id,asset_no,serial_number,position,tread_depth,pressure_reading,risk_level,km_at_fitment,km_at_removal,site,country,brand,issue_date')
-          .match(activeCountry && activeCountry !== 'All' ? { country: activeCountry } : {})
-          .range(from, to)),
-        fetchAllPages((from, to) => supabase
-          .from('inspections')
-          .select('id,asset_no,pressure_reading,tread_depth,position,inspection_date,site')
-          .match(activeCountry && activeCountry !== 'All' ? { country: activeCountry } : {})
-          .range(from, to)),
-      ])
+        // Null-safe country scope — never silently drop uncategorised rows
+        if (activeCountry && activeCountry !== 'All') q = q.or(`country.eq.${activeCountry},country.is.null`)
+        return q.range(from, to)
+      })
       if (rErr) throw rErr
       setRecords(recs ?? [])
-      setInspections(insp ?? [])
       setLastRefresh(new Date())
     } catch (e) {
       setError(e.message ?? 'Failed to load data')
@@ -485,9 +479,9 @@ export default function FuelEfficiency() {
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
       const kpiLines = [
-        `Estimated Monthly Fuel Loss Cost: R${fmt(kpis.totalExtraCostMonth, 2)}`,
+        `Estimated Monthly Fuel Loss Cost: ${activeCurrency} ${fmt(kpis.totalExtraCostMonth, 2)}`,
         `Fleet Rolling Resistance Score: ${kpis.rrScore}/10`,
-        `Potential Annual Fuel Savings: R${fmt(kpis.potentialCostSavingAnnual, 2)}`,
+        `Potential Annual Fuel Savings: ${activeCurrency} ${fmt(kpis.potentialCostSavingAnnual, 2)}`,
         `Avg Pressure Deviation: ${kpis.avgDevPct}%`,
         `CO2 Impact: ${kpis.co2Tonnes} tonnes/month`,
         `Current Pressure Compliance: ${kpis.currentCompliancePct}%`,
@@ -504,8 +498,8 @@ export default function FuelEfficiency() {
         `${s.compliancePct}%`,
         s.avgTread ?? 'N/A',
         fmt(s.extraFuelMonth),
-        `R${fmt(s.totalExtraCostMonth, 2)}`,
-        `R${fmt(s.annualExtraCost)}`,
+        `${activeCurrency} ${fmt(s.totalExtraCostMonth, 2)}`,
+        `${activeCurrency} ${fmt(s.annualExtraCost)}`,
       ]),
       styles: { fontSize: 8, cellPadding: 2.5, textColor: [30, 30, 30] },
       headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: 'bold' },
@@ -514,7 +508,7 @@ export default function FuelEfficiency() {
     })
 
     doc.save('TyrePulse_Fuel_Efficiency_Report.pdf')
-  }, [kpis, siteMetrics, fleetSize])
+  }, [kpis, siteMetrics, fleetSize, activeCurrency])
 
   // ── Export Excel ──────────────────────────────────────────────────────────
   const exportExcel = useCallback(() => {
@@ -586,6 +580,19 @@ export default function FuelEfficiency() {
           </button>
         </>}
       />
+
+      {/* ── Estimate disclosure ───────────────────────────────────────────── */}
+      <div className="bg-amber-900/20 border border-amber-700/50 text-amber-200 rounded-xl p-4 flex items-start gap-3">
+        <Info className="w-5 h-5 mt-0.5 shrink-0 text-amber-400" />
+        <div className="text-sm leading-relaxed">
+          <span className="font-semibold">Modelled estimates — not measured fuel consumption.</span>{' '}
+          Figures are derived from tyre pressure and tread condition using
+          rolling-resistance assumptions ({fmtCur(fuelCostPerLiter, activeCurrency)}/L,
+          {' '}{fleetConsumption} L/100km baseline). They indicate the <em>direction and
+          relative scale</em> of tyre-related fuel impact, not actual litres burned.
+          Adjust the assumptions below to match your fleet.
+        </div>
+      </div>
 
       {/* ── Error ─────────────────────────────────────────────────────────── */}
       {error && (

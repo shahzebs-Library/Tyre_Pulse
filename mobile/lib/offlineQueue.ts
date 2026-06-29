@@ -19,7 +19,7 @@ async function saveQueue(queue: OfflineInspection[]): Promise<void> {
 }
 
 export async function enqueueInspection(payload: InspectionPayload): Promise<string> {
-  const id = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  const id = `local_${crypto.randomUUID()}`
   const item: OfflineInspection = {
     id,
     payload,

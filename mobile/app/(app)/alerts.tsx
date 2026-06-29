@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  RefreshControl, StatusBar, ActivityIndicator,
+  RefreshControl, StatusBar, ActivityIndicator, Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -36,25 +36,88 @@ export default function AlertsScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [filter, setFilter] = useState<FilterKey>('all')
+  const [error, setError] = useState<string | null>(null)
+  const [ackingId, setAckingId] = useState<string | null>(null)
 
   const { allowed } = useRoleGuard(['inspector', 'tyre_man', 'admin', 'manager', 'director'])
   const textAlign = isRTL ? 'right' : 'left'
 
   const load = useCallback(async () => {
-    let q = supabase
-      .from('tyre_records')
-      .select('id,asset_no,site,brand,position,risk_level,serial_no,tread_depth,issue_date')
-      .in('risk_level', ['Critical', 'High'])
-      .order('issue_date', { ascending: false })
-      .limit(300)
-    if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
-    const { data } = await q
-    setRows((data as AlertRow[]) ?? [])
-    setLoading(false)
+    try {
+      setError(null)
+      let q = supabase
+        .from('tyre_records')
+        .select('id,asset_no,site,brand,position,risk_level,serial_no,tread_depth,issue_date')
+        .in('risk_level', ['Critical', 'High'])
+        .order('issue_date', { ascending: false })
+        .limit(300)
+      if (profile?.country) q = q.or(`country.eq.${profile.country},country.is.null`)
+
+      // Pull already-acknowledged risk alerts so resolved items disappear.
+      // Each ack stores the tyre_records id in `message` as `rec:<id>`.
+      const ackQ = supabase
+        .from('alerts')
+        .select('message')
+        .eq('alert_type', 'tyre_risk')
+        .eq('resolved', true)
+
+      const [{ data, error: rErr }, { data: acks }] = await Promise.all([q, ackQ])
+      if (rErr) throw rErr
+
+      const acked = new Set(
+        (acks ?? [])
+          .map((a: any) => (typeof a.message === 'string' && a.message.startsWith('rec:') ? a.message.slice(4) : null))
+          .filter(Boolean),
+      )
+      setRows(((data as AlertRow[]) ?? []).filter(r => !acked.has(r.id)))
+    } catch (e: any) {
+      if (__DEV__) console.warn('[alerts] load failed:', e?.message)
+      setError('Could not load alerts. Pull down to retry.')
+      setRows([])
+    } finally {
+      setLoading(false)
+    }
   }, [profile?.country])
 
   useEffect(() => { load() }, [load])
   useRealtime('tyre_records', load)
+  useRealtime('alerts', load)
+
+  const acknowledge = useCallback((item: AlertRow) => {
+    Alert.alert(
+      'Acknowledge alert',
+      `Mark the ${item.risk_level} alert for ${item.asset_no ?? 'this asset'} as reviewed? It will be removed from the list.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Acknowledge',
+          onPress: async () => {
+            setAckingId(item.id)
+            // Optimistic removal
+            setRows(prev => prev.filter(r => r.id !== item.id))
+            const { error: insErr } = await supabase.from('alerts').insert({
+              asset_no: item.asset_no,
+              alert_type: 'tyre_risk',
+              severity: item.risk_level,
+              message: `rec:${item.id}`,
+              site: item.site,
+              country: profile?.country ?? null,
+              resolved: true,
+              is_active: false,
+              created_by: profile?.id ?? null,
+            })
+            setAckingId(null)
+            if (insErr) {
+              // Roll back optimistic removal and surface the failure
+              if (__DEV__) console.warn('[alerts] acknowledge failed:', insErr.message)
+              Alert.alert('Could not acknowledge', 'Please try again.')
+              load()
+            }
+          },
+        },
+      ],
+    )
+  }, [profile?.country, profile?.id, load])
 
   async function onRefresh() {
     setRefreshing(true)
@@ -100,10 +163,21 @@ export default function AlertsScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="shield-checkmark-outline" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyText}>{t('modules.alerts.none')}</Text>
-            </View>
+            error ? (
+              <View style={styles.empty}>
+                <Ionicons name="cloud-offline-outline" size={48} color="#cbd5e1" />
+                <Text style={styles.emptyText}>{error}</Text>
+                <TouchableOpacity style={styles.retryBtn} onPress={onRefresh}>
+                  <Ionicons name="refresh" size={16} color="#fff" />
+                  <Text style={styles.retryText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.empty}>
+                <Ionicons name="shield-checkmark-outline" size={48} color="#cbd5e1" />
+                <Text style={styles.emptyText}>{t('modules.alerts.none')}</Text>
+              </View>
+            )
           }
           renderItem={({ item }) => {
             const rc = RISK_COLOR[item.risk_level ?? ''] ?? '#64748b'
@@ -125,8 +199,20 @@ export default function AlertsScreen() {
                     {item.serial_no ? `SN ${item.serial_no}` : ''}{item.tread_depth != null ? `  ·  ${item.tread_depth}mm` : ''}
                   </Text>
                 </View>
-                <View style={[styles.riskBadge, { backgroundColor: rc + '1a' }]}>
-                  <Text style={[styles.riskBadgeText, { color: rc }]}>{item.risk_level}</Text>
+                <View style={styles.cardRight}>
+                  <View style={[styles.riskBadge, { backgroundColor: rc + '1a' }]}>
+                    <Text style={[styles.riskBadgeText, { color: rc }]}>{item.risk_level}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.ackBtn}
+                    onPress={() => acknowledge(item)}
+                    disabled={ackingId === item.id}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    {ackingId === item.id
+                      ? <ActivityIndicator size="small" color="#16a34a" />
+                      : <><Ionicons name="checkmark-done" size={14} color="#16a34a" /><Text style={styles.ackText}>Ack</Text></>}
+                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             )
@@ -154,8 +240,13 @@ const styles = StyleSheet.create({
   riskDot: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
   cardMeta: { fontSize: 11.5, color: '#94a3b8' },
+  cardRight: { alignItems: 'flex-end', gap: 6 },
   riskBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   riskBadgeText: { fontSize: 11, fontWeight: '800' },
+  ackBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#16a34a14', minWidth: 44, justifyContent: 'center' },
+  ackText: { fontSize: 11, fontWeight: '800', color: '#16a34a' },
   empty: { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyText: { fontSize: 15, fontWeight: '700', color: '#94a3b8' },
+  emptyText: { fontSize: 15, fontWeight: '700', color: '#94a3b8', textAlign: 'center', paddingHorizontal: 24 },
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#16a34a', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9, marginTop: 4 },
+  retryText: { fontSize: 13, fontWeight: '800', color: '#fff' },
 })

@@ -67,9 +67,11 @@ export async function uploadInspectionPhoto(
 }
 
 /**
- * Upload a captured accident photo to the public `accident-photos` bucket.
+ * Upload a captured accident photo to the PRIVATE `accident-photos` bucket.
  * Uses base64 → Uint8Array (RN's fetch().blob() yields empty files in Expo).
- * Returns the permanent public URL, or null on failure.
+ * Returns a tp-storage:// ref (resolved to a short-lived signed URL on display
+ * via storageRefs.resolveStorageUrl) — never a permanent public URL — or null
+ * on failure.
  *
  * Path is collision-resistant: accidents/<uid>/<timestamp>_<index>_<random4>.<ext>
  */

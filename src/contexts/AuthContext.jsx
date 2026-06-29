@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { queryClient } from '../lib/queryClient'
 
 const AuthContext = createContext(null)
 
@@ -171,6 +172,23 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     await supabase.auth.signOut()
+    // Clear user-scoped client caches so a different account on this device
+    // cannot see the previous user's data after switching (account-switch
+    // isolation). Supabase already dropped its session above; here we drop the
+    // in-memory query cache, any service-worker runtime caches that could hold
+    // user data, and session storage.
+    try { queryClient.clear() } catch { /* no-op */ }
+    try {
+      if (typeof caches !== 'undefined' && caches.keys) {
+        const keys = await caches.keys()
+        await Promise.all(
+          keys
+            .filter(k => /supabase|rest|storage|auth|data/i.test(k))
+            .map(k => caches.delete(k)),
+        )
+      }
+    } catch { /* no-op */ }
+    try { sessionStorage.clear() } catch { /* no-op */ }
   }
 
   return (

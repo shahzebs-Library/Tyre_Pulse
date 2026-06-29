@@ -1,0 +1,7 @@
+# Local secrets and build artifacts — never commit.
+.env
+.env.local
+/bin/
+/out/
+*.test
+*.out

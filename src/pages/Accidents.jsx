@@ -761,6 +761,12 @@ export default function Accidents() {
             <FileText size={14} /> PDF
           </button>
           <button
+            onClick={() => navigate('/data-intake?module=accident')}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            <Upload size={15} /> Import via Data Intake Center
+          </button>
+          <button
             onClick={() => { setShowBulk(true); setBulkRows([]); setBulkFile(null); setBulkResult(null) }}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
@@ -771,6 +777,9 @@ export default function Accidents() {
           </button>
         </div>
       </div>
+      <p className="text-xs text-gray-500 -mt-1">
+        New: controlled, validated, audited accident &amp; insurance import with private evidence attachments and duplicate detection.
+      </p>
 
       {error && (
         <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 text-sm">{error}</div>

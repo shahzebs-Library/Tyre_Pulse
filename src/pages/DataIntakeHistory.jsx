@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  History, BarChart3, Layers, Tags, Loader2, AlertTriangle, RotateCcw, ChevronRight, Database,
+  History, BarChart3, Layers, Tags, Loader2, AlertTriangle, RotateCcw, ChevronRight, ChevronDown, Database, CheckCircle2,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import * as imports from '../lib/api/imports'
+import { reconcileBatch } from '../lib/import/reconcile'
 
 const ELEVATED = ['admin', 'manager', 'director']
 const TABS = [
@@ -18,6 +19,21 @@ const TABS = [
 function chip(s) {
   const ok = s === 'committed'
   return `text-xs px-2 py-0.5 rounded ${ok ? 'bg-green-900/30 text-green-400' : s === 'reversed' ? 'bg-red-900/30 text-red-400' : 'bg-gray-800 text-gray-400'}`
+}
+
+/** Inline reconciliation indicator derived from reconcileBatch(). */
+function ReconcileBadge({ summary }) {
+  if (summary.indicator === 'pending') {
+    return <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-500">—</span>
+  }
+  const balanced = summary.indicator === 'balanced'
+  const cls = balanced ? 'bg-green-900/30 text-green-400' : 'bg-amber-900/30 text-amber-400'
+  const Icon = balanced ? CheckCircle2 : AlertTriangle
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded inline-flex items-center gap-1 ${cls}`} title={`${summary.imported}/${summary.expected} imported`}>
+      <Icon size={12} /> {balanced ? 'Balanced' : 'Review'}
+    </span>
+  )
 }
 
 export default function DataIntakeHistory() {
@@ -34,6 +50,7 @@ export default function DataIntakeHistory() {
   const [customFields, setCustomFields] = useState([])
   const [drill, setDrill] = useState(null) // { batch, rows }
   const [busyId, setBusyId] = useState(null)
+  const [reconId, setReconId] = useState(null) // batch id whose reconciliation row is expanded
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -92,16 +109,29 @@ export default function DataIntakeHistory() {
           {tab === 'imports' && !drill && (
             <div className="border border-gray-800 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Module</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Rows</th><th className="text-left px-3 py-2">Errors/Dups</th><th className="text-left px-3 py-2">When</th><th className="px-3 py-2"></th></tr></thead>
+                <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Module</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Rows</th><th className="text-left px-3 py-2">Errors/Dups</th><th className="text-left px-3 py-2">Reconcile</th><th className="text-left px-3 py-2">When</th><th className="px-3 py-2"></th></tr></thead>
                 <tbody>
-                  {batches.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-600">No imports yet.</td></tr>}
-                  {batches.map((b) => (
-                    <tr key={b.id} className="border-t border-gray-800 hover:bg-gray-900/40">
+                  {batches.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-600">No imports yet.</td></tr>}
+                  {batches.map((b) => {
+                    const recon = reconcileBatch(b)
+                    const canRecon = recon.indicator !== 'pending'
+                    const open = reconId === b.id
+                    return (
+                    <Fragment key={b.id}>
+                    <tr className="border-t border-gray-800 hover:bg-gray-900/40">
                       <td className="px-3 py-2 capitalize">{b.module}</td>
                       <td className="px-3 py-2 text-gray-400">{b.country || '—'}</td>
                       <td className="px-3 py-2"><span className={chip(b.import_status)}>{b.import_status}</span></td>
                       <td className="px-3 py-2 text-gray-400">{b.imported_rows || 0}/{b.total_rows || 0}</td>
                       <td className="px-3 py-2 text-gray-500 text-xs">{b.error_rows || 0} / {b.duplicate_rows || 0}</td>
+                      <td className="px-3 py-2">
+                        {canRecon ? (
+                          <button onClick={() => setReconId(open ? null : b.id)} className="inline-flex items-center gap-1" aria-expanded={open} title="Show reconciliation detail">
+                            <ReconcileBadge summary={recon} />
+                            {open ? <ChevronDown size={13} className="text-gray-500" /> : <ChevronRight size={13} className="text-gray-500" />}
+                          </button>
+                        ) : <ReconcileBadge summary={recon} />}
+                      </td>
                       <td className="px-3 py-2 text-gray-500 text-xs">{b.created_at ? new Date(b.created_at).toLocaleString('en-GB') : ''}</td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
                         <button onClick={() => openDrill(b)} className="text-xs text-gray-300 hover:text-white inline-flex items-center gap-1">Rows <ChevronRight size={13} /></button>
@@ -110,7 +140,31 @@ export default function DataIntakeHistory() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    {open && (
+                      <tr className="border-t border-gray-800/60 bg-gray-900/40">
+                        <td colSpan={8} className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+                            <span className="text-gray-300 font-medium">Reconciliation</span>
+                            {[['Expected', recon.expected], ['Imported', recon.imported], ['Skipped', recon.skipped], ['Errors', recon.errors], ['Duplicates', recon.duplicates], ['Accounted for', recon.accountedFor]].map(([l, v]) => (
+                              <span key={l} className="text-gray-500">{l}: <span className="text-gray-200">{v}</span></span>
+                            ))}
+                            {recon.variance !== 0 && <span className="text-amber-400">Variance: {recon.variance}</span>}
+                          </div>
+                          {recon.balanced ? (
+                            <p className="mt-2 text-xs text-green-400 flex items-center gap-1"><CheckCircle2 size={13} /> All source rows are accounted for.</p>
+                          ) : (
+                            <ul className="mt-2 space-y-1">
+                              {recon.discrepancies.map((d, i) => (
+                                <li key={i} className="text-xs text-amber-300 flex items-start gap-1"><AlertTriangle size={13} className="mt-0.5 shrink-0" /> {d}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   UploadCloud, FileSpreadsheet, Wand2, ShieldCheck, CheckCircle2, AlertTriangle,
-  Loader2, ArrowRight, ArrowLeft, RefreshCw, Database, Save, Bookmark,
+  Loader2, ArrowRight, ArrowLeft, RefreshCw, Database, Save, Bookmark, Paperclip, FileArchive,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   parseWorkbook, sha256OfArrayBuffer, suggestMapping, transformRow, validateRow,
   classifyDuplicates, naturalKey, rowFingerprint, MODULE_FIELDS,
+  extractZip, matchAttachment, buildMatchRows,
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
 
@@ -56,6 +57,14 @@ export default function DataIntakeCenter() {
   const [result, setResult] = useState(null)
   const [recent, setRecent] = useState([])
 
+  // Accident-only: evidence ZIP ingestion (Phase 3). Each item tracks one file
+  // through extract → match → upload → record, with a per-file status/error so a
+  // single failure never aborts the package.
+  const [attachBusy, setAttachBusy] = useState(false)
+  const [attachItems, setAttachItems] = useState([]) // { name, sizeBytes, matchedBy, status, error }
+  const [attachWarnings, setAttachWarnings] = useState([])
+  const [attachDone, setAttachDone] = useState(false)
+
   const sheet = parsed?.sheets?.[sheetIdx] || null
   const targetOptions = useMemo(
     () => (MODULE_FIELDS[module] || []).map((f) => ({ key: f.key, label: f.label || f.key, required: f.required })),
@@ -70,6 +79,7 @@ export default function DataIntakeCenter() {
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null)
     setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setError(''); setProfiles([])
+    setAttachItems([]); setAttachWarnings([]); setAttachDone(false); setAttachBusy(false)
   }
 
   // ── Step 1: parse a chosen file ──────────────────────────────────────────────
@@ -218,6 +228,65 @@ export default function DataIntakeCenter() {
     } catch (err) {
       setError(err?.message || 'Could not stage the rows.')
     } finally { setBusy(false) }
+  }
+
+  // ── Accident-only: evidence ZIP ingestion (Phase 3) ──────────────────────────
+  // Extract a .zip client-side, match each file to a staged accident row by
+  // claim/police/asset no, upload each privately, then record the matches.
+  // Fully fault-tolerant: a single file failure is surfaced per-row, never aborts.
+  async function onAttachmentZip(e) {
+    const zip = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file
+    if (!zip || !batchId) return
+    setError(''); setAttachBusy(true); setAttachDone(false); setAttachWarnings([])
+
+    try {
+      const { files, warnings } = await extractZip(zip)
+      setAttachWarnings(warnings)
+      if (!files.length) {
+        setAttachItems([])
+        setError(warnings.length ? 'No usable files found in the archive.' : 'The archive is empty.')
+        return
+      }
+
+      // Match each file to a staged row, then render a pending table immediately.
+      const matches = files.map((f) => matchAttachment(f.name, annotated))
+      setAttachItems(files.map((f, i) => ({
+        name: f.name, sizeBytes: f.sizeBytes, matchedBy: matches[i]?.matchedBy || null, status: 'pending', error: null,
+      })))
+
+      const recordPayload = []
+      const finalItems = []
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i]
+        const base = { name: f.name, sizeBytes: f.sizeBytes, matchedBy: matches[i]?.matchedBy || null }
+        try {
+          const { fileId } = await imports.uploadAttachment(f.blob, {
+            batchId, country: activeCountry, filename: f.name,
+          })
+          recordPayload.push({ file: f, match: matches[i], fileId })
+          finalItems.push({ ...base, status: 'uploaded', error: null })
+        } catch (err) {
+          finalItems.push({ ...base, status: 'failed', error: err?.message || 'Upload failed.' })
+        }
+        setAttachItems([...finalItems]) // progressive UI update
+      }
+
+      // Record matches for everything that uploaded (matched + unmatched alike).
+      if (recordPayload.length) {
+        try {
+          const rows = buildMatchRows({ batchId, items: recordPayload, rows: annotated })
+          await imports.recordAttachmentMatches(rows)
+        } catch (err) {
+          setError(`Files uploaded, but recording matches failed: ${err?.message || 'unknown error'}`)
+        }
+      }
+      setAttachDone(true)
+    } catch (err) {
+      setError(err?.message || 'Could not process the attachment package.')
+    } finally {
+      setAttachBusy(false)
+    }
   }
 
   // ── Step 4: approve + commit ─────────────────────────────────────────────────
@@ -389,6 +458,74 @@ export default function DataIntakeCenter() {
       {/* STEP 4 */}
       {step === 3 && (
         <div className="space-y-4 max-w-xl">
+          {/* Accident-only: attach an evidence package (.zip) and match to rows */}
+          {module === 'accident' && (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Paperclip size={16} className="text-sky-400" />
+                <h3 className="text-sm font-semibold text-white">Attach evidence package (optional)</h3>
+              </div>
+              <p className="text-xs text-gray-400">
+                Upload a <span className="text-gray-200">.zip</span> of photos, police reports, invoices, quotations, or insurance
+                docs. Files are stored privately and matched to staged accident rows by claim no, police report no, or asset no.
+                Unmatched files are kept for later reconciliation.
+              </p>
+              <label className={`block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer ${attachBusy ? 'border-gray-700 opacity-60 pointer-events-none' : 'border-gray-700 hover:border-sky-600/60'}`}>
+                <input type="file" accept=".zip,application/zip" className="hidden" onChange={onAttachmentZip} disabled={attachBusy} />
+                {attachBusy ? <Loader2 className="animate-spin mx-auto text-sky-400" /> : <FileArchive className="mx-auto text-gray-500" size={28} />}
+                <p className="mt-2 text-xs text-gray-400">{attachBusy ? 'Processing package…' : 'Choose a .zip evidence package'}</p>
+              </label>
+
+              {attachWarnings.length > 0 && (
+                <div className="bg-amber-900/15 border border-amber-700/40 rounded-lg p-3 text-amber-300 text-xs space-y-1">
+                  <p className="flex items-center gap-1.5 font-medium"><AlertTriangle size={13} /> {attachWarnings.length} file(s) skipped</p>
+                  <ul className="list-disc pl-5 max-h-28 overflow-y-auto">
+                    {attachWarnings.slice(0, 30).map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {attachItems.length > 0 && (
+                <div className="overflow-x-auto border border-gray-800 rounded-lg max-h-72 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-800/60 text-gray-400 sticky top-0">
+                      <tr>
+                        <th className="text-left px-3 py-2">File</th>
+                        <th className="text-left px-3 py-2">Matched to</th>
+                        <th className="text-left px-3 py-2">Size</th>
+                        <th className="text-left px-3 py-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attachItems.map((it, i) => (
+                        <tr key={it.name + i} className="border-t border-gray-800">
+                          <td className="px-3 py-1.5 text-gray-200 truncate max-w-[200px]">{it.name}</td>
+                          <td className="px-3 py-1.5">
+                            {it.matchedBy
+                              ? <span className="text-green-400">{it.matchedBy === 'claim_no' ? 'Claim no' : it.matchedBy === 'police_report_no' ? 'Police report' : 'Asset no'}</span>
+                              : <span className="text-gray-500">unmatched</span>}
+                          </td>
+                          <td className="px-3 py-1.5 text-gray-400">{(it.sizeBytes / 1024).toFixed(0)} KB</td>
+                          <td className="px-3 py-1.5">
+                            <span className={`px-2 py-0.5 rounded ${it.status === 'uploaded' ? 'text-green-400 bg-green-900/30' : it.status === 'failed' ? 'text-red-400 bg-red-900/30' : 'text-gray-400 bg-gray-800'}`}>{it.status}</span>
+                            {it.error && <span className="ml-2 text-red-400">{it.error}</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {attachDone && attachItems.length > 0 && (
+                <p className="text-xs text-green-400 flex items-center gap-1.5">
+                  <CheckCircle2 size={13} />
+                  {attachItems.filter((i) => i.status === 'uploaded').length} uploaded · {attachItems.filter((i) => i.matchedBy).length} matched · {attachItems.filter((i) => i.status === 'failed').length} failed
+                </p>
+              )}
+            </div>
+          )}
+
           {!result ? (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
               <p className="text-sm text-gray-300">{counts?.ready ?? 0} ready + {counts?.warning ?? 0} warning rows will be committed to the live <span className="text-white">{module}</span> table. Error rows are skipped.</p>

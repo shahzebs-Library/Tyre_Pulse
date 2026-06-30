@@ -49,7 +49,7 @@ export function normaliseToken(s) {
 }
 
 /** Supported import modules. */
-export const MODULES = ['fleet', 'tyre', 'stock', 'accident']
+export const MODULES = ['fleet', 'tyre', 'stock', 'accident', 'inspection', 'workorder', 'warranty', 'gatepass']
 
 /**
  * Destination table per module.
@@ -60,6 +60,10 @@ export const MODULE_TABLES = {
   tyre: 'tyre_records',
   stock: 'stock_records',
   accident: 'accidents',
+  inspection: 'inspections',
+  workorder: 'work_orders',
+  warranty: 'warranty_claims',
+  gatepass: 'gate_passes',
 }
 
 /* ── Fleet (vehicle_fleet) ──────────────────────────────────────────────────── */
@@ -221,6 +225,125 @@ const ACCIDENT_FIELDS = [
     synonyms: ['closure status', 'closure', 'closed', 'case closed', 'حالة الإغلاق', 'الإغلاق'] },
 ]
 
+/* ── Inspections (inspections) ──────────────────────────────────────────────── */
+
+/** @type {CanonicalField[]} */
+const INSPECTION_FIELDS = [
+  { key: 'asset_no', label: 'Asset No.', required: true, type: 'string',
+    synonyms: ['asset', 'asset no', 'asset number', 'equipment', 'vehicle', 'vehicle no', 'veh no', 'unit', 'unit no', 'plate', 'fleet no',
+      'رقم المعدة', 'رقم المركبة', 'رقم الأصل', 'رقم السيارة'] },
+  { key: 'inspection_date', label: 'Inspection Date', required: true, type: 'date',
+    synonyms: ['date', 'inspection date', 'inspected date', 'check date', 'date inspected', 'تاريخ الفحص', 'التاريخ'] },
+  { key: 'inspection_type', label: 'Inspection Type', required: false, type: 'string',
+    synonyms: ['type', 'inspection type', 'template', 'checklist', 'check type', 'category', 'نوع الفحص', 'الفئة'] },
+  { key: 'inspector', label: 'Inspector', required: false, type: 'string',
+    synonyms: ['inspector', 'inspected by', 'checked by', 'technician', 'examiner', 'المفتش', 'الفاحص'] },
+  { key: 'tyre_serial', label: 'Tyre Serial', required: false, type: 'string',
+    synonyms: ['serial', 'tyre serial', 'serial no', 'tyre no', 's/n', 'رقم الإطار'] },
+  { key: 'site', label: 'Site', required: false, type: 'string',
+    synonyms: ['site', 'location', 'area', 'project', 'branch', 'depot', 'الموقع', 'المشروع', 'الفرع'] },
+  { key: 'country', label: 'Country', required: false, type: 'string',
+    synonyms: ['country', 'nation', 'country code', 'cc', 'البلد', 'الدولة'] },
+  { key: 'status', label: 'Status', required: false, type: 'string',
+    synonyms: ['status', 'state', 'result', 'outcome', 'الحالة', 'النتيجة'] },
+  { key: 'severity', label: 'Severity', required: false, type: 'string',
+    synonyms: ['severity', 'risk', 'risk level', 'priority', 'الخطورة', 'المخاطر'] },
+  { key: 'findings', label: 'Findings', required: false, type: 'string',
+    synonyms: ['findings', 'observations', 'remarks', 'comments', 'notes', 'الملاحظات', 'النتائج'] },
+  { key: 'odometer_km', label: 'Odometer KM', required: false, type: 'distance',
+    synonyms: ['odometer', 'odo', 'km', 'mileage', 'reading', 'odometer km', 'قراءة العداد', 'الكيلومترات'] },
+  { key: 'pressure_reading', label: 'Pressure', required: false, type: 'pressure',
+    synonyms: ['pressure', 'air pressure', 'psi', 'tyre pressure', 'ضغط الهواء', 'الضغط'] },
+]
+
+/* ── Work Orders (work_orders) ──────────────────────────────────────────────── */
+
+/** @type {CanonicalField[]} */
+const WORKORDER_FIELDS = [
+  { key: 'work_order_no', label: 'Work Order No.', required: true, type: 'string',
+    synonyms: ['wo', 'wo no', 'work order', 'work order no', 'work order number', 'job no', 'job card', 'job card no', 'ticket no', 'order no', 'رقم أمر العمل', 'رقم البطاقة'] },
+  { key: 'asset_no', label: 'Asset No.', required: false, type: 'string',
+    synonyms: ['asset', 'asset no', 'equipment', 'vehicle', 'vehicle no', 'unit', 'plate', 'fleet no', 'رقم المعدة', 'رقم المركبة'] },
+  { key: 'work_type', label: 'Work Type', required: false, type: 'string',
+    synonyms: ['work type', 'type', 'job type', 'repair type', 'service type', 'category', 'نوع العمل', 'الفئة'] },
+  { key: 'status', label: 'Status', required: false, type: 'string',
+    synonyms: ['status', 'state', 'wo status', 'job status', 'الحالة'] },
+  { key: 'priority', label: 'Priority', required: false, type: 'string',
+    synonyms: ['priority', 'urgency', 'الأولوية'] },
+  { key: 'description', label: 'Description', required: false, type: 'string',
+    synonyms: ['description', 'details', 'work description', 'scope', 'remarks', 'الوصف', 'التفاصيل'] },
+  { key: 'technician_name', label: 'Technician', required: false, type: 'string',
+    synonyms: ['technician', 'technician name', 'mechanic', 'assigned to', 'worker', 'الفني', 'الميكانيكي'] },
+  { key: 'workshop_name', label: 'Workshop', required: false, type: 'string',
+    synonyms: ['workshop', 'workshop name', 'garage', 'service center', 'service centre', 'الورشة'] },
+  { key: 'site', label: 'Site', required: false, type: 'string',
+    synonyms: ['site', 'location', 'project', 'branch', 'depot', 'الموقع', 'المشروع'] },
+  { key: 'country', label: 'Country', required: false, type: 'string',
+    synonyms: ['country', 'nation', 'country code', 'cc', 'البلد', 'الدولة'] },
+  { key: 'labour_cost', label: 'Labour Cost', required: false, type: 'currency',
+    synonyms: ['labour cost', 'labor cost', 'labour', 'labor', 'تكلفة العمالة'] },
+  { key: 'parts_cost', label: 'Parts Cost', required: false, type: 'currency',
+    synonyms: ['parts cost', 'parts', 'spare parts cost', 'material cost', 'تكلفة قطع الغيار'] },
+  { key: 'total_cost', label: 'Total Cost', required: false, type: 'currency',
+    synonyms: ['total cost', 'total', 'cost', 'amount', 'grand total', 'التكلفة الإجمالية', 'الإجمالي'] },
+]
+
+/* ── Warranty Claims (warranty_claims) ──────────────────────────────────────── */
+
+/** @type {CanonicalField[]} */
+const WARRANTY_FIELDS = [
+  { key: 'serial_number', label: 'Tyre Serial', required: true, type: 'string',
+    synonyms: ['serial', 'serial no', 'serial number', 'tyre serial', 'tyre no', 's/n', 'sn', 'barcode', 'رقم الإطار', 'الرقم التسلسلي'] },
+  { key: 'claim_no', label: 'Claim No.', required: false, type: 'string',
+    synonyms: ['claim', 'claim no', 'claim number', 'warranty claim', 'claim ref', 'rma', 'rma no', 'رقم المطالبة', 'مطالبة الضمان'] },
+  { key: 'brand', label: 'Brand', required: false, type: 'string',
+    synonyms: ['brand', 'tyre brand', 'make', 'manufacturer', 'الماركة', 'العلامة التجارية'] },
+  { key: 'size', label: 'Size', required: false, type: 'string',
+    synonyms: ['size', 'tyre size', 'description', 'المقاس', 'الحجم'] },
+  { key: 'asset_no', label: 'Asset No.', required: false, type: 'string',
+    synonyms: ['asset', 'asset no', 'equipment', 'vehicle', 'vehicle no', 'unit', 'plate', 'رقم المعدة', 'رقم المركبة'] },
+  { key: 'site', label: 'Site', required: false, type: 'string',
+    synonyms: ['site', 'location', 'project', 'branch', 'الموقع', 'المشروع'] },
+  { key: 'country', label: 'Country', required: false, type: 'string',
+    synonyms: ['country', 'nation', 'country code', 'cc', 'البلد', 'الدولة'] },
+  { key: 'fitment_date', label: 'Fitment Date', required: false, type: 'date',
+    synonyms: ['fitment date', 'fitted date', 'install date', 'تاريخ التركيب'] },
+  { key: 'removal_date', label: 'Removal Date', required: false, type: 'date',
+    synonyms: ['removal date', 'removed date', 'failure date', 'تاريخ الإزالة', 'تاريخ العطل'] },
+  { key: 'km_at_fitment', label: 'KM at Fitment', required: false, type: 'distance',
+    synonyms: ['fitted km', 'fitment km', 'km at fitment', 'install km', 'كم التركيب'] },
+  { key: 'km_at_removal', label: 'KM at Removal', required: false, type: 'distance',
+    synonyms: ['removed km', 'removal km', 'km at removal', 'failure km', 'كم الإزالة'] },
+  { key: 'failure_type', label: 'Failure Type', required: false, type: 'string',
+    synonyms: ['failure type', 'failure', 'defect', 'fault', 'reason', 'complaint', 'نوع العطل', 'العيب'] },
+  { key: 'supplier', label: 'Supplier', required: false, type: 'string',
+    synonyms: ['supplier', 'vendor', 'dealer', 'manufacturer', 'المورد', 'الوكيل'] },
+  { key: 'claim_status', label: 'Claim Status', required: false, type: 'string',
+    synonyms: ['claim status', 'status', 'warranty status', 'حالة المطالبة'] },
+  { key: 'credit_amount', label: 'Credit Amount', required: false, type: 'currency',
+    synonyms: ['credit', 'credit amount', 'credited', 'refund', 'compensation', 'مبلغ الائتمان', 'التعويض'] },
+]
+
+/* ── Gate Pass (gate_passes) ────────────────────────────────────────────────── */
+
+/** @type {CanonicalField[]} */
+const GATEPASS_FIELDS = [
+  { key: 'asset_no', label: 'Asset No.', required: true, type: 'string',
+    synonyms: ['asset', 'asset no', 'equipment', 'vehicle', 'vehicle no', 'unit', 'plate', 'fleet no', 'رقم المعدة', 'رقم المركبة'] },
+  { key: 'pass_date', label: 'Pass Date', required: true, type: 'date',
+    synonyms: ['date', 'pass date', 'gate pass date', 'release date', 'exit date', 'تاريخ التصريح', 'تاريخ الخروج'] },
+  { key: 'site', label: 'Site', required: false, type: 'string',
+    synonyms: ['site', 'location', 'gate', 'project', 'branch', 'الموقع', 'البوابة'] },
+  { key: 'country', label: 'Country', required: false, type: 'string',
+    synonyms: ['country', 'nation', 'country code', 'cc', 'البلد', 'الدولة'] },
+  { key: 'status', label: 'Status', required: false, type: 'string',
+    synonyms: ['status', 'state', 'pass status', 'clearance', 'الحالة'] },
+  { key: 'denial_reason', label: 'Denial Reason', required: false, type: 'string',
+    synonyms: ['denial reason', 'rejection reason', 'reason', 'hold reason', 'سبب الرفض', 'سبب'] },
+  { key: 'notes', label: 'Notes', required: false, type: 'string',
+    synonyms: ['notes', 'remarks', 'comments', 'ملاحظات'] },
+]
+
 /**
  * Module → canonical field list.
  * @type {Record<string, CanonicalField[]>}
@@ -230,6 +353,10 @@ export const MODULE_FIELDS = Object.freeze({
   tyre: TYRE_FIELDS,
   stock: STOCK_FIELDS,
   accident: ACCIDENT_FIELDS,
+  inspection: INSPECTION_FIELDS,
+  workorder: WORKORDER_FIELDS,
+  warranty: WARRANTY_FIELDS,
+  gatepass: GATEPASS_FIELDS,
 })
 
 /**

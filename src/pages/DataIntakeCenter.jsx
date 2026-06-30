@@ -18,6 +18,10 @@ const MODULES = [
   { key: 'tyre', label: 'Tyre Lifecycle' },
   { key: 'stock', label: 'Stock' },
   { key: 'accident', label: 'Accidents / Insurance' },
+  { key: 'inspection', label: 'Inspections' },
+  { key: 'workorder', label: 'Work Orders' },
+  { key: 'warranty', label: 'Warranty Claims' },
+  { key: 'gatepass', label: 'Gate Pass' },
 ]
 const ELEVATED = ['admin', 'manager', 'director']
 const STEPS = ['Upload', 'Map columns', 'Validate', 'Approve & Commit']

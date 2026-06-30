@@ -204,6 +204,45 @@ export function validateRow(transformed, module) {
     }
   }
 
+  // Warranty: removal cannot precede fitment (date or km).
+  if (module === 'warranty') {
+    const fk = row.km_at_fitment
+    const rk = row.km_at_removal
+    if (typeof fk === 'number' && typeof rk === 'number' && rk < fk) {
+      issues.push({
+        field: 'km_at_removal',
+        severity: 'error',
+        code: 'REMOVAL_BEFORE_FITMENT',
+        message: `Removal KM (${rk}) is less than fitment KM (${fk}).`,
+      })
+    }
+    const fd = row.fitment_date
+    const rd = row.removal_date
+    if (!isBlank(fd) && !isBlank(rd) && isPlausibleDate(String(fd)) && isPlausibleDate(String(rd)) && String(rd) < String(fd)) {
+      issues.push({
+        field: 'removal_date',
+        severity: 'warning',
+        code: 'REMOVAL_DATE_BEFORE_FITMENT',
+        message: `Removal date (${rd}) precedes fitment date (${fd}).`,
+      })
+    }
+  }
+
+  // Work orders: total cost should not be less than its components.
+  if (module === 'workorder') {
+    const labour = typeof row.labour_cost === 'number' ? row.labour_cost : 0
+    const parts = typeof row.parts_cost === 'number' ? row.parts_cost : 0
+    const total = row.total_cost
+    if (typeof total === 'number' && (labour > 0 || parts > 0) && total + 0.01 < labour + parts) {
+      issues.push({
+        field: 'total_cost',
+        severity: 'warning',
+        code: 'TOTAL_LT_COMPONENTS',
+        message: `Total cost (${total}) is less than labour + parts (${labour + parts}).`,
+      })
+    }
+  }
+
   const hasError = issues.some((i) => i.severity === 'error')
   const hasWarning = issues.some((i) => i.severity === 'warning')
   const status = hasError ? 'error' : hasWarning ? 'warning' : 'ready'
@@ -223,6 +262,14 @@ const NATURAL_KEY = {
   stock: (r) => keyParts([r.country, r.site, r.description]),
   // Accident identity = claim no (preferred) else police report no.
   accident: (r) => keyParts([r.country, r.insurance_claim_no || r.police_report_no]),
+  // Inspection event: asset + type + date + inspector.
+  inspection: (r) => keyParts([r.country, r.asset_no, r.inspection_type, r.inspection_date, r.inspector]),
+  // Work order: WO number is the identity.
+  workorder: (r) => keyParts([r.country, r.work_order_no]),
+  // Warranty: serial + claim ref (serial required).
+  warranty: (r) => keyParts([r.country, r.serial_number, r.claim_no]),
+  // Gate pass: no pass number column — asset + pass date.
+  gatepass: (r) => keyParts([r.country, r.asset_no, r.pass_date]),
 }
 
 /** Fields whose disagreement on a shared natural key constitutes a conflict. */
@@ -231,6 +278,10 @@ const CONFLICT_FIELDS = {
   tyre: ['asset_no', 'issue_date', 'km_at_fitment'],
   stock: ['stock_qty'],
   accident: ['asset_no', 'incident_date', 'claim_amount'],
+  inspection: ['status', 'severity', 'findings'],
+  workorder: ['asset_no', 'status', 'total_cost'],
+  warranty: ['asset_no', 'claim_status', 'credit_amount'],
+  gatepass: ['site', 'status'],
 }
 
 function norm(v) {

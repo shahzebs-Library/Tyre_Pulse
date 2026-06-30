@@ -1,0 +1,213 @@
+import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  History, BarChart3, Layers, Tags, Loader2, AlertTriangle, RotateCcw, ChevronRight, Database,
+} from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
+import { useSettings } from '../contexts/SettingsContext'
+import * as imports from '../lib/api/imports'
+
+const ELEVATED = ['admin', 'manager', 'director']
+const TABS = [
+  { key: 'imports', label: 'Imports', icon: History },
+  { key: 'quality', label: 'Data Quality', icon: BarChart3 },
+  { key: 'profiles', label: 'Mapping Profiles', icon: Layers },
+  { key: 'custom', label: 'Custom Fields', icon: Tags },
+]
+
+function chip(s) {
+  const ok = s === 'committed'
+  return `text-xs px-2 py-0.5 rounded ${ok ? 'bg-green-900/30 text-green-400' : s === 'reversed' ? 'bg-red-900/30 text-red-400' : 'bg-gray-800 text-gray-400'}`
+}
+
+export default function DataIntakeHistory() {
+  const { profile } = useAuth()
+  const { activeCountry } = useSettings()
+  const isElevated = ELEVATED.includes(String(profile?.role || '').toLowerCase())
+
+  const [tab, setTab] = useState('imports')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [batches, setBatches] = useState([])
+  const [quality, setQuality] = useState(null)
+  const [profiles, setProfiles] = useState([])
+  const [customFields, setCustomFields] = useState([])
+  const [drill, setDrill] = useState(null) // { batch, rows }
+  const [busyId, setBusyId] = useState(null)
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('')
+    try {
+      if (tab === 'imports') setBatches(await imports.listBatches({ country: activeCountry, limit: 100 }))
+      else if (tab === 'quality') setQuality(await imports.importQualityStats({ country: activeCountry }))
+      else if (tab === 'profiles') setProfiles(await imports.listProfiles({ country: activeCountry }))
+      else if (tab === 'custom') setCustomFields(await imports.listCustomFields({ country: activeCountry }))
+    } catch (e) {
+      setError(e?.message || 'Could not load data.')
+    } finally { setLoading(false) }
+  }, [tab, activeCountry])
+  useEffect(() => { load() }, [load])
+
+  async function openDrill(batch) {
+    setDrill({ batch, rows: null })
+    try { setDrill({ batch, rows: await imports.getBatchRows(batch.id) }) }
+    catch (e) { setDrill({ batch, rows: [], error: e?.message }) }
+  }
+
+  async function reverse(batch) {
+    if (!window.confirm(`Reverse import ${batch.module}/${batch.country}? This deletes only the rows this batch created.`)) return
+    setBusyId(batch.id)
+    try { await imports.reverseBatch(batch.id); await load() }
+    catch (e) { setError(e?.message || 'Reverse failed.') }
+    finally { setBusyId(null) }
+  }
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto text-gray-200">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Database size={22} /> Import Control</h1>
+          <p className="text-sm text-gray-400">Imports, quality, mapping profiles and custom fields for <span className="text-white">{activeCountry}</span>.</p>
+        </div>
+        <Link to="/data-intake" className="text-sm px-3 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white">New import</Link>
+      </div>
+
+      <div className="flex gap-2 mb-5 border-b border-gray-800">
+        {TABS.map((t) => {
+          const I = t.icon
+          return (
+            <button key={t.key} onClick={() => { setTab(t.key); setDrill(null) }} className={`px-3 py-2 text-sm flex items-center gap-2 border-b-2 -mb-px ${tab === t.key ? 'border-green-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
+              <I size={15} /> {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {error && <div className="mb-4 bg-red-900/20 border border-red-700/50 rounded-lg p-3 text-red-300 text-sm flex gap-2"><AlertTriangle size={16} /> {error}</div>}
+      {loading ? (
+        <div className="py-16 text-center"><Loader2 className="animate-spin mx-auto text-green-400" /></div>
+      ) : (
+        <>
+          {/* IMPORTS */}
+          {tab === 'imports' && !drill && (
+            <div className="border border-gray-800 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Module</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Rows</th><th className="text-left px-3 py-2">Errors/Dups</th><th className="text-left px-3 py-2">When</th><th className="px-3 py-2"></th></tr></thead>
+                <tbody>
+                  {batches.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-gray-600">No imports yet.</td></tr>}
+                  {batches.map((b) => (
+                    <tr key={b.id} className="border-t border-gray-800 hover:bg-gray-900/40">
+                      <td className="px-3 py-2 capitalize">{b.module}</td>
+                      <td className="px-3 py-2 text-gray-400">{b.country || '—'}</td>
+                      <td className="px-3 py-2"><span className={chip(b.import_status)}>{b.import_status}</span></td>
+                      <td className="px-3 py-2 text-gray-400">{b.imported_rows || 0}/{b.total_rows || 0}</td>
+                      <td className="px-3 py-2 text-gray-500 text-xs">{b.error_rows || 0} / {b.duplicate_rows || 0}</td>
+                      <td className="px-3 py-2 text-gray-500 text-xs">{b.created_at ? new Date(b.created_at).toLocaleString('en-GB') : ''}</td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        <button onClick={() => openDrill(b)} className="text-xs text-gray-300 hover:text-white inline-flex items-center gap-1">Rows <ChevronRight size={13} /></button>
+                        {isElevated && b.import_status === 'committed' && (
+                          <button onClick={() => reverse(b)} disabled={busyId === b.id} className="ml-3 text-xs text-red-400 hover:text-red-300 inline-flex items-center gap-1">{busyId === b.id ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />} Reverse</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* IMPORTS — drill into one batch's rows */}
+          {tab === 'imports' && drill && (
+            <div className="space-y-3">
+              <button onClick={() => setDrill(null)} className="text-sm text-gray-400 hover:text-white">← Back to imports</button>
+              <p className="text-sm text-gray-300 capitalize">{drill.batch.module} · {drill.batch.country} · <span className={chip(drill.batch.import_status)}>{drill.batch.import_status}</span></p>
+              {drill.rows == null ? <div className="py-8 text-center"><Loader2 className="animate-spin mx-auto text-green-400" /></div> : (
+                <div className="border border-gray-800 rounded-xl overflow-hidden max-h-[28rem] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-800/60 text-gray-400 text-xs sticky top-0"><tr><th className="text-left px-3 py-2">#</th><th className="text-left px-3 py-2">Validation</th><th className="text-left px-3 py-2">Dup</th><th className="text-left px-3 py-2">Action</th><th className="text-left px-3 py-2">Committed id</th></tr></thead>
+                    <tbody>
+                      {drill.rows.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-600">No rows.</td></tr>}
+                      {drill.rows.map((r) => (
+                        <tr key={r.id} className="border-t border-gray-800">
+                          <td className="px-3 py-1.5 text-gray-500">{r.source_row_no}</td>
+                          <td className="px-3 py-1.5 text-xs">{r.validation_status}</td>
+                          <td className="px-3 py-1.5 text-xs text-gray-400">{r.dup_status !== 'none' ? r.dup_status : '—'}</td>
+                          <td className="px-3 py-1.5 text-xs text-gray-400">{r.action}</td>
+                          <td className="px-3 py-1.5 text-xs text-gray-500 truncate max-w-[180px]">{r.target_record_id || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* QUALITY */}
+          {tab === 'quality' && quality && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[['Imports', quality.total, 'text-white'], ['Pending approval', quality.pendingApproval, 'text-amber-400'], ['Error rows', quality.errorRows, 'text-red-400'], ['Imported rows', quality.importedRows, 'text-green-400']].map(([l, v, c]) => (
+                  <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">{l}</p><p className={`text-2xl font-bold ${c}`}>{v}</p></div>
+                ))}
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <p className="text-sm text-gray-400 mb-2">By status</p>
+                  {Object.entries(quality.byStatus).map(([k, v]) => <div key={k} className="flex justify-between text-sm py-0.5"><span className="text-gray-300">{k}</span><span className="text-gray-500">{v}</span></div>)}
+                </div>
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <p className="text-sm text-gray-400 mb-2">By module</p>
+                  {Object.entries(quality.byModule).map(([k, v]) => <div key={k} className="flex justify-between text-sm py-0.5"><span className="text-gray-300 capitalize">{k}</span><span className="text-gray-500">{v}</span></div>)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* PROFILES */}
+          {tab === 'profiles' && (
+            <div className="border border-gray-800 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Name</th><th className="text-left px-3 py-2">Module</th><th className="text-left px-3 py-2">Source</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">v</th><th className="text-left px-3 py-2">Last used</th></tr></thead>
+                <tbody>
+                  {profiles.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-600">No saved mapping profiles yet — save one from a mapping step.</td></tr>}
+                  {profiles.map((p) => (
+                    <tr key={p.id} className="border-t border-gray-800">
+                      <td className="px-3 py-2 font-medium">{p.name}</td>
+                      <td className="px-3 py-2 capitalize text-gray-400">{p.module}</td>
+                      <td className="px-3 py-2 text-gray-400">{p.source_system || '—'}</td>
+                      <td className="px-3 py-2 text-gray-400">{p.country || 'any'}</td>
+                      <td className="px-3 py-2 text-gray-500">{p.version}</td>
+                      <td className="px-3 py-2 text-gray-500 text-xs">{p.last_used_at ? new Date(p.last_used_at).toLocaleDateString('en-GB') : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* CUSTOM FIELDS */}
+          {tab === 'custom' && (
+            <div className="border border-gray-800 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Field</th><th className="text-left px-3 py-2">Module</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Seen</th><th className="text-left px-3 py-2">Status</th></tr></thead>
+                <tbody>
+                  {customFields.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-gray-600">No custom (unmapped) fields catalogued yet.</td></tr>}
+                  {customFields.map((c) => (
+                    <tr key={c.id} className="border-t border-gray-800">
+                      <td className="px-3 py-2 font-medium">{c.field_name}</td>
+                      <td className="px-3 py-2 capitalize text-gray-400">{c.module}</td>
+                      <td className="px-3 py-2 text-gray-400">{c.country || 'any'}</td>
+                      <td className="px-3 py-2 text-gray-500">{c.occurrence_count}</td>
+                      <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400">{c.mapping_status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}

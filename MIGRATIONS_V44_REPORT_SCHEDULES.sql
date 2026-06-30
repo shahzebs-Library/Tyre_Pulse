@@ -30,10 +30,25 @@ CREATE INDEX IF NOT EXISTS idx_report_schedules_active      ON public.report_sch
 CREATE INDEX IF NOT EXISTS idx_report_schedules_org_id      ON public.report_schedules (org_id);
 CREATE INDEX IF NOT EXISTS idx_report_schedules_created_by  ON public.report_schedules (created_by);
 
-DROP TRIGGER IF EXISTS set_updated_at_report_schedules ON public.report_schedules;
-CREATE TRIGGER set_updated_at_report_schedules
-  BEFORE UPDATE ON public.report_schedules
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Reuse the existing updated_at trigger function. This DB names it
+-- public.set_updated_at(); fall back to update_updated_at_column() if a future
+-- environment uses that name instead, so the migration is portable.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+             WHERE n.nspname = 'public' AND p.proname = 'set_updated_at') THEN
+    DROP TRIGGER IF EXISTS set_updated_at_report_schedules ON public.report_schedules;
+    CREATE TRIGGER set_updated_at_report_schedules
+      BEFORE UPDATE ON public.report_schedules
+      FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+  ELSIF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+               WHERE n.nspname = 'public' AND p.proname = 'update_updated_at_column') THEN
+    DROP TRIGGER IF EXISTS set_updated_at_report_schedules ON public.report_schedules;
+    CREATE TRIGGER set_updated_at_report_schedules
+      BEFORE UPDATE ON public.report_schedules
+      FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+  END IF;
+END $$;
 
 ALTER TABLE public.report_schedules ENABLE ROW LEVEL SECURITY;
 

@@ -1,8 +1,47 @@
 # TyrePulse — Developer Handoff
-**Last updated:** June 2026
+**Last updated:** 30 June 2026
 **Branch:** `main` (all work merged)
-**Web build status:** ✅ Clean — builds, 369/369 tests passing, auto-deploys to Vercel
+**Web build status:** ✅ Clean — builds, 507/507 tests passing, auto-deploys to Vercel
 **Mobile build status:** ✅ EAS Android build green — Expo SDK 53, auto-builds on push to `main`
+**DB migrations applied to live Supabase:** through **V50** (project `jhssdmeruxtrlqnwfksc`)
+
+---
+
+## Session 5 — RAG/AI tooling, AI cost logging, and the complete Multi-Country Data Intake Center
+
+### Web — new modules (all wired into router + nav, build-clean)
+- **Knowledge Base** (`/knowledge-base`, `src/pages/KnowledgeBase.jsx`) — RAG document ingestion: drag-drop upload, 1500/200 chunking, per-chunk embedding via the `generate-embedding` edge function, `knowledge_documents` storage, status/search/filter/re-index, RBAC-gated writes.
+- **AI Cost Monitor** (`/ai-cost-monitor`, `src/pages/AiCostMonitor.jsx`) — reads `ai_token_logs`; KPI cards, daily SVG sparkline, feature/site spend breakdown, raw log table, date/feature/model filters. Uses inline SVG/CSS (no chart lib — project has no recharts).
+- **Scheduled Reports** — `report_schedules` table created (V44) to back the pre-existing `ScheduledReports.jsx`.
+
+### Edge functions — AI token logging (deployed live)
+- `chat-ai` (v4, verify_jwt=false / custom auth) and `generate-embedding` (v3) now fire-and-forget insert into `ai_token_logs` with computed `cost_usd`, fully isolated from the response path. Model logged as base id (`claude-haiku-4-5`) to match the dashboard rate table.
+
+### DB migrations (V42–V50, all applied live)
+- **V42** vehicle_fleet RLS split · **V43** `profiles.push_token` (+index) · **V44** `report_schedules` + `ai_token_logs` (trigger fn auto-detect: this DB uses `set_updated_at()`, NOT `update_updated_at_column()`) · **V45/V46** import staging schema + commit/reverse/reprocess RPCs (prior session) · **V47** live-dedup `import_existing_keys` · **V48** accident dedup branch · **V49** inspection/workorder/warranty/gatepass branches · **V50** `suppliers` + `drivers` master tables + supplier/driver dedup branches.
+
+### Mobile — push notifications
+- `lib/notifications.ts` (channels, permission, Expo push-token registration to `profiles.push_token`, sync success/failure + daily inspection reminder), wired into `_layout.tsx` boot + `profile.tsx` settings + `offlineQueue.ts` sync. `app.json` plugin + permissions added.
+
+### Mobile — Play Store prep
+- `mobile/PLAY_STORE_SUBMISSION.md` runbook; `eas.json` `serviceAccountKeyPath` fixed; secrets gitignored. **Exact-alarm policy declaration** flagged as a likely Play rejection cause.
+
+### Data Intake Center — `Data correction.md` COMPLETE for all live-target modules
+Built across phases (see `docs/IMPORT_CENTER_MIGRATION_PLAN.md`). The shared engine (`src/lib/import/*`: parseWorkbook, mapping, transform, validate, synonyms, attachments, reconcile) + `src/pages/DataIntakeCenter.jsx` wizard now handle **10 modules**, each: upload → map (EN/Arabic) → transform → validate → in-batch **+ live-table** dedup → approve → audited commit (`import_commit_batch`) → reconcile / reverse.
+- **Phase 2** — Fleet / Tyre / Stock + live-table dedup (V47) + reconciliation report.
+- **Phase 3** — Accidents/Insurance: financial-integrity validation, ZIP **evidence-package ingestion** (`attachments.js`, jszip → private `import-files` bucket → `import_attachment_matches`, matched by claim/police/asset).
+- **Phase 4** — Inspections / Work Orders / Warranty / Gate Pass (V49).
+- **Master tables (V50)** — `suppliers` + `drivers` created (org/country-scoped, RLS like vehicle_fleet) and wired as live adapters.
+- Each legacy uploader (FleetMaster, UploadData, StockManagement, Accidents, Inspections, WorkOrders, WarrantyTracker, GatePass, SupplierManagement, DriverManagement) now opens the engine via `/data-intake?module=<key>`.
+- **Module → table:** fleet→vehicle_fleet, tyre→tyre_records, stock→stock_records, accident→accidents, inspection→inspections, workorder→work_orders, warranty→warranty_claims, gatepass→gate_passes, supplier→suppliers, driver→drivers.
+- **Natural keys** (mirror client `validate.js` keyParts → server `import_existing_keys`, joined with `chr(1)`): fleet=country+asset_no; tyre=country+serial_no; stock=country+site+description; accident=country+claim_no/police_report_no; inspection=country+asset_no+type+date+inspector; workorder=country+work_order_no; warranty=country+serial_number+claim_no; gatepass=country+asset_no+pass_date; supplier=country+code/name; driver=country+driver_id.
+- **Staging-only by design:** GPS/ERP + custom (source-defined / preserved in custom_data + Custom Field Catalogue — no fixed target table).
+
+### Known gaps / not done
+- **Mobile Play Store submission** needs external artifacts only you can supply: Firebase `google-services.json`, Play service-account key, `notification-icon.png`, store-listing copy + screenshots.
+- **No real-device mobile QA** pass run this session.
+- **Go-backend migration** (`Roadmap_latest.Md`) deliberately untouched.
+- Minor: overlapping `vehicle_fleet` RLS policies (old `vf_*` + new V42) worth consolidating; `package.json`/`app.json` mobile version drift (cosmetic, EAS-managed).
 
 ---
 
@@ -372,10 +411,17 @@ Env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
 8. ✅ AI cost monitor — `AiCostMonitor.jsx` at `/ai-cost-monitor` (token logs + spend breakdown)
 9. ✅ Scheduled reports DB — `MIGRATIONS_V44` adds `report_schedules` table backing `ScheduledReports.jsx`
 
+### Web / Data Intake Center (Done — Session 5)
+10. ✅ Multi-Country Data Intake Center complete for all 10 live-target modules (`Data correction.md`) — see Session 5 above + `docs/IMPORT_CENTER_MIGRATION_PLAN.md`
+11. ✅ AI token logging deployed to `chat-ai` (v4) + `generate-embedding` (v3) edge functions
+12. ✅ All migrations V42–V50 applied to live Supabase
+
 ### Remaining
-- **Play Store submission:** Add `google-services.json` (from Firebase console for push notifications) + signing key (EAS managed credentials), then run `npm run release:android` from `mobile/`
-- **Edge function update:** Update `chat-ai` Supabase edge function to insert into `ai_token_logs` after each call (prompt_tokens, completion_tokens, model, feature, cost_usd)
-- **Apply pending migrations to Supabase:** V42 (vehicle_fleet RLS), V43 (push_tokens), V44 (report_schedules + ai_token_logs)
+- **Play Store submission:** Add `google-services.json` (Firebase console, for push) + signing key (EAS managed credentials), submit the **exact-alarm policy declaration** in Play Console (see `mobile/PLAY_STORE_SUBMISSION.md`), then `eas build`/`eas submit -p android --profile production` from `mobile/`. Needs your Expo/Play credentials.
+- **Mobile device QA:** run a real-device pass — login, inspection submit, scanner, offline sync, push.
+- **GPS/ERP + custom import adapters:** staging-only by design (no fixed target table). Promote only if/when a target schema is defined.
+- **Go-backend migration** (`Roadmap_latest.Md`): not started — deliberately out of scope.
+- Minor: consolidate overlapping `vehicle_fleet` RLS policies; align mobile `package.json`/`app.json` version.
 
 ---
 

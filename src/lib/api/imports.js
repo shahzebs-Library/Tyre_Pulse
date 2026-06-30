@@ -239,6 +239,21 @@ export async function saveProfile(profile, rules = []) {
   return data.id
 }
 
+/** Mapping rules for a saved profile (source_header → target_field). */
+export async function getProfileRules(profileId) {
+  return unwrap(
+    await supabase.from('import_mapping_rules')
+      .select('source_header,target_field,transform,confidence')
+      .eq('profile_id', profileId),
+  )
+}
+
+/** Touch last_used_at when a profile is applied (best-effort, non-blocking). */
+export async function touchProfile(profileId) {
+  await supabase.from('import_mapping_profiles')
+    .update({ last_used_at: new Date().toISOString() }).eq('id', profileId)
+}
+
 export async function listCustomFields({ module, country } = {}) {
   let q = supabase.from('custom_field_catalog')
     .select('id,module,country,field_name,occurrence_count,example_values,mapping_status,last_seen_at')

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -13,7 +14,7 @@ import {
   RefreshCw, CheckCircle, Clock, AlertTriangle, XCircle,
   Edit2, Save, Loader2, Calendar, Tag, Package,
   Building2, Hash, Percent, CreditCard, Activity, Info,
-  ArrowUpRight, Layers, Zap, Target, List, PieChart,
+  ArrowUpRight, Layers, Zap, Target, List, PieChart, Upload,
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -155,6 +156,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', warn 
 }
 
 export default function WarrantyTracker() {
+  const navigate = useNavigate()
   const { activeCurrency } = useSettings()
   const { profile } = useAuth()
 
@@ -729,6 +731,12 @@ export default function WarrantyTracker() {
             <FileSpreadsheet size={14} /> Excel
           </button>
           <button
+            onClick={() => navigate('/data-intake?module=warranty')}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            <Upload size={15} /> Import via Data Intake Center
+          </button>
+          <button
             onClick={() => openForm()}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-semibold text-white transition-colors"
           >
@@ -737,6 +745,9 @@ export default function WarrantyTracker() {
         </div>
         }
       />
+      <p className="text-xs text-gray-500 -mt-3">
+        New: controlled, validated, audited warranty-claim import with Arabic/English header mapping, fitment/removal lifecycle checks, and duplicate detection.
+      </p>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiCard icon={ShieldCheck} label="Total Claims" value={kpis.total} color="text-blue-400" />

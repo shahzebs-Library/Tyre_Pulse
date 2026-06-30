@@ -137,6 +137,59 @@ export function validateRow(transformed, module) {
     }
   }
 
+  // Accident / insurance financial integrity.
+  if (module === 'accident') {
+    const claim = row.claim_amount
+    const approved = row.claim_approved_amount
+    const recovered = row.recovered_amount
+    const repair = row.repair_cost
+    // Recovery cannot exceed the claim — a hard data error (block).
+    if (typeof recovered === 'number' && typeof claim === 'number' && claim > 0 && recovered > claim) {
+      issues.push({
+        field: 'recovered_amount',
+        severity: 'error',
+        code: 'RECOVERY_GT_CLAIM',
+        message: `Recovered (${recovered}) exceeds claim amount (${claim}).`,
+      })
+    }
+    // Approved should not exceed claimed.
+    if (typeof approved === 'number' && typeof claim === 'number' && claim > 0 && approved > claim) {
+      issues.push({
+        field: 'claim_approved_amount',
+        severity: 'warning',
+        code: 'APPROVED_GT_CLAIM',
+        message: `Approved (${approved}) exceeds claim amount (${claim}).`,
+      })
+    }
+    // Actual repair above the approved claim → cost overrun to review.
+    if (typeof repair === 'number' && typeof approved === 'number' && approved > 0 && repair > approved) {
+      issues.push({
+        field: 'repair_cost',
+        severity: 'warning',
+        code: 'ACTUAL_GT_APPROVED',
+        message: `Actual repair (${repair}) exceeds approved amount (${approved}).`,
+      })
+    }
+    // A claim with no estimate captured → follow-up needed.
+    if (typeof claim === 'number' && claim > 0 && isBlank(row.estimated_damage_cost)) {
+      issues.push({
+        field: 'estimated_damage_cost',
+        severity: 'warning',
+        code: 'ESTIMATE_MISSING',
+        message: 'Claim raised without an estimate — follow-up required.',
+      })
+    }
+    // No identifier at all → cannot dedup or trace; flag for review match.
+    if (isBlank(row.insurance_claim_no) && isBlank(row.police_report_no)) {
+      issues.push({
+        field: 'insurance_claim_no',
+        severity: 'warning',
+        code: 'NO_IDENTIFIER',
+        message: 'No claim or police report number — duplicate detection limited; review match required.',
+      })
+    }
+  }
+
   // Stock: critical level should not exceed min level.
   if (module === 'stock') {
     const min = row.min_level
@@ -168,6 +221,8 @@ const NATURAL_KEY = {
   fleet: (r) => keyParts([r.country, r.asset_no]),
   tyre: (r) => keyParts([r.country, r.serial_no]),
   stock: (r) => keyParts([r.country, r.site, r.description]),
+  // Accident identity = claim no (preferred) else police report no.
+  accident: (r) => keyParts([r.country, r.insurance_claim_no || r.police_report_no]),
 }
 
 /** Fields whose disagreement on a shared natural key constitutes a conflict. */
@@ -175,6 +230,7 @@ const CONFLICT_FIELDS = {
   fleet: ['make', 'model', 'vehicle_type', 'registration_no'],
   tyre: ['asset_no', 'issue_date', 'km_at_fitment'],
   stock: ['stock_qty'],
+  accident: ['asset_no', 'incident_date', 'claim_amount'],
 }
 
 function norm(v) {

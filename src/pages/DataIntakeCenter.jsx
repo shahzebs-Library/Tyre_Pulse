@@ -16,6 +16,7 @@ const MODULES = [
   { key: 'fleet', label: 'Fleet / Assets' },
   { key: 'tyre', label: 'Tyre Lifecycle' },
   { key: 'stock', label: 'Stock' },
+  { key: 'accident', label: 'Accidents / Insurance' },
 ]
 const ELEVATED = ['admin', 'manager', 'director']
 const STEPS = ['Upload', 'Map columns', 'Validate', 'Approve & Commit']

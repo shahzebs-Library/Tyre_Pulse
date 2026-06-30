@@ -49,7 +49,7 @@ export function normaliseToken(s) {
 }
 
 /** Supported import modules. */
-export const MODULES = ['fleet', 'tyre', 'stock']
+export const MODULES = ['fleet', 'tyre', 'stock', 'accident']
 
 /**
  * Destination table per module.
@@ -59,6 +59,7 @@ export const MODULE_TABLES = {
   fleet: 'vehicle_fleet',
   tyre: 'tyre_records',
   stock: 'stock_records',
+  accident: 'accidents',
 }
 
 /* ── Fleet (vehicle_fleet) ──────────────────────────────────────────────────── */
@@ -159,6 +160,67 @@ const STOCK_FIELDS = [
     synonyms: ['country', 'nation', 'country code', 'cc', 'البلد', 'الدولة'] },
 ]
 
+/* ── Accident & Insurance (accidents) ───────────────────────────────────────── */
+
+/**
+ * Accident identity in this DB is the insurance claim no (preferred) or police
+ * report no — there is no dedicated accident_no column. asset_no + incident_date
+ * form the minimum usable record; claim/police identifiers drive dedup.
+ * @type {CanonicalField[]}
+ */
+const ACCIDENT_FIELDS = [
+  { key: 'asset_no', label: 'Asset No.', required: true, type: 'string',
+    synonyms: ['asset', 'asset no', 'asset number', 'equipment', 'equipment no', 'vehicle', 'vehicle no', 'vehicle number', 'veh no', 'unit', 'unit no', 'plate', 'plate no', 'fleet no',
+      'رقم المعدة', 'رقم المركبة', 'رقم الأصل', 'رقم السيارة'] },
+  { key: 'incident_date', label: 'Incident Date', required: true, type: 'date',
+    synonyms: ['date', 'incident date', 'accident date', 'date of accident', 'date of incident', 'event date', 'loss date',
+      'تاريخ الحادث', 'تاريخ الحادثة', 'التاريخ'] },
+  { key: 'incident_time', label: 'Incident Time', required: false, type: 'string',
+    synonyms: ['time', 'incident time', 'accident time', 'time of accident', 'وقت الحادث', 'الوقت'] },
+  { key: 'location', label: 'Location', required: false, type: 'string',
+    synonyms: ['location', 'place', 'accident location', 'spot', 'مكان الحادث', 'الموقع'] },
+  { key: 'site', label: 'Site', required: false, type: 'string',
+    synonyms: ['site', 'project', 'branch', 'depot', 'camp', 'الموقع', 'المشروع', 'الفرع'] },
+  { key: 'country', label: 'Country', required: false, type: 'string',
+    synonyms: ['country', 'nation', 'country code', 'cc', 'البلد', 'الدولة'] },
+  { key: 'accident_type', label: 'Accident Type', required: false, type: 'string',
+    synonyms: ['type', 'accident type', 'incident type', 'category', 'collision type', 'نوع الحادث', 'الفئة'] },
+  { key: 'severity', label: 'Severity', required: false, type: 'string',
+    synonyms: ['severity', 'seriousness', 'damage level', 'impact', 'الخطورة', 'الشدة'] },
+  { key: 'description', label: 'Description', required: false, type: 'string',
+    synonyms: ['description', 'details', 'narrative', 'remarks', 'how it happened', 'الوصف', 'التفاصيل'] },
+  { key: 'damage_description', label: 'Damage Description', required: false, type: 'string',
+    synonyms: ['damage', 'damage description', 'damages', 'damage details', 'وصف الأضرار', 'الأضرار'] },
+  { key: 'driver_name', label: 'Driver / Operator', required: false, type: 'string',
+    synonyms: ['driver', 'driver name', 'operator', 'operator name', 'at fault driver', 'السائق', 'اسم السائق', 'المشغل'] },
+  { key: 'police_report_no', label: 'Police Report No.', required: false, type: 'string',
+    synonyms: ['police report', 'police report no', 'police no', 'police ref', 'report no', 'fir no', 'رقم المحضر', 'رقم البلاغ'] },
+  { key: 'insurer', label: 'Insurer', required: false, type: 'string',
+    synonyms: ['insurer', 'insurance company', 'insurance', 'underwriter', 'شركة التأمين', 'المؤمن'] },
+  { key: 'policy_no', label: 'Policy No.', required: false, type: 'string',
+    synonyms: ['policy', 'policy no', 'policy number', 'policy ref', 'رقم الوثيقة', 'رقم البوليصة'] },
+  { key: 'insurance_claim_no', label: 'Claim No.', required: false, type: 'string',
+    synonyms: ['claim', 'claim no', 'claim number', 'insurance claim', 'insurance claim no', 'claim ref', 'claim reference', 'رقم المطالبة', 'مطالبة'] },
+  { key: 'claim_status', label: 'Claim Status', required: false, type: 'string',
+    synonyms: ['claim status', 'status of claim', 'حالة المطالبة'] },
+  { key: 'claim_amount', label: 'Claim Amount', required: false, type: 'currency',
+    synonyms: ['claim amount', 'claimed amount', 'claim value', 'amount claimed', 'مبلغ المطالبة', 'قيمة المطالبة'] },
+  { key: 'claim_approved_amount', label: 'Approved Amount', required: false, type: 'currency',
+    synonyms: ['approved amount', 'claim approved', 'approved claim', 'settled amount', 'sanctioned amount', 'المبلغ المعتمد', 'المبلغ المقبول'] },
+  { key: 'recovered_amount', label: 'Recovered Amount', required: false, type: 'currency',
+    synonyms: ['recovered', 'recovered amount', 'recovery amount', 'amount recovered', 'reimbursed', 'المبلغ المسترد', 'المسترد'] },
+  { key: 'deductible', label: 'Deductible / Excess', required: false, type: 'currency',
+    synonyms: ['deductible', 'excess', 'excess amount', 'own damage excess', 'التحمل', 'نسبة التحمل'] },
+  { key: 'estimated_damage_cost', label: 'Estimated Cost', required: false, type: 'currency',
+    synonyms: ['estimate', 'estimated cost', 'estimated damage', 'estimated damage cost', 'quotation', 'quote', 'التكلفة التقديرية', 'التقدير'] },
+  { key: 'repair_cost', label: 'Actual Repair Cost', required: false, type: 'currency',
+    synonyms: ['actual cost', 'repair cost', 'actual repair cost', 'final cost', 'invoice amount', 'التكلفة الفعلية', 'تكلفة الإصلاح'] },
+  { key: 'parts_cost', label: 'Parts Cost', required: false, type: 'currency',
+    synonyms: ['parts cost', 'parts', 'spare parts cost', 'material cost', 'تكلفة قطع الغيار'] },
+  { key: 'closure_status', label: 'Closure Status', required: false, type: 'string',
+    synonyms: ['closure status', 'closure', 'closed', 'case closed', 'حالة الإغلاق', 'الإغلاق'] },
+]
+
 /**
  * Module → canonical field list.
  * @type {Record<string, CanonicalField[]>}
@@ -167,6 +229,7 @@ export const MODULE_FIELDS = Object.freeze({
   fleet: FLEET_FIELDS,
   tyre: TYRE_FIELDS,
   stock: STOCK_FIELDS,
+  accident: ACCIDENT_FIELDS,
 })
 
 /**

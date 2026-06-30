@@ -12,8 +12,9 @@ import {
   RefreshCw, ChevronRight, ChevronLeft, ChevronDown, X, Plus, Edit3,
   BarChart3, DollarSign, Truck, Package, Target, Zap, ShieldCheck,
   ArrowUpRight, ArrowDownRight, Users, Calendar, FileCheck, Loader2,
-  SlidersHorizontal, Eye, Globe, MapPin, Hash,
+  SlidersHorizontal, Eye, Globe, MapPin, Hash, Upload,
 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -597,6 +598,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function SupplierManagement() {
+  const navigate = useNavigate()
   const { activeCurrency, activeCountry } = useSettings()
   const { user, profile } = useAuth()
   const isAdmin = profile?.role === 'Admin'
@@ -1008,6 +1010,9 @@ export default function SupplierManagement() {
         icon={Building2}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => navigate('/data-intake?module=supplier')} className="flex items-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg">
+              <Upload size={13} /> Import via Data Intake Center
+            </button>
             <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm rounded-lg">
               <RefreshCw size={13} /> Refresh
             </button>

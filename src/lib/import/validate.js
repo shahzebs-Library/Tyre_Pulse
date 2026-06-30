@@ -270,6 +270,10 @@ const NATURAL_KEY = {
   warranty: (r) => keyParts([r.country, r.serial_number, r.claim_no]),
   // Gate pass: no pass number column — asset + pass date.
   gatepass: (r) => keyParts([r.country, r.asset_no, r.pass_date]),
+  // Supplier master: code preferred, else name.
+  supplier: (r) => keyParts([r.country, r.supplier_code || r.supplier_name]),
+  // Driver master: badge/employee id.
+  driver: (r) => keyParts([r.country, r.driver_id]),
 }
 
 /** Fields whose disagreement on a shared natural key constitutes a conflict. */
@@ -282,6 +286,8 @@ const CONFLICT_FIELDS = {
   workorder: ['asset_no', 'status', 'total_cost'],
   warranty: ['asset_no', 'claim_status', 'credit_amount'],
   gatepass: ['site', 'status'],
+  supplier: ['supplier_name', 'supplier_type', 'phone', 'email'],
+  driver: ['driver_name', 'license_no', 'status'],
 }
 
 function norm(v) {

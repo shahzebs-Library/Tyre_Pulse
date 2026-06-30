@@ -22,6 +22,8 @@ const MODULES = [
   { key: 'workorder', label: 'Work Orders' },
   { key: 'warranty', label: 'Warranty Claims' },
   { key: 'gatepass', label: 'Gate Pass' },
+  { key: 'supplier', label: 'Suppliers' },
+  { key: 'driver', label: 'Drivers' },
 ]
 const ELEVATED = ['admin', 'manager', 'director']
 const STEPS = ['Upload', 'Map columns', 'Validate', 'Approve & Commit']

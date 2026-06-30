@@ -49,7 +49,7 @@ export function normaliseToken(s) {
 }
 
 /** Supported import modules. */
-export const MODULES = ['fleet', 'tyre', 'stock', 'accident', 'inspection', 'workorder', 'warranty', 'gatepass']
+export const MODULES = ['fleet', 'tyre', 'stock', 'accident', 'inspection', 'workorder', 'warranty', 'gatepass', 'supplier', 'driver']
 
 /**
  * Destination table per module.
@@ -64,6 +64,8 @@ export const MODULE_TABLES = {
   workorder: 'work_orders',
   warranty: 'warranty_claims',
   gatepass: 'gate_passes',
+  supplier: 'suppliers',
+  driver: 'drivers',
 }
 
 /* ── Fleet (vehicle_fleet) ──────────────────────────────────────────────────── */
@@ -344,6 +346,62 @@ const GATEPASS_FIELDS = [
     synonyms: ['notes', 'remarks', 'comments', 'ملاحظات'] },
 ]
 
+/* ── Supplier master (suppliers) ────────────────────────────────────────────── */
+
+/** @type {CanonicalField[]} */
+const SUPPLIER_FIELDS = [
+  { key: 'supplier_name', label: 'Supplier Name', required: true, type: 'string',
+    synonyms: ['supplier', 'supplier name', 'vendor', 'vendor name', 'name', 'company', 'company name', 'dealer', 'المورد', 'اسم المورد', 'الشركة'] },
+  { key: 'supplier_code', label: 'Supplier Code', required: false, type: 'string',
+    synonyms: ['code', 'supplier code', 'vendor code', 'supplier id', 'vendor id', 'account no', 'رمز المورد', 'كود المورد'] },
+  { key: 'supplier_type', label: 'Supplier Type', required: false, type: 'string',
+    synonyms: ['type', 'supplier type', 'vendor type', 'category', 'classification', 'نوع المورد', 'الفئة'] },
+  { key: 'contact_person', label: 'Contact Person', required: false, type: 'string',
+    synonyms: ['contact', 'contact person', 'contact name', 'representative', 'rep', 'الشخص المسؤول', 'جهة الاتصال'] },
+  { key: 'phone', label: 'Phone', required: false, type: 'string',
+    synonyms: ['phone', 'mobile', 'tel', 'telephone', 'contact no', 'phone no', 'الهاتف', 'الجوال'] },
+  { key: 'email', label: 'Email', required: false, type: 'string',
+    synonyms: ['email', 'e-mail', 'mail', 'email address', 'البريد الإلكتروني'] },
+  { key: 'site', label: 'Site', required: false, type: 'string',
+    synonyms: ['site', 'location', 'branch', 'city', 'الموقع', 'الفرع'] },
+  { key: 'region', label: 'Region', required: false, type: 'string',
+    synonyms: ['region', 'zone', 'territory', 'المنطقة'] },
+  { key: 'country', label: 'Country', required: false, type: 'string',
+    synonyms: ['country', 'nation', 'country code', 'cc', 'البلد', 'الدولة'] },
+  { key: 'rating', label: 'Rating', required: false, type: 'number',
+    synonyms: ['rating', 'score', 'rank', 'grade', 'التقييم'] },
+  { key: 'status', label: 'Status', required: false, type: 'string',
+    synonyms: ['status', 'state', 'active', 'الحالة'] },
+]
+
+/* ── Driver master (drivers) ────────────────────────────────────────────────── */
+
+/** @type {CanonicalField[]} */
+const DRIVER_FIELDS = [
+  { key: 'driver_id', label: 'Driver ID', required: true, type: 'string',
+    synonyms: ['driver id', 'driver no', 'employee id', 'emp id', 'employee no', 'badge', 'badge no', 'iqama', 'iqama no', 'staff id', 'رقم السائق', 'رقم الموظف', 'الإقامة'] },
+  { key: 'driver_name', label: 'Driver Name', required: true, type: 'string',
+    synonyms: ['driver', 'driver name', 'name', 'operator', 'operator name', 'employee name', 'السائق', 'اسم السائق', 'المشغل'] },
+  { key: 'license_no', label: 'License No.', required: false, type: 'string',
+    synonyms: ['license', 'license no', 'licence', 'licence no', 'driving license', 'dl no', 'رقم الرخصة', 'رخصة القيادة'] },
+  { key: 'license_expiry', label: 'License Expiry', required: false, type: 'date',
+    synonyms: ['license expiry', 'licence expiry', 'expiry', 'expiry date', 'license expiry date', 'تاريخ انتهاء الرخصة', 'انتهاء الرخصة'] },
+  { key: 'phone', label: 'Phone', required: false, type: 'string',
+    synonyms: ['phone', 'mobile', 'tel', 'contact no', 'phone no', 'الهاتف', 'الجوال'] },
+  { key: 'nationality', label: 'Nationality', required: false, type: 'string',
+    synonyms: ['nationality', 'nation', 'citizenship', 'الجنسية'] },
+  { key: 'assigned_asset_no', label: 'Assigned Asset', required: false, type: 'string',
+    synonyms: ['asset', 'asset no', 'assigned asset', 'vehicle', 'vehicle no', 'assigned vehicle', 'unit', 'المركبة المخصصة', 'رقم المركبة'] },
+  { key: 'site', label: 'Site', required: false, type: 'string',
+    synonyms: ['site', 'location', 'project', 'branch', 'depot', 'الموقع', 'المشروع'] },
+  { key: 'region', label: 'Region', required: false, type: 'string',
+    synonyms: ['region', 'zone', 'territory', 'المنطقة'] },
+  { key: 'country', label: 'Country', required: false, type: 'string',
+    synonyms: ['country', 'nation', 'country code', 'cc', 'البلد', 'الدولة'] },
+  { key: 'status', label: 'Status', required: false, type: 'string',
+    synonyms: ['status', 'state', 'active', 'الحالة'] },
+]
+
 /**
  * Module → canonical field list.
  * @type {Record<string, CanonicalField[]>}
@@ -357,6 +415,8 @@ export const MODULE_FIELDS = Object.freeze({
   workorder: WORKORDER_FIELDS,
   warranty: WARRANTY_FIELDS,
   gatepass: GATEPASS_FIELDS,
+  supplier: SUPPLIER_FIELDS,
+  driver: DRIVER_FIELDS,
 })
 
 /**

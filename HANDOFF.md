@@ -6,6 +6,31 @@
 
 ---
 
+## Session 4 — Photo Upload Fix, Secure Storage & RLS Hardening
+
+### Mobile — Photo upload bug fixed (photos were silently failing)
+- **Root cause:** `TyreEditor.tsx` used `fetch(localUri).blob()` to read captured photos before uploading. In React Native / Expo, `fetch().blob()` on a `file://` URI yields an **empty blob** — photos appeared to upload but Supabase received 0 bytes.
+- Fixed: switched to `FileSystem.readAsStringAsync(localUri, { encoding: 'base64' })` → decode to `Uint8Array` → upload bytes directly. This matches the approach already in `photoUpload.ts` (offline queue path) which was working correctly.
+- Both the **immediate upload** path (TyreEditor, online inspection) and the **offline queue** path (`offlineQueue.ts` → `uploadAllPositionPhotos`) now use the same reliable FileSystem base64 method.
+
+### Mobile — Photo bucket alignment
+- `photoUpload.ts:uploadInspectionPhoto` was targeting bucket `inspection-photos` which **does not exist** in the Supabase storage setup (only `tyre-photos` is provisioned in MASTER_MIGRATION.sql).
+- Fixed: changed to `tyre-photos` with organized path prefix `inspections/{id}/{pos}_{ts}.{ext}` — consistent with TyreEditor's `photos/` prefix and accident photos' `accidents/` prefix, all in the same public bucket.
+
+### Mobile — Chunked SecureStore adapter
+- `mobile/lib/secureStorage.ts`: new chunked adapter for `expo-secure-store` handling auth tokens that exceed the **2 KB iOS Keychain item limit**. Supabase access+refresh token pairs routinely exceed 2 KB on accounts with large metadata. The adapter transparently splits values into 1800-char chunks with a metadata key.
+- Wired into `supabase.ts` as the `auth.storage` provider — replaces the old bare `SecureStore` adapter.
+
+### DB — vehicle_fleet RLS hardened (MIGRATIONS_V42)
+- `MIGRATIONS_V42_VEHICLE_FLEET_RLS.sql` + updated `MASTER_MIGRATION.sql`:
+  - Extended SELECT policy to `anon` role (required for registration/site-lookup flows that run before auth completes).
+  - Split the old catch-all `vehicle_fleet_write` policy into three explicit `vehicle_fleet_insert / _update / _delete` policies with `auth.uid() IS NOT NULL` guards.
+
+### Storage policy note
+The `tyre-photos` bucket is **public** (set in MASTER_MIGRATION.sql). All tyre, inspection, and accident photos are served via public URLs — no signed-URL round-trip required on read. The `storageRefs.ts` `resolveStorageUrl` function handles both the `tp-storage://` internal reference format (→ signed URL) and bare `https://` public URLs transparently.
+
+---
+
 ## Session 3 — Stabilization, Scanner & Whole-Project Audit
 
 ### Mobile — EAS build fixed (was failing "Gradle build failed with unknown error")
@@ -337,8 +362,8 @@ Env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
 2. Device test — login, inspection submit, scanner, offline sync (all wired to live schema)
 
 ### Mobile (Next Sprint)
-3. Photo uploads to Supabase Storage from inspection (currently captured as local URIs)
-4. ✅ ~~Barcode/QR scanner~~ — delivered (`app/(app)/scanner.tsx`)
+3. ✅ Photo uploads to Supabase Storage — fixed in Session 4 (FileSystem base64 path, correct bucket)
+4. ✅ Barcode/QR scanner — delivered (`app/(app)/scanner.tsx`)
 5. Push notifications for sync failures and inspection reminders
 6. Play Store submission prep (signing keys, store listing, screenshots)
 

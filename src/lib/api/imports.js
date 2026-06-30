@@ -300,6 +300,17 @@ export async function getBatchRows(batchId, limit = 500) {
   )
 }
 
+/**
+ * Permanently delete an import batch and (via ON DELETE CASCADE) its staged
+ * rows, sheets and attachment matches. Use for abandoned / draft / staged /
+ * rejected batches. A COMMITTED batch must be reversed first (reverseBatch) so
+ * the live rows it produced are removed too — this guards against orphaning them.
+ */
+export async function deleteBatch(batchId) {
+  const { error } = await supabase.from('import_batches').delete().eq('id', batchId)
+  if (error) throw new ServiceError(error.message, error.code, error)
+}
+
 /** Data Intake batches awaiting an approver's decision (canonical pipeline). */
 export async function listForApproval({ country, limit = 100 } = {}) {
   let q = supabase.from('import_batches').select(BATCH_COLS)

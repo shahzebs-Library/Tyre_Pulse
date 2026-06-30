@@ -758,6 +758,8 @@ export default function UploadData() {
   // ── Preview + duplicate check ───────────────────────────────────────────────
 
   async function buildPreview() {
+    setError('')
+    try {
     const built = buildRows(headers, rows, mapping)
     setPreview(built.slice(0, 5))
     setSkipIds(new Set())
@@ -830,6 +832,10 @@ export default function UploadData() {
     }
 
     setStep('preview')
+    } catch (err) {
+      console.error('[UploadData] buildPreview failed:', err)
+      setError('Could not build the preview: ' + (err?.message || 'unknown error') + '. Check the column mapping and try again.')
+    }
   }
 
   // ── Optional AI cleaning of low-confidence rows (off by default) ────────────

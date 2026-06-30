@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import {
   UploadCloud, FileSpreadsheet, Wand2, ShieldCheck, CheckCircle2, AlertTriangle,
   Loader2, ArrowRight, ArrowLeft, RefreshCw, Database, Save, Bookmark, Paperclip, FileArchive,
+  Trash2, RotateCcw,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -81,6 +82,28 @@ export default function DataIntakeCenter() {
     try { setRecent(await imports.listBatches({ country: activeCountry, limit: 8 })) } catch { /* non-blocking */ }
   }, [activeCountry])
   useEffect(() => { loadRecent() }, [loadRecent])
+
+  const [rowBusyId, setRowBusyId] = useState(null)
+
+  // Delete an abandoned/staged batch (cascades to its rows). A committed batch
+  // is reversed instead, so the live rows it produced are also removed.
+  async function deleteRecent(b) {
+    if (rowBusyId) return
+    const committed = b.import_status === 'committed'
+    const msg = committed
+      ? `Reverse the committed ${b.module} import? This removes the ${b.imported_rows || 0} rows it added to the live ${b.module} table.`
+      : `Delete the ${b.module} import (${b.import_status}, ${b.total_rows || 0} rows)? This permanently removes the staged batch.`
+    if (!window.confirm(msg)) return
+    setRowBusyId(b.id); setError('')
+    try {
+      if (committed) await imports.reverseBatch(b.id)
+      else await imports.deleteBatch(b.id)
+      await loadRecent()
+    } catch (err) {
+      console.error('[DataIntakeCenter] delete/reverse batch failed:', err)
+      setError(err?.message || 'Could not remove the batch.')
+    } finally { setRowBusyId(null) }
+  }
 
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null)
@@ -553,18 +576,36 @@ export default function DataIntakeCenter() {
         <h2 className="text-sm font-semibold text-gray-400 mb-2">Recent imports</h2>
         <div className="border border-gray-800 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Module</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Rows</th><th className="text-left px-3 py-2">When</th></tr></thead>
+            <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Module</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Rows</th><th className="text-left px-3 py-2">When</th><th className="text-right px-3 py-2">Actions</th></tr></thead>
             <tbody>
-              {recent.length === 0 && <tr><td colSpan={5} className="px-3 py-4 text-center text-gray-600">No imports yet.</td></tr>}
-              {recent.map((b) => (
+              {recent.length === 0 && <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-600">No imports yet.</td></tr>}
+              {recent.map((b) => {
+                const committed = b.import_status === 'committed'
+                const rowBusy = rowBusyId === b.id
+                return (
                 <tr key={b.id} className="border-t border-gray-800">
                   <td className="px-3 py-1.5 capitalize">{b.module}</td>
                   <td className="px-3 py-1.5 text-gray-400">{b.country || '—'}</td>
-                  <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${b.import_status === 'committed' ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>{b.import_status}</span></td>
+                  <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${committed ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>{b.import_status}</span></td>
                   <td className="px-3 py-1.5 text-gray-400">{b.imported_rows || 0}/{b.total_rows || 0}</td>
                   <td className="px-3 py-1.5 text-gray-500 text-xs">{b.created_at ? new Date(b.created_at).toLocaleString('en-GB') : ''}</td>
+                  <td className="px-3 py-1.5 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Link to="/data-intake/history" title="Open in import history"
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600">
+                        Open
+                      </Link>
+                      <button onClick={() => deleteRecent(b)} disabled={rowBusy}
+                        title={committed ? 'Reverse this committed import' : 'Delete this staged batch'}
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-red-400 hover:border-red-700/50 disabled:opacity-50">
+                        {rowBusy ? <Loader2 size={12} className="animate-spin" /> : committed ? <RotateCcw size={12} /> : <Trash2 size={12} />}
+                        {committed ? 'Reverse' : 'Delete'}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

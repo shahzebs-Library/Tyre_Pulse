@@ -1,9 +1,40 @@
 # TyrePulse — Developer Handoff
-**Last updated:** 30 June 2026
+**Last updated:** 1 July 2026
 **Branch:** `main` (all work merged)
 **Web build status:** ✅ Clean — builds, 507/507 tests passing, auto-deploys to Vercel
 **Mobile build status:** ✅ EAS Android build green — Expo SDK 53, auto-builds on push to `main`
-**DB migrations applied to live Supabase:** through **V50** (project `jhssdmeruxtrlqnwfksc`)
+**DB migrations applied to live Supabase:** through **V51** (project `jhssdmeruxtrlqnwfksc`)
+**Live URL under test:** tyre-pulse-peach.vercel.app
+
+---
+
+## Session 6 — Fixing the data/AI section: production schema drift, CORS, approvals, UI crashes
+
+**Root theme:** most "X is not working" reports traced to the **live Supabase/edge state having drifted from the code**, not client bugs. Always verify the live DB/edge config (information_schema, pg_policies, pg_proc, edge logs), not just the migration files.
+
+### Knowledge Base / RAG — was never provisioned in prod (FIXED)
+- Live `knowledge_documents` had drifted: **no pgvector, no embedding column, old `source_type` schema, no `match_knowledge_documents()`** → every KB upload 400'd, table stayed empty.
+- **`MIGRATIONS_V51_KNOWLEDGE_BASE_RAG.sql` (applied live):** enable pgvector, rebuild `knowledge_documents` to the code contract (`doc_type` CHECK sop/manual/policy/inspection/rca/vendor/other, `asset_no`, `tags text[]`, `embedding vector(1536)`, org/created_by defaults), ivfflat cosine index, RLS (select=true / write Admin+Manager), and the `match_knowledge_documents(query_embedding, match_count, filter_doc_type, filter_site)` RPC. Table was empty → non-destructive.
+
+### Edge CORS — blocked ALL AI on the vercel.app site (FIXED)
+- `supabase/functions/_shared/auth.ts` only allowed `tyrepulse.app` + localhost. The app is tested on `tyre-pulse-peach.vercel.app`, so the browser CORS-blocked every `chat-ai` / `generate-embedding` POST after preflight (edge logs: OPTIONS 200, no POST). This — not a missing OpenAI key — kept KB un-indexed, the chatbot dead, and `ai_token_logs` empty.
+- Fix: allow any `^https://[a-z0-9-]+\.vercel\.app$` origin (prod alias + rotating previews) plus the existing list; `ALLOWED_ORIGINS` env override still wins. Safe because functions still require a valid approved-user JWT.
+- **Redeployed live: `chat-ai` v5 (verify_jwt=false), `generate-embedding` v4 (verify_jwt=true).**
+
+### Upload/Approvals — unified the two disconnected pipelines
+- There were **two pipelines** that didn't share data: Data Intake (`import_batches`/`import_rows`) and legacy Upload (`pending_uploads`). Each history/approval view read only one → the other always looked empty (the "not linked" symptom).
+- **`UploadApprovals.jsx`** now defaults to a **"Data Intake" tab** over `import_batches WHERE approval_status='pending_approval'`: **Approve & Commit** via the secure `import_commit_batch` RPC (fixes non-admin orphaned submissions **and** the client-side insert 400 on generated cols/CHECK enums), **Reject**, and a read-only staged-rows preview. Legacy `pending_uploads` kept as a secondary tab + added **Delete** action + console error logging (errors no longer swallowed into empty lists).
+- **`DataIntakeCenter.jsx` Recent imports** now has an Actions column: **Open** (→ history), **Delete** (staged/abandoned — cascades to rows/sheets/attachments), **Reverse** (committed — removes the live rows too).
+- New service fns in `src/lib/api/imports.js`: `listForApproval()`, `rejectBatch()`, `deleteBatch()`.
+
+### UI crash + swallowed-error fixes
+- **React error #130 crash** on KnowledgeBase and AiCostMonitor: both passed a JSX *element* to `PageHeader icon=` (which renders `<Icon/>`). Fixed to component reference (`icon={BookOpen}` / `icon={DollarSign}`). Every other page already used the component-ref form.
+- **Legacy "Preview" did nothing:** `UploadData.buildPreview()` had no try/catch and only advanced the step on its last line — any failure killed the click silently. Now wrapped, surfaces the error.
+
+### Still open / needs the user
+- **OPENAI_API_KEY / ANTHROPIC_API_KEY**: user says OpenAI key already set; verify with `supabase secrets list --project-ref jhssdmeruxtrlqnwfksc`. With CORS fixed, KB indexing + chat + AI Cost Monitor population should now work after a hard-refresh.
+- **Data Intake staging stall** (`total_rows=0`): proven NOT a schema/RLS/CHECK block — the wizard's `stageRows` was never completed for the two abandoned batches. Needs a live upload with a real file to capture the exact failing step (Console now logs; watch the `import_rows` POST in Network). The two stuck `staged 0/0` batches can now be removed with the new Delete button.
+- Untracked, intentionally not committed: `QA_DATA_INTAKE_REPORT.md`, `QA_REPORT.md`, `mobile/ui_screenshot.png`.
 
 ---
 

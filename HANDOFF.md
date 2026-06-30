@@ -364,13 +364,18 @@ Env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
 ### Mobile (Next Sprint)
 3. ✅ Photo uploads to Supabase Storage — fixed in Session 4 (FileSystem base64 path, correct bucket)
 4. ✅ Barcode/QR scanner — delivered (`app/(app)/scanner.tsx`)
-5. Push notifications for sync failures and inspection reminders
-6. Play Store submission prep (signing keys, store listing, screenshots)
+5. ✅ Push notifications — delivered in Session 5 (`lib/notifications.ts`, profile settings, daily reminders)
+6. Play Store submission prep — `eas.json` production profile ready; need `google-services.json` + signing key + store listing assets
 
-### Web (Next Sprint)
-8. RAG document ingestion — SOP/policy PDF upload pipeline
-9. AI cost monitor — token usage dashboard
-10. Scheduled reports — monthly email of executive PDF
+### Web (Done)
+7. ✅ RAG document ingestion — `KnowledgeBase.jsx` at `/knowledge-base` (file upload + chunking + embedding)
+8. ✅ AI cost monitor — `AiCostMonitor.jsx` at `/ai-cost-monitor` (token logs + spend breakdown)
+9. ✅ Scheduled reports DB — `MIGRATIONS_V44` adds `report_schedules` table backing `ScheduledReports.jsx`
+
+### Remaining
+- **Play Store submission:** Add `google-services.json` (from Firebase console for push notifications) + signing key (EAS managed credentials), then run `npm run release:android` from `mobile/`
+- **Edge function update:** Update `chat-ai` Supabase edge function to insert into `ai_token_logs` after each call (prompt_tokens, completion_tokens, model, feature, cost_usd)
+- **Apply pending migrations to Supabase:** V42 (vehicle_fleet RLS), V43 (push_tokens), V44 (report_schedules + ai_token_logs)
 
 ---
 

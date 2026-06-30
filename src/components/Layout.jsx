@@ -132,6 +132,7 @@ const NAV_GROUPS = [
     label: 'Data',
     items: [
       { to: '/cleaning',     label: 'Data Cleaning',    icon: Wand2,         adminOnly: true },
+      { to: '/data-intake',  label: 'Data Intake Center', icon: Database },
       { to: '/upload',       label: 'Upload Data',      icon: Upload },
       { to: '/upload-approvals', label: 'Upload Approvals', icon: ClipboardList, adminOnly: true },
       { to: '/custom-data',  label: 'Custom Data',      icon: Database },

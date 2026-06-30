@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import * as imports from '../lib/api/imports'
 import PageHeader from '../components/ui/PageHeader'
 import {
   ClipboardCheck, CheckCircle, XCircle, Clock, FileSpreadsheet,
   User, Globe, Search, AlertTriangle, Pencil, Package, Save, Trash2, Wand2,
+  Database, Eye, Loader,
 } from 'lucide-react'
 
 const TYPE_META = {
@@ -25,7 +27,26 @@ export default function UploadApprovals() {
   const [error, setError]       = useState('')
   const [search, setSearch]     = useState('')
   const [previewing, setPreviewing] = useState(null) // pending row being previewed
-  const [tab, setTab]           = useState('pending')
+  const [tab, setTab]           = useState('intake')
+
+  // Canonical Data Intake (import_batches) approval queue.
+  const [intake, setIntake]       = useState([])
+  const [intakeLoading, setIntakeLoading] = useState(true)
+
+  const loadIntake = useCallback(async () => {
+    setIntakeLoading(true)
+    try {
+      const rows = await imports.listForApproval({ limit: 100 })
+      setIntake(rows ?? [])
+    } catch (e) {
+      console.error('[UploadApprovals] loadIntake failed:', e)
+      setError(e?.message || 'Could not load Data Intake approvals.')
+    } finally {
+      setIntakeLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadIntake() }, [loadIntake])
 
   const load = useCallback(async () => {
     const { data, error: err } = await supabase
@@ -33,7 +54,14 @@ export default function UploadApprovals() {
       .select('id, batch_id, uploaded_by, uploader_name, country, upload_type, target_table, file_name, row_count, rows, status, reviewed_at, review_note, created_at')
       .order('created_at', { ascending: false })
       .limit(300)
-    if (err) setError(err.message)
+    if (err) {
+      // Surface to the console for debugging instead of silently rendering an empty list.
+      console.error('[UploadApprovals] load failed:', err)
+      setError(err.message)
+      setLoading(false)
+      return
+    }
+    setError('')
     setPending((data ?? []).filter(p => p.status === 'pending'))
     setHistory((data ?? []).filter(p => p.status !== 'pending'))
     setLoading(false)
@@ -59,7 +87,11 @@ export default function UploadApprovals() {
     for (let i = 0; i < rows.length; i += BATCH) {
       const chunk = rows.slice(i, i + BATCH)
       const { error: insErr } = await supabase.from(p.target_table).insert(chunk)
-      if (insErr) { setError(`Insert failed for "${p.file_name}": ${insErr.message}`); setActing(null); return }
+      if (insErr) {
+        console.error(`[UploadApprovals] approve insert into ${p.target_table} failed:`, insErr)
+        setError(`Insert failed for "${p.file_name}" (${inserted} of ${rows.length} rows committed): ${insErr.message}`)
+        setActing(null); return
+      }
       inserted += chunk.length
     }
     const { error: updErr } = await supabase.from('pending_uploads')
@@ -79,8 +111,54 @@ export default function UploadApprovals() {
       .update({ status: 'rejected', reviewed_by: profile?.id, reviewed_at: new Date().toISOString(), review_note: note || null })
       .eq('id', p.id)
     setActing(null)
-    if (err) { setError(err.message); return }
+    if (err) { console.error('[UploadApprovals] reject failed:', err); setError(err.message); return }
     await load()
+  }
+
+  // Permanently remove an approval point (the staged upload batch). RLS allows
+  // delete for Admins only. Used to clear stale / abandoned / duplicate batches.
+  async function remove(p) {
+    if (acting) return
+    if (!window.confirm(`Delete the upload batch "${p.file_name}" (${(p.row_count || 0).toLocaleString()} rows)? This removes the staged data permanently and cannot be undone.`)) return
+    setActing(p.id); setError('')
+    const { error: err } = await supabase.from('pending_uploads').delete().eq('id', p.id)
+    setActing(null)
+    if (err) { console.error('[UploadApprovals] delete failed:', err); setError(err.message); return }
+    setPreviewing(prev => (prev?.id === p.id ? null : prev))
+    await load()
+  }
+
+  // ── Canonical Data Intake approvals (import_batches → secure commit RPC) ──────
+  const [intakePreview, setIntakePreview] = useState(null) // { batch, rows }
+
+  async function approveIntake(b) {
+    if (acting) return
+    setActing(b.id); setError('')
+    try {
+      await imports.approveBatch(b.id)
+      await imports.commitBatch(b.id) // server-side import_commit_batch — validated & idempotent
+      await loadIntake()
+    } catch (e) {
+      console.error('[UploadApprovals] approveIntake failed:', e)
+      setError(`Commit failed for the ${b.module} import: ${e?.message || 'unknown error'}`)
+    } finally { setActing(null) }
+  }
+
+  async function rejectIntake(b) {
+    if (acting) return
+    if (!window.confirm(`Reject the ${b.module} import (${(b.total_rows || 0).toLocaleString()} rows)? It will not be committed to live tables.`)) return
+    setActing(b.id); setError('')
+    try { await imports.rejectBatch(b.id); await loadIntake() }
+    catch (e) { console.error('[UploadApprovals] rejectIntake failed:', e); setError(e?.message || 'Reject failed.') }
+    finally { setActing(null) }
+  }
+
+  async function viewIntake(b) {
+    if (acting) return
+    setActing(b.id); setError('')
+    try { const rows = await imports.getBatchRows(b.id, 500); setIntakePreview({ batch: b, rows: rows ?? [] }) }
+    catch (e) { console.error('[UploadApprovals] viewIntake failed:', e); setError(e?.message || 'Could not load rows.') }
+    finally { setActing(null) }
   }
 
   const list = tab === 'pending' ? pending : history
@@ -124,7 +202,7 @@ export default function UploadApprovals() {
       {/* Tabs + search */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex gap-1 bg-gray-800/40 rounded-lg p-1">
-          {[['pending', `Pending (${pending.length})`], ['history', 'History']].map(([k, label]) => (
+          {[['intake', `Data Intake (${intake.length})`], ['pending', `Legacy (${pending.length})`], ['history', 'History']].map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${tab === k ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'}`}>
               {label}
@@ -141,7 +219,60 @@ export default function UploadApprovals() {
         </div>
       </div>
 
-      {loading ? (
+      {tab === 'intake' ? (
+        intakeLoading ? (
+          <div className="grid gap-3">{[...Array(3)].map((_, i) => <div key={i} className="card animate-pulse h-28 bg-gray-800/40" />)}</div>
+        ) : intake.length === 0 ? (
+          <div className="card py-16 flex flex-col items-center gap-3">
+            <Database size={40} className="text-gray-700" />
+            <p className="text-gray-400 font-medium">No imports awaiting approval</p>
+            <p className="text-gray-600 text-sm">Batches submitted from the Data Intake Center appear here for an approver to commit or reject.</p>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {intake.map(b => {
+              const busy = acting === b.id
+              return (
+                <div key={b.id} className="card" style={{ borderLeft: '3px solid #7c3aed' }}>
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: '#7c3aed1a' }}>
+                        <Database size={18} style={{ color: '#7c3aed' }} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-white font-semibold capitalize">{b.module} import{b.sheet ? ` · ${b.sheet}` : ''}</p>
+                        <div className="flex items-center gap-3 flex-wrap mt-1 text-xs text-gray-500">
+                          <span className="flex items-center gap-1"><Package size={11} />{(b.total_rows || 0).toLocaleString()} rows</span>
+                          <span className="text-green-400">{(b.ready_rows || 0).toLocaleString()} ready</span>
+                          {b.warning_rows > 0 && <span className="text-yellow-400">{b.warning_rows} warn</span>}
+                          {b.error_rows > 0 && <span className="text-red-400">{b.error_rows} error</span>}
+                          {b.duplicate_rows > 0 && <span className="text-gray-400">{b.duplicate_rows} dup</span>}
+                          <span className="flex items-center gap-1"><Globe size={11} />{b.country || '—'}</span>
+                          <span className="flex items-center gap-1"><Clock size={11} />{new Date(b.created_at).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button onClick={() => viewIntake(b)} disabled={busy} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
+                        <Eye size={14} /> Rows
+                      </button>
+                      <button onClick={() => rejectIntake(b)} disabled={busy}
+                        className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-red-700/50 text-red-400 hover:bg-red-900/20 disabled:opacity-50">
+                        <XCircle size={14} /> Reject
+                      </button>
+                      <button onClick={() => approveIntake(b)} disabled={busy || (b.ready_rows || 0) === 0}
+                        title={(b.ready_rows || 0) === 0 ? 'No ready rows to commit' : 'Approve and commit to live tables'}
+                        className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
+                        {busy ? <Loader size={14} className="animate-spin" /> : <CheckCircle size={14} />} {busy ? 'Committing…' : 'Approve & Commit'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      ) : loading ? (
         <div className="grid gap-3">{[...Array(3)].map((_, i) => <div key={i} className="card animate-pulse h-28 bg-gray-800/40" />)}</div>
       ) : filtered.length === 0 ? (
         <div className="card py-16 flex flex-col items-center gap-3">
@@ -196,6 +327,10 @@ export default function UploadApprovals() {
                         {p.status === 'approved' ? 'Approved' : 'Rejected'}
                       </span>
                     )}
+                    <button onClick={() => remove(p)} disabled={busy} title="Delete this upload batch permanently"
+                      className="flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-red-400 hover:border-red-700/50 disabled:opacity-50">
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -213,6 +348,76 @@ export default function UploadApprovals() {
           onSaved={async () => { await load(); setPreviewing(null) }}
         />
       )}
+
+      {/* Read-only staged-rows preview for a Data Intake batch */}
+      {intakePreview && (
+        <IntakeRowsModal data={intakePreview} onClose={() => setIntakePreview(null)} />
+      )}
+    </div>
+  )
+}
+
+function IntakeRowsModal({ data, onClose }) {
+  const { batch, rows } = data
+  const [search, setSearch] = useState('')
+  const cols = useMemo(() => {
+    const first = rows.find(r => r.transformed_data && typeof r.transformed_data === 'object')
+    return first ? Object.keys(first.transformed_data).slice(0, 12) : []
+  }, [rows])
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return rows.slice(0, 300)
+    return rows.filter(r => JSON.stringify(r.transformed_data ?? {}).toLowerCase().includes(q)).slice(0, 300)
+  }, [rows, search])
+  const statusColor = s => s === 'error' ? 'text-red-400' : s === 'warning' ? 'text-yellow-400' : 'text-green-400'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="bg-[var(--panel,#0f1623)] border border-gray-700 rounded-xl max-w-6xl w-full max-h-[88vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
+          <div>
+            <h3 className="text-white font-semibold capitalize">{batch.module} import · {(batch.total_rows || 0).toLocaleString()} rows</h3>
+            <p className="text-xs text-gray-500">Read-only staged data. Approve to commit only the ready rows; errors and duplicates are skipped server-side.</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white"><XCircle size={20} /></button>
+        </div>
+        <div className="px-5 py-3 border-b border-gray-800 flex items-center gap-2 bg-gray-800/40">
+          <Search size={14} className="text-gray-500" />
+          <input className="bg-transparent text-sm text-white placeholder-gray-500 outline-none flex-1"
+            placeholder="Filter staged rows…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <div className="overflow-auto p-4 flex-1">
+          {rows.length === 0 ? (
+            <p className="text-gray-500 text-sm">No staged rows found for this batch.</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr>
+                  <th className="text-left px-2 py-1.5 text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800">#</th>
+                  <th className="text-left px-2 py-1.5 text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800">Status</th>
+                  {cols.map(c => <th key={c} className="text-left px-2 py-1.5 text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800 whitespace-nowrap">{c}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map(r => (
+                  <tr key={r.id} className="border-b border-gray-800/50">
+                    <td className="px-2 py-1 text-gray-500">{r.source_row_no ?? '—'}</td>
+                    <td className={`px-2 py-1 font-medium ${statusColor(r.validation_status)}`}>
+                      {r.validation_status}{r.dup_status && r.dup_status !== 'none' ? ` · ${r.dup_status}` : ''}
+                    </td>
+                    {cols.map(c => (
+                      <td key={c} className="px-2 py-1 text-gray-300 whitespace-nowrap">
+                        {r.transformed_data?.[c] == null ? '—' : String(r.transformed_data[c])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {rows.length > 300 && <p className="text-xs text-gray-500 mt-3">Showing first 300 of {rows.length.toLocaleString()} rows.</p>}
+        </div>
+      </div>
     </div>
   )
 }

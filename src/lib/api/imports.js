@@ -300,6 +300,24 @@ export async function getBatchRows(batchId, limit = 500) {
   )
 }
 
+/** Data Intake batches awaiting an approver's decision (canonical pipeline). */
+export async function listForApproval({ country, limit = 100 } = {}) {
+  let q = supabase.from('import_batches').select(BATCH_COLS)
+    .eq('approval_status', 'pending_approval')
+    .order('created_at', { ascending: false }).limit(limit)
+  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+  return unwrap(await q)
+}
+
+/** Reject a submitted batch without committing it to the live tables. */
+export async function rejectBatch(batchId) {
+  const user = await currentUser()
+  const { error } = await supabase.from('import_batches')
+    .update({ approval_status: 'rejected', approver: user?.id ?? null, approved_at: new Date().toISOString() })
+    .eq('id', batchId)
+  if (error) throw new ServiceError(error.message, error.code, error)
+}
+
 export async function getRowIssues(rowId) {
   return unwrap(
     await supabase.from('import_row_issues')

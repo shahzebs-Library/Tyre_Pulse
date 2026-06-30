@@ -59,6 +59,89 @@ export async function uploadOriginalFile(file, { module, country, sha256 }) {
   return { fileId: data.id, bucket: BUCKET, path, sha256 }
 }
 
+/**
+ * Upload one extracted attachment (from an accident evidence ZIP) to the PRIVATE
+ * import-files bucket and record it in import_files. We reuse the import-files
+ * bucket (not accident-photos) so EVERY artefact of an import — the source
+ * workbook and its evidence package — lives under one org/country/batch path,
+ * shares one RLS surface, and is governed by one retention policy. Downloads are
+ * always via short-lived signed URLs; no public URL is ever produced.
+ *
+ * Path: <org>/<country>/accident/<batchId>/attachments/<uuid>/<filename>.
+ *
+ * @param {File|Blob} file            Extracted file (a Blob carries no .name).
+ * @param {Object}    opts
+ * @param {string}    opts.batchId    Owning import batch.
+ * @param {string}    [opts.country]  Country scope for the storage path.
+ * @param {string}    [opts.filename] Original filename (required when file is a Blob).
+ * @param {string}    [opts.sha256]   Optional content hash for dedupe.
+ * @returns {Promise<{ fileId: string|null, bucket: string, path: string }>}
+ */
+export async function uploadAttachment(file, { batchId, country, filename, sha256 } = {}) {
+  const user = await currentUser()
+  const org = await currentOrgId(user?.id)
+  const name = filename || file?.name || 'attachment'
+  const safeName = name.replace(/[^\w.\-]+/g, '_')
+  const path = `${org}/${country || 'NA'}/accident/${batchId || 'unbatched'}/attachments/${uuid()}/${safeName}`
+
+  const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+    contentType: file?.type || 'application/octet-stream',
+    upsert: false,
+  })
+  if (upErr) throw new ServiceError(upErr.message, upErr.statusCode, upErr)
+
+  // Record the bytes as an import_files row so the attachment is a first-class,
+  // retention-tracked artefact (best-effort: a missing row must not lose the file).
+  let fileId = null
+  try {
+    const row = {
+      country: country || null,
+      storage_bucket: BUCKET,
+      storage_path: path,
+      original_filename: name,
+      mime_type: file?.type || null,
+      size_bytes: file?.size ?? null,
+      sha256: sha256 ?? null,
+      created_by: user?.id ?? null,
+    }
+    const { data, error } = await supabase.from('import_files').insert(row).select('id').single()
+    if (error && error.code !== '23505') throw new ServiceError(error.message, error.code, error)
+    fileId = data?.id ?? null
+  } catch (err) {
+    if (err instanceof ServiceError && err.code === '23505') fileId = null
+    else throw err
+  }
+
+  return { fileId, bucket: BUCKET, path }
+}
+
+/**
+ * Bulk-insert attachment match records (V45 import_attachment_matches). Columns
+ * are explicit and real: batch_id, file_id, match_key, match_kind,
+ * matched_entity_type, matched_entity_id, status. organisation_id is set by the
+ * table default + RLS (app_current_org), never by the client.
+ *
+ * @param {Array<{ batchId?: string, fileId?: string|null, matchKey?: string,
+ *   matchKind?: string, matchedEntityType?: string|null,
+ *   matchedEntityId?: string|null, status?: string }>} rows
+ * @returns {Promise<number>} number of rows recorded
+ */
+export async function recordAttachmentMatches(rows) {
+  if (!rows?.length) return 0
+  const payload = rows.map((r) => ({
+    batch_id: r.batchId ?? null,
+    file_id: r.fileId ?? null,
+    match_key: r.matchKey ?? null,
+    match_kind: r.matchKind ?? null,
+    matched_entity_type: r.matchedEntityType ?? null,
+    matched_entity_id: r.matchedEntityId ?? null,
+    status: r.status ?? 'unmatched',
+  }))
+  const { error } = await supabase.from('import_attachment_matches').insert(payload)
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return payload.length
+}
+
 /** Create a staging batch for one sheet/module/country. Returns the batch id. */
 export async function createBatch(b) {
   const user = await currentUser()

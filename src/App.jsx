@@ -105,6 +105,8 @@ const TyreScan               = lazy(() => import('./pages/TyreScan'))
 const QrLabels               = lazy(() => import('./pages/QrLabels'))
 const CustomData             = lazy(() => import('./pages/CustomData'))
 const ScheduledReports       = lazy(() => import('./pages/ScheduledReports'))
+const KnowledgeBase          = lazy(() => import('./pages/KnowledgeBase'))
+const AiCostMonitor          = lazy(() => import('./pages/AiCostMonitor'))
 
 // ── Per-page error boundary ───────────────────────────────────────────────
 function Safe({ children }) {
@@ -169,6 +171,8 @@ function MainApp() {
                       <Route path="/fleet-master"         element={<Safe><FleetMaster /></Safe>} />
                       <Route path="/reports"              element={<Safe><Reports /></Safe>} />
                       <Route path="/scheduled-reports"   element={<Safe><ScheduledReports /></Safe>} />
+                      <Route path="/knowledge-base"       element={<Safe><KnowledgeBase /></Safe>} />
+                      <Route path="/ai-cost-monitor"      element={<Safe><AiCostMonitor /></Safe>} />
                       <Route path="/gate-pass"            element={<Safe><GatePass /></Safe>} />
                       <Route path="/serial-tracker"       element={<Safe><SerialTracker /></Safe>} />
                       <Route path="/work-orders"          element={<Safe><WorkOrders /></Safe>} />

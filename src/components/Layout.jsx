@@ -15,7 +15,7 @@ import {
   TrendingUp, BookOpen, Zap, Database, Wrench, Calendar,
   Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
-  Recycle, Radio, PackagePlus, CalendarCheck2, BellRing,
+  Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -93,6 +93,8 @@ const NAV_GROUPS = [
       { to: '/fleet-health',            label: 'Fleet Health Board',      icon: HeartPulse },
       { to: '/advanced-analytics',      label: 'Advanced Analytics',      icon: Microscope },
       { to: '/ai-command-center',       label: 'AI Command Center',       icon: Bot },
+      { to: '/knowledge-base',          label: 'Knowledge Base',          icon: Brain },
+      { to: '/ai-cost-monitor',         label: 'AI Cost Monitor',         icon: BarChart },
       { to: '/executive-report',        label: 'Executive Report',        icon: BookOpen },
       { to: '/forecasting',             label: 'Forecasting Engine',      icon: TrendingUp },
       { to: '/cost-center',             label: 'Cost Center',             icon: DollarSign },

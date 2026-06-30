@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   UploadCloud, FileSpreadsheet, Wand2, ShieldCheck, CheckCircle2, AlertTriangle,
-  Loader2, ArrowRight, ArrowLeft, RefreshCw, Database,
+  Loader2, ArrowRight, ArrowLeft, RefreshCw, Database, Save, Bookmark,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -42,6 +42,7 @@ export default function DataIntakeCenter() {
   const [error, setError] = useState('')
 
   const [batchId, setBatchId] = useState(null)
+  const [profiles, setProfiles] = useState([])
   const [mapping, setMapping] = useState([])
   const [annotated, setAnnotated] = useState([])
   const [counts, setCounts] = useState(null)
@@ -61,7 +62,7 @@ export default function DataIntakeCenter() {
 
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null)
-    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setError('')
+    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setError(''); setProfiles([])
   }
 
   // ── Step 1: parse a chosen file ──────────────────────────────────────────────
@@ -93,6 +94,8 @@ export default function DataIntakeCenter() {
       setBatchId(id)
       // seed mapping suggestions
       setMapping(suggestMapping({ columns: sheet.columns, module, sampleRows: sheet.rows.slice(0, 20) }))
+      // offer reusable mapping profiles for this module/country (non-blocking)
+      imports.listProfiles({ module, country: activeCountry }).then(setProfiles).catch(() => setProfiles([]))
       setStep(1)
     } catch (err) {
       setError(err?.message || 'Could not start the import.')
@@ -103,6 +106,41 @@ export default function DataIntakeCenter() {
     setMapping((m) => m.map((row) => row.sourceHeader === sourceHeader
       ? { ...row, target: target || null, action: target ? 'mapped' : 'preserve_custom' }
       : row))
+  }
+
+  // Apply a saved mapping profile: re-map source headers to its remembered targets.
+  async function applyProfile(profileId) {
+    if (!profileId) return
+    setError(''); setBusy(true)
+    try {
+      const rules = await imports.getProfileRules(profileId)
+      const byHeader = new Map(rules.map((r) => [r.source_header, r.target_field]))
+      setMapping((m) => m.map((row) => {
+        if (!byHeader.has(row.sourceHeader)) return row
+        const target = byHeader.get(row.sourceHeader) || null
+        return { ...row, target, action: target ? 'mapped' : 'preserve_custom', confidence: 100 }
+      }))
+      imports.touchProfile(profileId).catch(() => {})
+    } catch (err) {
+      setError(err?.message || 'Could not apply the profile.')
+    } finally { setBusy(false) }
+  }
+
+  // Save the current column mapping as a reusable profile for this module/country.
+  async function saveAsProfile() {
+    const name = window.prompt('Save this mapping as a reusable profile. Name:')
+    if (!name?.trim()) return
+    setError(''); setBusy(true)
+    try {
+      const rules = mapping
+        .filter((m) => m.target)
+        .map((m) => ({ sourceHeader: m.sourceHeader, target: m.target, confidence: m.confidence ?? 100 }))
+      await imports.saveProfile({ name: name.trim(), module, country: activeCountry }, rules)
+      const next = await imports.listProfiles({ module, country: activeCountry })
+      setProfiles(next)
+    } catch (err) {
+      setError(err?.message || 'Could not save the profile.')
+    } finally { setBusy(false) }
   }
 
   // ── Step 3: validate + classify ──────────────────────────────────────────────
@@ -226,7 +264,26 @@ export default function DataIntakeCenter() {
       {/* STEP 2 */}
       {step === 1 && sheet && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-400 flex items-center gap-2"><Wand2 size={15} /> Review the suggested mapping. Unknown columns are kept (never dropped).</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-gray-400 flex items-center gap-2"><Wand2 size={15} /> Review the suggested mapping. Unknown columns are kept (never dropped).</p>
+            <div className="flex items-center gap-2">
+              {profiles.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <Bookmark size={15} className="text-gray-500" />
+                  <select
+                    defaultValue=""
+                    onChange={(e) => { applyProfile(e.target.value); e.target.value = '' }}
+                    className="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs"
+                    title="Apply a saved mapping profile"
+                  >
+                    <option value="">Apply saved profile…</option>
+                    {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <button onClick={saveAsProfile} disabled={busy || !mapping.some((m) => m.target)} className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs flex items-center gap-1.5 disabled:opacity-50" title="Save this mapping for reuse"><Save size={14} /> Save as profile</button>
+            </div>
+          </div>
           <div className="overflow-x-auto border border-gray-800 rounded-xl">
             <table className="w-full text-sm">
               <thead className="bg-gray-800/60 text-gray-400 text-xs">

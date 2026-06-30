@@ -2,6 +2,7 @@
 // WorkOrders.jsx — Workshop Job Card Management · /work-orders
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Chart as ChartJS,
@@ -15,7 +16,7 @@ import {
   ChevronDown, ChevronUp, X, Edit2, Eye, Printer,
   Package, DollarSign, Calendar, User, Building2,
   AlertOctagon, Loader2, RefreshCw, TrendingUp,
-  FileSpreadsheet,
+  FileSpreadsheet, Upload,
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -114,6 +115,7 @@ export default function WorkOrders() {
   const { activeCountry, activeCurrency } = useSettings()
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency)
   const { user } = useAuth()
+  const navigate = useNavigate()
 
   const [orders, setOrders]       = useState([])
   const [loading, setLoading]     = useState(true)
@@ -480,12 +482,22 @@ export default function WorkOrders() {
             <button onClick={exportExcel} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
               <FileSpreadsheet size={14} /> Excel
             </button>
+            <button
+              onClick={() => navigate('/data-intake?module=workorder')}
+              className="btn-primary flex items-center gap-2 text-sm px-4"
+            >
+              <Upload size={15} /> Import via Data Intake Center
+            </button>
             <button onClick={openNew} className="btn-primary flex items-center gap-2 text-sm px-4">
               <Plus size={15} /> New Work Order
             </button>
           </div>
         }
       />
+
+      <p className="text-xs text-gray-500 -mt-3">
+        Bulk-import work orders / job cards from Excel/CSV with Arabic/English header mapping, cost validation and duplicate detection via the Data Intake Center.
+      </p>
 
       {error && (
         <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">

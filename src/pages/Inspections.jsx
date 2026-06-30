@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
-import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Upload } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -222,6 +222,7 @@ export default function Inspections() {
   const { profile, loading: authLoading } = useAuth()
   const { activeCountry } = useSettings()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const isTyreMan = profile?.role === 'Tyre Man'
   const [rows, setRows]         = useState([])
   const [loading, setLoading]   = useState(true)
@@ -914,6 +915,12 @@ export default function Inspections() {
               <FileText size={14}/> PDF
             </button>
             <button
+              onClick={() => navigate('/data-intake?module=inspection')}
+              className="btn-primary flex items-center gap-2 text-sm"
+            >
+              <Upload size={15} /> Import via Data Intake Center
+            </button>
+            <button
               className="btn-primary text-sm"
               onClick={() => setForm({ ...EMPTY_FORM, inspection_type: defaultType })}
             >
@@ -922,6 +929,12 @@ export default function Inspections() {
           </div>
         )}
       />
+
+      {!isTyreMan && (
+        <p className="text-xs text-gray-500 -mt-3">
+          Bulk-import inspections from Excel/CSV with Arabic/English header mapping, validation and duplicate detection via the Data Intake Center.
+        </p>
+      )}
 
       {/* Tabs — hidden for TyreMan (locked to checklist) */}
       {!isTyreMan && <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg w-fit flex-wrap">

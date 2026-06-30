@@ -16,6 +16,16 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5174',
 ]
 
+// Any Vercel deployment of this app (stable production alias + the rotating
+// per-push preview subdomains). Safe to allow broadly here because every
+// function still enforces a valid, approved-user JWT via requireApprovedRole —
+// the origin allowance alone grants no data access.
+const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/
+
+function isOriginAllowed(origin: string, allowedOrigins: string[]): boolean {
+  return allowedOrigins.includes(origin) || VERCEL_ORIGIN.test(origin)
+}
+
 export function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin')
   const configured = Deno.env.get('ALLOWED_ORIGINS')
@@ -25,7 +35,7 @@ export function corsHeaders(req: Request): Record<string, string> {
   const allowedOrigins = configured?.length ? configured : DEFAULT_ALLOWED_ORIGINS
 
   return {
-    'Access-Control-Allow-Origin': !origin || allowedOrigins.includes(origin) ? (origin ?? '*') : 'null',
+    'Access-Control-Allow-Origin': !origin || isOriginAllowed(origin, allowedOrigins) ? (origin ?? '*') : 'null',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Vary': 'Origin',

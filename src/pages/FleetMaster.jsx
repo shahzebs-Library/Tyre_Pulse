@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -84,6 +85,7 @@ const STATUS_BADGE = {
 const TABS = ['Records', 'Bulk Upload']
 
 export default function FleetMaster() {
+  const navigate = useNavigate()
   const { profile } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
 
@@ -369,7 +371,13 @@ export default function FleetMaster() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div />
         <div className="flex gap-2 flex-wrap">
-          <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm">
+          <button
+            onClick={() => navigate('/data-intake?module=fleet')}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            <Upload size={15} /> Import via Data Intake Center
+          </button>
+          <button onClick={openAdd} className="btn-secondary flex items-center gap-2 text-sm">
             <Plus size={15} /> Add Vehicle
           </button>
           <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-sm">
@@ -520,6 +528,17 @@ export default function FleetMaster() {
             <p className="text-xs text-gray-400 mb-4">
               Upload a .xlsx file with fleet vehicle data. Records are upserted on Asset No (existing records updated, new ones created).
               Download the template first to ensure correct column headers.
+            </p>
+            <p className="text-xs text-gray-500 mb-4">
+              New: use the controlled{' '}
+              <button
+                type="button"
+                onClick={() => navigate('/data-intake?module=fleet')}
+                className="text-green-400 hover:text-green-300 underline underline-offset-2"
+              >
+                Data Intake Center
+              </button>{' '}
+              for validated, audited, multi-country imports with duplicate detection and rollback.
             </p>
 
             {uploadStep === 'idle' && (

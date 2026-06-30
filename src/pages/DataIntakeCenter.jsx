@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   UploadCloud, FileSpreadsheet, Wand2, ShieldCheck, CheckCircle2, AlertTriangle,
   Loader2, ArrowRight, ArrowLeft, RefreshCw, Database, Save, Bookmark,
@@ -33,8 +33,14 @@ export default function DataIntakeCenter() {
   const isElevated = ELEVATED.includes(String(profile?.role || '').toLowerCase())
   const countryReady = activeCountry && activeCountry !== 'All'
 
+  const [searchParams] = useSearchParams()
+  const initialModule = (() => {
+    const requested = String(searchParams.get('module') || '').toLowerCase()
+    return MODULES.some((m) => m.key === requested) ? requested : 'fleet'
+  })()
+
   const [step, setStep] = useState(0)
-  const [module, setModule] = useState('fleet')
+  const [module, setModule] = useState(initialModule)
   const [file, setFile] = useState(null)
   const [parsed, setParsed] = useState(null)
   const [sheetIdx, setSheetIdx] = useState(0)

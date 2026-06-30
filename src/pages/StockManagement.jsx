@@ -1,9 +1,10 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package } from 'lucide-react'
+import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package, Upload } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -42,6 +43,7 @@ function firstOfMonth() {
 }
 
 export default function StockManagement() {
+  const navigate = useNavigate()
   const { profile } = useAuth()
   const { appSettings, activeCountry } = useSettings()
   const [records, setRecords]       = useState([])
@@ -444,18 +446,35 @@ export default function StockManagement() {
       />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div />
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => navigate('/data-intake?module=stock')}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            <Upload size={15} /> Import via Data Intake Center
+          </button>
           <button onClick={exportExcel} className="btn-secondary text-xs flex items-center gap-1.5">
             <Download size={14} /> Excel
           </button>
           <button onClick={exportPdf} className="btn-secondary text-xs flex items-center gap-1.5">
             <FileText size={14} /> PDF
           </button>
-          <button onClick={startAdd} className="btn-primary flex items-center gap-2 text-sm">
+          <button onClick={startAdd} className="btn-secondary flex items-center gap-2 text-sm">
             <Plus size={16} /> Add Stock
           </button>
         </div>
       </div>
+      <p className="text-xs text-gray-500 -mt-1">
+        New: use the controlled{' '}
+        <button
+          type="button"
+          onClick={() => navigate('/data-intake?module=stock')}
+          className="text-green-400 hover:text-green-300 underline underline-offset-2"
+        >
+          Data Intake Center
+        </button>{' '}
+        for validated, audited, multi-country imports with duplicate detection and rollback.
+      </p>
 
       {/* Tabs */}
       <div className="flex gap-2">

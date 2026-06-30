@@ -167,10 +167,18 @@ CREATE TRIGGER set_updated_at_vehicle_fleet
 
 ALTER TABLE public.vehicle_fleet ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "vehicle_fleet_select" ON public.vehicle_fleet;
+DROP POLICY IF EXISTS "vehicle_fleet_insert" ON public.vehicle_fleet;
+DROP POLICY IF EXISTS "vehicle_fleet_update" ON public.vehicle_fleet;
+DROP POLICY IF EXISTS "vehicle_fleet_delete" ON public.vehicle_fleet;
 DROP POLICY IF EXISTS "vehicle_fleet_write"  ON public.vehicle_fleet;
-CREATE POLICY "vehicle_fleet_select" ON public.vehicle_fleet FOR SELECT TO authenticated USING (true);
-CREATE POLICY "vehicle_fleet_write"  ON public.vehicle_fleet FOR ALL    TO authenticated
-  USING (auth.role() = 'authenticated') WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "vehicle_fleet_select" ON public.vehicle_fleet FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "vehicle_fleet_insert" ON public.vehicle_fleet FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() IS NOT NULL AND auth.role() = 'authenticated');
+CREATE POLICY "vehicle_fleet_update" ON public.vehicle_fleet FOR UPDATE TO authenticated
+  USING (auth.uid() IS NOT NULL AND auth.role() = 'authenticated')
+  WITH CHECK (auth.uid() IS NOT NULL AND auth.role() = 'authenticated');
+CREATE POLICY "vehicle_fleet_delete" ON public.vehicle_fleet FOR DELETE TO authenticated
+  USING (auth.uid() IS NOT NULL AND auth.role() = 'authenticated');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- TYRE RECORDS

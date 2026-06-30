@@ -51,15 +51,15 @@ export async function uploadInspectionPhoto(
     const bytes = decodeBase64(base64)
 
     const { error } = await supabase.storage
-      .from('inspection-photos')
-      .upload(path, bytes, { contentType, upsert: false })
+      .from('tyre-photos')
+      .upload(path, bytes, { contentType, upsert: true })
 
     if (error) {
       if (__DEV__) console.warn('[photoUpload] Storage upload error:', error.message)
       return null
     }
 
-    return storageRef('inspection-photos', path)
+    return storageRef('tyre-photos', path)
   } catch (err: any) {
     if (__DEV__) console.warn('[photoUpload] Unexpected error:', err?.message)
     return null

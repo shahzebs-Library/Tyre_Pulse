@@ -14,6 +14,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
+import * as FileSystem from 'expo-file-system'
 import { TyrePositionData } from '../lib/types'
 import { CONDITION_META, CONDITIONS, SHOW_TREAD_DEPTH } from '../lib/tyreConditions'
 import { lookupTyreBySerial, TyreLookupRecord } from '../lib/tyreLookup'
@@ -83,16 +84,21 @@ export default function TyreEditor({ data, onChange }: Props) {
   async function uploadPhoto(localUri: string) {
     setUploadState('uploading')
     try {
-      const response = await fetch(localUri)
-      const blob = await response.blob()
+      const rawExt = localUri.split('.').pop()?.toLowerCase() ?? 'jpg'
+      const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
+      const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
-      const ext       = 'jpg'
-      const safePosId = data.position.replace(/[^a-zA-Z0-9]/g, '_')
-      const path      = `photos/${Date.now()}_${safePosId}.${ext}`
+      const safePosId = data.position.replace(/[^a-zA-Z0-9_-]/g, '_')
+      const path = `photos/${Date.now()}_${safePosId}.${ext}`
+
+      const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: 'base64' })
+      const binaryString = atob(base64)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
 
       const { error: uploadError } = await supabase.storage
         .from('tyre-photos')
-        .upload(path, blob, { contentType: 'image/jpeg', upsert: true })
+        .upload(path, bytes, { contentType, upsert: true })
 
       if (uploadError) throw uploadError
 

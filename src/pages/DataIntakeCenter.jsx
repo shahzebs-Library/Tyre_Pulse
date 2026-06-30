@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   parseWorkbook, sha256OfArrayBuffer, suggestMapping, transformRow, validateRow,
-  classifyDuplicates, rowFingerprint, MODULE_FIELDS,
+  classifyDuplicates, naturalKey, rowFingerprint, MODULE_FIELDS,
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
 
@@ -143,8 +143,8 @@ export default function DataIntakeCenter() {
     } finally { setBusy(false) }
   }
 
-  // ── Step 3: validate + classify ──────────────────────────────────────────────
-  function runValidation() {
+  // ── Step 3: validate + classify (in-batch + live-table dedup) ────────────────
+  async function runValidation() {
     const rows = sheet.rows.map((raw, i) => {
       const { mapped, transformed, custom } = transformRow(raw, mapping, { module })
       const v = validateRow(transformed, module)
@@ -154,13 +154,44 @@ export default function DataIntakeCenter() {
         fingerprint: rowFingerprint(raw),
       }
     })
+
+    // In-batch duplicate classification (rows that repeat within this file).
     const withDup = classifyDuplicates(rows.map((r) => r.transformed), module)
     rows.forEach((r, i) => { r.dupStatus = withDup[i]?.dup_status || 'none' })
-    const c = { total: rows.length, ready: 0, warning: 0, error: 0, duplicate: 0, conflict: 0 }
+
+    // Live-table duplicate detection (V47). Fault-tolerant: if the RPC is not yet
+    // deployed or errors, fall back to in-batch dedup only — never break the wizard.
+    let liveKeys = null
+    try {
+      liveKeys = await imports.existingKeys({ module, country: activeCountry })
+    } catch (err) {
+      console.warn('Live duplicate detection unavailable; using in-batch dedup only.', err)
+    }
+
+    // Default action: reject errors; insert everything else. A row whose natural
+    // key already exists live is flagged duplicate and switched to 'skip' so the
+    // commit never creates a second live row (conflicts are left for the operator).
+    rows.forEach((r) => {
+      let action = r.validationStatus === 'error' ? 'reject' : 'insert'
+      let isLiveDup = false
+      if (liveKeys && r.validationStatus !== 'error') {
+        const key = naturalKey(r.transformed, module)
+        if (key && liveKeys.has(key)) {
+          isLiveDup = true
+          if (r.dupStatus !== 'conflict') r.dupStatus = 'duplicate'
+          action = 'skip'
+        }
+      }
+      r.liveDuplicate = isLiveDup
+      r.action = action
+    })
+
+    const c = { total: rows.length, ready: 0, warning: 0, error: 0, duplicate: 0, conflict: 0, liveDuplicate: 0 }
     rows.forEach((r) => {
       c[r.validationStatus] = (c[r.validationStatus] || 0) + 1
       if (r.dupStatus === 'duplicate') c.duplicate++
       if (r.dupStatus === 'conflict') c.conflict++
+      if (r.liveDuplicate) c.liveDuplicate++
     })
     setAnnotated(rows); setCounts(c)
   }
@@ -172,7 +203,7 @@ export default function DataIntakeCenter() {
       await imports.stageRows(batchId, annotated.map((r) => ({
         sheetName: sheet.name, sourceRowNo: r.sourceRowNo, raw: r.raw, mapped: r.mapped,
         transformed: r.transformed, custom: r.custom, validationStatus: r.validationStatus,
-        dupStatus: r.dupStatus, action: r.validationStatus === 'error' ? 'reject' : 'insert',
+        dupStatus: r.dupStatus, action: r.action ?? (r.validationStatus === 'error' ? 'reject' : 'insert'),
         fingerprint: r.fingerprint,
       })))
       await imports.setBatchCounts(batchId, counts)
@@ -320,8 +351,8 @@ export default function DataIntakeCenter() {
       {step === 2 && (
         <div className="space-y-4">
           {counts && (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {[['Total', counts.total, 'text-white'], ['Ready', counts.ready, 'text-green-400'], ['Warning', counts.warning, 'text-amber-400'], ['Error', counts.error, 'text-red-400'], ['Duplicate', counts.duplicate, 'text-purple-400']].map(([l, v, c]) => (
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+              {[['Total', counts.total, 'text-white'], ['Ready', counts.ready, 'text-green-400'], ['Warning', counts.warning, 'text-amber-400'], ['Error', counts.error, 'text-red-400'], ['Duplicate', counts.duplicate, 'text-purple-400'], ['Already live', counts.liveDuplicate || 0, 'text-sky-400']].map(([l, v, c]) => (
                 <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-3"><p className="text-xs text-gray-500">{l}</p><p className={`text-2xl font-bold ${c}`}>{v}</p></div>
               ))}
             </div>
@@ -334,7 +365,7 @@ export default function DataIntakeCenter() {
                   <tr key={r.sourceRowNo} className="border-t border-gray-800">
                     <td className="px-3 py-1.5 text-gray-500">{r.sourceRowNo}</td>
                     <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${statusColor(r.validationStatus)}`}>{r.validationStatus}</span></td>
-                    <td className="px-3 py-1.5 text-xs text-gray-400">{r.dupStatus !== 'none' ? r.dupStatus : '—'}</td>
+                    <td className="px-3 py-1.5 text-xs text-gray-400">{r.liveDuplicate ? <span className="text-sky-400">already live · skip</span> : r.dupStatus !== 'none' ? r.dupStatus : '—'}</td>
                     <td className="px-3 py-1.5 text-xs text-gray-500 truncate max-w-[280px]">{r.issues.map((i) => i.message).join('; ') || '—'}</td>
                   </tr>
                 ))}

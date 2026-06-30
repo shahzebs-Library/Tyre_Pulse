@@ -248,4 +248,25 @@ export function classifyDuplicates(rows, module) {
   })
 }
 
+/**
+ * Compute the natural key for a single row in a module — the SAME key the
+ * server RPC import_existing_keys() builds, so UI live-dedup and tests stay in
+ * lockstep with the database. Returns null when the identifying component is
+ * absent (key not usable for matching).
+ *
+ *   fleet : country + asset_no
+ *   tyre  : country + serial_no
+ *   stock : country + site + description
+ *
+ * @param {Record<string,*>} row    Transformed row (flat) or { transformed }.
+ * @param {'fleet'|'tyre'|'stock'} module
+ * @returns {string|null}
+ */
+export function naturalKey(row, module) {
+  const keyFn = NATURAL_KEY[module]
+  if (!keyFn) throw new Error(`naturalKey: unknown module "${module}"`)
+  const view = row && row.transformed && typeof row.transformed === 'object' ? row.transformed : row
+  return keyFn(view || {})
+}
+
 export { NATURAL_KEY }

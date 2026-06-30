@@ -29,4 +29,4 @@ export { suggestMapping, AUTO_THRESHOLD, SUGGEST_THRESHOLD } from './mapping'
 
 export { transformRow } from './transform'
 
-export { validateRow, classifyDuplicates, NATURAL_KEY } from './validate'
+export { validateRow, classifyDuplicates, naturalKey, NATURAL_KEY } from './validate'

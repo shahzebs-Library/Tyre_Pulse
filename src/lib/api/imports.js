@@ -162,6 +162,26 @@ export async function commitBatch(batchId) {
   return data
 }
 
+/**
+ * Live-table duplicate detection (V47). Returns the set of natural-key strings
+ * already present in the module's live table for the caller's organisation, so
+ * the Data Intake Center can skip re-importing an existing record. The key is
+ * built server-side identically to validate.naturalKey().
+ *
+ * @param {{ module: 'fleet'|'tyre'|'stock', country?: string }} params
+ * @returns {Promise<Set<string>>}
+ */
+export async function existingKeys({ module, country }) {
+  const { data, error } = await supabase.rpc('import_existing_keys', {
+    p_module: module,
+    p_country: country ?? null,
+  })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  // RPC returns SETOF text → array of strings (rows) or array of { import_existing_keys }.
+  const keys = (data || []).map((r) => (typeof r === 'string' ? r : r?.import_existing_keys)).filter(Boolean)
+  return new Set(keys)
+}
+
 export async function reverseBatch(batchId) {
   const { data, error } = await supabase.rpc('import_reverse_batch', { p_batch_id: batchId })
   if (error) throw new ServiceError(error.message, error.code, error)

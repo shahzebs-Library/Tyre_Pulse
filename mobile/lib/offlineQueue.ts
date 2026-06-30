@@ -2,6 +2,7 @@ import { OfflineInspection, InspectionPayload } from './types'
 import { supabase } from './supabase'
 import { uploadAllPositionPhotos } from './photoUpload'
 import { secureStorage } from './secureStorage'
+import { notifySyncSuccess, notifySyncFailure } from './notifications'
 
 const QUEUE_KEY = 'tp_inspection_queue_v1'
 
@@ -86,6 +87,14 @@ export async function syncQueue(): Promise<{ synced: number; failed: number }> {
   }
 
   await saveQueue(queue)
+
+  // Fire local notifications so the user knows sync outcome even if the app
+  // is backgrounded when SyncBanner triggers an auto-sync on reconnect.
+  await Promise.all([
+    notifySyncSuccess(synced),
+    notifySyncFailure(failed),
+  ])
+
   return { synced, failed }
 }
 

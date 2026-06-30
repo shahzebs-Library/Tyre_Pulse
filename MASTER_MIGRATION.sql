@@ -84,11 +84,13 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at   timestamptz DEFAULT now()
 );
 
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS employee_id    text;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS approved       boolean DEFAULT false;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS country        text[];
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS pending_reason text;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS org_id        uuid REFERENCES public.organisations(id);
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS employee_id             text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS approved                boolean DEFAULT false;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS country                 text[];
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS pending_reason          text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS org_id                  uuid REFERENCES public.organisations(id);
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS push_token              text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS push_token_updated_at  timestamptz;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_org_id ON public.profiles(org_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_role   ON public.profiles(role);

@@ -34,6 +34,7 @@ const CorrectiveActions      = lazy(() => import('./pages/CorrectiveActions'))
 const RcaRecords             = lazy(() => import('./pages/RcaRecords'))
 const DataCleaning           = lazy(() => import('./pages/DataCleaning'))
 const UploadData             = lazy(() => import('./pages/UploadData'))
+const DataIntakeCenter       = lazy(() => import('./pages/DataIntakeCenter'))
 const UploadApprovals        = lazy(() => import('./pages/UploadApprovals'))
 const Settings               = lazy(() => import('./pages/Settings'))
 const Analytics              = lazy(() => import('./pages/Analytics'))
@@ -222,6 +223,7 @@ function MainApp() {
                       <Route path="/users"       element={<Safe><ModuleRoute moduleKey="user_management"><UserManagement /></ModuleRoute></Safe>} />
                       {/* ── Universal ── */}
                       <Route path="/upload"      element={<Safe><UploadData /></Safe>} />
+                      <Route path="/data-intake" element={<Safe><DataIntakeCenter /></Safe>} />
                       <Route path="/upload-approvals" element={<Safe><UploadApprovals /></Safe>} />
                       <Route path="/custom-data" element={<Safe><CustomData /></Safe>} />
                       <Route path="/settings"    element={<Safe><Settings /></Safe>} />

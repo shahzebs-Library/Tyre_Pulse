@@ -353,7 +353,7 @@ export default function KnowledgeBase() {
       <PageHeader
         title="Knowledge Base"
         subtitle="RAG document ingestion for AI context retrieval"
-        icon={<BookOpen className="w-5 h-5 text-green-400" />}
+        icon={BookOpen}
       />
 
       {/* Stats */}

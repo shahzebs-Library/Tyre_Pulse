@@ -174,7 +174,7 @@ export default function AiCostMonitor() {
       <PageHeader
         title="AI Cost Monitor"
         subtitle="Token usage, spend tracking, and cost analysis"
-        icon={<DollarSign className="w-5 h-5 text-green-400" />}
+        icon={DollarSign}
       />
 
       {/* Toolbar */}

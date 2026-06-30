@@ -22,7 +22,7 @@
 | **1** | Staging schema + commit framework | **DONE** — `import_files/batches/batch_sheets/rows/row_issues/mapping_profiles/mapping_rules/attachment_matches/custom_field_catalog/import_audit_events` (V45); `import_commit_batch/import_reverse_batch/import_reprocess_row/import_target_table` (V46); private `import-files` bucket |
 | **1b** | Country-scope gate + role-based approval RPC + PWA cache exclusions + shared parse/map/validate engine (`src/lib/import/*`) | **Next** — closes the §6 gaps in the audit / §3–§6 of the security plan |
 | **2** | Priority adapters: **Fleet → Tyre → Stock** | **DONE** — engine wired end-to-end for all 3 (parse→map→validate→in-batch+**live-table** dedup→commit); `import_existing_keys` RPC (V47) skips re-imports of existing live records; legacy uploaders (FleetMaster/StockManagement/UploadData) route into the engine via `?module=`; reconciliation report on history; 421 tests incl. Arabic-header/cross-country/dup-serial-as-event/negative-stock scenarios |
-| **3** | Accidents + attachments (ZIP packages, private docs) | Pending 2 |
+| **3** | Accidents + attachments (ZIP packages, private docs) | **DONE** — accident adapter (ACCIDENT_FIELDS EN+AR synonyms, financial-integrity validation, country+claim_no/police_report_no natural key), live-dedup branch (V48), ZIP evidence ingestion (`attachments.js` extract+match by claim/police/asset → private `import-files` bucket → `import_attachment_matches`), legacy `Accidents.jsx` routed into engine; 450 tests |
 | **4** | Remaining: inspections, work orders, warranty, suppliers, drivers, gate pass, GPS/ERP, custom | Pending 3 |
 
 Ordering rationale: Fleet first (simplest natural key, feeds asset references),

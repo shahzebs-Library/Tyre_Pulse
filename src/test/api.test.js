@@ -13,9 +13,12 @@ const h = vi.hoisted(() => {
       select() { return b },
       order() { return b },
       limit() { return b },
+      insert(v) { calls.insert = v; return b },
+      update(v) { calls.update = v; return b },
       eq(c, v) { calls.eq.push([c, v]); return b },
       or(e) { calls.or.push(e); return b },
       maybeSingle() { return Promise.resolve(state.result) },
+      single() { return Promise.resolve(state.result) },
       then(onF, onR) { return Promise.resolve(state.result).then(onF, onR) },
     }
     state.last = b
@@ -26,7 +29,8 @@ const h = vi.hoisted(() => {
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
 
-const { assets, tyres, ServiceError, applyCountry } = await import('../lib/api')
+const { assets, tyres, stock, workOrders, inspections, accidents, ServiceError, applyCountry } =
+  await import('../lib/api')
 
 beforeEach(() => {
   h.state.result = { data: [], error: null }
@@ -78,6 +82,65 @@ describe('service layer — tyres', () => {
     const t = await tyres.getTyreBySerial('SN1')
     expect(h.state.last._calls.eq).toContainEqual(['serial_no', 'SN1'])
     expect(t).toEqual({ serial_no: 'SN1' })
+  })
+})
+
+describe('service layer — stock', () => {
+  it('lists from stock_records and returns data', async () => {
+    h.state.result = { data: [{ id: 's1' }], error: null }
+    const rows = await stock.listStock({ limit: 10 })
+    expect(h.state.last._table).toBe('stock_records')
+    expect(rows).toEqual([{ id: 's1' }])
+  })
+
+  it('applies a null-safe country filter and filters by stock status', async () => {
+    await stock.listStock({ country: 'KSA', status: 'Low' })
+    expect(h.state.last._calls.or).toContain('country.eq.KSA,country.is.null')
+    expect(h.state.last._calls.eq).toContainEqual(['stock_status', 'Low'])
+  })
+})
+
+describe('service layer — workOrders', () => {
+  it('lists from work_orders and applies country filter', async () => {
+    await workOrders.listWorkOrders({ country: 'UAE', status: 'Open' })
+    expect(h.state.last._table).toBe('work_orders')
+    expect(h.state.last._calls.or).toContain('country.eq.UAE,country.is.null')
+    expect(h.state.last._calls.eq).toContainEqual(['status', 'Open'])
+  })
+
+  it('does NOT filter country for "All"', async () => {
+    await workOrders.listWorkOrders({ country: 'All' })
+    expect(h.state.last._calls.or).toHaveLength(0)
+  })
+})
+
+describe('service layer — inspections', () => {
+  it('lists from inspections and applies country filter', async () => {
+    await inspections.listInspections({ country: 'Oman', severity: 'High' })
+    expect(h.state.last._table).toBe('inspections')
+    expect(h.state.last._calls.or).toContain('country.eq.Oman,country.is.null')
+    expect(h.state.last._calls.eq).toContainEqual(['severity', 'High'])
+  })
+
+  it('getInspection looks up by id via maybeSingle', async () => {
+    h.state.result = { data: { id: 'i1' }, error: null }
+    const i = await inspections.getInspection('i1')
+    expect(h.state.last._calls.eq).toContainEqual(['id', 'i1'])
+    expect(i).toEqual({ id: 'i1' })
+  })
+})
+
+describe('service layer — accidents', () => {
+  it('lists from accidents and applies country filter', async () => {
+    await accidents.listAccidents({ country: 'Qatar', status: 'Open' })
+    expect(h.state.last._table).toBe('accidents')
+    expect(h.state.last._calls.or).toContain('country.eq.Qatar,country.is.null')
+    expect(h.state.last._calls.eq).toContainEqual(['status', 'Open'])
+  })
+
+  it('throws a ServiceError on a Supabase error', async () => {
+    h.state.result = { data: null, error: { message: 'boom', code: '42501' } }
+    await expect(accidents.listAccidents()).rejects.toBeInstanceOf(ServiceError)
   })
 })
 

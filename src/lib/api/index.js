@@ -8,4 +8,8 @@
  */
 export * as assets from './assets'
 export * as tyres from './tyres'
+export * as stock from './stock'
+export * as workOrders from './workOrders'
+export * as inspections from './inspections'
+export * as accidents from './accidents'
 export { ServiceError, unwrap, applyCountry } from './_client'

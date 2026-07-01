@@ -17,7 +17,8 @@ RETURNS text LANGUAGE sql IMMUTABLE AS $$
   SELECT (jsonb_build_object(
     'fleet','vehicle_fleet', 'tyre','tyre_records', 'stock','stock_records',
     'accident','accidents', 'inspection','inspections', 'workorder','work_orders',
-    'warranty','warranty_claims', 'gatepass','gate_passes'
+    'warranty','warranty_claims', 'gatepass','gate_passes',
+    'supplier','suppliers', 'driver','drivers'
   )) ->> p_module;
 $$;
 

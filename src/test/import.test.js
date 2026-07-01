@@ -4,6 +4,7 @@ import {
   transformRow,
   validateRow,
   classifyDuplicates,
+  countryConflict,
   exactAlias,
   parseDelimitedText,
   detectHeaderRow,
@@ -138,6 +139,21 @@ describe('import engine — tyre spend derivation', () => {
     expect(transformed.cost_per_tyre).toBe(450)
     expect(transformed.line_total).toBe(900)
     expect(transformed.total_amount).toBeUndefined() // display-only alias dropped
+  })
+})
+
+describe('import engine — country-scope guard', () => {
+  it('flags a row whose country differs from the selected import country', () => {
+    expect(countryConflict({ country: 'UAE' }, 'KSA')).toBe(true)
+    expect(countryConflict({ country: 'United Arab Emirates' }, 'KSA')).toBe(true)
+  })
+  it('treats country aliases as the same country (no false conflict)', () => {
+    expect(countryConflict({ country: 'Saudi Arabia' }, 'KSA')).toBe(false)
+    expect(countryConflict({ country: 'SA' }, 'ksa')).toBe(false)
+  })
+  it('does not flag rows with no country value', () => {
+    expect(countryConflict({ asset_no: 'A1' }, 'KSA')).toBe(false)
+    expect(countryConflict({ country: '' }, 'KSA')).toBe(false)
   })
 })
 

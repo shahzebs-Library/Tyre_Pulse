@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   parseWorkbook, sha256OfArrayBuffer, suggestMapping, transformRow, validateRow,
-  classifyDuplicates, naturalKey, rowFingerprint, MODULE_FIELDS,
+  classifyDuplicates, naturalKey, countryConflict, rowFingerprint, MODULE_FIELDS,
   extractZip, matchAttachment, buildMatchRows,
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
@@ -65,6 +65,7 @@ export default function DataIntakeCenter() {
   const [result, setResult] = useState(null)
   const [recent, setRecent] = useState([])
   const [files, setFiles] = useState([])
+  const [countryAck, setCountryAck] = useState(false)
 
   // Accident-only: evidence ZIP ingestion (Phase 3). Each item tracks one file
   // through extract → match → upload → record, with a per-file status/error so a
@@ -129,7 +130,7 @@ export default function DataIntakeCenter() {
 
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null)
-    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setError(''); setProfiles([])
+    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setError(''); setProfiles([]); setCountryAck(false)
     setAttachItems([]); setAttachWarnings([]); setAttachDone(false); setAttachBusy(false)
   }
 
@@ -223,6 +224,21 @@ export default function DataIntakeCenter() {
       }
     })
 
+    // Country-scope guard (directive rule #1: never mix countries). A row whose
+    // own country value disagrees with the selected import country is flagged for
+    // review — never silently re-filed under the selected country.
+    setCountryAck(false)
+    rows.forEach((r) => {
+      if (countryConflict(r.transformed, activeCountry)) {
+        r.countryConflict = true
+        r.issues = [...(r.issues || []), {
+          field: 'country', severity: 'warning', code: 'COUNTRY_MISMATCH',
+          message: `Row country "${r.transformed.country}" differs from the selected import country ${activeCountry}.`,
+        }]
+        if (r.validationStatus === 'ready') r.validationStatus = 'warning'
+      }
+    })
+
     // In-batch duplicate classification (rows that repeat within this file).
     const withDup = classifyDuplicates(rows.map((r) => r.transformed), module)
     rows.forEach((r, i) => { r.dupStatus = withDup[i]?.dup_status || 'none' })
@@ -254,12 +270,13 @@ export default function DataIntakeCenter() {
       r.action = action
     })
 
-    const c = { total: rows.length, ready: 0, warning: 0, error: 0, duplicate: 0, conflict: 0, liveDuplicate: 0, amount: 0, qty: 0 }
+    const c = { total: rows.length, ready: 0, warning: 0, error: 0, duplicate: 0, conflict: 0, liveDuplicate: 0, countryConflict: 0, amount: 0, qty: 0 }
     rows.forEach((r) => {
       c[r.validationStatus] = (c[r.validationStatus] || 0) + 1
       if (r.dupStatus === 'duplicate') c.duplicate++
       if (r.dupStatus === 'conflict') c.conflict++
       if (r.liveDuplicate) c.liveDuplicate++
+      if (r.countryConflict) c.countryConflict++
       // Roll up spend for the batch: prefer the derived per-line total, else
       // fall back to qty × unit cost. Only meaningful for tyre imports.
       const t = r.transformed || {}
@@ -277,6 +294,10 @@ export default function DataIntakeCenter() {
   useEffect(() => { if (step === 2 && sheet && mapping.length) runValidation() }, [step]) // eslint-disable-line
 
   async function stageAll() {
+    if (counts?.countryConflict > 0 && !countryAck) {
+      setError(`${counts.countryConflict} row(s) have a country that differs from ${activeCountry}. Confirm the override to continue.`)
+      return
+    }
     setError(''); setBusy(true)
     try {
       await imports.stageRows(batchId, annotated.map((r) => ({
@@ -519,9 +540,19 @@ export default function DataIntakeCenter() {
               </tbody>
             </table>
           </div>
+          {counts?.countryConflict > 0 && (
+            <div className="bg-amber-900/20 border border-amber-600/50 rounded-xl p-4 space-y-2">
+              <p className="text-sm text-amber-300 flex items-center gap-2"><AlertTriangle size={16} /> {counts.countryConflict} row(s) carry a country that differs from the selected import country <span className="font-semibold">{activeCountry}</span>.</p>
+              <p className="text-xs text-gray-400">To protect country isolation these will be committed under <span className="text-gray-200">{activeCountry}</span> only if you explicitly confirm the override. The original country value is preserved in the source row either way.</p>
+              <label className="flex items-center gap-2 text-sm text-amber-200 cursor-pointer">
+                <input type="checkbox" checked={countryAck} onChange={(e) => setCountryAck(e.target.checked)} className="accent-amber-500" />
+                I confirm these rows belong to {activeCountry} and approve the override.
+              </label>
+            </div>
+          )}
           <div className="flex gap-2">
             <button onClick={() => setStep(1)} className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm flex items-center gap-2"><ArrowLeft size={15} /> Back</button>
-            <button onClick={stageAll} disabled={busy} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} Stage & continue</button>
+            <button onClick={stageAll} disabled={busy || (counts?.countryConflict > 0 && !countryAck)} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} Stage & continue</button>
           </div>
         </div>
       )}

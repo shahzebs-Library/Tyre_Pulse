@@ -382,4 +382,45 @@ export function naturalKey(row, module) {
   return keyFn(view || {})
 }
 
+/* ── Country-scope guard ──────────────────────────────────────────────────────
+ * The directive's first rule: never mix one country's records into another. When
+ * a source row carries its OWN country value that disagrees with the country the
+ * import is scoped to, it must be flagged for review — never silently re-filed.
+ */
+const COUNTRY_ALIASES = {
+  ksa:     ['ksa', 'sa', 'sau', 'saudi', 'saudi arabia', 'kingdom of saudi arabia', 'k s a', 'المملكة العربية السعودية', 'السعودية'],
+  uae:     ['uae', 'ae', 'are', 'u a e', 'united arab emirates', 'emirates', 'الإمارات', 'الامارات'],
+  qatar:   ['qatar', 'qa', 'qat', 'قطر'],
+  bahrain: ['bahrain', 'bh', 'bhr', 'البحرين'],
+  kuwait:  ['kuwait', 'kw', 'kwt', 'الكويت'],
+  oman:    ['oman', 'om', 'omn', 'عمان'],
+}
+
+/** Canonicalise a country token via aliases; unknown values compare literally. */
+function countryCanon(v) {
+  const s = norm(v).replace(/[.\-_]/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!s) return ''
+  for (const [canon, aliases] of Object.entries(COUNTRY_ALIASES)) {
+    if (canon === s || aliases.includes(s)) return canon
+  }
+  return s
+}
+
+/**
+ * True when a row's own country value clearly disagrees with the selected import
+ * country. A blank row country (the common case) never conflicts.
+ *
+ * @param {Record<string,*>} transformed   Transformed row (or { transformed }).
+ * @param {string} selectedCountry         The country the import is scoped to.
+ * @returns {boolean}
+ */
+export function countryConflict(transformed, selectedCountry) {
+  const view = transformed && transformed.transformed && typeof transformed.transformed === 'object'
+    ? transformed.transformed : (transformed || {})
+  const rowC = countryCanon(view.country)
+  const selC = countryCanon(selectedCountry)
+  if (!rowC || !selC) return false
+  return rowC !== selC
+}
+
 export { NATURAL_KEY }

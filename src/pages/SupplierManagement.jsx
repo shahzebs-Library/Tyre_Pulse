@@ -5,6 +5,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
 import PageHeader from '../components/ui/PageHeader'
 import {
   Building2, Star, TrendingUp, TrendingDown, Minus, Award, AlertTriangle,
@@ -30,7 +31,7 @@ ChartJS.register(
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CPK_BENCHMARK = 1.20
 const FAILURE_THRESHOLD = 0.15
-const TABS = ['Directory', 'Performance', 'Spend Analysis', 'Contracts', 'Recommendations']
+const TABS = ['Directory', 'Performance', 'Spend Analysis', 'Contracts', 'Recommendations', 'Scorecard']
 const RATINGS = ['Preferred', 'Approved', 'Under Review', 'Probation']
 // Categorical rating <-> numeric (rating column is numeric). Index is 1-based.
 const RATING_TO_NUM = RATINGS.reduce((acc, r, i) => { acc[r] = i + 1; return acc }, {})
@@ -621,6 +622,9 @@ export default function SupplierManagement() {
   const [contractsError, setContractsError] = useState(null)
   const [contractModal, setContractModal] = useState(null)
   const [contractSearch, setContractSearch] = useState('')
+  // Scorecard source data (warranty claims + purchase orders); tyres come from `records`.
+  const [scWarranty, setScWarranty] = useState([])
+  const [scPos, setScPos] = useState([])
 
   // Load tyre records
   const fetchData = useCallback(async () => {
@@ -628,7 +632,7 @@ export default function SupplierManagement() {
     setError(null)
     let q = supabase
       .from('tyre_records')
-      .select('id, brand, cost_per_tyre, issue_date, site, country, position, km_at_fitment, km_at_removal, risk_level, size, serial_number, asset_no')
+      .select('id, brand, supplier, qty, cost_per_tyre, issue_date, site, country, position, km_at_fitment, km_at_removal, risk_level, size, serial_number, asset_no')
     q = applyCountryFilter(q, activeCountry)
     const { data, error: err } = await fetchAllPages((from, to) => q.range(from, to))
     if (err) { setError(err.message); setLoading(false); return }
@@ -664,9 +668,29 @@ export default function SupplierManagement() {
     setContractsLoading(false)
   }, [activeCountry])
 
+  // Load warranty claims + purchase orders for the supplier scorecard.
+  const fetchScorecardSources = useCallback(async () => {
+    let wq = supabase.from('warranty_claims').select('id, supplier, brand, claim_status, credit_amount, country')
+    wq = applyCountryFilter(wq, activeCountry)
+    let pq = supabase.from('purchase_orders').select('id, supplier_name, vendor_name, expected_delivery, actual_delivery, country')
+    pq = applyCountryFilter(pq, activeCountry)
+    const [{ data: w }, { data: p }] = await Promise.all([wq, pq])
+    setScWarranty(w || [])
+    setScPos(p || [])
+  }, [activeCountry])
+
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { fetchRatings() }, [fetchRatings])
   useEffect(() => { fetchContracts() }, [fetchContracts])
+  useEffect(() => { fetchScorecardSources() }, [fetchScorecardSources])
+
+  // Supplier scorecard — tyre supplier falls back to brand (brand-proxied), matching
+  // this page's brand-centric model. Cost is ACTUAL only (no fabricated defaults).
+  const scorecard = useMemo(() => computeSupplierScorecard({
+    tyres: (records || []).map((r) => ({ ...r, supplier: r.supplier || r.brand })),
+    warranty: scWarranty,
+    purchaseOrders: scPos,
+  }), [records, scWarranty, scPos])
 
   // Derived: unique values for filters
   const countries = useMemo(() => ['All', ...new Set(records.map(r => r.country).filter(Boolean))], [records])
@@ -1561,6 +1585,47 @@ export default function SupplierManagement() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Tab 5: Scorecard */}
+        {activeTab === 5 && (
+          <motion.div key="scorecard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[['Suppliers', scorecard.totals.supplierCount], ['Tyres', scorecard.totals.totalTyres], ['Total spend', fmtCurrency(scorecard.totals.totalSpend, activeCurrency)], ['Warranty credit', fmtCurrency(scorecard.totals.totalWarrantyCredit, activeCurrency)]].map(([l, v]) => (
+                <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-3"><p className="text-xs text-gray-500">{l}</p><p className="text-xl font-bold text-white">{v}</p></div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500">Composite score (0–100, higher is better) blends CPK, failure rate, warranty recovery and on-time delivery. Cost is actual only; missing data is excluded, not penalised. Supplier falls back to tyre brand where a supplier is not recorded.</p>
+            <div className="border border-gray-800 rounded-xl overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-800/60 text-gray-400 text-xs">
+                  <tr>
+                    <th className="text-left px-3 py-2">#</th><th className="text-left px-3 py-2">Supplier</th>
+                    <th className="text-right px-3 py-2">Score</th><th className="text-right px-3 py-2">Tyres</th>
+                    <th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Avg CPK</th>
+                    <th className="text-right px-3 py-2">Failure %</th><th className="text-right px-3 py-2">Warranty rec.</th>
+                    <th className="text-right px-3 py-2">On-time %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scorecard.suppliers.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-600">No supplier data yet.</td></tr>}
+                  {scorecard.suppliers.map((s) => (
+                    <tr key={s.supplier} className="border-t border-gray-800">
+                      <td className="px-3 py-2 text-gray-500">{s.rank}</td>
+                      <td className="px-3 py-2 font-medium text-white">{s.supplier}</td>
+                      <td className="px-3 py-2 text-right"><span className={`px-2 py-0.5 rounded font-semibold ${s.score >= 70 ? 'bg-green-900/30 text-green-400' : s.score >= 40 ? 'bg-amber-900/30 text-amber-400' : 'bg-red-900/30 text-red-400'}`}>{s.score}</span></td>
+                      <td className="px-3 py-2 text-right text-gray-400">{s.tyreCount}</td>
+                      <td className="px-3 py-2 text-right text-gray-300">{fmtCurrency(s.totalSpend, activeCurrency)}</td>
+                      <td className="px-3 py-2 text-right text-gray-300">{s.avgCpk == null ? '—' : s.avgCpk.toFixed(3)}</td>
+                      <td className="px-3 py-2 text-right text-gray-300">{s.failureRate == null ? '—' : `${(s.failureRate * 100).toFixed(1)}%`}</td>
+                      <td className="px-3 py-2 text-right text-gray-300">{s.warrantyRecoveryRate == null ? '—' : fmtCurrency(s.warrantyRecoveryRate, activeCurrency)}</td>
+                      <td className="px-3 py-2 text-right text-gray-300">{s.onTimeRate == null ? '—' : `${(s.onTimeRate * 100).toFixed(0)}%`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </motion.div>
         )}

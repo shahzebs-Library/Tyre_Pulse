@@ -376,6 +376,19 @@ export function transformRow(rawRow, mapping, options = {}) {
     delete transformed.total_amount_currency
   }
 
+  // Work-order total: when the file doesn't carry an explicit total, sum the
+  // cost buckets so total_cost is never understated by dropped components.
+  if (module === 'workorder' && transformed.total_cost == null) {
+    const buckets = ['labour_cost', 'parts_cost', 'lubricant_cost', 'tyre_cost', 'outside_repair_cost']
+    let sum = 0
+    let any = false
+    for (const k of buckets) {
+      const v = Number(transformed[k])
+      if (Number.isFinite(v)) { sum += v; any = true }
+    }
+    if (any) transformed.total_cost = round(sum, 2)
+  }
+
   // Preserve every unmapped source column verbatim.
   /** @type {Record<string,*>} */
   const custom = {}

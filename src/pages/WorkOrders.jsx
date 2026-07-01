@@ -963,13 +963,42 @@ export default function WorkOrders() {
                   <p className="text-gray-400 text-xs mb-3">Cost Summary</p>
                   <div className="flex justify-between"><span className="text-gray-400 text-sm">Labour</span><span className="text-white text-sm">{fmtCurrency(viewOrder.labour_cost)}</span></div>
                   <div className="flex justify-between"><span className="text-gray-400 text-sm">Parts</span><span className="text-white text-sm">{fmtCurrency(viewOrder.parts_cost)}</span></div>
+                  {Number(viewOrder.lubricant_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Lubricants</span><span className="text-white text-sm">{fmtCurrency(viewOrder.lubricant_cost)}</span></div>}
+                  {Number(viewOrder.tyre_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Tyres</span><span className="text-white text-sm">{fmtCurrency(viewOrder.tyre_cost)}</span></div>}
+                  {Number(viewOrder.outside_repair_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Outside Repair</span><span className="text-white text-sm">{fmtCurrency(viewOrder.outside_repair_cost)}</span></div>}
                   <div className="flex justify-between border-t border-gray-700 pt-2 mt-2"><span className="text-white font-semibold text-sm">Total</span><span className="text-green-400 font-bold text-lg">{fmtCurrency(viewOrder.total_cost)}</span></div>
                 </div>
+
+                {/* Hours / meter */}
+                {(Number(viewOrder.labour_hours) > 0 || Number(viewOrder.standard_hours) > 0 || Number(viewOrder.breakdown_hours) > 0 || Number(viewOrder.odometer) > 0) && (
+                  <div className="bg-gray-800 rounded-xl p-4 grid grid-cols-2 gap-x-4 gap-y-2">
+                    <p className="text-gray-400 text-xs mb-1 col-span-2">Hours &amp; Meter</p>
+                    {Number(viewOrder.labour_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Labour hrs</span><span className="text-white text-sm">{viewOrder.labour_hours}</span></div>}
+                    {Number(viewOrder.standard_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Std hrs</span><span className="text-white text-sm">{viewOrder.standard_hours}</span></div>}
+                    {Number(viewOrder.breakdown_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Breakdown hrs</span><span className="text-white text-sm">{viewOrder.breakdown_hours}</span></div>}
+                    {Number(viewOrder.odometer) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Odometer</span><span className="text-white text-sm">{Number(viewOrder.odometer).toLocaleString()}</span></div>}
+                  </div>
+                )}
 
                 {viewOrder.notes && (
                   <div className="bg-gray-800 rounded-xl p-4">
                     <p className="text-gray-400 text-xs mb-2">Notes</p>
                     <p className="text-gray-300 text-sm leading-relaxed">{viewOrder.notes}</p>
+                  </div>
+                )}
+
+                {/* Preserved fields from import (nothing is discarded) */}
+                {viewOrder.custom_data && typeof viewOrder.custom_data === 'object' && Object.keys(viewOrder.custom_data).length > 0 && (
+                  <div className="bg-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-xs mb-2">Additional imported details</p>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {Object.entries(viewOrder.custom_data).map(([k, v]) => (
+                        <div key={k} className="flex justify-between gap-3 text-sm">
+                          <span className="text-gray-400 truncate">{k}</span>
+                          <span className="text-gray-200 text-right break-words">{String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

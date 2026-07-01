@@ -86,6 +86,30 @@ describe('import engine — work order mapping (real Gulf JC export)', () => {
     expect(t['Vehicle In Date']).not.toBe('asset_no')
     expect(['work_order_no', 'asset_no', 'total_cost']).not.toContain(t['Manpow Hrs'])
   })
+
+  it('maps the cost buckets (lubricants, tyres, outside repair) to real columns', () => {
+    const cols = ['Lubricants', 'Tyres', 'Outside Rep Cost', 'Total BD Hrs', 'Std Hrs', 'KM/HR']
+    const out = suggestMapping({ columns: cols, module: 'workorder' })
+    const t = Object.fromEntries(out.map((m) => [m.sourceHeader, m.target]))
+    expect(t['Lubricants']).toBe('lubricant_cost')
+    expect(t['Tyres']).toBe('tyre_cost')
+    expect(t['Outside Rep Cost']).toBe('outside_repair_cost')
+    expect(t['Total BD Hrs']).toBe('breakdown_hours')
+    expect(t['Std Hrs']).toBe('standard_hours')
+    expect(t['KM/HR']).toBe('odometer')
+  })
+
+  it('sums the cost buckets into total_cost when no explicit total is provided', () => {
+    const mapping = [
+      { sourceHeader: 'Labour', target: 'labour_cost' },
+      { sourceHeader: 'Spare', target: 'parts_cost' },
+      { sourceHeader: 'Lub', target: 'lubricant_cost' },
+      { sourceHeader: 'Tyres', target: 'tyre_cost' },
+    ]
+    const raw = { Labour: '100', Spare: '131', Lub: '69.5', Tyres: '840' }
+    const { transformed } = transformRow(raw, mapping, { module: 'workorder' })
+    expect(transformed.total_cost).toBe(1140.5)
+  })
 })
 
 describe('import engine — tyre spend derivation', () => {

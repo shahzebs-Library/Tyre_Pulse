@@ -46,7 +46,7 @@ function buildPeriodBuckets(records, granularity, defaultCost) {
     const key = getPeriodKey(r.issue_date, granularity)
     if (!key) return
     if (!map[key]) map[key] = { period: key, total: 0, count: 0 }
-    map[key].total += (r.cost_per_tyre || defaultCost) * (r.qty || 1)
+    map[key].total += (Number(r.cost_per_tyre) || 0) * (r.qty || 1)
     map[key].count += 1
   })
   return Object.values(map).sort((a, b) => a.period.localeCompare(b.period))
@@ -105,7 +105,7 @@ function ChartCardSkeleton() {
 
 // ── main component ────────────────────────────────────────────────────────────
 export default function SiteComparison() {
-  const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedSites, setSelectedSites] = useState([])
@@ -145,7 +145,7 @@ export default function SiteComparison() {
     })
   }, [records, dateFrom, dateTo])
 
-  const allMetrics = useMemo(() => computeSiteMetrics(filteredRecords, appSettings.cost_per_tyre), [filteredRecords, appSettings.cost_per_tyre])
+  const allMetrics = useMemo(() => computeSiteMetrics(filteredRecords), [filteredRecords])
   const allSites   = useMemo(() => allMetrics.map(s => s.site), [allMetrics])
 
   const filteredMetrics = useMemo(
@@ -388,7 +388,6 @@ export default function SiteComparison() {
               <TrendComparison
                 records={filteredRecords}
                 selectedSites={selectedSites}
-                defaultCost={appSettings.cost_per_tyre}
                 granularity={granularity}
                 chartRef={trendChartRef}
                 onMaximize={() => setModalOpen(true)}
@@ -404,7 +403,6 @@ export default function SiteComparison() {
         onClose={() => setModalOpen(false)}
         records={filteredRecords}
         selectedSites={selectedSites}
-        defaultCost={appSettings.cost_per_tyre}
         granularity={granularity}
         onGranularityChange={setGranularity}
         chartRef={trendChartRef}

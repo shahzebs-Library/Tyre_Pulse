@@ -44,7 +44,7 @@ const COL_WIDTHS = [40, 96, 110, 130, 96, 100, 100, 100, 88, 88, 72, 80]
 
 export default function TyreRecords() {
   const { profile } = useAuth()
-  const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
   const invalidate = useInvalidate()
 
   const [records, setRecords]         = useState([])
@@ -128,7 +128,9 @@ export default function TyreRecords() {
   })
 
   function openAdd() {
-    setForm(EMPTY_FORM(appSettings.cost_per_tyre, activeCountry !== 'All' ? activeCountry : 'KSA'))
+    // Cost is left blank so the user enters the ACTUAL cost — no settings default
+    // is written into a record.
+    setForm(EMPTY_FORM('', activeCountry !== 'All' ? activeCountry : 'KSA'))
     setEditRecord({})
     setFormError('')
   }
@@ -139,7 +141,7 @@ export default function TyreRecords() {
       brand: r.brand ?? '', serial_no: r.serial_no ?? '', qty: r.qty ?? 1,
       job_card: r.job_card ?? '', mis_number: r.mis_number ?? '', asset_no: r.asset_no ?? '',
       site: r.site ?? '', country: r.country ?? 'KSA', remarks: r.remarks ?? '',
-      cost_per_tyre: r.cost_per_tyre ?? appSettings.cost_per_tyre,
+      cost_per_tyre: r.cost_per_tyre ?? '',
       risk_level: r.risk_level ?? '', category: r.category ?? '',
       km_at_fitment: r.km_at_fitment ?? '', km_at_removal: r.km_at_removal ?? '',
     })
@@ -154,7 +156,8 @@ export default function TyreRecords() {
     const payload = {
       ...form,
       qty: +form.qty || 1,
-      cost_per_tyre: +form.cost_per_tyre || appSettings.cost_per_tyre,
+      // Store the actual entered cost, or null when left blank — never a default.
+      cost_per_tyre: form.cost_per_tyre !== '' && form.cost_per_tyre != null ? +form.cost_per_tyre : null,
       km_at_fitment: form.km_at_fitment !== '' ? +form.km_at_fitment : null,
       km_at_removal: form.km_at_removal !== '' ? +form.km_at_removal : null,
       country: form.country || 'KSA',
@@ -393,8 +396,8 @@ export default function TyreRecords() {
                 {rowVirtualizer.getVirtualItems().map(virtualRow => {
                   const r = records[virtualRow.index]
                   const rowSelected = isSelected(r.id)
-                  const cpk = r.km_at_fitment && r.km_at_removal && r.km_at_removal > r.km_at_fitment
-                    ? ((r.cost_per_tyre ?? appSettings.cost_per_tyre) / (r.km_at_removal - r.km_at_fitment)).toFixed(3)
+                  const cpk = r.cost_per_tyre != null && r.km_at_fitment && r.km_at_removal && r.km_at_removal > r.km_at_fitment
+                    ? (Number(r.cost_per_tyre) / (r.km_at_removal - r.km_at_fitment)).toFixed(3)
                     : null
 
                   return (
@@ -454,7 +457,7 @@ export default function TyreRecords() {
 
                       {/* Cost */}
                       <div className="px-4 text-gray-300 text-xs tabular-nums">
-                        {formatCurrencyCompact(r.cost_per_tyre ?? appSettings.cost_per_tyre, activeCurrency)}
+                        {r.cost_per_tyre != null ? formatCurrencyCompact(r.cost_per_tyre, activeCurrency) : <span className="text-muted">—</span>}
                       </div>
 
                       {/* CPK */}

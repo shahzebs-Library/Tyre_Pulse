@@ -445,10 +445,10 @@ export function computeRetreadPerformance(records = []) {
  * Scrap rate calculation.
  * @param {Object[]} records
  * @param {number}   [scrapKmPct=20]  – % of fleet avg km below which a removal is premature scrap
- * @param {number}   [defaultCost=1200]
+ * @param {number}   [defaultCost=0]  – cost for records with no cost_per_tyre; 0 = actual only (no fabricated default)
  * @returns {{ scrapRate, scrapCount, totalCount, estimatedScrapCost, bySite }}
  */
-export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 1200) {
+export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0) {
   const total  = records.length
   const valid  = records.filter(r => {
     const fit = Number(r.km_at_fitment)
@@ -561,10 +561,10 @@ export function computeFleetAvailability(records = [], fleetSize = 0) {
 /**
  * Monthly cost trend with linear regression and 1-month forecast.
  * @param {Object[]} records
- * @param {number}   [defaultCost=1200]
+ * @param {number}   [defaultCost=0]  – cost for records with no cost_per_tyre; 0 = actual only (no fabricated default)
  * @returns {{ byMonth, slope, trend, avgMonthlyCost, forecastNextMonth }}
  */
-export function computeCostTrend(records = [], defaultCost = 1200) {
+export function computeCostTrend(records = [], defaultCost = 0) {
   // Last 13 months
   const now   = new Date()
   const start = new Date(now.getFullYear(), now.getMonth() - 12, 1)

@@ -158,9 +158,9 @@ function buildPredictions(records, fleetMaster, fleetAvgCost, fleetAvgKmLife, fl
 
     if (active.length === 0) continue
 
-    // Cost fallback chain
+    // Actual costs only: this asset's mean, else the fleet's actual mean, else 0.
     const assetCosts = recs.map(r => r.cost_per_tyre).filter(v => v > 0)
-    const assetAvgCost = assetCosts.length > 0 ? mean(assetCosts) : (fleetAvgCost ?? 1200)
+    const assetAvgCost = assetCosts.length > 0 ? mean(assetCosts) : (fleetAvgCost || 0)
 
     for (const tyre of active) {
       const fitmentKm = tyre.km_at_fitment ?? currentKm ?? 0

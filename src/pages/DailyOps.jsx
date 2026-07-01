@@ -91,7 +91,7 @@ function addDays(iso, n) {
 }
 
 export default function DailyOps() {
-  const { appSettings, activeCurrency } = useSettings()
+  const { activeCurrency } = useSettings()
   const [selectedDate, setSelectedDate] = useState(fmtDate(new Date()))
   const [loading, setLoading] = useState(true)
   const [weekOpen, setWeekOpen] = useState(true)
@@ -148,10 +148,10 @@ export default function DailyOps() {
   const thisWeekCrit = useMemo(() => thisWeekRecs.filter(r => r.risk_level === 'Critical').length, [thisWeekRecs])
   const lastWeekCrit = useMemo(() => lastWeekRecs.filter(r => r.risk_level === 'Critical').length, [lastWeekRecs])
 
-  const thisWeekCost = useMemo(() => thisWeekRecs.reduce((s, r) => s + (r.cost_per_tyre || appSettings.cost_per_tyre || 0), 0), [thisWeekRecs, appSettings])
-  const lastWeekCost = useMemo(() => lastWeekRecs.reduce((s, r) => s + (r.cost_per_tyre || appSettings.cost_per_tyre || 0), 0), [lastWeekRecs, appSettings])
+  const thisWeekCost = useMemo(() => thisWeekRecs.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (r.qty || 1), 0), [thisWeekRecs])
+  const lastWeekCost = useMemo(() => lastWeekRecs.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (r.qty || 1), 0), [lastWeekRecs])
 
-  const todayCost = useMemo(() => todayRecs.reduce((s, r) => s + (r.cost_per_tyre || appSettings.cost_per_tyre || 0), 0), [todayRecs, appSettings])
+  const todayCost = useMemo(() => todayRecs.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (r.qty || 1), 0), [todayRecs])
 
   const dailyBudget = useMemo(() => {
     try {

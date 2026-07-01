@@ -37,7 +37,7 @@ const KPI_LABELS = {
 
 export default function KpiScorecard() {
   const { profile } = useAuth()
-  const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords]         = useState([])
   const [actions, setActions]         = useState([])
   const [targets, setTargets]         = useState(DEFAULT_TARGETS)
@@ -106,8 +106,8 @@ export default function KpiScorecard() {
   )
 
   const actuals = useMemo(() =>
-    months.map(m => computeMonthlyKpiActuals(filteredRecords, filteredActions, m, appSettings.cost_per_tyre)),
-    [filteredRecords, filteredActions, months, appSettings.cost_per_tyre]
+    months.map(m => computeMonthlyKpiActuals(filteredRecords, filteredActions, m)),
+    [filteredRecords, filteredActions, months]
   )
 
   // YoY fetch
@@ -147,10 +147,10 @@ export default function KpiScorecard() {
     const map = {}
     yoyMonths.forEach((yoyM, idx) => {
       const curM = months[idx]
-      map[curM] = computeMonthlyKpiActuals(filteredYoyRecords, filteredActions, yoyM, appSettings.cost_per_tyre)
+      map[curM] = computeMonthlyKpiActuals(filteredYoyRecords, filteredActions, yoyM)
     })
     return map
-  }, [showYoY, filteredYoyRecords, filteredActions, yoyMonths, months, appSettings.cost_per_tyre])
+  }, [showYoY, filteredYoyRecords, filteredActions, yoyMonths, months])
 
   // Cost trend with forecasts
   const costTrend = useMemo(() => {

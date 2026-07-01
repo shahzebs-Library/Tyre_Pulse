@@ -225,8 +225,9 @@ const DETAIL_TABS = ['Timeline', 'Analysis', 'Red Flags', 'Related Records', 'Fo
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function VehicleHistory() {
-  const { appSettings, activeCountry, activeCurrency } = useSettings()
-  const dc = appSettings?.cost_per_tyre || 1200
+  const { activeCountry, activeCurrency } = useSettings()
+  // Actual cost only — records without a cost contribute 0, never a default.
+  const dc = 0
 
   const [allRecords, setAllRecords]   = useState([])
   const [loading, setLoading]         = useState(true)

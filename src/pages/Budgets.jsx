@@ -83,7 +83,7 @@ export default function Budgets() {
       const spend = {}
       ;(tyreRes.data ?? []).forEach(t => {
         const key = `${t.site}~${filterYear}~${filterMonth}`
-        spend[key] = (spend[key] ?? 0) + (t.cost_per_tyre ?? appSettings.cost_per_tyre) * (t.qty ?? 1)
+        spend[key] = (spend[key] ?? 0) + (Number(t.cost_per_tyre) || 0) * (t.qty ?? 1)
       })
       setSpending(spend)
     } else {
@@ -102,7 +102,7 @@ export default function Budgets() {
         const d = new Date(t.issue_date)
         const m = d.getMonth() + 1
         const key = `${t.site}~${plannerYear}~${m}`
-        spend[key] = (spend[key] ?? 0) + (t.cost_per_tyre ?? appSettings.cost_per_tyre) * (t.qty ?? 1)
+        spend[key] = (spend[key] ?? 0) + (Number(t.cost_per_tyre) || 0) * (t.qty ?? 1)
       })
       setSpending(spend)
     }

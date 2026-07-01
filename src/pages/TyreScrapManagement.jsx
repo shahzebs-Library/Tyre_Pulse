@@ -290,7 +290,7 @@ export default function TyreScrapManagement() {
     const avgKmLife     = lives.length ? lives.reduce((a, b) => a + b, 0) / lives.length : null
     // Retread savings: 30% could have retreaded at 40% lower cost
     const retreadCandidates = Math.round(scrapCount * 0.30)
-    const avgCost           = scrapCount > 0 ? totalCost / scrapCount : appSettings?.cost_per_tyre ?? 1200
+    const avgCost           = scrapCount > 0 ? totalCost / scrapCount : 0
     const retreadSavings    = retreadCandidates * avgCost * 0.40
 
     return { scrapCount, totalCost, avgKmLife, scrapRate, retreadSavings, retreadCandidates }
@@ -378,7 +378,7 @@ export default function TyreScrapManagement() {
     const count = Math.round(thisMonthScrap.length * 0.30)
     const avgCost = thisMonthScrap.length > 0
       ? thisMonthScrap.reduce((s, t) => s + (Number(t.cost_per_tyre) || 0), 0) / thisMonthScrap.length
-      : (appSettings?.cost_per_tyre ?? 1200)
+      : 0
     const savings = count * avgCost * 0.40
     return { count, savings }
   }, [thisMonthScrap, appSettings])

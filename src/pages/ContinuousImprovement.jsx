@@ -278,7 +278,7 @@ function Toast({ message, type = 'success', onClose }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ContinuousImprovement() {
-  const { appSettings, activeCurrency, activeCountry } = useSettings()
+  const { activeCurrency, activeCountry } = useSettings()
 
   const [records, setRecords]     = useState([])
   const [actions, setActions]     = useState([])
@@ -1061,7 +1061,9 @@ export default function ContinuousImprovement() {
   // ── ROI summary ───────────────────────────────────────────────────────────────
 
   const roiSummary = useMemo(() => {
-    const avgTyreCost = metrics.avgCostPerTyre || appSettings.cost_per_tyre || 1200
+    // Actual fleet average cost only; when there is no cost data the ROI estimate
+    // stays at 0 rather than being fabricated from a settings default.
+    const avgTyreCost = Number(metrics.avgCostPerTyre) || 0
     const closedCritical = actionStats.closed.filter(a => a.priority === 'High').length
     const openCritical   = actionStats.open.filter(a => a.priority === 'High').length
     const costAvoidance  = closedCritical * avgTyreCost * 3
@@ -1077,7 +1079,7 @@ export default function ContinuousImprovement() {
       backlogRisk,
       totalSaving,
     }
-  }, [actions, actionStats, metrics, appSettings, opportunities])
+  }, [actions, actionStats, metrics, opportunities])
 
   // ── Exports ───────────────────────────────────────────────────────────────────
 

@@ -27,7 +27,9 @@ const EMPTY_FORM = {
   site: '', description: '', stock_qty: 0, min_level: 5, critical_level: 3, management_action: '',
 }
 
-const MOVEMENT_TYPES = ['In', 'Out', 'Adjustment', 'Initial', 'Reorder', 'Scrap']
+// Canonical ledger movement types (the server RPC derives +/- direction from these).
+const MOVEMENT_TYPES = ['receipt', 'return', 'transfer_in', 'adjustment_up', 'issue', 'transfer_out', 'scrap', 'adjustment_down']
+const ADD_TYPES = new Set(['receipt', 'return', 'transfer_in', 'adjustment_up', 'in', 'reorder', 'initial'])
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
@@ -184,33 +186,20 @@ export default function StockManagement() {
   }
 
   async function saveAdjustment() {
-    if (!adjForm || adjForm.qty_change === 0) return
-    const rec      = historyFor
-    const newQty   = rec.stock_qty + adjForm.qty_change
-    const status   = deriveStatus({ ...rec, stock_qty: newQty })
-    setSaving(true)
-
-    await Promise.all([
-      supabase.from('stock_records').update({
-        stock_qty: newQty,
-        stock_status: status,
-        updated_by: profile?.id,
-        updated_at: new Date().toISOString(),
-      }).eq('id', rec.id),
-      supabase.from('stock_movements').insert({
-        stock_id:      rec.id,
-        site:          rec.site,
-        description:   rec.description || null,
-        movement_type: adjForm.movement_type,
-        qty_before:    rec.stock_qty,
-        qty_change:    adjForm.qty_change,
-        qty_after:     newQty,
-        reason:        adjForm.reason || null,
-        reference_no:  adjForm.reference_no || null,
-        created_by:    profile?.id ?? null,
-      }),
-    ])
-
+    if (!adjForm || !adjForm.qty_change) return
+    const rec = historyFor
+    setSaving(true); setError('')
+    // Atomic, guarded, audited ledger post. The server computes qty_before/after
+    // and blocks a negative balance — no client-side stock math.
+    const { data, error: aErr } = await supabase.rpc('post_stock_movement', {
+      p_stock_id: rec.id,
+      p_type: adjForm.movement_type,
+      p_qty: Math.abs(Number(adjForm.qty_change)),
+      p_reason: adjForm.reason || null,
+      p_reference: adjForm.reference_no || null,
+    })
+    if (aErr) { setError(aErr.message); setSaving(false); return }
+    const newQty = data?.qty_after ?? rec.stock_qty
     setAdjForm(null)
     await load()
     await openHistory({ ...rec, stock_qty: newQty })
@@ -258,52 +247,19 @@ export default function StockManagement() {
     const reasonOut = `Transfer to ${toSite}${notes ? ': ' + notes : ''}`
     const reasonIn  = `Transfer from ${fromSite}${notes ? ': ' + notes : ''}`
 
-    const [movOut, movIn] = await Promise.all([
-      supabase.from('stock_movements').insert({
-        stock_id:      fromRecord.id,
-        site:          fromSite,
-        movement_type: 'Out',
-        qty_before:    fromRecord.stock_qty,
-        qty_change:    -transferQty,
-        qty_after:     fromRecord.stock_qty - transferQty,
-        reason:        reasonOut,
-        created_by:    profile?.id ?? null,
-      }),
-      supabase.from('stock_movements').insert({
-        stock_id:      toRecord.id,
-        site:          toSite,
-        movement_type: 'In',
-        qty_before:    toRecord.stock_qty,
-        qty_change:    transferQty,
-        qty_after:     toRecord.stock_qty + transferQty,
-        reason:        reasonIn,
-        created_by:    profile?.id ?? null,
-      }),
-    ])
-
-    if (movOut.error || movIn.error) {
-      setTransferError(movOut.error?.message || movIn.error?.message || 'Failed to log movements.')
-      setTransferring(false)
-      return
-    }
-
-    const [updFrom, updTo] = await Promise.all([
-      supabase.from('stock_records').update({
-        stock_qty:  fromRecord.stock_qty - transferQty,
-        updated_by: profile?.id,
-        updated_at: new Date().toISOString(),
-      }).eq('id', fromRecord.id),
-      supabase.from('stock_records').update({
-        stock_qty:  toRecord.stock_qty + transferQty,
-        updated_by: profile?.id,
-        updated_at: new Date().toISOString(),
-      }).eq('id', toRecord.id),
-    ])
-
-    if (updFrom.error || updTo.error) {
-      setTransferError(updFrom.error?.message || updTo.error?.message || 'Failed to update stock quantities.')
-      setTransferring(false)
-      return
+    // Two atomic ledger legs. Each RPC row-locks its stock row and negative-guards.
+    const { error: outErr } = await supabase.rpc('post_stock_movement', {
+      p_stock_id: fromRecord.id, p_type: 'transfer_out', p_qty: transferQty,
+      p_reason: reasonOut, p_reference: notes || null,
+    })
+    if (outErr) { setTransferError(outErr.message); setTransferring(false); return }
+    const { error: inErr } = await supabase.rpc('post_stock_movement', {
+      p_stock_id: toRecord.id, p_type: 'transfer_in', p_qty: transferQty,
+      p_reason: reasonIn, p_reference: notes || null,
+    })
+    if (inErr) {
+      setTransferError('Outbound posted but inbound failed: ' + inErr.message)
+      setTransferring(false); await load(); return
     }
 
     setTransferMsg(`Successfully transferred ${transferQty} units from ${fromSite} to ${toSite}.`)
@@ -579,7 +535,7 @@ export default function StockManagement() {
                           <div className="flex items-center gap-1.5">
                             <button onClick={() => startEdit(r)} className="text-gray-400 hover:text-blue-400 text-xs transition-colors">Edit</button>
                             <button
-                              onClick={() => { openHistory(r); setAdjForm({ qty_change: 0, reason: '', movement_type: 'Adjustment', reference_no: '' }) }}
+                              onClick={() => { openHistory(r); setAdjForm({ qty_change: 0, reason: '', movement_type: 'adjustment_up', reference_no: '' }) }}
                               className="text-gray-400 hover:text-purple-400 text-xs transition-colors"
                               title="Movement history"
                             >
@@ -964,8 +920,8 @@ export default function StockManagement() {
                         <td className="table-cell py-2 text-gray-400">{new Date(m.created_at).toLocaleDateString()}</td>
                         <td className="table-cell py-2">
                           <span className={`px-1.5 py-0.5 rounded text-xs ${
-                            m.movement_type === 'In' || m.movement_type === 'Reorder' ? 'bg-green-900/30 text-green-400' :
-                            m.movement_type === 'Out' || m.movement_type === 'Scrap' ? 'bg-red-900/30 text-red-400' :
+                            ADD_TYPES.has(String(m.movement_type).toLowerCase()) ? 'bg-green-900/30 text-green-400' :
+                            String(m.movement_type).toLowerCase() !== 'adjustment' ? 'bg-red-900/30 text-red-400' :
                             'bg-gray-800 text-gray-400'
                           }`}>
                             {m.movement_type}

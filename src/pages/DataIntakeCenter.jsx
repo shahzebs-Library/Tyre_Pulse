@@ -69,6 +69,7 @@ export default function DataIntakeCenter() {
   const [files, setFiles] = useState([])
   const [countryAck, setCountryAck] = useState(false)
   const [aliasMaps, setAliasMaps] = useState(null) // { site, supplier, brand } → Map
+  const [fxRatesMap, setFxRatesMap] = useState(null) // { quoteCurrency: {rate,rate_date,source} }
 
   // Accident-only: evidence ZIP ingestion (Phase 3). Each item tracks one file
   // through extract → match → upload → record, with a per-file status/error so a
@@ -133,7 +134,7 @@ export default function DataIntakeCenter() {
 
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null)
-    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setAliasMaps(null)
+    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setAliasMaps(null); setFxRatesMap(null)
     setAttachItems([]); setAttachWarnings([]); setAttachDone(false); setAttachBusy(false)
   }
 
@@ -174,6 +175,9 @@ export default function DataIntakeCenter() {
         for (const a of rows || []) if (by[a.entity_type]) by[a.entity_type].push(a)
         setAliasMaps({ site: buildAliasMap(by.site), supplier: buildAliasMap(by.supplier), brand: buildAliasMap(by.brand) })
       }).catch(() => setAliasMaps(null))
+      // preload APPROVED FX rates (base = active currency) so currency conversion
+      // stays synchronous and only ever uses approved rates (directive §12).
+      imports.listApprovedRatesMap({ baseCurrency: activeCurrency }).then(setFxRatesMap).catch(() => setFxRatesMap(null))
       setStep(1)
     } catch (err) {
       setError(err?.message || 'Could not start the import.')
@@ -224,7 +228,7 @@ export default function DataIntakeCenter() {
   // ── Step 3: validate + classify (in-batch + live-table dedup) ────────────────
   async function runValidation() {
     const rows = sheet.rows.map((raw, i) => {
-      const { mapped, transformed: t0, custom } = transformRow(raw, mapping, { module })
+      const { mapped, transformed: t0, custom } = transformRow(raw, mapping, { module, baseCurrency: activeCurrency, fxRates: fxRatesMap })
       // Normalise master-data spellings via saved aliases (site/supplier/brand).
       let transformed = t0
       if (aliasMaps) {

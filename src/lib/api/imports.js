@@ -606,6 +606,59 @@ export async function saveAlias({ entityType, country, rawValue, canonicalValue,
   return data.id
 }
 
+// ── Currency rates (directive §12) ───────────────────────────────────────────
+/** Approved (default) or draft FX rates, newest first. */
+export async function listCurrencyRates({ baseCurrency, quoteCurrency, approvedOnly = true } = {}) {
+  let q = supabase.from('currency_rates')
+    .select('id,base_currency,quote_currency,rate,rate_date,source,approved,approved_at,created_at')
+    .order('rate_date', { ascending: false })
+  if (approvedOnly) q = q.eq('approved', true)
+  if (baseCurrency) q = q.eq('base_currency', baseCurrency)
+  if (quoteCurrency) q = q.eq('quote_currency', quoteCurrency)
+  return unwrap(await q)
+}
+
+/**
+ * Preload a { [quoteCurrency]: { rate, rate_date, source } } map of the newest
+ * APPROVED rate ≤ today for a base currency — fed into transformRow so currency
+ * conversion stays synchronous and only ever uses approved rates.
+ */
+export async function listApprovedRatesMap({ baseCurrency } = {}) {
+  if (!baseCurrency) return {}
+  const rows = await listCurrencyRates({ baseCurrency, approvedOnly: true })
+  const today = new Date().toISOString().slice(0, 10)
+  const map = {}
+  for (const r of rows) {
+    if (r.rate_date > today) continue
+    // rows are date-desc; first seen per quote currency is the newest approved.
+    if (!map[r.quote_currency]) map[r.quote_currency] = { rate: Number(r.rate), rate_date: r.rate_date, source: r.source }
+  }
+  return map
+}
+
+/** Insert a draft (unapproved) FX rate. organisation_id set by DB default + RLS. */
+export async function saveCurrencyRate({ baseCurrency, quoteCurrency, rate, rateDate, source } = {}) {
+  if (!baseCurrency || !quoteCurrency || !(Number(rate) > 0) || !rateDate) {
+    throw new ServiceError('baseCurrency, quoteCurrency, a positive rate and rateDate are required', 'validation')
+  }
+  const user = await currentUser()
+  const { data, error } = await supabase.from('currency_rates').insert({
+    base_currency: baseCurrency, quote_currency: quoteCurrency, rate: Number(rate),
+    rate_date: rateDate, source: source || 'manual', created_by: user?.id ?? null,
+  }).select('id').single()
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data.id
+}
+
+/** Approve a draft rate (RLS gates this to approved+unlocked users). */
+export async function approveCurrencyRate(id) {
+  const user = await currentUser()
+  const { error } = await supabase.from('currency_rates')
+    .update({ approved: true, approved_by: user?.id ?? null, approved_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw new ServiceError(error.message, error.code, error)
+}
+
 export async function listCustomFields({ module, country } = {}) {
   let q = supabase.from('custom_field_catalog')
     .select('id,module,country,field_name,occurrence_count,example_values,mapping_status,last_seen_at')

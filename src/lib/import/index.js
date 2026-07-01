@@ -27,7 +27,7 @@ export {
 
 export { suggestMapping, AUTO_THRESHOLD, SUGGEST_THRESHOLD } from './mapping'
 
-export { transformRow } from './transform'
+export { transformRow, convertAmount } from './transform'
 
 export { validateRow, classifyDuplicates, naturalKey, countryConflict, NATURAL_KEY } from './validate'
 

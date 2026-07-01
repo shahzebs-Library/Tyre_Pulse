@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  History, BarChart3, Layers, Tags, Loader2, AlertTriangle, RotateCcw, ChevronRight, ChevronDown, Database, CheckCircle2, Link2, Plus,
+  History, BarChart3, Layers, Tags, Loader2, AlertTriangle, RotateCcw, ChevronRight, ChevronDown, Database, CheckCircle2, Link2, Plus, Coins,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -15,6 +15,7 @@ const TABS = [
   { key: 'profiles', label: 'Mapping Profiles', icon: Layers },
   { key: 'custom', label: 'Custom Fields', icon: Tags },
   { key: 'aliases', label: 'Aliases', icon: Link2 },
+  { key: 'fx', label: 'FX Rates', icon: Coins },
 ]
 const ALIAS_ENTITY_TYPES = ['site', 'supplier', 'brand', 'driver', 'make', 'model']
 
@@ -53,6 +54,9 @@ export default function DataIntakeHistory() {
   const [aliases, setAliases] = useState([])
   const [aliasForm, setAliasForm] = useState({ entityType: 'site', rawValue: '', canonicalValue: '' })
   const [savingAlias, setSavingAlias] = useState(false)
+  const [fxRates, setFxRates] = useState([])
+  const [fxForm, setFxForm] = useState({ baseCurrency: '', quoteCurrency: '', rate: '', rateDate: '', source: 'manual' })
+  const [savingFx, setSavingFx] = useState(false)
   const [drill, setDrill] = useState(null) // { batch, rows }
   const [busyId, setBusyId] = useState(null)
   const [reconId, setReconId] = useState(null) // batch id whose reconciliation row is expanded
@@ -65,6 +69,7 @@ export default function DataIntakeHistory() {
       else if (tab === 'profiles') setProfiles(await imports.listProfiles({ country: activeCountry }))
       else if (tab === 'custom') setCustomFields(await imports.listCustomFields({ country: activeCountry }))
       else if (tab === 'aliases') setAliases(await imports.listAliases({ country: activeCountry }))
+      else if (tab === 'fx') setFxRates(await imports.listCurrencyRates({ approvedOnly: false }))
     } catch (e) {
       setError(e?.message || 'Could not load data.')
     } finally { setLoading(false) }
@@ -80,6 +85,27 @@ export default function DataIntakeHistory() {
     } catch (e) {
       setError(e?.message || 'Could not save alias.')
     } finally { setSavingAlias(false) }
+  }
+
+  async function addFxRate() {
+    const f = fxForm
+    if (!f.baseCurrency.trim() || !f.quoteCurrency.trim() || !(Number(f.rate) > 0) || !f.rateDate) return
+    setSavingFx(true); setError('')
+    try {
+      await imports.saveCurrencyRate({
+        baseCurrency: f.baseCurrency.trim().toUpperCase(), quoteCurrency: f.quoteCurrency.trim().toUpperCase(),
+        rate: Number(f.rate), rateDate: f.rateDate, source: f.source || 'manual',
+      })
+      setFxForm((s) => ({ ...s, rate: '' }))
+      await load()
+    } catch (e) {
+      setError(e?.message || 'Could not save FX rate.')
+    } finally { setSavingFx(false) }
+  }
+  async function approveFx(id) {
+    setError('')
+    try { await imports.approveCurrencyRate(id); await load() }
+    catch (e) { setError(e?.message || 'Could not approve rate.') }
   }
   useEffect(() => { load() }, [load])
 
@@ -350,6 +376,43 @@ export default function DataIntakeHistory() {
                         <td className="px-3 py-2 font-medium text-white">{a.canonical_value}</td>
                         <td className="px-3 py-2 text-gray-400">{a.country || 'any'}</td>
                         <td className="px-3 py-2 text-gray-500 text-xs">{a.created_at ? new Date(a.created_at).toLocaleDateString('en-GB') : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* FX RATES */}
+          {tab === 'fx' && (
+            <div className="space-y-4">
+              <p className="text-xs text-gray-500">Approval-gated exchange rates. Imports convert a monetary value to the base currency <span className="text-gray-300">only</span> when an approved rate exists for its currency — never a silent or fabricated rate. Rate direction: 1 quote currency = rate × base currency.</p>
+              {isElevated && (
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-wrap items-end gap-3">
+                  <div><label className="block text-xs text-gray-500 mb-1">Base (report)</label><input value={fxForm.baseCurrency} onChange={(e) => setFxForm((f) => ({ ...f, baseCurrency: e.target.value }))} placeholder="USD" maxLength={3} className="w-20 bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm uppercase" /></div>
+                  <div><label className="block text-xs text-gray-500 mb-1">Quote (source)</label><input value={fxForm.quoteCurrency} onChange={(e) => setFxForm((f) => ({ ...f, quoteCurrency: e.target.value }))} placeholder="SAR" maxLength={3} className="w-20 bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm uppercase" /></div>
+                  <div><label className="block text-xs text-gray-500 mb-1">Rate</label><input type="number" step="0.00000001" value={fxForm.rate} onChange={(e) => setFxForm((f) => ({ ...f, rate: e.target.value }))} placeholder="0.2667" className="w-28 bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm" /></div>
+                  <div><label className="block text-xs text-gray-500 mb-1">Date</label><input type="date" value={fxForm.rateDate} onChange={(e) => setFxForm((f) => ({ ...f, rateDate: e.target.value }))} className="bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm" /></div>
+                  <div><label className="block text-xs text-gray-500 mb-1">Source</label><input value={fxForm.source} onChange={(e) => setFxForm((f) => ({ ...f, source: e.target.value }))} placeholder="manual" className="w-28 bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm" /></div>
+                  <button onClick={addFxRate} disabled={savingFx || !fxForm.baseCurrency.trim() || !fxForm.quoteCurrency.trim() || !(Number(fxForm.rate) > 0) || !fxForm.rateDate} className="px-3 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-1.5 disabled:opacity-50">{savingFx ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add draft</button>
+                </div>
+              )}
+              <div className="border border-gray-800 rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Pair</th><th className="text-left px-3 py-2">Rate</th><th className="text-left px-3 py-2">Date</th><th className="text-left px-3 py-2">Source</th><th className="text-left px-3 py-2">Status</th><th className="text-right px-3 py-2">Action</th></tr></thead>
+                  <tbody>
+                    {fxRates.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-600">No FX rates yet — add a draft, then approve it to enable conversion.</td></tr>}
+                    {fxRates.map((r) => (
+                      <tr key={r.id} className="border-t border-gray-800">
+                        <td className="px-3 py-2 font-medium">{r.quote_currency} → {r.base_currency}</td>
+                        <td className="px-3 py-2 text-gray-300 tabular-nums">{r.rate}</td>
+                        <td className="px-3 py-2 text-gray-400 text-xs">{r.rate_date}</td>
+                        <td className="px-3 py-2 text-gray-400">{r.source}</td>
+                        <td className="px-3 py-2"><span className={`text-xs px-2 py-0.5 rounded ${r.approved ? 'bg-green-900/30 text-green-400' : 'bg-amber-900/30 text-amber-400'}`}>{r.approved ? 'approved' : 'draft'}</span></td>
+                        <td className="px-3 py-2 text-right">{!r.approved && isElevated
+                          ? <button onClick={() => approveFx(r.id)} className="text-xs px-2 py-1 rounded border border-gray-700 text-gray-300 hover:text-green-400 hover:border-green-700/50 inline-flex items-center gap-1"><CheckCircle2 size={12} /> Approve</button>
+                          : <span className="text-gray-600 text-xs">—</span>}</td>
                       </tr>
                     ))}
                   </tbody>

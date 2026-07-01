@@ -214,6 +214,12 @@ function normaliseMass(raw, targetUnit) {
   }
 }
 
+/** Convert an amount by an approved rate (2dp); null when either is not finite. */
+function convertAmount(amount, rate) {
+  if (amount == null || !Number.isFinite(Number(amount)) || !Number.isFinite(Number(rate))) return null
+  return round(Number(amount) * Number(rate), 2)
+}
+
 /** Parse a currency cell into amount + detected currency code (never converts). */
 function parseCurrency(raw, defaultCurrency) {
   if (raw == null || raw === '') return null
@@ -249,6 +255,9 @@ export function transformRow(rawRow, mapping, options = {}) {
   const dateOrder = options.dateFormat || 'DMY'
   const units = options.unitSettings || {}
   const module = options.module || 'tyre'
+  const baseCurrency = options.baseCurrency || null
+  // Preloaded APPROVED rates: { [quoteCurrency]: { rate, rate_date, source } }.
+  const fxRates = options.fxRates || null
 
   // Normalise the mapping into source→target pairs, ignoring custom/null targets.
   /** @type {Array<[string,string]>} */
@@ -309,6 +318,25 @@ export function transformRow(rawRow, mapping, options = {}) {
           transformed.amount_original = c.amount
           transformed.currency_original = c.currency
           transformed[`${target}_currency`] = c.currency
+          // Conversion trail (directive §12) — NEVER silent. Convert only when an
+          // APPROVED rate for the row's currency was preloaded into options.fxRates.
+          if (baseCurrency && c.currency) {
+            if (c.currency === baseCurrency) {
+              transformed.currency_conversion_status = 'same_currency'
+            } else {
+              const fx = fxRates && fxRates[c.currency]
+              if (fx && Number(fx.rate) > 0) {
+                transformed.exchange_rate = Number(fx.rate)
+                transformed.exchange_rate_date = fx.rate_date
+                transformed.conversion_source = fx.source
+                transformed.base_currency = baseCurrency
+                transformed.amount_base_currency = convertAmount(c.amount, Number(fx.rate))
+                transformed.currency_conversion_status = 'converted'
+              } else {
+                transformed.currency_conversion_status = 'unconverted_no_rate'
+              }
+            }
+          }
         } else {
           transformed[target] = null
         }
@@ -401,4 +429,4 @@ export function transformRow(rawRow, mapping, options = {}) {
   return { mapped, transformed, custom }
 }
 
-export { parseDate, parseNumeric, normalisePressure, normaliseDistance, normaliseMass, parseCurrency }
+export { parseDate, parseNumeric, normalisePressure, normaliseDistance, normaliseMass, parseCurrency, convertAmount }

@@ -30,7 +30,7 @@ const h = vi.hoisted(() => {
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
 
-const { assets, tyres, stock, workOrders, inspections, accidents, gatePasses, ServiceError, applyCountry } =
+const { assets, tyres, stock, workOrders, inspections, accidents, gatePasses, correctiveActions, ServiceError, applyCountry } =
   await import('../lib/api')
 
 beforeEach(() => {
@@ -176,6 +176,31 @@ describe('service layer — gatePasses safety gate', () => {
 
   it('requires an assetNo', async () => {
     await expect(gatePasses.listGatePassBlockers({})).rejects.toBeInstanceOf(ServiceError)
+  })
+})
+
+describe('service layer — correctiveActions', () => {
+  it('lists from corrective_actions with STRICT country eq (not null-inclusive)', async () => {
+    await correctiveActions.listCorrectiveActions({ country: 'KSA' })
+    expect(h.state.last._table).toBe('corrective_actions')
+    expect(h.state.last._calls.eq).toContainEqual(['country', 'KSA'])
+    expect(h.state.last._calls.or).toHaveLength(0)
+  })
+
+  it('applies no country filter for "All"', async () => {
+    await correctiveActions.listCorrectiveActions({ country: 'All' })
+    expect(h.state.last._calls.eq).toHaveLength(0)
+  })
+
+  it('updateCorrectiveAction patches by id', async () => {
+    await correctiveActions.updateCorrectiveAction('ca1', { status: 'Closed' })
+    expect(h.state.last._calls.update).toEqual({ status: 'Closed' })
+    expect(h.state.last._calls.eq).toContainEqual(['id', 'ca1'])
+  })
+
+  it('throws a ServiceError on a Supabase error', async () => {
+    h.state.result = { data: null, error: { message: 'boom', code: '42501' } }
+    await expect(correctiveActions.listCorrectiveActions()).rejects.toBeInstanceOf(ServiceError)
   })
 })
 

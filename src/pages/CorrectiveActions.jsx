@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { correctiveActions } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -265,12 +265,8 @@ export default function CorrectiveActions() {
   // ── Data ──────────────────────────────────────────────────────────────────────
   const load = useCallback(async (quiet = false) => {
     quiet ? setRefreshing(true) : setLoading(true)
-    let q = supabase
-      .from('corrective_actions')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    const { data } = await q
+    let data = []
+    try { data = await correctiveActions.listCorrectiveActions({ country: activeCountry }) } catch { data = [] }
     setActions(data ?? [])
     quiet ? setRefreshing(false) : setLoading(false)
   }, [activeCountry])
@@ -366,22 +362,24 @@ export default function CorrectiveActions() {
         ? { closed_by: profile?.id, closed_at: new Date().toISOString() }
         : { closed_by: null, closed_at: null }),
     }
-    const { error: err } = editId
-      ? await supabase.from('corrective_actions').update(payload).eq('id', editId)
-      : await supabase.from('corrective_actions').insert(payload)
-    if (err) { setFormError(err.message); setSaving(false); return }
+    try {
+      if (editId) await correctiveActions.updateCorrectiveAction(editId, payload)
+      else await correctiveActions.createCorrectiveAction(payload)
+    } catch (err) { setFormError(err.message); setSaving(false); return }
     setShowForm(false)
     load(true)
     setSaving(false)
   }
 
   async function handleStatusChange(id, newStatus) {
-    await supabase.from('corrective_actions').update({
-      status: newStatus,
-      ...(newStatus === 'Closed'
-        ? { closed_by: profile?.id, closed_at: new Date().toISOString() }
-        : { closed_by: null, closed_at: null }),
-    }).eq('id', id)
+    try {
+      await correctiveActions.updateCorrectiveAction(id, {
+        status: newStatus,
+        ...(newStatus === 'Closed'
+          ? { closed_by: profile?.id, closed_at: new Date().toISOString() }
+          : { closed_by: null, closed_at: null }),
+      })
+    } catch { /* original ignored update errors here */ }
     load(true)
   }
 

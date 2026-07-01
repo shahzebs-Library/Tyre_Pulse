@@ -11,6 +11,8 @@ import {
   rowFingerprint,
   NATURAL_KEY,
   MODULE_FIELDS,
+  scoreHeader,
+  SUGGEST_THRESHOLD,
 } from '../lib/import'
 
 describe('import engine — synonyms & mapping', () => {
@@ -42,6 +44,65 @@ describe('import engine — synonyms & mapping', () => {
     // a stock description header should not map to a tyre field
     const stock = suggestMapping({ columns: ['Description'], module: 'stock' })
     expect(stock[0].target).toBe('description')
+  })
+
+  it('does NOT map identifier columns to currency targets (id-as-money guard)', () => {
+    const isCurrency = (mod, key) =>
+      (MODULE_FIELDS[mod] || []).some((f) => f.key === key && f.type === 'currency')
+
+    for (const mod of ['workorder', 'tyre']) {
+      const out = suggestMapping({
+        columns: ['Cost Center (100016)', 'Store Code'],
+        module: mod,
+        sampleRows: [{ 'Cost Center (100016)': '100016', 'Store Code': 'ST-01' }],
+      })
+      const byHeader = Object.fromEntries(out.map((m) => [m.sourceHeader, m]))
+
+      // Acceptance: an identifier column is EITHER demoted to review/preserve_custom
+      // (so the wizard never pre-applies it), OR resolved to a non-currency field —
+      // never an auto/suggest map onto money.
+      for (const h of ['Cost Center (100016)', 'Store Code']) {
+        const m = byHeader[h]
+        const demoted = m.action === 'review' || m.action === 'preserve_custom'
+        const nonCurrencyTarget = !isCurrency(mod, m.target)
+        expect(demoted || nonCurrencyTarget).toBe(true)
+        // In no case may it become an auto/suggest currency map.
+        expect(isCurrency(mod, m.target) && (m.action === 'auto' || m.action === 'suggest')).toBe(false)
+        expect(m.confidence).toBeLessThan(SUGGEST_THRESHOLD)
+      }
+    }
+  })
+
+  it('still maps legitimate cost headers to their currency targets', () => {
+    // workorder: Total Cost / Parts Cost carry no identifier token → stay currency.
+    const wo = suggestMapping({
+      columns: ['Total Cost', 'Parts Cost'],
+      module: 'workorder',
+      sampleRows: [{ 'Total Cost': '131.50', 'Parts Cost': '45.00' }],
+    })
+    const woT = Object.fromEntries(wo.map((m) => [m.sourceHeader, m]))
+    expect(woT['Total Cost'].target).toBe('total_cost')
+    expect(woT['Total Cost'].action).toBe('auto')
+    expect(woT['Parts Cost'].target).toBe('parts_cost')
+
+    // tyre: Total Cost is an alias of total_amount (currency) and must survive.
+    const ty = suggestMapping({
+      columns: ['Total Cost', 'Cost'],
+      module: 'tyre',
+      sampleRows: [{ 'Total Cost': '500.00', 'Cost': '125.00' }],
+    })
+    const tyT = Object.fromEntries(ty.map((m) => [m.sourceHeader, m]))
+    expect(tyT['Total Cost'].target).toBe('total_amount')
+    expect(tyT['Cost'].target).toBe('cost_per_tyre') // plain money header, no id token
+  })
+
+  it('penalises identifier headers scored against a currency target', () => {
+    // Direct scoreHeader check: same header, currency vs non-currency field type.
+    const guesses = ['total cost', 'cost', 'total amount']
+    const asCurrency = scoreHeader('Cost Center (100016)', guesses, { fieldType: 'currency' })
+    const asString = scoreHeader('Cost Center (100016)', guesses, { fieldType: 'string' })
+    expect(asCurrency.score).toBeLessThan(asString.score)
+    expect(asCurrency.score).toBeLessThan(SUGGEST_THRESHOLD)
   })
 })
 

@@ -165,8 +165,17 @@ export default function DataIntakeCenter() {
       })
       await imports.saveSheets(id, parsed.sheets)
       setBatchId(id)
-      // seed mapping suggestions
-      setMapping(suggestMapping({ columns: sheet.columns, module, sampleRows: sheet.rows.slice(0, 20) }))
+      // seed mapping suggestions — but do NOT pre-apply low-confidence guesses.
+      // A 'review' action (confidence < SUGGEST_THRESHOLD) keeps its guess only
+      // as a hint; the selected target defaults to null ("preserve as custom")
+      // so a weak guess (e.g. Store Code → Country) is never silently applied.
+      setMapping(
+        suggestMapping({ columns: sheet.columns, module, sampleRows: sheet.rows.slice(0, 20) }).map((m) =>
+          m.action === 'review'
+            ? { ...m, target: null, suggestedTarget: m.target, suggestedConfidence: m.confidence }
+            : m,
+        ),
+      )
       // offer reusable mapping profiles for this module/country (non-blocking)
       imports.listProfiles({ module, country: activeCountry }).then(setProfiles).catch(() => setProfiles([]))
       // load master-data aliases once so the validate pass can normalise spellings
@@ -519,6 +528,17 @@ export default function DataIntakeCenter() {
                           <option value="">— preserve as custom —</option>
                           {targetOptions.map((t) => <option key={t.key} value={t.key}>{t.label}{t.required ? ' *' : ''}</option>)}
                         </select>
+                        {!m.target && m.suggestedTarget && (
+                          <button
+                            type="button"
+                            onClick={() => setTarget(m.sourceHeader, m.suggestedTarget)}
+                            className="mt-1 block text-[11px] text-amber-400 hover:text-amber-300 underline decoration-dotted"
+                            title="Low-confidence guess — click to apply"
+                          >
+                            Suggested: {targetOptions.find((t) => t.key === m.suggestedTarget)?.label || m.suggestedTarget}
+                            {typeof m.suggestedConfidence === 'number' ? ` (${m.suggestedConfidence}%)` : ''}
+                          </button>
+                        )}
                       </td>
                       <td className="px-3 py-2"><span className={`text-xs px-2 py-0.5 rounded ${m.confidence >= 90 ? 'bg-green-900/30 text-green-400' : m.confidence >= 60 ? 'bg-amber-900/30 text-amber-400' : 'bg-gray-800 text-gray-400'}`}>{m.target ? `${m.confidence}%` : 'custom'}</span></td>
                     </tr>

@@ -25,7 +25,7 @@ export {
   normaliseToken,
 } from './synonyms'
 
-export { suggestMapping, AUTO_THRESHOLD, SUGGEST_THRESHOLD } from './mapping'
+export { suggestMapping, scoreHeader, AUTO_THRESHOLD, SUGGEST_THRESHOLD } from './mapping'
 
 export { transformRow, convertAmount } from './transform'
 

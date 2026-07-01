@@ -68,12 +68,74 @@ function levenshtein(a, b) {
 }
 
 /**
+ * Identifier tokens that mark a column as a code/reference rather than a value.
+ * Kept as whole-word tokens so we never trip on substrings inside real words
+ * (e.g. "code" must not fire on "current km" — it won't, we match on words).
+ */
+const IDENTIFIER_TOKENS = new Set(['center', 'centre', 'code', 'id', 'no', 'number', 'ref'])
+
+/**
+ * Penalty (score points) applied when an identifier-like header is scored
+ * against a currency-typed target. Large enough to push a strong substring
+ * match (≤88) below SUGGEST_THRESHOLD (60) so it becomes 'review'.
+ */
+const IDENTIFIER_CURRENCY_PENALTY = 45
+
+/**
+ * True when a (normalised) header contains a stand-alone identifier token.
+ * Uses whole-word matching so "Cost Center", "Store Code", "Ref No" fire but
+ * "Total Cost" / "Parts Cost" (no identifier word) do not.
+ * @param {string} normHeader   Already normalised via {@link normaliseToken}.
+ * @returns {boolean}
+ */
+function hasIdentifierToken(normHeader) {
+  for (const w of normHeader.split(' ')) {
+    if (IDENTIFIER_TOKENS.has(w)) return true
+  }
+  return false
+}
+
+/**
+ * True when sampled values look like codes/IDs rather than monetary numbers:
+ * short, no decimal point, and either non-numeric (alphanumeric/dashes) or a
+ * single constant repeated id. Conservative — an empty/decimal-bearing sample
+ * returns false so legitimate currency columns are never penalised.
+ * @param {Array<*>} [values]
+ * @returns {boolean}
+ */
+function looksLikeCodeValues(values) {
+  const seen = (values || []).map((v) => (v == null ? '' : String(v).trim())).filter((v) => v !== '')
+  if (seen.length === 0) return false
+  let codey = 0
+  for (const v of seen) {
+    const compact = v.replace(/\s/g, '')
+    const hasDecimal = compact.includes('.')
+    const isPlainNumber = NUM_RE.test(compact)
+    // A code: no decimal point AND (non-numeric OR short constant-width id).
+    if (!hasDecimal && (!isPlainNumber || compact.length <= 8)) codey++
+  }
+  if (codey / seen.length < 0.8) return false
+  // A constant repeated value across the sample is a strong id signal.
+  const distinct = new Set(seen)
+  return distinct.size === 1 || codey === seen.length
+}
+
+/**
  * Score a header against a list of synonym strings → { score, matchedGuess }.
+ *
+ * Optionally applies a negative cue: an identifier-like header (contains a
+ * token such as "code", "center", "no", "ref") scored against a currency-typed
+ * target is penalised so an ID column cannot masquerade as money. The penalty
+ * also fires when sampled values look like codes/IDs.
+ *
  * @param {string} header
  * @param {string[]} guesses
+ * @param {Object} [opts]
+ * @param {string} [opts.fieldType]        Logical type of the candidate target.
+ * @param {Array<*>} [opts.sampleValues]   Sampled cell values for this column.
  * @returns {{ score: number, matchedGuess: string|null }}
  */
-function scoreHeader(header, guesses) {
+function scoreHeader(header, guesses, opts = {}) {
   const h = normaliseToken(header)
   if (!h) return { score: 0, matchedGuess: null }
   let best = 0
@@ -116,6 +178,16 @@ function scoreHeader(header, guesses) {
       }
     }
   }
+
+  // Negative cue: identifier column → currency target is dangerous (ID as money).
+  if (best > 0 && opts.fieldType === 'currency') {
+    const headerIsId = hasIdentifierToken(h)
+    const valuesAreCodes = looksLikeCodeValues(opts.sampleValues)
+    if (headerIsId || valuesAreCodes) {
+      best = Math.max(0, best - IDENTIFIER_CURRENCY_PENALTY)
+    }
+  }
+
   return { score: best, matchedGuess }
 }
 
@@ -243,8 +315,12 @@ export function suggestMapping({ columns, module, sampleRows = [], savedProfileR
 
     // 3. Fuzzy against every field; keep best per field for this header.
     const sampleType = typeByHeader.get(h) || 'empty'
+    const sampleValues = sampleRows.map((r) => (r ? r[h] : undefined))
     for (const field of fields) {
-      const { score } = scoreHeader(h, synonymsFor(field.key, module))
+      const { score } = scoreHeader(h, synonymsFor(field.key, module), {
+        fieldType: field.type,
+        sampleValues,
+      })
       if (score <= 0) continue
       const adj = applyTypeSignal(score, sampleType, field.type)
       candidates.push({ header: h, target: field.key, score: adj, reason: 'fuzzy' })

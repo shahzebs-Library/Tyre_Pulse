@@ -38,7 +38,8 @@ function statusColor(s) {
 
 export default function DataIntakeCenter() {
   const { profile } = useAuth()
-  const { activeCountry } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
+  const fmtMoney = (n) => `${activeCurrency || ''} ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim()
   const isElevated = ELEVATED.includes(String(profile?.role || '').toLowerCase())
   const countryReady = activeCountry && activeCountry !== 'All'
 
@@ -253,13 +254,24 @@ export default function DataIntakeCenter() {
       r.action = action
     })
 
-    const c = { total: rows.length, ready: 0, warning: 0, error: 0, duplicate: 0, conflict: 0, liveDuplicate: 0 }
+    const c = { total: rows.length, ready: 0, warning: 0, error: 0, duplicate: 0, conflict: 0, liveDuplicate: 0, amount: 0, qty: 0 }
     rows.forEach((r) => {
       c[r.validationStatus] = (c[r.validationStatus] || 0) + 1
       if (r.dupStatus === 'duplicate') c.duplicate++
       if (r.dupStatus === 'conflict') c.conflict++
       if (r.liveDuplicate) c.liveDuplicate++
+      // Roll up spend for the batch: prefer the derived per-line total, else
+      // fall back to qty × unit cost. Only meaningful for tyre imports.
+      const t = r.transformed || {}
+      const line = Number(t.line_total)
+      if (Number.isFinite(line)) c.amount += line
+      else {
+        const unit = Number(t.cost_per_tyre); const qn = Number(t.qty)
+        if (Number.isFinite(unit)) c.amount += unit * (Number.isFinite(qn) && qn > 0 ? qn : 1)
+      }
+      const qv = Number(t.qty); if (Number.isFinite(qv)) c.qty += qv
     })
+    c.amount = Math.round(c.amount * 100) / 100
     setAnnotated(rows); setCounts(c)
   }
   useEffect(() => { if (step === 2 && sheet && mapping.length) runValidation() }, [step]) // eslint-disable-line
@@ -483,6 +495,15 @@ export default function DataIntakeCenter() {
               ))}
             </div>
           )}
+          {module === 'tyre' && counts && counts.amount > 0 && (
+            <div className="bg-emerald-900/15 border border-emerald-700/40 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-emerald-300/80 uppercase tracking-wide">Total tyre amount (this import)</p>
+                <p className="text-3xl font-bold text-emerald-300">{fmtMoney(counts.amount)}</p>
+              </div>
+              <p className="text-xs text-gray-400 max-w-xs">Derived from <span className="text-gray-200">{counts.qty || counts.total}</span> tyres × unit cost. Quantity and unit cost are stored; the total is computed so all spend rolls up in one place.</p>
+            </div>
+          )}
           <div className="overflow-x-auto border border-gray-800 rounded-xl max-h-80 overflow-y-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-800/60 text-gray-400 text-xs sticky top-0"><tr><th className="text-left px-3 py-2">#</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Dup</th><th className="text-left px-3 py-2">Issues</th></tr></thead>
@@ -579,6 +600,9 @@ export default function DataIntakeCenter() {
           {!result ? (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
               <p className="text-sm text-gray-300">{counts?.ready ?? 0} ready + {counts?.warning ?? 0} warning rows will be committed to the live <span className="text-white">{module}</span> table. Error rows are skipped.</p>
+              {module === 'tyre' && counts?.amount > 0 && (
+                <p className="text-sm text-emerald-300 border-t border-gray-800 pt-3">Total tyre amount to be recorded: <span className="font-bold">{fmtMoney(counts.amount)}</span> across {counts.qty || counts.total} tyres.</p>
+              )}
               {!isElevated && <p className="text-xs text-amber-400">Your role can stage but not approve — this will be submitted for approval.</p>}
               <button onClick={commit} disabled={busy} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {isElevated ? 'Approve & commit' : 'Submit for approval'}</button>
             </div>

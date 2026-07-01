@@ -60,6 +60,35 @@ describe('import engine — transform', () => {
   })
 })
 
+describe('import engine — tyre spend derivation', () => {
+  it('maps quantity and derives the per-line total from qty × unit cost', () => {
+    const mapping = [
+      { sourceHeader: 'Serial', target: 'serial_no' },
+      { sourceHeader: 'Asset', target: 'asset_no' },
+      { sourceHeader: 'Qty', target: 'qty' },
+      { sourceHeader: 'Unit Price', target: 'cost_per_tyre' },
+    ]
+    const raw = { Serial: 'SN1', Asset: 'A1', Qty: '4', 'Unit Price': '1,200.00' }
+    const { transformed } = transformRow(raw, mapping, { module: 'tyre' })
+    expect(transformed.qty).toBe(4)
+    expect(transformed.cost_per_tyre).toBe(1200)
+    expect(transformed.line_total).toBe(4800)
+  })
+
+  it('back-calculates unit cost when only quantity and total are provided', () => {
+    const mapping = [
+      { sourceHeader: 'Serial', target: 'serial_no' },
+      { sourceHeader: 'Qty', target: 'qty' },
+      { sourceHeader: 'Total', target: 'total_amount' },
+    ]
+    const raw = { Serial: 'SN2', Qty: '2', Total: '900' }
+    const { transformed } = transformRow(raw, mapping, { module: 'tyre' })
+    expect(transformed.cost_per_tyre).toBe(450)
+    expect(transformed.line_total).toBe(900)
+    expect(transformed.total_amount).toBeUndefined() // display-only alias dropped
+  })
+})
+
 describe('import engine — validation', () => {
   it('flags a missing required field as an error', () => {
     const res = validateRow({ brand: 'X' }, 'tyre') // no serial_no/asset_no

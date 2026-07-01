@@ -353,6 +353,29 @@ export function transformRow(rawRow, mapping, options = {}) {
     }
   }
 
+  // Tyre spend derivation: a tyre line has a quantity, a unit cost, and a total
+  // (qty × unit). Files provide any two; we derive the third so the stored
+  // columns (qty, cost_per_tyre) are always populated and a per-line total is
+  // available for spend roll-ups. total_amount is display-only (no DB column).
+  if (module === 'tyre') {
+    const q = transformed.qty != null && transformed.qty !== 0 ? transformed.qty : null
+    const unit = transformed.cost_per_tyre
+    const total = transformed.total_amount
+    if (unit == null && total != null && q) {
+      transformed.cost_per_tyre = round(total / q, 2)
+    } else if (q == null && unit != null && unit !== 0 && total != null) {
+      transformed.qty = Math.max(1, Math.round(total / unit))
+    }
+    const u2 = transformed.cost_per_tyre
+    const q2 = transformed.qty != null && transformed.qty !== 0 ? transformed.qty : (u2 != null ? 1 : null)
+    if (u2 != null && q2 != null) transformed.line_total = round(u2 * q2, 2)
+    else if (total != null) transformed.line_total = total
+    // total_amount is not a real column — keep line_total, drop the alias so the
+    // commit's column-intersection stays clean.
+    delete transformed.total_amount
+    delete transformed.total_amount_currency
+  }
+
   // Preserve every unmapped source column verbatim.
   /** @type {Record<string,*>} */
   const custom = {}

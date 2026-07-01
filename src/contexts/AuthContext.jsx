@@ -20,6 +20,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const profileChannelRef  = useRef(null)
+  const currentUserIdRef   = useRef(null)
   const lastActivityRef    = useRef(Date.now())
   const [modulePerms, setModulePerms] = useState(null)
   const [mfaEnabled, setMfaEnabled] = useState(false)
@@ -78,36 +79,53 @@ export function AuthProvider({ children }) {
     }
   }
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-        subscribeToProfile(session.user.id)
-      } else {
-        setLoading(false)
-      }
-    })
+  // Reacts to a single auth session change. Guarded by currentUserIdRef so that
+  // token refreshes, tab re-focus (visibilitychange), and INITIAL_SESSION for
+  // the SAME already-loaded user do NOT toggle `loading` — toggling it would
+  // unmount the whole routed tree (ProtectedRoute renders a spinner while
+  // loading) and wipe every page's in-progress state (e.g. the Data Intake
+  // wizard). We only do a full (re)load when the user IDENTITY actually changes.
+  function handleSession(session) {
+    const newUserId = session?.user?.id ?? null
+    setUser(session?.user ?? null)
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        setLoading(true)
-        await fetchProfile(session.user.id)
-        subscribeToProfile(session.user.id)
-      } else {
-        setProfile(null)
-        unsubscribeFromProfile()
-        setMfaEnabled(false)
-        setLoading(false)
-      }
-    })
+    if (!newUserId) {
+      // Signed out.
+      if (currentUserIdRef.current === null) { setLoading(false); return }
+      currentUserIdRef.current = null
+      setProfile(null)
+      setModulePerms(null)
+      unsubscribeFromProfile()
+      setMfaEnabled(false)
+      setLoading(false)
+      return
+    }
+
+    // Same user — token refresh / tab refocus / duplicate INITIAL_SESSION.
+    // Keep the fresh session but do not remount the app.
+    if (newUserId === currentUserIdRef.current) return
+
+    // A genuinely different (or first) user signed in → full load.
+    currentUserIdRef.current = newUserId
+    setLoading(true)
+    fetchProfile(newUserId)
+    subscribeToProfile(newUserId)
+  }
+
+  useEffect(() => {
+    // Belt-and-suspenders initial read (in case INITIAL_SESSION is delayed);
+    // handleSession is idempotent via the ref, so this never double-loads.
+    supabase.auth.getSession().then(({ data: { session } }) => handleSession(session))
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => handleSession(session),
+    )
 
     return () => {
       subscription.unsubscribe()
       unsubscribeFromProfile()
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchProfile(userId) {
     const [profileRes, permsRes, factorsRes] = await Promise.all([

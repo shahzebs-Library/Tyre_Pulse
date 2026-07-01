@@ -60,6 +60,16 @@ export default function DataIntakeCenter() {
   }, [activeCountry])
   useEffect(() => { loadRecent() }, [loadRecent])
 
+  // Warn before an accidental full-page reload/close while an import is in
+  // progress (state lives in memory and cannot survive a hard navigation).
+  useEffect(() => {
+    const dirty = step > 0 && !result
+    if (!dirty) return
+    const warn = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [step, result])
+
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null)
     setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setError(''); setProfiles([])

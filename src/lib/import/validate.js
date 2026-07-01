@@ -16,6 +16,7 @@
  */
 
 import { MODULE_FIELDS } from './synonyms.js'
+import { ENUM_DOMAINS, isInEnum } from './enums.js'
 
 /**
  * @typedef {Object} ValidationIssue
@@ -110,6 +111,27 @@ export function validateRow(transformed, module) {
         severity: isQty ? 'error' : 'warning',
         code: 'NEGATIVE_VALUE',
         message: `${key} is negative (${val}).`,
+      })
+    }
+  }
+
+  // Controlled-vocabulary (CHECK constraint) domains: a non-blank value outside
+  // the target column's allowed set is a hard error — surfaced per-row with the
+  // allowed values, instead of the whole batch failing with an opaque 400 at
+  // commit. transformRow has already canonicalised casing/separators, so only
+  // genuinely out-of-domain values reach here.
+  const enumFields = ENUM_DOMAINS[module]
+  if (enumFields) {
+    const fieldByKey = new Map(fields.map((f) => [f.key, f]))
+    for (const [key, allowed] of Object.entries(enumFields)) {
+      const val = row[key]
+      if (isBlank(val) || isInEnum(val, allowed)) continue
+      const label = fieldByKey.get(key)?.label || key
+      issues.push({
+        field: key,
+        severity: 'error',
+        code: 'ENUM_INVALID',
+        message: `${label} "${val}" is not an accepted value. Allowed: ${allowed.join(', ')}.`,
       })
     }
   }

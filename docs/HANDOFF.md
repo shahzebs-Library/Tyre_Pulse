@@ -44,6 +44,11 @@ Controlled pipeline Upload→Map→Validate→Approve→Commit, country-scoped, 
 ## Migrations reference (live + repo `MIGRATIONS_V*.sql`, all with rollback headers)
 V42/43 org scope · V44 file_metadata · V45 import center · V46 import commit · V47 work-order costs · V48 aliases · V49 currency_rates · V50 tyre-change+audit · V52 stock ledger · V53 gate-pass blockers. Self-asserting tests in `tests/rpc_*.sql`.
 
+### Session 7 — Import commit P1 blocker fixed
+QA (`QA_DATA_INTAKE_REPORT.md`) flagged Work-Order commit failing for everyone with an opaque 400; verified still live.
+- **Root cause 1 (all modules):** `import_commit_batch` built its INSERT column list without excluding DB-computed columns, so a mapped field colliding with a generated column (`work_orders.total_cost` = `GENERATED ALWAYS AS (labour_cost + parts_cost)`) raised `428C9` and failed the whole batch. **V54** redefines the RPC to exclude `is_generated='ALWAYS'` + identity columns (`tests/rpc_import_commit_generated.sql`, applied live + proven).
+- **Root cause 2:** no CHECK/enum validation client-side → bad values (e.g. `Asset Type`=PUMPS → `work_type`) marked "ready", rejected en masse at commit. New `src/lib/import/enums.js` holds the live CHECK domains (fleet.status; accident type/severity/status; inspection status/type; workorder work_type/status/priority). `transform.js` canonicalises casing/separators to exact DB spelling; `validate.js` flags out-of-domain values as per-row `ENUM_INVALID` errors (excluded from commit) with the allowed list. +10 tests (573 total, build green).
+
 ## Still PENDING (larger, deliberate work)
 1. **Phase 4 mobile** — Expo SQLite offline store + conflict handling (mobile rearchitecture; can't runtime-test in this env).
 2. **Phase 6 UX** — light/dark consistency, RTL/Arabic layout, universal chart drill-downs.

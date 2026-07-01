@@ -15,6 +15,7 @@
  */
 
 import { fieldDef } from './synonyms.js'
+import { ENUM_DOMAINS, canonicalizeEnum } from './enums.js'
 
 /**
  * @typedef {import('./mapping.js').MappingSuggestion} MappingSuggestion
@@ -415,6 +416,19 @@ export function transformRow(rawRow, mapping, options = {}) {
       if (Number.isFinite(v)) { sum += v; any = true }
     }
     if (any) transformed.total_cost = round(sum, 2)
+  }
+
+  // Controlled-vocabulary canonicalisation: snap enum columns to the DB's exact
+  // CHECK-constraint spelling (case / separator insensitive) so a valid-but-
+  // differently-cased value ("open" → "Open") commits cleanly. Genuinely unknown
+  // values are left as-is and flagged by validateRow before commit.
+  const enumFields = ENUM_DOMAINS[module]
+  if (enumFields) {
+    for (const [key, allowed] of Object.entries(enumFields)) {
+      if (transformed[key] != null && transformed[key] !== '') {
+        transformed[key] = canonicalizeEnum(transformed[key], allowed)
+      }
+    }
   }
 
   // Preserve every unmapped source column verbatim.

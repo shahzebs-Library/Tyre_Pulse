@@ -84,11 +84,13 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   created_at   timestamptz DEFAULT now()
 );
 
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS employee_id    text;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS approved       boolean DEFAULT false;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS country        text[];
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS pending_reason text;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS org_id        uuid REFERENCES public.organisations(id);
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS employee_id             text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS approved                boolean DEFAULT false;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS country                 text[];
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS pending_reason          text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS org_id                  uuid REFERENCES public.organisations(id);
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS push_token              text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS push_token_updated_at  timestamptz;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_org_id ON public.profiles(org_id);
 CREATE INDEX IF NOT EXISTS idx_profiles_role   ON public.profiles(role);
@@ -167,10 +169,18 @@ CREATE TRIGGER set_updated_at_vehicle_fleet
 
 ALTER TABLE public.vehicle_fleet ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "vehicle_fleet_select" ON public.vehicle_fleet;
+DROP POLICY IF EXISTS "vehicle_fleet_insert" ON public.vehicle_fleet;
+DROP POLICY IF EXISTS "vehicle_fleet_update" ON public.vehicle_fleet;
+DROP POLICY IF EXISTS "vehicle_fleet_delete" ON public.vehicle_fleet;
 DROP POLICY IF EXISTS "vehicle_fleet_write"  ON public.vehicle_fleet;
-CREATE POLICY "vehicle_fleet_select" ON public.vehicle_fleet FOR SELECT TO authenticated USING (true);
-CREATE POLICY "vehicle_fleet_write"  ON public.vehicle_fleet FOR ALL    TO authenticated
-  USING (auth.role() = 'authenticated') WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "vehicle_fleet_select" ON public.vehicle_fleet FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "vehicle_fleet_insert" ON public.vehicle_fleet FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() IS NOT NULL AND auth.role() = 'authenticated');
+CREATE POLICY "vehicle_fleet_update" ON public.vehicle_fleet FOR UPDATE TO authenticated
+  USING (auth.uid() IS NOT NULL AND auth.role() = 'authenticated')
+  WITH CHECK (auth.uid() IS NOT NULL AND auth.role() = 'authenticated');
+CREATE POLICY "vehicle_fleet_delete" ON public.vehicle_fleet FOR DELETE TO authenticated
+  USING (auth.uid() IS NOT NULL AND auth.role() = 'authenticated');
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- TYRE RECORDS

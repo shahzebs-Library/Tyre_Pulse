@@ -1,8 +1,103 @@
 # TyrePulse — Developer Handoff
-**Last updated:** June 2026
+**Last updated:** 1 July 2026
 **Branch:** `main` (all work merged)
-**Web build status:** ✅ Clean — builds, 369/369 tests passing, auto-deploys to Vercel
+**Web build status:** ✅ Clean — builds, 507/507 tests passing, auto-deploys to Vercel
 **Mobile build status:** ✅ EAS Android build green — Expo SDK 53, auto-builds on push to `main`
+**DB migrations applied to live Supabase:** through **V51** (project `jhssdmeruxtrlqnwfksc`)
+**Live URL under test:** tyre-pulse-peach.vercel.app
+
+---
+
+## Session 6 — Fixing the data/AI section: production schema drift, CORS, approvals, UI crashes
+
+**Root theme:** most "X is not working" reports traced to the **live Supabase/edge state having drifted from the code**, not client bugs. Always verify the live DB/edge config (information_schema, pg_policies, pg_proc, edge logs), not just the migration files.
+
+### Knowledge Base / RAG — was never provisioned in prod (FIXED)
+- Live `knowledge_documents` had drifted: **no pgvector, no embedding column, old `source_type` schema, no `match_knowledge_documents()`** → every KB upload 400'd, table stayed empty.
+- **`MIGRATIONS_V51_KNOWLEDGE_BASE_RAG.sql` (applied live):** enable pgvector, rebuild `knowledge_documents` to the code contract (`doc_type` CHECK sop/manual/policy/inspection/rca/vendor/other, `asset_no`, `tags text[]`, `embedding vector(1536)`, org/created_by defaults), ivfflat cosine index, RLS (select=true / write Admin+Manager), and the `match_knowledge_documents(query_embedding, match_count, filter_doc_type, filter_site)` RPC. Table was empty → non-destructive.
+
+### Edge CORS — blocked ALL AI on the vercel.app site (FIXED)
+- `supabase/functions/_shared/auth.ts` only allowed `tyrepulse.app` + localhost. The app is tested on `tyre-pulse-peach.vercel.app`, so the browser CORS-blocked every `chat-ai` / `generate-embedding` POST after preflight (edge logs: OPTIONS 200, no POST). This — not a missing OpenAI key — kept KB un-indexed, the chatbot dead, and `ai_token_logs` empty.
+- Fix: allow any `^https://[a-z0-9-]+\.vercel\.app$` origin (prod alias + rotating previews) plus the existing list; `ALLOWED_ORIGINS` env override still wins. Safe because functions still require a valid approved-user JWT.
+- **Redeployed live: `chat-ai` v5 (verify_jwt=false), `generate-embedding` v4 (verify_jwt=true).**
+
+### Upload/Approvals — unified the two disconnected pipelines
+- There were **two pipelines** that didn't share data: Data Intake (`import_batches`/`import_rows`) and legacy Upload (`pending_uploads`). Each history/approval view read only one → the other always looked empty (the "not linked" symptom).
+- **`UploadApprovals.jsx`** now defaults to a **"Data Intake" tab** over `import_batches WHERE approval_status='pending_approval'`: **Approve & Commit** via the secure `import_commit_batch` RPC (fixes non-admin orphaned submissions **and** the client-side insert 400 on generated cols/CHECK enums), **Reject**, and a read-only staged-rows preview. Legacy `pending_uploads` kept as a secondary tab + added **Delete** action + console error logging (errors no longer swallowed into empty lists).
+- **`DataIntakeCenter.jsx` Recent imports** now has an Actions column: **Open** (→ history), **Delete** (staged/abandoned — cascades to rows/sheets/attachments), **Reverse** (committed — removes the live rows too).
+- New service fns in `src/lib/api/imports.js`: `listForApproval()`, `rejectBatch()`, `deleteBatch()`.
+
+### UI crash + swallowed-error fixes
+- **React error #130 crash** on KnowledgeBase and AiCostMonitor: both passed a JSX *element* to `PageHeader icon=` (which renders `<Icon/>`). Fixed to component reference (`icon={BookOpen}` / `icon={DollarSign}`). Every other page already used the component-ref form.
+- **Legacy "Preview" did nothing:** `UploadData.buildPreview()` had no try/catch and only advanced the step on its last line — any failure killed the click silently. Now wrapped, surfaces the error.
+
+### Still open / needs the user
+- **OPENAI_API_KEY / ANTHROPIC_API_KEY**: user says OpenAI key already set; verify with `supabase secrets list --project-ref jhssdmeruxtrlqnwfksc`. With CORS fixed, KB indexing + chat + AI Cost Monitor population should now work after a hard-refresh.
+- **Data Intake staging stall** (`total_rows=0`): proven NOT a schema/RLS/CHECK block — the wizard's `stageRows` was never completed for the two abandoned batches. Needs a live upload with a real file to capture the exact failing step (Console now logs; watch the `import_rows` POST in Network). The two stuck `staged 0/0` batches can now be removed with the new Delete button.
+- Untracked, intentionally not committed: `QA_DATA_INTAKE_REPORT.md`, `QA_REPORT.md`, `mobile/ui_screenshot.png`.
+
+---
+
+## Session 5 — RAG/AI tooling, AI cost logging, and the complete Multi-Country Data Intake Center
+
+### Web — new modules (all wired into router + nav, build-clean)
+- **Knowledge Base** (`/knowledge-base`, `src/pages/KnowledgeBase.jsx`) — RAG document ingestion: drag-drop upload, 1500/200 chunking, per-chunk embedding via the `generate-embedding` edge function, `knowledge_documents` storage, status/search/filter/re-index, RBAC-gated writes.
+- **AI Cost Monitor** (`/ai-cost-monitor`, `src/pages/AiCostMonitor.jsx`) — reads `ai_token_logs`; KPI cards, daily SVG sparkline, feature/site spend breakdown, raw log table, date/feature/model filters. Uses inline SVG/CSS (no chart lib — project has no recharts).
+- **Scheduled Reports** — `report_schedules` table created (V44) to back the pre-existing `ScheduledReports.jsx`.
+
+### Edge functions — AI token logging (deployed live)
+- `chat-ai` (v4, verify_jwt=false / custom auth) and `generate-embedding` (v3) now fire-and-forget insert into `ai_token_logs` with computed `cost_usd`, fully isolated from the response path. Model logged as base id (`claude-haiku-4-5`) to match the dashboard rate table.
+
+### DB migrations (V42–V50, all applied live)
+- **V42** vehicle_fleet RLS split · **V43** `profiles.push_token` (+index) · **V44** `report_schedules` + `ai_token_logs` (trigger fn auto-detect: this DB uses `set_updated_at()`, NOT `update_updated_at_column()`) · **V45/V46** import staging schema + commit/reverse/reprocess RPCs (prior session) · **V47** live-dedup `import_existing_keys` · **V48** accident dedup branch · **V49** inspection/workorder/warranty/gatepass branches · **V50** `suppliers` + `drivers` master tables + supplier/driver dedup branches.
+
+### Mobile — push notifications
+- `lib/notifications.ts` (channels, permission, Expo push-token registration to `profiles.push_token`, sync success/failure + daily inspection reminder), wired into `_layout.tsx` boot + `profile.tsx` settings + `offlineQueue.ts` sync. `app.json` plugin + permissions added.
+
+### Mobile — Play Store prep
+- `mobile/PLAY_STORE_SUBMISSION.md` runbook; `eas.json` `serviceAccountKeyPath` fixed; secrets gitignored. **Exact-alarm policy declaration** flagged as a likely Play rejection cause.
+
+### Data Intake Center — `Data correction.md` COMPLETE for all live-target modules
+Built across phases (see `docs/IMPORT_CENTER_MIGRATION_PLAN.md`). The shared engine (`src/lib/import/*`: parseWorkbook, mapping, transform, validate, synonyms, attachments, reconcile) + `src/pages/DataIntakeCenter.jsx` wizard now handle **10 modules**, each: upload → map (EN/Arabic) → transform → validate → in-batch **+ live-table** dedup → approve → audited commit (`import_commit_batch`) → reconcile / reverse.
+- **Phase 2** — Fleet / Tyre / Stock + live-table dedup (V47) + reconciliation report.
+- **Phase 3** — Accidents/Insurance: financial-integrity validation, ZIP **evidence-package ingestion** (`attachments.js`, jszip → private `import-files` bucket → `import_attachment_matches`, matched by claim/police/asset).
+- **Phase 4** — Inspections / Work Orders / Warranty / Gate Pass (V49).
+- **Master tables (V50)** — `suppliers` + `drivers` created (org/country-scoped, RLS like vehicle_fleet) and wired as live adapters.
+- Each legacy uploader (FleetMaster, UploadData, StockManagement, Accidents, Inspections, WorkOrders, WarrantyTracker, GatePass, SupplierManagement, DriverManagement) now opens the engine via `/data-intake?module=<key>`.
+- **Module → table:** fleet→vehicle_fleet, tyre→tyre_records, stock→stock_records, accident→accidents, inspection→inspections, workorder→work_orders, warranty→warranty_claims, gatepass→gate_passes, supplier→suppliers, driver→drivers.
+- **Natural keys** (mirror client `validate.js` keyParts → server `import_existing_keys`, joined with `chr(1)`): fleet=country+asset_no; tyre=country+serial_no; stock=country+site+description; accident=country+claim_no/police_report_no; inspection=country+asset_no+type+date+inspector; workorder=country+work_order_no; warranty=country+serial_number+claim_no; gatepass=country+asset_no+pass_date; supplier=country+code/name; driver=country+driver_id.
+- **Staging-only by design:** GPS/ERP + custom (source-defined / preserved in custom_data + Custom Field Catalogue — no fixed target table).
+
+### Known gaps / not done
+- **Mobile Play Store submission** needs external artifacts only you can supply: Firebase `google-services.json`, Play service-account key, `notification-icon.png`, store-listing copy + screenshots.
+- **No real-device mobile QA** pass run this session.
+- **Go-backend migration** (`Roadmap_latest.Md`) deliberately untouched.
+- Minor: overlapping `vehicle_fleet` RLS policies (old `vf_*` + new V42) worth consolidating; `package.json`/`app.json` mobile version drift (cosmetic, EAS-managed).
+
+---
+
+## Session 4 — Photo Upload Fix, Secure Storage & RLS Hardening
+
+### Mobile — Photo upload bug fixed (photos were silently failing)
+- **Root cause:** `TyreEditor.tsx` used `fetch(localUri).blob()` to read captured photos before uploading. In React Native / Expo, `fetch().blob()` on a `file://` URI yields an **empty blob** — photos appeared to upload but Supabase received 0 bytes.
+- Fixed: switched to `FileSystem.readAsStringAsync(localUri, { encoding: 'base64' })` → decode to `Uint8Array` → upload bytes directly. This matches the approach already in `photoUpload.ts` (offline queue path) which was working correctly.
+- Both the **immediate upload** path (TyreEditor, online inspection) and the **offline queue** path (`offlineQueue.ts` → `uploadAllPositionPhotos`) now use the same reliable FileSystem base64 method.
+
+### Mobile — Photo bucket alignment
+- `photoUpload.ts:uploadInspectionPhoto` was targeting bucket `inspection-photos` which **does not exist** in the Supabase storage setup (only `tyre-photos` is provisioned in MASTER_MIGRATION.sql).
+- Fixed: changed to `tyre-photos` with organized path prefix `inspections/{id}/{pos}_{ts}.{ext}` — consistent with TyreEditor's `photos/` prefix and accident photos' `accidents/` prefix, all in the same public bucket.
+
+### Mobile — Chunked SecureStore adapter
+- `mobile/lib/secureStorage.ts`: new chunked adapter for `expo-secure-store` handling auth tokens that exceed the **2 KB iOS Keychain item limit**. Supabase access+refresh token pairs routinely exceed 2 KB on accounts with large metadata. The adapter transparently splits values into 1800-char chunks with a metadata key.
+- Wired into `supabase.ts` as the `auth.storage` provider — replaces the old bare `SecureStore` adapter.
+
+### DB — vehicle_fleet RLS hardened (MIGRATIONS_V42)
+- `MIGRATIONS_V42_VEHICLE_FLEET_RLS.sql` + updated `MASTER_MIGRATION.sql`:
+  - Extended SELECT policy to `anon` role (required for registration/site-lookup flows that run before auth completes).
+  - Split the old catch-all `vehicle_fleet_write` policy into three explicit `vehicle_fleet_insert / _update / _delete` policies with `auth.uid() IS NOT NULL` guards.
+
+### Storage policy note
+The `tyre-photos` bucket is **public** (set in MASTER_MIGRATION.sql). All tyre, inspection, and accident photos are served via public URLs — no signed-URL round-trip required on read. The `storageRefs.ts` `resolveStorageUrl` function handles both the `tp-storage://` internal reference format (→ signed URL) and bare `https://` public URLs transparently.
 
 ---
 
@@ -337,15 +432,27 @@ Env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
 2. Device test — login, inspection submit, scanner, offline sync (all wired to live schema)
 
 ### Mobile (Next Sprint)
-3. Photo uploads to Supabase Storage from inspection (currently captured as local URIs)
-4. ✅ ~~Barcode/QR scanner~~ — delivered (`app/(app)/scanner.tsx`)
-5. Push notifications for sync failures and inspection reminders
-6. Play Store submission prep (signing keys, store listing, screenshots)
+3. ✅ Photo uploads to Supabase Storage — fixed in Session 4 (FileSystem base64 path, correct bucket)
+4. ✅ Barcode/QR scanner — delivered (`app/(app)/scanner.tsx`)
+5. ✅ Push notifications — delivered in Session 5 (`lib/notifications.ts`, profile settings, daily reminders)
+6. Play Store submission prep — `eas.json` production profile ready; need `google-services.json` + signing key + store listing assets
 
-### Web (Next Sprint)
-8. RAG document ingestion — SOP/policy PDF upload pipeline
-9. AI cost monitor — token usage dashboard
-10. Scheduled reports — monthly email of executive PDF
+### Web (Done)
+7. ✅ RAG document ingestion — `KnowledgeBase.jsx` at `/knowledge-base` (file upload + chunking + embedding)
+8. ✅ AI cost monitor — `AiCostMonitor.jsx` at `/ai-cost-monitor` (token logs + spend breakdown)
+9. ✅ Scheduled reports DB — `MIGRATIONS_V44` adds `report_schedules` table backing `ScheduledReports.jsx`
+
+### Web / Data Intake Center (Done — Session 5)
+10. ✅ Multi-Country Data Intake Center complete for all 10 live-target modules (`Data correction.md`) — see Session 5 above + `docs/IMPORT_CENTER_MIGRATION_PLAN.md`
+11. ✅ AI token logging deployed to `chat-ai` (v4) + `generate-embedding` (v3) edge functions
+12. ✅ All migrations V42–V50 applied to live Supabase
+
+### Remaining
+- **Play Store submission:** Add `google-services.json` (Firebase console, for push) + signing key (EAS managed credentials), submit the **exact-alarm policy declaration** in Play Console (see `mobile/PLAY_STORE_SUBMISSION.md`), then `eas build`/`eas submit -p android --profile production` from `mobile/`. Needs your Expo/Play credentials.
+- **Mobile device QA:** run a real-device pass — login, inspection submit, scanner, offline sync, push.
+- **GPS/ERP + custom import adapters:** staging-only by design (no fixed target table). Promote only if/when a target schema is defined.
+- **Go-backend migration** (`Roadmap_latest.Md`): not started — deliberately out of scope.
+- Minor: consolidate overlapping `vehicle_fleet` RLS policies; align mobile `package.json`/`app.json` version.
 
 ---
 

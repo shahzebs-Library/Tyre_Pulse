@@ -137,6 +137,59 @@ export function validateRow(transformed, module) {
     }
   }
 
+  // Accident / insurance financial integrity.
+  if (module === 'accident') {
+    const claim = row.claim_amount
+    const approved = row.claim_approved_amount
+    const recovered = row.recovered_amount
+    const repair = row.repair_cost
+    // Recovery cannot exceed the claim — a hard data error (block).
+    if (typeof recovered === 'number' && typeof claim === 'number' && claim > 0 && recovered > claim) {
+      issues.push({
+        field: 'recovered_amount',
+        severity: 'error',
+        code: 'RECOVERY_GT_CLAIM',
+        message: `Recovered (${recovered}) exceeds claim amount (${claim}).`,
+      })
+    }
+    // Approved should not exceed claimed.
+    if (typeof approved === 'number' && typeof claim === 'number' && claim > 0 && approved > claim) {
+      issues.push({
+        field: 'claim_approved_amount',
+        severity: 'warning',
+        code: 'APPROVED_GT_CLAIM',
+        message: `Approved (${approved}) exceeds claim amount (${claim}).`,
+      })
+    }
+    // Actual repair above the approved claim → cost overrun to review.
+    if (typeof repair === 'number' && typeof approved === 'number' && approved > 0 && repair > approved) {
+      issues.push({
+        field: 'repair_cost',
+        severity: 'warning',
+        code: 'ACTUAL_GT_APPROVED',
+        message: `Actual repair (${repair}) exceeds approved amount (${approved}).`,
+      })
+    }
+    // A claim with no estimate captured → follow-up needed.
+    if (typeof claim === 'number' && claim > 0 && isBlank(row.estimated_damage_cost)) {
+      issues.push({
+        field: 'estimated_damage_cost',
+        severity: 'warning',
+        code: 'ESTIMATE_MISSING',
+        message: 'Claim raised without an estimate — follow-up required.',
+      })
+    }
+    // No identifier at all → cannot dedup or trace; flag for review match.
+    if (isBlank(row.insurance_claim_no) && isBlank(row.police_report_no)) {
+      issues.push({
+        field: 'insurance_claim_no',
+        severity: 'warning',
+        code: 'NO_IDENTIFIER',
+        message: 'No claim or police report number — duplicate detection limited; review match required.',
+      })
+    }
+  }
+
   // Stock: critical level should not exceed min level.
   if (module === 'stock') {
     const min = row.min_level
@@ -147,6 +200,45 @@ export function validateRow(transformed, module) {
         severity: 'warning',
         code: 'CRITICAL_GT_MIN',
         message: `Critical level (${crit}) exceeds minimum level (${min}).`,
+      })
+    }
+  }
+
+  // Warranty: removal cannot precede fitment (date or km).
+  if (module === 'warranty') {
+    const fk = row.km_at_fitment
+    const rk = row.km_at_removal
+    if (typeof fk === 'number' && typeof rk === 'number' && rk < fk) {
+      issues.push({
+        field: 'km_at_removal',
+        severity: 'error',
+        code: 'REMOVAL_BEFORE_FITMENT',
+        message: `Removal KM (${rk}) is less than fitment KM (${fk}).`,
+      })
+    }
+    const fd = row.fitment_date
+    const rd = row.removal_date
+    if (!isBlank(fd) && !isBlank(rd) && isPlausibleDate(String(fd)) && isPlausibleDate(String(rd)) && String(rd) < String(fd)) {
+      issues.push({
+        field: 'removal_date',
+        severity: 'warning',
+        code: 'REMOVAL_DATE_BEFORE_FITMENT',
+        message: `Removal date (${rd}) precedes fitment date (${fd}).`,
+      })
+    }
+  }
+
+  // Work orders: total cost should not be less than its components.
+  if (module === 'workorder') {
+    const labour = typeof row.labour_cost === 'number' ? row.labour_cost : 0
+    const parts = typeof row.parts_cost === 'number' ? row.parts_cost : 0
+    const total = row.total_cost
+    if (typeof total === 'number' && (labour > 0 || parts > 0) && total + 0.01 < labour + parts) {
+      issues.push({
+        field: 'total_cost',
+        severity: 'warning',
+        code: 'TOTAL_LT_COMPONENTS',
+        message: `Total cost (${total}) is less than labour + parts (${labour + parts}).`,
       })
     }
   }
@@ -168,6 +260,20 @@ const NATURAL_KEY = {
   fleet: (r) => keyParts([r.country, r.asset_no]),
   tyre: (r) => keyParts([r.country, r.serial_no]),
   stock: (r) => keyParts([r.country, r.site, r.description]),
+  // Accident identity = claim no (preferred) else police report no.
+  accident: (r) => keyParts([r.country, r.insurance_claim_no || r.police_report_no]),
+  // Inspection event: asset + type + date + inspector.
+  inspection: (r) => keyParts([r.country, r.asset_no, r.inspection_type, r.inspection_date, r.inspector]),
+  // Work order: WO number is the identity.
+  workorder: (r) => keyParts([r.country, r.work_order_no]),
+  // Warranty: serial + claim ref (serial required).
+  warranty: (r) => keyParts([r.country, r.serial_number, r.claim_no]),
+  // Gate pass: no pass number column — asset + pass date.
+  gatepass: (r) => keyParts([r.country, r.asset_no, r.pass_date]),
+  // Supplier master: code preferred, else name.
+  supplier: (r) => keyParts([r.country, r.supplier_code || r.supplier_name]),
+  // Driver master: badge/employee id.
+  driver: (r) => keyParts([r.country, r.driver_id]),
 }
 
 /** Fields whose disagreement on a shared natural key constitutes a conflict. */
@@ -175,6 +281,13 @@ const CONFLICT_FIELDS = {
   fleet: ['make', 'model', 'vehicle_type', 'registration_no'],
   tyre: ['asset_no', 'issue_date', 'km_at_fitment'],
   stock: ['stock_qty'],
+  accident: ['asset_no', 'incident_date', 'claim_amount'],
+  inspection: ['status', 'severity', 'findings'],
+  workorder: ['asset_no', 'status', 'total_cost'],
+  warranty: ['asset_no', 'claim_status', 'credit_amount'],
+  gatepass: ['site', 'status'],
+  supplier: ['supplier_name', 'supplier_type', 'phone', 'email'],
+  driver: ['driver_name', 'license_no', 'status'],
 }
 
 function norm(v) {
@@ -246,6 +359,27 @@ export function classifyDuplicates(rows, module) {
     const dup_status = k != null ? keyStatus.get(k) || 'none' : 'none'
     return { ...r, dup_status }
   })
+}
+
+/**
+ * Compute the natural key for a single row in a module — the SAME key the
+ * server RPC import_existing_keys() builds, so UI live-dedup and tests stay in
+ * lockstep with the database. Returns null when the identifying component is
+ * absent (key not usable for matching).
+ *
+ *   fleet : country + asset_no
+ *   tyre  : country + serial_no
+ *   stock : country + site + description
+ *
+ * @param {Record<string,*>} row    Transformed row (flat) or { transformed }.
+ * @param {'fleet'|'tyre'|'stock'} module
+ * @returns {string|null}
+ */
+export function naturalKey(row, module) {
+  const keyFn = NATURAL_KEY[module]
+  if (!keyFn) throw new Error(`naturalKey: unknown module "${module}"`)
+  const view = row && row.transformed && typeof row.transformed === 'object' ? row.transformed : row
+  return keyFn(view || {})
 }
 
 export { NATURAL_KEY }

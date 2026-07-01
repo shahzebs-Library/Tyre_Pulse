@@ -758,6 +758,8 @@ export default function UploadData() {
   // ── Preview + duplicate check ───────────────────────────────────────────────
 
   async function buildPreview() {
+    setError('')
+    try {
     const built = buildRows(headers, rows, mapping)
     setPreview(built.slice(0, 5))
     setSkipIds(new Set())
@@ -830,6 +832,10 @@ export default function UploadData() {
     }
 
     setStep('preview')
+    } catch (err) {
+      console.error('[UploadData] buildPreview failed:', err)
+      setError('Could not build the preview: ' + (err?.message || 'unknown error') + '. Check the column mapping and try again.')
+    }
   }
 
   // ── Optional AI cleaning of low-confidence rows (off by default) ────────────
@@ -1081,7 +1087,30 @@ export default function UploadData() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Upload Data" subtitle="Import tyre and fleet data from Excel or CSV files" icon={Upload} />
+      <PageHeader
+        title="Upload Data"
+        subtitle="Import tyre and fleet data from Excel or CSV files"
+        icon={Upload}
+        actions={
+          <button
+            onClick={() => navigate('/data-intake?module=tyre')}
+            className="btn-primary flex items-center gap-2 text-sm"
+          >
+            <Database size={15} /> Import via Data Intake Center
+          </button>
+        }
+      />
+      <p className="text-xs text-gray-500 -mt-2 mb-1">
+        New: use the controlled{' '}
+        <button
+          type="button"
+          onClick={() => navigate('/data-intake?module=tyre')}
+          className="text-green-400 hover:text-green-300 underline underline-offset-2"
+        >
+          Data Intake Center
+        </button>{' '}
+        for validated, audited, multi-country imports with duplicate detection and rollback.
+      </p>
       <StepBar current={step} />
 
       <AnimatePresence mode="wait">

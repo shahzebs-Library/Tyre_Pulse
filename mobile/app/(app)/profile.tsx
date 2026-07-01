@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, Alert,
+  View, Text, StyleSheet, TouchableOpacity, Alert, Switch,
   ScrollView, StatusBar, ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -10,6 +10,13 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage, Language } from '../../contexts/LanguageContext'
 import { getPendingCount, syncQueue, retryFailed, clearSynced, getQueue } from '../../lib/offlineQueue'
 import { canAccessAdmin, canManageUsers, canUseAI, canViewAccidents } from '../../lib/permissions'
+import {
+  requestNotificationPermission,
+  registerPushToken,
+  scheduleDailyInspectionReminder,
+  cancelDailyInspectionReminder,
+  getDailyReminderTrigger,
+} from '../../lib/notifications'
 
 const LANG_OPTIONS: { code: Language; labelKey: string }[] = [
   { code: 'en', labelKey: 'language.english' },
@@ -25,6 +32,8 @@ export default function ProfileScreen() {
   const [syncing, setSyncing] = useState(false)
   const [queueTotal, setQueueTotal] = useState(0)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [reminderEnabled, setReminderEnabled] = useState(false)
+  const [reminderHour, setReminderHour] = useState(7)
 
   const textAlign = isRTL ? 'right' : 'left'
 
@@ -42,6 +51,32 @@ export default function ProfileScreen() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Register push token and load reminder state on mount.
+  useEffect(() => {
+    if (profile?.id) {
+      registerPushToken(profile.id).catch(() => {})
+    }
+    getDailyReminderTrigger().then(trigger => {
+      if (trigger) { setReminderEnabled(true); setReminderHour(trigger.hour) }
+    })
+  }, [profile?.id])
+
+  async function toggleReminder(enabled: boolean) {
+    const granted = await requestNotificationPermission()
+    if (!granted) {
+      Alert.alert('Notifications Blocked', 'Enable notifications for TyrePulse in your device settings to use reminders.')
+      return
+    }
+    setReminderEnabled(enabled)
+    if (enabled) {
+      await scheduleDailyInspectionReminder(reminderHour, 0)
+    } else {
+      await cancelDailyInspectionReminder()
+    }
+  }
+
+  const reminderHours = [6, 7, 8, 9, 10]
 
   async function handleSync() {
     setSyncing(true)
@@ -192,6 +227,42 @@ export default function ProfileScreen() {
               )}
             </TouchableOpacity>
           ))}
+        </View>
+
+        {/* Notifications section */}
+        <Text style={[styles.sectionTitle, { textAlign }]}>Notifications</Text>
+        <View style={styles.section}>
+          <View style={[styles.detailRow, { borderBottomWidth: 0 }, isRTL && styles.detailRowRTL]}>
+            <Ionicons name="notifications-outline" size={16} color="#64748b" />
+            <Text style={[styles.detailLabel, { flex: 1, textAlign }]}>Daily Inspection Reminder</Text>
+            <Switch
+              value={reminderEnabled}
+              onValueChange={toggleReminder}
+              trackColor={{ false: '#e2e8f0', true: '#bbf7d0' }}
+              thumbColor={reminderEnabled ? '#16a34a' : '#94a3b8'}
+            />
+          </View>
+          {reminderEnabled && (
+            <View style={[styles.reminderTimeRow, isRTL && styles.detailRowRTL]}>
+              <Text style={styles.reminderTimeLabel}>Remind me at</Text>
+              <View style={styles.reminderHourRow}>
+                {reminderHours.map(h => (
+                  <TouchableOpacity
+                    key={h}
+                    style={[styles.hourChip, reminderHour === h && styles.hourChipActive]}
+                    onPress={async () => {
+                      setReminderHour(h)
+                      await scheduleDailyInspectionReminder(h, 0)
+                    }}
+                  >
+                    <Text style={[styles.hourChipText, reminderHour === h && styles.hourChipTextActive]}>
+                      {h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Sync section */}
@@ -381,4 +452,17 @@ const styles = StyleSheet.create({
   },
   signOutText: { fontSize: 15, fontWeight: '700', color: '#dc2626' },
   version: { textAlign: 'center', fontSize: 12, color: '#cbd5e1', marginTop: 8 },
+  reminderTimeRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingBottom: 14, flexWrap: 'wrap',
+  },
+  reminderTimeLabel: { fontSize: 13, color: '#64748b', minWidth: 80 },
+  reminderHourRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  hourChip: {
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+    backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0',
+  },
+  hourChipActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
+  hourChipText: { fontSize: 12, fontWeight: '600', color: '#64748b' },
+  hourChipTextActive: { color: '#fff' },
 })

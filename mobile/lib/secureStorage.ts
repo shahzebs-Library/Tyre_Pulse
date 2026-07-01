@@ -6,11 +6,16 @@ type ChunkMeta = {
   chunks: number
 }
 
-const metaKey = (key: string) => `${key}:meta`
-const chunkKey = (key: string, index: number) => `${key}:chunk:${index}`
+const metaKey = (key: string) => `${key}_meta`
+const chunkKey = (key: string, index: number) => `${key}_chunk_${index}`
 
 export const secureStorage = {
   async getItem(key: string): Promise<string | null> {
+    if (!key || typeof key !== 'string') {
+      console.warn('[SecureStorage] Invalid key provided to getItem:', key)
+      return null
+    }
+    
     const metaRaw = await SecureStore.getItemAsync(metaKey(key))
     if (!metaRaw) return SecureStore.getItemAsync(key)
 
@@ -26,6 +31,11 @@ export const secureStorage = {
   },
 
   async setItem(key: string, value: string): Promise<void> {
+    if (!key || typeof key !== 'string') {
+      console.warn('[SecureStorage] Invalid key provided to setItem:', key)
+      return
+    }
+    
     await this.removeItem(key)
 
     if (value.length <= CHUNK_SIZE) {
@@ -46,6 +56,11 @@ export const secureStorage = {
   },
 
   async removeItem(key: string): Promise<void> {
+    if (!key || typeof key !== 'string') {
+      console.warn('[SecureStorage] Invalid key provided to removeItem:', key)
+      return
+    }
+    
     const metaRaw = await SecureStore.getItemAsync(metaKey(key))
     if (metaRaw) {
       try {

@@ -18,3 +18,6 @@ dist/
 web-build/
 # Google Play service account key (provided via CI secret, never commit)
 google-service-account.json
+# Firebase config for FCM push (per-environment, never commit)
+google-services.json
+GoogleService-Info.plist

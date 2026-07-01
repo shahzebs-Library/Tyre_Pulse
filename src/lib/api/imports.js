@@ -59,6 +59,89 @@ export async function uploadOriginalFile(file, { module, country, sha256 }) {
   return { fileId: data.id, bucket: BUCKET, path, sha256 }
 }
 
+/**
+ * Upload one extracted attachment (from an accident evidence ZIP) to the PRIVATE
+ * import-files bucket and record it in import_files. We reuse the import-files
+ * bucket (not accident-photos) so EVERY artefact of an import — the source
+ * workbook and its evidence package — lives under one org/country/batch path,
+ * shares one RLS surface, and is governed by one retention policy. Downloads are
+ * always via short-lived signed URLs; no public URL is ever produced.
+ *
+ * Path: <org>/<country>/accident/<batchId>/attachments/<uuid>/<filename>.
+ *
+ * @param {File|Blob} file            Extracted file (a Blob carries no .name).
+ * @param {Object}    opts
+ * @param {string}    opts.batchId    Owning import batch.
+ * @param {string}    [opts.country]  Country scope for the storage path.
+ * @param {string}    [opts.filename] Original filename (required when file is a Blob).
+ * @param {string}    [opts.sha256]   Optional content hash for dedupe.
+ * @returns {Promise<{ fileId: string|null, bucket: string, path: string }>}
+ */
+export async function uploadAttachment(file, { batchId, country, filename, sha256 } = {}) {
+  const user = await currentUser()
+  const org = await currentOrgId(user?.id)
+  const name = filename || file?.name || 'attachment'
+  const safeName = name.replace(/[^\w.\-]+/g, '_')
+  const path = `${org}/${country || 'NA'}/accident/${batchId || 'unbatched'}/attachments/${uuid()}/${safeName}`
+
+  const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file, {
+    contentType: file?.type || 'application/octet-stream',
+    upsert: false,
+  })
+  if (upErr) throw new ServiceError(upErr.message, upErr.statusCode, upErr)
+
+  // Record the bytes as an import_files row so the attachment is a first-class,
+  // retention-tracked artefact (best-effort: a missing row must not lose the file).
+  let fileId = null
+  try {
+    const row = {
+      country: country || null,
+      storage_bucket: BUCKET,
+      storage_path: path,
+      original_filename: name,
+      mime_type: file?.type || null,
+      size_bytes: file?.size ?? null,
+      sha256: sha256 ?? null,
+      created_by: user?.id ?? null,
+    }
+    const { data, error } = await supabase.from('import_files').insert(row).select('id').single()
+    if (error && error.code !== '23505') throw new ServiceError(error.message, error.code, error)
+    fileId = data?.id ?? null
+  } catch (err) {
+    if (err instanceof ServiceError && err.code === '23505') fileId = null
+    else throw err
+  }
+
+  return { fileId, bucket: BUCKET, path }
+}
+
+/**
+ * Bulk-insert attachment match records (V45 import_attachment_matches). Columns
+ * are explicit and real: batch_id, file_id, match_key, match_kind,
+ * matched_entity_type, matched_entity_id, status. organisation_id is set by the
+ * table default + RLS (app_current_org), never by the client.
+ *
+ * @param {Array<{ batchId?: string, fileId?: string|null, matchKey?: string,
+ *   matchKind?: string, matchedEntityType?: string|null,
+ *   matchedEntityId?: string|null, status?: string }>} rows
+ * @returns {Promise<number>} number of rows recorded
+ */
+export async function recordAttachmentMatches(rows) {
+  if (!rows?.length) return 0
+  const payload = rows.map((r) => ({
+    batch_id: r.batchId ?? null,
+    file_id: r.fileId ?? null,
+    match_key: r.matchKey ?? null,
+    match_kind: r.matchKind ?? null,
+    matched_entity_type: r.matchedEntityType ?? null,
+    matched_entity_id: r.matchedEntityId ?? null,
+    status: r.status ?? 'unmatched',
+  }))
+  const { error } = await supabase.from('import_attachment_matches').insert(payload)
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return payload.length
+}
+
 /** Create a staging batch for one sheet/module/country. Returns the batch id. */
 export async function createBatch(b) {
   const user = await currentUser()
@@ -162,6 +245,26 @@ export async function commitBatch(batchId) {
   return data
 }
 
+/**
+ * Live-table duplicate detection (V47). Returns the set of natural-key strings
+ * already present in the module's live table for the caller's organisation, so
+ * the Data Intake Center can skip re-importing an existing record. The key is
+ * built server-side identically to validate.naturalKey().
+ *
+ * @param {{ module: 'fleet'|'tyre'|'stock', country?: string }} params
+ * @returns {Promise<Set<string>>}
+ */
+export async function existingKeys({ module, country }) {
+  const { data, error } = await supabase.rpc('import_existing_keys', {
+    p_module: module,
+    p_country: country ?? null,
+  })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  // RPC returns SETOF text → array of strings (rows) or array of { import_existing_keys }.
+  const keys = (data || []).map((r) => (typeof r === 'string' ? r : r?.import_existing_keys)).filter(Boolean)
+  return new Set(keys)
+}
+
 export async function reverseBatch(batchId) {
   const { data, error } = await supabase.rpc('import_reverse_batch', { p_batch_id: batchId })
   if (error) throw new ServiceError(error.message, error.code, error)
@@ -195,6 +298,35 @@ export async function getBatchRows(batchId, limit = 500) {
       .select('id,source_row_no,validation_status,dup_status,action,transformed_data,target_record_id,processed_at')
       .eq('batch_id', batchId).order('source_row_no').limit(limit),
   )
+}
+
+/**
+ * Permanently delete an import batch and (via ON DELETE CASCADE) its staged
+ * rows, sheets and attachment matches. Use for abandoned / draft / staged /
+ * rejected batches. A COMMITTED batch must be reversed first (reverseBatch) so
+ * the live rows it produced are removed too — this guards against orphaning them.
+ */
+export async function deleteBatch(batchId) {
+  const { error } = await supabase.from('import_batches').delete().eq('id', batchId)
+  if (error) throw new ServiceError(error.message, error.code, error)
+}
+
+/** Data Intake batches awaiting an approver's decision (canonical pipeline). */
+export async function listForApproval({ country, limit = 100 } = {}) {
+  let q = supabase.from('import_batches').select(BATCH_COLS)
+    .eq('approval_status', 'pending_approval')
+    .order('created_at', { ascending: false }).limit(limit)
+  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+  return unwrap(await q)
+}
+
+/** Reject a submitted batch without committing it to the live tables. */
+export async function rejectBatch(batchId) {
+  const user = await currentUser()
+  const { error } = await supabase.from('import_batches')
+    .update({ approval_status: 'rejected', approver: user?.id ?? null, approved_at: new Date().toISOString() })
+    .eq('id', batchId)
+  if (error) throw new ServiceError(error.message, error.code, error)
 }
 
 export async function getRowIssues(rowId) {

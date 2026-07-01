@@ -8,8 +8,9 @@ import PageHeader from '../components/ui/PageHeader'
 import {
   User, Users, TrendingUp, TrendingDown, Award, AlertTriangle,
   BarChart2, Download, FileText, FileSpreadsheet, Search, Filter,
-  X, ChevronDown, ChevronUp, RefreshCw, Eye, Calendar,
+  X, ChevronDown, ChevronUp, RefreshCw, Eye, Calendar, Upload,
 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
@@ -496,6 +497,7 @@ function DriverDrawer({ driver, currency, onClose }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function DriverManagement() {
+  const navigate = useNavigate()
   const { activeCurrency, activeCountry } = useSettings()
 
   // Data state
@@ -756,6 +758,12 @@ export default function DriverManagement() {
         subtitle="CPK ranking, failure analysis and tyre cost impact by driver"
         icon={Users}
         actions={<>
+          <button
+            onClick={() => navigate('/data-intake?module=driver')}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-medium transition-colors"
+          >
+            <Upload size={13} /> Import via Data Intake Center
+          </button>
           <button
             onClick={load}
             className="p-2 rounded-lg text-gray-500 hover:text-green-400 transition-colors hover:bg-green-400/10"

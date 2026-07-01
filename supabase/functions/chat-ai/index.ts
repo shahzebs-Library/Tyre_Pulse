@@ -4,6 +4,9 @@ import { corsHeaders, jsonResponse, requireApprovedRole } from '../_shared/auth.
 
 // Model is locked server-side — never accept a client-supplied value
 const MODEL = 'claude-haiku-4-5-20251001'
+// Base model id (without date suffix) logged to ai_token_logs so it matches the
+// rate table the AI Cost Monitor dashboard uses for cost estimation.
+const MODEL_BASE = 'claude-haiku-4-5'
 
 // Per-model price in USD per 1M tokens (input / output). Used for cost tracking.
 const MODEL_PRICING: Record<string, { in: number; out: number }> = {
@@ -151,6 +154,26 @@ serve(async (req) => {
       svc.from('ai_usage_log').insert(usageRow).then(({ error }) => {
         if (error) console.error('[chat-ai] usage log insert failed:', error.message)
       })
+
+      // AI Cost Monitor dashboard reads ai_token_logs. Fire-and-forget insert —
+      // wrapped so a logging failure can NEVER affect the user-facing response.
+      try {
+        svc.from('ai_token_logs').insert({
+          user_id: userId,
+          model: MODEL_BASE,
+          feature: 'chat',
+          prompt_tokens: inputTokens,
+          completion_tokens: outputTokens,
+          cost_usd: costUsd(MODEL, inputTokens, outputTokens),
+          site,
+          country,
+          created_at: new Date(nowMs).toISOString(),
+        }).then(({ error }) => {
+          if (error) console.error('[chat-ai] ai_token_logs insert failed:', error.message)
+        })
+      } catch (e) {
+        console.error('[chat-ai] ai_token_logs insert threw (ignored):', e)
+      }
       if (content) {
         svc.from('ai_response_cache').upsert({
           query_hash: cacheKey,

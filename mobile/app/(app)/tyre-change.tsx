@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
-import { saveRecord } from '../../lib/recordQueue'
+import { saveCommand } from '../../lib/recordQueue'
 import PhotoCapture from '../../components/PhotoCapture'
 import { UserRole } from '../../lib/types'
 
@@ -45,7 +45,7 @@ export default function TyreChangeScreen() {
     setSaving(true)
     const today = new Date().toISOString().split('T')[0]
     const sn = serial.trim() || null
-    const res = await saveRecord('tyre_records', {
+    const res = await saveCommand('TYRE_CHANGE', {
       asset_no: assetNo.trim(),
       site: site.trim() || null,
       country: profile?.country ?? null,

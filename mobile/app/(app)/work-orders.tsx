@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
-import { saveRecord } from '../../lib/recordQueue'
+import { saveCommand } from '../../lib/recordQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
@@ -79,7 +79,7 @@ export default function WorkOrdersScreen() {
     if (!asset.trim()) { Alert.alert(t('modules.workOrders.missingAsset')); return }
     setSaving(true)
     const wono = `WO-${Date.now().toString().slice(-8)}`
-    const res = await saveRecord('work_orders', {
+    const res = await saveCommand('WORK_ORDER', {
       work_order_no: wono,
       asset_no: asset.trim(),
       work_type: workType,

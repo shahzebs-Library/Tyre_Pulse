@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
-import { saveRecord } from '../../lib/recordQueue'
+import { saveCommand } from '../../lib/recordQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
@@ -84,7 +84,7 @@ export default function RcaScreen() {
     if (saving) return
     if (!rootCause.trim()) { Alert.alert(t('modules.rca.missingCause')); return }
     setSaving(true)
-    const res = await saveRecord('rca_records', {
+    const res = await saveCommand('RCA', {
       asset_no: asset.trim() || null,
       tyre_serial: serial.trim() || null,
       brand: brand.trim() || null,

@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRoleGuard } from '../../hooks/useRoleGuard'
-import { saveRecord } from '../../lib/recordQueue'
+import { saveCommand } from '../../lib/recordQueue'
 import PhotoCapture from '../../components/PhotoCapture'
 import { UserRole } from '../../lib/types'
 
@@ -52,7 +52,7 @@ export default function ReportIssueScreen() {
     if (!title.trim()) { Alert.alert(t('modules.reportIssue.raisedTitle'), t('modules.reportIssue.missingTitle')); return }
     setSaving(true)
     const due = dueDays != null ? new Date(Date.now() + dueDays * 86400000).toISOString() : null
-    const res = await saveRecord('corrective_actions', {
+    const res = await saveCommand('REPORT_ISSUE', {
       title: title.trim(),
       priority,
       site: site.trim() || null,

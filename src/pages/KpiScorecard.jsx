@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as kpiTargets from '../lib/api/kpiTargets'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import {
@@ -56,12 +55,10 @@ export default function KpiScorecard() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const cf = activeCountry !== 'All' ? activeCountry : null
-      const flt = q => cf ? q.eq('country', cf) : q
       const [r, a, t] = await Promise.all([
-        fetchAllPages((from, to) => flt(supabase.from('tyre_records').select('id,issue_date,risk_level,cost_per_tyre,qty,created_at,country,site').order('issue_date')).range(from, to), { max: 200000 }),
-        flt(supabase.from('corrective_actions').select('id,due_date,status,country').neq('status', 'Closed')),
-        supabase.from('kpi_targets').select('*').eq('year', yearFilter),
+        kpiTargets.listKpiTyreRecords({ country: activeCountry }),
+        kpiTargets.listOpenCorrectiveActions({ country: activeCountry }),
+        kpiTargets.listKpiTargets({ year: yearFilter }),
       ])
       setRecords(r.data || [])
       setActions(a.data || [])
@@ -120,16 +117,9 @@ export default function KpiScorecard() {
       const [y, mo] = lastYoyMonth.split('-')
       const lastDay = new Date(Number(y), Number(mo), 0).getDate()
       const yoyEnd = `${lastYoyMonth}-${lastDay}`
-      const cf = activeCountry !== 'All' ? activeCountry : null
-      const { data } = await fetchAllPages((from, to) => {
-        let q = supabase
-          .from('tyre_records')
-          .select('id,issue_date,risk_level,cost_per_tyre,qty,created_at,country,site')
-          .gte('issue_date', yoyStart)
-          .lte('issue_date', yoyEnd)
-        if (cf) q = q.eq('country', cf)
-        return q.range(from, to)
-      }, { max: 200000 })
+      const { data } = await kpiTargets.listKpiTyreRecordsInRange({
+        start: yoyStart, end: yoyEnd, country: activeCountry,
+      })
       setYoyRecords(data || [])
       setYoyLoading(false)
     }
@@ -241,7 +231,7 @@ export default function KpiScorecard() {
       created_by: profile?.id ?? null,
       updated_at: new Date().toISOString(),
     }))
-    await supabase.from('kpi_targets').upsert(upserts, { onConflict: 'metric,year,month,site' })
+    await kpiTargets.upsertKpiTargets(upserts)
     setTargets(draftTargets)
     setEditing(false)
     setSaving(false)

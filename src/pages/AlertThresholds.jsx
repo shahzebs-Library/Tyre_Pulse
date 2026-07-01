@@ -5,7 +5,7 @@ import {
   ChevronRight, AlertTriangle, Gauge, Calendar, DollarSign,
   Search, Filter, X, Save, Loader2, ToggleLeft, ToggleRight,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import * as alertThresholds from '../lib/api/alertThresholds'
 import { useAuth } from '../contexts/AuthContext'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -503,14 +503,13 @@ export default function AlertThresholds() {
     if (!profile?.id) return
     setLoading(true)
     setError(null)
-    const { data, error: err } = await supabase
-      .from('alert_thresholds')
-      .select('*')
-      .eq('user_id', profile.id)
-      .order('created_at', { ascending: false })
-    if (err) { setError(err.message); setLoading(false); return }
-    setThresholds(data || [])
-    setLoading(false)
+    try {
+      const data = await alertThresholds.listAlertThresholds({ userId: profile.id })
+      setThresholds(data || [])
+      setLoading(false)
+    } catch (err) {
+      setError(err.message); setLoading(false)
+    }
   }, [profile?.id])
 
   useEffect(() => { fetch() }, [fetch])
@@ -533,37 +532,32 @@ export default function AlertThresholds() {
       org_id:  profile.org_id ?? null,
       updated_at: new Date().toISOString(),
     }
-    let err
-    if (modal.mode === 'edit') {
-      const { error: e } = await supabase
-        .from('alert_thresholds')
-        .update(payload)
-        .eq('id', modal.initial.id)
-      err = e
-    } else {
-      const { error: e } = await supabase
-        .from('alert_thresholds')
-        .insert(payload)
-      err = e
+    try {
+      if (modal.mode === 'edit') {
+        await alertThresholds.updateAlertThreshold(modal.initial.id, payload)
+      } else {
+        await alertThresholds.createAlertThreshold(payload)
+      }
+    } catch (err) {
+      setSaving(false)
+      setError(err.message); return
     }
     setSaving(false)
-    if (err) { setError(err.message); return }
     setModal(null)
     fetch()
   }
 
   async function handleDelete(id) {
-    const { error: err } = await supabase.from('alert_thresholds').delete().eq('id', id)
-    if (err) { setError(err.message); return }
+    try {
+      await alertThresholds.deleteAlertThreshold(id)
+    } catch (err) { setError(err.message); return }
     setThresholds(prev => prev.filter(t => t.id !== id))
   }
 
   async function handleToggle(id, active) {
-    const { error: err } = await supabase
-      .from('alert_thresholds')
-      .update({ active, updated_at: new Date().toISOString() })
-      .eq('id', id)
-    if (err) { setError(err.message); return }
+    try {
+      await alertThresholds.updateAlertThreshold(id, { active, updated_at: new Date().toISOString() })
+    } catch (err) { setError(err.message); return }
     setThresholds(prev => prev.map(t => t.id === id ? { ...t, active } : t))
   }
 

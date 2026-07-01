@@ -21,7 +21,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as rotations from '../lib/api/rotations'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -682,17 +682,7 @@ export default function RotationSchedule() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await fetchAllPages((from, to) => {
-        let query = supabase
-          .from('tyre_records')
-          .select('id,asset_no,serial_number,serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country')
-          .order('issue_date', { ascending: true })
-        if (activeCountry && activeCountry !== 'All') {
-          query = query.eq('country', activeCountry)
-        }
-        return query.range(from, to)
-      })
-      if (err) throw err
+      const data = await rotations.listRotationRecords({ country: activeCountry })
       setRecords(data || [])
     } catch (e) {
       setError(e.message || 'Failed to load data')
@@ -722,15 +712,7 @@ export default function RotationSchedule() {
     setSchedLoading(true)
     setSchedError(null)
     try {
-      let query = supabase
-        .from('tyre_rotations')
-        .select('id,asset_no,site,scheduled_date,priority,status,notes,current_km,country,created_at')
-        .order('scheduled_date', { ascending: true })
-      if (activeCountry && activeCountry !== 'All') {
-        query = query.or(`country.eq.${activeCountry},country.is.null`)
-      }
-      const { data, error: err } = await query
-      if (err) throw err
+      const data = await rotations.listRotations({ country: activeCountry })
       setSchedules((data || []).map(mapRow))
     } catch (e) {
       setSchedError(e.message || 'Failed to load schedule')
@@ -760,8 +742,7 @@ export default function RotationSchedule() {
         country: (activeCountry && activeCountry !== 'All') ? activeCountry : null,
         created_by: uid,
       }))
-      const { error: err } = await supabase.from('tyre_rotations').insert(rows)
-      if (err) throw err
+      await rotations.createRotations(rows)
       await fetchSchedules()
     } catch (e) {
       setSchedError(e.message || 'Failed to save schedule')
@@ -774,11 +755,7 @@ export default function RotationSchedule() {
     setSchedBusy(true)
     setSchedError(null)
     try {
-      const { error: err } = await supabase
-        .from('tyre_rotations')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', id)
-      if (err) throw err
+      await rotations.updateRotation(id, { status, updated_at: new Date().toISOString() })
       await fetchSchedules()
     } catch (e) {
       setSchedError(e.message || 'Failed to update schedule')
@@ -791,8 +768,7 @@ export default function RotationSchedule() {
     setSchedBusy(true)
     setSchedError(null)
     try {
-      const { error: err } = await supabase.from('tyre_rotations').delete().eq('id', id)
-      if (err) throw err
+      await rotations.deleteRotation(id)
       await fetchSchedules()
     } catch (e) {
       setSchedError(e.message || 'Failed to remove schedule')

@@ -60,6 +60,34 @@ describe('import engine — transform', () => {
   })
 })
 
+describe('import engine — work order mapping (real Gulf JC export)', () => {
+  it('maps the key work-order columns to the right target columns', () => {
+    const cols = [
+      'Veh No.', 'Driver Name', 'Tracking Category', 'Location', 'Workshop Location',
+      'JC No.', 'Complaints', 'QC Remarks', 'Job Done Description', 'Manpow Hrs',
+      'Vehicle In Date', 'Vehicle Out Date', 'Reason Of Repair', 'Spare Parts', 'Total Spare Cost',
+    ]
+    const rows = [{
+      'Veh No.': 'BH009', 'Location': 'KSP-TP', 'Workshop Location': 'KSP_TP-ST',
+      'JC No.': 'GCKR/JC/0053/0226', 'Vehicle In Date': '2026-02-01', 'Vehicle Out Date': '2026-02-02',
+      'Manpow Hrs': '2.0', 'Total Spare Cost': '131.0',
+    }]
+    const out = suggestMapping({ columns: cols, module: 'workorder', sampleRows: rows })
+    const t = Object.fromEntries(out.map((m) => [m.sourceHeader, m.target]))
+    expect(t['Veh No.']).toBe('asset_no')
+    expect(t['JC No.']).toBe('work_order_no')
+    expect(t['Location']).toBe('site')
+    expect(t['Workshop Location']).toBe('workshop_name')
+    expect(t['Vehicle In Date']).toBe('opened_at')
+    expect(t['Vehicle Out Date']).toBe('completed_at')
+    expect(t['Reason Of Repair']).toBe('work_type')
+    expect(t['Total Spare Cost']).toBe('parts_cost')
+    // dates must NOT be mis-mapped onto an id column, hours must NOT hit a cost column
+    expect(t['Vehicle In Date']).not.toBe('asset_no')
+    expect(['work_order_no', 'asset_no', 'total_cost']).not.toContain(t['Manpow Hrs'])
+  })
+})
+
 describe('import engine — tyre spend derivation', () => {
   it('maps quantity and derives the per-line total from qty × unit cost', () => {
     const mapping = [

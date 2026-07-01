@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  History, BarChart3, Layers, Tags, Loader2, AlertTriangle, RotateCcw, ChevronRight, ChevronDown, Database, CheckCircle2,
+  History, BarChart3, Layers, Tags, Loader2, AlertTriangle, RotateCcw, ChevronRight, ChevronDown, Database, CheckCircle2, Link2, Plus,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -14,7 +14,9 @@ const TABS = [
   { key: 'quality', label: 'Data Quality', icon: BarChart3 },
   { key: 'profiles', label: 'Mapping Profiles', icon: Layers },
   { key: 'custom', label: 'Custom Fields', icon: Tags },
+  { key: 'aliases', label: 'Aliases', icon: Link2 },
 ]
+const ALIAS_ENTITY_TYPES = ['site', 'supplier', 'brand', 'driver', 'make', 'model']
 
 function chip(s) {
   const ok = s === 'committed'
@@ -48,6 +50,9 @@ export default function DataIntakeHistory() {
   const [quality, setQuality] = useState(null)
   const [profiles, setProfiles] = useState([])
   const [customFields, setCustomFields] = useState([])
+  const [aliases, setAliases] = useState([])
+  const [aliasForm, setAliasForm] = useState({ entityType: 'site', rawValue: '', canonicalValue: '' })
+  const [savingAlias, setSavingAlias] = useState(false)
   const [drill, setDrill] = useState(null) // { batch, rows }
   const [busyId, setBusyId] = useState(null)
   const [reconId, setReconId] = useState(null) // batch id whose reconciliation row is expanded
@@ -59,10 +64,23 @@ export default function DataIntakeHistory() {
       else if (tab === 'quality') setQuality(await imports.importControlStats({ country: activeCountry }))
       else if (tab === 'profiles') setProfiles(await imports.listProfiles({ country: activeCountry }))
       else if (tab === 'custom') setCustomFields(await imports.listCustomFields({ country: activeCountry }))
+      else if (tab === 'aliases') setAliases(await imports.listAliases({ country: activeCountry }))
     } catch (e) {
       setError(e?.message || 'Could not load data.')
     } finally { setLoading(false) }
   }, [tab, activeCountry])
+
+  async function addAlias() {
+    if (!aliasForm.rawValue.trim() || !aliasForm.canonicalValue.trim()) return
+    setSavingAlias(true); setError('')
+    try {
+      await imports.saveAlias({ ...aliasForm, country: activeCountry })
+      setAliasForm((f) => ({ ...f, rawValue: '', canonicalValue: '' }))
+      await load()
+    } catch (e) {
+      setError(e?.message || 'Could not save alias.')
+    } finally { setSavingAlias(false) }
+  }
   useEffect(() => { load() }, [load])
 
   async function openDrill(batch) {
@@ -291,6 +309,52 @@ export default function DataIntakeHistory() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* ALIASES */}
+          {tab === 'aliases' && (
+            <div className="space-y-4">
+              <p className="text-xs text-gray-500">Normalise inconsistent master-data spellings on import (e.g. “Qiddiya-1” → “Qiddiya G1”, “Bridge Stone” → “Bridgestone”). Aliases rewrite values during import; they never create master records.</p>
+              {isElevated && (
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Entity</label>
+                    <select value={aliasForm.entityType} onChange={(e) => setAliasForm((f) => ({ ...f, entityType: e.target.value }))} className="bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm capitalize">
+                      {ALIAS_ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="block text-xs text-gray-500 mb-1">Raw value (as in file)</label>
+                    <input value={aliasForm.rawValue} onChange={(e) => setAliasForm((f) => ({ ...f, rawValue: e.target.value }))} placeholder="Qiddiya-1" className="w-full bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm" />
+                  </div>
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="block text-xs text-gray-500 mb-1">Canonical value</label>
+                    <input value={aliasForm.canonicalValue} onChange={(e) => setAliasForm((f) => ({ ...f, canonicalValue: e.target.value }))} placeholder="Qiddiya G1" className="w-full bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm" />
+                  </div>
+                  <button onClick={addAlias} disabled={savingAlias || !aliasForm.rawValue.trim() || !aliasForm.canonicalValue.trim()} className="px-3 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-1.5 disabled:opacity-50">
+                    {savingAlias ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Add alias
+                  </button>
+                </div>
+              )}
+              <div className="border border-gray-800 rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Entity</th><th className="text-left px-3 py-2">Raw value</th><th className="text-left px-3 py-2"></th><th className="text-left px-3 py-2">Canonical</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Added</th></tr></thead>
+                  <tbody>
+                    {aliases.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-600">No master-data aliases yet — add one to normalise inconsistent site/supplier/brand spellings on import.</td></tr>}
+                    {aliases.map((a) => (
+                      <tr key={a.id} className="border-t border-gray-800">
+                        <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 capitalize">{a.entity_type}</span></td>
+                        <td className="px-3 py-2 text-gray-300">{a.raw_value}</td>
+                        <td className="px-3 py-2 text-gray-600"><ChevronRight size={14} /></td>
+                        <td className="px-3 py-2 font-medium text-white">{a.canonical_value}</td>
+                        <td className="px-3 py-2 text-gray-400">{a.country || 'any'}</td>
+                        <td className="px-3 py-2 text-gray-500 text-xs">{a.created_at ? new Date(a.created_at).toLocaleDateString('en-GB') : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </>

@@ -31,6 +31,8 @@ export { transformRow } from './transform'
 
 export { validateRow, classifyDuplicates, naturalKey, countryConflict, NATURAL_KEY } from './validate'
 
+export { buildAliasMap, applyAliases, applyAliasesToRow } from './aliases'
+
 export {
   extractZip,
   matchAttachment,

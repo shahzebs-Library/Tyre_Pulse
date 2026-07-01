@@ -10,6 +10,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import {
   parseWorkbook, sha256OfArrayBuffer, suggestMapping, transformRow, validateRow,
   classifyDuplicates, naturalKey, countryConflict, rowFingerprint, MODULE_FIELDS,
+  buildAliasMap, applyAliasesToRow,
   extractZip, matchAttachment, buildMatchRows,
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
@@ -67,6 +68,7 @@ export default function DataIntakeCenter() {
   const [recent, setRecent] = useState([])
   const [files, setFiles] = useState([])
   const [countryAck, setCountryAck] = useState(false)
+  const [aliasMaps, setAliasMaps] = useState(null) // { site, supplier, brand } → Map
 
   // Accident-only: evidence ZIP ingestion (Phase 3). Each item tracks one file
   // through extract → match → upload → record, with a per-file status/error so a
@@ -131,7 +133,7 @@ export default function DataIntakeCenter() {
 
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null)
-    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false)
+    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setAliasMaps(null)
     setAttachItems([]); setAttachWarnings([]); setAttachDone(false); setAttachBusy(false)
   }
 
@@ -166,6 +168,12 @@ export default function DataIntakeCenter() {
       setMapping(suggestMapping({ columns: sheet.columns, module, sampleRows: sheet.rows.slice(0, 20) }))
       // offer reusable mapping profiles for this module/country (non-blocking)
       imports.listProfiles({ module, country: activeCountry }).then(setProfiles).catch(() => setProfiles([]))
+      // load master-data aliases once so the validate pass can normalise spellings
+      imports.listAliases({ country: activeCountry }).then((rows) => {
+        const by = { site: [], supplier: [], brand: [] }
+        for (const a of rows || []) if (by[a.entity_type]) by[a.entity_type].push(a)
+        setAliasMaps({ site: buildAliasMap(by.site), supplier: buildAliasMap(by.supplier), brand: buildAliasMap(by.brand) })
+      }).catch(() => setAliasMaps(null))
       setStep(1)
     } catch (err) {
       setError(err?.message || 'Could not start the import.')
@@ -216,7 +224,14 @@ export default function DataIntakeCenter() {
   // ── Step 3: validate + classify (in-batch + live-table dedup) ────────────────
   async function runValidation() {
     const rows = sheet.rows.map((raw, i) => {
-      const { mapped, transformed, custom } = transformRow(raw, mapping, { module })
+      const { mapped, transformed: t0, custom } = transformRow(raw, mapping, { module })
+      // Normalise master-data spellings via saved aliases (site/supplier/brand).
+      let transformed = t0
+      if (aliasMaps) {
+        for (const field of ['site', 'supplier', 'brand']) {
+          if (aliasMaps[field]?.size) transformed = applyAliasesToRow(transformed, field, aliasMaps[field])
+        }
+      }
       const v = validateRow(transformed, module)
       return {
         sourceRowNo: i + 1, raw, mapped, transformed, custom,

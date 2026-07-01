@@ -5,6 +5,7 @@
  */
 import { supabase } from '../supabase'
 import { ServiceError, unwrap } from './_client'
+import { normaliseToken } from '../import/synonyms'
 
 const BUCKET = 'import-files'
 
@@ -558,6 +559,51 @@ export async function getProfileRules(profileId) {
 export async function touchProfile(profileId) {
   await supabase.from('import_mapping_profiles')
     .update({ last_used_at: new Date().toISOString() }).eq('id', profileId)
+}
+
+// ── Master-data aliases (directive §9) ───────────────────────────────────────
+/** Active raw→canonical aliases for an entity type, country-scoped. */
+export async function listAliases({ entityType, country } = {}) {
+  let q = supabase.from('import_master_aliases')
+    .select('id,entity_type,country,raw_value,canonical_value,canonical_id,active,created_at')
+    .eq('active', true).order('raw_value')
+  if (entityType) q = q.eq('entity_type', entityType)
+  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+  return unwrap(await q)
+}
+
+/**
+ * Create or update one alias. Manual upsert (the unique key is on
+ * COALESCE(country,'') — a functional index PostgREST can't name for onConflict).
+ * organisation_id is set by the table DEFAULT + RLS, never by the client.
+ */
+export async function saveAlias({ entityType, country, rawValue, canonicalValue, canonicalId } = {}) {
+  if (!entityType || !rawValue || !canonicalValue) {
+    throw new ServiceError('entityType, rawValue and canonicalValue are required', 'validation')
+  }
+  const user = await currentUser()
+  const norm = normaliseToken(rawValue)
+  const scopeCountry = country && country !== 'All' ? country : null
+  let sel = supabase.from('import_master_aliases').select('id')
+    .eq('entity_type', entityType).eq('raw_value_norm', norm)
+  sel = scopeCountry ? sel.eq('country', scopeCountry) : sel.is('country', null)
+  const { data: existing } = await sel.maybeSingle()
+  const row = {
+    entity_type: entityType, country: scopeCountry,
+    raw_value: String(rawValue).trim(), raw_value_norm: norm,
+    canonical_value: String(canonicalValue).trim(), canonical_id: canonicalId ?? null,
+    active: true, created_by: user?.id ?? null,
+  }
+  if (existing?.id) {
+    const { error } = await supabase.from('import_master_aliases')
+      .update({ canonical_value: row.canonical_value, canonical_id: row.canonical_id, active: true })
+      .eq('id', existing.id)
+    if (error) throw new ServiceError(error.message, error.code, error)
+    return existing.id
+  }
+  const { data, error } = await supabase.from('import_master_aliases').insert(row).select('id').single()
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data.id
 }
 
 export async function listCustomFields({ module, country } = {}) {

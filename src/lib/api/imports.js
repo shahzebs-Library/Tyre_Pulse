@@ -273,6 +273,110 @@ export async function approveBatch(batchId) {
   if (error) throw new ServiceError(error.message, error.code, error)
 }
 
+// Tunable company limits for post-import automation. Overridable via opts.limits
+// so thresholds can move to a per-org config table later with no code change.
+const AUTOMATION_LIMITS = { TREAD_MIN_MM: 3, PRESSURE_MIN: 90, PRESSURE_LOW_REPEAT: 2 }
+
+/**
+ * Value-producing automation (directive §20). After a batch commits, generate
+ * org/country-scoped operational alerts + corrective actions from the just-
+ * committed rows. Best-effort and idempotent (skips assets already alerted /
+ * with an open action); NEVER throws — the commit result stays authoritative.
+ *
+ * @returns {Promise<{alerts:number, actions:number, skipped:number, error?:string}>}
+ */
+export async function runPostImportAutomation(batchId, module, opts = {}) {
+  const limits = { ...AUTOMATION_LIMITS, ...(opts.limits || {}) }
+  try {
+    if (module !== 'tyre') return { alerts: 0, actions: 0, skipped: 0 }
+    const batch = await getBatch(batchId)
+    const scopeCountry = batch?.country ?? opts.country ?? null
+    const rows = await getBatchRows(batchId, 5000)
+    // Only act on rows that actually became live records.
+    const live = rows.filter((r) => r.target_record_id != null).map((r) => r.transformed_data || {})
+    const user = await currentUser()
+
+    // ── Alerts: critical risk or low tread ───────────────────────────────────
+    const alertCand = []
+    for (const t of live) {
+      if (!t.asset_no) continue
+      const critical = String(t.risk_level || '').toLowerCase() === 'critical'
+      const tread = Number(t.tread_depth)
+      const lowTread = Number.isFinite(tread) && tread < limits.TREAD_MIN_MM
+      if (!critical && !lowTread) continue
+      const bits = [t.serial_no && `serial ${t.serial_no}`, lowTread && `tread ${tread}mm`, critical && 'risk Critical'].filter(Boolean)
+      alertCand.push({
+        asset_no: t.asset_no, alert_type: 'tyre_risk', severity: critical ? 'critical' : 'high',
+        message: `Imported tyre on ${t.asset_no}${bits.length ? ' — ' + bits.join(', ') : ''}.`,
+        site: t.site ?? null, country: scopeCountry ?? t.country ?? null,
+        resolved: false, is_active: true, created_by: user?.id ?? null,
+      })
+    }
+
+    // ── Corrective actions: repeated low pressure on one asset ────────────────
+    const byAsset = new Map()
+    for (const t of live) {
+      if (!t.asset_no) continue
+      const p = Number(t.pressure_reading)
+      if (!(Number.isFinite(p) && p < limits.PRESSURE_MIN)) continue
+      const a = byAsset.get(t.asset_no) || { count: 0, site: t.site ?? null, serial: t.serial_no ?? null }
+      a.count++
+      byAsset.set(t.asset_no, a)
+    }
+    const actionCand = []
+    for (const [asset, a] of byAsset) {
+      if (a.count < limits.PRESSURE_LOW_REPEAT) continue
+      actionCand.push({
+        title: `Repeated low tyre pressure — asset ${asset}`, priority: 'high',
+        site: a.site, region: null,
+        description: `${a.count} tyres on asset ${asset} imported with pressure below ${limits.PRESSURE_MIN}.`,
+        root_cause: 'Under-inflation', asset_no: asset, tyre_serial: a.serial,
+        status: 'open', country: scopeCountry, due_date: null, created_by: user?.id ?? null,
+      })
+    }
+
+    let skipped = 0
+    // Idempotency: skip assets already alerted / with an open action (RLS org-scoped).
+    if (alertCand.length) {
+      const assets = [...new Set(alertCand.map((c) => c.asset_no))]
+      let eq = supabase.from('alerts').select('asset_no').eq('alert_type', 'tyre_risk').eq('is_active', true).in('asset_no', assets)
+      if (scopeCountry) eq = eq.eq('country', scopeCountry)
+      const { data: existing } = await eq
+      const seen = new Set((existing || []).map((e) => e.asset_no))
+      const fresh = alertCand.filter((c) => !seen.has(c.asset_no))
+      skipped += alertCand.length - fresh.length
+      alertCand.length = 0; alertCand.push(...fresh)
+    }
+    if (actionCand.length) {
+      const assets = [...new Set(actionCand.map((c) => c.asset_no))]
+      let eq = supabase.from('corrective_actions').select('asset_no').eq('status', 'open').in('asset_no', assets)
+      if (scopeCountry) eq = eq.eq('country', scopeCountry)
+      const { data: existing } = await eq
+      const seen = new Set((existing || []).map((e) => e.asset_no))
+      const fresh = actionCand.filter((c) => !seen.has(c.asset_no))
+      skipped += actionCand.length - fresh.length
+      actionCand.length = 0; actionCand.push(...fresh)
+    }
+
+    let alerts = 0
+    let actions = 0
+    if (alertCand.length) {
+      const { error } = await supabase.from('alerts').insert(alertCand)
+      if (error) console.warn('[automation] alerts insert failed:', error.message)
+      else alerts = alertCand.length
+    }
+    if (actionCand.length) {
+      const { error } = await supabase.from('corrective_actions').insert(actionCand)
+      if (error) console.warn('[automation] corrective_actions insert failed:', error.message)
+      else actions = actionCand.length
+    }
+    return { alerts, actions, skipped }
+  } catch (err) {
+    console.warn('[automation] post-import automation failed:', err?.message || err)
+    return { alerts: 0, actions: 0, skipped: 0, error: err?.message || String(err) }
+  }
+}
+
 /** Commit an approved batch into live tables via the secure server RPC. */
 export async function commitBatch(batchId) {
   const { data, error } = await supabase.rpc('import_commit_batch', { p_batch_id: batchId })
@@ -463,6 +567,64 @@ export async function listCustomFields({ module, country } = {}) {
   if (module) q = q.eq('module', module)
   if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
   return unwrap(await q)
+}
+
+/**
+ * Rich Import Control Dashboard aggregation (directive Section 21). Windowed over
+ * the most-recent 1000 org+country-scoped batches; every rate is divide-by-zero
+ * guarded and avgApprovalHours is null when no batch has been approved.
+ */
+export async function importControlStats({ country } = {}) {
+  let q = supabase.from('import_batches')
+    .select('id,country,module,source_system,approval_status,import_status,total_rows,ready_rows,warning_rows,error_rows,duplicate_rows,conflict_rows,imported_rows,skipped_rows,uploader,created_at,approved_at')
+    .order('created_at', { ascending: false }).limit(1000)
+  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+  const batches = unwrap(await q)
+
+  const bump = (o, k) => { const key = k ?? 'Unassigned'; o[key] = (o[key] || 0) + 1 }
+  const s = {
+    total: batches.length, byCountry: {}, byModule: {}, bySource: {}, byStatus: {},
+    successRate: 0, validationErrorRate: 0, duplicateRate: 0, conflictRate: 0,
+    totalRows: 0, errorRows: 0, warningRows: 0, duplicateRows: 0, conflictRows: 0,
+    importedRows: 0, skippedRows: 0, failedRows: 0, pendingApproval: 0,
+    avgApprovalHours: null, topUploaders: [], latest: [],
+  }
+  let committed = 0
+  let apprMs = 0
+  let apprN = 0
+  const uploaders = new Map()
+  for (const b of batches) {
+    bump(s.byCountry, b.country); bump(s.byModule, b.module)
+    bump(s.bySource, b.source_system ?? 'Unknown'); bump(s.byStatus, b.import_status)
+    if (b.import_status === 'committed') committed++
+    if (b.approval_status === 'pending_approval') s.pendingApproval++
+    s.totalRows += b.total_rows || 0
+    s.errorRows += b.error_rows || 0
+    s.warningRows += b.warning_rows || 0
+    s.duplicateRows += b.duplicate_rows || 0
+    s.conflictRows += b.conflict_rows || 0
+    s.importedRows += b.imported_rows || 0
+    s.skippedRows += b.skipped_rows || 0
+    if (b.approved_at && b.created_at) {
+      const ms = new Date(b.approved_at).getTime() - new Date(b.created_at).getTime()
+      if (Number.isFinite(ms) && ms >= 0) { apprMs += ms; apprN++ }
+    }
+    if (b.uploader) uploaders.set(b.uploader, (uploaders.get(b.uploader) || 0) + 1)
+  }
+  s.failedRows = s.errorRows
+  s.successRate = s.total ? Math.round((committed / s.total) * 100) : 0
+  s.validationErrorRate = s.totalRows ? Math.round((s.errorRows / s.totalRows) * 100) : 0
+  s.duplicateRate = s.totalRows ? Math.round((s.duplicateRows / s.totalRows) * 100) : 0
+  s.conflictRate = s.totalRows ? Math.round((s.conflictRows / s.totalRows) * 100) : 0
+  s.avgApprovalHours = apprN ? Math.round((apprMs / apprN) / 3600000 * 10) / 10 : null
+  s.topUploaders = [...uploaders.entries()]
+    .map(([uploader, count]) => ({ uploader, count }))
+    .sort((a, b) => b.count - a.count).slice(0, 5)
+  s.latest = batches.slice(0, 8).map((b) => ({
+    id: b.id, module: b.module, country: b.country, status: b.import_status,
+    importedRows: b.imported_rows || 0, totalRows: b.total_rows || 0, createdAt: b.created_at,
+  }))
+  return s
 }
 
 /** Aggregate counts for the import quality dashboard. */

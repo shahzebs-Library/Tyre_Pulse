@@ -56,7 +56,7 @@ export default function DataIntakeHistory() {
     setLoading(true); setError('')
     try {
       if (tab === 'imports') setBatches(await imports.listBatches({ country: activeCountry, limit: 100 }))
-      else if (tab === 'quality') setQuality(await imports.importQualityStats({ country: activeCountry }))
+      else if (tab === 'quality') setQuality(await imports.importControlStats({ country: activeCountry }))
       else if (tab === 'profiles') setProfiles(await imports.listProfiles({ country: activeCountry }))
       else if (tab === 'custom') setCustomFields(await imports.listCustomFields({ country: activeCountry }))
     } catch (e) {
@@ -205,15 +205,48 @@ export default function DataIntakeHistory() {
                   <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">{l}</p><p className={`text-2xl font-bold ${c}`}>{v}</p></div>
                 ))}
               </div>
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[['Success rate', `${quality.successRate}%`, 'text-green-400'], ['Validation error rate', `${quality.validationErrorRate}%`, 'text-red-400'], ['Duplicate rate', `${quality.duplicateRate}%`, 'text-amber-400'], ['Avg approval time', quality.avgApprovalHours == null ? '—' : `${quality.avgApprovalHours}h`, 'text-white']].map(([l, v, c]) => (
+                  <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">{l}</p><p className={`text-2xl font-bold ${c}`}>{v}</p></div>
+                ))}
+              </div>
+              <div className="grid md:grid-cols-3 gap-4">
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                  <p className="text-sm text-gray-400 mb-2">By status</p>
-                  {Object.entries(quality.byStatus).map(([k, v]) => <div key={k} className="flex justify-between text-sm py-0.5"><span className="text-gray-300">{k}</span><span className="text-gray-500">{v}</span></div>)}
+                  <p className="text-sm text-gray-400 mb-2">By country</p>
+                  {Object.entries(quality.byCountry).map(([k, v]) => <div key={k} className="flex justify-between text-sm py-0.5"><span className="text-gray-300">{k}</span><span className="text-gray-500">{v}</span></div>)}
+                </div>
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <p className="text-sm text-gray-400 mb-2">By source system</p>
+                  {Object.entries(quality.bySource).map(([k, v]) => <div key={k} className="flex justify-between text-sm py-0.5"><span className="text-gray-300">{k}</span><span className="text-gray-500">{v}</span></div>)}
                 </div>
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                   <p className="text-sm text-gray-400 mb-2">By module</p>
                   {Object.entries(quality.byModule).map(([k, v]) => <div key={k} className="flex justify-between text-sm py-0.5"><span className="text-gray-300 capitalize">{k}</span><span className="text-gray-500">{v}</span></div>)}
                 </div>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <p className="text-sm text-gray-400 mb-2">Row quality</p>
+                  {[['Warning rows', quality.warningRows], ['Duplicate rows', quality.duplicateRows], ['Conflict rows', quality.conflictRows], ['Skipped rows', quality.skippedRows], ['Failed rows', quality.failedRows]].map(([l, v]) => <div key={l} className="flex justify-between text-sm py-0.5"><span className="text-gray-300">{l}</span><span className="text-gray-500">{v}</span></div>)}
+                </div>
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <p className="text-sm text-gray-400 mb-2">Top uploaders</p>
+                  {quality.topUploaders.length === 0 && <p className="text-xs text-gray-600">No uploads yet.</p>}
+                  {quality.topUploaders.map((u) => <div key={u.uploader} className="flex justify-between text-sm py-0.5"><span className="text-gray-300 truncate max-w-[220px]" title={u.uploader}>{u.uploader}</span><span className="text-gray-500">{u.count}</span></div>)}
+                </div>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <p className="text-sm text-gray-400 mb-2">Latest imports</p>
+                {quality.latest.length === 0 && <p className="text-xs text-gray-600">No imports yet.</p>}
+                {quality.latest.map((i) => (
+                  <div key={i.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs border-t border-gray-800/60 py-1.5 first:border-t-0">
+                    <span className="capitalize text-gray-300 font-medium">{i.module}</span>
+                    <span className="text-gray-500">{i.country || '—'}</span>
+                    <span className={chip(i.status)}>{i.status}</span>
+                    <span className="text-gray-500">{i.importedRows}/{i.totalRows} rows</span>
+                    <span className="text-gray-600 ml-auto">{i.createdAt ? new Date(i.createdAt).toLocaleString('en-GB') : ''}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}

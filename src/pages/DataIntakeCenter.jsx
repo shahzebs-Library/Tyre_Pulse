@@ -63,6 +63,7 @@ export default function DataIntakeCenter() {
   const [annotated, setAnnotated] = useState([])
   const [counts, setCounts] = useState(null)
   const [result, setResult] = useState(null)
+  const [automation, setAutomation] = useState(null)
   const [recent, setRecent] = useState([])
   const [files, setFiles] = useState([])
   const [countryAck, setCountryAck] = useState(false)
@@ -130,7 +131,7 @@ export default function DataIntakeCenter() {
 
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null)
-    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setError(''); setProfiles([]); setCountryAck(false)
+    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false)
     setAttachItems([]); setAttachWarnings([]); setAttachDone(false); setAttachBusy(false)
   }
 
@@ -379,7 +380,15 @@ export default function DataIntakeCenter() {
       await imports.submitForApproval(batchId)
       if (isElevated) await imports.approveBatch(batchId)
       const res = await imports.commitBatch(batchId)
-      setResult(res); loadRecent()
+      setResult(res)
+      // Value-producing automation (directive §20). Best-effort — must never
+      // block or fail the commit the operator already succeeded at.
+      if (res?.status === 'committed') {
+        imports.runPostImportAutomation(batchId, module, { country: activeCountry })
+          .then((a) => { if (a && (a.alerts || a.actions)) setAutomation(a) })
+          .catch(() => {})
+      }
+      loadRecent()
     } catch (err) {
       setError(err?.message || 'Commit failed.')
     } finally { setBusy(false) }
@@ -641,6 +650,11 @@ export default function DataIntakeCenter() {
             <div className="bg-green-900/20 border border-green-700/50 rounded-xl p-6 text-green-300">
               <CheckCircle2 className="mb-2" />
               <p className="font-semibold">{result.status === 'committed' ? `Committed — ${result.inserted} row(s) inserted, ${result.skipped} skipped.` : `Status: ${result.status}`}</p>
+              {automation && (automation.alerts > 0 || automation.actions > 0) && (
+                <p className="mt-2 text-xs text-sky-300 flex items-center gap-1.5">
+                  <AlertTriangle size={13} /> Automation: {automation.alerts} tyre-risk alert(s) and {automation.actions} corrective action(s) generated{automation.skipped ? ` · ${automation.skipped} skipped (already open)` : ''}.
+                </p>
+              )}
               <button onClick={reset} className="mt-3 text-sm underline">Start another import</button>
             </div>
           )}

@@ -10,6 +10,7 @@ import {
   Download, Search, RefreshCw, Activity, Upload,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import { gatePasses } from '../lib/api'
 
 const STATUS_CONFIG = {
   Cleared: { color: 'text-green-400', bg: 'bg-green-900/30', border: 'border-green-700/50' },
@@ -26,6 +27,8 @@ export default function GatePass() {
   const [siteFilter, setSiteFilter]   = useState('')
   const [checkResult, setCheckResult] = useState(null) // null | 'found' | 'not-found'
   const [inspection, setInspection]   = useState(null)
+  const [blockers, setBlockers]       = useState(null) // safety gate: {total,blocked,corrective_actions,tyres,inspections}
+  const [issueError, setIssueError]   = useState('')
   const [passes, setPasses]           = useState([])
   const [sites, setSites]             = useState([])
   const [checking, setChecking]       = useState(false)
@@ -97,6 +100,11 @@ export default function GatePass() {
     setCheckResult(null)
     setInspection(null)
     setShowDenialInput(false)
+    setBlockers(null)
+    setIssueError('')
+    // Safety gate: surface open critical defects for this asset before release.
+    gatePasses.listGatePassBlockers({ assetNo: assetSearch.trim(), country: activeCountry })
+      .then(setBlockers).catch(() => setBlockers(null))
     const { data } = await supabase
       .from('inspections')
       .select('id, inspection_type, scheduled_date, inspector, created_at, status, site')
@@ -117,24 +125,44 @@ export default function GatePass() {
   }
 
   async function issuePass(status) {
-    setIssuing(true)
-    await supabase.from('gate_passes').insert({
+    setIssuing(true); setIssueError('')
+    const values = {
       asset_no:      assetSearch.trim(),
       site:          siteFilter || inspection?.site || null,
       country:       activeCountry !== 'All' ? activeCountry : null,
       pass_date:     today,
       status,
       inspection_id: inspection?.id || null,
-      cleared_by:    profile?.id || null,
+      cleared_by:    status === 'Cleared' ? (profile?.id || null) : null,
       cleared_at:    status === 'Cleared' ? new Date().toISOString() : null,
       denial_reason: status === 'Denied' ? (denialReason || null) : null,
-    })
+    }
+    try {
+      if (status === 'Cleared') {
+        // Route release through the safety gate — refuses when critical defects are open.
+        const { blockers: b } = await gatePasses.createGatePass(values)
+        if (b) setBlockers(b)
+      } else {
+        await supabase.from('gate_passes').insert(values) // denials/other are never blocked
+      }
+    } catch (err) {
+      if (err?.code === 'BLOCKED') {
+        setBlockers(err.blockers)
+        setIssueError(err.message)
+        setIssuing(false)
+        return
+      }
+      setIssueError(err?.message || 'Could not issue the pass.')
+      setIssuing(false)
+      return
+    }
     await loadPasses()
     setCheckResult(null)
     setInspection(null)
     setAssetSearch('')
     setDenialReason('')
     setShowDenialInput(false)
+    setBlockers(null)
     setIssuing(false)
   }
 
@@ -338,9 +366,22 @@ export default function GatePass() {
               <p>Inspector: <span className="text-white">{inspection.inspector || 'Not specified'}</span></p>
               <p>Recorded: <span className="text-white">{new Date(inspection.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span></p>
             </div>
-            <button onClick={() => issuePass('Cleared')} disabled={issuing}
-              className="btn-primary px-6 disabled:opacity-50">
-              {issuing ? 'Issuing...' : 'Issue Gate Pass'}
+            {blockers?.blocked && (
+              <div className="rounded-lg p-3 mb-3" style={{ background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.45)' }}>
+                <p className="text-red-300 font-semibold text-sm mb-1">⛔ Release blocked — {blockers.total} open critical safety item(s)</p>
+                <ul className="text-xs text-red-200/90 space-y-0.5 list-disc pl-4">
+                  {blockers.corrective_actions?.map((c) => <li key={c.id}>Corrective action: {c.title} ({c.status})</li>)}
+                  {blockers.tyres?.map((t) => <li key={t.id}>Critical tyre {t.serial_no || ''} {t.brand ? `(${t.brand})` : ''}</li>)}
+                  {blockers.inspections?.map((i) => <li key={i.id}>Critical inspection: {i.title || i.inspection_type} ({i.status})</li>)}
+                </ul>
+                <p className="text-[11px] text-red-200/70 mt-1">Resolve/close these before the vehicle can be released.</p>
+              </div>
+            )}
+            {issueError && !blockers?.blocked && <p className="text-red-400 text-xs mb-2">{issueError}</p>}
+            <button onClick={() => issuePass('Cleared')} disabled={issuing || blockers?.blocked}
+              className="btn-primary px-6 disabled:opacity-50"
+              title={blockers?.blocked ? 'Blocked by open critical safety items' : undefined}>
+              {issuing ? 'Issuing...' : blockers?.blocked ? 'Release blocked' : 'Issue Gate Pass'}
             </button>
           </div>
         )}

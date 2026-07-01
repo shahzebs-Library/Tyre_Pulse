@@ -4,7 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // records the table queried and the eq/or filters applied, and resolves to a
 // configurable { data, error }.
 const h = vi.hoisted(() => {
-  const state = { result: { data: [], error: null }, last: null }
+  const state = { result: { data: [], error: null }, last: null, rpc: { data: null, error: null }, lastRpc: null }
+  function rpc(name, args) { state.lastRpc = { name, args }; return Promise.resolve(state.rpc) }
   function from(table) {
     const calls = { eq: [], or: [] }
     const b = {
@@ -24,17 +25,19 @@ const h = vi.hoisted(() => {
     state.last = b
     return b
   }
-  return { state, supabase: { from } }
+  return { state, supabase: { from, rpc } }
 })
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
 
-const { assets, tyres, stock, workOrders, inspections, accidents, ServiceError, applyCountry } =
+const { assets, tyres, stock, workOrders, inspections, accidents, gatePasses, ServiceError, applyCountry } =
   await import('../lib/api')
 
 beforeEach(() => {
   h.state.result = { data: [], error: null }
   h.state.last = null
+  h.state.rpc = { data: null, error: null }
+  h.state.lastRpc = null
 })
 
 describe('service layer — assets', () => {
@@ -141,6 +144,38 @@ describe('service layer — accidents', () => {
   it('throws a ServiceError on a Supabase error', async () => {
     h.state.result = { data: null, error: { message: 'boom', code: '42501' } }
     await expect(accidents.listAccidents()).rejects.toBeInstanceOf(ServiceError)
+  })
+})
+
+describe('service layer — gatePasses safety gate', () => {
+  it('lists blockers via the gate_pass_blockers RPC with trimmed asset + country', async () => {
+    h.state.rpc = { data: { asset_no: 'A1', total: 0, blocked: false, corrective_actions: [], tyres: [], inspections: [] }, error: null }
+    await gatePasses.listGatePassBlockers({ assetNo: '  A1 ', country: 'KSA' })
+    expect(h.state.lastRpc.name).toBe('gate_pass_blockers')
+    expect(h.state.lastRpc.args).toEqual({ p_asset_no: 'A1', p_country: 'KSA' })
+  })
+
+  it('passes null country for "All"', async () => {
+    h.state.rpc = { data: { total: 0, blocked: false }, error: null }
+    await gatePasses.listGatePassBlockers({ assetNo: 'A1', country: 'All' })
+    expect(h.state.lastRpc.args.p_country).toBeNull()
+  })
+
+  it('refuses to create a Cleared pass when blockers exist (BLOCKED)', async () => {
+    h.state.rpc = { data: { asset_no: 'A1', total: 2, blocked: true, corrective_actions: [{ id: 'c1' }], tyres: [], inspections: [] }, error: null }
+    await expect(gatePasses.createGatePass({ asset_no: 'A1', status: 'Cleared', country: 'KSA' }))
+      .rejects.toMatchObject({ code: 'BLOCKED' })
+  })
+
+  it('allows a Denied pass without running the safety gate', async () => {
+    h.state.result = { data: { id: 'g1', status: 'Denied' }, error: null }
+    const { pass } = await gatePasses.createGatePass({ asset_no: 'A1', status: 'Denied' })
+    expect(h.state.lastRpc).toBeNull() // gate not consulted for denials
+    expect(pass.status).toBe('Denied')
+  })
+
+  it('requires an assetNo', async () => {
+    await expect(gatePasses.listGatePassBlockers({})).rejects.toBeInstanceOf(ServiceError)
   })
 })
 

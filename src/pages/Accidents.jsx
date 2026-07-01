@@ -4,8 +4,7 @@ import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import AccidentDetailModal from '../components/AccidentDetailModal'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as accidentsApi from '../lib/api/accidents'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -206,11 +205,7 @@ export default function Accidents() {
   const loadRecords = useCallback(async () => {
     setLoading(true)
     // Paginate past the 1000-row cap so the list AND its exports are complete.
-    const { data, error: err } = await fetchAllPages((from, to) => {
-      let q = supabase.from('accidents').select('*').order('incident_date', { ascending: false }).range(from, to)
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      return q
-    }, { max: 100000 })
+    const { data, error: err } = await accidentsApi.listAllAccidentsForPage({ country: activeCountry })
     if (err) setError(err.message)
     else setRecords(data ?? [])
     setLoading(false)
@@ -220,10 +215,9 @@ export default function Accidents() {
 
   // Load fleet assets for search combobox
   useEffect(() => {
-    supabase.from('fleet_master')
-      .select('asset_no, vehicle_type, site, country')
-      .order('asset_no')
-      .then(({ data }) => setFleetAssets(data ?? []))
+    accidentsApi.listAccidentFleet()
+      .then((data) => setFleetAssets(data ?? []))
+      .catch(() => setFleetAssets([]))
   }, [])
 
   // Close asset dropdown on outside click
@@ -340,7 +334,7 @@ export default function Accidents() {
     setBulkImporting(true)
     setBulkResult(null)
     const payload = valid.map(({ _row, _valid, ...r }) => ({ ...r, created_by: profile?.id }))
-    const { error: err } = await supabase.from('accidents').insert(payload)
+    const { error: err } = await accidentsApi.createAccidentForPage(payload)
     const skipped = bulkRows.filter(r => !r._valid).length
     if (err) {
       setBulkResult({ added: 0, skipped, errors: [err.message] })
@@ -654,8 +648,8 @@ export default function Accidents() {
     }
     if (!editId) payload.created_by = profile?.id
     const { error: err } = editId
-      ? await supabase.from('accidents').update(payload).eq('id', editId)
-      : await supabase.from('accidents').insert(payload)
+      ? await accidentsApi.updateAccidentForPage(editId, payload)
+      : await accidentsApi.createAccidentForPage(payload)
     if (err) { setFormError(err.message); setSaving(false); return }
     setShowModal(false)
     loadRecords()
@@ -664,7 +658,7 @@ export default function Accidents() {
 
   async function handleDelete(id) {
     if (!window.confirm('Delete this incident record?')) return
-    await supabase.from('accidents').delete().eq('id', id)
+    await accidentsApi.deleteAccident(id)
     loadRecords()
   }
 

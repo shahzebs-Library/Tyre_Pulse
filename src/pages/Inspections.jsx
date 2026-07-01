@@ -3,6 +3,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
+import * as inspectionsApi from '../lib/api/inspections'
+import * as correctiveActions from '../lib/api/correctiveActions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
@@ -243,10 +245,11 @@ export default function Inspections() {
   useEffect(() => {
     const approveId = searchParams.get('approve')
     if (!approveId || authLoading) return
-    supabase.from('inspections').select('*').eq('id', approveId).single()
-      .then(({ data }) => {
+    inspectionsApi.getInspectionForPage(approveId)
+      .then(data => {
         if (data) { setApproveTarget(data); setShowApproveModal(true) }
       })
+      .catch(() => { /* silent — invalid/inaccessible approve link */ })
   }, [searchParams, authLoading])
   const [raisingAction, setRaisingAction] = useState(null)
   const [selectedTyre, setSelectedTyre]   = useState(null)
@@ -344,11 +347,11 @@ export default function Inspections() {
   const [masterAssets, setMasterAssets] = useState([])
 
   useEffect(() => {
-    supabase.from('vehicle_fleet').select('site, asset_no, vehicle_type').then(({ data }) => {
+    inspectionsApi.listInspectionVehicles().then(data => {
       if (!data) return
       setMasterSites([...new Set(data.map(r => r.site).filter(Boolean))].sort())
       setMasterAssets(data.filter(r => r.asset_no).sort((a, b) => a.asset_no.localeCompare(b.asset_no)))
-    })
+    }).catch(() => { /* silent — master data best-effort */ })
   }, [])
 
   // Geolocation auto-site detection (best-effort) — declared after masterSites
@@ -383,12 +386,13 @@ export default function Inspections() {
   async function load() {
     setLoading(true)
     // Paginate past the 1000-row cap so the list AND its exports are complete.
-    const { data } = await fetchAllPages((from, to) => {
-      let q = supabase.from('inspections').select('*').order('scheduled_date', { ascending: false }).range(from, to)
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      if (profile?.role === 'Tyre Man' && profile?.id) q = q.eq('created_by', profile.id)
-      return q
-    }, { max: 100000 })
+    const { data } = await fetchAllPages((from, to) =>
+      inspectionsApi.listInspectionsForPage({
+        from,
+        to,
+        country: activeCountry,
+        createdBy: profile?.role === 'Tyre Man' && profile?.id ? profile.id : undefined,
+      }), { max: 100000 })
     const today = new Date().toISOString().split('T')[0]
     const enriched = (data || []).map(r => ({
       ...r,
@@ -472,57 +476,62 @@ export default function Inspections() {
     const payload = { ...form, created_by: profile?.id ?? null }
     delete payload.id
 
-    let error
-    if (form.id) {
-      ;({ error } = await supabase.from('inspections').update(payload).eq('id', form.id))
-    } else {
-      ;({ error } = await supabase.from('inspections').insert(payload))
-    }
-    if (error) {
-      setSaveError(error.message || 'Save failed. If this persists, run MIGRATIONS_SAFE.sql to update the inspections table schema.')
-    } else {
+    try {
+      if (form.id) {
+        await inspectionsApi.patchInspection(form.id, payload)
+      } else {
+        await inspectionsApi.insertInspection(payload)
+      }
       setForm(null)
       await load()
+    } catch (error) {
+      setSaveError(error?.message || 'Save failed. If this persists, run MIGRATIONS_SAFE.sql to update the inspections table schema.')
     }
     setSaving(false)
   }
 
   async function markDone(id) {
-    await supabase.from('inspections').update({
-      status: 'Done',
-      completed_date: new Date().toISOString().split('T')[0],
-    }).eq('id', id)
+    try {
+      await inspectionsApi.patchInspection(id, {
+        status: 'Done',
+        completed_date: new Date().toISOString().split('T')[0],
+      })
+    } catch { /* mirror prior fire-and-forget: proceed to reload regardless */ }
     await load()
   }
 
   async function confirmDelete() {
-    await supabase.from('inspections').delete().eq('id', deleteId)
+    try {
+      await inspectionsApi.deleteInspection(deleteId)
+    } catch { /* mirror prior fire-and-forget: proceed to reload regardless */ }
     setDeleteId(null)
     await load()
   }
 
   async function raiseAction(row, actionTitle) {
-    const { data, error } = await supabase.from('corrective_actions').insert({
-      title: actionTitle || `Action from: ${row.title}`,
-      description: row.findings || row.notes || '',
-      site: row.site,
-      asset_no: row.asset_no || null,
-      priority: row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium',
-      status: 'Open',
-      source: 'Observation',
-      created_by: profile?.id ?? null,
-    }).select('id').single()
-    if (!error && data?.id) {
-      await supabase.from('inspections').update({ linked_action_id: data.id }).eq('id', row.id)
-      await load()
-    }
+    try {
+      const data = await correctiveActions.createCorrectiveAction({
+        title: actionTitle || `Action from: ${row.title}`,
+        description: row.findings || row.notes || '',
+        site: row.site,
+        asset_no: row.asset_no || null,
+        priority: row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium',
+        status: 'Open',
+        source: 'Observation',
+        created_by: profile?.id ?? null,
+      })
+      if (data?.id) {
+        await inspectionsApi.patchInspection(row.id, { linked_action_id: data.id })
+        await load()
+      }
+    } catch { /* mirror prior guard: on failure, no link + no reload */ }
     setRaisingAction(null)
   }
 
   async function loadFleetInfo(assetNo) {
     if (!assetNo.trim()) return
     setClLookingUp(true)
-    const { data } = await supabase.from('vehicle_fleet').select('vehicle_type, asset_no, site').eq('asset_no', assetNo.trim()).maybeSingle()
+    const data = await inspectionsApi.findVehicleByAsset(assetNo.trim()).catch(() => null)
     // Use DB vehicle_type if available, otherwise infer from asset number prefix
     const vehicleType = data?.vehicle_type || inferVehicleTypeFromAsset(assetNo)
     const fleetInfo = data || (vehicleType ? { asset_no: assetNo.trim(), vehicle_type: vehicleType, site: null } : null)
@@ -571,9 +580,13 @@ export default function Inspections() {
     // Vibrate on save attempt (success signal pattern)
     vibrate([50, 30, 50])
 
-    const { data, error } = await supabase.from('inspections').insert(payload).select().single()
-    if (error) {
-      if (!navigator.onLine || error.message?.includes('fetch')) {
+    try {
+      const data = await inspectionsApi.insertInspectionReturning(payload)
+      setClSaved(data)
+      vibrate([80, 30, 80, 30, 200])
+      await load()
+    } catch (error) {
+      if (!navigator.onLine || error?.message?.includes('fetch')) {
         // Offline — enqueue for later sync
         try {
           await enqueueInspection(payload)
@@ -586,13 +599,9 @@ export default function Inspections() {
           setClError('Failed to queue offline. Please try again.')
         }
       } else {
-        setClError(error.message || 'Save failed — please try again.')
+        setClError(error?.message || 'Save failed — please try again.')
         vibrate(300)
       }
-    } else {
-      setClSaved(data)
-      vibrate([80, 30, 80, 30, 200])
-      await load()
     }
     setClSaving(false)
   }
@@ -1085,11 +1094,13 @@ export default function Inspections() {
                         if (!clSaved?.id) return
                         setClSendingEmail(true)
                         // Update DB status
-                        await supabase.from('inspections').update({
-                          approval_status: 'pending_approval',
-                          approver_email: clApproverEmail,
-                          status: 'In Progress',
-                        }).eq('id', clSaved.id)
+                        try {
+                          await inspectionsApi.patchInspection(clSaved.id, {
+                            approval_status: 'pending_approval',
+                            approver_email: clApproverEmail,
+                            status: 'In Progress',
+                          })
+                        } catch { /* mirror prior fire-and-forget: proceed to send email regardless */ }
                         // Build approval link
                         const approvalLink = `${window.location.origin}/inspections?approve=${clSaved.id}`
                         // Send email via Edge Function
@@ -1608,11 +1619,13 @@ export default function Inspections() {
                 <button
                   onClick={async () => {
                     setApproveSubmitting(true)
-                    await supabase.from('inspections').update({
-                      approval_status: 'rejected',
-                      approved_at: new Date().toISOString(),
-                      approved_by: profile?.id,
-                    }).eq('id', approveTarget.id)
+                    try {
+                      await inspectionsApi.patchInspection(approveTarget.id, {
+                        approval_status: 'rejected',
+                        approved_at: new Date().toISOString(),
+                        approved_by: profile?.id,
+                      })
+                    } catch { /* mirror prior fire-and-forget: surface result regardless */ }
                     setApproveMsg({ type: 'err', text: 'Inspection rejected.' })
                     setApproveSubmitting(false)
                   }}
@@ -1629,12 +1642,14 @@ export default function Inspections() {
                   onClick={async () => {
                     if (!approverSig) { setApproveMsg({ type: 'err', text: 'Please add your signature before approving.' }); return }
                     setApproveSubmitting(true)
-                    await supabase.from('inspections').update({
-                      approval_status: 'approved',
-                      approver_signature: approverSig,
-                      approved_at: new Date().toISOString(),
-                      approved_by: profile?.id,
-                    }).eq('id', approveTarget.id)
+                    try {
+                      await inspectionsApi.patchInspection(approveTarget.id, {
+                        approval_status: 'approved',
+                        approver_signature: approverSig,
+                        approved_at: new Date().toISOString(),
+                        approved_by: profile?.id,
+                      })
+                    } catch { /* mirror prior fire-and-forget: surface result regardless */ }
                     setApproveMsg({ type: 'ok', text: '✓ Inspection approved and signed.' })
                     setApproveSubmitting(false)
                     setApproveTarget(prev => ({ ...prev, approval_status: 'approved', approver_signature: approverSig }))

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { supabase } from '../lib/supabase'
+import * as usersApi from '../lib/api/users'
 import { useAuth } from '../contexts/AuthContext'
 import {
   Users, Search, Edit2, Trash2, CheckCircle, XCircle, Shield,
@@ -383,12 +383,15 @@ export default function UserManagement() {
     setLoadError(null)
     setRlsBlocked(false)
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
+    try {
+      const data = await usersApi.listProfiles()
+      if (!data || data.length === 0) {
+        setRlsBlocked(true)
+        setUsers([])
+      } else {
+        setUsers(data)
+      }
+    } catch (error) {
       if (
         error.message?.toLowerCase().includes('permission') ||
         error.message?.toLowerCase().includes('policy') ||
@@ -400,11 +403,6 @@ export default function UserManagement() {
         setLoadError(error.message)
       }
       setUsers([])
-    } else if (!data || data.length === 0) {
-      setRlsBlocked(true)
-      setUsers([])
-    } else {
-      setUsers(data)
     }
 
     setLoading(false)
@@ -413,13 +411,8 @@ export default function UserManagement() {
   const loadAuditLog = useCallback(async () => {
     setAuditLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('audit_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100)
-
-      if (!error && data) {
+      const data = await usersApi.listAuditLog({ limit: 100 })
+      if (data) {
         setAuditLog(data)
       }
     } catch {
@@ -467,10 +460,16 @@ export default function UserManagement() {
 
   async function handleInlineRoleChange(userId, newRole) {
     setRoleSaveState(s => ({ ...s, [userId]: 'saving' }))
-    const { data, error } = await supabase.rpc('admin_update_profile', {
-      p_user_id: userId,
-      p_role: newRole,
-    })
+    let data = null
+    let error = null
+    try {
+      data = await usersApi.adminUpdateProfile({
+        p_user_id: userId,
+        p_role: newRole,
+      })
+    } catch (e) {
+      error = e
+    }
 
     const success = !error && data?.success !== false
     if (success) {
@@ -486,10 +485,16 @@ export default function UserManagement() {
   // ── Approve quick action ──────────────────────────────────────────────────
 
   async function handleApproveQuick(user) {
-    const { data, error } = await supabase.rpc('admin_update_profile', {
-      p_user_id: user.id,
-      p_approved: true,
-    })
+    let data = null
+    let error = null
+    try {
+      data = await usersApi.adminUpdateProfile({
+        p_user_id: user.id,
+        p_approved: true,
+      })
+    } catch (e) {
+      error = e
+    }
     if (!error && data?.success !== false) {
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, approved: true } : u))
       showToast(`${user.full_name || user.username || 'User'} approved.`, 'ok')
@@ -550,20 +555,26 @@ export default function UserManagement() {
     const trimmedName = editForm.full_name.trim()
 
     // ── RPC (security-definer, bypasses RLS reliably) ────────────────────
-    const { data: rpcData, error: rpcError } = await supabase.rpc('admin_update_profile', {
-      p_user_id:    editTarget.id,
-      p_full_name:  trimmedName                              || null,
-      p_username:   editForm.username?.trim()                || null,
-      p_employee_id: editForm.employee_id?.trim()            || null,
-      p_role:       editForm.role                            || null,
-      p_country:    editForm.country.length > 0 ? editForm.country : null,
-      p_region:     editForm.region?.trim()                  || null,
-      p_site:       editForm.site?.trim()                    || null,
-      p_phone:      editForm.phone?.trim()                   || null,
-      p_notes:      editForm.notes?.trim()                   || null,
-      p_approved:   editForm.approved,
-      p_locked:     editForm.locked,
-    })
+    let rpcData = null
+    let rpcError = null
+    try {
+      rpcData = await usersApi.adminUpdateProfile({
+        p_user_id:    editTarget.id,
+        p_full_name:  trimmedName                              || null,
+        p_username:   editForm.username?.trim()                || null,
+        p_employee_id: editForm.employee_id?.trim()            || null,
+        p_role:       editForm.role                            || null,
+        p_country:    editForm.country.length > 0 ? editForm.country : null,
+        p_region:     editForm.region?.trim()                  || null,
+        p_site:       editForm.site?.trim()                    || null,
+        p_phone:      editForm.phone?.trim()                   || null,
+        p_notes:      editForm.notes?.trim()                   || null,
+        p_approved:   editForm.approved,
+        p_locked:     editForm.locked,
+      })
+    } catch (e) {
+      rpcError = e
+    }
 
     // RPC transport error (function missing) → fallback
     if (rpcError) {
@@ -578,9 +589,9 @@ export default function UserManagement() {
       }
 
       // Fallback: direct table update
-      const { error: directError } = await supabase
-        .from('profiles')
-        .update({
+      let directError = null
+      try {
+        await usersApi.updateProfileById(editTarget.id, {
           full_name:   trimmedName                              || null,
           username:    editForm.username?.trim()                || null,
           employee_id: editForm.employee_id?.trim()            || null,
@@ -593,7 +604,9 @@ export default function UserManagement() {
           approved:    editForm.approved,
           locked:      editForm.locked,
         })
-        .eq('id', editTarget.id)
+      } catch (e) {
+        directError = e
+      }
 
       if (directError) {
         setEditMsg({
@@ -637,12 +650,9 @@ export default function UserManagement() {
     setDeleteLoading(true)
     setDeleteError('')
 
-    const { error } = await supabase
-      .from('profiles')
-      .delete()
-      .eq('id', deleteTarget.id)
-
-    if (error) {
+    try {
+      await usersApi.deleteProfileById(deleteTarget.id)
+    } catch (error) {
       setDeleteError(error.message)
       setDeleteLoading(false)
       return

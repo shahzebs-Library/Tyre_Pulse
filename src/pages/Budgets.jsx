@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { Plus, Save, X, Download, FileText, PiggyBank } from 'lucide-react'
@@ -7,7 +6,7 @@ import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as budgetsApi from '../lib/api/budgets'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement,
   Filler, Tooltip, Legend, BarElement,
@@ -65,18 +64,17 @@ export default function Budgets() {
 
   async function load() {
     setLoading(true)
-    const cf = activeCountry !== 'All' ? activeCountry : null
-    const flt = q => cf ? q.eq('country', cf) : q
 
     if (viewMode === 'month') {
       const [budgetRes, tyreRes] = await Promise.all([
-        flt(supabase.from('budgets').select('*').eq('year', filterYear).eq('month', filterMonth).order('site')),
-        fetchAllPages((from, to) => flt(supabase.from('tyre_records')
-          .select('site, cost_per_tyre, qty, issue_date')
-          .gte('issue_date', `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`)
-          .lt('issue_date', filterMonth === 12
+        budgetsApi.listBudgets({ country: activeCountry, year: filterYear, month: filterMonth }),
+        budgetsApi.listBudgetTyreRecords({
+          country: activeCountry,
+          start: `${filterYear}-${String(filterMonth).padStart(2, '0')}-01`,
+          end: filterMonth === 12
             ? `${filterYear + 1}-01-01`
-            : `${filterYear}-${String(filterMonth + 1).padStart(2, '0')}-01`)).range(from, to)),
+            : `${filterYear}-${String(filterMonth + 1).padStart(2, '0')}-01`,
+        }),
       ])
       setBudgets(budgetRes.data ?? [])
 
@@ -88,11 +86,12 @@ export default function Budgets() {
       setSpending(spend)
     } else {
       const [budgetRes, tyreRes] = await Promise.all([
-        flt(supabase.from('budgets').select('*').eq('year', plannerYear).order('site')),
-        fetchAllPages((from, to) => flt(supabase.from('tyre_records')
-          .select('site, cost_per_tyre, qty, issue_date')
-          .gte('issue_date', `${plannerYear}-01-01`)
-          .lt('issue_date', `${plannerYear + 1}-01-01`)).range(from, to)),
+        budgetsApi.listBudgets({ country: activeCountry, year: plannerYear }),
+        budgetsApi.listBudgetTyreRecords({
+          country: activeCountry,
+          start: `${plannerYear}-01-01`,
+          end: `${plannerYear + 1}-01-01`,
+        }),
       ])
       setBudgets(budgetRes.data ?? [])
 
@@ -114,11 +113,11 @@ export default function Budgets() {
     e.preventDefault()
     setSaving(true)
     setError('')
-    const { error: err } = await supabase.from('budgets').upsert({
+    const { error: err } = await budgetsApi.upsertBudget({
       ...form,
       region:     profile?.region ?? 'KSA',
       created_by: profile?.id,
-    }, { onConflict: 'site,region,year,month' })
+    })
     if (err) { setError(err.message); setSaving(false); return }
     setShowForm(false)
     load()
@@ -139,7 +138,7 @@ export default function Budgets() {
         created_by:     profile?.id,
       }
     })
-    await supabase.from('budgets').upsert(upserts, { onConflict: 'site,region,year,month' })
+    await budgetsApi.upsertBudgets(upserts)
     setPlannerEdits({})
     await load()
     setSavingPlanner(false)
@@ -373,7 +372,7 @@ export default function Budgets() {
                             value={b.status ?? 'Draft'}
                             onChange={async e => {
                               const newStatus = e.target.value
-                              await supabase.from('budgets').update({ status: newStatus }).eq('id', b.id)
+                              try { await budgetsApi.updateBudgetStatus(b.id, newStatus) } catch { /* non-blocking status update */ }
                               setBudgets(prev => prev.map(x => x.id === b.id ? { ...x, status: newStatus } : x))
                             }}
                           >

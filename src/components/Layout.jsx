@@ -30,10 +30,14 @@ import MobileBottomNav from './MobileBottomNav'
 import CommandPalette from './CommandPalette'
 import { useCommandPalette } from '../contexts/CommandPaletteContext'
 
-// Roles that have access to restricted nav groups
-const INTELLIGENCE_ROLES = ['Admin']
-const ANALYTICS_ROLES    = ['Admin', 'Manager', 'Director']
+// Roles that see the analytics/intelligence items. Item-level gating (adminOnly /
+// roles) is preserved from the previous group-level gating so the regrouped
+// workspaces expose exactly what each role saw before.
+const ANALYTICS_ROLES = ['Admin', 'Manager', 'Director']
+const A = true // adminOnly shorthand (was the Admin-only "Intelligence" group)
 
+// Eight operational workspaces (directive Phase 5) + Overview. Every route is
+// unchanged — pages are only regrouped and no journey is removed.
 const NAV_GROUPS = [
   {
     label: 'Overview',
@@ -43,101 +47,119 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: 'Analytics',
-    groupRoles: ANALYTICS_ROLES,
-    items: [
-      { to: '/analytics',    label: 'Analytics',          icon: BarChart2 },
-      { to: '/brand-perf',   label: 'Brand Performance',  icon: Shield },
-      { to: '/site-comp',    label: 'Site Comparison',    icon: Layers },
-      { to: '/fleet',        label: 'Fleet Analytics',    icon: GitBranch },
-      { to: '/kpi',          label: 'KPI Scorecard',      icon: ClipboardCheck },
-      { to: '/country-comp', label: 'Country Comparison', icon: Globe },
-      { to: '/comparison',   label: 'Comparison',         icon: GitCompare },
-    ],
-  },
-  {
     label: 'Operations',
     items: [
-      { to: '/fleet-master',        label: 'Fleet Master',        icon: Truck },
-      { to: '/assets',              label: 'Asset Management',    icon: LayoutGrid },
+      { to: '/fleet-master',        label: 'Fleet Master',       icon: Truck },
+      { to: '/assets',              label: 'Asset Management',   icon: LayoutGrid },
+      { to: '/actions',             label: 'Corrective Actions', icon: ClipboardList },
+      { to: '/rca',                 label: 'Root Cause',         icon: Search },
+      { to: '/daily-ops',           label: 'Daily Ops',          icon: Coffee, adminOnly: A },
+      { to: '/live-fleet',          label: 'Live Fleet Status',  icon: Radio, adminOnly: A },
+      { to: '/serial-tracker',      label: 'Serial Tracker',     icon: ScanLine, adminOnly: A },
+      { to: '/qr-labels',           label: 'QR Labels',          icon: QrCode, adminOnly: A },
+      { to: '/vehicle-history',     label: 'Vehicle History',    icon: Car, adminOnly: A },
+      { to: '/anomalies',           label: 'Anomaly Scan',       icon: AlertTriangle, adminOnly: A },
+      { to: '/maintenance-calendar', label: 'Maintenance Calendar', icon: Calendar, adminOnly: A },
+      { to: '/erp-sync',            label: 'ERP Sync',           icon: Database, adminOnly: A },
+    ],
+  },
+  {
+    label: 'Tyre Performance',
+    items: [
+      { to: '/analytics',    label: 'Analytics',          icon: BarChart2,      roles: ANALYTICS_ROLES },
+      { to: '/brand-perf',   label: 'Brand Performance',  icon: Shield,         roles: ANALYTICS_ROLES },
+      { to: '/site-comp',    label: 'Site Comparison',    icon: Layers,         roles: ANALYTICS_ROLES },
+      { to: '/fleet',        label: 'Fleet Analytics',    icon: GitBranch,      roles: ANALYTICS_ROLES },
+      { to: '/kpi',          label: 'KPI Scorecard',      icon: ClipboardCheck, roles: ANALYTICS_ROLES },
+      { to: '/country-comp', label: 'Country Comparison', icon: Globe,          roles: ANALYTICS_ROLES },
+      { to: '/comparison',   label: 'Comparison',         icon: GitCompare,     roles: ANALYTICS_ROLES },
+      { to: '/kpi-engine',             label: 'Engineering KPIs',       icon: Cpu, adminOnly: A },
+      { to: '/kpi-command',            label: 'KPI Command Center',     icon: LayoutGrid, adminOnly: A },
+      { to: '/position-intelligence',  label: 'Position Intelligence',  icon: MapPin, adminOnly: A },
+      { to: '/pressure-intel',         label: 'Pressure Intelligence',  icon: Gauge, adminOnly: A },
+      { to: '/predictive-maintenance', label: 'Predictive Maintenance', icon: CalendarClock, adminOnly: A },
+      { to: '/fleet-intelligence',     label: 'Fleet Intelligence',     icon: BarChartBig, adminOnly: A },
+      { to: '/fleet-health',           label: 'Fleet Health Board',     icon: HeartPulse, adminOnly: A },
+      { to: '/advanced-analytics',     label: 'Advanced Analytics',     icon: Microscope, adminOnly: A },
+      { to: '/benchmark',              label: 'Performance Benchmark',  icon: Target, adminOnly: A },
+      { to: '/tyre-size',              label: 'Size Optimizer',         icon: Layers, adminOnly: A },
+      { to: '/tyre-lifecycle',         label: 'Tyre Lifecycle',         icon: RefreshCw, adminOnly: A },
+      { to: '/tyre-exchange',          label: 'Tyre Exchange',          icon: ArrowLeftRight, adminOnly: A },
+      { to: '/tyre-specs',             label: 'Tyre Specifications',    icon: FileWarning, adminOnly: A },
+      { to: '/rotation',               label: 'Rotation Schedule',      icon: RotateCcw, adminOnly: A },
+      { to: '/root-cause',             label: 'Root Cause Engine',      icon: GitMerge, adminOnly: A },
+      { to: '/ai',                     label: 'Smart Analytics',        icon: Sparkles, adminOnly: A },
+    ],
+  },
+  {
+    label: 'Workshop & Downtime',
+    items: [
+      { to: '/work-orders',     label: 'Work Orders',        icon: Wrench },
+      { to: '/gate-pass',       label: 'Gate Pass',          icon: ShieldCheck },
+      { to: '/workshop',        label: 'Workshop Management', icon: Wrench, adminOnly: A },
+      { to: '/downtime',        label: 'Downtime Tracker',   icon: Clock, adminOnly: A },
+      { to: '/fuel-efficiency', label: 'Fuel Efficiency',    icon: Fuel, adminOnly: A },
+    ],
+  },
+  {
+    label: 'Stock & Procurement',
+    items: [
       { to: '/stock',               label: 'Stock',               icon: Package },
-      { to: '/budgets',             label: 'Budgets',             icon: DollarSign },
-      { to: '/actions',             label: 'Corrective Actions',  icon: ClipboardList },
-      { to: '/accidents',           label: 'Accidents',           icon: AlertOctagon },
-      { to: '/rca',                 label: 'Root Cause',          icon: Search },
-      { to: '/inspections',         label: 'Inspections',         icon: ClipboardCheck },
-      { to: '/inspection-planner',  label: 'Inspection Planner',  icon: CalendarClock },
-      { to: '/warranty',            label: 'Warranty Tracker',    icon: ShieldCheck },
-      { to: '/work-orders',         label: 'Work Orders',         icon: Wrench },
-      { to: '/gate-pass',           label: 'Gate Pass',           icon: ShieldCheck },
-      { to: '/scrap',               label: 'Scrap Management',    icon: FileWarning },
       { to: '/stock-replenishment', label: 'Stock Replenishment', icon: PackagePlus },
-      { to: '/reports',             label: 'Reports',             icon: FileText },
-      { to: '/scheduled-reports',   label: 'Scheduled Reports',   icon: CalendarCheck2 },
+      { to: '/scrap',               label: 'Scrap Management',    icon: FileWarning },
+      { to: '/budgets',             label: 'Budgets',             icon: DollarSign },
+      { to: '/procurement',         label: 'Procurement',         icon: ShoppingCart, adminOnly: A },
+      { to: '/suppliers',           label: 'Supplier Management', icon: Users, adminOnly: A },
+      { to: '/vendor-intelligence', label: 'Vendor Intelligence', icon: Trophy, adminOnly: A },
+      { to: '/budget-planner',      label: 'Budget Planner',      icon: DollarSign, adminOnly: A },
+      { to: '/cost-center',         label: 'Cost Center',         icon: DollarSign, adminOnly: A },
+      { to: '/forecasting',         label: 'Forecasting Engine',  icon: TrendingUp, adminOnly: A },
     ],
   },
   {
-    label: 'Intelligence',
-    groupRoles: INTELLIGENCE_ROLES,
+    label: 'Safety & Compliance',
     items: [
-      { to: '/kpi-engine',              label: 'Engineering KPIs',        icon: Cpu },
-      { to: '/kpi-command',            label: 'KPI Command Center',      icon: LayoutGrid },
-      { to: '/position-intelligence',   label: 'Position Intelligence',   icon: MapPin },
-      { to: '/pressure-intel',          label: 'Pressure Intelligence',   icon: Gauge },
-      { to: '/inspection-intelligence', label: 'Inspection Intelligence', icon: Activity },
-      { to: '/root-cause',              label: 'Root Cause Engine',       icon: GitMerge },
-      { to: '/predictive-maintenance',  label: 'Predictive Maintenance',  icon: CalendarClock },
-      { to: '/vendor-intelligence',     label: 'Vendor Intelligence',     icon: Trophy },
-      { to: '/driver-management',       label: 'Driver Intelligence',     icon: Users },
-      { to: '/fleet-intelligence',      label: 'Fleet Intelligence',      icon: BarChartBig },
-      { to: '/fleet-health',            label: 'Fleet Health Board',      icon: HeartPulse },
-      { to: '/advanced-analytics',      label: 'Advanced Analytics',      icon: Microscope },
-      { to: '/ai-command-center',       label: 'AI Command Center',       icon: Bot },
-      { to: '/knowledge-base',          label: 'Knowledge Base',          icon: Brain },
-      { to: '/ai-cost-monitor',         label: 'AI Cost Monitor',         icon: BarChart },
-      { to: '/executive-report',        label: 'Executive Report',        icon: BookOpen },
-      { to: '/forecasting',             label: 'Forecasting Engine',      icon: TrendingUp },
-      { to: '/cost-center',             label: 'Cost Center',             icon: DollarSign },
-      { to: '/benchmark',               label: 'Performance Benchmark',   icon: Target },
-      { to: '/procurement',             label: 'Procurement',             icon: ShoppingCart },
-      { to: '/suppliers',               label: 'Supplier Management',     icon: Users },
-      { to: '/tyre-size',               label: 'Size Optimizer',          icon: Layers },
-      { to: '/tyre-lifecycle',          label: 'Tyre Lifecycle',          icon: RefreshCw },
-      { to: '/tyre-exchange',           label: 'Tyre Exchange',           icon: ArrowLeftRight },
-      { to: '/tyre-specs',              label: 'Tyre Specifications',     icon: FileWarning },
-      { to: '/rotation',                label: 'Rotation Schedule',       icon: RotateCcw },
-      { to: '/recall-tracker',          label: 'Recall Tracker',          icon: AlertCircle },
-      { to: '/fuel-efficiency',         label: 'Fuel Efficiency',         icon: Fuel },
-      { to: '/workshop',                label: 'Workshop Management',     icon: Wrench },
-      { to: '/downtime',                label: 'Downtime Tracker',        icon: Clock },
-      { to: '/budget-planner',          label: 'Budget Planner',          icon: DollarSign },
-      { to: '/daily-ops',               label: 'Daily Ops',               icon: Coffee },
-      { to: '/continuous-improvement',  label: 'Continuous Improvement',  icon: Zap },
-      { to: '/erp-sync',                label: 'ERP Sync',                icon: Database },
-      { to: '/maintenance-calendar',    label: 'Maintenance Calendar',    icon: Calendar },
-      { to: '/safety-compliance',       label: 'Safety & Compliance',     icon: ShieldCheck },
-      { to: '/live-fleet',              label: 'Live Fleet Status',       icon: Radio },
-      { to: '/compliance',              label: 'Compliance Dashboard',    icon: Shield },
-      { to: '/retread',                 label: 'Retread Management',      icon: Recycle },
-      { to: '/alerts',              label: 'Alerts',              icon: Bell },
-      { to: '/alert-thresholds',   label: 'Alert Thresholds',    icon: BellRing },
-      { to: '/anomalies',       label: 'Anomaly Scan',    icon: AlertTriangle, adminOnly: true },
-      { to: '/vehicle-history', label: 'Vehicle History', icon: Car,           adminOnly: true },
-      { to: '/serial-tracker',  label: 'Serial Tracker',  icon: ScanLine },
-      { to: '/qr-labels',       label: 'QR Labels',       icon: QrCode },
-      { to: '/ai',              label: 'Smart Analytics', icon: Sparkles,      adminOnly: true },
+      { to: '/inspections',            label: 'Inspections',         icon: ClipboardCheck },
+      { to: '/inspection-planner',     label: 'Inspection Planner',  icon: CalendarClock },
+      { to: '/inspection-intelligence', label: 'Inspection Intelligence', icon: Activity, adminOnly: A },
+      { to: '/safety-compliance',      label: 'Safety & Compliance', icon: ShieldCheck, adminOnly: A },
+      { to: '/compliance',             label: 'Compliance Dashboard', icon: Shield, adminOnly: A },
+      { to: '/alerts',                 label: 'Alerts',              icon: Bell, adminOnly: A },
+      { to: '/alert-thresholds',       label: 'Alert Thresholds',    icon: BellRing, adminOnly: A },
+      { to: '/driver-management',      label: 'Driver Intelligence', icon: Users, adminOnly: A },
+      { to: '/retread',                label: 'Retread Management',  icon: Recycle, adminOnly: A },
     ],
   },
   {
-    label: 'Data',
+    label: 'Accident & Insurance',
     items: [
-      { to: '/cleaning',     label: 'Data Cleaning',    icon: Wand2,         adminOnly: true },
-      { to: '/data-intake',  label: 'Data Intake Center', icon: Database },
-      { to: '/upload',       label: 'Upload Data',      icon: Upload },
-      { to: '/upload-approvals', label: 'Upload Approvals', icon: ClipboardList, adminOnly: true },
-      { to: '/custom-data',  label: 'Custom Data',      icon: Database },
-      { to: '/audit',        label: 'Audit Trail',      icon: ClipboardList, adminOnly: true },
-      { to: '/settings',     label: 'Settings',         icon: Settings },
+      { to: '/accidents',      label: 'Accidents',       icon: AlertOctagon },
+      { to: '/warranty',       label: 'Warranty Tracker', icon: ShieldCheck },
+      { to: '/recall-tracker', label: 'Recall Tracker',  icon: AlertCircle, adminOnly: A },
+    ],
+  },
+  {
+    label: 'Reports & Executive',
+    items: [
+      { to: '/reports',           label: 'Reports',           icon: FileText },
+      { to: '/scheduled-reports', label: 'Scheduled Reports', icon: CalendarCheck2 },
+      { to: '/executive-report',  label: 'Executive Report',  icon: BookOpen, adminOnly: A },
+      { to: '/ai-command-center', label: 'AI Command Center', icon: Bot, adminOnly: A },
+      { to: '/knowledge-base',    label: 'Knowledge Base',    icon: Brain, adminOnly: A },
+      { to: '/ai-cost-monitor',   label: 'AI Cost Monitor',   icon: BarChart, adminOnly: A },
+      { to: '/continuous-improvement', label: 'Continuous Improvement', icon: Zap, adminOnly: A },
+    ],
+  },
+  {
+    label: 'Administration & Data',
+    items: [
+      { to: '/cleaning',         label: 'Data Cleaning',      icon: Wand2, adminOnly: true },
+      { to: '/data-intake',      label: 'Data Intake Center', icon: Database },
+      { to: '/upload',           label: 'Upload Data',        icon: Upload },
+      { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, adminOnly: true },
+      { to: '/custom-data',      label: 'Custom Data',        icon: Database },
+      { to: '/audit',            label: 'Audit Trail',        icon: ClipboardList, adminOnly: true },
+      { to: '/settings',         label: 'Settings',           icon: Settings },
     ],
   },
 ]
@@ -152,6 +174,7 @@ function shouldShowNavItem(item, profile) {
     return item.to === '/inspections' || item.to === '/settings'
   }
   if (item.adminOnly) return profile?.role === 'Admin'
+  if (item.roles) return item.roles.includes(profile?.role)
   return true
 }
 

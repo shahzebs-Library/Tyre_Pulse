@@ -31,6 +31,15 @@ export { transformRow, convertAmount } from './transform'
 
 export { validateRow, classifyDuplicates, naturalKey, countryConflict, NATURAL_KEY } from './validate'
 
+export {
+  wrongModuleWarning,
+  duplicateRatio,
+  naturalKeyLabel,
+  hasNaturalKey,
+  WRONG_MODULE_THRESHOLD,
+  NATURAL_KEY_FIELDS,
+} from './granularity'
+
 export { buildAliasMap, applyAliases, applyAliasesToRow } from './aliases'
 
 export {

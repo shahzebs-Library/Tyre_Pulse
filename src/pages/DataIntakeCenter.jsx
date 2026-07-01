@@ -10,6 +10,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import {
   parseWorkbook, sha256OfArrayBuffer, suggestMapping, transformRow, validateRow,
   classifyDuplicates, naturalKey, countryConflict, rowFingerprint, MODULE_FIELDS,
+  wrongModuleWarning, WRONG_MODULE_THRESHOLD,
   buildAliasMap, applyAliasesToRow,
   extractZip, matchAttachment, buildMatchRows,
 } from '../lib/import'
@@ -90,6 +91,14 @@ export default function DataIntakeCenter() {
     try { setFiles(await imports.listFiles({ country: activeCountry, limit: 25 })) } catch { /* non-blocking */ }
   }, [activeCountry])
   useEffect(() => { loadRecent() }, [loadRecent])
+
+  // Finer-granularity ("wrong module") heuristic: when >60% of keyed rows collapse
+  // onto an existing/repeated natural key, the file is likely line-item data staged
+  // against the wrong module. Non-blocking — surfaced as a banner on the Validate step.
+  const granularityWarning = useMemo(
+    () => wrongModuleWarning(counts, module, WRONG_MODULE_THRESHOLD),
+    [counts, module],
+  )
 
   // Uploaded files that never became an import (orphans from abandoned attempts).
   const orphanFiles = useMemo(() => files.filter((f) => f.orphan), [files])
@@ -299,13 +308,16 @@ export default function DataIntakeCenter() {
       r.action = action
     })
 
-    const c = { total: rows.length, ready: 0, warning: 0, error: 0, duplicate: 0, conflict: 0, liveDuplicate: 0, countryConflict: 0, amount: 0, qty: 0 }
+    const c = { total: rows.length, ready: 0, warning: 0, error: 0, duplicate: 0, conflict: 0, liveDuplicate: 0, countryConflict: 0, keyed: 0, amount: 0, qty: 0 }
     rows.forEach((r) => {
       c[r.validationStatus] = (c[r.validationStatus] || 0) + 1
       if (r.dupStatus === 'duplicate') c.duplicate++
       if (r.dupStatus === 'conflict') c.conflict++
       if (r.liveDuplicate) c.liveDuplicate++
       if (r.countryConflict) c.countryConflict++
+      // Rows that produce a usable natural key — the denominator for the
+      // finer-granularity ("wrong module") duplicate-ratio heuristic.
+      if (naturalKey(r.transformed, module) != null) c.keyed++
       // Roll up spend for the batch: prefer the derived per-line total, else
       // fall back to qty × unit cost. Only meaningful for tyre imports.
       const t = r.transformed || {}
@@ -571,6 +583,22 @@ export default function DataIntakeCenter() {
                 <p className="text-3xl font-bold text-emerald-300">{fmtMoney(counts.amount)}</p>
               </div>
               <p className="text-xs text-gray-400 max-w-xs">Derived from <span className="text-gray-200">{counts.qty || counts.total}</span> tyres × unit cost. Quantity and unit cost are stored; the total is computed so all spend rolls up in one place.</p>
+            </div>
+          )}
+          {granularityWarning && (
+            <div className="bg-amber-900/20 border border-amber-600/50 rounded-xl p-4 space-y-2">
+              <p className="text-sm text-amber-300 flex items-center gap-2">
+                <AlertTriangle size={16} />
+                This file looks like line-item / finer-grained data — it may be the wrong module.
+              </p>
+              <p className="text-xs text-gray-400">
+                The natural key for <span className="text-gray-200 font-semibold">{MODULES.find((m) => m.key === module)?.label || module}</span> is
+                {' '}<span className="text-gray-200 font-semibold">{granularityWarning.keyLabel}</span>, but
+                {' '}<span className="text-amber-200 font-semibold">{granularityWarning.pct}%</span> of keyed rows
+                {' '}({granularityWarning.collapsed.toLocaleString('en-US')} of {granularityWarning.keyed.toLocaleString('en-US')})
+                {' '}collapse to existing keys. Committing here would discard the line-item detail. If this is
+                {' '}per-line data (e.g. parts consumption), import it under a finer-grained module instead. Review before committing.
+              </p>
             </div>
           )}
           <div className="overflow-x-auto border border-gray-800 rounded-xl max-h-80 overflow-y-auto">

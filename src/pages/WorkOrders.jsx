@@ -21,7 +21,7 @@ import {
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
-import { supabase } from '../lib/supabase'
+import { workOrders } from '../lib/api'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -146,10 +146,7 @@ export default function WorkOrders() {
     setLoading(true)
     setError(null)
     try {
-      let q = supabase.from('work_orders').select('*').order('opened_at', { ascending: false })
-      if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data, error: err } = await q
-      if (err) throw err
+      const data = await workOrders.listWorkOrdersForPage({ country: activeCountry })
       setOrders(data || [])
     } catch (e) {
       setError(e.message)
@@ -314,14 +311,12 @@ export default function WorkOrders() {
       }
 
       if (editOrder) {
-        const { error: err } = await supabase.from('work_orders').update(payload).eq('id', editOrder.id)
-        if (err) throw err
+        await workOrders.updateWorkOrderById(editOrder.id, payload)
       } else {
         // Generate work order number
-        const { data: woNo } = await supabase.rpc('generate_work_order_no')
+        const woNo = await workOrders.generateWorkOrderNo()
         payload.work_order_no = woNo || `WO-${Date.now()}`
-        const { error: err } = await supabase.from('work_orders').insert(payload)
-        if (err) throw err
+        await workOrders.insertWorkOrder(payload)
       }
       await load()
       setShowForm(false)
@@ -337,8 +332,9 @@ export default function WorkOrders() {
     const patch = { status: newStatus }
     if (newStatus === 'In Progress' && !order.started_at) patch.started_at = new Date().toISOString()
     if (newStatus === 'Completed') patch.completed_at = new Date().toISOString()
-    const { error: err } = await supabase.from('work_orders').update(patch).eq('id', order.id)
-    if (err) { alert('Update failed: ' + err.message); return }
+    try {
+      await workOrders.updateWorkOrderById(order.id, patch)
+    } catch (err) { alert('Update failed: ' + err.message); return }
     await load()
     if (viewOrder?.id === order.id) setViewOrder(o => ({ ...o, ...patch }))
   }

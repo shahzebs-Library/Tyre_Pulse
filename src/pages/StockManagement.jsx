@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import { stock } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package, Upload } from 'lucide-react'
@@ -80,20 +79,13 @@ export default function StockManagement() {
 
   async function load() {
     setLoading(true)
-    let q = supabase.from('stock_records').select('*').order('site')
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    const { data: stockData } = await q
-    const stockRecords = stockData ?? []
+    const stockRecords = await stock.listStockRecords({ country: activeCountry }) ?? []
     setRecords(stockRecords)
 
     // Load velocity data from tyre_records (last 3 months)
     const threeMonthsAgo = new Date()
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
-    const { data: velData } = await fetchAllPages((from, to) => supabase
-      .from('tyre_records')
-      .select('site, qty, issue_date')
-      .gte('issue_date', threeMonthsAgo.toISOString().slice(0, 10))
-      .range(from, to))
+    const velData = await stock.listTyreIssuesSince(threeMonthsAgo.toISOString().slice(0, 10))
 
     // Group by site and sum qty
     const siteQtyMap = {}
@@ -156,28 +148,31 @@ export default function StockManagement() {
     }
 
     let stockId = editId
-    if (editId) {
-      const { error: err } = await supabase.from('stock_records').update(payload).eq('id', editId)
-      if (err) { setError(err.message); setSaving(false); return }
-    } else {
-      const { data: ins, error: err } = await supabase.from('stock_records').insert(payload).select('id').single()
-      if (err) { setError(err.message); setSaving(false); return }
-      stockId = ins.id
-    }
+    try {
+      if (editId) {
+        await stock.updateStockRecord(editId, payload)
+      } else {
+        const ins = await stock.insertStockRecord(payload)
+        stockId = ins.id
+      }
+    } catch (err) { setError(err.message); setSaving(false); return }
 
     const qtyChange = editId ? newQty - prevQty : newQty
     if (qtyChange !== 0 || !editId) {
-      await supabase.from('stock_movements').insert({
-        stock_id:      stockId,
-        site:          form.site,
-        description:   form.description || null,
-        movement_type: editId ? (qtyChange > 0 ? 'In' : 'Out') : 'Initial',
-        qty_before:    editId ? prevQty : 0,
-        qty_change:    qtyChange,
-        qty_after:     newQty,
-        reason:        editId ? 'Manual edit' : 'Initial stock entry',
-        created_by:    profile?.id ?? null,
-      })
+      // Best-effort audit movement — original ignored insert errors here.
+      try {
+        await stock.insertStockMovement({
+          stock_id:      stockId,
+          site:          form.site,
+          description:   form.description || null,
+          movement_type: editId ? (qtyChange > 0 ? 'In' : 'Out') : 'Initial',
+          qty_before:    editId ? prevQty : 0,
+          qty_change:    qtyChange,
+          qty_after:     newQty,
+          reason:        editId ? 'Manual edit' : 'Initial stock entry',
+          created_by:    profile?.id ?? null,
+        })
+      } catch { /* audit is best-effort; do not block the save */ }
     }
 
     setShowForm(false)
@@ -191,14 +186,16 @@ export default function StockManagement() {
     setSaving(true); setError('')
     // Atomic, guarded, audited ledger post. The server computes qty_before/after
     // and blocks a negative balance — no client-side stock math.
-    const { data, error: aErr } = await supabase.rpc('post_stock_movement', {
-      p_stock_id: rec.id,
-      p_type: adjForm.movement_type,
-      p_qty: Math.abs(Number(adjForm.qty_change)),
-      p_reason: adjForm.reason || null,
-      p_reference: adjForm.reference_no || null,
-    })
-    if (aErr) { setError(aErr.message); setSaving(false); return }
+    let data
+    try {
+      data = await stock.postStockMovement({
+        stockId:   rec.id,
+        type:      adjForm.movement_type,
+        qty:       adjForm.qty_change,
+        reason:    adjForm.reason,
+        reference: adjForm.reference_no,
+      })
+    } catch (aErr) { setError(aErr.message); setSaving(false); return }
     const newQty = data?.qty_after ?? rec.stock_qty
     setAdjForm(null)
     await load()
@@ -209,12 +206,8 @@ export default function StockManagement() {
   async function openHistory(rec) {
     setHistoryFor(rec)
     setLoadingMov(true)
-    const { data } = await supabase
-      .from('stock_movements')
-      .select('*')
-      .eq('stock_id', rec.id)
-      .order('created_at', { ascending: false })
-      .limit(50)
+    let data = []
+    try { data = await stock.listStockMovements(rec.id, 50) } catch { data = [] }
     setMovements(data || [])
     setLoadingMov(false)
   }
@@ -248,16 +241,12 @@ export default function StockManagement() {
     const reasonIn  = `Transfer from ${fromSite}${notes ? ': ' + notes : ''}`
 
     // Two atomic ledger legs. Each RPC row-locks its stock row and negative-guards.
-    const { error: outErr } = await supabase.rpc('post_stock_movement', {
-      p_stock_id: fromRecord.id, p_type: 'transfer_out', p_qty: transferQty,
-      p_reason: reasonOut, p_reference: notes || null,
-    })
-    if (outErr) { setTransferError(outErr.message); setTransferring(false); return }
-    const { error: inErr } = await supabase.rpc('post_stock_movement', {
-      p_stock_id: toRecord.id, p_type: 'transfer_in', p_qty: transferQty,
-      p_reason: reasonIn, p_reference: notes || null,
-    })
-    if (inErr) {
+    try {
+      await stock.postStockMovement({ stockId: fromRecord.id, type: 'transfer_out', qty: transferQty, reason: reasonOut, reference: notes })
+    } catch (outErr) { setTransferError(outErr.message); setTransferring(false); return }
+    try {
+      await stock.postStockMovement({ stockId: toRecord.id, type: 'transfer_in', qty: transferQty, reason: reasonIn, reference: notes })
+    } catch (inErr) {
       setTransferError('Outbound posted but inbound failed: ' + inErr.message)
       setTransferring(false); await load(); return
     }
@@ -275,13 +264,8 @@ export default function StockManagement() {
 
   async function loadTimeline() {
     setTlLoading(true)
-    let q = supabase.from('tyre_records')
-      .select('issue_date, qty, site')
-      .gte('issue_date', tlFrom)
-      .lte('issue_date', tlTo)
-      .order('issue_date', { ascending: true })
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    const { data } = await q
+    let data = []
+    try { data = await stock.listTyreIssuesInRange({ from: tlFrom, to: tlTo, country: activeCountry }) } catch { data = [] }
     setTlRecords(data ?? [])
     setTlLoading(false)
   }

@@ -8,6 +8,13 @@ import { supabase, unwrap, applyCountry } from './_client'
 const COLS =
   'id,work_order_no,asset_no,tyre_serial,tyre_position,status,priority,work_type,description,technician_name,workshop_name,site,country,opened_at,started_at,completed_at,target_completion,labour_hours,labour_rate,labour_cost,parts_cost,total_cost,created_at'
 
+// Superset used by the Work Orders page detail drawer / job-card export, which
+// also surfaces parts, notes, granular cost buckets, hour/meter fields and any
+// preserved import payload. Kept separate from COLS so the least-privilege base
+// select stays narrow for other consumers.
+const PAGE_COLS =
+  `${COLS},parts_used,notes,lubricant_cost,tyre_cost,outside_repair_cost,standard_hours,breakdown_hours,odometer,custom_data`
+
 /**
  * List work orders, newest first. Country-scoped (null-safe) and optionally
  * filtered by status / priority / site.
@@ -41,4 +48,35 @@ export async function updateWorkOrder(id, patch) {
   return unwrap(
     await supabase.from('work_orders').update(patch).eq('id', id).select(COLS).single(),
   )
+}
+
+/**
+ * List work orders for the Work Orders page. Returns the full detail-drawer
+ * column set (PAGE_COLS), ordered by opened_at (newest first), country-scoped
+ * with a strict match ("All" = no filter). No row cap — the page filters,
+ * sorts and paginates client-side.
+ * @param {{country?:string}} [opts]
+ */
+export async function listWorkOrdersForPage({ country } = {}) {
+  let q = supabase
+    .from('work_orders')
+    .select(PAGE_COLS)
+    .order('opened_at', { ascending: false })
+  if (country && country !== 'All') q = q.eq('country', country)
+  return unwrap(await q)
+}
+
+/** Insert a work order (page mutation — no row returned). */
+export async function insertWorkOrder(values) {
+  return unwrap(await supabase.from('work_orders').insert(values))
+}
+
+/** Update a work order by id (page mutation — no row returned). */
+export async function updateWorkOrderById(id, patch) {
+  return unwrap(await supabase.from('work_orders').update(patch).eq('id', id))
+}
+
+/** Generate the next sequential work-order number via the DB RPC. */
+export async function generateWorkOrderNo() {
+  return unwrap(await supabase.rpc('generate_work_order_no'))
 }

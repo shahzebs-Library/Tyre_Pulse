@@ -25,8 +25,29 @@ async function currentOrgId(userId) {
 }
 
 /**
+ * Look up a previously-uploaded file by content hash and tell whether it was
+ * ever committed. Used to recover gracefully from duplicate-hash uploads instead
+ * of dead-ending the user.
+ */
+async function findFileBySha(sha256) {
+  if (!sha256) return null
+  const { data: f } = await supabase.from('import_files')
+    .select('id,storage_path').eq('sha256', sha256).maybeSingle()
+  if (!f) return null
+  const { data: b } = await supabase.from('import_batches')
+    .select('id').eq('file_id', f.id).eq('import_status', 'committed').limit(1).maybeSingle()
+  return { id: f.id, storagePath: f.storage_path, committedBatchId: b?.id ?? null }
+}
+
+/**
  * Upload the original file to the PRIVATE import-files bucket and record it.
  * Path: <org>/<country>/<module>/<uuid>/<filename>. Returns file metadata.
+ *
+ * Duplicate-hash recovery: the same bytes may already have a file row (e.g. an
+ * earlier attempt that never finished). Rather than dead-ending with "already
+ * imported", we: (a) remove the redundant object we just stored, (b) if the
+ * prior upload was actually COMMITTED, block with a pointer to History, else
+ * (c) REUSE the orphaned prior file and let the import continue.
  */
 export async function uploadOriginalFile(file, { module, country, sha256 }) {
   const user = await currentUser()
@@ -52,8 +73,22 @@ export async function uploadOriginalFile(file, { module, country, sha256 }) {
   }
   const { data, error } = await supabase.from('import_files').insert(row).select('id').single()
   if (error) {
-    // 23505 = duplicate sha256 for this org
-    if (error.code === '23505') throw new ServiceError('This file has already been imported.', error.code, error)
+    // 23505 = duplicate sha256 for this org — recover instead of dead-ending.
+    if (error.code === '23505') {
+      await supabase.storage.from(BUCKET).remove([path]).catch(() => {})
+      const prior = await findFileBySha(sha256)
+      if (prior?.committedBatchId) {
+        const e = new ServiceError(
+          'This file was already imported and committed. Open it from Import History instead of re-importing.',
+          '23505', error,
+        )
+        e.alreadyCommitted = true
+        e.batchId = prior.committedBatchId
+        throw e
+      }
+      // Orphaned earlier upload (never committed) → reuse it and continue.
+      return { fileId: prior?.id ?? null, bucket: BUCKET, path: prior?.storagePath ?? path, sha256, reused: true }
+    }
     throw new ServiceError(error.message, error.code, error)
   }
   return { fileId: data.id, bucket: BUCKET, path, sha256 }
@@ -308,6 +343,41 @@ export async function getBatchRows(batchId, limit = 500) {
  */
 export async function deleteBatch(batchId) {
   const { error } = await supabase.from('import_batches').delete().eq('id', batchId)
+  if (error) throw new ServiceError(error.message, error.code, error)
+}
+
+/**
+ * Recently uploaded original files, each tagged with whether it ever became a
+ * batch (hasBatch) / was committed (committed) / is an ORPHAN (uploaded but no
+ * batch — e.g. an abandoned attempt). Surfaces files that would otherwise be
+ * invisible in the batch-centric views.
+ */
+export async function listFiles({ country, limit = 25 } = {}) {
+  let q = supabase.from('import_files')
+    .select('id,original_filename,country,mime_type,size_bytes,created_at')
+    .order('created_at', { ascending: false }).limit(limit)
+  if (country && country !== 'All') q = q.or(`country.eq.${country},country.is.null`)
+  const files = unwrap(await q)
+  if (!files.length) return files
+  const ids = files.map((f) => f.id)
+  const { data: batches } = await supabase.from('import_batches').select('file_id,import_status').in('file_id', ids)
+  const withBatch = new Set((batches || []).map((b) => b.file_id))
+  const committed = new Set((batches || []).filter((b) => b.import_status === 'committed').map((b) => b.file_id))
+  return files.map((f) => ({ ...f, hasBatch: withBatch.has(f.id), committed: committed.has(f.id), orphan: !withBatch.has(f.id) }))
+}
+
+/**
+ * Delete an uploaded file record and its stored object. Intended for ORPHAN
+ * cleanup (a file with a batch is protected by the FK); the stored object is
+ * removed first so no private bytes are left behind.
+ */
+export async function deleteFile(fileId) {
+  const { data: f } = await supabase.from('import_files')
+    .select('storage_bucket,storage_path').eq('id', fileId).maybeSingle()
+  if (f?.storage_path) {
+    await supabase.storage.from(f.storage_bucket || BUCKET).remove([f.storage_path]).catch(() => {})
+  }
+  const { error } = await supabase.from('import_files').delete().eq('id', fileId)
   if (error) throw new ServiceError(error.message, error.code, error)
 }
 

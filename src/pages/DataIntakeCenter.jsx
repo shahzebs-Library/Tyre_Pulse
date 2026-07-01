@@ -63,6 +63,7 @@ export default function DataIntakeCenter() {
   const [counts, setCounts] = useState(null)
   const [result, setResult] = useState(null)
   const [recent, setRecent] = useState([])
+  const [files, setFiles] = useState([])
 
   // Accident-only: evidence ZIP ingestion (Phase 3). Each item tracks one file
   // through extract → match → upload → record, with a per-file status/error so a
@@ -80,8 +81,18 @@ export default function DataIntakeCenter() {
 
   const loadRecent = useCallback(async () => {
     try { setRecent(await imports.listBatches({ country: activeCountry, limit: 8 })) } catch { /* non-blocking */ }
+    try { setFiles(await imports.listFiles({ country: activeCountry, limit: 25 })) } catch { /* non-blocking */ }
   }, [activeCountry])
   useEffect(() => { loadRecent() }, [loadRecent])
+
+  // Uploaded files that never became an import (orphans from abandoned attempts).
+  const orphanFiles = useMemo(() => files.filter((f) => f.orphan), [files])
+  async function deleteOrphan(f) {
+    if (!window.confirm(`Delete the uploaded file "${f.original_filename}"? It was never imported, so nothing in your live data is affected.`)) return
+    setError('')
+    try { await imports.deleteFile(f.id); await loadRecent() }
+    catch (err) { setError(err?.message || 'Could not delete the file.') }
+  }
 
   // Warn before an accidental full-page reload/close while an import is in
   // progress (state lives in memory and cannot survive a hard navigation).
@@ -621,6 +632,35 @@ export default function DataIntakeCenter() {
         </div>
         <p className="mt-3 text-xs text-gray-600">Original files are stored privately; every source row is preserved. Commits run server-side (permission + country scope + idempotency). <Link to="/upload" className="underline">Legacy upload</Link></p>
       </div>
+
+      {/* uploaded-but-not-imported files (orphans) — nothing is hidden */}
+      {orphanFiles.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-sm font-semibold text-amber-400/90 mb-2 flex items-center gap-2"><AlertTriangle size={15} /> Uploaded but not yet imported</h2>
+          <p className="text-xs text-gray-500 mb-2">These files were uploaded but never completed the wizard, so they added nothing to your live data. Re-run the import from step 1, or remove them.</p>
+          <div className="border border-amber-800/40 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-amber-900/10 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">File</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Size</th><th className="text-left px-3 py-2">Uploaded</th><th className="text-right px-3 py-2">Actions</th></tr></thead>
+              <tbody>
+                {orphanFiles.map((f) => (
+                  <tr key={f.id} className="border-t border-gray-800">
+                    <td className="px-3 py-1.5 text-gray-300 truncate max-w-[240px]">{f.original_filename}</td>
+                    <td className="px-3 py-1.5 text-gray-400">{f.country || '—'}</td>
+                    <td className="px-3 py-1.5 text-gray-500 text-xs">{f.size_bytes ? `${Math.round(f.size_bytes / 1024)} KB` : '—'}</td>
+                    <td className="px-3 py-1.5 text-gray-500 text-xs">{f.created_at ? new Date(f.created_at).toLocaleString('en-GB') : ''}</td>
+                    <td className="px-3 py-1.5 text-right">
+                      <button onClick={() => deleteOrphan(f)} title="Remove this unused upload"
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-red-400 hover:border-red-700/50">
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

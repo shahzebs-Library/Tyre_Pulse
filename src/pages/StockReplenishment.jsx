@@ -18,8 +18,7 @@ import {
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as purchaseOrders from '../lib/api/purchaseOrders'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -134,26 +133,13 @@ export default function StockReplenishment() {
       ninety.setDate(ninety.getDate() - 90)
       const ninetyStr = ninety.toISOString().slice(0, 10)
 
-      const hasCountry = activeCountry && activeCountry !== 'All'
-
-      let stockQuery = supabase.from('stock').select('*')
-      if (hasCountry) stockQuery = stockQuery.or(`country.eq.${activeCountry},country.is.null`)
-
-      const [stockRes, tyreRes] = await Promise.all([
-        stockQuery,
-        fetchAllPages((from, to) => {
-          let q = supabase.from('tyre_records').select('site,brand,size,issue_date,cost_per_tyre,country')
-            .gte('issue_date', ninetyStr)
-          if (hasCountry) q = q.or(`country.eq.${activeCountry},country.is.null`)
-          return q.range(from, to)
-        }, { max: 200000 }),
+      const [stockRows, tyreRows] = await Promise.all([
+        purchaseOrders.listReplenishmentStock({ country: activeCountry }),
+        purchaseOrders.listReplenishmentTyreRecords({ country: activeCountry, sinceDate: ninetyStr }),
       ])
 
-      if (stockRes.error) throw stockRes.error
-      if (tyreRes.error) throw tyreRes.error
-
-      setStockData(stockRes.data || [])
-      setTyreRecords(tyreRes.data || [])
+      setStockData(stockRows || [])
+      setTyreRecords(tyreRows || [])
       setLastSync(new Date())
     } catch (e) {
       setError(e.message)
@@ -586,8 +572,13 @@ export default function StockReplenishment() {
 
       // Generate PO number via RPC, fall back to client-side sequence.
       let poNumber
-      const { data: poNo, error: rpcErr } = await supabase.rpc('generate_po_number')
-      if (rpcErr || !poNo) {
+      let poNo = null
+      try {
+        poNo = await purchaseOrders.generatePoNumber()
+      } catch {
+        poNo = null
+      }
+      if (!poNo) {
         poNumber = `PO-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
       } else {
         poNumber = poNo
@@ -615,8 +606,7 @@ export default function StockReplenishment() {
         notes:         'Generated from Stock Replenishment intelligence.',
       }
 
-      const { error: insErr } = await supabase.from('purchase_orders').insert(payload)
-      if (insErr) throw insErr
+      await purchaseOrders.createPurchaseOrder(payload)
 
       setPoResult({ type: 'success', message: `Purchase order ${poNumber} created as Draft. Manage it in Procurement.` })
       setOrderLines([])

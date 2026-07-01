@@ -4,7 +4,8 @@ import {
   FileText, AlertCircle, CheckCircle, Clock, RefreshCw,
   ChevronDown, X, Plus, Loader,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabase' // retained solely for reindexMissingEmbeddings(supabase)
+import * as knowledgeDocuments from '../lib/api/knowledgeDocuments'
 import { useAuth } from '../contexts/AuthContext'
 import { generateEmbedding, reindexMissingEmbeddings } from '../lib/embeddingService'
 import PageHeader from '../components/ui/PageHeader'
@@ -110,7 +111,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
           `${form.title}\n\n${chunkContent}`
         )
 
-        const { error: dbErr } = await supabase.from('knowledge_documents').insert({
+        await knowledgeDocuments.createKnowledgeDocument({
           title:     `${form.title}${chunks.length > 1 ? ` (${idx + 1}/${chunks.length})` : ''}`,
           content:   chunkContent,
           doc_type:  form.doc_type,
@@ -119,7 +120,6 @@ function UploadModal({ onClose, onSuccess, sites }) {
           tags,
           embedding,
         })
-        if (dbErr) throw dbErr
       }
 
       onSuccess(chunks.length)
@@ -285,13 +285,7 @@ export default function KnowledgeBase() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await supabase
-        .from('knowledge_documents')
-        .select('id, title, doc_type, site, asset_no, tags, embedding, created_at, updated_at')
-        .order('created_at', { ascending: false })
-      if (err) throw err
-
-      const rows = data ?? []
+      const rows = await knowledgeDocuments.listKnowledgeDocuments()
       setDocs(rows)
       setStats({
         total: rows.length,
@@ -312,8 +306,9 @@ export default function KnowledgeBase() {
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this document from the knowledge base?')) return
-    const { error: err } = await supabase.from('knowledge_documents').delete().eq('id', id)
-    if (err) { setError(err.message); return }
+    try {
+      await knowledgeDocuments.deleteKnowledgeDocument(id)
+    } catch (err) { setError(err.message); return }
     setDocs(prev => prev.filter(d => d.id !== id))
     setStats(prev => ({ ...prev, total: prev.total - 1 }))
   }

@@ -9,8 +9,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as customData from '../lib/api/customData'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact } from '../lib/formatters'
@@ -96,43 +95,42 @@ export default function CustomData() {
   async function loadFieldStats() {
     setLoading(true)
     const country = activeCountry !== 'All' ? activeCountry : null
-    const { data, error } = await supabase.rpc('get_extra_field_stats', { p_country: country })
-    setFieldStats(data ?? [])
+    try {
+      const data = await customData.getExtraFieldStats({ country })
+      setFieldStats(data ?? [])
+    } catch {
+      setFieldStats([])
+    }
     setLoading(false)
   }
 
   async function loadSynonyms() {
     setSynLoading(true)
-    const { data } = await supabase
-      .from('field_synonyms')
-      .select('*')
-      .order('use_count', { ascending: false })
-    setSynonyms(data ?? [])
+    try {
+      const data = await customData.listFieldSynonyms()
+      setSynonyms(data ?? [])
+    } catch {
+      setSynonyms([])
+    }
     setSynLoading(false)
   }
 
   async function loadRecords() {
     setRecLoading(true)
-    let q = supabase
-      .from('tyre_records')
-      .select('id, asset_no, serial_no, issue_date, site, brand, extra_fields', { count: 'exact' })
-      .not('extra_fields', 'eq', '{}')
-      .not('extra_fields', 'is', null)
-      .order('issue_date', { ascending: false })
-      .range(recPage * REC_PAGE_SIZE, (recPage + 1) * REC_PAGE_SIZE - 1)
-
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-
-    // Filter by extra field key/value
-    if (filterKey && filterVal) {
-      q = q.contains('extra_fields', { [filterKey]: filterVal })
-    } else if (filterKey) {
-      q = q.not('extra_fields->>' + filterKey, 'is', null)
+    try {
+      const { data, count } = await customData.listRecordsWithExtraFields({
+        country: activeCountry,
+        filterKey,
+        filterVal,
+        from: recPage * REC_PAGE_SIZE,
+        to: (recPage + 1) * REC_PAGE_SIZE - 1,
+      })
+      setRecords(data ?? [])
+      setTotalRecords(count ?? 0)
+    } catch {
+      setRecords([])
+      setTotalRecords(0)
     }
-
-    const { data, count } = await q
-    setRecords(data ?? [])
-    setTotalRecords(count ?? 0)
     setRecLoading(false)
   }
 
@@ -141,20 +139,23 @@ export default function CustomData() {
   async function addSynonym(customName, mapsTo) {
     if (!customName.trim() || !mapsTo) { setAddError('Both fields are required.'); return }
     setAddSaving(true); setAddError('')
-    const { error } = await supabase.from('field_synonyms').insert({
-      custom_name:  customName.trim(),
-      maps_to:      mapsTo,
-      table_target: 'tyre_records',
-      created_by:   profile?.id,
-      use_count:    0,
-    })
-    if (error) { setAddError(error.message) }
-    else { setNewCustom(''); setNewMapsTo(''); await loadSynonyms() }
+    try {
+      await customData.createFieldSynonym({
+        custom_name:  customName.trim(),
+        maps_to:      mapsTo,
+        table_target: 'tyre_records',
+        created_by:   profile?.id,
+        use_count:    0,
+      })
+      setNewCustom(''); setNewMapsTo(''); await loadSynonyms()
+    } catch (error) {
+      setAddError(error.message)
+    }
     setAddSaving(false)
   }
 
   async function deleteSynonym(id) {
-    await supabase.from('field_synonyms').delete().eq('id', id)
+    try { await customData.deleteFieldSynonym(id) } catch { /* optimistic removal below */ }
     setSynonyms(s => s.filter(x => x.id !== id))
   }
 
@@ -174,12 +175,10 @@ export default function CustomData() {
     setBackfillResult(null)
 
     // Fetch ALL records where this extra_field exists but canonical column is null
-    const { data: batch, error } = await fetchAllPages((from, to) => supabase
-      .from('tyre_records')
-      .select('id, extra_fields')
-      .not('extra_fields->>' + backfillKey, 'is', null)
-      .is(backfillTarget, null)
-      .range(from, to))
+    const { data: batch, error } = await customData.listTyreRecordsForBackfill({
+      fieldKey: backfillKey,
+      target: backfillTarget,
+    })
 
     if (error) { setBackfillRunning(false); return }
 
@@ -187,9 +186,9 @@ export default function CustomData() {
     const CHUNK = 200
     for (let i = 0; i < batch.length; i += CHUNK) {
       const slice = batch.slice(i, i + CHUNK)
-      // Update each record — set canonical field = extra_fields value
+      // Update each record — set canonical field = extra_fields value (dynamic key)
       await Promise.all(slice.map(r =>
-        supabase.from('tyre_records').update({ [backfillTarget]: r.extra_fields[backfillKey] }).eq('id', r.id)
+        customData.updateTyreRecordFields(r.id, { [backfillTarget]: r.extra_fields[backfillKey] })
       ))
       updated += slice.length
     }
@@ -203,13 +202,7 @@ export default function CustomData() {
 
   async function exportExtraFields() {
     // Fetch ALL records with extra_fields
-    const { data } = await fetchAllPages((from, to) => supabase
-      .from('tyre_records')
-      .select('id, asset_no, serial_no, issue_date, site, brand, country, extra_fields')
-      .not('extra_fields', 'eq', '{}')
-      .not('extra_fields', 'is', null)
-      .order('issue_date', { ascending: false })
-      .range(from, to))
+    const { data } = await customData.listTyreRecordsForExport()
 
     if (!data?.length) return
 

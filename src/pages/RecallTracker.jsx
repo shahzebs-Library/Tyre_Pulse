@@ -18,8 +18,7 @@ import {
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as recallsApi from '../lib/api/recalls'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -152,11 +151,7 @@ export default function RecallTracker() {
   const loadRecalls = useCallback(async () => {
     try {
       setRecallsError('')
-      const { data, error } = await supabase
-        .from('recalls')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (error) throw error
+      const data = await recallsApi.listRecalls()
       setRecalls(data ?? [])
     } catch {
       setRecallsError('Could not load recall records. Please retry.')
@@ -171,10 +166,7 @@ export default function RecallTracker() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data } = await fetchAllPages((from, to) => supabase
-        .from('tyre_records')
-        .select('id, asset_no, serial_number, brand, size, position, site, country, tread_depth, risk_level, issue_date, km_at_fitment, km_at_removal')
-        .range(from, to))
+      const { data } = await recallsApi.listRecallTyres()
       setTyres(data ?? [])
       setLoading(false)
     }
@@ -400,19 +392,15 @@ export default function RecallTracker() {
         closed_at: form.status === 'Closed' ? new Date().toISOString() : null,
       }
       if (editRecall) {
-        const { error } = await supabase.from('recalls').update(row).eq('id', editRecall)
-        if (error) throw error
+        await recallsApi.updateRecall(editRecall, row)
       } else {
-        const { error } = await supabase.from('recalls').insert({ ...row, created_by: profile?.id ?? null })
-        if (error) {
-          // 23505 = unique_violation on (recall_number, country)
-          if (error.code === '23505') { setFormError('Recall number already exists'); setSaving(false); return }
-          throw error
-        }
+        await recallsApi.createRecall({ ...row, created_by: profile?.id ?? null })
       }
       await loadRecalls()
       setShowAddModal(false)
     } catch (e) {
+      // 23505 = unique_violation on (recall_number, country)
+      if (e?.code === '23505') { setFormError('Recall number already exists'); setSaving(false); return }
       setFormError(e?.message || 'Could not save the recall. Please retry.')
     } finally {
       setSaving(false)
@@ -421,9 +409,7 @@ export default function RecallTracker() {
 
   async function handleClose(recallId) {
     try {
-      const { error } = await supabase.from('recalls')
-        .update({ status: 'Closed', closed_at: new Date().toISOString() }).eq('id', recallId)
-      if (error) throw error
+      await recallsApi.updateRecall(recallId, { status: 'Closed', closed_at: new Date().toISOString() })
       await loadRecalls()
     } catch (e) {
       window.alert(e?.message || 'Could not close the recall.')
@@ -433,8 +419,7 @@ export default function RecallTracker() {
   async function handleDelete(recallId) {
     if (!window.confirm('Delete this recall record?')) return
     try {
-      const { error } = await supabase.from('recalls').delete().eq('id', recallId)
-      if (error) throw error
+      await recallsApi.deleteRecall(recallId)
       await loadRecalls()
     } catch (e) {
       window.alert(e?.message || 'Could not delete the recall.')

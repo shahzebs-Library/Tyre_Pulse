@@ -19,8 +19,7 @@ import {
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as warranty from '../lib/api/warranty'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -191,11 +190,7 @@ export default function WarrantyTracker() {
   const loadClaims = useCallback(async () => {
     try {
       setClaimsError('')
-      const { data, error } = await supabase
-        .from('warranty_claims')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (error) throw error
+      const data = await warranty.listWarrantyClaims()
       setClaims(data ?? [])
     } catch (e) {
       setClaimsError('Could not load warranty claims. Please retry.')
@@ -207,18 +202,15 @@ export default function WarrantyTracker() {
   // the list always reflects committed state — no optimistic divergence.
   const upsertClaim = useCallback(async (row, id) => {
     if (id) {
-      const { error } = await supabase.from('warranty_claims').update(row).eq('id', id)
-      if (error) throw error
+      await warranty.updateWarrantyClaim(id, row)
     } else {
-      const { error } = await supabase.from('warranty_claims').insert(row)
-      if (error) throw error
+      await warranty.createWarrantyClaim(row)
     }
     await loadClaims()
   }, [loadClaims])
 
   const removeClaim = useCallback(async (id) => {
-    const { error } = await supabase.from('warranty_claims').delete().eq('id', id)
-    if (error) throw error
+    await warranty.deleteWarrantyClaim(id)
     await loadClaims()
   }, [loadClaims])
 
@@ -229,11 +221,8 @@ export default function WarrantyTracker() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data } = await fetchAllPages((from, to) => supabase
-        .from('tyre_records')
-        .select('id, serial_number, brand, size, asset_no, site, country, fitment_date, km_at_fitment, km_at_removal, supplier')
-        .order('created_at', { ascending: false })
-        .range(from, to))
+      let data = []
+      try { data = await warranty.listTyreContext() } catch { data = [] }
       setTyreRecords(data ?? [])
       setLoading(false)
     }
@@ -396,12 +385,7 @@ export default function WarrantyTracker() {
     if (!form.serial_number.trim()) return
     setSerialLookupLoading(true)
     try {
-      const { data } = await supabase
-        .from('tyre_records')
-        .select('serial_number, brand, size, asset_no, site, country, fitment_date, km_at_fitment, km_at_removal, supplier')
-        .ilike('serial_number', `%${form.serial_number.trim()}%`)
-        .limit(1)
-        .single()
+      const data = await warranty.findTyreForClaim(form.serial_number.trim())
       if (data) {
         setForm(prev => ({
           ...prev,

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import * as rca from '../lib/api/rca'
+import * as correctiveActions from '../lib/api/correctiveActions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Plus, Save, X, Search, Download, FileText, Camera, GitBranch } from 'lucide-react'
@@ -73,12 +74,12 @@ export default function RcaRecords() {
 
   async function load() {
     setLoading(true)
-    let q = supabase
-      .from('rca_records')
-      .select('*, corrective_action:corrective_action_id(id,title,status)')
-      .order('created_at', { ascending: false })
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    const { data } = await q
+    let data
+    try {
+      data = await rca.listRcaRecords({ country: activeCountry })
+    } catch {
+      data = []
+    }
     setRecords(data ?? [])
     setLoading(false)
   }
@@ -130,39 +131,38 @@ export default function RcaRecords() {
       country:              form.country || 'KSA',
       created_by:           editId ? undefined : profile?.id,
     }
-    const { error: err } = editId
-      ? await supabase.from('rca_records').update(payload).eq('id', editId)
-      : await supabase.from('rca_records').insert(payload)
-    if (err) { setError(err.message); setSaving(false); return }
+    try {
+      if (editId) await rca.updateRcaRecord(editId, payload)
+      else        await rca.createRcaRecord(payload)
+    } catch (err) { setError(err.message); setSaving(false); return }
     setShowForm(false)
     load()
     setSaving(false)
   }
 
-  async function createLinkedAction(rca) {
+  async function createLinkedAction(record) {
     setCreatingAction(true)
     const payload = {
-      title:       `CA for ${rca.asset_no || rca.tyre_serial || 'RCA'} · ${rca.site || ''}`.trim(),
+      title:       `CA for ${record.asset_no || record.tyre_serial || 'RCA'} · ${record.site || ''}`.trim(),
       priority:    'High',
-      site:        rca.site ?? '',
-      description: rca.root_cause ? `Root cause: ${rca.root_cause}` : '',
+      site:        record.site ?? '',
+      description: record.root_cause ? `Root cause: ${record.root_cause}` : '',
       assigned_to: '',
       status:      'Open',
-      asset_no:    rca.asset_no ?? '',
-      tyre_serial: rca.tyre_serial ?? '',
-      root_cause:  rca.root_cause ?? '',
+      asset_no:    record.asset_no ?? '',
+      tyre_serial: record.tyre_serial ?? '',
+      root_cause:  record.root_cause ?? '',
       created_by:  profile?.id ?? null,
     }
-    const { data: ca, error: caErr } = await supabase
-      .from('corrective_actions')
-      .insert(payload)
-      .select('id')
-      .single()
+    let ca
+    try {
+      ca = await correctiveActions.createCorrectiveAction(payload)
+    } catch { ca = null }
 
-    if (!caErr && ca) {
-      await supabase.from('rca_records')
-        .update({ corrective_action_id: ca.id })
-        .eq('id', rca.id)
+    if (ca) {
+      try {
+        await rca.updateRcaRecord(record.id, { corrective_action_id: ca.id })
+      } catch { /* original ignored this error */ }
       await load()
       navigate('/actions')
     }

@@ -3,7 +3,7 @@
 **Last Updated:** 2026-07-02 (evening - supersedes the morning draft)
 **Repository:** shahzebs-Library/Tyre_Pulse · branch `main`
 **Verified against:** the live Supabase project (`jhssdmeruxtrlqnwfksc`), the
-current `main` code, and the test suite (701 web tests green · web build green ·
+current `main` code, and the test suite (709 web tests green · web build green ·
 mobile typecheck clean).
 
 > ⚠️ The previous version of this document described the old PR-based plan
@@ -30,6 +30,10 @@ mobile typecheck clean).
 | **Web CI** | ✅ DONE | `.github/workflows/ci.yml` - tests + build + mobile typecheck on every push/PR (plus existing Android build workflows). |
 | **Exports** | ✅ DONE | PDF/Excel/PPTX live; `EXPORT_GUIDE.md` + `EXPORT_QUICK_REFERENCE.md` match the real `exportUtils` API. |
 | **Export libs lazy-loaded** | ✅ DONE | xlsx/jspdf/pptxgenjs are async chunks loading on first export click - no page ships them in its initial load (31 pages + exportUtils/parseWorkbook/emailService converted). |
+| **Multi-org onboarding & cross-org admin** | ✅ DONE | V63-V67: 3 country orgs (KSA/UAE/Egypt); Admin+super-admin see all orgs (app_is_org_admin on 38 policies); country→org auto-assign; per-user Organisation selector. Rolled-back-verified. |
+| **Access Control (editable role×module)** | ✅ DONE | V64 set_module_permissions RPC + AccessControlMatrix UI (was read-only fake). |
+| **Imported custom fields in UI** | ✅ DONE | V63 custom_data columns + CustomFieldsPanel in WorkOrders/Tyre/Accidents/Inspections/Fleet detail views (reference costs + line items). |
+| **Admin multi-delete** | ✅ DONE | WorkOrders, Accidents, Inspections, Fleet Master - select-all + verified chunked delete. |
 | **Scheduled report delivery** | ✅ DONE (needs 1 secret) | pg_cron → `send-scheduled-reports` edge fn every 15 min; live KPI digest email per schedule; `report_send_log` tracks every send/failure; verified end-to-end. **Owner must set `RESEND_API_KEY`** (Edge Function secret) for mail to actually leave. |
 
 ## 🔴 Genuinely open gaps (the real backlog)
@@ -66,10 +70,22 @@ mobile typecheck clean).
 
 ---
 
+### P5 - Master Build program (owner directive 2026-07-02, docs/"Master Build...Instruction.md")
+Enterprise multi-tenant polish. Phases (see HANDOFF.md for detail):
+| Phase | Deliverable |
+|---|---|
+| A. Tenant Branding (next) | organisations.settings branding schema + set_org_branding RPC + TenantContext + Org Branding page; wired into app/dashboards/PDF/PPTX/email. |
+| B. Branded PDF engine | cover, repeating headers, landscape, page numbers, footer/disclaimer/signatures, filters+source line, print-readable charts. |
+| C. Branded PPTX engine + fix download | investigate MIME/blob/open; reusable 12-slide management deck. |
+| D. Report Center | saved templates, filters, preview, history, snapshots (on scheduled reports + report_send_log). |
+| E. Design system | tokens, tenant theme, light default, a11y, states. |
+| F. Docs set | PROJECT_OVERVIEW/ARCHITECTURE/DATA_DICTIONARY/REPORTING_GUIDE/BRANDING_AND_REPORT_SETTINGS/INTEGRATIONS/TESTING_AND_RELEASE + CLAUDE.md, maintained per phase. |
+Owner input before Phase A: per-org branding assets + light/dark report default; confirm Phase A vs C-first.
+
 ## Scoreboard
 
 - **Migrations applied & live-verified:** V40 → V67 (every one proven with a rolled-back self-asserting SQL test).
-- **Gate:** 701 web tests · build green · mobile typecheck clean (0 errors).
+- **Gate:** 709 web tests · build green · mobile typecheck clean (0 errors).
 - **Security advisors:** 0 ERROR-level findings.
 - **Intake:** all 10 modules commit end-to-end; 5 company formats auto-recognised.
 

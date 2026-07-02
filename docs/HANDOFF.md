@@ -1,6 +1,6 @@
 # TyrePulse - Session Handoff
 
-_Last updated: 2026-07-02 (night) · branch `main` (clean, fully pushed) · migrations V40→V62 live · P2 backlog CLOSED_
+_Last updated: 2026-07-02 (late) · branch `main` (clean, fully pushed) · migrations V40→V67 live · P2 CLOSED · multi-org onboarding LIVE_
 
 ## TL;DR
 The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.js/DB migration on this track). The **Multi-Country Data Intake Center** (+ its 4 follow-on gaps), most of the `Current issues fixing.md` program (Phases 0-3, plus Phase 5 KPI registry + nav regroup), **the P0/P1 fixes from `docs/PROJECT_AUDIT_2026-07.md`** (mobile accident/offline/sync/logout, web error states, security V57-V59), **per-row-resilient import commits (V60)** and **the 5 real company formats** (`docs/imports/` - auto-recognised profiles, cost-of-record rule, line-item aggregation) are built, **tested, and on `main`**. The Go backend and native Android app stay **off `main`** on their own branches (frozen, not abandoned).
@@ -16,11 +16,49 @@ The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.j
 - **Verify columns/constraints against the live schema** before writing any query/RPC (generated columns, CHECK constraints, status enums are easy to get wrong). Every applied migration here was proven by a self-asserting `BEGIN...ROLLBACK` SQL test first.
 - Backward-compatible only; no table drops without migration + reconciliation + rollback.
 - **No fabricated values** - actual data only; missing cost/metric → 0 or "-", never a settings default.
-- Gate after every change: `npm run test:run` · `npx vite build` · `cd mobile && npm run typecheck`. Currently **701 web tests green**; build green; **mobile typecheck fully clean** (expo-notifications/expo-device now installed). CI runs this gate on every push (`.github/workflows/ci.yml`).
+- Gate after every change: `npm run test:run` · `npx vite build` · `cd mobile && npm run typecheck`. Currently **709 web tests green**; build green; **mobile typecheck fully clean** (expo-notifications/expo-device now installed). CI runs this gate on every push (`.github/workflows/ci.yml`).
 - Country isolation is sacred; files stay private (signed URLs); no service-role/AI/storage keys in web or mobile.
 - Push `git push -u origin main`. No PR unless asked.
 
 ## DONE and on `main`
+
+### 2026-07-02 late - multi-org, access control, custom fields, multi-delete (V63-V67)
+- **Multi-org onboarding (V63-V67):** 3 country organisations (KSA/UAE/Egypt);
+  BOTH Admin role and super-admins see/work across ALL orgs (app_is_org_admin()
+  on the 38 org-isolation policies); normal org users stay isolated. Assigning a
+  user's **country auto-places them in the matching org** (admin_update_profile);
+  User Management has a per-user Organisation selector. All rolled-back-verified.
+- **Access Control (V64):** the old read-only "Access Matrix" replaced by a real
+  editable role x module grid (AccessControlMatrix + moduleCatalog +
+  modulePermissions service + Admin-gated set_module_permissions RPC), grouped by
+  the 8 workspaces, per-role All/None, search, unsaved-change highlight, Save.
+- **Imported custom fields shown (V63):** custom_data columns on all import
+  targets; CustomFieldsPanel surfaces reference costs / line items / extra
+  headings in Work Orders, Tyre Records, Accidents, Inspections, Fleet detail views.
+- **Admin multi-delete:** Work Orders, Accidents, Inspections, Fleet Master -
+  select-all-page + per-row checkboxes, confirm dialog, verified/​chunked delete.
+- **Batch-delete fix:** AuditTrail "Delete Batch" now removes the upload_history
+  entry and never mis-blames "Admin permission" on an empty batch.
+
+### Master Build program (owner directive - docs/"Master Build...Instruction.md")
+Standards for an enterprise multi-tenant product. Phased plan (see the doc):
+- **A. Tenant Branding** (next): typed branding in organisations.settings (logo,
+  colours, currency, date/units/timezone, header/footer/disclaimer, signatures,
+  default filters) + set_org_branding RPC + TenantContext + Org Branding admin
+  page; wired into app accent, dashboards, PDF, PPTX, email.
+- **B. Branded PDF engine** (cover, repeating headers, landscape, page numbers,
+  footer/disclaimer/signatures, data-source/filters line, print-readable charts).
+- **C. Branded PowerPoint engine + fix the download** (investigate MIME/blob/open,
+  reusable 12-slide management deck).
+- **D. Report Center** (saved templates, filters, preview, history, snapshots -
+  builds on scheduled reports + report_send_log).
+- **E. Design system** (tokens, tenant theme, light default, a11y, states).
+- **F. Docs set** (PROJECT_OVERVIEW / ARCHITECTURE / DATA_DICTIONARY /
+  REPORTING_GUIDE / BRANDING_AND_REPORT_SETTINGS / INTEGRATIONS /
+  TESTING_AND_RELEASE / CHANGELOG + CLAUDE.md) - maintained each phase.
+Owner input needed before Phase A: per-org branding assets (logo/colours/legal
+name/footer/disclaimer) and light-vs-dark report default; and confirm start at
+Phase A (branding) vs Phase C first (PowerPoint download is flagged broken).
 
 ### 2026-07-02 night - export work + P2 wave (see CHANGELOG_ENGINEERING.md)
 - **Export libs lazy-loaded:** xlsx/jspdf/pptxgenjs are async chunks loading on

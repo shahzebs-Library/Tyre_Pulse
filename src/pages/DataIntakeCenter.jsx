@@ -746,9 +746,29 @@ export default function DataIntakeCenter() {
               <button onClick={commit} disabled={busy} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {isElevated ? 'Approve & commit' : 'Submit for approval'}</button>
             </div>
           ) : (
-            <div className="bg-green-900/20 border border-green-700/50 rounded-xl p-6 text-green-300">
-              <CheckCircle2 className="mb-2" />
-              <p className="font-semibold">{result.status === 'committed' ? `Committed — ${result.inserted} row(s) inserted, ${result.skipped} skipped.` : `Status: ${result.status}`}</p>
+            <div className={`rounded-xl p-6 ${result.status === 'failed'
+              ? 'bg-red-900/20 border border-red-700/50 text-red-300'
+              : 'bg-green-900/20 border border-green-700/50 text-green-300'}`}>
+              {result.status === 'failed' ? <AlertTriangle className="mb-2" /> : <CheckCircle2 className="mb-2" />}
+              <p className="font-semibold">
+                {result.status === 'committed' && `Committed — ${result.inserted} row(s) inserted, ${result.skipped} skipped${result.failed ? `, ${result.failed} failed` : ''}.`}
+                {result.status === 'failed' && `No rows could be committed — ${result.failed} row(s) failed. The reasons are listed below.`}
+                {result.status !== 'committed' && result.status !== 'failed' && `Status: ${result.status}`}
+              </p>
+              {Array.isArray(result.errors) && result.errors.length > 0 && (
+                <div className="mt-3 bg-black/25 border border-red-800/40 rounded-lg p-3 space-y-1 max-h-52 overflow-y-auto">
+                  <p className="text-xs font-semibold text-red-300 uppercase tracking-wide">Why rows failed</p>
+                  {result.errors.map((e, i) => (
+                    <p key={i} className="text-xs text-red-200/90">
+                      <span className="font-mono text-red-300">Row {e.row}:</span> {e.message}
+                    </p>
+                  ))}
+                  {result.failed > result.errors.length && (
+                    <p className="text-[11px] text-red-300/70">…and {result.failed - result.errors.length} more — every failed row's reason is saved on the row (Validation issues, code COMMIT_FAILED).</p>
+                  )}
+                  <p className="text-[11px] text-red-300/70 pt-1">Fix the source values (or the column mapping) and re-import the file — committed rows are skipped automatically.</p>
+                </div>
+              )}
               {automation && (automation.alerts > 0 || automation.actions > 0) && (
                 <p className="mt-2 text-xs text-sky-300 flex items-center gap-1.5">
                   <AlertTriangle size={13} /> Automation: {automation.alerts} tyre-risk alert(s) and {automation.actions} corrective action(s) generated{automation.skipped ? ` · ${automation.skipped} skipped (already open)` : ''}.

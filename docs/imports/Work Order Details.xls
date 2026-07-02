@@ -1,0 +1,694 @@
+<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Version>16.00</Version>
+ </DocumentProperties>
+ <OfficeDocumentSettings xmlns="urn:schemas-microsoft-com:office:office">
+  <AllowPNG/>
+ </OfficeDocumentSettings>
+ <ExcelWorkbook xmlns="urn:schemas-microsoft-com:office:excel">
+  <WindowHeight>6760</WindowHeight>
+  <WindowWidth>19200</WindowWidth>
+  <WindowTopX>32767</WindowTopX>
+  <WindowTopY>32767</WindowTopY>
+  <ProtectStructure>False</ProtectStructure>
+  <ProtectWindows>False</ProtectWindows>
+ </ExcelWorkbook>
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="s62">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat ss:Format="0"/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="s63">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat ss:Format="@"/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="s64">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat ss:Format="Fixed"/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="s65">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Arial" ss:Bold="1"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="bj_griddetails">
+  <Names>
+   <NamedRange ss:Name="_FilterDatabase" ss:RefersTo="=bj_griddetails!R1C1:R25C15"
+    ss:Hidden="1"/>
+  </Names>
+  <Table ss:ExpandedColumnCount="15" ss:ExpandedRowCount="25" x:FullColumns="1"
+   x:FullRows="1" ss:DefaultRowHeight="14.5">
+   <Column ss:StyleID="s62"/>
+   <Column ss:StyleID="s63" ss:Span="8"/>
+   <Column ss:Index="11" ss:StyleID="s64"/>
+   <Column ss:StyleID="s63"/>
+   <Column ss:StyleID="s64" ss:Span="2"/>
+   <Row>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">#</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Issue Number</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Work Order Number</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Transaction Type</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Asset Code</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Asset Description</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Asset Type</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Store Code</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Cost Center</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Itemcode</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Qty</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Item Description</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Values</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Spare Parts</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:StyleID="s65"><Data ss:Type="String">Trye</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">12</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0009/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0017/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM420</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">SYM5310GJB1</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">KSP_TP-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100060</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">223758-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80 R22.5 TECHKING</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">766</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">766</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">16</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0013/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0031/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM477</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DHABAN-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100053</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">900</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">900</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">25</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0053/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0055/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM484</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRIYAH-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100063</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">714.4</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">714.4</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">26</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0054/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0055/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM484</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRIYAH-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100063</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">714.4</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">714.4</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">27</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0055/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0055/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM484</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRIYAH-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100063</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">714.4</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">714.4</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">28</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0056/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0055/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM484</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRIYAH-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100063</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">714.4</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">714.4</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">29</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0057/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0055/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM484</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRIYAH-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100063</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">714.4</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">714.4</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">30</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0058/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0055/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM484</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRIYAH-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100063</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">714.4</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">714.4</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">38</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0021/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0058/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM402</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">SYM5310GJB1</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">REDSEA-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100021</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">900</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">900</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">42</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0023/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0067/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM487</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">QIDDIYA-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100059</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">223758-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80 R22.5 TECHKING</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">766</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">766</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">43</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0029/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0068/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">tm466</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">CONCRETE MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRIYAH-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100063</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">608</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">608</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">44</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0024/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0070/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM374</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">HMGJ1241016552</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">REDSEA-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100021</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">900</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">900</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">45</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0027/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0072/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM548</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRIYAH-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100067</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">140315-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TUBELESS WHEEL RIM  315/80 R22.5 (9*22.5</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">250</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">250</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">46</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0027/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0072/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM548</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRIYAH-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100067</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">223758-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80 R22.5 TECHKING</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">766</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">766</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">47</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0025/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0074/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM605</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">RIY-MET-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100059</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">770</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">770</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">72</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0032/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0084/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM518</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TRANSIT MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DHABAN-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100053</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">223758-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80 R22.5 TECHKING</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">766</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">766</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">77</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0035/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0086/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">MP131</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">PUMPS</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRIYAH-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100063</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">699.2</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">699.2</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">78</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0031/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0087/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM390</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">HMGJ1241025203</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">REDSEA-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100021</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">900</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">900</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">79</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0043/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0090/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">MP112</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">PUMPS</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRYAH-ST2</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100067</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">221855-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 385-65R22.5</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">990</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">990</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">84</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0047/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0102/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">SL018</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">SKID LOADER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">KSP_TP-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100060</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">221622-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 10-16.5</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">360</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">360</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">86</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0044/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0104/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">MP131</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">PUMPS</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">DIRIYAH-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100063</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">221855-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 385-65R22.5</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">950</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">950</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">88</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0048/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0107/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">MP110</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">PUMPS</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">NHC-ST</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100054</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">223758-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80 R22.5 TECHKING</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">766</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">766</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">92</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0061/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0126/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM515</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TRANSIT MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">KSP_TP-ST</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100060</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">310522-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80R22.5 TEGRYS/ERICLE</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">760</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">760</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="Number">93</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GC/MIS/0051/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">GCKR/JC/0127/0726</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">2026-07-01</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TM675</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="7"><Data ss:Type="String">TR-MIXER</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">NHC-ST</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">100054</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">223758-O</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">1</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="String">TIRE 315/80 R22.5 TECHKING</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+    <Cell><Data ss:Type="Number">766</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>
+    <Cell ss:Index="15"><Data ss:Type="Number">766</Data><NamedCell
+      ss:Name="_FilterDatabase"/></Cell>
+   </Row>
+  </Table>
+  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
+   <Selected/>
+   <Panes>
+    <Pane>
+     <Number>3</Number>
+     <ActiveRow>28</ActiveRow>
+     <ActiveCol>13</ActiveCol>
+    </Pane>
+   </Panes>
+   <ProtectObjects>False</ProtectObjects>
+   <ProtectScenarios>False</ProtectScenarios>
+  </WorksheetOptions>
+  <AutoFilter x:Range="R1C1:R25C15"
+   xmlns="urn:schemas-microsoft-com:office:excel">
+  </AutoFilter>
+ </Worksheet>
+ <ss:DocumentProperties>
+   <ss:Author>Ramco Systems Ltd</ss:Author>
+   <ss:LastAuthor>Ramco Systems Ltd</ss:LastAuthor>
+   <ss:Created>Thursday, July 2, 2026</ss:Created>
+  </ss:DocumentProperties>
+</Workbook>

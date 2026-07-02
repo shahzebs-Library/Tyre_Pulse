@@ -54,6 +54,7 @@ export default function DataIntakeCenter() {
   const [step, setStep] = useState(0)
   const [module, setModule] = useState(initialModule)
   const [file, setFile] = useState(null)
+  const [fileQueue, setFileQueue] = useState([])   // extra files picked in one go, imported one-by-one
   const [parsed, setParsed] = useState(null)
   const [sheetIdx, setSheetIdx] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -148,9 +149,7 @@ export default function DataIntakeCenter() {
   }
 
   // ── Step 1: parse a chosen file ──────────────────────────────────────────────
-  async function onFile(e) {
-    const f = e.target.files?.[0]
-    if (!f) return
+  async function loadFile(f) {
     setError(''); setBusy(true)
     try {
       const buf = await f.arrayBuffer()
@@ -159,6 +158,24 @@ export default function DataIntakeCenter() {
     } catch (err) {
       setError(err?.message || 'Could not read the file.')
     } finally { setBusy(false) }
+  }
+
+  // Multi-file selection: the first file enters the wizard immediately; the rest
+  // wait in a visible queue and are offered one-by-one after each commit, so a
+  // whole batch of exports can be imported in one sitting without re-picking.
+  async function onFile(e) {
+    const list = Array.from(e.target.files || [])
+    if (!list.length) return
+    setFileQueue(list.slice(1))
+    await loadFile(list[0])
+  }
+
+  async function nextQueuedFile() {
+    const [next, ...rest] = fileQueue
+    if (!next) return
+    reset()
+    setFileQueue(rest)
+    await loadFile(next)
   }
 
   async function startBatch() {
@@ -492,9 +509,12 @@ export default function DataIntakeCenter() {
             </div>
           </div>
           <label className="block border-2 border-dashed border-gray-700 rounded-xl p-10 text-center cursor-pointer hover:border-green-600/60">
-            <input type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" className="hidden" onChange={onFile} />
+            <input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt" multiple className="hidden" onChange={onFile} />
             {busy ? <Loader2 className="animate-spin mx-auto text-green-400" /> : <UploadCloud className="mx-auto text-gray-500" size={34} />}
-            <p className="mt-2 text-sm text-gray-400">{file ? file.name : 'Choose an Excel or CSV file'}</p>
+            <p className="mt-2 text-sm text-gray-400">{file ? file.name : 'Choose one or more Excel / CSV files'}</p>
+            {fileQueue.length > 0 && (
+              <p className="mt-1 text-xs text-sky-400">{fileQueue.length} more file{fileQueue.length !== 1 ? 's' : ''} queued — offered after this import finishes.</p>
+            )}
           </label>
 
           {parsed && (
@@ -734,7 +754,16 @@ export default function DataIntakeCenter() {
                   <AlertTriangle size={13} /> Automation: {automation.alerts} tyre-risk alert(s) and {automation.actions} corrective action(s) generated{automation.skipped ? ` · ${automation.skipped} skipped (already open)` : ''}.
                 </p>
               )}
-              <button onClick={reset} className="mt-3 text-sm underline">Start another import</button>
+              {fileQueue.length > 0 ? (
+                <div className="mt-3 flex items-center gap-4">
+                  <button onClick={nextQueuedFile} className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2">
+                    <UploadCloud size={14} /> Import next file ({fileQueue.length} remaining)
+                  </button>
+                  <button onClick={() => { setFileQueue([]); reset() }} className="text-sm underline">Discard queue</button>
+                </div>
+              ) : (
+                <button onClick={reset} className="mt-3 text-sm underline">Start another import</button>
+              )}
             </div>
           )}
         </div>

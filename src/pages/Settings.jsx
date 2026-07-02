@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Save, User, Settings2, Bell, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -93,6 +95,7 @@ function getInitials(name) {
 }
 
 export default function Settings() {
+  const { t } = useLanguage()
   const { profile, user, mfaEnabled, setMfaEnabled } = useAuth()
   const { appSettings: globalSettings, refreshSettings, setActiveCountry, activeCountry } = useSettings()
   const isAdmin    = profile?.role === 'Admin'
@@ -698,15 +701,21 @@ export default function Settings() {
             </div>
           </div>
 
+          {/* Language */}
+          <div>
+            <label className="label">{t('common.language')}</label>
+            <LanguageSwitcher variant="segment" className="mt-1" />
+          </div>
+
           {/* Guided tour */}
           <div>
-            <label className="label">Guided Tour</label>
+            <label className="label">{t('onboarding.guidedTour')}</label>
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event('tp:onboarding:replay'))}
               className="btn-secondary w-full mt-1 justify-center"
             >
-              <Sparkles size={15} /> Replay onboarding tour
+              <Sparkles size={15} /> {t('onboarding.replay')}
             </button>
           </div>
 

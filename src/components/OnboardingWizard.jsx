@@ -8,6 +8,7 @@ import {
   Check, X, ShieldCheck, MapPin, Rocket, Boxes, Truck,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 
 /**
@@ -161,6 +162,7 @@ export function hasCompletedOnboarding(userId) {
 
 export default function OnboardingWizard() {
   const { profile, user } = useAuth()
+  const { t } = useLanguage()
   const { activeCountry, setActiveCountry } = useSettings()
   const navigate = useNavigate()
 
@@ -264,12 +266,12 @@ export default function OnboardingWizard() {
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: content.accent }}>
-                  {role || 'Welcome'}
+                  {role ? t(`roles.${role}`) : t('common.language')}
                 </p>
                 <h2 className="text-lg font-extrabold leading-tight truncate" style={{ color: 'var(--text-primary)' }}>
                   {current === 'welcome'
-                    ? `Welcome, ${(profile.full_name || '').split(' ')[0] || 'there'}`
-                    : STEP_TITLES[current]}
+                    ? t('onboarding.welcome', { name: (profile.full_name || '').split(' ')[0] || '' })
+                    : t(`onboarding.stepTitles.${current}`)}
                 </h2>
               </div>
             </div>
@@ -306,8 +308,7 @@ export default function OnboardingWizard() {
                       {content.tagline}
                     </p>
                     <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                      This quick tour shows what you can do and where to start.
-                      It takes less than a minute — you can replay it anytime from Settings.
+                      {t('onboarding.intro')}
                     </p>
                     <div
                       className="flex items-center gap-2 mt-4 px-3 py-2.5 rounded-xl"
@@ -315,7 +316,7 @@ export default function OnboardingWizard() {
                     >
                       <Rocket size={16} style={{ color: content.accent }} className="flex-shrink-0" />
                       <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        Tailored to your role: <span style={{ color: content.accent }} className="font-bold">{role}</span>
+                        {t('onboarding.tailored')}: <span style={{ color: content.accent }} className="font-bold">{t(`roles.${role}`)}</span>
                       </span>
                     </div>
                   </div>
@@ -324,7 +325,7 @@ export default function OnboardingWizard() {
                 {current === 'role' && (
                   <div className="space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-                      What you can do
+                      {t('onboarding.whatYouCanDo')}
                     </p>
                     <ul className="space-y-2">
                       {content.capabilities.map((cap, i) => (
@@ -353,16 +354,15 @@ export default function OnboardingWizard() {
                     <div className="flex items-center gap-2">
                       <MapPin size={16} style={{ color: content.accent }} />
                       <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        Choose your data scope
+                        {t('onboarding.chooseScope')}
                       </p>
                     </div>
                     <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                      Pick the country whose fleet you want to work with. You can switch
-                      this anytime from the sidebar. Currency and cost figures follow your selection.
+                      {t('onboarding.scopeHelp')}
                     </p>
                     <div className="grid grid-cols-2 gap-2 pt-1">
                       <CountryOption
-                        code="All" label="All Countries" sub="Global view"
+                        code="All" label={t('common.allCountries')} sub={t('onboarding.globalView')}
                         active={activeCountry === 'All'} accent={content.accent}
                         onClick={() => setActiveCountry('All')}
                       />
@@ -381,7 +381,7 @@ export default function OnboardingWizard() {
                 {current === 'features' && (
                   <div className="space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-                      Jump straight to
+                      {t('onboarding.jumpTo')}
                     </p>
                     <div className="grid grid-cols-2 gap-2.5">
                       {content.features.map(({ to, label, icon: Icon, desc }) => (
@@ -413,7 +413,7 @@ export default function OnboardingWizard() {
                     >
                       <Check size={30} style={{ color: content.accent }} strokeWidth={2.5} />
                     </div>
-                    <h3 className="text-base font-extrabold" style={{ color: 'var(--text-primary)' }}>You're all set</h3>
+                    <h3 className="text-base font-extrabold" style={{ color: 'var(--text-primary)' }}>{t('onboarding.readyTitle')}</h3>
                     <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                       {lockedCountry
                         ? <>You're working in <span className="font-bold" style={{ color: content.accent }}>{COUNTRY_LABEL[lockedCountry] || lockedCountry}</span>. </>
@@ -433,12 +433,12 @@ export default function OnboardingWizard() {
           >
             {step > 0 ? (
               <button onClick={back} className="btn-secondary" style={{ padding: '0.5rem 0.9rem' }}>
-                <ArrowLeft size={15} /> Back
+                <ArrowLeft size={15} /> {t('onboarding.back')}
               </button>
             ) : (
               <button onClick={() => finish(null)} className="text-sm font-medium transition-colors px-2"
                 style={{ color: 'var(--text-muted)' }}>
-                Skip tour
+                {t('onboarding.skip')}
               </button>
             )}
 
@@ -448,7 +448,7 @@ export default function OnboardingWizard() {
               </button>
             ) : (
               <button onClick={next} className="btn-primary">
-                Next <ArrowRight size={16} />
+                {t('onboarding.next')} <ArrowRight size={16} />
               </button>
             )}
           </div>

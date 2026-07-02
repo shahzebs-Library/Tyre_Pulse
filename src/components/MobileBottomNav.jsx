@@ -4,6 +4,7 @@ import {
   FileText, ScanLine, Menu,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 
 /**
  * Mobile bottom navigation for the web PWA.
@@ -15,14 +16,14 @@ import { useAuth } from '../contexts/AuthContext'
  */
 
 const T = {
-  home:      { to: '/',            label: 'Home',    icon: LayoutDashboard, end: true },
-  inspect:   { to: '/inspections', label: 'Inspect', icon: ClipboardCheck },
-  records:   { to: '/tyres',       label: 'Records', icon: Layers },
-  work:      { to: '/work-orders', label: 'Work',    icon: Wrench },
-  alerts:    { to: '/alerts',      label: 'Alerts',  icon: Bell },
-  scan:      { to: '/scan',        label: 'Scan',    icon: ScanLine },
-  analytics: { to: '/analytics',   label: 'Reports', icon: BarChart2 },
-  reports:   { to: '/reports',     label: 'Reports', icon: FileText },
+  home:      { to: '/',            tk: 'home',     label: 'Home',    icon: LayoutDashboard, end: true },
+  inspect:   { to: '/inspections', tk: 'inspect',  label: 'Inspect', icon: ClipboardCheck },
+  records:   { to: '/tyres',       tk: 'records',  label: 'Records', icon: Layers },
+  work:      { to: '/work-orders', tk: 'work',     label: 'Work',    icon: Wrench },
+  alerts:    { to: '/alerts',      tk: 'alerts',   label: 'Alerts',  icon: Bell },
+  scan:      { to: '/scan',        tk: 'scan',     label: 'Scan',    icon: ScanLine },
+  analytics: { to: '/analytics',   tk: 'analytics',label: 'Reports', icon: BarChart2 },
+  reports:   { to: '/reports',     tk: 'reports',  label: 'Reports', icon: FileText },
 }
 
 // Primary tabs per role (max 4; the 5th slot is always the Menu button).
@@ -38,6 +39,7 @@ const ROLE_TABS = {
 
 export default function MobileBottomNav({ alertCount, onMenuOpen }) {
   const { profile } = useAuth()
+  const { t } = useLanguage()
   const tabs = ROLE_TABS[profile?.role] ?? ROLE_TABS.Inspector
 
   return (
@@ -54,7 +56,7 @@ export default function MobileBottomNav({ alertCount, onMenuOpen }) {
       }}
     >
       <div className="flex items-stretch h-[54px]">
-        {tabs.map(({ to, label, icon: Icon, end }) => (
+        {tabs.map(({ to, label, tk, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
@@ -75,7 +77,7 @@ export default function MobileBottomNav({ alertCount, onMenuOpen }) {
                     </span>
                   )}
                 </div>
-                <span className="text-[9.5px] font-semibold tracking-wide">{label}</span>
+                <span className="text-[9.5px] font-semibold tracking-wide">{tk ? t(`shell.tabs.${tk}`) : label}</span>
               </>
             )}
           </NavLink>
@@ -85,10 +87,10 @@ export default function MobileBottomNav({ alertCount, onMenuOpen }) {
           onClick={onMenuOpen}
           className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors active:opacity-70"
           style={{ color: 'var(--text-muted)' }}
-          aria-label="Open menu"
+          aria-label={t('shell.openMenu')}
         >
           <Menu size={20} strokeWidth={1.7} />
-          <span className="text-[9.5px] font-semibold tracking-wide">Menu</span>
+          <span className="text-[9.5px] font-semibold tracking-wide">{t('shell.menu')}</span>
         </button>
       </div>
     </nav>

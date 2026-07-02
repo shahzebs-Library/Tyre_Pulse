@@ -27,6 +27,8 @@ import InstallPwaPrompt from './InstallPwaPrompt'
 import NotificationCenter from './NotificationCenter'
 import GlobalSearch from './GlobalSearch'
 import MobileBottomNav from './MobileBottomNav'
+import LanguageSwitcher from './LanguageSwitcher'
+import { useLanguage } from '../contexts/LanguageContext'
 import OnboardingWizard from './OnboardingWizard'
 import CommandPalette from './CommandPalette'
 import { useCommandPalette } from '../contexts/CommandPaletteContext'
@@ -194,15 +196,16 @@ function roleBadgeClass(role) {
 // Scan · Profile). Alerts moves to a header bell so the bottom bar stays at the
 // five primary field actions, matching the native inspector experience.
 const TYRE_MAN_TABS = [
-  { to: '/inspections', label: 'Inspect',   icon: ClipboardCheck, end: false },
-  { to: '/tyres',       label: 'Records',   icon: Layers },
-  { to: '/work-orders', label: 'Work',      icon: Wrench },
-  { to: '/scan',        label: 'Scan',      icon: ScanLine },
-  { to: '/settings',    label: 'Profile',   icon: User },
+  { to: '/inspections', tk: 'inspect', label: 'Inspect',   icon: ClipboardCheck, end: false },
+  { to: '/tyres',       tk: 'records', label: 'Records',   icon: Layers },
+  { to: '/work-orders', tk: 'work',    label: 'Work',      icon: Wrench },
+  { to: '/scan',        tk: 'scan',    label: 'Scan',      icon: ScanLine },
+  { to: '/settings',    tk: 'profile', label: 'Profile',   icon: User },
 ]
 
 function TyreManShell({ children, alertCount }) {
   const { signOut, profile } = useAuth()
+  const { t } = useLanguage()
   const location = useLocation()
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
   const [pendingCount, setPendingCount] = useState(0)
@@ -288,6 +291,7 @@ function TyreManShell({ children, alertCount }) {
               ⏳ {pendingCount}
             </span>
           )}
+          <LanguageSwitcher />
           <NavLink
             to="/alerts"
             className="relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
@@ -346,7 +350,7 @@ function TyreManShell({ children, alertCount }) {
         }}
       >
         <div className="flex items-stretch h-[54px]">
-          {TYRE_MAN_TABS.map(({ to, label, icon: Icon, end }) => (
+          {TYRE_MAN_TABS.map(({ to, label, tk, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -369,7 +373,7 @@ function TyreManShell({ children, alertCount }) {
                       </span>
                     )}
                   </div>
-                  <span className="text-[9.5px] font-semibold tracking-wide">{label}</span>
+                  <span className="text-[9.5px] font-semibold tracking-wide">{tk ? t(`shell.tabs.${tk}`) : label}</span>
                 </>
               )}
             </NavLink>
@@ -394,6 +398,7 @@ export default function Layout({ children }) {
   useRealtimeSync()
 
   const { profile, signOut }                = useAuth()
+  const { t }                               = useLanguage()
   const { activeCountry, setActiveCountry } = useSettings()
   const { theme, toggleTheme }              = useTheme()
   const navigate     = useNavigate()
@@ -658,10 +663,10 @@ export default function Layout({ children }) {
               {/* Country selector */}
               {(profile?.role === 'Admin' || !profile?.country || profile.country.length === 0) && (
                 <div className="px-2.5 pb-1">
-                  <p className="nav-section px-0.5 pt-2 pb-1.5">Country</p>
+                  <p className="nav-section px-0.5 pt-2 pb-1.5">{t('shell.country')}</p>
                   <div className="flex gap-0.5 rounded-xl p-0.5"
                     style={{ background: 'rgba(22,163,74,0.04)', border: '1px solid rgba(22,163,74,0.09)' }}>
-                    <button className={pillClass('All')} style={pillStyle('All')} onClick={() => setActiveCountry('All')}>All</button>
+                    <button className={pillClass('All')} style={pillStyle('All')} onClick={() => setActiveCountry('All')}>{t('common.all')}</button>
                     {COUNTRIES.map(c => (
                       <button key={c} className={pillClass(c)} style={pillStyle(c)} onClick={() => setActiveCountry(c)}>
                         {COUNTRY_LABEL[c]}
@@ -670,6 +675,12 @@ export default function Layout({ children }) {
                   </div>
                 </div>
               )}
+
+              {/* Language selector */}
+              <div className="px-2.5 pb-2">
+                <p className="nav-section px-0.5 pt-2 pb-1.5">{t('common.language')}</p>
+                <LanguageSwitcher className="w-full justify-between" />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

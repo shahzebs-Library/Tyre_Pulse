@@ -1,0 +1,23 @@
+{
+  "search": "بحث...",
+  "menu": "القائمة",
+  "country": "الدولة",
+  "notifications": "الإشعارات",
+  "collapseSidebar": "طي القائمة الجانبية",
+  "expandSidebar": "توسيع القائمة الجانبية",
+  "openMenu": "فتح القائمة",
+  "fleetIntelligence": "ذكاء الأسطول",
+  "alerts": "التنبيهات",
+  "offlineQueued": "{count} في قائمة الانتظار دون اتصال",
+  "tabs": {
+    "home": "الرئيسية",
+    "inspect": "فحص",
+    "records": "السجلات",
+    "work": "أوامر العمل",
+    "alerts": "التنبيهات",
+    "scan": "مسح",
+    "reports": "التقارير",
+    "analytics": "التقارير",
+    "profile": "الملف"
+  }
+}

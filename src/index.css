@@ -1,7 +1,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─── RTL / Arabic ───────────────────────────────────────────────────────────
+   Arabic switches the document to dir="rtl" + .rtl on <html>. The whole layout
+   mirrors via `dir`; the rules below flip the few places that use physical
+   directions and load an Arabic-capable typeface. */
+html[dir='rtl'] body,
+html.rtl body {
+  font-family: 'IBM Plex Sans Arabic', 'Inter', system-ui, -apple-system, sans-serif;
+  font-feature-settings: normal;
+}
+html.rtl { direction: rtl; }
+/* Numbers stay LTR/tabular even inside RTL text for correct KPI alignment. */
+html.rtl .tabular-nums,
+html.rtl [class*="stat-value"],
+html.rtl table td,
+html.rtl table th { font-variant-numeric: tabular-nums; }
+/* Keep icon-only flips predictable: chevrons that imply "forward" mirror. */
+html.rtl .rtl-flip { transform: scaleX(-1); }
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DESIGN SYSTEM v3  ·  TyrePulse

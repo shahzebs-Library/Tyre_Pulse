@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 import { supabase } from '../lib/supabase'
 import TpLogo from '../assets/logo.svg'
 import TwoFactorChallenge from '../components/TwoFactorChallenge'
@@ -473,6 +474,9 @@ export default function Login() {
             </div>
             <div style={{fontSize:24, fontWeight:800, color:'#fff', letterSpacing:'-0.03em'}}>TyrePulse</div>
             <div style={{fontSize:11, color:'rgba(74,222,128,0.65)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:3}}>Fleet Intelligence Platform</div>
+            <div style={{ display:'flex', justifyContent:'center', marginTop:14 }}>
+              <LanguageSwitcher />
+            </div>
           </motion.div>
 
           {/* Session expired banner */}

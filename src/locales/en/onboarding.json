@@ -1,0 +1,26 @@
+{
+  "welcome": "Welcome, {name}",
+  "skip": "Skip tour",
+  "next": "Next",
+  "back": "Back",
+  "replay": "Replay onboarding tour",
+  "guidedTour": "Guided Tour",
+  "tailored": "Tailored to your role",
+  "intro": "This quick tour shows what you can do and where to start. It takes less than a minute — you can replay it anytime from Settings.",
+  "whatYouCanDo": "What you can do",
+  "jumpTo": "Jump straight to",
+  "chooseScope": "Choose your data scope",
+  "scopeHelp": "Pick the country whose fleet you want to work with. You can switch this anytime from the sidebar. Currency and cost figures follow your selection.",
+  "dataScope": "Data scope",
+  "yourRole": "Your role",
+  "quickStart": "Quick start",
+  "readyTitle": "You're all set",
+  "readyToGo": "Ready to go",
+  "globalView": "Global view",
+  "stepTitles": {
+    "role": "Your role",
+    "country": "Data scope",
+    "features": "Quick start",
+    "finish": "Ready to go"
+  }
+}

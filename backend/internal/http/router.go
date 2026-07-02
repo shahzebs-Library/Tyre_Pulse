@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/shahzebs-library/tyrepulse/backend/internal/modules/assets"
 	"github.com/shahzebs-library/tyrepulse/backend/internal/modules/identity"
 	"github.com/shahzebs-library/tyrepulse/backend/internal/platform/auth"
 	"github.com/shahzebs-library/tyrepulse/backend/internal/platform/database"
@@ -16,11 +17,12 @@ import (
 
 // Deps are the dependencies the router needs to wire routes.
 type Deps struct {
-	DB             *database.DB
-	Verifier       *auth.Verifier
-	AllowedOrigins []string
+	DB              *database.DB
+	Verifier        *auth.Verifier
+	AllowedOrigins  []string
 	RateLimitPerMin int
 	IdentityHandler *identity.Handler
+	AssetsHandler   *assets.Handler
 }
 
 // New builds the fully-wired HTTP handler.
@@ -48,6 +50,10 @@ func New(d Deps, mws ...func(http.Handler) http.Handler) http.Handler {
 	r.Group(func(pr chi.Router) {
 		pr.Use(httpserver.Authenticate(d.Verifier))
 		pr.Get("/api/v1/me", d.IdentityHandler.Me)
+		if d.AssetsHandler != nil {
+			pr.Get("/api/v1/assets", d.AssetsHandler.List)
+			pr.Get("/api/v1/assets/{id}", d.AssetsHandler.Get)
+		}
 	})
 
 	return r

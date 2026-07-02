@@ -71,6 +71,41 @@ func (r *Repository) GetProfile(ctx context.Context, userID string) (*Profile, e
 	return &p, nil
 }
 
+// Scope is the caller's authorization context loaded from the database: their
+// canonical role and the countries they are permitted to see. Other modules use
+// this to enforce server-side scope — the role/scope is never trusted from the
+// client.
+type Scope struct {
+	UserID    string
+	Role      string
+	Countries []string
+	Approved  bool
+	Locked    bool
+}
+
+// GetScope loads the caller's role + country scope for authorization decisions.
+func (r *Repository) GetScope(ctx context.Context, userID string) (*Scope, error) {
+	const q = `
+		SELECT id::text,
+		       COALESCE(role, ''),
+		       COALESCE(country, '{}'),
+		       COALESCE(approved, false),
+		       COALESCE(locked, false)
+		FROM public.profiles
+		WHERE id = $1`
+	var s Scope
+	err := r.pool.QueryRow(ctx, q, userID).Scan(
+		&s.UserID, &s.Role, &s.Countries, &s.Approved, &s.Locked,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrProfileNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
 // Handler serves identity endpoints.
 type Handler struct {
 	repo *Repository

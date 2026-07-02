@@ -63,6 +63,7 @@ export default function TyreRecords() {
   const [editRecord, setEditRecord]       = useState(null)
   const [showBulkEdit, setShowBulkEdit]   = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteError, setDeleteError]     = useState('')
   const [saving, setSaving]               = useState(false)
   const [formError, setFormError]         = useState('')
   const [form, setForm]                   = useState(() => EMPTY_FORM())
@@ -201,16 +202,38 @@ export default function TyreRecords() {
 
   async function deleteSelected() {
     setSaving(true)
+    setDeleteError('')
     const ids = [...selected]
     const BATCH = 200
-    for (let i = 0; i < ids.length; i += BATCH) {
-      await supabase.from('tyre_records').delete().in('id', ids.slice(i, i + BATCH))
+    let deleted = 0
+    try {
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const chunk = ids.slice(i, i + BATCH)
+        // Count-verify each batch so a silent RLS/constraint failure surfaces
+        // instead of the button appearing to do nothing.
+        const { data, error } = await supabase
+          .from('tyre_records').delete().in('id', chunk).select('id')
+        if (error) throw error
+        deleted += data?.length ?? 0
+      }
+      if (deleted === 0) {
+        // Rows matched none deleted → almost always the delete RLS policy
+        // (only Admin may delete tyre records).
+        throw new Error(
+          (profile?.role || '').toLowerCase() === 'admin'
+            ? 'No records were deleted. They may already be gone — refresh and retry.'
+            : 'You do not have permission to delete tyre records. Only an Admin can delete.',
+        )
+      }
+      setShowDeleteConfirm(false)
+      clear()
+      loadRecords()
+      loadFilters()
+    } catch (e) {
+      setDeleteError(e.message || 'Delete failed. Please try again.')
+    } finally {
+      setSaving(false)
     }
-    setShowDeleteConfirm(false)
-    clear()
-    loadRecords()
-    loadFilters()
-    setSaving(false)
   }
 
   async function handleBulkExport(rows) {
@@ -711,7 +734,7 @@ export default function TyreRecords() {
 
       {/* Delete confirmation */}
       {showDeleteConfirm && (
-        <Modal title="Confirm Delete" onClose={() => setShowDeleteConfirm(false)}>
+        <Modal title="Confirm Delete" onClose={() => { setShowDeleteConfirm(false); setDeleteError('') }}>
           <div className="flex gap-3 mb-5 p-4 rounded-xl bg-red-500/8 border border-red-500/20">
             <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
             <div>
@@ -719,6 +742,12 @@ export default function TyreRecords() {
               <p className="text-muted text-sm mt-1">This action is permanent and cannot be undone.</p>
             </div>
           </div>
+          {deleteError && (
+            <div className="flex gap-2 mb-4 p-3 rounded-xl bg-red-900/30 border border-red-700 text-red-300 text-sm">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+              <span>{deleteError}</span>
+            </div>
+          )}
           <div className="flex gap-3">
             <button onClick={deleteSelected} disabled={saving} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}

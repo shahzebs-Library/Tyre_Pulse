@@ -1,9 +1,11 @@
 # TyrePulse — Session Handoff
 
-_Last updated: 2026-07-01 · branch `main` @ `aec3f68` (clean, fully pushed)_
+_Last updated: 2026-07-02 · branch `main` (clean, fully pushed) · migrations V40→V60 live_
 
 ## TL;DR
-The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.js/DB migration on this track). The **Multi-Country Data Intake Center** (+ its 4 follow-on gaps) and most of the `Current issues fixing.md` program (Phases 0–3, plus Phase 5 KPI registry + nav regroup) are built, **tested, and on `main`**. The Go backend and native Android app stay **off `main`** on their own branches (frozen, not abandoned).
+The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.js/DB migration on this track). The **Multi-Country Data Intake Center** (+ its 4 follow-on gaps), most of the `Current issues fixing.md` program (Phases 0–3, plus Phase 5 KPI registry + nav regroup), **the P0/P1 fixes from `docs/PROJECT_AUDIT_2026-07.md`** (mobile accident/offline/sync/logout, web error states, security V57–V59), **per-row-resilient import commits (V60)** and **the 5 real company formats** (`docs/imports/` — auto-recognised profiles, cost-of-record rule, line-item aggregation) are built, **tested, and on `main`**. The Go backend and native Android app stay **off `main`** on their own branches (frozen, not abandoned).
+
+**Running gap scoreboard:** `docs/PROJECT_GAP_ANALYSIS.md` (corrected 2026-07-02 — the morning Copilot draft wrongly listed completed work as missing). Deep findings: `docs/PROJECT_AUDIT_2026-07.md`. Per-change record: `docs/CHANGELOG_ENGINEERING.md`.
 
 ## Stack
 - **Web:** Vite + React 19 (`src/`) · **Mobile:** Expo React Native (`mobile/`)
@@ -14,11 +16,33 @@ The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.j
 - **Verify columns/constraints against the live schema** before writing any query/RPC — the multi-agent design passes repeatedly got schema details wrong (generated columns, CHECK constraints, status enums). Every applied migration here was proven by a self-asserting `BEGIN…ROLLBACK` SQL test first.
 - Backward-compatible only; no table drops without migration + reconciliation + rollback.
 - **No fabricated values** — actual data only; missing cost/metric → 0 or "—", never a settings default.
-- Gate after every change: `npm run test:run` · `npx vite build` · `cd mobile && npm run typecheck`. Currently **563 web tests green**; mobile typecheck clean except pre-existing `notifications.ts` (missing `expo-notifications` types).
+- Gate after every change: `npm run test:run` · `npx vite build` · `cd mobile && npm run typecheck`. Currently **701 web tests green**; build green; **mobile typecheck fully clean** (expo-notifications/expo-device now installed). CI runs this gate on every push (`.github/workflows/ci.yml`).
 - Country isolation is sacred; files stay private (signed URLs); no service-role/AI/storage keys in web or mobile.
-- Commit trailer: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` + the `Claude-Session:` line. Push `git push -u origin main`. No PR unless asked. Chat-only model id: `claude-opus-4-8` (never in commits/code).
+- Commit trailer: `Co-Authored-By:` the current assistant + the `Claude-Session:` line (see recent `git log` for the exact form). Push `git push -u origin main`. No PR unless asked. Model id stays chat-only (never in commits/code).
 
 ## DONE and on `main`
+
+### 2026-07-02 session (see CHANGELOG_ENGINEERING.md for detail)
+- **Security V57–V59:** work_orders/PO write policies approval-gated; definer
+  views → invoker; fn search_path pinned; deny-all cache tables readable;
+  **anon accident-photo read leak closed**; bucket size/mime limits. Advisors: 0 ERROR.
+- **Delete integrity V58:** cleaning_log FK → CASCADE (tyre deletes work again,
+  Admin-only via RLS); rca/gate_passes FKs → SET NULL; all silent-fail delete
+  buttons now verify + surface the real reason (TyreRecords, AuditTrail,
+  FleetMaster, DataCleaning, WorkOrders — WO delete added, Admin-only).
+- **Import commit V60:** per-row sub-transactions — one bad value fails ONE row
+  with its DB reason recorded (`COMMIT_FAILED`), not the whole batch; RPC
+  returns per-row errors; V56 defaults let all 10 modules commit.
+- **Mobile P0:** accident submit fixed (tp-storage:// refs); offline photos
+  never lost (queued + re-uploaded); unified sync banner/Sync Now; logout wipes
+  queues + push token.
+- **Web P0:** error+retry on 7 core pages; AssetManagement localStorage
+  masking removed; ErpSync honest; multi-file intake queue; `.xlsm/.xlsb/.ods`.
+- **Real company formats (`docs/imports/`):** XML Spreadsheet 2003 + Ramco
+  HTML-grid parsing; footer stripping; fingerprint **auto-applied mapping
+  profiles** (5 seeded); cost-of-record rule (tyre cost ONLY from Work Order
+  Details `Trye`, summed per WO via line-item aggregation, lines kept in
+  custom_data); 8 CI regression tests on the real files.
 
 ### Data Intake Center (`Data correction.md`) — complete
 Controlled pipeline Upload→Map→Validate→Approve→Commit, country-scoped, private files, server-side RPC commit, preserves every original row/file.

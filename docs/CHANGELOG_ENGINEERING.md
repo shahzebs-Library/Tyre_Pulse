@@ -94,3 +94,21 @@ mobile deps synced — typecheck now fully clean.
   Proven end-to-end live (cron fired on its own; failure honestly logged as
   "RESEND_API_KEY not configured" — the one owner action remaining).
 - Gate: 701/701 tests · build green.
+
+## 2026-07-02 (night) — P2 closed via multi-agent wave
+
+- **Currency/date sweep (33 pages, 3 parallel agents):** every hardcoded 'SAR'
+  default, `SAR ${x}` template, Rand prefix and en-GB/en-US/en-SA display
+  locale replaced with formatters + activeCurrency / formatDate. KPI target
+  labels currency-neutral; KpiCommandCenter benchmarks relabeled "static
+  industry reference" (U4). No query/ISO/date-input strings touched.
+- **Confirm dialogs:** InspectionPlanner schedules, CustomData synonyms,
+  SupplierManagement contracts — confirm modal + .select-verified delete +
+  error surfaced in-dialog.
+- **localStorage → DB (V62):** tyre_disposals + tyre_status_marks tables
+  (org RLS, approval-gated writes); TyreExchange marks, scrap disposal
+  statuses, Procurement budget (settings key) and Settings scheduled reports
+  (→ report_schedules) all shared/team-wide now, optimistic UI with rollback.
+- **Mobile:** online inspection submit re-uploads pending photos (H8);
+  typed record queue prunes synced entries (M4).
+- Gate: 701/701 tests · build green · mobile typecheck clean.

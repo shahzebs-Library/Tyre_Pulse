@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { workOrders } from '../lib/api'
 import PageHeader from '../components/ui/PageHeader'
+import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '../lib/formatters'
@@ -107,6 +108,9 @@ export default function WorkOrders() {
   const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteError, setDeleteError] = useState('')
+  // Multi-select delete (Admin-only). Holds selected work-order ids.
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
 
   const [orders, setOrders]       = useState([])
   const [loading, setLoading]     = useState(true)
@@ -253,6 +257,43 @@ export default function WorkOrders() {
       await load()
     } catch (e) {
       setDeleteError(e.message || 'Delete failed. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── Multi-select helpers ────────────────────────────────────────────────────
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  const pageIds = paginated.map(o => o.id)
+  const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id))
+  function toggleSelectPage() {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (allPageSelected) pageIds.forEach(id => next.delete(id))
+      else pageIds.forEach(id => next.add(id))
+      return next
+    })
+  }
+
+  async function confirmBulkDelete() {
+    if (selectedIds.size === 0) return
+    setSaving(true)
+    setDeleteError('')
+    try {
+      const n = await workOrders.deleteWorkOrders([...selectedIds])
+      setBulkDeleteOpen(false)
+      setSelectedIds(new Set())
+      if (viewOrder && selectedIds.has(viewOrder.id)) setViewOrder(null)
+      await load()
+      return n
+    } catch (e) {
+      setDeleteError(e.message || 'Bulk delete failed. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -604,11 +645,31 @@ export default function WorkOrders() {
       </div>
 
       {/* Table */}
+      {isAdmin && selectedIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
+          <span className="text-sm text-blue-200">{selectedIds.size} work order{selectedIds.size !== 1 ? 's' : ''} selected</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-white px-2 py-1">Clear</button>
+            <button onClick={() => { setDeleteError(''); setBulkDeleteOpen(true) }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
+              <Trash2 size={14} /> Delete {selectedIds.size}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800">
+                {isAdmin && (
+                  <th className="px-4 py-3 w-10">
+                    <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
+                      title="Select all on this page"
+                      className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                  </th>
+                )}
                 {[
                   { label: 'WO #',        field: 'work_order_no' },
                   { label: 'Asset',       field: 'asset_no'      },
@@ -636,7 +697,7 @@ export default function WorkOrders() {
             <tbody>
               {paginated.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="text-center py-16 text-gray-500">
+                  <td colSpan={isAdmin ? 11 : 10} className="text-center py-16 text-gray-500">
                     <Wrench size={40} className="mx-auto mb-3 opacity-30" />
                     <p>No work orders found</p>
                     <button onClick={openNew} className="mt-3 text-blue-400 hover:text-blue-300 text-sm">Create first work order →</button>
@@ -648,7 +709,13 @@ export default function WorkOrders() {
                 const pc = PRIORITY_CONFIG[order.priority] || PRIORITY_CONFIG.Medium
                 const overdue = isOverdue(order)
                 return (
-                  <tr key={order.id} className={`border-b border-gray-800 hover:bg-gray-800/50 transition-colors ${overdue ? 'bg-red-950/10' : ''}`}>
+                  <tr key={order.id} className={`border-b border-gray-800 hover:bg-gray-800/50 transition-colors ${selectedIds.has(order.id) ? 'bg-blue-950/20' : overdue ? 'bg-red-950/10' : ''}`}>
+                    {isAdmin && (
+                      <td className="px-4 py-3">
+                        <input type="checkbox" checked={selectedIds.has(order.id)} onChange={() => toggleSelect(order.id)}
+                          className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <span className="text-blue-400 font-mono text-xs">{order.work_order_no}</span>
                       {overdue && <span className="ml-2 text-xs text-red-400 font-medium">OVERDUE</span>}
@@ -907,6 +974,33 @@ export default function WorkOrders() {
         </div>
       )}
 
+      {/* ── Bulk delete confirmation (Admin only) ────────────────────────────── */}
+      {bulkDeleteOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => { if (!saving) { setBulkDeleteOpen(false); setDeleteError('') } }}>
+          <div className="bg-gray-900 border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex gap-3 mb-4">
+              <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-white font-semibold">Delete {selectedIds.size} work order{selectedIds.size !== 1 ? 's' : ''}?</p>
+                <p className="text-gray-400 text-sm mt-1">This permanently removes the selected work orders and their cost records. This cannot be undone.</p>
+              </div>
+            </div>
+            {deleteError && (
+              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
+            )}
+            <div className="flex gap-3">
+              <button onClick={confirmBulkDelete} disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                {saving ? 'Deleting...' : `Delete ${selectedIds.size}`}
+              </button>
+              <button onClick={() => { setBulkDeleteOpen(false); setDeleteError('') }} disabled={saving} className="btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Detail Drawer ────────────────────────────────────────────────────── */}
       <AnimatePresence>
         {viewOrder && (
@@ -1024,20 +1118,8 @@ export default function WorkOrders() {
                   </div>
                 )}
 
-                {/* Preserved fields from import (nothing is discarded) */}
-                {viewOrder.custom_data && typeof viewOrder.custom_data === 'object' && Object.keys(viewOrder.custom_data).length > 0 && (
-                  <div className="bg-gray-800 rounded-xl p-4">
-                    <p className="text-gray-400 text-xs mb-2">Additional imported details</p>
-                    <div className="grid grid-cols-1 gap-1.5">
-                      {Object.entries(viewOrder.custom_data).map(([k, v]) => (
-                        <div key={k} className="flex justify-between gap-3 text-sm">
-                          <span className="text-gray-400 truncate">{k}</span>
-                          <span className="text-gray-200 text-right break-words">{String(v)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Preserved fields from import — reference costs + per-line detail */}
+                <CustomFieldsPanel data={viewOrder.custom_data} title="Additional imported details" defaultOpen />
 
                 <div className="flex gap-3 pt-2">
                   <button onClick={() => { setViewOrder(null); openEdit(viewOrder) }}

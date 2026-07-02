@@ -15,7 +15,7 @@ const COLS =
  * the narrow COLS so existing consumers of the narrow functions are unaffected.
  */
 const PAGE_COLS =
-  'id,title,inspection_type,site,asset_no,tyre_serial,region,status,findings,severity,inspection_date,scheduled_date,completed_date,inspector,notes,country,created_by,created_at,attendees,vehicle_type,tyre_conditions,odometer_km,hour_meter,photo_data,inspector_signature,linked_action_id,approval_status,approver_email,approver_signature,approved_at,approved_by,pressure_reading,locked,locked_at'
+  'id,title,inspection_type,site,asset_no,tyre_serial,region,status,findings,severity,inspection_date,scheduled_date,completed_date,inspector,notes,country,created_by,created_at,attendees,vehicle_type,tyre_conditions,odometer_km,hour_meter,photo_data,inspector_signature,linked_action_id,approval_status,approver_email,approver_signature,approved_at,approved_by,pressure_reading,locked,locked_at,custom_data'
 
 /**
  * List inspections, newest first. Country-scoped (null-safe) and optionally

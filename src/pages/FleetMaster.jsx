@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import CustomFieldsPanel from '../components/CustomFieldsPanel'
 
 const PAGE_SIZE = 25
 
@@ -763,6 +764,10 @@ export default function FleetMaster() {
                 <textarea className="input" rows={2} value={form.notes} onChange={F('notes')} placeholder="Any additional notes..." />
               </div>
             </div>
+
+            {editRecord.id && (
+              <CustomFieldsPanel data={editRecord.custom_data} title="Additional imported fields (read-only)" />
+            )}
 
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">

@@ -93,3 +93,25 @@ export async function deleteWorkOrder(id) {
     throw new ServiceError('The work order was not deleted - only an Admin can delete work orders.', '42501')
   }
 }
+
+/**
+ * Delete many work orders (Admin-only via RLS). Chunked to stay within request
+ * limits; returns the number actually deleted so the UI can surface a partial
+ * or permission block instead of pretending success.
+ */
+export async function deleteWorkOrders(ids) {
+  const list = [...new Set((ids || []).filter(Boolean))]
+  if (!list.length) return 0
+  const CHUNK = 100
+  let deleted = 0
+  for (let i = 0; i < list.length; i += CHUNK) {
+    const slice = list.slice(i, i + CHUNK)
+    const { data, error } = await supabase.from('work_orders').delete().in('id', slice).select('id')
+    if (error) throw new ServiceError(error.message, error.code, error)
+    deleted += data?.length ?? 0
+  }
+  if (deleted === 0) {
+    throw new ServiceError('No work orders were deleted - only an Admin can delete work orders.', '42501')
+  }
+  return deleted
+}

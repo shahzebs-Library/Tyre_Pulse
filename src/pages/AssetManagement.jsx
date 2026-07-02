@@ -21,6 +21,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate, formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
+import CustomFieldsPanel from '../components/CustomFieldsPanel'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -371,6 +372,9 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
             })}
           </div>
         </div>
+
+        {/* Additional imported fields */}
+        <CustomFieldsPanel data={asset.custom_data} title="Additional imported fields" />
       </div>
     </motion.div>
   )

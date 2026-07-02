@@ -10,6 +10,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Upload } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
+import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
@@ -1563,6 +1564,11 @@ export default function Inspections() {
                   <span style={{ color: '#d1d5db', fontWeight: 600 }}>{v}</span>
                 </div>
               ))}
+            </div>
+
+            {/* Additional imported fields */}
+            <div style={{ marginBottom: 16 }}>
+              <CustomFieldsPanel data={approveTarget.custom_data} title="Additional imported fields" />
             </div>
 
             {/* Inspector signature preview */}

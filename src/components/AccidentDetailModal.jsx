@@ -16,6 +16,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency } from '../lib/formatters'
 import { describeAuditRow } from '../lib/auditDiff'
 import { resolveStorageUrls } from '../lib/storageRefs'
+import CustomFieldsPanel from './CustomFieldsPanel'
 
 const RECOVERY_SOURCES = ['none', 'insurer', 'third_party', 'driver', 'warranty']
 const RECOVERY_SOURCE_LABELS = { none: 'None', insurer: 'Insurer', third_party: 'Third Party', driver: 'Driver', warranty: 'Warranty' }
@@ -227,6 +228,7 @@ function OverviewTab({ acc }) {
           </div>
         </div>
       )}
+      <CustomFieldsPanel data={acc.custom_data} title="Additional imported fields" />
     </div>
   )
 }

@@ -11,6 +11,7 @@ import { formatCurrencyCompact } from '../lib/formatters'
 import { useInvalidate } from '../hooks/useSupabaseQuery'
 import { useBulkSelect } from '../hooks/useBulkSelect'
 import BulkActionBar from '../components/BulkActionBar'
+import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import {
   Search, ChevronLeft, ChevronRight, Eye, FileSpreadsheet,
   FileText, Plus, Edit2, Trash2, Save, X, Check, AlertTriangle,
@@ -592,19 +593,9 @@ export default function TyreRecords() {
               </div>
             ))}
           </dl>
-          {detailRecord.extra_fields && Object.keys(detailRecord.extra_fields).length > 0 && (
-            <div className="mt-4 pt-4 border-t border-[var(--border-dim)]">
-              <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Additional Fields</p>
-              <dl className="grid grid-cols-2 gap-3 text-sm">
-                {Object.entries(detailRecord.extra_fields).map(([k, v]) => (
-                  <div key={k}>
-                    <dt className="text-muted text-xs">{k}</dt>
-                    <dd className="text-gray-300 mt-0.5">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          )}
+          <div className="mt-4">
+            <CustomFieldsPanel data={detailRecord.extra_fields} title="Additional imported fields" />
+          </div>
           <div className="flex gap-2 mt-4 pt-4 border-t border-[var(--border-dim)]">
             <button onClick={() => { openEdit(detailRecord); setDetailRecord(null) }} className="btn-secondary flex items-center gap-2 text-sm">
               <Edit2 size={14} /> Edit Record

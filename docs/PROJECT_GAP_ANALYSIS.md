@@ -34,13 +34,13 @@ mobile typecheck clean).
 
 ## 🔴 Genuinely open gaps (the real backlog)
 
-### P2 — Product correctness
-| Gap | Where | Notes |
-|---|---|---|
-| Currency/date formatter sweep | ~30 pages | Hardcoded `'SAR'`/`'R'` + mixed date locales → consolidate on `formatters` + `activeCurrency`. |
-| Confirm dialogs on destructive deletes | SupplierManagement contracts, InspectionPlanner schedules, CustomData synonyms | Reuse the "type DELETE" pattern. |
-| localStorage business data → DB | Procurement budget, tyre returns/write-offs, scrap disposals, scheduled reports, alert thresholds | Per-browser today; unshared/unaudited. |
-| Online inspection photo re-upload | `mobile/.../inspection/new.tsx` | Online path can persist dead `file://` URIs when eager upload failed. |
+### P2 — Product correctness — ✅ CLOSED 2026-07-02
+| Gap | Resolution |
+|---|---|
+| Currency/date formatter sweep | 33 pages now format via `formatters` + `activeCurrency` (incl. KpiCommandCenter's Rand → active currency, U4); user-visible dates via `formatDate`/`formatMonthYear`. |
+| Confirm dialogs on destructive deletes | InspectionPlanner schedules, CustomData synonyms, SupplierManagement contracts — confirm + verified delete + surfaced error. |
+| localStorage business data → DB | V62: tyre_disposals + tyre_status_marks tables; Procurement budget → settings; Settings scheduled reports → report_schedules (feeds real delivery). Alert thresholds were already DB-backed. |
+| Online inspection photo re-upload | Online submit re-uploads pending position photos; no dead file:// URIs reach the DB. Record queue also prunes synced entries (M4). |
 
 ### P3 — Platform debt
 | Gap | Where | Notes |

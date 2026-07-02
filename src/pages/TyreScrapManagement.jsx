@@ -18,6 +18,7 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { formatDate, formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -27,7 +28,6 @@ ChartJS.register(
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const LS_DISPOSALS_KEY = 'tp_scrap_disposals'
 
 const TABS = ['Overview', 'By Brand', 'By Site', 'Disposal Log']
 
@@ -93,13 +93,13 @@ function fmt(n, decimals = 0) {
   })
 }
 
-function fmtCurrency(n, currency = 'SAR') {
+function fmtCurrency(n, currency) {
   if (n == null || isNaN(n)) return '—'
   return `${currency} ${fmt(n, 0)}`
 }
 
 function nowStr() {
-  return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDate(new Date())
 }
 
 function subDays(d, days) {
@@ -117,17 +117,6 @@ function kmLife(t) {
 
 function isScrap(t) {
   return t.risk_level === 'Critical' || t.category === 'Scrap'
-}
-
-function loadDisposals() {
-  try {
-    const raw = localStorage.getItem(LS_DISPOSALS_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch { return {} }
-}
-
-function saveDisposals(map) {
-  localStorage.setItem(LS_DISPOSALS_KEY, JSON.stringify(map))
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -196,8 +185,19 @@ export default function TyreScrapManagement() {
   const [logDateFrom,  setLogDateFrom]  = useState('')
   const [logDateTo,    setLogDateTo]    = useState('')
 
-  // Disposals persisted in localStorage
-  const [disposals, setDisposals] = useState(loadDisposals)
+  // Disposal statuses persisted in tyre_disposals (V62) — shared across the
+  // team instead of one browser's localStorage.
+  const [disposals, setDisposals] = useState({})
+  const [disposalError, setDisposalError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('tyre_disposals').select('tyre_record_id,status').then(({ data }) => {
+      if (cancelled || !data) return
+      setDisposals(Object.fromEntries(data.map((d) => [d.tyre_record_id, d.status])))
+    })
+    return () => { cancelled = true }
+  }, [])
 
   const listRef = useRef(null)
 
@@ -300,7 +300,7 @@ export default function TyreScrapManagement() {
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       months.push({
-        label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
+        label: formatMonthYear(d),
         key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
         count: 0,
         cost: 0,
@@ -459,7 +459,7 @@ export default function TyreScrapManagement() {
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       months.push({
-        label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
+        label: formatMonthYear(d),
         key:   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
       })
     }
@@ -528,11 +528,20 @@ export default function TyreScrapManagement() {
 
   // ── Mark as disposed ──────────────────────────────────────────────────────────
   const markDisposed = useCallback((id, status = 'Disposed') => {
+    setDisposalError('')
+    let prevStatus
     setDisposals(prev => {
-      const next = { ...prev, [id]: status }
-      saveDisposals(next)
-      return next
+      prevStatus = prev[id]
+      return { ...prev, [id]: status }
     })
+    supabase.from('tyre_disposals')
+      .upsert({ tyre_record_id: id, status }, { onConflict: 'tyre_record_id' })
+      .then(({ error: err }) => {
+        if (err) {
+          setDisposals(prev => ({ ...prev, [id]: prevStatus ?? 'Pending' }))
+          setDisposalError(`Could not save the disposal status: ${err.message}`)
+        }
+      })
   }, [])
 
   // ── Monthly trend chart data ──────────────────────────────────────────────────
@@ -1326,6 +1335,9 @@ export default function TyreScrapManagement() {
                   className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-red-600"
                   title="Date to"
                 />
+                {disposalError && (
+                  <p className="w-full text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{disposalError}</p>
+                )}
                 <div className="flex gap-2 ml-auto">
                   <button
                     onClick={exportDisposalExcel}

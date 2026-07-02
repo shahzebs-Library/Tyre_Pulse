@@ -19,6 +19,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear, formatMonth, formatDateTime } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -61,15 +62,7 @@ const EMPTY_FORM = {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function _fmtCurrencyBase(v, currency = 'SAR') {
-  const n = parseFloat(v)
-  if (isNaN(n)) return '—'
-  return `${currency} ` + n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-function fmtDate(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
-}
+const fmtDate = (d) => formatDate(d)
 function calcItemTotal(item) {
   return (parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)
 }
@@ -133,11 +126,19 @@ export default function Procurement() {
   const [formData, setFormData]     = useState(EMPTY_FORM)
   const [itemRow, setItemRow]       = useState({ ...EMPTY_ITEM })
   const [taxPct, setTaxPct]         = useState(15)
-  const [budget, setBudget]         = useState(() => {
-    try { return parseFloat(localStorage.getItem(BUDGET_KEY)) || 0 } catch { return 0 }
-  })
+  // Procurement budget — stored in the shared settings table (V62 sweep) so
+  // every user sees the same figure instead of a per-browser localStorage copy.
+  const [budget, setBudget]         = useState(0)
   const [budgetInput, setBudgetInput] = useState('')
   const [editBudget, setEditBudget]   = useState(false)
+  const [budgetError, setBudgetError] = useState('')
+
+  useEffect(() => {
+    supabase.from('settings').select('value').eq('key', BUDGET_KEY).maybeSingle().then(({ data }) => {
+      const v = parseFloat(typeof data?.value === 'string' ? JSON.parse(data.value) : data?.value)
+      if (Number.isFinite(v)) setBudget(v)
+    })
+  }, [])
 
   // ── Load ───────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -235,7 +236,7 @@ export default function Procurement() {
     return {
       labels: months.map(m => {
         const [y, mo] = m.split('-')
-        return new Date(parseInt(y), parseInt(mo) - 1).toLocaleString('en-US', { month: 'short', year: '2-digit' })
+        return formatMonthYear(new Date(parseInt(y), parseInt(mo) - 1))
       }),
       datasets: top5.map((vendor, idx) => ({
         label: vendor,
@@ -295,7 +296,7 @@ export default function Procurement() {
     return {
       labels: months.map(m => {
         const [y, mo] = m.split('-')
-        return new Date(parseInt(y), parseInt(mo) - 1).toLocaleString('en-US', { month: 'short' })
+        return formatMonth(new Date(parseInt(y), parseInt(mo) - 1))
       }),
       datasets: [
         {
@@ -447,11 +448,18 @@ export default function Procurement() {
   }
 
   // ── Budget save ────────────────────────────────────────────────────────────
-  function saveBudget() {
+  async function saveBudget() {
     const val = parseFloat(budgetInput)
     if (!isNaN(val) && val >= 0) {
+      setBudgetError('')
+      const prev = budget
       setBudget(val)
-      localStorage.setItem(BUDGET_KEY, val.toString())
+      const { error: err } = await supabase.from('settings')
+        .upsert({ key: BUDGET_KEY, value: JSON.stringify(val) }, { onConflict: 'key' })
+      if (err) {
+        setBudget(prev)
+        setBudgetError(`Could not save the budget: ${err.message}`)
+      }
     }
     setEditBudget(false)
     setBudgetInput('')
@@ -471,7 +479,7 @@ export default function Procurement() {
     doc.text('PURCHASE ORDER', 14, 25)
     doc.setFontSize(8); doc.setTextColor(156, 163, 175)
     doc.text(`${po.po_number}  ·  ${po.status}  ·  Priority: ${po.priority}`, 14, 33)
-    doc.text(`Generated: ${new Date().toLocaleString('en-US')}`, 140, 33)
+    doc.text(`Generated: ${formatDateTime(new Date())}`, 140, 33)
 
     autoTable(doc, {
       startY: 48,
@@ -708,7 +716,7 @@ export default function Procurement() {
                 type="number" min="0" step="1000"
                 value={budgetInput}
                 onChange={e => setBudgetInput(e.target.value)}
-                placeholder="Annual budget (R)"
+                placeholder={`Annual budget (${activeCurrency})`}
                 className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
                 onKeyDown={e => e.key === 'Enter' && saveBudget()}
               />
@@ -716,6 +724,9 @@ export default function Procurement() {
                 Save
               </button>
             </div>
+          )}
+          {budgetError && (
+            <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{budgetError}</p>
           )}
 
           <div className="space-y-3">

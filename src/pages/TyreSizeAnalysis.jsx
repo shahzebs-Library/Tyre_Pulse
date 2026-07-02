@@ -5,6 +5,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatDate } from '../lib/formatters'
 import {
   Layers, Download, FileText, AlertTriangle, CheckCircle,
   TrendingUp, TrendingDown, RefreshCw, Target, BarChart3,
@@ -74,7 +75,7 @@ function calcLife(r) {
   return km > 0 ? km : null
 }
 
-function fmtCpk(v, currency = 'SAR') {
+function fmtCpk(v, currency) {
   if (v == null || !isFinite(v)) return 'N/A'
   return `${currency} ${v.toFixed(4)}/km`
 }
@@ -585,7 +586,7 @@ export default function TyreSizeAnalysis() {
       doc.setFontSize(14); doc.setFont('helvetica', 'bold')
       doc.text('TYREPULSE · Tyre Size & Specification Optimizer', 14, 10)
       doc.setFontSize(9); doc.setFont('helvetica', 'normal')
-      doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} | Fleet: ${kpis.total} tyres | Unique Sizes: ${kpis.uniqueSz}`, 14, 17)
+      doc.text(`Generated: ${formatDate(new Date())} | Fleet: ${kpis.total} tyres | Unique Sizes: ${kpis.uniqueSz}`, 14, 17)
 
       let y = 28
       doc.setFontSize(11); doc.setTextColor(22, 163, 74); doc.setFont('helvetica', 'bold')

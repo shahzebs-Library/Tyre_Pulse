@@ -17,6 +17,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
+import { formatDate, formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 import {
   computeCpkFleet, computeAvgTyreLife, computeFailureRate,
@@ -32,12 +33,14 @@ ChartJS.register(
 )
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const BENCHMARKS = {
+// Benchmark thresholds are static industry reference targets (not regional data).
+// Currency only affects CPK display formatting, never the threshold values.
+const makeBenchmarks = (currency) => ({
   cpk: {
-    key: 'cpk', label: 'Cost Per Km (CPK)', unit: 'R/km',
+    key: 'cpk', label: 'Cost Per Km (CPK)', unit: `${currency}/km`,
     world_class: 0.80, good: 1.20, average: 1.80, poor: 2.50,
     higherIsBetter: false,
-    format: v => `R${Number(v).toFixed(3)}`,
+    format: v => `${currency} ${Number(v).toFixed(3)}`,
     icon: Gauge,
     description: 'Cost spent per km on tyres',
   },
@@ -81,9 +84,13 @@ const BENCHMARKS = {
     icon: BarChart3,
     description: 'On-time inspection completion',
   },
-}
+})
 
-const KPI_KEYS = Object.keys(BENCHMARKS)
+// Currency-independent copy for threshold math (scores, keys). Display always
+// uses the currency-aware instance built inside the component.
+const BENCHMARKS_STATIC = makeBenchmarks('')
+
+const KPI_KEYS = Object.keys(BENCHMARKS_STATIC)
 
 const PERIOD_PRESETS = [
   { label: 'Today', value: '1d' },
@@ -138,7 +145,7 @@ function prevPeriodDates(from, to) {
 }
 
 function kpiScore(key, value) {
-  const b = BENCHMARKS[key]
+  const b = BENCHMARKS_STATIC[key]
   if (!b || value == null || isNaN(value)) return 0
   const { world_class, good, average, poor, higherIsBetter } = b
   if (higherIsBetter) {
@@ -185,8 +192,7 @@ function normalizeForRadar(key, value) {
 function monthLabel(key) {
   if (!key) return ''
   const [y, m] = key.split('-')
-  const d = new Date(+y, +m - 1, 1)
-  return d.toLocaleDateString('en', { month: 'short', year: '2-digit' })
+  return formatMonthYear(new Date(+y, +m - 1, 1))
 }
 
 // ── KPI extraction from computed data ────────────────────────────────────────
@@ -262,8 +268,8 @@ function Sparkline({ data, positive = true, height = 32, width = 100 }) {
 }
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ kpiKey, value, prevValue, sparkData, targets, onClick }) {
-  const b = BENCHMARKS[kpiKey]
+function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onClick }) {
+  const b = benchmark
   const score = kpiScore(kpiKey, value)
   const rating = ratingLabel(score)
   const Icon = b.icon
@@ -381,9 +387,9 @@ function KpiCard({ kpiKey, value, prevValue, sparkData, targets, onClick }) {
 }
 
 // ── Drill-down Modal ──────────────────────────────────────────────────────────
-function DrillDownModal({ kpiKey, monthlyData, onClose }) {
+function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
   if (!kpiKey) return null
-  const b = BENCHMARKS[kpiKey]
+  const b = benchmark
   const labels = monthlyData.map(d => monthLabel(d.month))
   const values = monthlyData.map(d => d.value)
 
@@ -487,7 +493,9 @@ function DrillDownModal({ kpiKey, monthlyData, onClose }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function KpiCommandCenter() {
-  const { activeCountry, appSettings } = useSettings()
+  const { activeCountry, activeCurrency, appSettings } = useSettings()
+  // Currency-aware benchmark set — shadows nothing; all display formatting below uses this.
+  const BENCHMARKS = useMemo(() => makeBenchmarks(activeCurrency), [activeCurrency])
   const [period, setPeriod] = useState('90d')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -633,7 +641,7 @@ export default function KpiCommandCenter() {
           pointRadius: 4,
         },
         {
-          label: 'Industry Average',
+          label: 'Reference Average',
           data: KPI_KEYS.map(k => normalizeForRadar(k, BENCHMARKS[k].average)),
           backgroundColor: 'transparent',
           borderColor: '#f97316',
@@ -654,7 +662,7 @@ export default function KpiCommandCenter() {
         },
       ],
     }
-  }, [kpiValues])
+  }, [kpiValues, BENCHMARKS])
 
   const siteKpiData = useMemo(() => {
     if (!records.length) return []
@@ -723,7 +731,7 @@ export default function KpiCommandCenter() {
       }
     })
     return alerts.sort((a, b) => b.severity - a.severity)
-  }, [kpiValues, monthlyKpiMatrix])
+  }, [kpiValues, monthlyKpiMatrix, BENCHMARKS])
 
   const periodComparisonData = useMemo(() => {
     if (!KPI_KEYS.some(k => kpiValues[k] != null)) return null
@@ -748,7 +756,7 @@ export default function KpiCommandCenter() {
         },
       ],
     }
-  }, [kpiValues, prevKpiValues])
+  }, [kpiValues, prevKpiValues, BENCHMARKS])
 
   const drillMonthlyData = useMemo(() => {
     if (!drillKpi || !monthlyKpiMatrix.length) return []
@@ -769,7 +777,7 @@ export default function KpiCommandCenter() {
     doc.text('TYREPULSE · KPI Command Center', 14, 11)
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Period: ${from} to ${to}  |  Overall Fleet Score: ${overallScore.toFixed(0)}/100  |  Generated: ${new Date().toLocaleDateString()}`, 14, 19)
+    doc.text(`Period: ${from} to ${to}  |  Overall Fleet Score: ${overallScore.toFixed(0)}/100  |  Generated: ${formatDate(new Date())}`, 14, 19)
 
     autoTable(doc, {
       startY: 30,
@@ -987,6 +995,7 @@ export default function KpiCommandCenter() {
             <KpiCard
               key={key}
               kpiKey={key}
+              benchmark={BENCHMARKS[key]}
               value={kpiValues[key]}
               prevValue={prevKpiValues[key]}
               sparkData={kpiSparklines[key]}
@@ -1003,9 +1012,9 @@ export default function KpiCommandCenter() {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
           <h3 className="text-white font-semibold mb-1 flex items-center gap-2">
             <Layers size={16} className="text-purple-400" />
-            Fleet vs Industry Benchmark
+            Fleet vs Benchmark
           </h3>
-          <p className="text-gray-500 text-xs mb-4">All KPIs normalized 0–100. Higher = better.</p>
+          <p className="text-gray-500 text-xs mb-4">Static industry reference targets. All KPIs normalized 0–100. Higher = better.</p>
           <div className="h-72">
             <Radar data={radarData} options={{
               responsive: true,
@@ -1325,6 +1334,7 @@ export default function KpiCommandCenter() {
       {drillKpi && (
         <DrillDownModal
           kpiKey={drillKpi}
+          benchmark={BENCHMARKS[drillKpi]}
           monthlyData={drillMonthlyData}
           onClose={() => setDrillKpi(null)}
         />

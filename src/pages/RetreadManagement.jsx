@@ -18,6 +18,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatDate, formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -79,7 +80,7 @@ const EXPORT_HEADERS = [
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function nowStr() {
-  return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDate(new Date())
 }
 
 function kmLife(t) {
@@ -359,7 +360,7 @@ export default function RetreadManagement() {
     const monthlyBar = {
       labels: months.map(m => {
         const [yr, mo] = m.split('-')
-        return new Date(Number(yr), Number(mo) - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+        return formatMonthYear(new Date(Number(yr), Number(mo) - 1, 1))
       }),
       datasets: [{
         label: 'Retreads Fitted',
@@ -443,7 +444,7 @@ export default function RetreadManagement() {
     const trendChart = {
       labels: months.map(m => {
         const [yr, mo] = m.split('-')
-        return new Date(Number(yr), Number(mo) - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+        return formatMonthYear(new Date(Number(yr), Number(mo) - 1, 1))
       }),
       datasets: trendDatasets,
     }

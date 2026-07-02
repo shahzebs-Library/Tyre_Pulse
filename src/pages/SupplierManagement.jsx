@@ -6,6 +6,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
+import { formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 import {
   Building2, Star, TrendingUp, TrendingDown, Minus, Award, AlertTriangle,
@@ -81,14 +82,14 @@ function calcCpk(cost, kmFit, kmRem) {
   return cost / km
 }
 
-function fmtCurrency(v, currency = 'SAR') {
+function fmtCurrency(v, currency) {
   if (v == null || !isFinite(v)) return `${currency} 0`
   if (Math.abs(v) >= 1_000_000) return `${currency} ${(v / 1_000_000).toFixed(2)}M`
   if (Math.abs(v) >= 1_000) return `${currency} ${(v / 1_000).toFixed(1)}K`
   return `${currency} ${Math.round(v).toLocaleString()}`
 }
 
-function fmtCpk(v, currency = 'SAR') {
+function fmtCpk(v, currency) {
   if (v == null || !isFinite(v)) return 'N/A'
   return `${currency} ${v.toFixed(4)}/km`
 }
@@ -527,7 +528,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
                       <td className="px-3 py-2 text-gray-300">{r.site || '—'}</td>
                       <td className="px-3 py-2"><CpkBadge cpk={cpk} currency={currency} /></td>
                       <td className={`px-3 py-2 ${riskColor}`}>{r.risk_level || '—'}</td>
-                      <td className="px-3 py-2 text-gray-500">{r.issue_date ? new Date(r.issue_date).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'2-digit' }) : '—'}</td>
+                      <td className="px-3 py-2 text-gray-500">{r.issue_date ? formatDate(r.issue_date) : '—'}</td>
                     </tr>
                   )
                 })}
@@ -622,6 +623,9 @@ export default function SupplierManagement() {
   const [contractsError, setContractsError] = useState(null)
   const [contractModal, setContractModal] = useState(null)
   const [contractSearch, setContractSearch] = useState('')
+  const [contractDeleteTarget, setContractDeleteTarget] = useState(null)
+  const [contractDeleteError, setContractDeleteError] = useState(null)
+  const [contractDeleting, setContractDeleting] = useState(false)
   // Scorecard source data (warranty claims + purchase orders); tyres come from `records`.
   const [scWarranty, setScWarranty] = useState([])
   const [scPos, setScPos] = useState([])
@@ -820,9 +824,19 @@ export default function SupplierManagement() {
     return null
   }
 
-  async function deleteContract(id) {
-    const { error: err } = await supabase.from('supplier_contracts').delete().eq('id', id)
-    if (err) { setContractsError(err.message); return }
+  async function deleteContract() {
+    if (!contractDeleteTarget) return
+    setContractDeleting(true)
+    setContractDeleteError(null)
+    const { data, error: err } = await supabase
+      .from('supplier_contracts').delete().eq('id', contractDeleteTarget.id).select('id')
+    if (err || (data?.length ?? 0) === 0) {
+      setContractDeleteError(err?.message || 'The contract could not be deleted — you may not have permission, or it was already removed.')
+      setContractDeleting(false)
+      return
+    }
+    setContractDeleting(false)
+    setContractDeleteTarget(null)
     await fetchContracts()
   }
 
@@ -1468,7 +1482,7 @@ export default function SupplierManagement() {
                                 <button onClick={() => setContractModal(c)} className="p-1.5 text-gray-500 hover:text-blue-400 hover:bg-gray-800 rounded">
                                   <Edit3 size={13} />
                                 </button>
-                                <button onClick={() => deleteContract(c.id)} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded">
+                                <button onClick={() => { setContractDeleteError(null); setContractDeleteTarget(c) }} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded">
                                   <X size={13} />
                                 </button>
                               </div>
@@ -1664,6 +1678,37 @@ export default function SupplierManagement() {
             onSave={saveContract}
             onClose={() => setContractModal(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Delete Contract Confirmation */}
+      <AnimatePresence>
+        {contractDeleteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl p-5"
+            >
+              <div className="flex gap-3 mb-4">
+                <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-white font-medium">Delete contract for <span className="text-blue-400">{contractDeleteTarget.supplier_name}</span>?</p>
+                  <p className="text-gray-400 text-sm mt-1">This removes the supplier contract permanently. Tyre and spend records are not affected.</p>
+                </div>
+              </div>
+              {contractDeleteError && (
+                <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{contractDeleteError}</p>
+              )}
+              <div className="flex gap-3">
+                <button onClick={deleteContract} disabled={contractDeleting} className="btn-danger flex items-center gap-2 disabled:opacity-50">
+                  <X size={15} /> {contractDeleting ? 'Deleting…' : 'Delete Contract'}
+                </button>
+                <button onClick={() => { setContractDeleteTarget(null); setContractDeleteError(null) }} className="btn-secondary">Cancel</button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

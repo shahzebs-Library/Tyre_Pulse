@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatDate, formatDateTime } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 import {
   Wrench, ClipboardList, Clock, CheckCircle, DollarSign, AlertTriangle,
@@ -63,7 +64,7 @@ const PRIORITIES = ['Critical','High','Medium','Low']
 const PAGE_SIZE  = 20
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-function fmtCurrency(v, currency = 'SAR') {
+function fmtCurrency(v, currency) {
   if (v == null || !isFinite(v)) return `${currency} 0`
   if (Math.abs(v) >= 1_000_000) return `${currency} ${(v / 1_000_000).toFixed(2)}M`
   if (Math.abs(v) >= 1_000) return `${currency} ${(v / 1_000).toFixed(1)}K`
@@ -278,9 +279,9 @@ function JobDrawer({ job, onClose, currency }) {
               { label: 'Site', value: job.site },
               { label: 'Work Type', value: job.work_type },
               { label: 'Assigned To', value: job.assigned_to },
-              { label: 'Created', value: job.created_at ? new Date(job.created_at).toLocaleString() : '—' },
-              { label: 'Scheduled', value: job.scheduled_date ? new Date(job.scheduled_date).toLocaleDateString() : '—' },
-              { label: 'Completed', value: job.completed_at ? new Date(job.completed_at).toLocaleString() : '—' },
+              { label: 'Created', value: job.created_at ? formatDateTime(job.created_at) : '—' },
+              { label: 'Scheduled', value: job.scheduled_date ? formatDate(job.scheduled_date) : '—' },
+              { label: 'Completed', value: job.completed_at ? formatDateTime(job.completed_at) : '—' },
               { label: 'Turnaround', value: fmtHours(ta) },
             ].map(({ label, value }) => (
               <div key={label} className="bg-gray-900 rounded-lg p-3">
@@ -1124,13 +1125,13 @@ export default function WorkshopManagement() {
                                 </td>
                                 <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{job.assigned_to || '—'}</td>
                                 <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                                  {job.created_at ? new Date(job.created_at).toLocaleDateString() : '—'}
+                                  {job.created_at ? formatDate(job.created_at) : '—'}
                                 </td>
                                 <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                                  {job.scheduled_date ? new Date(job.scheduled_date).toLocaleDateString() : '—'}
+                                  {job.scheduled_date ? formatDate(job.scheduled_date) : '—'}
                                 </td>
                                 <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                                  {job.completed_at ? new Date(job.completed_at).toLocaleDateString() : '—'}
+                                  {job.completed_at ? formatDate(job.completed_at) : '—'}
                                 </td>
                                 <td className="px-4 py-3 text-gray-300 whitespace-nowrap font-medium">
                                   {fmtCurrency(job.total_cost, activeCurrency)}

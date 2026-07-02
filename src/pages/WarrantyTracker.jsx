@@ -19,6 +19,7 @@ import {
 import * as warranty from '../lib/api/warranty'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -93,7 +94,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 function fmtDate(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
-  return isNaN(d) ? iso : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return isNaN(d) ? iso : formatDate(d)
 }
 
 function generateClaimNo(existingClaims) {
@@ -226,7 +227,7 @@ export default function WarrantyTracker() {
     load()
   }, [])
 
-  const cur = activeCurrency || 'SAR'
+  const cur = activeCurrency
   const fmt = (v) => {
     if (v == null || !isFinite(v)) return `${cur} 0`
     if (Math.abs(v) >= 1_000_000) return `${cur} ${(v / 1_000_000).toFixed(2)}M`
@@ -478,7 +479,7 @@ export default function WarrantyTracker() {
     doc.text('Tyre Pulse — Warranty Claims Report', 14, 16)
     doc.setFontSize(10)
     doc.setTextColor(156, 163, 175)
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')}  |  Total Claims: ${claims.length}`, 14, 23)
+    doc.text(`Generated: ${formatDate(new Date())}  |  Total Claims: ${claims.length}`, 14, 23)
     autoTable(doc, {
       startY: 30,
       head: [['Claim No', 'Serial', 'Brand', 'Size', 'Asset', 'Site', 'Failure Type', 'Status', 'km Run', 'Exp km', '% Life', 'Credit', 'Date']],
@@ -573,7 +574,7 @@ export default function WarrantyTracker() {
     doc.setTextColor(0, 0, 0)
     doc.setFontSize(11)
     doc.text(`Claim Reference: ${claim.claim_no}`, 14, 48)
-    doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 14, 56)
+    doc.text(`Date: ${formatDate(new Date())}`, 14, 56)
     doc.setDrawColor(200, 200, 200)
     doc.line(14, 60, 196, 60)
     doc.setFontSize(12)
@@ -627,7 +628,7 @@ export default function WarrantyTracker() {
     y += 8
     doc.text('Name: ________________________', 14, y)
     y += 8
-    doc.text(`Date: ${new Date().toLocaleDateString('en-GB')}`, 14, y)
+    doc.text(`Date: ${formatDate(new Date())}`, 14, y)
     doc.save(`warranty-claim-${claim.claim_no}.pdf`)
   }, [])
 

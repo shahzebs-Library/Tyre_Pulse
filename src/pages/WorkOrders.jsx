@@ -22,6 +22,7 @@ import { workOrders } from '../lib/api'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '../lib/formatters'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -83,19 +84,8 @@ const EMPTY_FORM = {
 }
 
 // ── Helper ────────────────────────────────────────────────────────────────────
-function _fmtCurrencyBase(v, currency = 'SAR') {
-  const n = parseFloat(v)
-  if (isNaN(n)) return '—'
-  return `${currency} ` + n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-function fmtDate(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-function fmtDateTime(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+const fmtDate = (d) => formatDate(d)
+const fmtDateTime = (d) => formatDateTime(d)
 function isOverdue(wo) {
   if (!wo.target_completion) return false
   if (['Completed','Closed','Cancelled'].includes(wo.status)) return false
@@ -370,7 +360,7 @@ export default function WorkOrders() {
     doc.text('Workshop Job Card', 14, 23)
     doc.setFontSize(9); doc.setTextColor(156, 163, 175)
     doc.text(`${order.work_order_no}  ·  ${order.work_type}  ·  Priority: ${order.priority}`, 14, 30)
-    doc.text(`Printed: ${new Date().toLocaleString('en-US')}`, 140, 30)
+    doc.text(`Printed: ${formatDateTime(new Date())}`, 140, 30)
 
     const details = [
       ['Asset No', order.asset_no, 'Status', order.status],

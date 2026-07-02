@@ -1,8 +1,28 @@
-import * as XLSX from 'xlsx'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import pptxgen from 'pptxgenjs'
 import { formatCurrencyCompact, formatDate } from './formatters.js'
+
+// ── Lazy-loaded heavy libraries ────────────────────────────────────────────────
+// xlsx (~420 KB), jspdf (~400 KB) and pptxgenjs (~385 KB) must never ship with a
+// page's initial chunk — they load on the first export click and are then
+// memoised. Module-level bindings keep every internal helper working unchanged;
+// each public export awaits the loader for the engine(s) it needs.
+let XLSX, jsPDF, autoTable, pptxgen
+
+async function ensureXlsx() {
+  if (!XLSX) XLSX = await import('xlsx')
+  return XLSX
+}
+async function ensurePdf() {
+  if (!jsPDF) {
+    const [j, a] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
+    jsPDF = j.default
+    autoTable = a.default
+  }
+  return { jsPDF, autoTable }
+}
+async function ensurePptx() {
+  if (!pptxgen) pptxgen = (await import('pptxgenjs')).default
+  return pptxgen
+}
 
 // ── Brand palette — deep slate + indigo + gold (no green/AI references) ────────
 const P = {
@@ -450,7 +470,8 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
 }
 
 // ── Excel Export ───────────────────────────────────────────────────────────────
-export function exportToExcel(rows, columns, headers, filename = 'export', sheetName = 'Data', opts = {}) {
+export async function exportToExcel(rows, columns, headers, filename = 'export', sheetName = 'Data', opts = {}) {
+  await ensureXlsx()
   rows = Array.isArray(rows) ? rows : []
   const currency = opts.currency || 'SAR'
   const wb = XLSX.utils.book_new()
@@ -582,7 +603,8 @@ function _hBarChart(doc, x, y, w, h, entries, accentRgb, fmt) {
 }
 
 // ── PDF Report Export — auto KPI summary + charts, then the data table ───────────
-export function exportToPdf(rows, columns, title, filename = 'report', orientation = 'landscape', company = '', opts = {}) {
+export async function exportToPdf(rows, columns, title, filename = 'report', orientation = 'landscape', company = '', opts = {}) {
+  await ensurePdf()
   const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width
   rows = Array.isArray(rows) ? rows : []
@@ -735,6 +757,7 @@ export function exportToPdf(rows, columns, title, filename = 'report', orientati
  * @param {string}  [opts.company]
  */
 export async function exportInspectionDetailPdf(row, opts = {}) {
+  await ensurePdf()
   const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pw      = doc.internal.pageSize.width
   const ph      = doc.internal.pageSize.height
@@ -1092,7 +1115,8 @@ function _buildRecommendations(riskCounts, totalT, row) {
  * @param {Object} data
  * @param {string} [filename]
  */
-export function exportDailyExecutivePdf(data, filename) {
+export async function exportDailyExecutivePdf(data, filename) {
+  await ensurePdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const PW  = doc.internal.pageSize.width   // 297
   const PH  = doc.internal.pageSize.height  // 210
@@ -1519,6 +1543,7 @@ export function exportDailyExecutivePdf(data, filename) {
 
 // ── PowerPoint Export — light executive theme, native editable charts ─────────
 export async function exportToPptx(data, filename = 'TyrePulse_Report') {
+  await ensurePptx()
   const pptx = new pptxgen()
   pptx.layout = 'LAYOUT_WIDE'
   pptx.theme = { headFontFace: 'Arial', bodyFontFace: 'Arial' }

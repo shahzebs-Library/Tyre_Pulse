@@ -17,9 +17,6 @@ import {
   FileText, Download, RefreshCw, Filter, BarChart2,
   Loader2, FileSpreadsheet, Minus, Car, CircleDot,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import * as analytics from '../lib/api/analyticsReads'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
@@ -250,7 +247,9 @@ export default function SafetyCompliance() {
   }, [compliance])
 
   // ── Export ────────────────────────────────────────────────────────────────
-  function exportPdf() {
+  async function exportPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     if (!compliance) return
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     doc.setFillColor(15, 23, 42); doc.rect(0, 0, 297, 32, 'F')
@@ -302,7 +301,8 @@ export default function SafetyCompliance() {
     doc.save(`safety-compliance-${new Date().toISOString().slice(0,10)}.pdf`)
   }
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     if (!compliance) return
     const ws = XLSX.utils.json_to_sheet([
       { Metric: 'Tread Depth Compliance', Score: compliance.treadCompliance.toFixed(1) + '%' },

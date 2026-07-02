@@ -15,9 +15,6 @@ import {
   FileSpreadsheet, ChevronDown, ChevronUp, Edit2, CheckCircle,
   Clock, BarChart2, Layers, Zap, ExternalLink,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import * as purchaseOrders from '../lib/api/purchaseOrders'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -453,7 +450,8 @@ export default function StockReplenishment() {
   }
 
   // ── Export PO to Excel ─────────────────────────────────────────────────────
-  function exportOrderExcel() {
+  async function exportOrderExcel() {
+    const XLSX = await import('xlsx')
     const rows = orderLines.map((l, i) => ({
       '#':               i + 1,
       'Brand':           l.brand,
@@ -477,7 +475,9 @@ export default function StockReplenishment() {
   }
 
   // ── Export PO to PDF ───────────────────────────────────────────────────────
-  function exportOrderPDF() {
+  async function exportOrderPDF() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     // Header
     doc.setFillColor(15, 23, 42)

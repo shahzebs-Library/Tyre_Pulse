@@ -16,9 +16,6 @@ import {
   BarChart2, Loader2, RefreshCw, Download, FileSpreadsheet, FileText,
   Star, AlertTriangle, CheckCircle, Info, ArrowUpRight, ArrowDownRight,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import * as analytics from '../lib/api/analyticsReads'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -333,8 +330,10 @@ export default function PerformanceBenchmark() {
   }, [brandBench])
 
   // ── Export ────────────────────────────────────────────────────────────────
-  function exportPdf() {
+  async function exportPdf() {
     if (!benchmarked.length) return
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     doc.setFillColor(15, 23, 42); doc.rect(0, 0, 297, 32, 'F')
     doc.setTextColor(255, 255, 255)
@@ -369,8 +368,9 @@ export default function PerformanceBenchmark() {
     doc.save(`performance-benchmark-${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
-  function exportExcel() {
+  async function exportExcel() {
     if (!benchmarked.length) return
+    const XLSX = await import('xlsx')
     const ws = XLSX.utils.json_to_sheet(benchmarked.map(m => ({
       KPI: m.label,
       'Your Fleet': m.format(m.value),

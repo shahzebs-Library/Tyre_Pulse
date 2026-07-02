@@ -14,9 +14,6 @@ import {
   DollarSign, BarChart2, Activity, Globe, CheckCircle, XCircle,
   Info, ArrowUpRight, ArrowDownRight,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
@@ -459,7 +456,9 @@ export default function FuelEfficiency() {
   }, [vehicleMetrics])
 
   // ── Export PDF ────────────────────────────────────────────────────────────
-  const exportPDF = useCallback(() => {
+  const exportPDF = useCallback(async () => {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     doc.setFillColor(22, 101, 52)
     doc.rect(0, 0, 297, 22, 'F')
@@ -511,7 +510,8 @@ export default function FuelEfficiency() {
   }, [kpis, siteMetrics, fleetSize, activeCurrency])
 
   // ── Export Excel ──────────────────────────────────────────────────────────
-  const exportExcel = useCallback(() => {
+  const exportExcel = useCallback(async () => {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
 
     const vehicleRows = vehicleMetrics.map(v => ({

@@ -7,8 +7,6 @@ import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package, Up
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 } from 'chart.js'
@@ -307,7 +305,9 @@ export default function StockManagement() {
   }), [tlByDate])
 
   // Reorder request PDF
-  function generateReorderPdf(rec) {
+  async function generateReorderPdf(rec) {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     doc.setFillColor(30, 30, 40)
     doc.rect(0, 0, 210, 297, 'F')

@@ -14,9 +14,6 @@ import {
   Calendar, ChevronDown, ChevronUp, Star, Trophy, AlertOctagon,
   ArrowUpRight, ArrowDownRight, Info, X, FileText,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
@@ -758,7 +755,9 @@ export default function KpiCommandCenter() {
     return monthlyKpiMatrix.map(m => ({ month: m.month, value: m[drillKpi] ?? 0 }))
   }, [drillKpi, monthlyKpiMatrix])
 
-  function exportPdf() {
+  async function exportPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     doc.setFillColor(15, 23, 42)
     doc.rect(0, 0, 297, 210, 'F')
@@ -815,7 +814,8 @@ export default function KpiCommandCenter() {
     doc.save(`kpi-command-center-${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
     const kpiRows = KPI_KEYS.map(k => {
       const b = BENCHMARKS[k]

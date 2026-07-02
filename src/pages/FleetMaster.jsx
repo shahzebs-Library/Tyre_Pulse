@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel } from '../lib/exportUtils'
-import * as XLSX from 'xlsx'
 import {
   Search, Plus, Edit2, Trash2, Save, X, AlertTriangle,
   FileSpreadsheet, Download, Upload, Truck, ChevronLeft, ChevronRight
@@ -281,7 +280,8 @@ export default function FleetMaster() {
   }
 
   // ── download template ─────────────────────────────────────────────────────────
-  function downloadTemplate() {
+  async function downloadTemplate() {
+    const XLSX = await import('xlsx')
     const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS])
     ws['!cols'] = TEMPLATE_HEADERS.map(h => ({ wch: Math.max(h.length + 4, 18) }))
     const wb = XLSX.utils.book_new()
@@ -290,7 +290,8 @@ export default function FleetMaster() {
   }
 
   // ── bulk upload handlers ──────────────────────────────────────────────────────
-  function handleUploadFile(e) {
+  async function handleUploadFile(e) {
+    const XLSX = await import('xlsx')
     const file = e.target.files?.[0]
     if (!file) return
     setUploadFileName(file.name)

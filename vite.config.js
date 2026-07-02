@@ -168,9 +168,12 @@ export default defineConfig({
           ) return 'vendor-react'
           if (id.includes('/chart.js/') || id.includes('/react-chartjs')) return 'vendor-charts'
           if (id.includes('/framer-motion/')) return 'vendor-motion'
-          if (id.includes('/jspdf/') || id.includes('/jspdf-autotable/') || id.includes('autotable')) return 'vendor-pdf'
-          if (id.includes('/pptxgenjs/')) return 'vendor-pptx'
-          if (id.includes('/xlsx/')) return 'vendor-xlsx'
+          // NOTE: xlsx / jspdf / pptxgenjs are intentionally NOT pinned here.
+          // They are only ever loaded via dynamic import(), so Rollup gives each
+          // its own async chunk that downloads on the first export/parse click.
+          // Pinning them into a manual chunk made Rollup co-locate shared interop
+          // helpers there, dragging the whole ~400 KB chunk back into every
+          // page's initial load.
           if (id.includes('/@supabase/')) return 'vendor-supabase'
           if (id.includes('/@anthropic-ai/')) return 'vendor-ai'
           if (id.includes('/lucide-react/')) return 'vendor-icons'

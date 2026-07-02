@@ -6,7 +6,6 @@ import { useSettings } from '../contexts/SettingsContext'
 import { batchClassify } from '../lib/tyreClassifier'
 import { canonicalCode } from '../lib/tyrePositions'
 import { logAuditEvent } from '../lib/auditLogger'
-import * as XLSX from 'xlsx'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Upload, FileSpreadsheet, CheckCircle, X, Wand2, BookOpen,
@@ -494,13 +493,13 @@ function extractAoa(aoa, forcedHeaderRow = null) {
   return { headers, rows, headerRow: hIdx, aoa }
 }
 
-function aoaFromWorksheet(ws) {
+function aoaFromWorksheet(XLSX, ws) {
   return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
 }
 
 /** Convert a worksheet → { headers, rows, headerRow, aoa } via smart detection. */
-function extractTable(ws, forcedHeaderRow = null) {
-  return extractAoa(aoaFromWorksheet(ws), forcedHeaderRow)
+function extractTable(XLSX, ws, forcedHeaderRow = null) {
+  return extractAoa(aoaFromWorksheet(XLSX, ws), forcedHeaderRow)
 }
 
 /** Sniff the delimiter of a CSV/TSV/TXT file (comma, semicolon, tab, pipe). */
@@ -678,12 +677,13 @@ export default function UploadData() {
       // Binary workbook (xlsx/xls/xlsm/xlsb/ods). XLSX also reads CSV bytes, so
       // this doubles as a fallback for mislabelled or oddly-encoded text files.
       const tryBinary = async () => {
+        const XLSX = await import('xlsx')
         const wb = XLSX.read(buf, { type: typeof buf === 'string' ? 'binary' : 'array', cellDates: true })
         if (!wb.SheetNames?.length) throw new Error('workbook has no sheets')
         wbRef.current = wb
 
         const opts = wb.SheetNames.map(name => {
-          const t = extractTable(wb.Sheets[name])
+          const t = extractTable(XLSX, wb.Sheets[name])
           const likelyPivot = t.rows.length < 3 && t.headers.length > 15
           return { name, rows: t.rows.length, selected: t.rows.length > 0 && !likelyPivot, likelyPivot }
         })
@@ -692,7 +692,7 @@ export default function UploadData() {
         // ERP exports carry one data tab plus title/metadata/pivot tabs.
         if (withData.length <= 1) {
           const target = withData[0]?.name ?? wb.SheetNames[0]
-          await loadFromExtract(extractTable(wb.Sheets[target]))
+          await loadFromExtract(extractTable(XLSX, wb.Sheets[target]))
           return
         }
         setSheetOptions(opts)
@@ -1260,9 +1260,10 @@ export default function UploadData() {
             <div className="flex gap-3">
               <button disabled={!sheetOptions.some(s => s.selected)}
                 onClick={async () => {
+                  const XLSX = await import('xlsx')
                   const wb = wbRef.current
                   // Smart header detection per sheet, then unify into one header set.
-                  const tables = sheetOptions.filter(s => s.selected).map(s => extractTable(wb.Sheets[s.name]))
+                  const tables = sheetOptions.filter(s => s.selected).map(s => extractTable(XLSX, wb.Sheets[s.name]))
                   const hdrs = []
                   tables.forEach(t => t.headers.forEach(h => { if (!hdrs.includes(h)) hdrs.push(h) }))
                   const dataRows = []

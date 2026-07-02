@@ -14,9 +14,6 @@ import {
   ChevronDown, ChevronUp, Loader2, XCircle, ArrowRight,
   Recycle, AlertOctagon, ShieldAlert, Flame, Activity,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
@@ -584,7 +581,9 @@ export default function TyreScrapManagement() {
   }), [activeCurrency])
 
   // ── Exports ───────────────────────────────────────────────────────────────────
-  function exportDisposalPdf() {
+  async function exportDisposalPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const pw = doc.internal.pageSize.width
 
@@ -630,7 +629,8 @@ export default function TyreScrapManagement() {
     doc.save(`TyrePulse_Scrap_Disposal_Manifest_${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
-  function exportDisposalExcel() {
+  async function exportDisposalExcel() {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
     const rows = disposalLog.map(t => ({
       'Serial No':        t.serial_number ?? '',

@@ -17,7 +17,14 @@
  * @module import/parseWorkbook
  */
 
-import * as XLSX from 'xlsx'
+// xlsx is ~420 KB — load it on the first parse, never with the page chunk.
+// Module-level binding so the sync closures inside parseWorkbook() can use it
+// after the initial await.
+let XLSX
+async function ensureXlsx() {
+  if (!XLSX) XLSX = await import('xlsx')
+  return XLSX
+}
 
 /**
  * @typedef {Object} ParsedColumn
@@ -331,6 +338,7 @@ function looksLikeText(bytes) {
  * @returns {Promise<ParsedWorkbook>}
  */
 export async function parseWorkbook(arrayBufferOrFile, opts = {}) {
+  await ensureXlsx()
   const fileName = opts.fileName || (arrayBufferOrFile && arrayBufferOrFile.name) || ''
   const buf = await toArrayBuffer(arrayBufferOrFile)
   const bytes = new Uint8Array(buf)

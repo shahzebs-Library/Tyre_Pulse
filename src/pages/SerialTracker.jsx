@@ -1,5 +1,4 @@
 import { useState, useMemo, useRef } from 'react'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
@@ -170,7 +169,7 @@ export default function SerialTracker() {
   // ── Bulk Lookup ───────────────────────────────────────────────────────────
   const SERIAL_HEADERS = ['serial_no', 'Serial No', 'Serial Number', 'serial']
 
-  function extractSerialsFromSheet(wb) {
+  function extractSerialsFromSheet(wb, XLSX) {
     const sheet = wb.Sheets[wb.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
     if (rows.length === 0) return []
@@ -182,6 +181,7 @@ export default function SerialTracker() {
   }
 
   async function processBulkFile(file) {
+    const XLSX = await import('xlsx')
     setBulkFileName(file.name)
     setBulkLoading(true)
     setBulkDone(false)
@@ -191,7 +191,7 @@ export default function SerialTracker() {
 
     const arrayBuffer = await file.arrayBuffer()
     const wb = XLSX.read(arrayBuffer, { type: 'array' })
-    const serials = extractSerialsFromSheet(wb)
+    const serials = extractSerialsFromSheet(wb, XLSX)
 
     if (serials.length === 0) {
       setBulkLoading(false)

@@ -16,9 +16,6 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -877,6 +874,8 @@ export default function InspectionPlanner() {
 
   // ── Export ────────────────────────────────────────────────────────────────────
   async function exportPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     setExportLoading(true)
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     doc.setFillColor(22, 101, 52)
@@ -915,6 +914,7 @@ export default function InspectionPlanner() {
   }
 
   async function exportExcel() {
+    const XLSX = await import('xlsx')
     setExportLoading(true)
     const wb = XLSX.utils.book_new()
 

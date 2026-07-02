@@ -16,9 +16,6 @@ import {
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -516,7 +513,8 @@ export default function TyreExchange() {
     )
   }
 
-  function exportTransfersExcel() {
+  async function exportTransfersExcel() {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
     const transferSheet = XLSX.utils.json_to_sheet(filteredTransfers.map(t => ({
       Serial: t.serial,
@@ -554,7 +552,9 @@ export default function TyreExchange() {
     XLSX.writeFile(wb, 'TyrePulse_TransferHistory.xlsx')
   }
 
-  function exportTransferCertificate(tx) {
+  async function exportTransferCertificate(tx) {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     doc.setFillColor(22, 101, 52)
     doc.rect(0, 0, 210, 28, 'F')

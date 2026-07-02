@@ -20,7 +20,6 @@ import {
   FileSpreadsheet, ChevronDown,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
-import * as XLSX from 'xlsx'
 
 // Canonical tyre_records fields the user can map to
 const CANONICAL_FIELDS = [
@@ -201,6 +200,7 @@ export default function CustomData() {
   // ── Export extra_fields data ──────────────────────────────────────────────
 
   async function exportExtraFields() {
+    const XLSX = await import('xlsx')
     // Fetch ALL records with extra_fields
     const { data } = await customData.listTyreRecordsForExport()
 

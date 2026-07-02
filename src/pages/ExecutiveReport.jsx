@@ -20,9 +20,6 @@ import {
   Building2, Wrench, Star, AlertOctagon,
   ChevronRight, Award, Package, Users, Mail,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import EmailReportModal from '../components/EmailReportModal'
 import {
@@ -744,6 +741,8 @@ export default function ExecutiveReport() {
 
   // ── PDF Export ────────────────────────────────────────────────────────────
   const exportPDF = useCallback(async () => {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     setExporting(true)
     try {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -883,7 +882,8 @@ export default function ExecutiveReport() {
   }, [period, kpis, rootCauses, riskMatrix, actionPlan, totalSpend, projectedAnnual, costTrend, currency, companyName, savingsOpportunity])
 
   // ── Excel Export ──────────────────────────────────────────────────────────
-  const exportExcel = useCallback(() => {
+  const exportExcel = useCallback(async () => {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
 
     const kpiRows = [
@@ -930,7 +930,9 @@ export default function ExecutiveReport() {
     XLSX.writeFile(wb, `TyrePulse_Executive_Report_${period}_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }, [kpis, rootCauses, riskMatrix, actionPlan, costTrend, costBySite, totalSpend, projectedAnnual, currency, period])
 
-  const exportActionPlanPDF = useCallback(() => {
+  const exportActionPlanPDF = useCallback(async () => {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const pw = doc.internal.pageSize.width
     doc.setFillColor(6, 78, 59)

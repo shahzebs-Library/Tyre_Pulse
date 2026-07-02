@@ -14,8 +14,6 @@ import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import { legacyPositionCode } from '../lib/tyrePositions'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { useWakeLock, vibrate, shareOrCopy } from '../hooks/useWakeLock'
 import { enqueueInspection, syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
 
@@ -608,6 +606,8 @@ export default function Inspections() {
 
   async function exportChecklistPdf(preview = false) {
     if (!clSaved) return
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const tyreData = clPositions.length > 0 ? clPositions
       : (clSaved.tyre_conditions || (() => { try { return JSON.parse(clSaved.findings || '[]') } catch { return [] } })())
 

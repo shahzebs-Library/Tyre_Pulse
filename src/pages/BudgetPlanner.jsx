@@ -9,9 +9,6 @@ import {
   ArcElement, Title, Tooltip, Legend, Filler,
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import PageHeader from '../components/ui/PageHeader'
 import { fetchAllPages } from '../lib/fetchAll'
 import {
@@ -581,6 +578,8 @@ export default function BudgetPlanner() {
 
   // ── PDF Export ────────────────────────────────────────────────────────────
   async function handleExportPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     setExporting(true)
     try {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
@@ -698,7 +697,8 @@ export default function BudgetPlanner() {
   }
 
   // ── Excel Export ──────────────────────────────────────────────────────────
-  function handleExportExcel() {
+  async function handleExportExcel() {
+    const XLSX = await import('xlsx')
     setExporting(true)
     try {
       const wb = XLSX.utils.book_new()

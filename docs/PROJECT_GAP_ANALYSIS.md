@@ -29,6 +29,8 @@ mobile typecheck clean).
 | **Stock ledger / tyre-change atomicity** | ✅ DONE | `post_stock_movement` (V52) + `apply_tyre_change` (V50), self-asserting SQL tests. |
 | **Web CI** | ✅ DONE | `.github/workflows/ci.yml` — tests + build + mobile typecheck on every push/PR (plus existing Android build workflows). |
 | **Exports** | ✅ DONE | PDF/Excel/PPTX live; `EXPORT_GUIDE.md` + `EXPORT_QUICK_REFERENCE.md` match the real `exportUtils` API. |
+| **Export libs lazy-loaded** | ✅ DONE | xlsx/jspdf/pptxgenjs are async chunks loading on first export click — no page ships them in its initial load (31 pages + exportUtils/parseWorkbook/emailService converted). |
+| **Scheduled report delivery** | ✅ DONE (needs 1 secret) | pg_cron → `send-scheduled-reports` edge fn every 15 min; live KPI digest email per schedule; `report_send_log` tracks every send/failure; verified end-to-end. **Owner must set `RESEND_API_KEY`** (Edge Function secret) for mail to actually leave. |
 
 ## 🔴 Genuinely open gaps (the real backlog)
 
@@ -44,7 +46,6 @@ mobile typecheck clean).
 | Gap | Where | Notes |
 |---|---|---|
 | Finish service-layer page migration | ~16 pages / ~120 inline calls (top: DataCleaning, UploadData, Dashboard) | Pattern established; migrate in batches. |
-| Lazy-load export libs | ~32 pages statically import xlsx/jspdf/pptxgen | Move inside export handlers. |
 | RLS perf consolidation | live DB | 207 multiple-permissive-policy warnings, 82 initplan, 56 unindexed FKs — matters as data grows. |
 | Mobile offline update commands | stock adjust, WO/CA status updates | Direct writes today — lost when offline. |
 | Cross-file merge on import | intake | Same JC enriched from Complaints History + Work Order Details (today: duplicate-skip; cost file should win — see `docs/imports/README.md`). |
@@ -55,7 +56,6 @@ mobile typecheck clean).
 | Web i18n + RTL (Arabic) | Mobile ships ar/ur; web is hardcoded English — the biggest UX gap for Gulf users. |
 | Chart drill-down | 0 of 54 chart pages click through to source records (stated directive requirement). |
 | Light theme via CSS vars | ~80 pages use literal dark classes. |
-| Scheduled report delivery backend | Settings UI exists; no scheduler/email sender. |
 | Dev/staging Supabase project | All builds point at production today (H6). |
 | GPS/Telematics + generic ERP import adapters | New intake modules. |
 | Go backend + native Android | Frozen on their own branches by decision — **not** merged to `main`. |

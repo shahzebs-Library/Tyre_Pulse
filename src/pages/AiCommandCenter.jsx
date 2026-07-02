@@ -19,7 +19,6 @@ import { runTyreEngineerAgent } from '../lib/agents/tyreEngineerAgent'
 import { runQaDataAgent } from '../lib/agents/qaDataAgent'
 import { runPlannerAgent } from '../lib/agents/plannerAgent'
 import { useSettings } from '../contexts/SettingsContext'
-import jsPDF from 'jspdf'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -597,7 +596,8 @@ export default function AiCommandCenter() {
 
   // ── Export chat as PDF ──────────────────────────────────────────────────────
 
-  function exportChatPdf() {
+  async function exportChatPdf() {
+    const { default: jsPDF } = await import('jspdf')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const pageWidth = doc.internal.pageSize.getWidth()
     const margin = 15

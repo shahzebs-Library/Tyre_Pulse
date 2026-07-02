@@ -1,7 +1,15 @@
 // emailService.js — Report email generation and delivery
 import { supabase } from './supabase'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+
+// jspdf is heavy (~400 KB) — load it on first use, never with the page chunk.
+let jsPDF, autoTable
+async function ensurePdf() {
+  if (!jsPDF) {
+    const [j, a] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
+    jsPDF = j.default
+    autoTable = a.default
+  }
+}
 
 /**
  * Generate a PDF report and return it as a base64 string.
@@ -13,7 +21,8 @@ import autoTable from 'jspdf-autotable'
  * @param {[string, string][]} summaryRows - Optional KPI summary rows [label, value]
  * @returns {string} Base64-encoded PDF (no data URI prefix)
  */
-export function generateReportPdf(title, subtitle, columns, rows, summaryRows = []) {
+export async function generateReportPdf(title, subtitle, columns, rows, summaryRows = []) {
+  await ensurePdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
   // ── Header band ──────────────────────────────────────────────────────────────

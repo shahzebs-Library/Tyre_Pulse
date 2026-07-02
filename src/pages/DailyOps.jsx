@@ -14,8 +14,6 @@ import {
   Truck, FileText, Printer, ChevronDown, ChevronUp,
   ZapOff, Building2, BarChart2, Bell, Eye,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import * as dailyOpsApi from '../lib/api/dailyOps'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -351,7 +349,9 @@ export default function DailyOps() {
     )
   }
 
-  function generatePDF() {
+  async function generatePDF() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const W = doc.internal.pageSize.getWidth()
     doc.setFillColor(7, 15, 9)

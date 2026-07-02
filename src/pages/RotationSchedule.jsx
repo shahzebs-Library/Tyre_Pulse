@@ -17,9 +17,6 @@ import {
   AlertOctagon, Gauge, Activity, ChevronRight, Wrench,
   FileSpreadsheet, BarChart3, Target, MapPin,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import * as rotations from '../lib/api/rotations'
 import { normalizePosition } from '../lib/tyrePositions'
@@ -870,7 +867,8 @@ export default function RotationSchedule() {
   }, [analytics])
 
   // ── Export ─────────────────────────────────────────────────────────────────
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     if (!analytics) return
     const rows = filteredVehicles.map(v => ({
       Asset:               v.asset,
@@ -901,7 +899,9 @@ export default function RotationSchedule() {
     XLSX.writeFile(wb, `Rotation_Compliance_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
-  function exportPdf() {
+  async function exportPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     if (!analytics) return
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const pw = doc.internal.pageSize.width

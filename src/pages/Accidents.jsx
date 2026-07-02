@@ -9,7 +9,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { resolveStorageUrl } from '../lib/storageRefs'
-import * as XLSX from 'xlsx'
 import { Bar } from 'react-chartjs-2'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
@@ -250,7 +249,8 @@ export default function Accidents() {
     setShowAssetDrop(false)
   }
 
-  function downloadTemplate() {
+  async function downloadTemplate() {
+    const XLSX = await import('xlsx')
     const ws = XLSX.utils.aoa_to_sheet([BULK_TEMPLATE_COLS, BULK_TEMPLATE_EXAMPLE])
     // Column widths
     ws['!cols'] = BULK_TEMPLATE_COLS.map(() => ({ wch: 22 }))
@@ -263,7 +263,8 @@ export default function Accidents() {
     setBulkFile(file)
     setBulkResult(null)
     const reader = new FileReader()
-    reader.onload = e => {
+    reader.onload = async e => {
+      const XLSX = await import('xlsx')
       try {
         const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true })
         const ws = wb.Sheets[wb.SheetNames[0]]

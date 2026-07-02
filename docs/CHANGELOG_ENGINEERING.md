@@ -77,3 +77,20 @@ fields. 8 regression tests parse the real files on CI.
 mobile deps synced — typecheck now fully clean.
 
 **Gate:** 701/701 web tests · build green · mobile typecheck 0 errors.
+
+## 2026-07-02 (later) — Export work: lazy loading + scheduled delivery
+
+- **Lazy export libs:** xlsx (~420 KB), jspdf (~400 KB), pptxgenjs (~385 KB)
+  converted to dynamic import-on-use in exportUtils, parseWorkbook,
+  emailService and all 31 pages that imported them directly; manualChunks
+  unpinned so each lib is a natural async chunk. Verified in dist/: zero page
+  chunks statically link them; they download on the first export/parse click.
+- **Scheduled report delivery (V61 + edge fn):** pg_cron + pg_net enabled;
+  cron every 15 min POSTs to `send-scheduled-reports` gated by a
+  service-role-only secret (cron_config). The function processes due ACTIVE
+  report_schedules, emails a live KPI digest (counts only — no fabrication;
+  dash when unreadable), advances next_run_at (Riyadh time), backs off 1h on
+  failure, and records every outcome in the new `report_send_log`.
+  Proven end-to-end live (cron fired on its own; failure honestly logged as
+  "RESEND_API_KEY not configured" — the one owner action remaining).
+- Gate: 701/701 tests · build green.

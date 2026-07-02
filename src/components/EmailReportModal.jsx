@@ -85,7 +85,7 @@ export default function EmailReportModal({
     try {
       let pdfBase64 = null
       if (includePdf && hasPdfData) {
-        pdfBase64 = generateReportPdf(
+        pdfBase64 = await generateReportPdf(
           reportTitle,
           defaultPeriod,
           pdfColumns,

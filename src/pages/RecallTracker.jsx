@@ -15,9 +15,6 @@ import {
   Info, BarChart3, List, GitBranch, Star, XCircle,
   ArrowRight, Loader2, Flag, Hash, Layers,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import * as recallsApi from '../lib/api/recalls'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -445,7 +442,9 @@ export default function RecallTracker() {
   }, [drawer, drawerSearch, matchTyresForRecall])
 
   // ── Export ────────────────────────────────────────────────────────────────
-  function exportPdf() {
+  async function exportPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const pw = doc.internal.pageSize.width
 
@@ -515,7 +514,8 @@ export default function RecallTracker() {
     doc.save(`TyrePulse_Recall_Report_${new Date().toISOString().slice(0,10)}.pdf`)
   }
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
 
     const recallRows = recalls.map(r => ({

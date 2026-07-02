@@ -13,9 +13,6 @@ import {
   RefreshCw, History, Zap, Truck, Info, BarChart3,
   ClipboardCheck, Wrench, BookOpen,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import PageHeader from '../components/ui/PageHeader'
 const uuidv4 = () => crypto.randomUUID()
 import { supabase } from '../lib/supabase'
@@ -916,6 +913,7 @@ export default function TyreSpecifications() {
     const reader = new FileReader()
     reader.onload = async ev => {
       try {
+        const XLSX = await import('xlsx')
         const wb = XLSX.read(ev.target.result, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const rows = XLSX.utils.sheet_to_json(ws)
@@ -953,7 +951,8 @@ export default function TyreSpecifications() {
 
   // ── Export specs to Excel ─────────────────────────────────────────────────────
 
-  function exportSpecsExcel() {
+  async function exportSpecsExcel() {
+    const XLSX = await import('xlsx')
     const rows = specs.map(s => ({
       'Vehicle Type': s.vehicle_type,
       'Position': s.position,
@@ -973,7 +972,9 @@ export default function TyreSpecifications() {
 
   // ── Export compliance PDF ─────────────────────────────────────────────────────
 
-  function exportCompliancePdf() {
+  async function exportCompliancePdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     doc.setFillColor(22, 101, 52)
     doc.rect(0, 0, doc.internal.pageSize.width, 22, 'F')

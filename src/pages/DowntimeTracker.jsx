@@ -18,9 +18,6 @@ import {
 import StatCard from '../components/StatCard'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -644,7 +641,9 @@ export default function DowntimeTracker() {
   }
 
   // ── Export PDF ────────────────────────────────────────────────────────────────
-  function handleExportPdf() {
+  async function handleExportPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     doc.setFillColor(15, 23, 42)
     doc.rect(0, 0, 297, 22, 'F')

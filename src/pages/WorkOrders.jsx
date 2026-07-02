@@ -18,9 +18,6 @@ import {
   AlertOctagon, Loader2, RefreshCw, TrendingUp,
   FileSpreadsheet, Upload, Trash2,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { workOrders } from '../lib/api'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings } from '../contexts/SettingsContext'
@@ -360,7 +357,9 @@ export default function WorkOrders() {
   }
 
   // ── PDF Job Card ──────────────────────────────────────────────────────────
-  function exportJobCard(order) {
+  async function exportJobCard(order) {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     doc.setFillColor(15, 23, 42)
     doc.rect(0, 0, 210, 35, 'F')
@@ -442,7 +441,8 @@ export default function WorkOrders() {
   }
 
   // ── Excel export ──────────────────────────────────────────────────────────
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const rows = filtered.map(o => ({
       'Work Order No': o.work_order_no,
       'Asset No': o.asset_no,

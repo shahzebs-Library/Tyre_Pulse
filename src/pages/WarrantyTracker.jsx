@@ -16,9 +16,6 @@ import {
   Building2, Hash, Percent, CreditCard, Activity, Info,
   ArrowUpRight, Layers, Zap, Target, List, PieChart, Upload,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import * as warranty from '../lib/api/warranty'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -470,7 +467,9 @@ export default function WarrantyTracker() {
     }
   }, [removeClaim])
 
-  const exportPDF = useCallback(() => {
+  const exportPDF = useCallback(async () => {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape' })
     doc.setFillColor(17, 24, 39)
     doc.rect(0, 0, 297, 210, 'F')
@@ -519,7 +518,8 @@ export default function WarrantyTracker() {
     doc.save(`warranty-claims-${new Date().toISOString().split('T')[0]}.pdf`)
   }, [claims, filtered, brandPerf, cur])
 
-  const exportExcel = useCallback(() => {
+  const exportExcel = useCallback(async () => {
+    const XLSX = await import('xlsx')
     const rows = filtered.map(c => ({
       'Claim No': c.claim_no,
       'Serial Number': c.serial_number,
@@ -564,7 +564,8 @@ export default function WarrantyTracker() {
     XLSX.writeFile(wb, `warranty-claims-${new Date().toISOString().split('T')[0]}.xlsx`)
   }, [filtered, brandPerf, failureCounts])
 
-  const exportClaimLetter = useCallback((claim) => {
+  const exportClaimLetter = useCallback(async (claim) => {
+    const { default: jsPDF } = await import('jspdf')
     const doc = new jsPDF()
     doc.setFontSize(20)
     doc.setTextColor(30, 64, 175)

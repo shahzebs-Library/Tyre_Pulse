@@ -16,9 +16,6 @@ import {
   Search, Filter, ChevronDown, ChevronUp,
   TrendingUp, BarChart2, Eye, Printer,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -461,7 +458,9 @@ export default function Procurement() {
   }
 
   // ── PDF export ─────────────────────────────────────────────────────────────
-  function exportPDF(po) {
+  async function exportPDF(po) {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     doc.setFillColor(15, 23, 42)
     doc.rect(0, 0, 210, 40, 'F')
@@ -534,7 +533,8 @@ export default function Procurement() {
   }
 
   // ── Excel export ───────────────────────────────────────────────────────────
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const rows = filtered.map(po => ({
       'PO Number':       po.po_number,
       'Vendor':          po.vendor_name,

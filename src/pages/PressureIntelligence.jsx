@@ -12,9 +12,6 @@ import {
   RefreshCw, BarChart3, Thermometer, Users, Building2, Info, Eye,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
@@ -701,7 +698,8 @@ export default function PressureIntelligence() {
   }, [enriched, assetDrilldown])
 
   // ── Exports ────────────────────────────────────────────────────────────────
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const rows = enriched.map(r => ({
       'Asset No':      r.asset_no || '',
       'Serial':        r.serial || '',
@@ -740,7 +738,9 @@ export default function PressureIntelligence() {
     XLSX.writeFile(wb, `pressure_intelligence_${new Date().toISOString().slice(0,10)}.xlsx`)
   }
 
-  function exportPdf() {
+  async function exportPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const W = doc.internal.pageSize.width
 

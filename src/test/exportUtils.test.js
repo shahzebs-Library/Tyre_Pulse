@@ -83,12 +83,12 @@ beforeEach(() => {
 // exportToExcel — data mapping / row transformation
 // ─────────────────────────────────────────────────────────────────────────────
 describe('exportToExcel — data row mapping', () => {
-  it('maps column keys to headers in each display row', () => {
+  it('maps column keys to headers in each display row', async () => {
     const rows    = [{ id: 1, name: 'Goodyear', size: '225/45R17' }]
     const columns = ['id', 'name', 'size']
     const headers = ['ID', 'Name', 'Size']
 
-    exportToExcel(rows, columns, headers, 'test')
+    await exportToExcel(rows, columns, headers, 'test')
 
     const jsonToSheet = XLSX.utils.json_to_sheet
     expect(jsonToSheet).toHaveBeenCalledOnce()
@@ -96,24 +96,24 @@ describe('exportToExcel — data row mapping', () => {
     expect(displayRows[0]).toEqual({ ID: 1, Name: 'Goodyear', Size: '225/45R17' })
   })
 
-  it('uses empty string for missing column values', () => {
+  it('uses empty string for missing column values', async () => {
     const rows    = [{ id: 1 }] // name and size missing
     const columns = ['id', 'name', 'size']
     const headers = ['ID', 'Name', 'Size']
 
-    exportToExcel(rows, columns, headers, 'test')
+    await exportToExcel(rows, columns, headers, 'test')
 
     const jsonToSheet = XLSX.utils.json_to_sheet
     const [displayRows] = jsonToSheet.mock.calls[0]
     expect(displayRows[0]).toEqual({ ID: 1, Name: '', Size: '' })
   })
 
-  it('only includes specified columns (extra row fields are excluded)', () => {
+  it('only includes specified columns (extra row fields are excluded)', async () => {
     const rows    = [{ id: 1, name: 'Michelin', secret: 'hidden' }]
     const columns = ['id', 'name']
     const headers = ['ID', 'Name']
 
-    exportToExcel(rows, columns, headers, 'test')
+    await exportToExcel(rows, columns, headers, 'test')
 
     const jsonToSheet = XLSX.utils.json_to_sheet
     const [displayRows] = jsonToSheet.mock.calls[0]
@@ -121,7 +121,7 @@ describe('exportToExcel — data row mapping', () => {
     expect(Object.keys(displayRows[0])).toEqual(['ID', 'Name'])
   })
 
-  it('handles multiple data rows correctly', () => {
+  it('handles multiple data rows correctly', async () => {
     const rows = [
       { site: 'Riyadh', count: 10 },
       { site: 'Jeddah', count: 25 },
@@ -130,7 +130,7 @@ describe('exportToExcel — data row mapping', () => {
     const columns = ['site', 'count']
     const headers = ['Site', 'Count']
 
-    exportToExcel(rows, columns, headers, 'sites')
+    await exportToExcel(rows, columns, headers, 'sites')
 
     const jsonToSheet = XLSX.utils.json_to_sheet
     const [displayRows] = jsonToSheet.mock.calls[0]
@@ -138,20 +138,20 @@ describe('exportToExcel — data row mapping', () => {
     expect(displayRows[1]).toEqual({ Site: 'Jeddah', Count: 25 })
   })
 
-  it('handles empty rows array (produces empty sheet)', () => {
-    exportToExcel([], ['id'], ['ID'], 'empty')
+  it('handles empty rows array (produces empty sheet)', async () => {
+    await exportToExcel([], ['id'], ['ID'], 'empty')
 
     const jsonToSheet = XLSX.utils.json_to_sheet
     const [displayRows] = jsonToSheet.mock.calls[0]
     expect(displayRows).toEqual([])
   })
 
-  it('passes headers array as header option to json_to_sheet', () => {
+  it('passes headers array as header option to json_to_sheet', async () => {
     const rows    = [{ name: 'Continental' }]
     const columns = ['name']
     const headers = ['Tyre Name']
 
-    exportToExcel(rows, columns, headers, 'test')
+    await exportToExcel(rows, columns, headers, 'test')
 
     const jsonToSheet = XLSX.utils.json_to_sheet
     const [, options] = jsonToSheet.mock.calls[0]
@@ -163,14 +163,14 @@ describe('exportToExcel — data row mapping', () => {
 // exportToExcel — column width calculation
 // ─────────────────────────────────────────────────────────────────────────────
 describe('exportToExcel — column width calculation', () => {
-  it('sets ws["!cols"] with one entry per header', () => {
+  it('sets ws["!cols"] with one entry per header', async () => {
     const rows    = [{ a: 'hello', b: 'world' }]
     const columns = ['a', 'b']
     const headers = ['Col A', 'Col B']
 
     // We need the actual ws object returned by json_to_sheet to check !cols
     // json_to_sheet is mocked but returns a plain object; we can inspect what writeFile receives
-    exportToExcel(rows, columns, headers, 'test')
+    await exportToExcel(rows, columns, headers, 'test')
     // Verify the data worksheet was appended (a Summary sheet precedes it when
     // rows are present, so assert the final append targets the Data sheet).
     expect(XLSX.utils.book_append_sheet).toHaveBeenCalled()
@@ -178,12 +178,12 @@ describe('exportToExcel — column width calculation', () => {
     expect(appendCalls[appendCalls.length - 1][2]).toBe('Data')
   })
 
-  it('appends sheet to workbook with correct sheet name', () => {
+  it('appends sheet to workbook with correct sheet name', async () => {
     const rows    = [{ a: '1' }]
     const columns = ['a']
     const headers = ['A']
 
-    exportToExcel(rows, columns, headers, 'myfile', 'MySheet')
+    await exportToExcel(rows, columns, headers, 'myfile', 'MySheet')
 
     expect(XLSX.utils.book_append_sheet).toHaveBeenCalledWith(
       expect.anything(),
@@ -192,18 +192,18 @@ describe('exportToExcel — column width calculation', () => {
     )
   })
 
-  it('calls writeFile with correct filename including .xlsx extension', () => {
+  it('calls writeFile with correct filename including .xlsx extension', async () => {
     const rows    = [{ x: 'data' }]
     const columns = ['x']
     const headers = ['X']
 
-    exportToExcel(rows, columns, headers, 'my_export')
+    await exportToExcel(rows, columns, headers, 'my_export')
 
     expect(XLSX.writeFile).toHaveBeenCalledWith(expect.anything(), 'my_export.xlsx')
   })
 
-  it('uses default filename "export" when none provided', () => {
-    exportToExcel([{ x: '1' }], ['x'], ['X'])
+  it('uses default filename "export" when none provided', async () => {
+    await exportToExcel([{ x: '1' }], ['x'], ['X'])
 
     expect(XLSX.writeFile).toHaveBeenCalledWith(expect.anything(), 'export.xlsx')
   })
@@ -213,27 +213,27 @@ describe('exportToExcel — column width calculation', () => {
 // exportToPdf — PDF generation
 // ─────────────────────────────────────────────────────────────────────────────
 describe('exportToPdf — PDF generation', () => {
-  it('creates a jsPDF instance with landscape orientation by default', () => {
-    exportToPdf([], [], 'Test Report', 'test')
+  it('creates a jsPDF instance with landscape orientation by default', async () => {
+    await exportToPdf([], [], 'Test Report', 'test')
 
     expect(jsPDF).toHaveBeenCalledWith(
       expect.objectContaining({ orientation: 'landscape' })
     )
   })
 
-  it('creates a jsPDF instance with portrait orientation when specified', () => {
-    exportToPdf([], [], 'Test Report', 'test', 'portrait')
+  it('creates a jsPDF instance with portrait orientation when specified', async () => {
+    await exportToPdf([], [], 'Test Report', 'test', 'portrait')
 
     expect(jsPDF).toHaveBeenCalledWith(
       expect.objectContaining({ orientation: 'portrait' })
     )
   })
 
-  it('calls autoTable with rows mapped through column keys', () => {
+  it('calls autoTable with rows mapped through column keys', async () => {
     const rows    = [{ site: 'Riyadh', count: 5 }]
     const columns = [{ key: 'site', header: 'Site' }, { key: 'count', header: 'Count' }]
 
-    exportToPdf(rows, columns, 'Sites Report', 'sites')
+    await exportToPdf(rows, columns, 'Sites Report', 'sites')
 
     expect(autoTable).toHaveBeenCalled()
     // The main data table is the final autoTable call (analytical summary tables
@@ -243,11 +243,11 @@ describe('exportToPdf — PDF generation', () => {
     expect(tableOptions.body).toEqual([['Riyadh', '5']])
   })
 
-  it('maps null/undefined cell values to em-dash "—" in table body', () => {
+  it('maps null/undefined cell values to em-dash "—" in table body', async () => {
     const rows    = [{ site: 'Riyadh', notes: null }]
     const columns = [{ key: 'site', header: 'Site' }, { key: 'notes', header: 'Notes' }]
 
-    exportToPdf(rows, columns, 'Report', 'test')
+    await exportToPdf(rows, columns, 'Report', 'test')
 
     const dataCall = autoTable.mock.calls[autoTable.mock.calls.length - 1]
     const [, tableOptions] = dataCall
@@ -255,21 +255,21 @@ describe('exportToPdf — PDF generation', () => {
     expect(tableOptions.body[0][1]).toBe('')
   })
 
-  it('passes column headers as first element of head array', () => {
+  it('passes column headers as first element of head array', async () => {
     const columns = [
       { key: 'id', header: 'ID' },
       { key: 'name', header: 'Name' },
     ]
 
-    exportToPdf([], columns, 'Test', 'test')
+    await exportToPdf([], columns, 'Test', 'test')
 
     const [, tableOptions] = autoTable.mock.calls[0]
     expect(tableOptions.head).toEqual([['ID', 'Name']])
   })
 
-  it('calls doc.save with filename + .pdf extension', () => {
+  it('calls doc.save with filename + .pdf extension', async () => {
     const mockDoc = jsPDF.mock.results[0]?.value ?? new jsPDF()
-    exportToPdf([], [], 'Title', 'my_report')
+    await exportToPdf([], [], 'Title', 'my_report')
 
     // The instance created inside exportToPdf should have .save called
     // Access through the mock constructor's latest instance
@@ -277,15 +277,15 @@ describe('exportToPdf — PDF generation', () => {
     expect(instance.save).toHaveBeenCalledWith('my_report.pdf')
   })
 
-  it('uses default filename "report" when none given', () => {
-    exportToPdf([], [], 'Title')
+  it('uses default filename "report" when none given', async () => {
+    await exportToPdf([], [], 'Title')
 
     const instance = jsPDF.mock.results[jsPDF.mock.results.length - 1].value
     expect(instance.save).toHaveBeenCalledWith('report.pdf')
   })
 
-  it('handles empty rows array without error', () => {
-    expect(() => exportToPdf([], [], 'Empty Report', 'empty')).not.toThrow()
+  it('handles empty rows array without error', async () => {
+    await expect(exportToPdf([], [], 'Empty Report', 'empty')).resolves.not.toThrow()
   })
 })
 
@@ -293,7 +293,7 @@ describe('exportToPdf — PDF generation', () => {
 // exportToPptx — PowerPoint generation
 // ─────────────────────────────────────────────────────────────────────────────
 describe('exportToPptx — PowerPoint generation', () => {
-  it('returns a Promise', () => {
+  it('returns a Promise', async () => {
     const result = exportToPptx({ totalTyres: 0, totalCost: 0, openActions: 0, highRisk: 0, period: 'Q1 2024' })
     expect(result).toBeInstanceOf(Promise)
   })

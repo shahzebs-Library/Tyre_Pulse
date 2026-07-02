@@ -13,9 +13,6 @@ import {
   Activity, Building2, Tag, Calendar, Layers, Info, Star,
   ArrowRight, Recycle, CircleDollarSign, Target, Zap,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
@@ -558,7 +555,9 @@ export default function RetreadManagement() {
     )
   }, [enriched])
 
-  const handleExportRoiPdf = useCallback(() => {
+  const handleExportRoiPdf = useCallback(async () => {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const pw = doc.internal.pageSize.width
 

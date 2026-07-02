@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import QRCode from 'qrcode'
-import jsPDF from 'jspdf'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -125,6 +124,7 @@ export default function QrLabels() {
   }
 
   async function exportPDF() {
+    const { default: jsPDF } = await import('jspdf')
     const readyItems = filtered.filter(r => selected.has(r.id) && qrImages[r.id])
     if (!readyItems.length) return
     setExporting(true)

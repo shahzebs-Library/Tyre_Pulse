@@ -13,9 +13,6 @@ import {
   RefreshCw, BarChart3, ClipboardList, Gauge, Building2, Info, Calendar,
   Mail, Award, Clock, AlertCircle, Users, Eye, ExternalLink,
 } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
@@ -731,7 +728,9 @@ export default function ComplianceDashboard() {
   const overdueCount = inspectionStats.rows.filter(r => r.status === 'overdue').length
 
   // ── PDF: Tread Compliance Report ─────────────────────────────────────────────
-  function exportTreadPdf() {
+  async function exportTreadPdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const W = doc.internal.pageSize.width
 
@@ -804,7 +803,9 @@ export default function ComplianceDashboard() {
   }
 
   // ── PDF: Full Compliance Certificate ────────────────────────────────────────
-  function exportCertificatePdf() {
+  async function exportCertificatePdf() {
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const W = doc.internal.pageSize.width
     const H = doc.internal.pageSize.height
@@ -943,7 +944,8 @@ export default function ComplianceDashboard() {
   }
 
   // ── Excel export ─────────────────────────────────────────────────────────────
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
 
     // Summary sheet

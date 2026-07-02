@@ -347,6 +347,9 @@ export default function UserManagement() {
 
   // Inline role save state per user id: 'saving' | 'saved' | null
   const [roleSaveState, setRoleSaveState] = useState({})
+  // Organisations for the user→org assignment selector
+  const [organisations, setOrganisations] = useState([])
+  const [orgSaveState, setOrgSaveState]   = useState({})
 
   // Toast notification
   const [toast, setToast]           = useState(null) // { text, type: 'ok'|'err' }
@@ -423,7 +426,7 @@ export default function UserManagement() {
   }, [])
 
   useEffect(() => {
-    if (isAdmin) loadUsers()
+    if (isAdmin) { loadUsers(); usersApi.listOrganisations().then(setOrganisations).catch(() => setOrganisations([])) }
     else setLoading(false)
   }, [isAdmin, loadUsers])
 
@@ -480,6 +483,24 @@ export default function UserManagement() {
     } else {
       setRoleSaveState(s => ({ ...s, [userId]: null }))
       showToast(error?.message ?? data?.error ?? 'Role update failed.', 'err')
+    }
+  }
+
+  // ── Inline organisation assignment ────────────────────────────────────────
+  async function handleInlineOrgChange(userId, newOrgId) {
+    setOrgSaveState(s => ({ ...s, [userId]: 'saving' }))
+    let data = null, error = null
+    try {
+      data = await usersApi.adminUpdateProfile({ p_user_id: userId, p_org_id: newOrgId || null })
+    } catch (e) { error = e }
+    const success = !error && data?.success !== false
+    if (success) {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, org_id: newOrgId || null } : u))
+      setOrgSaveState(s => ({ ...s, [userId]: 'saved' }))
+      setTimeout(() => setOrgSaveState(s => ({ ...s, [userId]: null })), 1500)
+    } else {
+      setOrgSaveState(s => ({ ...s, [userId]: null }))
+      showToast(error?.message ?? data?.error ?? 'Organisation update failed.', 'err')
     }
   }
 
@@ -800,7 +821,7 @@ export default function UserManagement() {
               <table className="w-full">
                 <thead>
                   <tr>
-                    {['User', 'Role', 'Access', 'Status', 'Joined', 'Actions'].map(h => (
+                    {['User', 'Role', 'Organisation', 'Access', 'Status', 'Joined', 'Actions'].map(h => (
                       <th key={h} className="table-header">{h}</th>
                     ))}
                   </tr>
@@ -814,13 +835,13 @@ export default function UserManagement() {
                     </>
                   ) : rlsBlocked ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-12 text-gray-600">
+                      <td colSpan={7} className="text-center py-12 text-gray-600">
                         User list unavailable. See warning above.
                       </td>
                     </tr>
                   ) : filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-14">
+                      <td colSpan={7} className="text-center py-14">
                         <div className="flex flex-col items-center gap-3 text-gray-500">
                           <UserX size={32} className="text-gray-700" />
                           <p className="text-sm">No users match the current filters.</p>
@@ -899,6 +920,29 @@ export default function UserManagement() {
                             {saveState === 'saved' && (
                               <CheckCircle size={15} className="text-green-400" />
                             )}
+                          </div>
+                        </td>
+
+                        {/* Organisation column: assign each user to an org */}
+                        <td className="table-cell">
+                          <div className="flex items-center gap-2">
+                            <div className="relative">
+                              <select
+                                value={u.org_id ?? ''}
+                                onChange={e => handleInlineOrgChange(u.id, e.target.value)}
+                                disabled={orgSaveState[u.id] === 'saving' || u.is_super_admin}
+                                title={u.is_super_admin ? 'Super admins see every organisation' : 'Assign this user to an organisation'}
+                                className="input text-xs py-1 pr-7 pl-2 w-40 appearance-none cursor-pointer disabled:opacity-60"
+                              >
+                                <option value="">— No org (all shared) —</option>
+                                {organisations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                              </select>
+                              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            </div>
+                            {orgSaveState[u.id] === 'saving' && (
+                              <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                            )}
+                            {orgSaveState[u.id] === 'saved' && <CheckCircle size={15} className="text-green-400" />}
                           </div>
                         </td>
 

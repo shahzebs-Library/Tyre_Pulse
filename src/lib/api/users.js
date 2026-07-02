@@ -16,7 +16,14 @@ import { supabase, unwrap, ServiceError } from './_client'
 // org-internal columns (organisation_id, org_id, is_super_admin metadata beyond
 // the flag the UI surfaces) that the page never touches.
 const COLS =
-  'id,username,full_name,role,employee_id,approved,country,countries,site,region,locked,is_super_admin,pending_reason,email,phone,last_login_at,login_count,created_at,module_overrides,notes,updated_at'
+  'id,username,full_name,role,employee_id,approved,country,countries,site,region,locked,is_super_admin,pending_reason,email,phone,last_login_at,login_count,created_at,module_overrides,notes,updated_at,org_id'
+
+/** Organisations for the user→org assignment selector (id, name, country). */
+export async function listOrganisations() {
+  return unwrap(
+    await supabase.from('organisations').select('id,name,slug,country').order('name'),
+  )
+}
 
 /**
  * List profiles, newest first - mirrors the page's

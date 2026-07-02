@@ -16,8 +16,7 @@ import {
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as dailyOpsApi from '../lib/api/dailyOps'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -108,11 +107,11 @@ export default function DailyOps() {
     const thirtyDaysAgo = addDays(date, -30)
 
     const [trRes, insRes, woRes, alRes, t30Res] = await Promise.allSettled([
-      fetchAllPages((from, to) => supabase.from('tyre_records').select('id,asset_no,serial_number,position,risk_level,tread_depth,issue_date,cost_per_tyre,site,country,brand,km_at_fitment,km_at_removal,created_at').gte('issue_date', thirtyDaysAgo).lte('issue_date', wEnd).range(from, to), { max: 200000 }),
-      fetchAllPages((from, to) => supabase.from('inspections').select('id,asset_no,inspection_date,site,inspector,tyre_conditions,created_at').gte('inspection_date', thirtyDaysAgo).lte('inspection_date', wEnd).range(from, to), { max: 200000 }),
-      supabase.from('work_orders').select('id,asset_no,work_order_no,status,priority,created_at,scheduled_date:target_completion,site').gte('created_at', thirtyDaysAgo + 'T00:00:00').lte('created_at', wEnd + 'T23:59:59'),
-      supabase.from('alerts').select('id,asset_no,alert_type,severity,message,created_at,resolved').gte('created_at', thirtyDaysAgo + 'T00:00:00').lte('created_at', wEnd + 'T23:59:59'),
-      fetchAllPages((from, to) => supabase.from('tyre_records').select('asset_no,issue_date').gte('issue_date', thirtyDaysAgo).lte('issue_date', date).range(from, to), { max: 200000 }),
+      dailyOpsApi.listDailyTyreRecords({ thirtyDaysAgo, wEnd }),
+      dailyOpsApi.listDailyInspections({ thirtyDaysAgo, wEnd }),
+      dailyOpsApi.listDailyWorkOrders({ thirtyDaysAgo, wEnd }),
+      dailyOpsApi.listDailyAlerts({ thirtyDaysAgo, wEnd }),
+      dailyOpsApi.listDailyTyreFitments({ thirtyDaysAgo, date }),
     ])
 
     setTyreRecords(trRes.status === 'fulfilled' && trRes.value.data ? trRes.value.data : [])

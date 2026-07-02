@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as aiApi from '../lib/api/aiAnalytics'
 import { useSettings } from '../contexts/SettingsContext'
 import { detectAnomalies } from '../lib/anomalyEngine'
 import { askAI, buildDataContext, DEEP_ANALYSIS_PRESETS, SUGGESTED_QUESTIONS } from '../lib/aiAnalytics'
@@ -281,12 +280,10 @@ export default function AiAnalytics() {
 
   async function load() {
     setLoading(true)
-    const cf = activeCountry !== 'All' ? activeCountry : null
-    const flt = q => cf ? q.eq('country', cf) : q
     const [tyreRes, inspRes, actionRes] = await Promise.all([
-      fetchAllPages((from, to) => flt(supabase.from('tyre_records').select('id,issue_date,brand,site,asset_no,category,risk_level,cost_per_tyre,qty,serial_no,created_at,country').order('issue_date', { ascending: true })).range(from, to), { max: 200000 }),
-      supabase.from('inspections').select('id,status,severity,scheduled_date,site,findings,inspector').order('scheduled_date', { ascending: false }).limit(100),
-      supabase.from('corrective_actions').select('id,title,priority,site,status,assigned_to').order('created_at', { ascending: false }).limit(50),
+      aiApi.listAiTyreRecords({ country: activeCountry }),
+      aiApi.listAiInspections(),
+      aiApi.listAiCorrectiveActions(),
     ])
     setRecords(tyreRes.data ?? [])
     setInspections(inspRes.data ?? [])

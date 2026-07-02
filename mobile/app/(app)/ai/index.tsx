@@ -277,7 +277,7 @@ async function fetchFleetContext(intent: Intent): Promise<FleetContext> {
 // ── System Prompt Builder ─────────────────────────────────────────────────────
 
 function buildSystemPrompt(context: FleetContext): string {
-  return `You are the Tyre Pulse AI Command Center — a fleet intelligence engine for senior fleet managers and administrators.
+  return `You are the Tyre Pulse AI Command Center - a fleet intelligence engine for senior fleet managers and administrators.
 
 You analyze real-time fleet data and provide sharp, actionable insights. You are NOT a generic chatbot.
 
@@ -288,8 +288,8 @@ Your response style:
 - Be direct and concise. Lead with the most critical finding.
 - Use numbers, percentages and cost figures from the data above.
 - Highlight anomalies and risks clearly.
-- End every response with 2–3 specific, prioritized recommendations.
-- Format with short paragraphs — no long walls of text.
+- End every response with 2-3 specific, prioritized recommendations.
+- Format with short paragraphs - no long walls of text.
 - If a question is outside fleet/tyre scope, redirect politely.
 
 At the very end of your response (and ONLY if relevant), add one line in this exact format:
@@ -335,7 +335,7 @@ const QUICK_COMMANDS = [
   { icon: 'warning-outline',       label: 'Critical tyres now',      query: 'Show me the critical and high-risk tyres right now with site breakdown' },
   { icon: 'cash-outline',          label: 'Cost breakdown',          query: 'Break down fleet tyre costs by site and brand for the last 90 days' },
   { icon: 'construct-outline',     label: 'Overdue work orders',     query: 'What work orders are overdue and what is the current status of corrective actions?' },
-  { icon: 'analytics-outline',     label: 'Brand performance',       query: 'Compare tyre brand performance — failure rates, average cost and reliability' },
+  { icon: 'analytics-outline',     label: 'Brand performance',       query: 'Compare tyre brand performance - failure rates, average cost and reliability' },
   { icon: 'location-outline',      label: 'Site risk analysis',      query: 'Which sites have the highest risk concentration and what should be done?' },
 ]
 
@@ -502,7 +502,7 @@ export default function AICommandCenter() {
               <View style={ds.welcomeIconRing}><Ionicons name="sparkles" size={32} color="#7c3aed" /></View>
               <Text style={ds.welcomeTitle}>Fleet AI Command Center</Text>
               <Text style={ds.welcomeSubtitle}>
-                Ask anything about your fleet. I fetch live data from your database and deliver actionable intelligence — costs, risks, work orders, brand performance and more.
+                Ask anything about your fleet. I fetch live data from your database and deliver actionable intelligence - costs, risks, work orders, brand performance and more.
               </Text>
             </View>
 

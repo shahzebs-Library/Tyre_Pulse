@@ -94,7 +94,7 @@ function computeLocalRedFlags(assetRecords) {
           severity: 'high',
           record_ids: [r.id],
           records: [r],
-          message: `Suspiciously low mileage: tyre removed after only ${km} km — possible theft or misuse`,
+          message: `Suspiciously low mileage: tyre removed after only ${km} km - possible theft or misuse`,
           detail: `Asset ${r.asset_no}, fitment: ${kmFit} km, removal: ${kmRem} km on ${r.issue_date}`,
         })
       }
@@ -114,7 +114,7 @@ function computeLocalRedFlags(assetRecords) {
           severity: 'high',
           record_ids: [prev.id, curr.id],
           records: [prev, curr],
-          message: `Odometer inconsistency detected: km readings are not sequential — possible tampering`,
+          message: `Odometer inconsistency detected: km readings are not sequential - possible tampering`,
           detail: `Previous removal: ${prevRem} km (${prev.issue_date}), next fitment: ${currFit} km (${curr.issue_date})`,
         })
       }
@@ -186,7 +186,7 @@ function computeFleetPolicyFlags(assetRecords, fleetRecord) {
             severity: 'high',
             record_ids: [r.id],
             records: [r],
-            message: `Tyre removed after only ${km.toLocaleString()} km — below 40% of policy threshold (${Math.round(threshold).toLocaleString()} km)`,
+            message: `Tyre removed after only ${km.toLocaleString()} km - below 40% of policy threshold (${Math.round(threshold).toLocaleString()} km)`,
             detail: `Expected: ${fleetRecord.expected_km_per_tyre.toLocaleString()} km, actual: ${km.toLocaleString()} km on ${r.issue_date}`,
           })
         }
@@ -509,9 +509,9 @@ export default function VehicleHistory() {
                     }
                   </td>
                   <td className="px-3 py-2 text-gray-400 text-right text-xs">
-                    {row.avgDays !== null ? `${row.avgDays}d` : '—'}
+                    {row.avgDays !== null ? `${row.avgDays}d` : '-'}
                   </td>
-                  <td className="px-3 py-2 text-gray-500 text-xs">{row.lastSeen || '—'}</td>
+                  <td className="px-3 py-2 text-gray-500 text-xs">{row.lastSeen || '-'}</td>
                   <td className="px-3 py-2 text-center">
                     <span className={`text-xs px-2 py-0.5 rounded-full border font-bold ${misuseBadgeClass(row.misuseScore)}`}>
                       {row.misuseScore}
@@ -541,7 +541,7 @@ export default function VehicleHistory() {
         </div>
         {filteredRows.length > 200 && (
           <p className="text-xs text-gray-500 text-center py-3">
-            Showing 200 of {filteredRows.length} vehicles — use filters to narrow results
+            Showing 200 of {filteredRows.length} vehicles - use filters to narrow results
           </p>
         )}
       </div>
@@ -700,7 +700,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
         </div>
       ) : (
         <p className="text-xs text-gray-600">
-          No fleet record —{' '}
+          No fleet record -{' '}
           <a href="/fleet-master" className="text-blue-500 hover:text-blue-400 underline">
             add in Fleet Master
           </a>
@@ -745,7 +745,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
                         style={{ backgroundColor: { Low: '#16a34a', Medium: '#ca8a04', High: '#ea580c', Critical: '#dc2626' }[p.risk_level] ?? '#374151' }}
                       />
                       <span className="font-mono text-gray-400 w-16">{p.position}</span>
-                      <span className="text-gray-500">{p.brand || '—'}</span>
+                      <span className="text-gray-500">{p.brand || '-'}</span>
                     </div>
                   ))}
                 </div>
@@ -884,7 +884,7 @@ function TimelineTab({ records, flaggedIds, currency, defaultCost }) {
             const isFlagged = flaggedIds.has(r.id)
             const kmRun = (r.km_at_fitment != null && r.km_at_removal != null)
               ? `${(+r.km_at_removal - +r.km_at_fitment).toLocaleString()} km`
-              : '—'
+              : '-'
             return (
               <tr
                 key={r.id}
@@ -895,14 +895,14 @@ function TimelineTab({ records, flaggedIds, currency, defaultCost }) {
               >
                 <td className="py-1.5 pr-3 text-gray-400 whitespace-nowrap">
                   {isFlagged && <AlertTriangle size={10} className="inline text-red-400 mr-1" />}
-                  {r.issue_date || '—'}
+                  {r.issue_date || '-'}
                 </td>
-                <td className="py-1.5 pr-3 text-gray-300">{r.brand || '—'}</td>
-                <td className="py-1.5 pr-3 text-gray-400 max-w-[120px] truncate">{r.description || '—'}</td>
+                <td className="py-1.5 pr-3 text-gray-300">{r.brand || '-'}</td>
+                <td className="py-1.5 pr-3 text-gray-400 max-w-[120px] truncate">{r.description || '-'}</td>
                 <td className="py-1.5 pr-3">
                   {r.category
                     ? <span className="px-1.5 py-0.5 rounded bg-blue-900/30 text-blue-400 text-[10px]">{r.category}</span>
-                    : <span className="text-gray-600">—</span>
+                    : <span className="text-gray-600">-</span>
                   }
                 </td>
                 <td className="py-1.5 pr-3">
@@ -915,8 +915,8 @@ function TimelineTab({ records, flaggedIds, currency, defaultCost }) {
                 </td>
                 <td className="py-1.5 pr-3 text-gray-500 whitespace-nowrap">{kmRun}</td>
                 <td className="py-1.5 pr-3 text-gray-400 text-right">{r.qty || 1}</td>
-                <td className="py-1.5 pr-3 text-gray-400 whitespace-nowrap">{r.site || '—'}</td>
-                <td className="py-1.5 text-gray-500 max-w-[160px] truncate">{r.remarks_cleaned || r.remarks || '—'}</td>
+                <td className="py-1.5 pr-3 text-gray-400 whitespace-nowrap">{r.site || '-'}</td>
+                <td className="py-1.5 text-gray-500 max-w-[160px] truncate">{r.remarks_cleaned || r.remarks || '-'}</td>
               </tr>
             )
           })}
@@ -1114,7 +1114,7 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
                   a.status === 'Closed'
                     ? 'bg-green-900/30 text-green-400 border-green-700/40'
                     : 'bg-yellow-900/30 text-yellow-400 border-yellow-700/40'
-                }`}>{a.status || '—'}</span>
+                }`}>{a.status || '-'}</span>
                 <span className="text-gray-300 flex-1">{a.title || '(no title)'}</span>
                 {a.site && <span className="text-gray-500 text-xs">{a.site}</span>}
                 {a.priority && (
@@ -1136,7 +1136,7 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
           <div className="space-y-2">
             {rca.map(r => (
               <div key={r.id} className="flex items-center gap-3 bg-gray-800/30 rounded-lg px-4 py-2.5 text-sm flex-wrap">
-                <span className="font-mono text-xs text-blue-400">{r.tyre_serial || '—'}</span>
+                <span className="font-mono text-xs text-blue-400">{r.tyre_serial || '-'}</span>
                 <span className="text-gray-300 flex-1">{r.root_cause || '(no root cause logged)'}</span>
                 {r.brand && <span className="text-gray-500 text-xs">{r.brand}</span>}
                 {r.site  && <span className="text-gray-500 text-xs">{r.site}</span>}
@@ -1157,10 +1157,10 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
                   r.status === 'Completed'
                     ? 'bg-green-900/30 text-green-400 border-green-700/40'
                     : 'bg-blue-900/30 text-blue-400 border-blue-700/40'
-                }`}>{r.status || '—'}</span>
+                }`}>{r.status || '-'}</span>
                 <span className="text-gray-300 flex-1 font-mono text-xs">{r.id?.slice(0, 12)}…</span>
                 {r.site && <span className="text-gray-500 text-xs">{r.site}</span>}
-                <span className="text-gray-600 text-xs">{r.created_at?.slice(0, 10) || '—'}</span>
+                <span className="text-gray-600 text-xs">{r.created_at?.slice(0, 10) || '-'}</span>
               </div>
             ))}
           </div>
@@ -1207,11 +1207,11 @@ function urgencyFromHealth(score) {
 }
 
 function replacementReason(position, healthScore) {
-  if (position.risk_level === 'Critical') return 'Critical risk level — immediate replacement required'
-  if (position.risk_level === 'High') return 'High risk level — schedule replacement soon'
-  if (healthScore < 25) return 'Health score critically low — tyre nearing end of life'
-  if (healthScore <= 50) return 'Declining health — plan replacement within 2 months'
-  return 'Monitor condition — no immediate action required'
+  if (position.risk_level === 'Critical') return 'Critical risk level - immediate replacement required'
+  if (position.risk_level === 'High') return 'High risk level - schedule replacement soon'
+  if (healthScore < 25) return 'Health score critically low - tyre nearing end of life'
+  if (healthScore <= 50) return 'Declining health - plan replacement within 2 months'
+  return 'Monitor condition - no immediate action required'
 }
 
 function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord }) {
@@ -1344,7 +1344,7 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                 const monthsRemaining = remaining > 0 ? Math.round(remaining / avgMonthlyKm) : 0
                 isDueSoon = monthsRemaining < 2
                 forecastText = isDueSoon
-                  ? 'Due soon — replacement recommended'
+                  ? 'Due soon - replacement recommended'
                   : `Est. ${monthsRemaining} month${monthsRemaining !== 1 ? 's' : ''} remaining`
                 forecastClass = isDueSoon ? 'text-red-400' : monthsRemaining <= 3 ? 'text-orange-400' : 'text-green-400'
               } else if (row.avgDays) {
@@ -1356,7 +1356,7 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                   const monthsLeft = Math.round(daysLeft / 30)
                   isDueSoon = daysLeft < 60
                   forecastText = isDueSoon
-                    ? 'Due soon — based on avg replacement interval'
+                    ? 'Due soon - based on avg replacement interval'
                     : `Est. ${Math.max(0, monthsLeft)} month${monthsLeft !== 1 ? 's' : ''} remaining (interval-based)`
                   forecastClass = isDueSoon ? 'text-red-400' : monthsLeft <= 2 ? 'text-orange-400' : 'text-blue-400'
                 } else {
@@ -1364,7 +1364,7 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                   forecastClass = 'text-gray-500'
                 }
               } else {
-                forecastText = 'No km or interval data — unable to forecast'
+                forecastText = 'No km or interval data - unable to forecast'
                 forecastClass = 'text-gray-500'
               }
 
@@ -1380,7 +1380,7 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-sm text-gray-300 w-20">{p.position}</span>
                     {p.brand && <span className="text-xs text-gray-500">{p.brand}</span>}
-                    {/* serial_no disabled — re-enable when ready
+                    {/* serial_no disabled - re-enable when ready
                     {p.serial_no && (
                       <span className="text-[10px] font-mono text-gray-600">{p.serial_no}</span>
                     )} */}

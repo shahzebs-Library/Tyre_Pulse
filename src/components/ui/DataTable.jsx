@@ -3,21 +3,21 @@ import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 /**
- * DataTable — premium animated data table with loading/empty states and pagination.
+ * DataTable - premium animated data table with loading/empty states and pagination.
  *
- * @param {Array}    columns   — [{ key, label, render?, width?, align? }]
- * @param {Array}    rows      — data rows
+ * @param {Array}    columns   - [{ key, label, render?, width?, align? }]
+ * @param {Array}    rows      - data rows
  * @param {boolean}  loading
  * @param {string}   emptyMsg
  * @param {ReactNode} emptyIcon
- * @param {number}   page      — 0-indexed current page
+ * @param {number}   page      - 0-indexed current page
  * @param {number}   totalPages
- * @param {function} onPage    — (page) => void
- * @param {number}   total     — total record count
- * @param {string}   rowKey    — key field for row identity (default 'id')
+ * @param {function} onPage    - (page) => void
+ * @param {number}   total     - total record count
+ * @param {string}   rowKey    - key field for row identity (default 'id')
  * @param {function} onRowClick
- * @param {Set}      selected  — Set of selected row ids
- * @param {function} onSelect  — (id) => void
+ * @param {Set}      selected  - Set of selected row ids
+ * @param {function} onSelect  - (id) => void
  * @param {boolean}  selectable
  */
 export default function DataTable({
@@ -135,7 +135,7 @@ export default function DataTable({
                           )}
                         >
                           {col.render ? col.render(row[col.key], row) : (
-                            <span className="text-gray-300">{row[col.key] ?? '—'}</span>
+                            <span className="text-gray-300">{row[col.key] ?? '-'}</span>
                           )}
                         </td>
                       ))}

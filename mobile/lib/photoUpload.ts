@@ -32,7 +32,7 @@ export async function uploadInspectionPhoto(
     const rawExt = localUri.split('.').pop()?.toLowerCase() ?? 'jpg'
     if (!ALLOWED_EXTS.has(rawExt)) return null
 
-    // Normalise extension — some devices return HEIC; storage serves as jpeg
+    // Normalise extension - some devices return HEIC; storage serves as jpeg
     const ext = rawExt === 'heic' || rawExt === 'heif' ? 'jpg' : rawExt
     const contentType = ext === 'png' ? 'image/png' : 'image/jpeg'
 
@@ -43,7 +43,7 @@ export async function uploadInspectionPhoto(
     const sanitisedPosition = tyrePosition.replace(/[^a-zA-Z0-9_-]/g, '_')
     const path = `inspections/${inspectionId}/${sanitisedPosition}_${Date.now()}.${ext}`
 
-    // Read file as base64 — required for RN where Blob is not a true File
+    // Read file as base64 - required for RN where Blob is not a true File
     const base64 = await FileSystem.readAsStringAsync(localUri, {
       encoding: 'base64',
     })
@@ -74,7 +74,7 @@ export async function uploadInspectionPhoto(
  * Path is collision-resistant: accidents/<uid>/<timestamp>_<index>_<random4>.<ext>
  */
 export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<string | null> {
-  // Reject anything that isn't a local file URI — never store http/data URIs directly
+  // Reject anything that isn't a local file URI - never store http/data URIs directly
   if (!localUri || !localUri.startsWith('file://')) return null
   try {
     const rawExt = localUri.split('.').pop()?.toLowerCase() ?? 'jpg'
@@ -103,7 +103,7 @@ export async function uploadAccidentPhoto(localUri: string, index = 0): Promise<
       return null
     }
 
-    // Return a storage ref (resolved to signed URL on display) — keeps bucket private
+    // Return a storage ref (resolved to signed URL on display) - keeps bucket private
     return storageRef('accident-photos', path)
   } catch (err: any) {
     if (__DEV__) console.warn('[photoUpload] accident upload failed:', err?.message)

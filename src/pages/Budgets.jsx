@@ -245,7 +245,7 @@ export default function Budgets() {
     exportToPdf(
       rows,
       [{ key: 'site', header: 'Site' }, { key: 'budget', header: 'Budget' }, { key: 'spent', header: 'Spent' }, { key: 'remaining', header: 'Remaining' }],
-      `Budget Report – ${MONTHS_LABELS[filterMonth - 1]} ${filterYear}`,
+      `Budget Report - ${MONTHS_LABELS[filterMonth - 1]} ${filterYear}`,
       `budget-${filterYear}-${filterMonth}`,
       'portrait',
       '',
@@ -493,7 +493,7 @@ export default function Budgets() {
                           )
                         })}
                         <td className="py-1.5 px-2 text-right text-gray-300 font-medium">
-                          {siteTotal > 0 ? formatCurrencyCompact(siteTotal) : '—'}
+                          {siteTotal > 0 ? formatCurrencyCompact(siteTotal) : '-'}
                         </td>
                       </tr>
                     )

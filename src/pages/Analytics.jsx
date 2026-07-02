@@ -588,7 +588,7 @@ function MonthlyTrend({ trendData, currency = 'SAR', onMaximize, chartRef }) {
       <div className="grid grid-cols-3 gap-4">
         {trendData.slice(-3).map(d => (
           <div key={d.month} className={`card ${d.isForecast ? 'border border-yellow-800/50' : ''}`}>
-            <p className="text-xs text-gray-500">{d.isForecast ? 'Forecast' : 'Actual'} — {d.month}</p>
+            <p className="text-xs text-gray-500">{d.isForecast ? 'Forecast' : 'Actual'} - {d.month}</p>
             <p className="text-lg font-bold text-white mt-1">
               {formatCurrencyCompact(d.value ?? d.total ?? 0, currency)}
             </p>

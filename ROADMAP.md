@@ -1,6 +1,6 @@
-# TyrePulse — Complete Product Roadmap
+# TyrePulse - Complete Product Roadmap
 **Readymix Concrete Company · Built by Shahzeb Rahman © 2026**
-**Version 6.1 · Updated June 2026 · Governed by CLAUDE.md**
+**Version 6.1 · Updated June 2026**
 
 ---
 
@@ -24,86 +24,86 @@
 | Web hosting | ✅ Vercel (auto-deploy on push to `main`) |
 | Web data integrity | ✅ Checklist TDZ crash fixed; `vehicles`/`tyre_changes` views + `alerts` table + perf indexes added |
 | Database | ✅ Supabase PostgreSQL + Auth + Storage + pgvector |
-| Mobile app | ✅ React Native (Expo SDK 53) — 6 screens (incl. scanner), offline-first |
+| Mobile app | ✅ React Native (Expo SDK 53) - 6 screens (incl. scanner), offline-first |
 | Mobile inspection flow | ✅ Aligned to live schema; inspector RLS insert enabled |
-| Mobile i18n | ✅ English + Arabic (RTL) + Urdu (RTL) — full parity |
-| Mobile EAS build | ✅ Green — auto-builds on push to `main` |
+| Mobile i18n | ✅ English + Arabic (RTL) + Urdu (RTL) - full parity |
+| Mobile EAS build | ✅ Green - auto-builds on push to `main` |
 | Mobile Play Store | ⬜ Pending store listing + signing |
 
 ---
 
-## Waves 1–20 — Web Platform *(Complete)*
+## Waves 1-20 - Web Platform *(Complete)*
 
-### Wave 1 — Security, Auth & Access Control ✅
+### Wave 1 - Security, Auth & Access Control ✅
 - 30-minute idle session timeout, touch events tracked
 - Login via Email, Username, or Employee ID
 - Role-based access: Intelligence (Admin), Analytics (Admin+Manager+Director)
 - Admin-only approval gate for new signups
 - Multi-country assignment in UserManagement
 
-### Waves 2–6 — Upload, Dashboard, Inspections, Gate Pass, Comparison ✅
+### Waves 2-6 - Upload, Dashboard, Inspections, Gate Pass, Comparison ✅
 All features complete. See PHASE2_CHECKLIST.md.
 
-### Wave 7 — Operational Intelligence ✅
+### Wave 7 - Operational Intelligence ✅
 KPI targets, VehicleHistory forecasting, StockManagement velocity, Reports.
 
-### Wave 8 — Engineering KPI Engine ✅
-CPK, tyre life, failure rate, pressure compliance, retread performance, vendor KPI — all 11 KPIs with PDF/Excel export.
+### Wave 8 - Engineering KPI Engine ✅
+CPK, tyre life, failure rate, pressure compliance, retread performance, vendor KPI - all 11 KPIs with PDF/Excel export.
 
-### Wave 9 — Pressure & Inspection Intelligence ✅
+### Wave 9 - Pressure & Inspection Intelligence ✅
 Pressure compliance, anomaly detection, inspector quality score, compliance dashboard.
 
-### Wave 10 — Tyre Position Intelligence ✅
+### Wave 10 - Tyre Position Intelligence ✅
 CPK per position, failure rates, heat map, rotation compliance tracker.
 
-### Wave 11 — Root Cause Intelligence Engine ✅
+### Wave 11 - Root Cause Intelligence Engine ✅
 14 root causes, automated classification, AI fallback, corrective action linking.
 
-### Wave 12 — Predictive Maintenance Engine ✅
+### Wave 12 - Predictive Maintenance Engine ✅
 Replacement schedules, tread life estimation, 30/60/90-day purchase calendar, workshop load balancing.
 
-### Wave 13 — Vendor & Workshop Intelligence ✅
+### Wave 13 - Vendor & Workshop Intelligence ✅
 Vendor scorecard, CPK ranking, retread ROI calculator, workshop metrics.
 
-### Wave 14 — Fleet Management Intelligence ✅
+### Wave 14 - Fleet Management Intelligence ✅
 Fleet availability, downtime tracking, live fleet status, health board.
 
-### Wave 15 — Advanced Analytics ✅
+### Wave 15 - Advanced Analytics ✅
 Seasonal analysis, country/branch/vehicle/driver comparison, AI-narrated summaries.
 
-### Wave 16 — Data Quality Intelligence ✅
+### Wave 16 - Data Quality Intelligence ✅
 Duplicate detection, invalid readings, missing inspections, data quality score.
 
-### Wave 17 — Executive Intelligence & Reporting ✅
+### Wave 17 - Executive Intelligence & Reporting ✅
 One-click monthly executive PDF, KPI narrative, root cause section, financial impact.
 
-### Wave 18 — Forecasting Engine ✅
+### Wave 18 - Forecasting Engine ✅
 Annual budget forecast, 30/60/90-day demand, stock replenishment matrix.
 
-### Wave 19 — Continuous Improvement Engine ✅
+### Wave 19 - Continuous Improvement Engine ✅
 Cost reduction identification, reliability tracking, procurement optimization.
 
-### Wave 20 — Daily Operations & Checklist ✅
+### Wave 20 - Daily Operations & Checklist ✅
 | Feature | Status |
 |---------|--------|
 | Daily Ops dashboard | ✅ |
-| Inspection checklist — bilingual EN/AR | ✅ |
+| Inspection checklist - bilingual EN/AR | ✅ |
 | Auto-title, site/asset dropdowns, inspector auto-fill | ✅ |
-| Vehicle diagram — SVG, case-insensitive, correct positions | ✅ |
+| Vehicle diagram - SVG, case-insensitive, correct positions | ✅ |
 | `tyre_conditions` JSONB + `vehicle_type` saved | ✅ |
-| PDF export — captures actual SVG diagram | ✅ |
+| PDF export - captures actual SVG diagram | ✅ |
 
 ---
 
-## Wave 21 — RAG & Knowledge System 🔄
+## Wave 21 - RAG & Knowledge System 🔄
 
 | Component | Status |
 |-----------|--------|
 | pgvector extension | ✅ |
 | `knowledge_documents` table | ✅ |
 | `ai_response_cache` table | ✅ |
-| `ragService.js` — retrieval + 5-min cache | ✅ |
-| `embeddingService.js` — batch embedding | ✅ |
+| `ragService.js` - retrieval + 5-min cache | ✅ |
+| `embeddingService.js` - batch embedding | ✅ |
 | Edge Function: `generate-embedding` | ✅ |
 | Document ingestion pipeline (SOPs, manuals) | ⬜ |
 | Nightly inspection comment embedding job | ⬜ |
@@ -111,11 +111,11 @@ Cost reduction identification, reliability tracking, procurement optimization.
 
 ---
 
-## Wave 22 — Multi-Agent AI System 🔄
+## Wave 22 - Multi-Agent AI System 🔄
 
 | Component | Status |
 |-----------|--------|
-| `aiRouter.js` — query classification | ✅ |
+| `aiRouter.js` - query classification | ✅ |
 | Analyst, TyreEngineer, QAData, Planner agents | ✅ |
 | AI Command Center UI | ✅ |
 | AI cost monitor dashboard | ⬜ |
@@ -124,14 +124,14 @@ Cost reduction identification, reliability tracking, procurement optimization.
 
 ---
 
-## Wave 23 — Enterprise & Scale 🔄
+## Wave 23 - Enterprise & Scale 🔄
 
 | Feature | Status |
 |---------|--------|
 | ERP Sync UI | ✅ |
 | Audit trail | ✅ |
 | Multi-country architecture (KSA/UAE/Egypt) | ✅ |
-| RBAC — 6 roles, tiered | ✅ |
+| RBAC - 6 roles, tiered | ✅ |
 | API webhook for ERP write-back | ⬜ |
 | Scheduled report delivery (cron email) | ⬜ |
 | Multi-tenant architecture (tenant_id) | ⬜ |
@@ -139,10 +139,10 @@ Cost reduction identification, reliability tracking, procurement optimization.
 
 ---
 
-## Wave 24 — Mobile Inspector App 🔄
+## Wave 24 - Mobile Inspector App 🔄
 
 ### Architecture Decision
-**React Native + Expo SDK 54** — chosen over Capacitor/Flutter/Native Kotlin.
+**React Native + Expo SDK 54** - chosen over Capacitor/Flutter/Native Kotlin.
 
 Reasons:
 - Shared TypeScript codebase with web (types, business logic)
@@ -161,7 +161,7 @@ Reasons:
 | Offline queue | AsyncStorage | 2.1.2 |
 | Network | expo-network | 7.1.5 |
 | Camera | expo-camera + expo-image-picker | 16.x |
-| i18n | Custom LanguageContext | — |
+| i18n | Custom LanguageContext | - |
 | Build | EAS Build (cloud) | CLI 20.1.0 |
 | CI/CD | GitHub Actions | ubuntu-latest |
 
@@ -212,7 +212,7 @@ SyncBanner.addNetworkStateListener fires on reconnect
 | `1f3a46e` | Replace netinfo with expo-network; add SDK 35 build config |
 | `ea24776` | Disable New Architecture (`newArchEnabled: false`); pin NDK 27.1.12297006 |
 
-### Wave 24 — Remaining Features
+### Wave 24 - Remaining Features
 
 | Feature | Priority | Status |
 |---------|----------|--------|
@@ -229,7 +229,7 @@ SyncBanner.addNetworkStateListener fires on reconnect
 
 ---
 
-## Wave 25 — AI Mobile Features ⬜
+## Wave 25 - AI Mobile Features ⬜
 
 | Feature | Status |
 |---------|--------|
@@ -241,7 +241,7 @@ SyncBanner.addNetworkStateListener fires on reconnect
 
 ---
 
-## Wave 26 — Enterprise Mobile ⬜
+## Wave 26 - Enterprise Mobile ⬜
 
 | Feature | Status |
 |---------|--------|
@@ -253,7 +253,7 @@ SyncBanner.addNetworkStateListener fires on reconnect
 
 ---
 
-## Migrations — Current State
+## Migrations - Current State
 
 Run `MIGRATIONS_SAFE.sql` first (idempotent), then:
 
@@ -298,19 +298,19 @@ Env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
 
 ## Immediate Priorities
 
-### P0 — This Sprint
+### P0 - This Sprint
 1. Confirm EAS build `ea24776` passes (New Architecture disabled + NDK pinned)
 2. Download APK from expo.dev, install on Samsung M10
 3. Verify login → inspection → sync flow end-to-end
 4. Fix any runtime bugs found on device
 
-### P1 — Next Sprint
+### P1 - Next Sprint
 5. Photo upload to Supabase Storage
 6. Barcode scanner for tyre serial input
 7. Play Store account setup + signing keys
 8. RAG document ingestion pipeline (web)
 
-### P2 — Following Sprint
+### P2 - Following Sprint
 9. Push notifications
 10. GPS tagging on inspections
 11. AI cost monitor (web)
@@ -319,4 +319,3 @@ Env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `FROM_EMAIL`
 ---
 
 *TyrePulse v6.1 · Readymix Concrete Company · Shahzeb Rahman © 2026*
-*Fully governed by CLAUDE.md*

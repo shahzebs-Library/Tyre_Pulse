@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// anomalyEngine.js — Rule-based suspicious tyre record detection (no AI)
+// anomalyEngine.js - Rule-based suspicious tyre record detection (no AI)
 // Detects: short replacements, same-day bursts, rapid recurrence, cost spikes
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -34,8 +34,8 @@ const ANOMALY_CONFIG = {
 /**
  * Detect all anomalies in a set of tyre records.
  * Expects records sorted by issue_date ASC (or will sort internally).
- * @param {Array} records  — full array of tyre_record rows
- * @param {object} [config] — override defaults
+ * @param {Array} records  - full array of tyre_record rows
+ * @param {object} [config] - override defaults
  * @returns {Anomaly[]}
  */
 export function detectAnomalies(records, config = {}) {
@@ -70,7 +70,7 @@ export function detectAnomalies(records, config = {}) {
   )
 
   // ────────────────────────────────────────────────────────────────────────
-  // 1. SHORT INTERVAL — same asset replaced < threshold days after previous
+  // 1. SHORT INTERVAL - same asset replaced < threshold days after previous
   // ────────────────────────────────────────────────────────────────────────
   Object.entries(byAsset).forEach(([assetNo, recs]) => {
     for (let i = 1; i < recs.length; i++) {
@@ -112,7 +112,7 @@ export function detectAnomalies(records, config = {}) {
   })
 
   // ────────────────────────────────────────────────────────────────────────
-  // 2. SAME-DAY BURST — multiple tyres on same asset same date
+  // 2. SAME-DAY BURST - multiple tyres on same asset same date
   // ────────────────────────────────────────────────────────────────────────
   Object.entries(byAsset).forEach(([assetNo, recs]) => {
     const byDate = groupBy(recs, r => r.issue_date)
@@ -145,7 +145,7 @@ export function detectAnomalies(records, config = {}) {
   })
 
   // ────────────────────────────────────────────────────────────────────────
-  // 3. RAPID RECURRENCE — ≥N high-risk events on same asset within window
+  // 3. RAPID RECURRENCE - ≥N high-risk events on same asset within window
   // ────────────────────────────────────────────────────────────────────────
   Object.entries(byAsset).forEach(([assetNo, recs]) => {
     const highRiskRecs = recs.filter(r => r.risk_level === 'High' && r.issue_date)
@@ -181,7 +181,7 @@ export function detectAnomalies(records, config = {}) {
   })
 
   // ────────────────────────────────────────────────────────────────────────
-  // 4. COST SPIKE — cost_per_tyre is outlier (Z-score)
+  // 4. COST SPIKE - cost_per_tyre is outlier (Z-score)
   // ────────────────────────────────────────────────────────────────────────
   if (costSd > 0) {
     records.forEach(r => {
@@ -202,7 +202,7 @@ export function detectAnomalies(records, config = {}) {
           record_ids: [r.id],
           records:    [r],
           message:    `Unusual cost: SAR ${r.cost_per_tyre.toLocaleString()} for ${r.brand || 'unknown brand'} (fleet avg SAR ${Math.round(costMean).toLocaleString()})`,
-          detail:     `Z-score: ${z.toFixed(2)} — Asset ${r.asset_no || '?'} on ${r.issue_date || '?'}`,
+          detail:     `Z-score: ${z.toFixed(2)} - Asset ${r.asset_no || '?'} on ${r.issue_date || '?'}`,
           cost:       r.cost_per_tyre,
           zScore:     z,
           fleetAvg:   Math.round(costMean),
@@ -212,7 +212,7 @@ export function detectAnomalies(records, config = {}) {
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // 5. SERIAL REUSE — same serial_no on multiple different assets
+  // 5. SERIAL REUSE - same serial_no on multiple different assets
   // ────────────────────────────────────────────────────────────────────────
   Object.entries(bySerial).forEach(([serial, recs]) => {
     if (!serial || serial === 'null' || serial === '') return
@@ -239,7 +239,7 @@ export function detectAnomalies(records, config = {}) {
   })
 
   // ────────────────────────────────────────────────────────────────────────
-  // 6. EXACT DUPLICATE — same asset + serial + date combination
+  // 6. EXACT DUPLICATE - same asset + serial + date combination
   // ────────────────────────────────────────────────────────────────────────
   const dupMap = {}
   records.forEach(r => {

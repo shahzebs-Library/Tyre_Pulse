@@ -116,12 +116,12 @@ export default function Settings() {
   const [prefCurrency, setPrefCurrency] = useState(() => localStorage.getItem('prefCurrency') ?? 'SAR')
   const [prefCountry, setPrefCountry]  = useState(() => activeCountry)
 
-  // Alert thresholds — 3 legacy localStorage fields
+  // Alert thresholds - 3 legacy localStorage fields
   const [highRiskPct, setHighRiskPct]      = useState(() => Number(localStorage.getItem('thresh_highRisk') ?? 25))
   const [critCostThresh, setCritCostThresh] = useState(() => Number(localStorage.getItem('thresh_critCost') ?? 50000))
   const [lowTreadMm, setLowTreadMm]        = useState(() => Number(localStorage.getItem('thresh_lowTread') ?? 2))
 
-  // Alert thresholds — 5 new fields persisted to app_settings
+  // Alert thresholds - 5 new fields persisted to app_settings
   const [alertThresholds, setAlertThresholds] = useState(ALERT_THRESHOLD_DEFAULTS)
   const [savingThresholds, setSavingThresholds] = useState(false)
   const [threshMsg, setThreshMsg] = useState('')
@@ -133,7 +133,7 @@ export default function Settings() {
   const [savingKpi, setSavingKpi]           = useState(false)
   const [kpiMsg, setKpiMsg]                 = useState('')
 
-  // Scheduled Reports — persisted to localStorage
+  // Scheduled Reports - persisted to localStorage
   const [schedules, setSchedules] = useState(() => {
     try { return JSON.parse(localStorage.getItem('tp_scheduled_reports') || '[]') }
     catch { return [] }
@@ -350,7 +350,7 @@ export default function Settings() {
       if (recipients.length === 0) throw new Error('No valid recipients')
       await sendReportEmail({
         to: recipients,
-        subject: `[Test] TyrePulse ${schedule.reportName} — ${getScheduleLabel(schedule)}`,
+        subject: `[Test] TyrePulse ${schedule.reportName} - ${getScheduleLabel(schedule)}`,
         bodyHtml: `<p style="font-family:Arial,sans-serif;color:#1e293b;">
           <strong>Test Delivery</strong><br><br>
           This is a test send for your scheduled report:<br><br>
@@ -560,7 +560,7 @@ export default function Settings() {
       {/* 3-column grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-        {/* Column 1 — Profile */}
+        {/* Column 1 - Profile */}
         <div className="card space-y-4">
           <h2 className="text-base font-semibold text-white flex items-center gap-2"><User size={16} /> Profile</h2>
 
@@ -628,7 +628,7 @@ export default function Settings() {
           </form>
         </div>
 
-        {/* Column 2 — App Preferences */}
+        {/* Column 2 - App Preferences */}
         <div className="card space-y-4">
           <h2 className="text-base font-semibold text-white flex items-center gap-2"><Settings2 size={16} /> App Preferences</h2>
 
@@ -716,7 +716,7 @@ export default function Settings() {
           </form>
         </div>
 
-        {/* Column 3 — Alert Thresholds */}
+        {/* Column 3 - Alert Thresholds */}
         <div className="card space-y-4">
           <h2 className="text-base font-semibold text-white flex items-center gap-2"><Bell size={16} /> Alert Thresholds</h2>
           <p className="text-xs text-gray-500">
@@ -831,7 +831,7 @@ export default function Settings() {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-white flex items-center gap-2">
-            <Target size={16} /> KPI Targets — {currentYear}
+            <Target size={16} /> KPI Targets - {currentYear}
           </h2>
           {isAdmin && !editingKpi && (
             <button

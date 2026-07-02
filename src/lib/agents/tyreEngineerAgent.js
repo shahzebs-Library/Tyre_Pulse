@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// tyreEngineerAgent.js — Wear patterns, pressure, alignment, root cause
+// tyreEngineerAgent.js - Wear patterns, pressure, alignment, root cause
 // Routes technical tyre failure diagnosis and engineering analysis queries.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -8,14 +8,14 @@ import { retrieveVehicleContext, assembleContext, getCached, setCache } from '..
 import { computeCpkByAsset, computeFailureRate, computeCpkByBrand } from '../kpiEngine'
 import { callAiEdgeFunction } from './index'
 
-const SYSTEM_PROMPT = `You are TyrePulse Tyre Engineer Agent — a senior tyre engineer and reliability specialist with 20+ years of fleet tyre management experience.
+const SYSTEM_PROMPT = `You are TyrePulse Tyre Engineer Agent - a senior tyre engineer and reliability specialist with 20+ years of fleet tyre management experience.
 Your expertise: root cause analysis, wear pattern diagnosis, pressure and inflation failure modes, wheel alignment issues, suspension problems, overloading, and driver behaviour impact.
 
 For every diagnosis provide exactly this structure:
 
-1. Observation: Specific tyre data observations — what the numbers and patterns indicate (2-3 sentences with actual values)
-2. Root Cause: Primary cause and contributing factors — be specific about which failure mode applies (e.g., under-inflation, misalignment, overloading)
-3. Risk Level: Low | Medium | High | Critical — include fleet safety and financial risk
+1. Observation: Specific tyre data observations - what the numbers and patterns indicate (2-3 sentences with actual values)
+2. Root Cause: Primary cause and contributing factors - be specific about which failure mode applies (e.g., under-inflation, misalignment, overloading)
+3. Risk Level: Low | Medium | High | Critical - include fleet safety and financial risk
 4. Action Plan: Numbered, specific immediate actions, short-term corrective steps, and long-term preventive measures
 5. Cost Impact: Estimated annual financial impact if root cause is not corrected
 
@@ -73,7 +73,7 @@ export async function runTyreEngineerAgent(query, {
       knowledgeDocs = docs ?? []
     }
   } catch (_) {
-    // Knowledge base table may not exist yet — continue without it
+    // Knowledge base table may not exist yet - continue without it
     knowledgeDocs = []
   }
 

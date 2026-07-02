@@ -89,7 +89,7 @@ const CHART_OPTS_NO_SCALES = {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function fmt(n, decimals = 0) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return Number(n).toLocaleString(undefined, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -97,7 +97,7 @@ function fmt(n, decimals = 0) {
 }
 
 function fmtCurrency(n, currency = 'SAR') {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return `${currency} ${fmt(n, 0)}`
 }
 
@@ -441,7 +441,7 @@ export default function TyreScrapManagement() {
     })
     return Object.values(map).map(s => {
       const scrapRate = s.total > 0 ? (s.scrap / s.total) * 100 : 0
-      const worstBrand = Object.entries(s.brands).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—'
+      const worstBrand = Object.entries(s.brands).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '-'
       // Trend: compare last 2 available months
       const monthKeys = Object.keys(s.monthly).sort()
       let trend = 'stable'
@@ -609,16 +609,16 @@ export default function TyreScrapManagement() {
       startY: 34,
       head: [['Serial No', 'Brand', 'Size', 'Position', 'Asset', 'Site', 'Date Removed', 'km Life', 'Cost', 'Removal Reason', 'Disposal Status']],
       body: disposalLog.map(t => [
-        t.serial_number ?? '—',
-        t.brand ?? '—',
-        t.size ?? '—',
-        t.position ?? '—',
-        t.asset_no ?? '—',
-        t.site ?? '—',
-        t.removal_date || t.issue_date || '—',
-        kmLife(t) != null ? fmt(kmLife(t)) : '—',
-        t.cost_per_tyre != null ? `${activeCurrency} ${fmt(Number(t.cost_per_tyre))}` : '—',
-        t.removal_reason ?? '—',
+        t.serial_number ?? '-',
+        t.brand ?? '-',
+        t.size ?? '-',
+        t.position ?? '-',
+        t.asset_no ?? '-',
+        t.site ?? '-',
+        t.removal_date || t.issue_date || '-',
+        kmLife(t) != null ? fmt(kmLife(t)) : '-',
+        t.cost_per_tyre != null ? `${activeCurrency} ${fmt(Number(t.cost_per_tyre))}` : '-',
+        t.removal_reason ?? '-',
         disposals[t.id] ?? 'Pending',
       ]),
       styles: { fontSize: 7, cellPadding: 1.8 },
@@ -790,7 +790,7 @@ export default function TyreScrapManagement() {
             <KpiCard
               icon={Activity}
               label="Avg km Life at Scrap"
-              value={kpis.avgKmLife != null ? `${fmt(kpis.avgKmLife)} km` : '—'}
+              value={kpis.avgKmLife != null ? `${fmt(kpis.avgKmLife)} km` : '-'}
               sub={`Fleet avg: ${fmt(fleetAvgKmLife)} km`}
               color={
                 kpis.avgKmLife != null && kpis.avgKmLife < fleetAvgKmLife * 0.6
@@ -813,9 +813,9 @@ export default function TyreScrapManagement() {
               }
               badge={
                 kpis.scrapRate > 25
-                  ? { label: 'Critical — Investigate', cls: 'text-red-400 bg-red-900/30 border-red-700' }
+                  ? { label: 'Critical - Investigate', cls: 'text-red-400 bg-red-900/30 border-red-700' }
                   : kpis.scrapRate > 15
-                  ? { label: 'Elevated — Monitor', cls: 'text-orange-400 bg-orange-900/30 border-orange-700' }
+                  ? { label: 'Elevated - Monitor', cls: 'text-orange-400 bg-orange-900/30 border-orange-700' }
                   : null
               }
             />
@@ -867,7 +867,7 @@ export default function TyreScrapManagement() {
                           {retreatOpportunity.count} tyre{retreatOpportunity.count !== 1 ? 's' : ''} this month may qualify for retreading
                         </p>
                         <p className="text-blue-400/80 text-xs">
-                          Estimated savings: {fmtCurrency(retreatOpportunity.savings, activeCurrency)} — retreading at 40% lower cost vs new replacement
+                          Estimated savings: {fmtCurrency(retreatOpportunity.savings, activeCurrency)} - retreading at 40% lower cost vs new replacement
                         </p>
                       </div>
                     </div>
@@ -880,7 +880,7 @@ export default function TyreScrapManagement() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-4">
                   <p className="text-xs text-gray-400 font-medium mb-3 flex items-center gap-2">
-                    <TrendingDown className="text-red-400" size={13} /> Monthly Scrap Trend — Last 12 Months
+                    <TrendingDown className="text-red-400" size={13} /> Monthly Scrap Trend - Last 12 Months
                   </p>
                   <div className="h-52">
                     {monthlyTrend.some(m => m.count > 0)
@@ -950,17 +950,17 @@ export default function TyreScrapManagement() {
                             const pct  = fleetAvgKmLife > 0 ? (life / fleetAvgKmLife) * 100 : 0
                             return (
                               <tr key={t.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                                <td className="py-1.5 font-mono text-blue-300">{t.serial_number ?? '—'}</td>
+                                <td className="py-1.5 font-mono text-blue-300">{t.serial_number ?? '-'}</td>
                                 <td className="py-1.5 text-gray-300">{t.brand}</td>
-                                <td className="py-1.5 text-gray-400">{t.position ?? '—'}</td>
-                                <td className="py-1.5 text-gray-400">{t.site ?? '—'}</td>
+                                <td className="py-1.5 text-gray-400">{t.position ?? '-'}</td>
+                                <td className="py-1.5 text-gray-400">{t.site ?? '-'}</td>
                                 <td className="py-1.5 text-right text-red-400 font-semibold">{fmt(life)}</td>
                                 <td className="py-1.5 text-right">
                                   <span className={`font-bold ${pct < 30 ? 'text-red-400' : 'text-yellow-400'}`}>
                                     {pct.toFixed(0)}%
                                   </span>
                                 </td>
-                                <td className="py-1.5 text-gray-500">{t.removal_reason ?? '—'}</td>
+                                <td className="py-1.5 text-gray-500">{t.removal_reason ?? '-'}</td>
                               </tr>
                             )
                           })}
@@ -968,7 +968,7 @@ export default function TyreScrapManagement() {
                       </table>
                       {earlyScrap.length > 8 && (
                         <p className="text-gray-600 text-xs mt-2 text-center">
-                          + {earlyScrap.length - 8} more — use Disposal Log tab for full list
+                          + {earlyScrap.length - 8} more - use Disposal Log tab for full list
                         </p>
                       )}
                     </div>
@@ -1114,10 +1114,10 @@ export default function TyreScrapManagement() {
                               </div>
                             </td>
                             <td className="px-4 py-3 text-right text-gray-400 text-xs">
-                              {b.avgKm != null ? `${fmt(b.avgKm)} km` : '—'}
+                              {b.avgKm != null ? `${fmt(b.avgKm)} km` : '-'}
                             </td>
                             <td className="px-4 py-3 text-right text-gray-400 text-xs">
-                              {b.avgCPK != null ? b.avgCPK.toFixed(4) : '—'}
+                              {b.avgCPK != null ? b.avgCPK.toFixed(4) : '-'}
                             </td>
                             <td className="px-4 py-3 text-right text-xs">
                               <span className={b.earlyPct > 30 ? 'text-red-400 font-bold' : 'text-gray-400'}>
@@ -1156,7 +1156,7 @@ export default function TyreScrapManagement() {
               {/* Site grouped bar chart */}
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <p className="text-xs text-gray-400 font-medium mb-3 flex items-center gap-2">
-                  <Building2 size={13} className="text-blue-400" /> Scrap Count by Site — Last 6 Months
+                  <Building2 size={13} className="text-blue-400" /> Scrap Count by Site - Last 6 Months
                 </p>
                 <div className="h-56">
                   {siteAnalysis.length > 0
@@ -1384,24 +1384,24 @@ export default function TyreScrapManagement() {
                             transition={{ delay: Math.min(i * 0.02, 0.4) }}
                             className="border-b border-gray-800/60 hover:bg-gray-800/30 transition"
                           >
-                            <td className="px-4 py-2.5 font-mono text-blue-300 text-xs">{t.serial_number ?? '—'}</td>
-                            <td className="px-4 py-2.5 text-gray-200 font-medium">{t.brand ?? '—'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{t.size ?? '—'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">{t.position ?? '—'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">{t.asset_no ?? '—'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">{t.site ?? '—'}</td>
+                            <td className="px-4 py-2.5 font-mono text-blue-300 text-xs">{t.serial_number ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-gray-200 font-medium">{t.brand ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{t.size ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs">{t.position ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs">{t.asset_no ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs">{t.site ?? '-'}</td>
                             <td className="px-4 py-2.5 text-gray-400 text-xs">
-                              {t.removal_date || t.issue_date || '—'}
+                              {t.removal_date || t.issue_date || '-'}
                             </td>
                             <td className="px-4 py-2.5 text-right text-xs">
                               <span className={life != null ? (life < fleetAvgKmLife * 0.5 ? 'text-red-400 font-semibold' : 'text-gray-300') : 'text-gray-600'}>
-                                {life != null ? `${fmt(life)} km` : '—'}
+                                {life != null ? `${fmt(life)} km` : '-'}
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-right text-xs text-orange-400">
-                              {t.cost_per_tyre != null ? `${activeCurrency} ${fmt(Number(t.cost_per_tyre))}` : '—'}
+                              {t.cost_per_tyre != null ? `${activeCurrency} ${fmt(Number(t.cost_per_tyre))}` : '-'}
                             </td>
-                            <td className="px-4 py-2.5 text-gray-500 text-xs">{t.removal_reason ?? '—'}</td>
+                            <td className="px-4 py-2.5 text-gray-500 text-xs">{t.removal_reason ?? '-'}</td>
                             <td className="px-4 py-2.5 text-center">
                               <Badge label={status} cfg={cfg} />
                             </td>

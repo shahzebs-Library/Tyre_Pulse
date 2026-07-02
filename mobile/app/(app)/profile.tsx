@@ -135,7 +135,7 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Workspace — role-specific shortcuts */}
+        {/* Workspace - role-specific shortcuts */}
         {(() => {
           const role = profile?.role
           const tools = [

@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, jsonResponse, requireApprovedRole } from '../_shared/auth.ts'
 
-// Model is locked server-side — never accept a client-supplied value
+// Model is locked server-side - never accept a client-supplied value
 const MODEL = 'claude-haiku-4-5-20251001'
 
 // Per-model price in USD per 1M tokens (input / output). Used for cost tracking.

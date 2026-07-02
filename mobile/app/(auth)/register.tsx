@@ -100,11 +100,11 @@ export default function RegisterScreen() {
 
       const userId = authData.user?.id
       if (!userId) {
-        setError('Registration failed — no user ID returned. Please try again.')
+        setError('Registration failed - no user ID returned. Please try again.')
         return
       }
 
-      // 2. Insert pending profile (approved: false — admin must approve)
+      // 2. Insert pending profile (approved: false - admin must approve)
       const { error: profileErr } = await supabase.from('profiles').upsert({
         id:        userId,
         full_name: fullName.trim(),
@@ -116,7 +116,7 @@ export default function RegisterScreen() {
       }, { onConflict: 'id' })
 
       if (profileErr) {
-        // Profile insert failed — log but still show success since auth user was created
+        // Profile insert failed - log but still show success since auth user was created
         console.warn('Profile insert failed:', profileErr.message)
       }
 
@@ -343,7 +343,7 @@ export default function RegisterScreen() {
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
-                  <Text style={styles.siteOrLabel}>— or type your site —</Text>
+                  <Text style={styles.siteOrLabel}>- or type your site -</Text>
                 </>
               ) : null}
               <View style={[styles.inputWrapper, isRTL && styles.inputWrapperRTL]}>

@@ -109,13 +109,13 @@ const FIELD_MAPPINGS = [
 ]
 
 const VALIDATION_FAILURES = [
-  { field: 'PRESSURE_KPA',   issue: 'Value outside valid range (0–1200 kPa)',     count: 214,  severity: 'Error'   },
+  { field: 'PRESSURE_KPA',   issue: 'Value outside valid range (0-1200 kPa)',     count: 214,  severity: 'Error'   },
   { field: 'KM_READING',     issue: 'Odometer rollback detected',                 count: 87,   severity: 'Error'   },
   { field: 'TYRE_SERIAL',    issue: 'Duplicate serial in same sync batch',        count: 43,   severity: 'Error'   },
   { field: 'FIT_DATE',       issue: 'Date precedes vehicle manufacture year',     count: 19,   severity: 'Error'   },
   { field: 'TREAD_DEPTH_MM', issue: 'Tread depth exceeds new tyre specification', count: 156,  severity: 'Warning' },
   { field: 'ASSET_NO',       issue: 'Asset not found in Fleet Master',            count: 72,   severity: 'Warning' },
-  { field: 'SUPPLIER_CODE',  issue: 'Unknown supplier code — lookup failed',      count: 38,   severity: 'Warning' },
+  { field: 'SUPPLIER_CODE',  issue: 'Unknown supplier code - lookup failed',      count: 38,   severity: 'Warning' },
   { field: 'SITE_CODE',      issue: 'Site code not mapped to TyrePulse site',     count: 25,   severity: 'Warning' },
   { field: 'COST_CENTRE',    issue: 'Cost centre not present in chart of accounts',count: 11,  severity: 'Warning' },
   { field: 'INSP_DATE',      issue: 'Inspection timestamp in future',             count: 6,    severity: 'Warning' },
@@ -395,7 +395,7 @@ export default function ErpSync() {
               <Zap size={13} /> Trigger Full Sync
             </button>
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 rounded-lg text-[11px] text-gray-300 bg-gray-900 border border-gray-700 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-              Requires API access — read-only mode
+              Requires API access - read-only mode
             </div>
           </div>
           <div className="relative group">
@@ -403,7 +403,7 @@ export default function ErpSync() {
               <RefreshCw size={13} /> Trigger Delta Sync
             </button>
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 rounded-lg text-[11px] text-gray-300 bg-gray-900 border border-gray-700 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-              Requires API access — read-only mode
+              Requires API access - read-only mode
             </div>
           </div>
           <button
@@ -632,7 +632,7 @@ export default function ErpSync() {
             <Shield size={14} className="text-green-400" /> Data Validation
           </h2>
           <div className="rounded-xl p-4 mb-4" style={{ background: 'var(--panel-overlay)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <p className="text-[11px] text-gray-600 mb-3">Last sync validation — {(validationChart.valid + validationChart.warning + validationChart.error).toLocaleString()} total records</p>
+            <p className="text-[11px] text-gray-600 mb-3">Last sync validation - {(validationChart.valid + validationChart.warning + validationChart.error).toLocaleString()} total records</p>
             <div style={{ height: 200 }}>
               <Doughnut data={doughnutData} options={doughnutOptions} />
             </div>

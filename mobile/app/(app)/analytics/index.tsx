@@ -1,5 +1,5 @@
 /**
- * Fleet Analytics — mobile KPI dashboard
+ * Fleet Analytics - mobile KPI dashboard
  *
  * Available to: admin · manager · director
  * Shows: fleet cost KPIs, risk breakdown, top sites by cost, recent critical alerts
@@ -196,7 +196,7 @@ export default function AnalyticsScreen() {
             <KpiCard icon="checkmark-circle-outline" label="Safe"     value={(kpi!.totalRecords - kpi!.criticalCount - kpi!.highCount).toString()} color="#16a34a" />
           </View>
 
-          {/* Risk breakdown — with % labels inside bars */}
+          {/* Risk breakdown - with % labels inside bars */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Risk Breakdown</Text>
             <View style={{ gap: 12 }}>

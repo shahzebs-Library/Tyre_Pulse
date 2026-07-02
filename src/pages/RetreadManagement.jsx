@@ -127,7 +127,7 @@ function last12Months() {
 }
 
 function scoreVendor(v) {
-  // 0–100 composite: CPK efficiency 40%, success rate 40%, life km 20%
+  // 0-100 composite: CPK efficiency 40%, success rate 40%, life km 20%
   // Lower CPK is better; higher success/life is better
   // Normalised relative to own data; use raw heuristics here
   const cpkScore = v.avgCpk != null ? Math.max(0, 100 - v.avgCpk * 10000) : 50
@@ -793,7 +793,7 @@ export default function RetreadManagement() {
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-4">
                       <p className="text-xs text-gray-400 mb-3 font-medium flex items-center gap-1.5">
-                        <BarChart3 size={13} className="text-purple-400" /> Retread Fitments — Last 12 Months
+                        <BarChart3 size={13} className="text-purple-400" /> Retread Fitments - Last 12 Months
                       </p>
                       <div className="h-52">
                         <Bar
@@ -994,7 +994,7 @@ export default function RetreadManagement() {
                   {vendorData.trendChart.datasets.length > 0 && (
                     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                       <p className="text-xs text-gray-400 mb-3 font-medium flex items-center gap-1.5">
-                        <Activity size={13} className="text-purple-400" /> CPK Trend — Top 3 Vendors (Last 12 Months)
+                        <Activity size={13} className="text-purple-400" /> CPK Trend - Top 3 Vendors (Last 12 Months)
                       </p>
                       <div className="h-64">
                         <Line data={vendorData.trendChart} options={CHART_OPTS} />
@@ -1081,14 +1081,14 @@ export default function RetreadManagement() {
                           className="border-b border-gray-800/60 hover:bg-gray-800/40 transition cursor-pointer"
                           onClick={() => setDrawer(t)}
                         >
-                          <td className="px-4 py-3 font-mono text-purple-300 text-xs">{t.serial_number ?? '—'}</td>
-                          <td className="px-4 py-3 font-medium text-gray-100">{t.brand ?? '—'}</td>
-                          <td className="px-4 py-3 text-gray-400 font-mono text-xs">{t.size ?? '—'}</td>
-                          <td className="px-4 py-3 text-gray-400 text-xs">{t.position ?? '—'}</td>
-                          <td className="px-4 py-3 text-gray-400 text-xs">{t.asset_no ?? '—'}</td>
-                          <td className="px-4 py-3 text-gray-400 text-xs">{t.site ?? '—'}</td>
+                          <td className="px-4 py-3 font-mono text-purple-300 text-xs">{t.serial_number ?? '-'}</td>
+                          <td className="px-4 py-3 font-medium text-gray-100">{t.brand ?? '-'}</td>
+                          <td className="px-4 py-3 text-gray-400 font-mono text-xs">{t.size ?? '-'}</td>
+                          <td className="px-4 py-3 text-gray-400 text-xs">{t.position ?? '-'}</td>
+                          <td className="px-4 py-3 text-gray-400 text-xs">{t.asset_no ?? '-'}</td>
+                          <td className="px-4 py-3 text-gray-400 text-xs">{t.site ?? '-'}</td>
                           <td className="px-4 py-3 text-center text-gray-300 text-xs">
-                            {t.km_life != null ? t.km_life.toLocaleString() : '—'}
+                            {t.km_life != null ? t.km_life.toLocaleString() : '-'}
                           </td>
                           <td className="px-4 py-3 text-center font-mono text-purple-400 text-xs">
                             {fmtCpk(t.cpk, activeCurrency)}
@@ -1096,7 +1096,7 @@ export default function RetreadManagement() {
                           <td className="px-4 py-3 text-center">{riskBadge(t.risk_level)}</td>
                           <td className="px-4 py-3 text-center">{statusBadge(t.status)}</td>
                           <td className="px-4 py-3 text-center text-gray-400 text-xs">
-                            {t.days_in_service != null ? `${t.days_in_service}d` : '—'}
+                            {t.days_in_service != null ? `${t.days_in_service}d` : '-'}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <button
@@ -1270,7 +1270,7 @@ export default function RetreadManagement() {
                     {riskBadge(drawer.risk_level)}
                     {statusBadge(drawer.status)}
                   </div>
-                  <p className="text-gray-400 text-sm">{drawer.brand} — {drawer.size}</p>
+                  <p className="text-gray-400 text-sm">{drawer.brand} - {drawer.size}</p>
                 </div>
                 <button onClick={() => setDrawer(null)} className="text-gray-500 hover:text-gray-200 shrink-0">
                   <X size={20} />
@@ -1295,7 +1295,7 @@ export default function RetreadManagement() {
                     ].map(({ label, value }) => (
                       <div key={label}>
                         <p className="text-gray-500 text-xs">{label}</p>
-                        <p className="text-gray-200 font-medium text-sm mt-0.5">{value ?? '—'}</p>
+                        <p className="text-gray-200 font-medium text-sm mt-0.5">{value ?? '-'}</p>
                       </div>
                     ))}
                   </div>
@@ -1307,7 +1307,7 @@ export default function RetreadManagement() {
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     {[
                       { label: 'Issue Date', value: drawer.issue_date },
-                      { label: 'Removal Date', value: drawer.removal_date ?? (drawer.km_at_removal ? '—' : 'Still Fitted') },
+                      { label: 'Removal Date', value: drawer.removal_date ?? (drawer.km_at_removal ? '-' : 'Still Fitted') },
                       { label: 'km at Fitment', value: drawer.km_at_fitment?.toLocaleString() },
                       { label: 'km at Removal', value: drawer.km_at_removal?.toLocaleString() },
                       { label: 'km Life', value: drawer.km_life != null ? `${drawer.km_life.toLocaleString()} km` : null },
@@ -1317,7 +1317,7 @@ export default function RetreadManagement() {
                     ].map(({ label, value }) => (
                       <div key={label}>
                         <p className="text-gray-500 text-xs">{label}</p>
-                        <p className="text-gray-200 font-medium text-sm mt-0.5">{value ?? '—'}</p>
+                        <p className="text-gray-200 font-medium text-sm mt-0.5">{value ?? '-'}</p>
                       </div>
                     ))}
                   </div>

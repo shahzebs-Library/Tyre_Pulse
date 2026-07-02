@@ -1,5 +1,5 @@
 /**
- * auditDiff — turn accident_audit_log rows into "who changed what" for mobile.
+ * auditDiff - turn accident_audit_log rows into "who changed what" for mobile.
  * Mirrors src/lib/auditDiff.js on the web.
  */
 
@@ -50,7 +50,7 @@ const ACTION_LABELS: Record<string, string> = {
 }
 
 const fmt = (v: any): string => {
-  if (v === null || v === undefined || v === '') return '—'
+  if (v === null || v === undefined || v === '') return '-'
   if (typeof v === 'boolean') return v ? 'Yes' : 'No'
   return String(v)
 }

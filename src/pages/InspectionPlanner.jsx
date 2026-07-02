@@ -52,11 +52,11 @@ function weekLabel(dateStr) {
   const d = new Date(dateStr + 'T00:00:00')
   const end = new Date(d); end.setDate(d.getDate() + 6)
   const fmt = dt => dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
-  return `${fmt(d)} – ${fmt(end)}`
+  return `${fmt(d)} - ${fmt(end)}`
 }
 
 function fmtDisplay(ds) {
-  if (!ds) return '—'
+  if (!ds) return '-'
   return new Date(ds + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
@@ -344,7 +344,7 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
       inspection_date: dates[i % dates.length],
       inspection_time: '08:00',
       type,
-      notes: `Bulk scheduled — overdue by ${v.days_overdue} days`,
+      notes: `Bulk scheduled - overdue by ${v.days_overdue} days`,
       status: 'Scheduled',
     }))
     await onSave(items)
@@ -364,7 +364,7 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
           <h3 className="text-base font-semibold text-white flex items-center gap-2">
             <Layers size={16} className="text-purple-400" />
-            Bulk Schedule — {selected.length} vehicles
+            Bulk Schedule - {selected.length} vehicles
           </h3>
           <button onClick={onClose} className="p-1 hover:bg-gray-800 rounded-lg transition-colors">
             <X size={16} className="text-gray-400" />
@@ -658,11 +658,11 @@ export default function InspectionPlanner() {
         if (daysOverdue <= 0) return null
         return {
           asset_no: a.asset_no,
-          site: a.site || '—',
+          site: a.site || '-',
           last_inspection: last?.inspection_date || null,
           days_overdue: daysOverdue,
           last_risk: riskByAsset.get(a.asset_no) || 'Unknown',
-          inspector: last?.inspector_name || '—',
+          inspector: last?.inspector_name || '-',
         }
       })
       .filter(Boolean)
@@ -693,11 +693,11 @@ export default function InspectionPlanner() {
       }
       return {
         asset_no: a.asset_no,
-        site: a.site || '—',
+        site: a.site || '-',
         days_since: daysSince,
         recommended: interval,
         status,
-        inspector: last?.inspector_name || '—',
+        inspector: last?.inspector_name || '-',
       }
     })
   }, [distinctAssets, lastInspectionByAsset, today, interval])
@@ -725,7 +725,7 @@ export default function InspectionPlanner() {
         ? Math.round((thisMonthCount / totalScheduled) * 100)
         : null
       const siteSet = new Set(all.slice(0, 50).map(r => r.site).filter(Boolean))
-      const topSite = all.length > 0 ? (all[0].site || '—') : '—'
+      const topSite = all.length > 0 ? (all[0].site || '-') : '-'
       return { name, thisWeekCount, thisMonthCount, avgPerDay, completionRate, topSite, total: all.length }
     }).sort((a, b) => b.thisMonthCount - a.thisMonthCount)
   }, [distinctInspectors, inspections, weekBounds, monthBounds, today, schedule])
@@ -884,7 +884,7 @@ export default function InspectionPlanner() {
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE — Inspection Schedule', 14, 13)
+    doc.text('TYREPULSE - Inspection Schedule', 14, 13)
     doc.setFontSize(8)
     doc.setFont('helvetica', 'normal')
     doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')}`, 150, 13)
@@ -1192,7 +1192,7 @@ export default function InspectionPlanner() {
               ) : filteredOverdue.length === 0 ? (
                 <div className="p-8 text-center">
                   <CheckCircle2 size={32} className="text-green-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">No overdue inspections — all vehicles are on schedule.</p>
+                  <p className="text-sm text-gray-400">No overdue inspections - all vehicles are on schedule.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -1279,7 +1279,7 @@ export default function InspectionPlanner() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
                 <div className="flex items-center gap-2">
                   <Calendar size={16} className="text-blue-400" />
-                  <h2 className="text-sm font-semibold text-white">Upcoming Inspections — Next 30 Days</h2>
+                  <h2 className="text-sm font-semibold text-white">Upcoming Inspections - Next 30 Days</h2>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1505,7 +1505,7 @@ export default function InspectionPlanner() {
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-5">
                 <BarChart2 size={16} className="text-blue-400" />
-                <h2 className="text-sm font-semibold text-white">Inspection Frequency by Site — Last 6 Months</h2>
+                <h2 className="text-sm font-semibold text-white">Inspection Frequency by Site - Last 6 Months</h2>
               </div>
               {loading ? (
                 <div className="h-72 bg-gray-800 animate-pulse rounded-lg" />

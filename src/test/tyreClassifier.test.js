@@ -51,9 +51,9 @@ describe('CATEGORIES export', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — BLOWOUT (Critical)
+// classifyTyre - BLOWOUT (Critical)
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — BLOWOUT (Critical)', () => {
+describe('classifyTyre - BLOWOUT (Critical)', () => {
   it('classifies "blowout" in remarks', () => {
     const result = classifyTyre('', 'tyre blowout on highway')
     expect(result.category).toBe('Blowout')
@@ -98,9 +98,9 @@ describe('classifyTyre — BLOWOUT (Critical)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — SEPARATION (Critical)
+// classifyTyre - SEPARATION (Critical)
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — SEPARATION (Critical)', () => {
+describe('classifyTyre - SEPARATION (Critical)', () => {
   it('classifies "tread separation"', () => {
     const result = classifyTyre('', 'tread separation on rear tyre')
     expect(result.category).toBe('Tread Separation')
@@ -127,9 +127,9 @@ describe('classifyTyre — SEPARATION (Critical)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — SIDEWALL (High)
+// classifyTyre - SIDEWALL (High)
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — SIDEWALL (High)', () => {
+describe('classifyTyre - SIDEWALL (High)', () => {
   it('classifies "sidewall damage"', () => {
     const result = classifyTyre('', 'sidewall damage noted on inspection')
     expect(result.category).toBe('Sidewall Damage')
@@ -162,9 +162,9 @@ describe('classifyTyre — SIDEWALL (High)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — PUNCTURE (Medium)
+// classifyTyre - PUNCTURE (Medium)
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — PUNCTURE (Medium)', () => {
+describe('classifyTyre - PUNCTURE (Medium)', () => {
   it('classifies "puncture" in remarks', () => {
     const result = classifyTyre('', 'puncture on rear left tyre')
     expect(result.category).toBe('Puncture')
@@ -209,9 +209,9 @@ describe('classifyTyre — PUNCTURE (Medium)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — WEAR (Low)
+// classifyTyre - WEAR (Low)
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — WEAR (Low)', () => {
+describe('classifyTyre - WEAR (Low)', () => {
   it('classifies "worn out" tyre', () => {
     const result = classifyTyre('', 'worn out, replace immediately')
     expect(result.category).toBe('Normal Wear')
@@ -250,9 +250,9 @@ describe('classifyTyre — WEAR (Low)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — HEAT (High)
+// classifyTyre - HEAT (High)
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — HEAT (High)', () => {
+describe('classifyTyre - HEAT (High)', () => {
   it('classifies "overheat" damage', () => {
     const result = classifyTyre('', 'tyre overheated due to long run')
     expect(result.category).toBe('Heat / Overload Damage')
@@ -279,9 +279,9 @@ describe('classifyTyre — HEAT (High)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — IMPACT (High)
+// classifyTyre - IMPACT (High)
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — IMPACT (High)', () => {
+describe('classifyTyre - IMPACT (High)', () => {
   it('classifies "pothole" impact', () => {
     const result = classifyTyre('', 'tyre damaged by pothole')
     expect(result.category).toBe('Impact Damage')
@@ -302,9 +302,9 @@ describe('classifyTyre — IMPACT (High)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — REPLACEMENT (Low)
+// classifyTyre - REPLACEMENT (Low)
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — REPLACEMENT (Low)', () => {
+describe('classifyTyre - REPLACEMENT (Low)', () => {
   it('classifies "scheduled replacement"', () => {
     const result = classifyTyre('', 'scheduled replacement at 60k km')
     expect(result.category).toBe('Scheduled Replacement')
@@ -331,9 +331,9 @@ describe('classifyTyre — REPLACEMENT (Low)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — Confidence levels
+// classifyTyre - Confidence levels
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — Confidence levels', () => {
+describe('classifyTyre - Confidence levels', () => {
   it('returns Low confidence when only 1 pattern matches', () => {
     const result = classifyTyre('', 'sidewall damage')
     expect(result.confidence).toBe('Low')
@@ -366,9 +366,9 @@ describe('classifyTyre — Confidence levels', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — Edge cases
+// classifyTyre - Edge cases
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — Edge cases', () => {
+describe('classifyTyre - Edge cases', () => {
   it('returns Unclassified for empty string inputs', () => {
     const result = classifyTyre('', '')
     expect(result.category).toBe('Unclassified')
@@ -437,9 +437,9 @@ describe('classifyTyre — Edge cases', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — Competing pattern matches (higher-weight wins)
+// classifyTyre - Competing pattern matches (higher-weight wins)
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — Competing pattern matches', () => {
+describe('classifyTyre - Competing pattern matches', () => {
   it('BLOWOUT wins over PUNCTURE when both present (weight 10 vs 5)', () => {
     const result = classifyTyre('', 'nail puncture caused blowout on highway')
     expect(result.category).toBe('Blowout')
@@ -469,9 +469,9 @@ describe('classifyTyre — Competing pattern matches', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — Abbreviation expansion
+// classifyTyre - Abbreviation expansion
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — Abbreviation expansion', () => {
+describe('classifyTyre - Abbreviation expansion', () => {
   it('expands s/w to Sidewall → classifies as Sidewall Damage', () => {
     const result = classifyTyre('', 's/w cut on driver side')
     expect(result.category).toBe('Sidewall Damage')
@@ -505,9 +505,9 @@ describe('classifyTyre — Abbreviation expansion', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// classifyTyre — Text cleaning (junk removal)
+// classifyTyre - Text cleaning (junk removal)
 // ─────────────────────────────────────────────────────────────────────────────
-describe('classifyTyre — Text cleaning', () => {
+describe('classifyTyre - Text cleaning', () => {
   it('strips repeated slashes from remarks_cleaned', () => {
     const result = classifyTyre('', '/// flat tyre on rear')
     expect(result.remarks_cleaned).not.toMatch(/\/{2,}/)
@@ -623,7 +623,7 @@ describe('RISK_COLOUR and CONFIDENCE_COLOUR constants', () => {
   })
 })
 
-describe('classifyTyre — Arabic and Urdu terms', () => {
+describe('classifyTyre - Arabic and Urdu terms', () => {
   it('classifies Arabic blowout انفجار', () => {
     const r = classifyTyre('', 'انفجار في الإطار الأمامي')
     expect(r.category).toBe('Blowout')

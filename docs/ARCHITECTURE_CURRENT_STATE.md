@@ -1,4 +1,4 @@
-# TyrePulse — Current State Architecture
+# TyrePulse - Current State Architecture
 
 > **Status:** Step 0 baseline (as-built). This document describes the system **exactly as it exists today**, before the Go-backend migration. It is the reference point for every cutover in `docs/GO_BACKEND_MIGRATION_PLAN.md` and every risk in `docs/SECURITY_RISK_REGISTER.md`.
 >
@@ -82,7 +82,7 @@ There is **no `src/api/` or service API layer**. The web app contains **69 files
 |---|---|---|
 | Identity / Users | `profiles`, `module_permissions` | `profiles` carries `role`, `approved`, `locked`, `site`, `country[]`. |
 | Organisation / Scope | `organisations`, `sites` | `organisations` **exists but has 0 rows** and is **not wired into RLS**; scoping is geographic (`site` + `country[]`). |
-| Assets / Fleet | `vehicle_fleet` (canonical), `fleet_master` (legacy) | Duplicate masters — see §5. |
+| Assets / Fleet | `vehicle_fleet` (canonical), `fleet_master` (legacy) | Duplicate masters - see §5. |
 | Tyres | `tyre_records`, `tyre_specifications`*, `tyre_rotations`* | `*` = newer tables. |
 | Inspections | `inspections`, `inspection_schedules`*, `inspection_audit_log` | Tyre data stored as **JSONB `tyre_conditions`** (GIN-indexed). |
 | Stock / Inventory | `stock_records` (canonical), `stock_movements` (append-only audit), `stock` (legacy) | See §5. |
@@ -96,7 +96,7 @@ There is **no `src/api/` or service API layer**. The web app contains **69 files
 | Alerts / Notifications | `alerts`, `alert_thresholds`, `notifications` | |
 | Reports | `report_schedules` | |
 | AI / Knowledge | `ai_response_cache`, `ai_usage_log`, `knowledge_documents`, `document_chunks` | RAG corpus + cost log. |
-| Audit | `audit_log` (v1), `audit_log_v2` (enriched), `inspection_audit_log`, `accident_audit_log` | **Four** audit surfaces — see §5. |
+| Audit | `audit_log` (v1), `audit_log_v2` (enriched), `inspection_audit_log`, `accident_audit_log` | **Four** audit surfaces - see §5. |
 | Uploads | `pending_uploads` | |
 | Config | `system_config` | |
 
@@ -118,7 +118,7 @@ Detailed transform, dedupe keys, and reconciliation are in `docs/LEGACY_DATA_MAP
 
 ## 6. Authentication & Authorization Flow
 
-### 6.1 Client (web) — `src/contexts/AuthContext.jsx`
+### 6.1 Client (web) - `src/contexts/AuthContext.jsx`
 
 1. Sign-in via Supabase Auth → JWT.
 2. On session load, three parallel calls:
@@ -129,9 +129,9 @@ Detailed transform, dedupe keys, and reconciliation are in `docs/LEGACY_DATA_MAP
    - Immediately blocks if `locked === true` or `approved === false`.
    - **MFA**: checks `getAuthenticatorAssuranceLevel()`; returns `{ mfaRequired: true }` until satisfied.
    - **30-minute in-memory idle timeout** (`IDLE_MS = 30 * 60 * 1000`).
-4. **Hardcoded `ROLE_DEFAULTS`** map (Admin / Manager / Director / Inspector / Tyre Man / Reporter / Driver) provides default module visibility. This is **UX gating, not a security control** — see Security Register.
+4. **Hardcoded `ROLE_DEFAULTS`** map (Admin / Manager / Director / Inspector / Tyre Man / Reporter / Driver) provides default module visibility. This is **UX gating, not a security control** - see Security Register.
 
-### 6.2 Real authorization boundary — Postgres RLS
+### 6.2 Real authorization boundary - Postgres RLS
 
 All enforcement that matters happens in RLS policies (V40/V41 hardening). Helper functions:
 
@@ -144,7 +144,7 @@ All enforcement that matters happens in RLS policies (V40/V41 hardening). Helper
 
 **Scope is geographic, not organisational:** policies filter on `site` and `country[]` columns on `profiles`. `organisations` exists but is **empty and not referenced by RLS**.
 
-### 6.3 Edge Function authorization — `supabase/functions/_shared/auth.ts`
+### 6.3 Edge Function authorization - `supabase/functions/_shared/auth.ts`
 
 `requireApprovedRole(req, allowedRoles)`:
 1. Extracts `Bearer` token; 401 if missing.
@@ -160,7 +160,7 @@ CORS is origin-allowlisted (`ALLOWED_ORIGINS` env, default `tyrepulse.app` + loc
 
 ## 7. File-Upload & Storage Flow
 
-### 7.1 Storage reference model — `src/lib/storageRefs.js` / `mobile/lib/storageRefs.ts`
+### 7.1 Storage reference model - `src/lib/storageRefs.js` / `mobile/lib/storageRefs.ts`
 
 - Files are stored in **private** Supabase Storage buckets.
 - The database persists an **opaque reference** `tp-storage://<bucket>/<path>`, never a public URL.
@@ -170,10 +170,10 @@ CORS is origin-allowlisted (`ALLOWED_ORIGINS` env, default `tyrepulse.app` + loc
   - Returns `null` (and warns) on failure.
 - `resolveStorageUrls()` batches and filters nulls.
 
-### 7.2 Mobile upload — `mobile/lib/photoUpload.ts`
+### 7.2 Mobile upload - `mobile/lib/photoUpload.ts`
 
 - Uploads to private buckets; persists `storageRef` + returns signed URLs.
-- **Accident-photos bucket is now private** (previously public via `getPublicUrl()` — fixed).
+- **Accident-photos bucket is now private** (previously public via `getPublicUrl()` - fixed).
 
 > **Gap:** server-side MIME/size validation is not enforced; uploads are validated client-side only. Tracked in the Security Register.
 
@@ -183,9 +183,9 @@ CORS is origin-allowlisted (`ALLOWED_ORIGINS` env, default `tyrepulse.app` + loc
 
 | Queue | Storage key | Mechanism |
 |---|---|---|
-| Inspections | `tp_inspection_queue_v1` (AsyncStorage) | `mobile/lib/offlineQueue.ts` — submit-or-queue, auto-flush on reconnect. |
-| Generic records | `tp_record_queue_v1` (SecureStore) | `mobile/lib/recordQueue.ts` — `saveRecord(table, payload)` tries `supabase.from(table).insert(payload)` immediately; on any error enqueues and retries on sync. |
-| PWA inspections (web) | Workbox background sync | `src/lib/offlineQueue.js` — POST queued `NetworkOnly` + background sync. |
+| Inspections | `tp_inspection_queue_v1` (AsyncStorage) | `mobile/lib/offlineQueue.ts` - submit-or-queue, auto-flush on reconnect. |
+| Generic records | `tp_record_queue_v1` (SecureStore) | `mobile/lib/recordQueue.ts` - `saveRecord(table, payload)` tries `supabase.from(table).insert(payload)` immediately; on any error enqueues and retries on sync. |
+| PWA inspections (web) | Workbox background sync | `src/lib/offlineQueue.js` - POST queued `NetworkOnly` + background sync. |
 
 **Critical issue:** `recordQueue.ts` lets the **client choose the destination table** (`saveRecord(table, …)`), and `syncRecordQueue()` replays `supabase.from(item.table).insert(item.payload)`. A mobile client must never decide which table to write to. The Go API replaces this with typed, server-routed commands. See Security Register **R-03**.
 
@@ -200,7 +200,7 @@ CORS is origin-allowlisted (`ALLOWED_ORIGINS` env, default `tyrepulse.app` + loc
 | `generate-embedding` | OpenAI `text-embedding-3-small`. | `requireApprovedRole`; OpenAI key server-side only. |
 | `_shared/auth.ts` | Shared CORS + `requireApprovedRole`. | See §6.3. |
 
-All AI/email/embedding provider keys live **only** in Edge Function environment — never shipped to clients.
+All AI/email/embedding provider keys live **only** in Edge Function environment - never shipped to clients.
 
 ---
 
@@ -209,8 +209,8 @@ All AI/email/embedding provider keys live **only** in Edge Function environment 
 | Secret | Location | Status |
 |---|---|---|
 | Supabase URL | `VITE_SUPABASE_URL` (web), `EXPO_PUBLIC_SUPABASE_URL` (mobile) | OK (public). |
-| Supabase **anon** key | `VITE_SUPABASE_ANON_KEY`; **hardcoded in `mobile/app.json` and `mobile/eas.json`** | Public by design (RLS-protected) but **should be EAS Secrets** — **OPEN**, R-01. |
-| Supabase **service_role** key | Edge Function env only | Correct — never client-exposed. |
+| Supabase **anon** key | `VITE_SUPABASE_ANON_KEY`; **hardcoded in `mobile/app.json` and `mobile/eas.json`** | Public by design (RLS-protected) but **should be EAS Secrets** - **OPEN**, R-01. |
+| Supabase **service_role** key | Edge Function env only | Correct - never client-exposed. |
 | Anthropic / OpenAI / Resend keys | Edge Function env only | Correct. |
 
 `.env.example` documents `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`.
@@ -224,9 +224,9 @@ All AI/email/embedding provider keys live **only** in Edge Function environment 
 | `*.supabase.co/rest/*` | NetworkFirst | 5 min | **Caches authenticated REST/user data** in a generic browser cache. |
 | `*.supabase.co/auth/*` | NetworkFirst | 60 s | Caches auth responses. |
 | `*.supabase.co/storage/*` | CacheFirst | 24 h | Caches (signed) storage objects. |
-| POST inspections | NetworkOnly + background sync | — | Correct for offline writes. |
+| POST inspections | NetworkOnly + background sync | - | Correct for offline writes. |
 
-`registerType: 'prompt'`, large-bundle allowance raised above the 2 MB Workbox default. **Caching authenticated REST/auth/user data in a shared cache is a confidentiality risk** — Security Register **R-02**.
+`registerType: 'prompt'`, large-bundle allowance raised above the 2 MB Workbox default. **Caching authenticated REST/auth/user data in a shared cache is a confidentiality risk** - Security Register **R-02**.
 
 ---
 
@@ -235,7 +235,7 @@ All AI/email/embedding provider keys live **only** in Edge Function environment 
 - **48 fragmented root SQL files**: `MIGRATIONS_V1` … `MIGRATIONS_V41` plus `MASTER_MIGRATION.sql` (**canonical, 1039 lines**), `MASTER_ENGINE.sql`, `MIGRATIONS_SAFE.sql`, `BACKEND_RLS.sql`, `SUPABASE_SCHEMA.sql`, `MIGRATION_ADMIN_PROFILES.sql`.
 - No single linear, traceable migration chain. `MASTER_MIGRATION.sql` is the canonical schema; `MIGRATIONS_SAFE.sql` carries legacy variants.
 - V40 (`MIGRATIONS_V40_SECURITY_HARDENING.sql`) and V41 (`MIGRATIONS_V41_RLS_POLICY_CLEANUP.sql`) hardened RLS helpers and policies.
-- Consolidation into one ordered, version-controlled migration set is a Step-1 prerequisite — Security Register **R-06**.
+- Consolidation into one ordered, version-controlled migration set is a Step-1 prerequisite - Security Register **R-06**.
 
 ---
 
@@ -252,12 +252,12 @@ All AI/email/embedding provider keys live **only** in Edge Function environment 
 
 ## 14. Architectural Risks (Summary)
 
-1. **No API boundary** — clients are coupled to the physical schema; the database is the only authorization layer.
+1. **No API boundary** - clients are coupled to the physical schema; the database is the only authorization layer.
 2. **Client decides write targets** (`recordQueue.ts` arbitrary tables).
 3. **Authenticated data cached** by the PWA service worker.
 4. **Source-of-truth ambiguity** across duplicate masters and four audit logs.
 5. **Fragmented migration history** (48 files).
 6. **No server-side upload validation** (MIME/size).
-7. **Multi-tenancy not enforced** — `organisations` empty and unused; scope is geographic text columns.
+7. **Multi-tenancy not enforced** - `organisations` empty and unused; scope is geographic text columns.
 
 Each maps to a mitigation in `docs/SECURITY_RISK_REGISTER.md` and a cutover in `docs/GO_BACKEND_MIGRATION_PLAN.md`.

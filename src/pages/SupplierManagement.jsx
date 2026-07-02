@@ -519,13 +519,13 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
                   const riskColor = { High: 'text-red-400', Critical: 'text-red-500', Medium: 'text-amber-400', Low: 'text-emerald-400' }[r.risk_level] || 'text-gray-500'
                   return (
                     <tr key={r.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                      <td className="px-3 py-2 text-gray-300 font-mono truncate max-w-[80px]">{r.serial_number || '—'}</td>
-                      <td className="px-3 py-2 text-gray-300">{r.size || '—'}</td>
-                      <td className="px-3 py-2 text-gray-300">{r.asset_no || '—'}</td>
-                      <td className="px-3 py-2 text-gray-300">{r.site || '—'}</td>
+                      <td className="px-3 py-2 text-gray-300 font-mono truncate max-w-[80px]">{r.serial_number || '-'}</td>
+                      <td className="px-3 py-2 text-gray-300">{r.size || '-'}</td>
+                      <td className="px-3 py-2 text-gray-300">{r.asset_no || '-'}</td>
+                      <td className="px-3 py-2 text-gray-300">{r.site || '-'}</td>
                       <td className="px-3 py-2"><CpkBadge cpk={cpk} currency={currency} /></td>
-                      <td className={`px-3 py-2 ${riskColor}`}>{r.risk_level || '—'}</td>
-                      <td className="px-3 py-2 text-gray-500">{r.issue_date ? new Date(r.issue_date).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'2-digit' }) : '—'}</td>
+                      <td className={`px-3 py-2 ${riskColor}`}>{r.risk_level || '-'}</td>
+                      <td className="px-3 py-2 text-gray-500">{r.issue_date ? new Date(r.issue_date).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'2-digit' }) : '-'}</td>
                     </tr>
                   )
                 })}
@@ -609,7 +609,7 @@ export default function SupplierManagement() {
   const [filterCountry, setFilterCountry] = useState('All')
   const [filterSite, setFilterSite] = useState('All')
   const [filterRating, setFilterRating] = useState('All')
-  // ratings: { [brand]: { label, notes, id } } — persisted in supplier_ratings
+  // ratings: { [brand]: { label, notes, id } } - persisted in supplier_ratings
   const [ratings, setRatings] = useState({})
   const [ratingsError, setRatingsError] = useState(null)
   const [selectedSupplier, setSelectedSupplier] = useState(null)
@@ -768,7 +768,7 @@ export default function SupplierManagement() {
     })
   }
 
-  // Contract management — returns error string or null
+  // Contract management - returns error string or null
   async function saveContract(contract) {
     const payload = pick({
       supplier_name: contract.supplier_name?.trim() || '',
@@ -857,11 +857,11 @@ export default function SupplierManagement() {
     if (best && fleetAvgCpk > 0) {
       const pct = ((fleetAvgCpk - best.avgCpk) / fleetAvgCpk * 100).toFixed(1)
       if (parseFloat(pct) > 5) {
-        recs.push({ type: 'increase', brand: best.brand, msg: `Increase ${best.brand} usage — CPK is ${fmtCpk(best.avgCpk, activeCurrency)}, which is ${pct}% better than fleet average`, impact: 'High' })
+        recs.push({ type: 'increase', brand: best.brand, msg: `Increase ${best.brand} usage - CPK is ${fmtCpk(best.avgCpk, activeCurrency)}, which is ${pct}% better than fleet average`, impact: 'High' })
       }
     }
     allMetrics.filter(m => m.failureRate > FAILURE_THRESHOLD).forEach(m => {
-      recs.push({ type: 'review', brand: m.brand, msg: `Review ${m.brand} — failure rate is ${(m.failureRate * 100).toFixed(1)}%, above ${(FAILURE_THRESHOLD * 100).toFixed(0)}% threshold`, impact: 'Critical' })
+      recs.push({ type: 'review', brand: m.brand, msg: `Review ${m.brand} - failure rate is ${(m.failureRate * 100).toFixed(1)}%, above ${(FAILURE_THRESHOLD * 100).toFixed(0)}% threshold`, impact: 'Critical' })
     })
     if (worst && best && worst.brand !== best.brand && worst.avgCpk != null && best.avgCpk != null) {
       const annualRecs = worst.recs.length
@@ -888,7 +888,7 @@ export default function SupplierManagement() {
     const topSizes = Object.entries(sizeMap).slice(0, 2)
     topSizes.forEach(([sz, info]) => {
       if (info.cpk != null) {
-        recs.push({ type: 'consolidate', brand: info.brand, msg: `Consider consolidating ${sz} procurement to ${info.brand} — best CPK for this size at ${fmtCpk(info.cpk, activeCurrency)}`, impact: 'Medium' })
+        recs.push({ type: 'consolidate', brand: info.brand, msg: `Consider consolidating ${sz} procurement to ${info.brand} - best CPK for this size at ${fmtCpk(info.cpk, activeCurrency)}`, impact: 'Medium' })
       }
     })
     return recs.slice(0, 8)
@@ -1027,10 +1027,10 @@ export default function SupplierManagement() {
         <KpiCard icon={Star} label="Preferred" value={kpiSummary.preferredCount} sub={`of ${kpiSummary.total} suppliers`} color="text-emerald-400" />
         <KpiCard icon={Target} label="CPK Range"
           value={kpiSummary.cpkMin != null ? `${fmtCpk(kpiSummary.cpkMin, activeCurrency).split(' ')[1]}` : 'N/A'}
-          sub={kpiSummary.cpkMax != null ? `to ${fmtCpk(kpiSummary.cpkMax, activeCurrency)}` : '—'}
+          sub={kpiSummary.cpkMax != null ? `to ${fmtCpk(kpiSummary.cpkMax, activeCurrency)}` : '-'}
           color="text-purple-400" />
-        <KpiCard icon={Award} label="Best CPK" value={kpiSummary.best?.brand || 'N/A'} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : '—'} color="text-emerald-400" />
-        <KpiCard icon={AlertTriangle} label="Worst CPK" value={kpiSummary.worst?.brand || 'N/A'} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : '—'} color="text-red-400" />
+        <KpiCard icon={Award} label="Best CPK" value={kpiSummary.best?.brand || 'N/A'} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : '-'} color="text-emerald-400" />
+        <KpiCard icon={AlertTriangle} label="Worst CPK" value={kpiSummary.worst?.brand || 'N/A'} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : '-'} color="text-red-400" />
       </div>
 
       {/* Ratings persistence error banner */}
@@ -1423,11 +1423,11 @@ export default function SupplierManagement() {
                         return (
                           <tr key={c.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
                             <td className="px-4 py-3 text-white font-medium">{c.supplier_name}</td>
-                            <td className="px-4 py-3 text-gray-400 text-xs">{c.contract_start || '—'}</td>
-                            <td className="px-4 py-3 text-gray-400 text-xs">{c.contract_end || '—'}</td>
-                            <td className="px-4 py-3 text-gray-300">{c.payment_terms || '—'}</td>
-                            <td className="px-4 py-3 text-gray-300">{c.price_per_unit ? fmtCurrency(Number(c.price_per_unit), activeCurrency) : '—'}</td>
-                            <td className="px-4 py-3 text-gray-300">{c.min_order || '—'}</td>
+                            <td className="px-4 py-3 text-gray-400 text-xs">{c.contract_start || '-'}</td>
+                            <td className="px-4 py-3 text-gray-400 text-xs">{c.contract_end || '-'}</td>
+                            <td className="px-4 py-3 text-gray-300">{c.payment_terms || '-'}</td>
+                            <td className="px-4 py-3 text-gray-300">{c.price_per_unit ? fmtCurrency(Number(c.price_per_unit), activeCurrency) : '-'}</td>
+                            <td className="px-4 py-3 text-gray-300">{c.min_order || '-'}</td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}>
                                 {status === 'Expiring Soon' && <AlertTriangle size={9} />}
@@ -1460,7 +1460,7 @@ export default function SupplierManagement() {
                 <div>
                   <p className="text-amber-400 font-medium text-sm">Contracts Expiring Soon</p>
                   <p className="text-amber-300/70 text-xs mt-1">
-                    {contracts.filter(c => getContractStatus(c) === 'Expiring Soon').map(c => c.supplier_name).join(', ')} — renewal action required within 30 days
+                    {contracts.filter(c => getContractStatus(c) === 'Expiring Soon').map(c => c.supplier_name).join(', ')} - renewal action required within 30 days
                   </p>
                 </div>
               </div>

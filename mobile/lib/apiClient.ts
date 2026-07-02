@@ -1,5 +1,5 @@
 /**
- * apiClient — auth-aware client for the TyrePulse Go API (/api/v1).
+ * apiClient - auth-aware client for the TyrePulse Go API (/api/v1).
  *
  * Step 1 foundation for the backend migration. NOT yet wired into screens:
  * the app keeps using Supabase directly until each module is cut over. As
@@ -66,7 +66,7 @@ async function authHeader(): Promise<Record<string, string>> {
 
 async function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
   if (!BASE_URL) {
-    throw new ApiError('not_configured', 'EXPO_PUBLIC_API_BASE_URL is not set — Go API not wired in this build.', 0)
+    throw new ApiError('not_configured', 'EXPO_PUBLIC_API_BASE_URL is not set - Go API not wired in this build.', 0)
   }
   const qs = opts.query
     ? '?' + new URLSearchParams(

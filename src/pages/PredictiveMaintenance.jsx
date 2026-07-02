@@ -62,7 +62,7 @@ function daysBetween(a, b) {
 }
 
 function fmt(n, dec = 0) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return Number(n).toLocaleString('en-US', {
     minimumFractionDigits: dec,
     maximumFractionDigits: dec,
@@ -70,12 +70,12 @@ function fmt(n, dec = 0) {
 }
 
 function fmtCurrency(n, currency = 'SAR') {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return `${currency} ${fmt(n, 0)}`
 }
 
 function fmtDate(date) {
-  if (!date) return '—'
+  if (!date) return '-'
   return new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
@@ -177,11 +177,11 @@ function buildPredictions(records, fleetMaster, fleetAvgCost, fleetAvgKmLife, fl
       predictions.push({
         id: tyre.id,
         asset_no: assetNo,
-        site: tyre.site ?? master?.site ?? '—',
-        vehicle_type: master?.vehicle_type ?? '—',
-        position: tyre.position ?? '—',
-        brand: tyre.brand ?? '—',
-        tyre_serial: tyre.tyre_serial ?? '—',
+        site: tyre.site ?? master?.site ?? '-',
+        vehicle_type: master?.vehicle_type ?? '-',
+        position: tyre.position ?? '-',
+        brand: tyre.brand ?? '-',
+        tyre_serial: tyre.tyre_serial ?? '-',
         tread_depth: tyre.tread_depth ?? null,
         pressure_reading: tyre.pressure_reading ?? null,
         km_remaining: Math.round(remainingKm),
@@ -429,7 +429,7 @@ export default function PredictiveMaintenance() {
 
   // ── Derived lists ─────────────────────────────────────────────────────────────
   const uniqueSites = useMemo(() => {
-    const s = new Set(allPredictions.map(p => p.site).filter(v => v && v !== '—'))
+    const s = new Set(allPredictions.map(p => p.site).filter(v => v && v !== '-'))
     return ['all', ...Array.from(s).sort()]
   }, [allPredictions])
 
@@ -595,7 +595,7 @@ export default function PredictiveMaintenance() {
       ...p,
       due_date: fmtDate(p.due_date),
       estimated_cost: `${activeCurrency} ${fmt(p.estimated_cost, 0)}`,
-      tread_depth: p.tread_depth != null ? `${p.tread_depth} mm` : '—',
+      tread_depth: p.tread_depth != null ? `${p.tread_depth} mm` : '-',
     }))
     exportToPdf(
       rows,
@@ -611,7 +611,7 @@ export default function PredictiveMaintenance() {
         { key: 'estimated_cost', header: 'Est. Cost' },
         { key: 'days_away',      header: 'Days Away' },
       ],
-      'Predictive Maintenance – Upcoming Tyre Replacements',
+      'Predictive Maintenance - Upcoming Tyre Replacements',
       `Predictive_Maintenance_${new Date().toISOString().slice(0,10)}`,
       'landscape',
     )
@@ -656,7 +656,7 @@ export default function PredictiveMaintenance() {
           <div className="flex items-center gap-2 flex-wrap">
             {!fleetMasterAvailable && (
               <span className="text-xs text-amber-400 border border-amber-800/40 bg-amber-900/20 px-2 py-1 rounded-lg">
-                Fleet master unavailable — using tyre records only
+                Fleet master unavailable - using tyre records only
               </span>
             )}
             <button onClick={handleExcelExport} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
@@ -691,14 +691,14 @@ export default function PredictiveMaintenance() {
             />
             <KpiCard
               icon={Clock}
-              label="Replacements due 31–90 days"
+              label="Replacements due 31-90 days"
               value={`${fmt(kpis.soon.length)} tyres`}
               sub={fmtCurrency(kpis.soonCost, activeCurrency)}
               color="amber"
             />
             <KpiCard
               icon={CheckCircle}
-              label="Replacements due 91–365 days"
+              label="Replacements due 91-365 days"
               value={`${fmt(kpis.monitor.length)} tyres`}
               sub={fmtCurrency(kpis.monitorCost, activeCurrency)}
               color="green"
@@ -834,9 +834,9 @@ export default function PredictiveMaintenance() {
           {/* ── Quarterly forecast cards ────────────────────────────────────── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: 'Q1 Forecast (Months 1–3)',  value: quarterlyForecast.q1,    color: 'from-blue-900/30 to-blue-800/10 border-blue-800/40' },
-              { label: 'Q2 Forecast (Months 4–6)',  value: quarterlyForecast.q2,    color: 'from-purple-900/30 to-purple-800/10 border-purple-800/40' },
-              { label: 'H2 Forecast (Months 7–12)', value: quarterlyForecast.h2,    color: 'from-cyan-900/30 to-cyan-800/10 border-cyan-800/40' },
+              { label: 'Q1 Forecast (Months 1-3)',  value: quarterlyForecast.q1,    color: 'from-blue-900/30 to-blue-800/10 border-blue-800/40' },
+              { label: 'Q2 Forecast (Months 4-6)',  value: quarterlyForecast.q2,    color: 'from-purple-900/30 to-purple-800/10 border-purple-800/40' },
+              { label: 'H2 Forecast (Months 7-12)', value: quarterlyForecast.h2,    color: 'from-cyan-900/30 to-cyan-800/10 border-cyan-800/40' },
               { label: 'Annual Total',               value: quarterlyForecast.total, color: 'from-green-900/30 to-green-800/10 border-green-800/40' },
             ].map(card => (
               <div key={card.label} className={`bg-gradient-to-br ${card.color} border rounded-xl p-4`}>
@@ -891,7 +891,7 @@ export default function PredictiveMaintenance() {
                           <td className="py-2 px-2 text-center">
                             {p.tread_depth != null
                               ? <span className={`font-semibold ${p.tread_depth < URGENT_TREAD_MM ? 'text-red-400' : p.tread_depth < SOON_TREAD_MM ? 'text-amber-400' : 'text-green-400'}`}>{p.tread_depth}</span>
-                              : <span className="text-gray-600">—</span>
+                              : <span className="text-gray-600">-</span>
                             }
                           </td>
                           <td className="py-2 px-2 text-right text-gray-300">{fmt(p.km_remaining)}</td>
@@ -968,7 +968,7 @@ export default function PredictiveMaintenance() {
           {siteBreakdown.length > 0 && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
               <div className="mb-4">
-                <h2 className="text-sm font-semibold text-white">Site Breakdown — 12-Month Forecast</h2>
+                <h2 className="text-sm font-semibold text-white">Site Breakdown - 12-Month Forecast</h2>
                 <p className="text-xs text-gray-500">Replacement demand and budget allocation by site</p>
               </div>
               <div className="overflow-x-auto">
@@ -1089,7 +1089,7 @@ export default function PredictiveMaintenance() {
                     },
                     {
                       title: 'Urgency Classification',
-                      body: `Tread depth < ${URGENT_TREAD_MM}mm OR due in ≤${URGENT_DAYS} days → Urgent. Due in ${URGENT_DAYS + 1}–${SOON_DAYS} days → Soon. Otherwise → Monitor.`,
+                      body: `Tread depth < ${URGENT_TREAD_MM}mm OR due in ≤${URGENT_DAYS} days → Urgent. Due in ${URGENT_DAYS + 1}-${SOON_DAYS} days → Soon. Otherwise → Monitor.`,
                     },
                     {
                       title: 'Cost Estimation',

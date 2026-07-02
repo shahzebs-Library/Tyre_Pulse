@@ -1,5 +1,5 @@
 /**
- * useRealtime — Supabase postgres_changes subscriptions that auto-invalidate
+ * useRealtime - Supabase postgres_changes subscriptions that auto-invalidate
  * TanStack Query caches. Zero polling. Instant UI updates on any data change.
  *
  * Usage: call useRealtimeSync() once inside Layout.jsx (always-mounted).
@@ -45,7 +45,7 @@ function subscribeTable(qc, table, queryKeys) {
 }
 
 /**
- * useRealtimeSync — call once in Layout.jsx.
+ * useRealtimeSync - call once in Layout.jsx.
  * Subscribes to all core tables. Automatically reconnects on mount.
  */
 export function useRealtimeSync() {
@@ -71,7 +71,7 @@ export function useRealtimeSync() {
 }
 
 /**
- * useTableRealtime — subscribe to a specific table in a single component.
+ * useTableRealtime - subscribe to a specific table in a single component.
  * Use when a page needs a focused subscription beyond the global ones.
  */
 export function useTableRealtime(table, queryKeys) {

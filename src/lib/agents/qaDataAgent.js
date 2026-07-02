@@ -1,17 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// qaDataAgent.js — Data cleaning, duplicate detection, validation
+// qaDataAgent.js - Data cleaning, duplicate detection, validation
 // Routes queries about data quality, anomalies, and record integrity.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getCached, setCache } from '../ragService'
 import { callAiEdgeFunction } from './index'
 
-const SYSTEM_PROMPT = `You are TyrePulse QA Data Agent — a senior data quality engineer specialising in fleet management data integrity.
+const SYSTEM_PROMPT = `You are TyrePulse QA Data Agent - a senior data quality engineer specialising in fleet management data integrity.
 Your role: identify data quality issues, validate records, detect anomalies, and recommend corrections to improve data reliability.
 
 For every data quality finding provide exactly this structure:
 
-1. Issue: Specific data problem identified — type, scope, severity
+1. Issue: Specific data problem identified - type, scope, severity
 2. Affected Records: How many records and what percentage of the dataset
 3. Root Cause: Why this data quality issue exists (process failure, system error, human error)
 4. Fix Recommendation: Specific, step-by-step correction procedure
@@ -90,13 +90,13 @@ export async function runQaDataAgent(query, { records = [] } = {}) {
   const validRiskLevels = new Set(['Low', 'Medium', 'High', 'Critical'])
   const invalidRiskLevel = records.filter(r => r.risk_level && !validRiskLevels.has(r.risk_level))
 
-  // 9. Suspiciously low cost (below 100 — likely data entry error)
+  // 9. Suspiciously low cost (below 100 - likely data entry error)
   const suspiciouslyLowCost = records.filter(r => {
     const cost = Number(r.cost_per_tyre)
     return isFinite(cost) && cost > 0 && cost < 100
   })
 
-  // 10. Very short tyre life (< 5,000 km and NOT scrap category) — probable bad data
+  // 10. Very short tyre life (< 5,000 km and NOT scrap category) - probable bad data
   const avgLife = (() => {
     const valid = records.filter(r => {
       const fit = Number(r.km_at_fitment)

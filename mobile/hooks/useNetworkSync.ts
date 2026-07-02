@@ -55,7 +55,7 @@ export function useNetworkSync(): void {
           attemptSync()
         }
       } catch {
-        // Network check failed — device is likely offline; ignore
+        // Network check failed - device is likely offline; ignore
       }
     }, POLL_INTERVAL_MS)
 

@@ -135,7 +135,7 @@ export default function FuelEfficiency() {
         let q = supabase
           .from('tyre_records')
           .select('id,asset_no,serial_number,position,tread_depth,pressure_reading,risk_level,km_at_fitment,km_at_removal,site,country,brand,issue_date')
-        // Null-safe country scope — never silently drop uncategorised rows
+        // Null-safe country scope - never silently drop uncategorised rows
         if (activeCountry && activeCountry !== 'All') q = q.or(`country.eq.${activeCountry},country.is.null`)
         return q.range(from, to)
       })
@@ -241,7 +241,7 @@ export default function FuelEfficiency() {
       if (!map[r.asset_no]) {
         map[r.asset_no] = {
           asset_no: r.asset_no,
-          site: r.site ?? '—',
+          site: r.site ?? '-',
           tyreCount: 0,
           totalPressureDev: 0,
           pressureCount: 0,
@@ -375,7 +375,7 @@ export default function FuelEfficiency() {
     })
   }, [enriched])
 
-  // ── Doughnut – current compliance ─────────────────────────────────────────
+  // ── Doughnut - current compliance ─────────────────────────────────────────
   const complianceDoughnut = useMemo(() => {
     const comp = kpis?.currentCompliancePct ?? 0
     return {
@@ -425,7 +425,7 @@ export default function FuelEfficiency() {
       recs.push({
         icon: AlertTriangle,
         color: 'text-red-400',
-        text: `${worn} tyres at ≤3mm tread depth are costing ~${fmtCur(wornCost, activeCurrency)}/month in excess fuel — replace immediately`,
+        text: `${worn} tyres at ≤3mm tread depth are costing ~${fmtCur(wornCost, activeCurrency)}/month in excess fuel - replace immediately`,
         impact: 'Critical',
       })
     }
@@ -433,7 +433,7 @@ export default function FuelEfficiency() {
       recs.push({
         icon: Wind,
         color: 'text-purple-400',
-        text: `Fleet average pressure deviation of ${kpis.avgDevPct.toFixed(1)}% exceeds 10% threshold — systematic inflation audit required`,
+        text: `Fleet average pressure deviation of ${kpis.avgDevPct.toFixed(1)}% exceeds 10% threshold - systematic inflation audit required`,
         impact: 'High',
       })
     }
@@ -585,7 +585,7 @@ export default function FuelEfficiency() {
       <div className="bg-amber-900/20 border border-amber-700/50 text-amber-200 rounded-xl p-4 flex items-start gap-3">
         <Info className="w-5 h-5 mt-0.5 shrink-0 text-amber-400" />
         <div className="text-sm leading-relaxed">
-          <span className="font-semibold">Modelled estimates — not measured fuel consumption.</span>{' '}
+          <span className="font-semibold">Modelled estimates - not measured fuel consumption.</span>{' '}
           Figures are derived from tyre pressure and tread condition using
           rolling-resistance assumptions ({fmtCur(fuelCostPerLiter, activeCurrency)}/L,
           {' '}{fleetConsumption} L/100km baseline). They indicate the <em>direction and
@@ -803,7 +803,7 @@ export default function FuelEfficiency() {
 
           {/* ── 4. Rolling Resistance by Vehicle ───────────────────────── */}
           {vehicleMetrics.length > 0 && (
-            <ChartCard title="Rolling Resistance Impact by Vehicle" subtitle="Top 20 vehicles — estimated monthly extra fuel cost from under-inflation" icon={BarChart2}>
+            <ChartCard title="Rolling Resistance Impact by Vehicle" subtitle="Top 20 vehicles - estimated monthly extra fuel cost from under-inflation" icon={BarChart2}>
               <div className="h-72">
                 <Bar
                   data={{
@@ -924,8 +924,8 @@ export default function FuelEfficiency() {
                     <tr className="bg-gray-800/50 font-semibold text-white">
                       <td className="px-4 py-3">Total</td>
                       <td className="px-4 py-3 text-right">{siteMetrics.reduce((s, r) => s + r.vehicles, 0)}</td>
-                      <td className="px-4 py-3 text-right">—</td>
-                      <td className="px-4 py-3 text-right">—</td>
+                      <td className="px-4 py-3 text-right">-</td>
+                      <td className="px-4 py-3 text-right">-</td>
                       <td className="px-4 py-3 text-right">{fmt(siteMetrics.reduce((s, r) => s + r.extraFuelMonth, 0))}</td>
                       <td className="px-4 py-3 text-right text-amber-400">{fmtCur(siteMetrics.reduce((s, r) => s + r.totalExtraCostMonth, 0), activeCurrency)}</td>
                       <td className="px-4 py-3 text-right text-red-400">{fmtCur(siteMetrics.reduce((s, r) => s + r.annualExtraCost, 0), activeCurrency)}</td>
@@ -945,7 +945,7 @@ export default function FuelEfficiency() {
             >
               <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
                 <TrendingDown className="w-5 h-5 text-green-400" />
-                <h3 className="font-semibold text-white">Fuel Savings Opportunity — Top 10 Vehicles</h3>
+                <h3 className="font-semibold text-white">Fuel Savings Opportunity - Top 10 Vehicles</h3>
                 <span className="ml-auto text-xs text-gray-500">Highest improvement potential</span>
               </div>
               <div className="overflow-x-auto">
@@ -991,7 +991,7 @@ export default function FuelEfficiency() {
           {monthlyTrend.length > 0 && (
             <ChartCard
               title="12-Month Fuel Impact Trend"
-              subtitle="Estimated monthly fuel waste cost based on historical tyre data — shows fleet trajectory"
+              subtitle="Estimated monthly fuel waste cost based on historical tyre data - shows fleet trajectory"
               icon={TrendingUp}
             >
               <div className="h-72">
@@ -1041,7 +1041,7 @@ export default function FuelEfficiency() {
             >
               <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
                 <Leaf className="w-5 h-5 text-green-400" />
-                Environmental Impact — Excess Emissions from Poor Tyre Maintenance
+                Environmental Impact - Excess Emissions from Poor Tyre Maintenance
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <EnvCard

@@ -27,8 +27,8 @@ ChartJS.register(
 )
 
 // ── Compliance constants ───────────────────────────────────────────────────────
-const LEGAL_MIN_TREAD   = 1.6  // mm — general legal minimum
-const FLEET_MIN_TREAD   = 3.0  // mm — heavy commercial / fleet standard
+const LEGAL_MIN_TREAD   = 1.6  // mm - general legal minimum
+const FLEET_MIN_TREAD   = 3.0  // mm - heavy commercial / fleet standard
 const PRESSURE_TOLERANCE = 0.10 // ±10%
 const INSPECTION_MAX_DAYS = 30  // days
 const INSPECTION_DUE_DAYS = 45  // warn before overdue
@@ -346,7 +346,7 @@ export default function ComplianceDashboard() {
     const total       = filteredTyres.length
     const withReading = filteredTyres.filter(r => r.pressure_reading != null && Number(r.pressure_reading) > 0)
     const noReading   = filteredTyres.filter(r => !r.pressure_reading || Number(r.pressure_reading) === 0)
-    // Without a nominal value per tyre, flag any reading outside a general band 85–130 PSI as anomaly
+    // Without a nominal value per tyre, flag any reading outside a general band 85-130 PSI as anomaly
     const compliant   = withReading.filter(r => {
       const v = Number(r.pressure_reading)
       return v >= 85 && v <= 130
@@ -384,16 +384,16 @@ export default function ComplianceDashboard() {
       const status = inspectionStatus(days)
       return {
         asset_no,
-        vehicle_type:   fm.vehicle_type || '—',
-        site:           ins?.site || fm.site || '—',
+        vehicle_type:   fm.vehicle_type || '-',
+        site:           ins?.site || fm.site || '-',
         last_inspection: ins?.scheduled_date || null,
         days_since:     days,
         next_due:       ins?.scheduled_date
           ? new Date(new Date(ins.scheduled_date).getTime() + INSPECTION_MAX_DAYS * 86400000).toISOString().slice(0, 10)
           : null,
         status,
-        inspector:      ins?.inspector || '—',
-        inspection_type: ins?.inspection_type || '—',
+        inspector:      ins?.inspector || '-',
+        inspection_type: ins?.inspection_type || '-',
       }
     })
 
@@ -463,10 +463,10 @@ export default function ComplianceDashboard() {
   // ── Tread distribution chart ────────────────────────────────────────────────
   const treadDistChart = useMemo(() => {
     const bands = [
-      { label: '0–2mm',  min: 0,  max: 2,  color: 'rgba(239,68,68,0.85)' },
-      { label: '2–4mm',  min: 2,  max: 4,  color: 'rgba(249,115,22,0.8)' },
-      { label: '4–6mm',  min: 4,  max: 6,  color: 'rgba(234,179,8,0.8)' },
-      { label: '6–8mm',  min: 6,  max: 8,  color: 'rgba(34,197,94,0.8)' },
+      { label: '0-2mm',  min: 0,  max: 2,  color: 'rgba(239,68,68,0.85)' },
+      { label: '2-4mm',  min: 2,  max: 4,  color: 'rgba(249,115,22,0.8)' },
+      { label: '4-6mm',  min: 4,  max: 6,  color: 'rgba(234,179,8,0.8)' },
+      { label: '6-8mm',  min: 6,  max: 8,  color: 'rgba(34,197,94,0.8)' },
       { label: '8mm+',   min: 8,  max: Infinity, color: 'rgba(34,197,94,0.95)' },
     ]
     const counts = bands.map(b =>
@@ -572,7 +572,7 @@ export default function ComplianceDashboard() {
   const inspBySite = useMemo(() => {
     const map = {}
     inspectionStats.rows.forEach(r => {
-      if (!r.site || r.site === '—') return
+      if (!r.site || r.site === '-') return
       if (!map[r.site]) map[r.site] = { compliant: 0, overdue: 0, due_soon: 0, no_data: 0 }
       map[r.site][r.status] = (map[r.site][r.status] || 0) + 1
     })
@@ -777,14 +777,14 @@ export default function ComplianceDashboard() {
       startY: 20,
       head: [['Asset', 'Serial', 'Brand', 'Position', 'Tread (mm)', 'Site', 'Days In Service', 'Risk', 'Status']],
       body: nonCompliantTyres.slice(0, 200).map(r => [
-        r.asset_no || '—',
-        r.serial_number || '—',
-        r.brand || '—',
-        r.position || '—',
+        r.asset_no || '-',
+        r.serial_number || '-',
+        r.brand || '-',
+        r.position || '-',
         r.tread_depth != null ? `${Number(r.tread_depth).toFixed(1)}` : 'No Data',
-        r.site || '—',
-        r.issue_date ? String(daysInService(r.issue_date)) : '—',
-        r.risk_level || '—',
+        r.site || '-',
+        r.issue_date ? String(daysInService(r.issue_date)) : '-',
+        r.risk_level || '-',
         r.tread_depth != null && Number(r.tread_depth) < LEGAL_MIN_TREAD ? 'LEGAL FAILURE' : 'Below Fleet Min',
       ]),
       theme: 'striped',
@@ -884,18 +884,18 @@ export default function ComplianceDashboard() {
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(12)
       doc.setFont('helvetica', 'bold')
-      doc.text(`LEGAL COMPLIANCE FAILURES — ${legalFailures.length} Tyre(s) Below ${LEGAL_MIN_TREAD}mm`, 14, 10)
+      doc.text(`LEGAL COMPLIANCE FAILURES - ${legalFailures.length} Tyre(s) Below ${LEGAL_MIN_TREAD}mm`, 14, 10)
       autoTable(doc, {
         startY: 20,
         head: [['Asset', 'Serial', 'Brand', 'Position', 'Tread (mm)', 'Site', 'Risk Level']],
         body: legalFailures.slice(0, 100).map(r => [
-          r.asset_no || '—',
-          r.serial_number || '—',
-          r.brand || '—',
-          r.position || '—',
+          r.asset_no || '-',
+          r.serial_number || '-',
+          r.brand || '-',
+          r.position || '-',
           Number(r.tread_depth).toFixed(1),
-          r.site || '—',
-          r.risk_level || '—',
+          r.site || '-',
+          r.risk_level || '-',
         ]),
         theme: 'striped',
         headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 9 },
@@ -999,7 +999,7 @@ export default function ComplianceDashboard() {
 
       <PageHeader
         title="Compliance Dashboard"
-        subtitle={`Legal & safety compliance — tread depth, pressure, inspection schedules & audit certificates${lastRefresh ? ` · Last refresh: ${lastRefresh.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+        subtitle={`Legal & safety compliance - tread depth, pressure, inspection schedules & audit certificates${lastRefresh ? ` · Last refresh: ${lastRefresh.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
         icon={ShieldCheck}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
@@ -1121,7 +1121,7 @@ export default function ComplianceDashboard() {
                 <div className="bg-gray-900/60 rounded-xl p-3 border border-gray-700/40">
                   <p className="text-xs text-gray-500 mb-1">Last Audit</p>
                   <p className="text-sm font-semibold text-white">
-                    {lastRefresh ? lastRefresh.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                    {lastRefresh ? lastRefresh.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
                   </p>
                 </div>
                 <div className="bg-gray-900/60 rounded-xl p-3 border border-gray-700/40">
@@ -1185,7 +1185,7 @@ export default function ComplianceDashboard() {
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp size={14} className="text-green-400" />
               <h3 className="text-sm font-semibold text-white">Compliance Trend</h3>
-              <span className="ml-auto text-xs text-gray-500">Tread compliance % — last 6 months</span>
+              <span className="ml-auto text-xs text-gray-500">Tread compliance % - last 6 months</span>
             </div>
             <div className="h-48">
               <Line data={trendLineChart} options={trendLineOpts} />
@@ -1263,9 +1263,9 @@ export default function ComplianceDashboard() {
                         </div>
                         <div className="flex flex-wrap gap-3 mt-2">
                           {[
-                            { color: 'bg-red-500',    label: '0–2mm (Legal failure)' },
-                            { color: 'bg-orange-500', label: '2–4mm (Below fleet min)' },
-                            { color: 'bg-yellow-500', label: '4–6mm (Monitor)' },
+                            { color: 'bg-red-500',    label: '0-2mm (Legal failure)' },
+                            { color: 'bg-orange-500', label: '2-4mm (Below fleet min)' },
+                            { color: 'bg-yellow-500', label: '4-6mm (Monitor)' },
                             { color: 'bg-green-500',  label: '6mm+ (Good)' },
                           ].map(l => (
                             <div key={l.label} className="flex items-center gap-1.5">
@@ -1334,7 +1334,7 @@ export default function ComplianceDashboard() {
                       {nonCompliantTyres.length === 0 ? (
                         <div className="flex flex-col items-center py-12 gap-2">
                           <CheckCircle size={28} className="text-green-500" />
-                          <p className="text-gray-400 text-sm">All tyres meet the fleet minimum tread depth — fully compliant!</p>
+                          <p className="text-gray-400 text-sm">All tyres meet the fleet minimum tread depth - fully compliant!</p>
                         </div>
                       ) : (
                         <>
@@ -1356,15 +1356,15 @@ export default function ComplianceDashboard() {
                                       key={r.id ?? i}
                                       className={`border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors ${isLegalFail ? 'bg-red-950/20' : ''}`}
                                     >
-                                      <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '—'}</td>
-                                      <td className="py-2 pr-3 text-gray-300">{r.position || '—'}</td>
-                                      <td className="py-2 pr-3 text-gray-300">{r.brand || '—'}</td>
+                                      <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '-'}</td>
+                                      <td className="py-2 pr-3 text-gray-300">{r.position || '-'}</td>
+                                      <td className="py-2 pr-3 text-gray-300">{r.brand || '-'}</td>
                                       <td className={`py-2 pr-3 font-bold ${isLegalFail ? 'text-red-400' : 'text-orange-400'}`}>
                                         {td !== null ? `${td.toFixed(1)} mm` : <span className="text-gray-600">No Data</span>}
                                       </td>
-                                      <td className="py-2 pr-3 text-gray-400">{r.site || '—'}</td>
+                                      <td className="py-2 pr-3 text-gray-400">{r.site || '-'}</td>
                                       <td className="py-2 pr-3 text-gray-400">
-                                        {r.issue_date ? `${daysInService(r.issue_date)} days` : '—'}
+                                        {r.issue_date ? `${daysInService(r.issue_date)} days` : '-'}
                                       </td>
                                       <td className="py-2 pr-3"><RiskBadge risk={r.risk_level} /></td>
                                       <td className="py-2 pr-3">
@@ -1390,7 +1390,7 @@ export default function ComplianceDashboard() {
                           </div>
                           <div className="flex items-center justify-between mt-3">
                             <p className="text-xs text-gray-500">
-                              {(treadPage - 1) * PAGE_SIZE + 1}–{Math.min(treadPage * PAGE_SIZE, nonCompliantTyres.length)} of {nonCompliantTyres.length}
+                              {(treadPage - 1) * PAGE_SIZE + 1}-{Math.min(treadPage * PAGE_SIZE, nonCompliantTyres.length)} of {nonCompliantTyres.length}
                             </p>
                             <div className="flex items-center gap-1">
                               <button disabled={treadPage === 1} onClick={() => setTreadPage(p => p - 1)}
@@ -1424,7 +1424,7 @@ export default function ComplianceDashboard() {
                       {[
                         { label: 'Total Tyres', val: pressureStats.total, col: 'text-blue-300' },
                         { label: 'With Reading', val: pressureStats.withReading, col: 'text-green-400' },
-                        { label: 'Compliant (85–130 PSI)', val: pressureStats.compliant, col: 'text-green-400' },
+                        { label: 'Compliant (85-130 PSI)', val: pressureStats.compliant, col: 'text-green-400' },
                         { label: 'Anomalies / No Data', val: `${pressureStats.anomalies} / ${pressureStats.noReading}`, col: 'text-red-400' },
                       ].map(({ label, val, col }) => (
                         <div key={label} className="bg-gray-800/60 rounded-xl p-3 border border-gray-700/40">
@@ -1510,7 +1510,7 @@ export default function ComplianceDashboard() {
                       {pressureAnomalies.length === 0 ? (
                         <div className="flex flex-col items-center py-12 gap-2">
                           <CheckCircle size={28} className="text-green-500" />
-                          <p className="text-gray-400 text-sm">No pressure anomalies — all tyres have valid readings!</p>
+                          <p className="text-gray-400 text-sm">No pressure anomalies - all tyres have valid readings!</p>
                         </div>
                       ) : (
                         <>
@@ -1529,14 +1529,14 @@ export default function ComplianceDashboard() {
                                     key={r.id ?? i}
                                     className={`border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors ${r.pressureFlag === 'Anomaly' ? 'bg-orange-950/10' : ''}`}
                                   >
-                                    <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '—'}</td>
-                                    <td className="py-2 pr-3 text-gray-400 font-mono text-[11px]">{r.serial_number || '—'}</td>
-                                    <td className="py-2 pr-3 text-gray-300">{r.brand || '—'}</td>
-                                    <td className="py-2 pr-3 text-gray-300">{r.position || '—'}</td>
+                                    <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '-'}</td>
+                                    <td className="py-2 pr-3 text-gray-400 font-mono text-[11px]">{r.serial_number || '-'}</td>
+                                    <td className="py-2 pr-3 text-gray-300">{r.brand || '-'}</td>
+                                    <td className="py-2 pr-3 text-gray-300">{r.position || '-'}</td>
                                     <td className={`py-2 pr-3 font-bold ${r.pressureFlag === 'Anomaly' ? 'text-orange-400' : 'text-gray-600'}`}>
-                                      {r.pressure_reading ? `${Number(r.pressure_reading).toFixed(0)} PSI` : '—'}
+                                      {r.pressure_reading ? `${Number(r.pressure_reading).toFixed(0)} PSI` : '-'}
                                     </td>
-                                    <td className="py-2 pr-3 text-gray-400">{r.site || '—'}</td>
+                                    <td className="py-2 pr-3 text-gray-400">{r.site || '-'}</td>
                                     <td className="py-2 pr-3"><RiskBadge risk={r.risk_level} /></td>
                                     <td className="py-2 pr-3">
                                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -1554,7 +1554,7 @@ export default function ComplianceDashboard() {
                           </div>
                           <div className="flex items-center justify-between mt-3">
                             <p className="text-xs text-gray-500">
-                              {(pressurePage - 1) * PAGE_SIZE + 1}–{Math.min(pressurePage * PAGE_SIZE, pressureAnomalies.length)} of {pressureAnomalies.length}
+                              {(pressurePage - 1) * PAGE_SIZE + 1}-{Math.min(pressurePage * PAGE_SIZE, pressureAnomalies.length)} of {pressureAnomalies.length}
                             </p>
                             <div className="flex items-center gap-1">
                               <button disabled={pressurePage === 1} onClick={() => setPressurePage(p => p - 1)}
@@ -1588,7 +1588,7 @@ export default function ComplianceDashboard() {
                       {[
                         { label: 'Total Vehicles', val: inspectionStats.total, col: 'text-blue-300' },
                         { label: `Compliant (≤${INSPECTION_MAX_DAYS}d)`, val: inspectionStats.compliant, col: 'text-green-400' },
-                        { label: `Due Soon (${INSPECTION_MAX_DAYS + 1}–${INSPECTION_DUE_DAYS}d)`, val: inspectionStats.dueSoon, col: 'text-yellow-400' },
+                        { label: `Due Soon (${INSPECTION_MAX_DAYS + 1}-${INSPECTION_DUE_DAYS}d)`, val: inspectionStats.dueSoon, col: 'text-yellow-400' },
                         { label: `Overdue (>${INSPECTION_DUE_DAYS}d)`, val: inspectionStats.overdue, col: 'text-red-400' },
                       ].map(({ label, val, col }) => (
                         <div key={label} className="bg-gray-800/60 rounded-xl p-3 border border-gray-700/40">
@@ -1680,7 +1680,7 @@ export default function ComplianceDashboard() {
                                       r.status === 'due_soon' ? 'bg-yellow-950/10' : ''
                                     }`}
                                   >
-                                    <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '—'}</td>
+                                    <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '-'}</td>
                                     <td className="py-2 pr-3 text-gray-300">{r.vehicle_type}</td>
                                     <td className="py-2 pr-3 text-gray-400">{r.site}</td>
                                     <td className="py-2 pr-3 text-gray-400 whitespace-nowrap">
@@ -1694,12 +1694,12 @@ export default function ComplianceDashboard() {
                                       r.days_since > INSPECTION_MAX_DAYS ? 'text-yellow-400' :
                                       'text-green-400'
                                     }`}>
-                                      {r.days_since !== null ? `${r.days_since}d` : '—'}
+                                      {r.days_since !== null ? `${r.days_since}d` : '-'}
                                     </td>
                                     <td className="py-2 pr-3 text-gray-400 whitespace-nowrap">
                                       {r.next_due
                                         ? new Date(r.next_due).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                                        : '—'}
+                                        : '-'}
                                     </td>
                                     <td className="py-2 pr-3">
                                       <InspectionBadge status={r.status} />
@@ -1712,7 +1712,7 @@ export default function ComplianceDashboard() {
                           </div>
                           <div className="flex items-center justify-between mt-3">
                             <p className="text-xs text-gray-500">
-                              {(inspPage - 1) * PAGE_SIZE + 1}–{Math.min(inspPage * PAGE_SIZE, inspectionRows.length)} of {inspectionRows.length}
+                              {(inspPage - 1) * PAGE_SIZE + 1}-{Math.min(inspPage * PAGE_SIZE, inspectionRows.length)} of {inspectionRows.length}
                             </p>
                             <div className="flex items-center gap-1">
                               <button disabled={inspPage === 1} onClick={() => setInspPage(p => p - 1)}

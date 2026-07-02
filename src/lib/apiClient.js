@@ -1,5 +1,5 @@
 /**
- * apiClient — auth-aware client for the TyrePulse Go API (/api/v1).
+ * apiClient - auth-aware client for the TyrePulse Go API (/api/v1).
  *
  * This is the Step 1 foundation for the backend migration. It is intentionally
  * NOT yet wired into any page: pages continue to use Supabase directly until
@@ -62,7 +62,7 @@ export async function request(method, path, opts = {}) {
   if (!BASE_URL) {
     throw new ApiError(
       'not_configured',
-      'VITE_API_BASE_URL is not set — the Go API is not wired in this build.',
+      'VITE_API_BASE_URL is not set - the Go API is not wired in this build.',
       0,
     )
   }
@@ -119,7 +119,7 @@ export async function request(method, path, opts = {}) {
       return envelope ? envelope.data : null
     } catch (e) {
       if (e instanceof ApiError) throw e
-      // Network/abort error — retry idempotent methods.
+      // Network/abort error - retry idempotent methods.
       if (attempt < retries) {
         attempt++
         await sleep(250 * 2 ** (attempt - 1))

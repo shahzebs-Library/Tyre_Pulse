@@ -1,7 +1,7 @@
 /**
  * Custom Data Manager
  *
- * Every column in every uploaded file is saved — nothing is ever lost.
+ * Every column in every uploaded file is saved - nothing is ever lost.
  * Columns that don't match a standard field land in extra_fields JSONB.
  * This page makes all of that data visible, searchable, exportable,
  * and promotable to permanent field synonyms so future uploads auto-map them.
@@ -187,7 +187,7 @@ export default function CustomData() {
     const CHUNK = 200
     for (let i = 0; i < batch.length; i += CHUNK) {
       const slice = batch.slice(i, i + CHUNK)
-      // Update each record — set canonical field = extra_fields value
+      // Update each record - set canonical field = extra_fields value
       await Promise.all(slice.map(r =>
         supabase.from('tyre_records').update({ [backfillTarget]: r.extra_fields[backfillKey] }).eq('id', r.id)
       ))
@@ -256,7 +256,7 @@ export default function CustomData() {
     <div className="space-y-6">
       <PageHeader
         title="Custom Data Manager"
-        subtitle="Every column from every upload is saved here — nothing is ever lost"
+        subtitle="Every column from every upload is saved here - nothing is ever lost"
         icon={Database}
         actions={
           <button onClick={exportExtraFields} className="btn-secondary flex items-center gap-2 text-sm">
@@ -278,7 +278,7 @@ export default function CustomData() {
         <div className="flex items-start gap-3">
           <Info size={18} className="text-blue-400 flex-shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-blue-300">All your data is always saved — nothing is skipped or lost</p>
+            <p className="text-sm font-semibold text-blue-300">All your data is always saved - nothing is skipped or lost</p>
             <p className="text-sm text-gray-400">
               When you upload a file, every column maps to a standard field. Any column that doesn't match a standard field
               is automatically saved as <strong className="text-gray-300">custom data</strong>. You can view it here, use it across modules,
@@ -354,7 +354,7 @@ export default function CustomData() {
               <div className="card text-center py-16">
                 <Database size={32} className="text-gray-700 mx-auto mb-3" />
                 <p className="text-gray-400 font-medium">No custom fields yet</p>
-                <p className="text-gray-600 text-sm mt-1">Upload a file with columns beyond the standard fields — they'll appear here automatically.</p>
+                <p className="text-gray-600 text-sm mt-1">Upload a file with columns beyond the standard fields - they'll appear here automatically.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -422,7 +422,7 @@ export default function CustomData() {
                         <div className="mt-2 p-3 rounded-lg bg-purple-900/20 border border-purple-700/40 space-y-2">
                           <p className="text-xs text-purple-300 font-medium">Map "<span className="font-mono">{stat.field_key}</span>" to which standard field?</p>
                           <select className="input text-xs w-full" value={promoteTarget} onChange={e => setPromoteTarget(e.target.value)}>
-                            <option value="">— choose field —</option>
+                            <option value="">- choose field -</option>
                             {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
                           </select>
                           <div className="flex gap-2">
@@ -440,7 +440,7 @@ export default function CustomData() {
                           </p>
                           <p className="text-xs text-gray-500">Only fills records where the target field is currently empty.</p>
                           <select className="input text-xs w-full" value={backfillTarget} onChange={e => setBackfillTarget(e.target.value)}>
-                            <option value="">— choose target field —</option>
+                            <option value="">- choose target field -</option>
                             {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
                           </select>
                           {backfillResult && (
@@ -489,7 +489,7 @@ export default function CustomData() {
                 <div className="flex-1 min-w-[180px]">
                   <label className="label text-xs">Maps to standard field</label>
                   <select className="input text-sm" value={newMapsTo} onChange={e => setNewMapsTo(e.target.value)}>
-                    <option value="">— select —</option>
+                    <option value="">- select -</option>
                     {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
                   </select>
                 </div>
@@ -560,7 +560,7 @@ export default function CustomData() {
                         </td>
                         <td className="table-cell text-gray-400">{s.use_count.toLocaleString()}</td>
                         <td className="table-cell text-gray-500 text-xs">
-                          {s.last_used_at ? new Date(s.last_used_at).toLocaleDateString() : '—'}
+                          {s.last_used_at ? new Date(s.last_used_at).toLocaleDateString() : '-'}
                         </td>
                         <td className="table-cell">
                           <button onClick={() => deleteSynonym(s.id)} className="p-1.5 rounded hover:bg-red-900/30 text-gray-600 hover:text-red-400 transition-colors">
@@ -581,7 +581,7 @@ export default function CustomData() {
                 <div>
                   <p className="text-sm font-semibold text-gray-300 mb-1">How synonyms power future uploads</p>
                   <p className="text-xs text-gray-500 leading-relaxed">
-                    When you upload a new file, the system loads all synonyms first. A synonym match scores 100% confidence — the highest possible —
+                    When you upload a new file, the system loads all synonyms first. A synonym match scores 100% confidence - the highest possible -
                     so the column maps automatically without you needing to adjust anything. Synonyms work for any variation of the column name including Arabic headers.
                   </p>
                 </div>
@@ -691,10 +691,10 @@ export default function CustomData() {
                             <td className="table-cell">
                               <ChevronRight size={12} className={`text-gray-500 transition-transform ${expanded ? 'rotate-90' : ''}`} />
                             </td>
-                            <td className="table-cell font-mono text-blue-300">{r.asset_no ?? '—'}</td>
-                            <td className="table-cell font-mono text-gray-300">{r.serial_no ?? '—'}</td>
-                            <td className="table-cell text-gray-400">{r.issue_date ?? '—'}</td>
-                            <td className="table-cell text-gray-400">{r.site ?? '—'}</td>
+                            <td className="table-cell font-mono text-blue-300">{r.asset_no ?? '-'}</td>
+                            <td className="table-cell font-mono text-gray-300">{r.serial_no ?? '-'}</td>
+                            <td className="table-cell text-gray-400">{r.issue_date ?? '-'}</td>
+                            <td className="table-cell text-gray-400">{r.site ?? '-'}</td>
                             <td className="table-cell">
                               <div className="flex flex-wrap gap-1">
                                 {efKeys.slice(0, 3).map(k => (

@@ -163,7 +163,7 @@ export default function WorkOrdersScreen() {
               <View style={styles.card}>
                 <View style={{ flex: 1, gap: 4 }}>
                   <View style={[styles.cardTop, isRTL && styles.rowR]}>
-                    <Text style={[styles.cardTitle, { textAlign }]}>{item.asset_no ?? '—'}</Text>
+                    <Text style={[styles.cardTitle, { textAlign }]}>{item.asset_no ?? '-'}</Text>
                     <Text style={styles.wono}>{item.work_order_no}</Text>
                   </View>
                   <Text style={[styles.cardMeta, { textAlign }]}>{item.work_type ?? 'Work'}{item.site ? ` · ${item.site}` : ''}</Text>

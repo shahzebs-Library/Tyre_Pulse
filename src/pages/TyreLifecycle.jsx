@@ -52,11 +52,11 @@ const DONUT_OPTS = {
 const PAGE_SIZE = 25
 
 const KM_BANDS = [
-  { label: '0–20k',   min: 0,      max: 20000  },
-  { label: '20–40k',  min: 20000,  max: 40000  },
-  { label: '40–60k',  min: 40000,  max: 60000  },
-  { label: '60–80k',  min: 60000,  max: 80000  },
-  { label: '80–100k', min: 80000,  max: 100000 },
+  { label: '0-20k',   min: 0,      max: 20000  },
+  { label: '20-40k',  min: 20000,  max: 40000  },
+  { label: '40-60k',  min: 40000,  max: 60000  },
+  { label: '60-80k',  min: 60000,  max: 80000  },
+  { label: '80-100k', min: 80000,  max: 100000 },
   { label: '100k+',   min: 100000, max: Infinity },
 ]
 
@@ -304,7 +304,7 @@ export default function TyreLifecycle() {
 
   useEffect(() => { setPage(1) }, [search, filterBrand, filterSite, filterCategory, dateFrom, dateTo])
 
-  // ── Expand row — fetch all records for that serial ────────────────────────
+  // ── Expand row - fetch all records for that serial ────────────────────────
   const [serialHistory, setSerialHistory] = useState({})
 
   async function toggleExpand(serial) {
@@ -338,8 +338,8 @@ export default function TyreLifecycle() {
     const rows = filtered.map(r => ({
       ...r,
       _removal_date: r.km_at_removal != null ? (r.issue_date || '') : 'Active',
-      _km_run:       kmRun(r) != null ? kmRun(r).toLocaleString() : '—',
-      _cpk:          cpk(r) != null ? cpk(r).toFixed(4) : '—',
+      _km_run:       kmRun(r) != null ? kmRun(r).toLocaleString() : '-',
+      _cpk:          cpk(r) != null ? cpk(r).toFixed(4) : '-',
       _stage:        lifecycleStage(r),
     }))
     exportToPdf(rows, cols, 'Tyre Lifecycle Report', 'TyreLifecycle_Report', 'landscape')
@@ -387,7 +387,7 @@ export default function TyreLifecycle() {
           { label: 'Avg Life',       value: Math.round(kpis.avgLife).toLocaleString(),        icon: Gauge,      color: 'green',  suffix: ' km' },
           { label: 'Retread Rate',   value: kpis.retreadRate.toFixed(1),                      icon: RefreshCw,  color: 'purple', suffix: '%' },
           { label: 'Scrap Rate',     value: kpis.scrapRate.toFixed(1),                        icon: Trash2,     color: 'red',    suffix: '%' },
-          { label: 'Avg CPK',        value: kpis.avgCpk > 0 ? kpis.avgCpk.toFixed(4) : '—', icon: DollarSign, color: 'yellow', suffix: '' },
+          { label: 'Avg CPK',        value: kpis.avgCpk > 0 ? kpis.avgCpk.toFixed(4) : '-', icon: DollarSign, color: 'yellow', suffix: '' },
         ].map(({ label, value, icon: Icon, color, suffix }) => {
           const colorMap = {
             blue:   'text-blue-400 bg-blue-400/10',
@@ -509,7 +509,7 @@ export default function TyreLifecycle() {
                   <p className="text-xs text-gray-600 mt-0.5">
                     {stage.avgCost > 0
                       ? `Avg ${activeCurrency} ${Math.round(stage.avgCost).toLocaleString()}`
-                      : '—'
+                      : '-'
                     }
                   </p>
                 </motion.div>
@@ -579,7 +579,7 @@ export default function TyreLifecycle() {
           <h2 className="text-sm font-semibold text-gray-300">
             Tyre Lifecycle Table
             <span className="ml-2 text-gray-600 font-normal text-xs">
-              {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+              {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
             </span>
           </h2>
           <div className="flex items-center gap-2">
@@ -639,15 +639,15 @@ export default function TyreLifecycle() {
                         className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors cursor-pointer"
                         onClick={() => r.serial_number && toggleExpand(r.serial_number)}
                       >
-                        <td className="px-4 py-3 font-mono text-xs text-gray-300">{r.serial_number || '—'}</td>
-                        <td className="px-4 py-3 text-white font-medium">{r.brand || '—'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.size || '—'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.position || '—'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.asset_no || '—'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.site || '—'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.issue_date || '—'}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-300">{r.serial_number || '-'}</td>
+                        <td className="px-4 py-3 text-white font-medium">{r.brand || '-'}</td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{r.size || '-'}</td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{r.position || '-'}</td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{r.asset_no || '-'}</td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{r.site || '-'}</td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{r.issue_date || '-'}</td>
                         <td className="px-4 py-3 text-gray-300 text-right tabular-nums">
-                          {km != null ? km.toLocaleString() : <span className="text-gray-600">—</span>}
+                          {km != null ? km.toLocaleString() : <span className="text-gray-600">-</span>}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -660,7 +660,7 @@ export default function TyreLifecycle() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-xs text-gray-400">
-                          {cpkV != null ? cpkV.toFixed(4) : <span className="text-gray-600">—</span>}
+                          {cpkV != null ? cpkV.toFixed(4) : <span className="text-gray-600">-</span>}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stageColor(stage)}`}>
@@ -687,7 +687,7 @@ export default function TyreLifecycle() {
                                 className="px-6 py-4"
                               >
                                 <p className="text-xs font-semibold text-gray-400 mb-3">
-                                  Transfer History — Serial: <span className="text-white font-mono">{r.serial_number}</span>
+                                  Transfer History - Serial: <span className="text-white font-mono">{r.serial_number}</span>
                                 </p>
                                 {!serialHistory[r.serial_number] ? (
                                   <p className="text-xs text-gray-600">Loading…</p>
@@ -707,11 +707,11 @@ export default function TyreLifecycle() {
                                             hStage === 'In Service'? 'bg-green-500' : 'bg-gray-500'
                                           }`} />
                                           <div className="pl-3 flex flex-wrap gap-x-6 gap-y-1 text-xs">
-                                            <span className="text-gray-400">{h.issue_date || '—'}</span>
-                                            <span className="text-white">Asset: <span className="text-gray-300">{h.asset_no || '—'}</span></span>
-                                            <span className="text-white">Site: <span className="text-gray-300">{h.site || '—'}</span></span>
-                                            <span className="text-white">Position: <span className="text-gray-300">{h.position || '—'}</span></span>
-                                            <span className="text-white">km: <span className="text-gray-300">{hKm != null ? hKm.toLocaleString() : '—'}</span></span>
+                                            <span className="text-gray-400">{h.issue_date || '-'}</span>
+                                            <span className="text-white">Asset: <span className="text-gray-300">{h.asset_no || '-'}</span></span>
+                                            <span className="text-white">Site: <span className="text-gray-300">{h.site || '-'}</span></span>
+                                            <span className="text-white">Position: <span className="text-gray-300">{h.position || '-'}</span></span>
+                                            <span className="text-white">km: <span className="text-gray-300">{hKm != null ? hKm.toLocaleString() : '-'}</span></span>
                                             <span className={`px-1.5 py-0.5 rounded font-medium ${stageColor(hStage)}`}>{hStage}</span>
                                           </div>
                                         </div>

@@ -30,7 +30,7 @@ function computeNextRun(frequency, dayOfWeek, dayOfMonth, timeOfDay) {
 }
 
 function formatNextRun(nextRunAt) {
-  if (!nextRunAt) return '—'
+  if (!nextRunAt) return '-'
   const d = new Date(nextRunAt)
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

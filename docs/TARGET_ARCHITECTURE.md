@@ -1,4 +1,4 @@
-# TyrePulse — Target Architecture
+# TyrePulse - Target Architecture
 
 > **Status:** Step 0 design. The destination for the phased migration in
 > `docs/GO_BACKEND_MIGRATION_PLAN.md`. Current state is in
@@ -7,7 +7,7 @@
 ## 1. Goal
 Move from a **direct-Supabase** model (clients talk straight to Postgres via the
 SDK, RLS as the only boundary) to a **server-authoritative** model where a **Go
-API** owns authorization, validation, workflow, idempotency, and audit — without
+API** owns authorization, validation, workflow, idempotency, and audit - without
 breaking the running web/mobile apps. Migration is module-by-module; Supabase
 remains for not-yet-migrated modules during transition.
 

@@ -457,22 +457,22 @@ export default function FleetMaster() {
                     <tr><td colSpan={10} className="text-center py-12 text-gray-500">No vehicles found</td></tr>
                   ) : records.map(r => (
                     <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
-                      <td className="table-cell font-medium text-white font-mono text-xs">{r.asset_no ?? '—'}</td>
-                      <td className="table-cell text-gray-400">{r.fleet_number ?? '—'}</td>
+                      <td className="table-cell font-medium text-white font-mono text-xs">{r.asset_no ?? '-'}</td>
+                      <td className="table-cell text-gray-400">{r.fleet_number ?? '-'}</td>
                       <td className="table-cell">
                         {r.make || r.model
                           ? <span className="text-gray-200">{[r.make, r.model].filter(Boolean).join(' ')}</span>
                           : <span className="text-yellow-500 text-xs">Missing</span>}
                       </td>
-                      <td className="table-cell text-gray-400">{r.vehicle_type ?? '—'}</td>
-                      <td className="table-cell text-gray-400">{r.year ?? '—'}</td>
-                      <td className="table-cell text-gray-400">{r.site ?? '—'}</td>
-                      <td className="table-cell text-gray-400 max-w-[120px] truncate">{r.operator_name ?? '—'}</td>
+                      <td className="table-cell text-gray-400">{r.vehicle_type ?? '-'}</td>
+                      <td className="table-cell text-gray-400">{r.year ?? '-'}</td>
+                      <td className="table-cell text-gray-400">{r.site ?? '-'}</td>
+                      <td className="table-cell text-gray-400 max-w-[120px] truncate">{r.operator_name ?? '-'}</td>
                       <td className="table-cell">
-                        <span className={`badge ${STATUS_BADGE[r.status] ?? 'bg-gray-800 text-gray-400'}`}>{r.status ?? '—'}</span>
+                        <span className={`badge ${STATUS_BADGE[r.status] ?? 'bg-gray-800 text-gray-400'}`}>{r.status ?? '-'}</span>
                       </td>
                       <td className="table-cell text-xs text-gray-500">
-                        {r.min_days_between_changes ? `${r.min_days_between_changes}d` : '—'}
+                        {r.min_days_between_changes ? `${r.min_days_between_changes}d` : '-'}
                         {r.expected_km_per_tyre ? ` / ${r.expected_km_per_tyre.toLocaleString()} km` : ''}
                         {!r.min_days_between_changes && !r.expected_km_per_tyre && (
                           <span className="text-orange-500 text-xs">No policy</span>
@@ -499,7 +499,7 @@ export default function FleetMaster() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
                 <p className="text-sm text-gray-400">
-                  Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()}
+                  Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()}
                 </p>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40"><ChevronLeft size={16} /></button>
@@ -567,7 +567,7 @@ export default function FleetMaster() {
                         {uploadPreview.map((row, i) => (
                           <tr key={i}>
                             {['asset_no', 'fleet_number', 'make', 'model', 'vehicle_type', 'year', 'site', 'status'].map(f => (
-                              <td key={f} className="table-cell">{String(row[f] ?? '—')}</td>
+                              <td key={f} className="table-cell">{String(row[f] ?? '-')}</td>
                             ))}
                           </tr>
                         ))}

@@ -187,7 +187,7 @@ export default function Console2FAModal({ onClose }) {
                       </div>
                       <ul className="space-y-1.5 text-xs text-gray-400">
                         <li className="flex items-center gap-2"><CheckCircle size={11} className="text-green-400" /> Works with Google Authenticator, Authy, 1Password, and any TOTP app</li>
-                        <li className="flex items-center gap-2"><CheckCircle size={11} className="text-green-400" /> Required every login — protects even if password is compromised</li>
+                        <li className="flex items-center gap-2"><CheckCircle size={11} className="text-green-400" /> Required every login - protects even if password is compromised</li>
                         <li className="flex items-center gap-2"><CheckCircle size={11} className="text-green-400" /> 30-second rotating codes, no internet required</li>
                       </ul>
                     </>

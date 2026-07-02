@@ -21,7 +21,7 @@ ChartJS.register(
 )
 
 // ── helpers ────────────────────────────────────────────────────────────────────
-const fmt = n => (typeof n === 'number' ? n.toFixed(1) : '—')
+const fmt = n => (typeof n === 'number' ? n.toFixed(1) : '-')
 const pct = (a, b) => (b > 0 ? ((a / b) * 100).toFixed(1) : '0.0')
 const MONTHS_BACK = 12
 
@@ -371,7 +371,7 @@ export default function InspectionIntelligence() {
           asset_no: v.asset_no,
           site,
           lastInspectionDate: lastDate,
-          daysSince: days === Infinity ? '—' : days,
+          daysSince: days === Infinity ? '-' : days,
           daysNum: days === Infinity ? 9999 : days,
           severity: days > 30 ? 'critical' : days > 14 ? 'high' : 'medium',
         })
@@ -478,31 +478,31 @@ export default function InspectionIntelligence() {
 
     complianceBySite
       .filter(s => s.pct < 60 && s.scheduled > 0)
-      .forEach(s => recs.push({ priority: 'Critical', message: `Site "${s.site}" inspection compliance at ${s.pct.toFixed(0)}% — schedule immediate inspection round` }))
+      .forEach(s => recs.push({ priority: 'Critical', message: `Site "${s.site}" inspection compliance at ${s.pct.toFixed(0)}% - schedule immediate inspection round` }))
 
     if (missingInspections.filter(v => v.severity === 'critical').length > 0) {
-      recs.push({ priority: 'Critical', message: `${missingInspections.filter(v => v.severity === 'critical').length} vehicles are overdue by >30 days — critical downtime risk` })
+      recs.push({ priority: 'Critical', message: `${missingInspections.filter(v => v.severity === 'critical').length} vehicles are overdue by >30 days - critical downtime risk` })
     }
 
     if (duplicates.length > 0) {
-      recs.push({ priority: 'High', message: `${duplicates.length} duplicate inspection entries detected — review data entry procedures immediately` })
+      recs.push({ priority: 'High', message: `${duplicates.length} duplicate inspection entries detected - review data entry procedures immediately` })
     }
 
     if (missingInspections.length > 5) {
-      recs.push({ priority: 'High', message: `${missingInspections.length} vehicles missing recent inspections — high fleet availability risk` })
+      recs.push({ priority: 'High', message: `${missingInspections.length} vehicles missing recent inspections - high fleet availability risk` })
     }
 
     inspectorScores
       .filter(i => i.qualityScore < 0.70)
-      .forEach(i => recs.push({ priority: 'Medium', message: `Inspector "${i.inspector}" quality score ${(i.qualityScore * 100).toFixed(0)}% — remediation training recommended` }))
+      .forEach(i => recs.push({ priority: 'Medium', message: `Inspector "${i.inspector}" quality score ${(i.qualityScore * 100).toFixed(0)}% - remediation training recommended` }))
 
     if (parseFloat(complianceMetrics.pressureCovPct) < 50) {
-      recs.push({ priority: 'Medium', message: `Pressure data coverage at ${complianceMetrics.pressureCovPct}% — mandate pressure readings in all inspections` })
+      recs.push({ priority: 'Medium', message: `Pressure data coverage at ${complianceMetrics.pressureCovPct}% - mandate pressure readings in all inspections` })
     }
 
     complianceBySite
       .filter(s => s.pct >= 60 && s.pct < 85 && s.scheduled > 0)
-      .forEach(s => recs.push({ priority: 'Medium', message: `Site "${s.site}" compliance at ${s.pct.toFixed(0)}% — below 85% target, review scheduling` }))
+      .forEach(s => recs.push({ priority: 'Medium', message: `Site "${s.site}" compliance at ${s.pct.toFixed(0)}% - below 85% target, review scheduling` }))
 
     // Sort Critical → High → Medium
     const order = { Critical: 0, High: 1, Medium: 2 }
@@ -888,8 +888,8 @@ export default function InspectionIntelligence() {
                   >
                     <td className="table-cell font-mono text-xs">{v.asset_no}</td>
                     <td className="table-cell text-gray-300">{v.site}</td>
-                    <td className="table-cell text-gray-400">{v.lastInspectionDate || '—'}</td>
-                    <td className="table-cell font-semibold">{v.daysSince === '—' ? '—' : `${v.daysSince}d`}</td>
+                    <td className="table-cell text-gray-400">{v.lastInspectionDate || '-'}</td>
+                    <td className="table-cell font-semibold">{v.daysSince === '-' ? '-' : `${v.daysSince}d`}</td>
                     <td className="table-cell"><SeverityBadge sev={v.severity} /></td>
                     <td className="table-cell text-right">
                       {alertRaised[v.asset_no] ? (
@@ -947,15 +947,15 @@ export default function InspectionIntelligence() {
               <tbody>
                 {duplicates.map((d, i) => (
                   <tr key={i} className="border-t border-white/5 bg-yellow-900/5">
-                    <td className="table-cell font-mono text-xs">{d.asset_no || '—'}</td>
-                    <td className="table-cell text-gray-400">{d.date || '—'}</td>
-                    <td className="table-cell text-gray-300">{d.type || '—'}</td>
+                    <td className="table-cell font-mono text-xs">{d.asset_no || '-'}</td>
+                    <td className="table-cell text-gray-400">{d.date || '-'}</td>
+                    <td className="table-cell text-gray-300">{d.type || '-'}</td>
                     <td className="table-cell text-center">
                       <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-900/40 text-yellow-400 border border-yellow-700/50">
                         ×{d.count}
                       </span>
                     </td>
-                    <td className="table-cell text-gray-400 text-xs">{d.inspectorNames || '—'}</td>
+                    <td className="table-cell text-gray-400 text-xs">{d.inspectorNames || '-'}</td>
                     <td className="table-cell text-right">
                       <a
                         href="/inspections"
@@ -1064,7 +1064,7 @@ export default function InspectionIntelligence() {
                 {expandedDQ === 'findings' && (
                   <ExpandableIssueList
                     items={complianceMetrics.missingFindings}
-                    labelFn={r => `${r.asset_no || '—'} · ${r.scheduled_date || '—'} · ${r.site || '—'}`}
+                    labelFn={r => `${r.asset_no || '-'} · ${r.scheduled_date || '-'} · ${r.site || '-'}`}
                   />
                 )}
               </>
@@ -1091,7 +1091,7 @@ export default function InspectionIntelligence() {
                 {expandedDQ === 'inspector' && (
                   <ExpandableIssueList
                     items={complianceMetrics.noInspector}
-                    labelFn={r => `${r.asset_no || '—'} · ${r.scheduled_date || '—'} · ${r.site || '—'}`}
+                    labelFn={r => `${r.asset_no || '-'} · ${r.scheduled_date || '-'} · ${r.site || '-'}`}
                   />
                 )}
               </>
@@ -1119,7 +1119,7 @@ export default function InspectionIntelligence() {
                 {expandedDQ === 'suspicious' && (
                   <ExpandableIssueList
                     items={complianceMetrics.suspiciousDate}
-                    labelFn={r => `${r.asset_no || '—'} · completed ${r.completed_date} / scheduled ${r.scheduled_date}`}
+                    labelFn={r => `${r.asset_no || '-'} · completed ${r.completed_date} / scheduled ${r.scheduled_date}`}
                   />
                 )}
               </>
@@ -1169,7 +1169,7 @@ export default function InspectionIntelligence() {
         {recommendations.length === 0 ? (
           <div className="flex items-center gap-2 text-green-400 py-4">
             <CheckCircle size={18} />
-            <span className="text-sm font-medium">All metrics within acceptable thresholds — no immediate action required</span>
+            <span className="text-sm font-medium">All metrics within acceptable thresholds - no immediate action required</span>
           </div>
         ) : (
           <div className="space-y-2">

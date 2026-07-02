@@ -1,5 +1,5 @@
 /**
- * offlineQueue.js — IndexedDB-backed offline inspection queue with Background Sync.
+ * offlineQueue.js - IndexedDB-backed offline inspection queue with Background Sync.
  *
  * When the user saves a checklist offline the payload is persisted to IndexedDB.
  * The service worker Background Sync tag 'inspection-sync' is registered so the
@@ -48,7 +48,7 @@ export async function enqueueInspection(payload) {
       if ('serviceWorker' in navigator && 'SyncManager' in window) {
         navigator.serviceWorker.ready
           .then(sw => sw.sync.register(SYNC_TAG))
-          .catch(() => { /* Background Sync not permitted — will sync on next open */ })
+          .catch(() => { /* Background Sync not permitted - will sync on next open */ })
       }
       resolve(req.result)
     }
@@ -94,7 +94,7 @@ export async function markInspectionSynced(queueId) {
 
 /**
  * Flush all pending items to Supabase. Returns array of { queueId, success, error? }.
- * Safe to call multiple times — synced items are skipped automatically.
+ * Safe to call multiple times - synced items are skipped automatically.
  */
 export async function syncPendingInspections(supabase) {
   let pending
@@ -121,7 +121,7 @@ export async function syncPendingInspections(supabase) {
 }
 
 /**
- * Count pending items — used for the offline badge/indicator.
+ * Count pending items - used for the offline badge/indicator.
  */
 export async function getPendingCount() {
   try {

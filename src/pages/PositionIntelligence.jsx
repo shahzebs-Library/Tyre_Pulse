@@ -507,7 +507,7 @@ export default function PositionIntelligence() {
 
       <PageHeader
         title="Tyre Position Intelligence"
-        subtitle="Performance analysis by axle position — fastest wear, highest cost, failure-prone positions"
+        subtitle="Performance analysis by axle position - fastest wear, highest cost, failure-prone positions"
         icon={MapPin}
         actions={
           <div className="flex items-center gap-2">
@@ -581,7 +581,7 @@ export default function PositionIntelligence() {
             value={dateFrom}
             onChange={e => { setDateFrom(e.target.value); setActivePreset('') }}
           />
-          <span className="text-gray-500 text-xs">–</span>
+          <span className="text-gray-500 text-xs">-</span>
           <input
             type="date"
             className="input text-xs py-1 px-2"
@@ -659,7 +659,7 @@ export default function PositionIntelligence() {
                       <span className="text-[10px] text-gray-500">
                         {p.avgCpk != null
                           ? p.avgCpk < 1.0 ? <span className="text-green-400">▲ efficient</span>
-                            : p.avgCpk < 2.0 ? <span className="text-yellow-400">— moderate</span>
+                            : p.avgCpk < 2.0 ? <span className="text-yellow-400">- moderate</span>
                             : <span className="text-red-400">▼ costly</span>
                           : ''}
                       </span>
@@ -843,7 +843,7 @@ export default function PositionIntelligence() {
                               {fmtNum(val)}%
                             </span>
                           ) : (
-                            <span className="text-gray-700">—</span>
+                            <span className="text-gray-700">-</span>
                           )}
                         </td>
                       )
@@ -936,7 +936,7 @@ export default function PositionIntelligence() {
 
               {/* Brands table */}
               <div className="card lg:col-span-2 overflow-x-auto">
-                <p className="text-xs font-semibold text-gray-300 mb-3">Brand Performance — {activeTab}</p>
+                <p className="text-xs font-semibold text-gray-300 mb-3">Brand Performance - {activeTab}</p>
                 {activeMetrics.brands.length === 0 ? (
                   <p className="text-xs text-gray-600 italic">No brand data</p>
                 ) : (
@@ -1014,7 +1014,7 @@ export default function PositionIntelligence() {
             {/* 4. Worst assets at this position */}
             {activeMetrics.worstAssets.length > 0 && (
               <div className="card overflow-x-auto">
-                <p className="text-xs font-semibold text-gray-300 mb-3">Worst Assets — {activeTab} (Top 5 by CPK)</p>
+                <p className="text-xs font-semibold text-gray-300 mb-3">Worst Assets - {activeTab} (Top 5 by CPK)</p>
                 <table className="min-w-full text-xs">
                   <thead>
                     <tr>
@@ -1080,7 +1080,7 @@ export default function PositionIntelligence() {
                 .filter(pm => pm.count > 0)
                 .reduce((s, pm) => s + pm.failureRate, 0) /
                 Math.max(positionMetrics.filter(pm => pm.count > 0).length, 1)
-              const multiplier = fleetAvgFailure > 0 ? (p.failureRate / fleetAvgFailure).toFixed(1) : '—'
+              const multiplier = fleetAvgFailure > 0 ? (p.failureRate / fleetAvgFailure).toFixed(1) : '-'
 
               return (
                 <div key={p.position} className={`card border ${severity === 'Critical' ? 'border-red-700/40 bg-red-950/15' : 'border-yellow-700/40 bg-yellow-950/15'}`}>
@@ -1097,7 +1097,7 @@ export default function PositionIntelligence() {
                     <div className="flex-1 space-y-2">
                       <p className="text-xs text-gray-300">
                         <span className="font-semibold text-white">{fmtNum(p.failureRate)}% failure rate</span>
-                        {' '}— {multiplier}× fleet average.{' '}
+                        {' '}- {multiplier}× fleet average.{' '}
                         {p.highRiskCount} high/critical risk records from {p.count} total.
                       </p>
                       <p className="text-xs text-gray-400 leading-relaxed">{p.recommendation}</p>

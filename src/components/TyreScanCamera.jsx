@@ -58,7 +58,7 @@ export default function TyreScanCamera({ onClose, onResult }) {
       if (tyreData) {
         setResult({ serial, tyre: tyreData, fleet: null })
       } else {
-        // Secondary: asset/vehicle QR lookup — try asset_no and registration_no
+        // Secondary: asset/vehicle QR lookup - try asset_no and registration_no
         const { data: fleetData } = await supabase
           .from('vehicle_fleet')
           .select('asset_no,vehicle_type,site,registration_no')

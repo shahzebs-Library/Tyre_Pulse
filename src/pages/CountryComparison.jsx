@@ -496,7 +496,7 @@ export default function CountryComparison() {
 
         {!hasTrend ? (
           <div className="py-12 text-center text-gray-600 text-sm">
-            No dated records yet — upload tyre records with an issue date to see monthly &amp; yearly trends.
+            No dated records yet - upload tyre records with an issue date to see monthly &amp; yearly trends.
           </div>
         ) : (
           <div className="grid lg:grid-cols-3 gap-5">

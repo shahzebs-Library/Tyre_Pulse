@@ -259,7 +259,7 @@ export default function NewInspectionScreen() {
       .filter(Boolean)
       .join('\n')
     const payload = {
-      title: `Daily Tyre Inspection — ${selectedSite} — ${inspectionDate}`,
+      title: `Daily Tyre Inspection - ${selectedSite} - ${inspectionDate}`,
       site: selectedSite,
       asset_no: effectiveVehicle.asset_no,
       vehicle_type: effectiveVehicle.vehicle_type,
@@ -286,7 +286,7 @@ export default function NewInspectionScreen() {
     }
   }
 
-  // RBAC gate — render nothing while the guard redirects unauthorised roles.
+  // RBAC gate - render nothing while the guard redirects unauthorised roles.
   if (!allowed) {
     return (
       <SafeAreaView style={[styles.safe, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -324,7 +324,7 @@ export default function NewInspectionScreen() {
               <Text style={[styles.fieldLabel, { textAlign }]}>{t('inspection.siteLabel')}</Text>
 
               {sites.length === 0 ? (
-                /* No sites in DB yet — let user type one */
+                /* No sites in DB yet - let user type one */
                 <TextInput
                   style={[styles.input, { textAlign }]}
                   value={selectedSite}

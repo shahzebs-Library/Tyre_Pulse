@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// SafetyCompliance.jsx — Fleet Safety & Regulatory Compliance Dashboard · /safety-compliance
+// SafetyCompliance.jsx - Fleet Safety & Regulatory Compliance Dashboard · /safety-compliance
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
@@ -60,9 +60,9 @@ function getPosition(pos) {
   return 'default'
 }
 
-function fmtPct(n) { return isNaN(n) ? '—' : n.toFixed(1) + '%' }
+function fmtPct(n) { return isNaN(n) ? '-' : n.toFixed(1) + '%' }
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   return new Date(d).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
@@ -302,7 +302,7 @@ export default function SafetyCompliance() {
     const pgCount = doc.internal.getNumberOfPages()
     for (let i = 1; i <= pgCount; i++) {
       doc.setPage(i); doc.setFontSize(7); doc.setTextColor(156, 163, 175)
-      doc.text(`TyrePulse Safety & Compliance — Page ${i} of ${pgCount}`, 14, 202)
+      doc.text(`TyrePulse Safety & Compliance - Page ${i} of ${pgCount}`, 14, 202)
     }
     doc.save(`safety-compliance-${new Date().toISOString().slice(0,10)}.pdf`)
   }
@@ -543,16 +543,16 @@ export default function SafetyCompliance() {
                         const deficit = (limit - parseFloat(r.tread_depth)).toFixed(1)
                         return (
                           <tr key={r.id} className="border-b border-gray-800 hover:bg-gray-800/50">
-                            <td className="px-4 py-3 text-white font-medium">{r.asset_number || r.asset_no || '—'}</td>
-                            <td className="px-4 py-3 text-gray-300">{r.serial_number || r.serial_no || '—'}</td>
-                            <td className="px-4 py-3 text-gray-300">{r.tyre_position || r.position || '—'}</td>
+                            <td className="px-4 py-3 text-white font-medium">{r.asset_number || r.asset_no || '-'}</td>
+                            <td className="px-4 py-3 text-gray-300">{r.serial_number || r.serial_no || '-'}</td>
+                            <td className="px-4 py-3 text-gray-300">{r.tyre_position || r.position || '-'}</td>
                             <td className="px-4 py-3 text-red-400 font-bold">{r.tread_depth}mm</td>
                             <td className="px-4 py-3 text-gray-400">{limit}mm</td>
                             <td className="px-4 py-3 text-red-400">-{deficit}mm</td>
                             <td className="px-4 py-3">
-                              <span className={`text-xs font-medium ${r.risk_level === 'Critical' ? 'text-red-400' : r.risk_level === 'High' ? 'text-orange-400' : 'text-yellow-400'}`}>{r.risk_level || '—'}</span>
+                              <span className={`text-xs font-medium ${r.risk_level === 'Critical' ? 'text-red-400' : r.risk_level === 'High' ? 'text-orange-400' : 'text-yellow-400'}`}>{r.risk_level || '-'}</span>
                             </td>
-                            <td className="px-4 py-3 text-gray-400">{r.site || '—'}</td>
+                            <td className="px-4 py-3 text-gray-400">{r.site || '-'}</td>
                           </tr>
                         )
                       })}
@@ -635,10 +635,10 @@ export default function SafetyCompliance() {
                     <tbody>
                       {inspections.slice(0, 30).map(r => (
                         <tr key={r.id} className="border-b border-gray-800 hover:bg-gray-800/50">
-                          <td className="px-4 py-3 text-white font-medium">{r.asset_no || '—'}</td>
-                          <td className="px-4 py-3 text-gray-300">{r.inspector || '—'}</td>
+                          <td className="px-4 py-3 text-white font-medium">{r.asset_no || '-'}</td>
+                          <td className="px-4 py-3 text-gray-300">{r.inspector || '-'}</td>
                           <td className="px-4 py-3 text-gray-400">{fmtDate(r.inspection_date)}</td>
-                          <td className="px-4 py-3 text-gray-400">{r.site || '—'}</td>
+                          <td className="px-4 py-3 text-gray-400">{r.site || '-'}</td>
                           <td className="px-4 py-3">{r.tread_depth != null ? <CheckCircle size={14} className="text-green-400" /> : <XCircle size={14} className="text-red-400" />}</td>
                           <td className="px-4 py-3">{r.pressure_reading != null ? <CheckCircle size={14} className="text-green-400" /> : <XCircle size={14} className="text-red-400" />}</td>
                         </tr>

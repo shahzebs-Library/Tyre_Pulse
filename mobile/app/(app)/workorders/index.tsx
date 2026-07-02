@@ -1,5 +1,5 @@
 /**
- * Work Orders / Corrective Actions — mobile list
+ * Work Orders / Corrective Actions - mobile list
  *
  * Roles:
  *   admin / manager → all sites, can close actions
@@ -158,7 +158,7 @@ export default function WorkOrdersScreen() {
               <Ionicons name="construct-outline" size={48} color="#cbd5e1" />
               <Text style={styles.emptyTitle}>No work orders</Text>
               <Text style={styles.emptyHint}>
-                {statusFilter === 'Open' ? 'No open actions — great work!' : 'Nothing matches the current filter'}
+                {statusFilter === 'Open' ? 'No open actions - great work!' : 'Nothing matches the current filter'}
               </Text>
             </View>
           }

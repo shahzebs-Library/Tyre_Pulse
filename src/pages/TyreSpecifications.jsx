@@ -55,7 +55,7 @@ const SMART_DEFAULTS = [
     min_speed_index: 'L',
     recommended_pressure: 110,
     min_tread_depth: 3,
-    notes: 'Drive axle — dual fitment. Deep traction pattern recommended',
+    notes: 'Drive axle - dual fitment. Deep traction pattern recommended',
   },
   {
     vehicle_type: 'Semi-Trailer',
@@ -77,7 +77,7 @@ const SMART_DEFAULTS = [
     min_speed_index: 'M',
     recommended_pressure: 115,
     min_tread_depth: 3,
-    notes: 'Mixer steer — higher payload consideration',
+    notes: 'Mixer steer - higher payload consideration',
   },
   {
     vehicle_type: 'Tipper',
@@ -88,7 +88,7 @@ const SMART_DEFAULTS = [
     min_speed_index: 'L',
     recommended_pressure: 110,
     min_tread_depth: 4,
-    notes: 'Tipper drive — aggressive pattern for off-road conditions',
+    notes: 'Tipper drive - aggressive pattern for off-road conditions',
   },
   {
     vehicle_type: 'Bus',
@@ -496,7 +496,7 @@ function DeleteConfirmModal({ spec, onClose, onConfirm }) {
             <h3 className="text-white font-semibold">Delete Specification</h3>
           </div>
           <p className="text-gray-400 text-sm mb-2">
-            Delete <span className="text-white font-medium">{spec?.vehicle_type} — {spec?.position}</span>?
+            Delete <span className="text-white font-medium">{spec?.vehicle_type} - {spec?.position}</span>?
           </p>
           <p className="text-gray-500 text-xs mb-6">This action cannot be undone. Compliance records will show "No Spec Defined" for affected vehicles.</p>
           <div className="flex justify-end gap-3">
@@ -579,7 +579,7 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
                 </div>
                 <h3 className="text-white font-semibold">Raise Work Order</h3>
               </div>
-              <p className="text-gray-400 text-sm mb-2">Asset: <span className="text-white">{asset.asset_no}</span> — Site: <span className="text-white">{asset.site}</span></p>
+              <p className="text-gray-400 text-sm mb-2">Asset: <span className="text-white">{asset.asset_no}</span> - Site: <span className="text-white">{asset.site}</span></p>
               <div className="bg-gray-800 rounded-lg p-3 mb-4 space-y-1">
                 {violations.map((v, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs text-orange-300">
@@ -1372,12 +1372,12 @@ export default function TyreSpecifications() {
                                 transition={{ delay: i * 0.01 }}
                                 className="border-b border-gray-800 hover:bg-gray-800/40 transition-colors"
                               >
-                                <td className="px-4 py-3 text-white text-sm font-mono">{row.asset_no || '—'}</td>
+                                <td className="px-4 py-3 text-white text-sm font-mono">{row.asset_no || '-'}</td>
                                 <td className="px-4 py-3 text-gray-300 text-sm">{row.vehicleType || <span className="text-gray-600">Unknown</span>}</td>
-                                <td className="px-4 py-3 text-gray-300 text-sm">{normalizePosition(row.position) || '—'}</td>
-                                <td className="px-4 py-3 text-gray-300 text-sm font-mono">{row.size || '—'}</td>
-                                <td className="px-4 py-3 text-gray-300 text-sm">{row.brand || '—'}</td>
-                                <td className="px-4 py-3 text-gray-400 text-sm">{row.site || '—'}</td>
+                                <td className="px-4 py-3 text-gray-300 text-sm">{normalizePosition(row.position) || '-'}</td>
+                                <td className="px-4 py-3 text-gray-300 text-sm font-mono">{row.size || '-'}</td>
+                                <td className="px-4 py-3 text-gray-300 text-sm">{row.brand || '-'}</td>
+                                <td className="px-4 py-3 text-gray-400 text-sm">{row.site || '-'}</td>
                                 <td className="px-4 py-3">
                                   <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
                                     <Icon size={10} /> {cfg.label}
@@ -1405,7 +1405,7 @@ export default function TyreSpecifications() {
                   {complianceTotalPages > 1 && (
                     <div className="px-4 py-3 border-t border-gray-800 flex items-center justify-between">
                       <p className="text-gray-500 text-xs">
-                        Showing {compPage * PAGE_SIZE + 1}–{Math.min((compPage + 1) * PAGE_SIZE, filteredCompliance.length)} of {filteredCompliance.length}
+                        Showing {compPage * PAGE_SIZE + 1}-{Math.min((compPage + 1) * PAGE_SIZE, filteredCompliance.length)} of {filteredCompliance.length}
                       </p>
                       <div className="flex gap-1">
                         <button onClick={() => setCompPage(p => Math.max(0, p - 1))} disabled={compPage === 0} className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 transition-colors">
@@ -1437,7 +1437,7 @@ export default function TyreSpecifications() {
               <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
                 <p className="text-white font-medium text-sm flex items-center gap-2">
                   <AlertOctagon size={15} className="text-red-400" />
-                  Non-Conformance Report — Grouped by Asset
+                  Non-Conformance Report - Grouped by Asset
                 </p>
                 <span className="text-gray-500 text-xs">{nonConformanceByAsset.length} vehicles with violations</span>
               </div>
@@ -1476,7 +1476,7 @@ export default function TyreSpecifications() {
                             <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? 'bg-red-900 text-red-300' : 'bg-gray-800 text-gray-400'}`}>{i + 1}</span>
                           </td>
                           <td className="px-4 py-3 text-white font-mono text-sm">{a.asset_no}</td>
-                          <td className="px-4 py-3 text-gray-400 text-sm">{a.site || '—'}</td>
+                          <td className="px-4 py-3 text-gray-400 text-sm">{a.site || '-'}</td>
                           <td className="px-4 py-3 text-gray-300 text-sm">{a.vehicleType || 'Unknown'}</td>
                           <td className="px-4 py-3">
                             <span className={`text-sm font-bold ${a.violations.length >= 3 ? 'text-red-400' : 'text-orange-400'}`}>{a.violations.length}</span>
@@ -1632,9 +1632,9 @@ export default function TyreSpecifications() {
                             <td className="px-4 py-2.5 text-gray-400 text-xs max-w-[120px] truncate">{event.user}</td>
                             <td className="px-4 py-2.5 text-gray-300 text-xs">{event.vehicle_type}</td>
                             <td className="px-4 py-2.5 text-gray-400 text-xs">{event.position}</td>
-                            <td className="px-4 py-2.5 text-gray-500 text-xs">{event.changed_field || '—'}</td>
-                            <td className="px-4 py-2.5 text-gray-600 text-xs max-w-[120px] truncate">{event.old_value || '—'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs max-w-[120px] truncate">{event.new_value || '—'}</td>
+                            <td className="px-4 py-2.5 text-gray-500 text-xs">{event.changed_field || '-'}</td>
+                            <td className="px-4 py-2.5 text-gray-600 text-xs max-w-[120px] truncate">{event.old_value || '-'}</td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs max-w-[120px] truncate">{event.new_value || '-'}</td>
                           </tr>
                         )
                       })}

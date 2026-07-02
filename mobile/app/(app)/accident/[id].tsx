@@ -141,7 +141,7 @@ ACCIDENT REPORT:
 - Type: ${accident.accident_type.replace('_', ' ')}
 - Severity: ${accident.severity.toUpperCase()}
 - Description: ${accident.description ?? 'Not provided'}
-- Injuries: ${accident.injuries ? `Yes — ${accident.injury_count} persons` : 'No'}
+- Injuries: ${accident.injuries ? `Yes - ${accident.injury_count} persons` : 'No'}
 - Third Party Involved: ${accident.third_party_involved ? 'Yes' : 'No'}
 - Police Report: ${accident.police_report_no ?? 'None'}
 - Damage Description: ${accident.damage_description ?? 'Not specified'}
@@ -240,7 +240,7 @@ Risk Level: [Critical / High / Medium / Low]
           <Text style={styles.headerSub}>#{accident.id.slice(0, 8).toUpperCase()}</Text>
         </View>
 
-        {/* Status badge — tappable for managers/admins */}
+        {/* Status badge - tappable for managers/admins */}
         <TouchableOpacity
           style={[styles.statusBadge, { backgroundColor: statusColor + '18', borderColor: statusColor + '50' }]}
           onPress={() => canChangeStatus && setShowStatusModal(true)}
@@ -348,13 +348,13 @@ Risk Level: [Critical / High / Medium / Low]
 
         {/* ── Reporter info (admin sees reviewer too) ────────────────────────── */}
         <SectionCard title="Report Info" icon="person-circle-outline">
-          <InfoRow label="Reported By"  value={accident.reporter_name ?? '—'} />
+          <InfoRow label="Reported By"  value={accident.reporter_name ?? '-'} />
           <InfoRow label="Submitted"    value={new Date(accident.created_at).toLocaleString()} />
           {accident.updated_at !== accident.created_at && (
             <InfoRow label="Last Updated" value={new Date(accident.updated_at).toLocaleString()} />
           )}
           {canSeeAudit && accident.reviewed_by && (
-            <InfoRow label="Reviewed At" value={accident.reviewed_at ? new Date(accident.reviewed_at).toLocaleString() : '—'} />
+            <InfoRow label="Reviewed At" value={accident.reviewed_at ? new Date(accident.reviewed_at).toLocaleString() : '-'} />
           )}
         </SectionCard>
 
@@ -394,7 +394,7 @@ Risk Level: [Critical / High / Medium / Low]
 
         {/* ── Activity / Audit (admin / manager / director only) ─────────────── */}
         {canSeeAudit && auditLog.length > 0 && (
-          <SectionCard title="Activity — who changed what" icon="shield-checkmark-outline">
+          <SectionCard title="Activity - who changed what" icon="shield-checkmark-outline">
             {auditLog.map((row, i) => {
               const actionColor =
                 row.action === 'status_change' ? '#3b82f6'

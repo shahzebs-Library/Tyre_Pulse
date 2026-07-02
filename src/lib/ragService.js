@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// ragService.js — Retrieval-Augmented Generation service for TyrePulse AI OS
+// ragService.js - Retrieval-Augmented Generation service for TyrePulse AI OS
 // Provides selective context retrieval to minimise AI token usage.
 // No full-table scans. Always retrieve only relevant context.
 // ─────────────────────────────────────────────────────────────────────────────

@@ -48,7 +48,7 @@ function pctDiff(a, b) {
 }
 
 function DeltaBadge({ diff, pct, isGoodWhenDown = true }) {
-  if (diff === 0) return <span className="text-gray-500 font-medium">—</span>
+  if (diff === 0) return <span className="text-gray-500 font-medium">-</span>
   const improve = isGoodWhenDown ? diff < 0 : diff > 0
   const Icon = diff > 0 ? ArrowUpRight : ArrowDownRight
   return (
@@ -200,8 +200,8 @@ export default function Comparison() {
       const chartData = {
         labels: allMonths.map(m => MONTHS[m]),
         datasets: [
-          { label: `Period A — ${periodA.year}`, data: aVals, backgroundColor: 'rgba(22,163,74,0.65)', borderColor: '#16a34a', borderWidth: 1, borderRadius: 4 },
-          { label: `Period B — ${periodB.year}`, data: bVals, backgroundColor: 'rgba(59,130,246,0.65)', borderColor: '#3b82f6', borderWidth: 1, borderRadius: 4 },
+          { label: `Period A - ${periodA.year}`, data: aVals, backgroundColor: 'rgba(22,163,74,0.65)', borderColor: '#16a34a', borderWidth: 1, borderRadius: 4 },
+          { label: `Period B - ${periodB.year}`, data: bVals, backgroundColor: 'rgba(59,130,246,0.65)', borderColor: '#3b82f6', borderWidth: 1, borderRadius: 4 },
         ],
       }
 
@@ -250,8 +250,8 @@ export default function Comparison() {
     const chartData = {
       labels: dims.slice(0, 12),
       datasets: [
-        { label: `Period A — ${periodA.year}`, data: aVals.slice(0, 12), backgroundColor: 'rgba(22,163,74,0.65)', borderColor: '#16a34a', borderWidth: 1, borderRadius: 4 },
-        { label: `Period B — ${periodB.year}`, data: bVals.slice(0, 12), backgroundColor: 'rgba(59,130,246,0.65)', borderColor: '#3b82f6', borderWidth: 1, borderRadius: 4 },
+        { label: `Period A - ${periodA.year}`, data: aVals.slice(0, 12), backgroundColor: 'rgba(22,163,74,0.65)', borderColor: '#16a34a', borderWidth: 1, borderRadius: 4 },
+        { label: `Period B - ${periodB.year}`, data: bVals.slice(0, 12), backgroundColor: 'rgba(59,130,246,0.65)', borderColor: '#3b82f6', borderWidth: 1, borderRadius: 4 },
       ],
     }
 
@@ -358,12 +358,12 @@ export default function Comparison() {
           {totals && (
             <div className="flex gap-3 flex-wrap">
               <PeriodSummaryCard
-                label={`Period A — ${periodA.year}`}
+                label={`Period A - ${periodA.year}`}
                 total={totals.a} metric={metric} currency={activeCurrency}
                 colorClass="border-green-700/40"
               />
               <PeriodSummaryCard
-                label={`Period B — ${periodB.year}`}
+                label={`Period B - ${periodB.year}`}
                 total={totals.b} metric={metric} currency={activeCurrency}
                 colorClass="border-blue-700/40"
               />

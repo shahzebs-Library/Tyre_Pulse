@@ -1,8 +1,8 @@
 /**
  * Shared tyre-serial lookup.
  *
- * Used by the scanner and the inspection detail popup so a serial — whether
- * scanned or typed — resolves to the same canonical tyre record. Serials live
+ * Used by the scanner and the inspection detail popup so a serial - whether
+ * scanned or typed - resolves to the same canonical tyre record. Serials live
  * across several imported columns, hence the multi-column OR match.
  */
 
@@ -20,7 +20,7 @@ export interface TyreLookupRecord {
   pressure_reading: string | number | null
 }
 
-/** PostgREST or() filters break on commas/parens — keep only safe serial chars. */
+/** PostgREST or() filters break on commas/parens - keep only safe serial chars. */
 export function sanitizeSerial(code: string): string {
   return code.trim().replace(/[(),]/g, '').slice(0, 64)
 }

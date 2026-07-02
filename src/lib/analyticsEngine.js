@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// analyticsEngine.js — Pure stats + aggregation engine (no AI tokens)
+// analyticsEngine.js - Pure stats + aggregation engine (no AI tokens)
 // All functions are stateless; pass data in, get results out.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -350,7 +350,7 @@ export function computeMonthlyKpiActuals(records, actions, month, _defaultCost) 
 }
 
 /**
- * Weighted composite risk score for a set of records (0–100)
+ * Weighted composite risk score for a set of records (0-100)
  * Used for site-level and overall risk dashboards
  */
 export function weightedRiskScore(records) {

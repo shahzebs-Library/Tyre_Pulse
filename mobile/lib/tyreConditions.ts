@@ -65,7 +65,7 @@ export const CONDITION_META: Record<TyreCondition, ConditionMeta> = {
   },
 }
 
-/** Ordered conditions for the picker — most common first */
+/** Ordered conditions for the picker - most common first */
 export const CONDITIONS: TyreCondition[] = ['Good', 'Worn', 'Damaged', 'Puncture', 'Flat', 'Missing']
 
 /** Map DB/legacy condition strings → canonical TyreCondition */

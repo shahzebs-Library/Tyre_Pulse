@@ -2,7 +2,7 @@
  * TyreDetailModal
  *
  * Focused popup for a single tyre position. Opened by tapping a tyre on the
- * vehicle diagram or a row in the position list — it shows only that tyre's
+ * vehicle diagram or a row in the position list - it shows only that tyre's
  * information and editable fields, with a clear iconic condition header.
  */
 

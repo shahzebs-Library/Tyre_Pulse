@@ -1,5 +1,5 @@
 /**
- * auditDiff.js — turn accident_audit_log rows into human "who changed what".
+ * auditDiff.js - turn accident_audit_log rows into human "who changed what".
  * Shared by the web AccidentDetailModal Activity tab.
  */
 
@@ -40,7 +40,7 @@ export const ACCIDENT_AUDIT_FIELDS = [
 ]
 
 const fmt = (v) => {
-  if (v === null || v === undefined || v === '') return '—'
+  if (v === null || v === undefined || v === '') return '-'
   if (typeof v === 'boolean') return v ? 'Yes' : 'No'
   return String(v)
 }

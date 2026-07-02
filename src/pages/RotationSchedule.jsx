@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// RotationSchedule.jsx — Tyre Rotation Compliance Tracker · /rotation
+// RotationSchedule.jsx - Tyre Rotation Compliance Tracker · /rotation
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -74,11 +74,11 @@ const MONTH_LABELS = Array.from({ length: 12 }, (_, i) => {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmt(n, dec = 0) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return Number(n).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 function nowStr() {
@@ -147,8 +147,8 @@ function buildRotationAnalytics(records, interval) {
   // Per-vehicle stats
   const vehicles = []
   Object.entries(byAsset).forEach(([asset, recs]) => {
-    const site    = recs[0]?.site || '—'
-    const country = recs[0]?.country || '—'
+    const site    = recs[0]?.site || '-'
+    const country = recs[0]?.country || '-'
 
     // Active tyres: latest record per serial on this asset
     const latestBySn = {}
@@ -293,7 +293,7 @@ function buildRotationAnalytics(records, interval) {
     .map(([site, d]) => ({ site, pct: Math.round((d.compliant / d.total) * 100), total: d.total, compliant: d.compliant }))
     .sort((a, b) => b.pct - a.pct)
 
-  // Monthly rotation activity — derived from actual detected rotation events
+  // Monthly rotation activity - derived from actual detected rotation events
   // (position changes in tyre_records) over the trailing 12 months. No synthetic
   // variance: each bucket is a real count of rotations performed that month.
   const now = new Date()
@@ -426,7 +426,7 @@ function RotationDrawer({ vehicle, onClose }) {
                           </div>
                         </>
                       ) : (
-                        <div className="text-sm text-gray-500">—</div>
+                        <div className="text-sm text-gray-500">-</div>
                       )}
                     </div>
                   )
@@ -435,7 +435,7 @@ function RotationDrawer({ vehicle, onClose }) {
               {vehicle.wearImbalance != null && vehicle.wearImbalance > WEAR_IMBALANCE_MM && (
                 <div className="mt-3 flex items-center gap-2 text-xs text-orange-400 bg-orange-900/20 border border-orange-800 rounded-lg px-3 py-2">
                   <AlertTriangle size={13} />
-                  Steer–Drive tread imbalance of {vehicle.wearImbalance.toFixed(1)} mm — rotation recommended
+                  Steer-Drive tread imbalance of {vehicle.wearImbalance.toFixed(1)} mm - rotation recommended
                 </div>
               )}
             </div>
@@ -505,11 +505,11 @@ function RotationDrawer({ vehicle, onClose }) {
                       const td = parseFloat(t.tread_depth)
                       return (
                         <tr key={i} className="hover:bg-gray-800/50">
-                          <td className="py-2 pr-4 text-white font-mono">{t.serial_number || t.serial_no || '—'}</td>
+                          <td className="py-2 pr-4 text-white font-mono">{t.serial_number || t.serial_no || '-'}</td>
                           <td className="py-2 pr-4 text-gray-300">{normPos(t.position)}</td>
-                          <td className="py-2 pr-4 text-gray-300">{t.brand || '—'}</td>
+                          <td className="py-2 pr-4 text-gray-300">{t.brand || '-'}</td>
                           <td className={`py-2 pr-4 font-medium ${!isNaN(td) && td < 4 ? 'text-red-400' : 'text-green-400'}`}>
-                            {isNaN(td) ? '—' : `${td.toFixed(1)}`}
+                            {isNaN(td) ? '-' : `${td.toFixed(1)}`}
                           </td>
                           <td className="py-2 pr-4 text-gray-300">{fmt(safeKm(t.km_at_fitment))}</td>
                         </tr>
@@ -578,7 +578,7 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
           <div className="flex items-center justify-between p-5 border-b border-gray-800">
             <div className="flex items-center gap-2 text-white font-semibold">
               <RotateCcw size={16} className="text-green-400" />
-              Schedule Rotation — {vehicle?.asset}
+              Schedule Rotation - {vehicle?.asset}
             </div>
             <button onClick={onClose} className="p-1.5 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors">
               <X size={16} />
@@ -635,7 +635,7 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
               </div>
               <div>
                 <div className="text-gray-400">Since Last Rotation</div>
-                <div className="text-white font-medium">{vehicle?.sinceLastKm != null ? `${fmt(vehicle.sinceLastKm)} km` : '—'}</div>
+                <div className="text-white font-medium">{vehicle?.sinceLastKm != null ? `${fmt(vehicle.sinceLastKm)} km` : '-'}</div>
               </div>
             </div>
           </div>
@@ -946,7 +946,7 @@ export default function RotationSchedule() {
     const kpis = [
       ['Compliance', `${analytics.compliancePct}%`],
       ['Overdue', String(analytics.overdue)],
-      ['Avg Interval', analytics.avgInterval ? `${fmt(analytics.avgInterval)} km` : '—'],
+      ['Avg Interval', analytics.avgInterval ? `${fmt(analytics.avgInterval)} km` : '-'],
       ['Est. Savings', `${activeCurrency} ${fmt(analytics.costSavings)}`],
     ]
     kpis.forEach(([k, v], i) => {
@@ -960,8 +960,8 @@ export default function RotationSchedule() {
       body: filteredVehicles.map(v => [
         v.asset, v.site, v.activeTyreCount,
         fmtDate(v.lastRotationDate),
-        v.sinceLastKm != null ? fmt(v.sinceLastKm) : '—',
-        v.dueInKm != null ? fmt(v.dueInKm) : '—',
+        v.sinceLastKm != null ? fmt(v.sinceLastKm) : '-',
+        v.dueInKm != null ? fmt(v.dueInKm) : '-',
         v.status, v.totalRotations,
       ]),
       styles: { fontSize: 8, cellPadding: 2 },
@@ -1125,7 +1125,7 @@ export default function RotationSchedule() {
               <KpiCard
                 icon={Activity}
                 label="Avg Interval Between Rotations"
-                value={analytics.avgInterval ? `${fmt(analytics.avgInterval)} km` : '—'}
+                value={analytics.avgInterval ? `${fmt(analytics.avgInterval)} km` : '-'}
                 sub={`Target: ${fmt(interval)} km`}
                 color="blue"
                 delay={0.1}
@@ -1267,14 +1267,14 @@ export default function RotationSchedule() {
                                 <span className={v.sinceLastKm >= interval ? 'text-red-400 font-medium' : 'text-gray-300'}>
                                   {fmt(v.sinceLastKm)}
                                 </span>
-                              ) : <span className="text-gray-600">—</span>}
+                              ) : <span className="text-gray-600">-</span>}
                             </td>
                             <td className="px-4 py-3">
                               {v.dueInKm != null ? (
                                 <span className={v.dueInKm <= 0 ? 'text-red-400 font-medium' : v.dueInKm <= DUE_SOON_BUFFER ? 'text-yellow-400' : 'text-gray-300'}>
                                   {v.dueInKm <= 0 ? `${fmt(Math.abs(v.dueInKm))} overdue` : fmt(v.dueInKm)}
                                 </span>
-                              ) : <span className="text-gray-600">—</span>}
+                              ) : <span className="text-gray-600">-</span>}
                             </td>
                             <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
                             <td className="px-4 py-3">
@@ -1296,7 +1296,7 @@ export default function RotationSchedule() {
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800 bg-gray-950">
                       <span className="text-xs text-gray-500">
-                        {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredVehicles.length)} of {filteredVehicles.length}
+                        {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filteredVehicles.length)} of {filteredVehicles.length}
                       </span>
                       <div className="flex gap-2">
                         <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="p-1.5 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 transition-colors">
@@ -1318,7 +1318,7 @@ export default function RotationSchedule() {
                     <div className="bg-orange-900/20 border border-orange-800 rounded-xl p-5">
                       <div className="flex items-center gap-2 text-orange-400 font-semibold text-sm mb-3">
                         <AlertTriangle size={15} />
-                        {imbalanced.length} Vehicle{imbalanced.length !== 1 ? 's' : ''} with Unbalanced Tyre Wear (&gt; {WEAR_IMBALANCE_MM}mm steer–drive difference)
+                        {imbalanced.length} Vehicle{imbalanced.length !== 1 ? 's' : ''} with Unbalanced Tyre Wear (&gt; {WEAR_IMBALANCE_MM}mm steer-drive difference)
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {imbalanced.map(v => (
@@ -1526,7 +1526,7 @@ export default function RotationSchedule() {
                   <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                     <Gauge size={15} className="text-orange-400" />
                     Position Wear Balance Analysis
-                    <span className="text-xs text-gray-500 font-normal ml-2">Vehicles with &gt; {WEAR_IMBALANCE_MM}mm steer–drive imbalance</span>
+                    <span className="text-xs text-gray-500 font-normal ml-2">Vehicles with &gt; {WEAR_IMBALANCE_MM}mm steer-drive imbalance</span>
                   </h2>
                   {(() => {
                     const imbalanced = analytics.vehicles.filter(v => v.wearImbalance != null && v.wearImbalance > WEAR_IMBALANCE_MM)
@@ -1557,8 +1557,8 @@ export default function RotationSchedule() {
                                   </button>
                                 </td>
                                 <td className="py-2.5 pr-4 text-gray-300">{v.site}</td>
-                                <td className="py-2.5 pr-4 text-blue-400">{v.steerTread?.toFixed(1) ?? '—'} mm</td>
-                                <td className="py-2.5 pr-4 text-red-400">{v.driveTread?.toFixed(1) ?? '—'} mm</td>
+                                <td className="py-2.5 pr-4 text-blue-400">{v.steerTread?.toFixed(1) ?? '-'} mm</td>
+                                <td className="py-2.5 pr-4 text-red-400">{v.driveTread?.toFixed(1) ?? '-'} mm</td>
                                 <td className="py-2.5 pr-4">
                                   <span className={`font-semibold ${v.wearImbalance > 6 ? 'text-red-400' : 'text-orange-400'}`}>
                                     Δ{v.wearImbalance.toFixed(1)} mm
@@ -1679,7 +1679,7 @@ export default function RotationSchedule() {
                                   </div>
                                   <div>
                                     <div className="text-xs text-gray-500">Notes</div>
-                                    <div className="text-gray-400 text-xs truncate max-w-xs">{s.notes || '—'}</div>
+                                    <div className="text-gray-400 text-xs truncate max-w-xs">{s.notes || '-'}</div>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">

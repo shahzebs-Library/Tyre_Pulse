@@ -137,10 +137,10 @@ function buildApprovalEmailHtml({ assetNo, inspector, date, site, odometer, hour
     : '<p style="color:#9ca3af;font-style:italic;">No digital signature captured</p>'
 
   const rows = [
-    ['Asset / Vehicle', assetNo || '—'],
-    ['Inspection Date', date || '—'],
-    ['Site', site || '—'],
-    ['Inspector', inspector || '—'],
+    ['Asset / Vehicle', assetNo || '-'],
+    ['Inspection Date', date || '-'],
+    ['Site', site || '-'],
+    ['Inspector', inspector || '-'],
     odometer ? ['Odometer (km)', odometer] : null,
     hourMeter ? ['Hour Meter (hrs)', hourMeter] : null,
   ].filter(Boolean)
@@ -314,7 +314,7 @@ export default function Inspections() {
   // Virtual scroll ref for the inspections table
   const tableParentRef = useRef(null)
 
-  // PWA — Screen Wake Lock during inspection
+  // PWA - Screen Wake Lock during inspection
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
 
   // Acquire wake lock when checklist tab is active with positions loaded
@@ -350,7 +350,7 @@ export default function Inspections() {
     })
   }, [])
 
-  // Geolocation auto-site detection (best-effort) — declared after masterSites
+  // Geolocation auto-site detection (best-effort) - declared after masterSites
   // so its dependency array is not evaluated before that state exists.
   const geoAttempted = useRef(false)
   useEffect(() => {
@@ -359,7 +359,7 @@ export default function Inspections() {
     if (!navigator.geolocation || masterSites.length === 0) return
     navigator.geolocation.getCurrentPosition(
       () => { /* future: match to nearest site from geo coordinates */ },
-      () => { /* permission denied — ignore */ },
+      () => { /* permission denied - ignore */ },
       { timeout: 6000, maximumAge: 60000 }
     )
   }, [activeTab, masterSites])
@@ -369,7 +369,7 @@ export default function Inspections() {
     if (name && !clInspector) setClInspector(name)
   }, [profile])
 
-  // Deep-link: /inspections?asset=ASSET_NO — auto-load checklist for scanned vehicle QR
+  // Deep-link: /inspections?asset=ASSET_NO - auto-load checklist for scanned vehicle QR
   useEffect(() => {
     const assetParam = searchParams.get('asset')
     if (!assetParam || authLoading) return
@@ -544,7 +544,7 @@ export default function Inspections() {
     setClError(null)
     setClOffline(false)
     const payload = {
-      title: `Daily Tyre Inspection — ${clSite || clAsset} — ${clDate}`,
+      title: `Daily Tyre Inspection - ${clSite || clAsset} - ${clDate}`,
       inspection_type: 'Routine',
       site: clSite,
       asset_no: clAsset.trim(),
@@ -573,7 +573,7 @@ export default function Inspections() {
     const { data, error } = await supabase.from('inspections').insert(payload).select().single()
     if (error) {
       if (!navigator.onLine || error.message?.includes('fetch')) {
-        // Offline — enqueue for later sync
+        // Offline - enqueue for later sync
         try {
           await enqueueInspection(payload)
           setClOffline(true)
@@ -585,7 +585,7 @@ export default function Inspections() {
           setClError('Failed to queue offline. Please try again.')
         }
       } else {
-        setClError(error.message || 'Save failed — please try again.')
+        setClError(error.message || 'Save failed - please try again.')
         vibrate(300)
       }
     } else {
@@ -651,7 +651,7 @@ export default function Inspections() {
     const infoRows = Math.ceil(infoItems.length / 3)
     y += infoRows * 12 + 6
 
-    // ── Vehicle diagram — capture actual SVG rendered in the DOM ───────────────
+    // ── Vehicle diagram - capture actual SVG rendered in the DOM ───────────────
     const svgEl = diagramRef.current?.querySelector('svg')
     if (svgEl) {
       try {
@@ -923,7 +923,7 @@ export default function Inspections() {
         )}
       />
 
-      {/* Tabs — hidden for TyreMan (locked to checklist) */}
+      {/* Tabs - hidden for TyreMan (locked to checklist) */}
       {!isTyreMan && <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg w-fit flex-wrap">
         {tabConfig.map(({ key, label, icon: Icon, count }) => (
           <button
@@ -959,7 +959,7 @@ export default function Inspections() {
                   : <CheckSquare size={20} className="text-green-400" />
                 }
                 <h3 className="text-lg font-semibold" style={{ color: clOffline ? '#92400e' : undefined }}>
-                  {clOffline ? 'Saved Offline — Will Sync' : 'Checklist Saved'}
+                  {clOffline ? 'Saved Offline - Will Sync' : 'Checklist Saved'}
                 </h3>
               </div>
               {clOffline && (
@@ -1014,7 +1014,7 @@ export default function Inspections() {
                   <button
                     onClick={async () => {
                       await shareOrCopy({
-                        title: `TyrePulse Inspection — ${clSaved.asset_no}`,
+                        title: `TyrePulse Inspection - ${clSaved.asset_no}`,
                         text: `Daily tyre inspection for ${clSaved.asset_no} on ${clSaved.scheduled_date} completed. ${clPositions.filter(p => p.condition === 'Puncture' || p.condition === 'Damage').length} critical tyre(s) flagged.`,
                       })
                     }}
@@ -1083,7 +1083,7 @@ export default function Inspections() {
                         await supabase.functions.invoke('send-email', {
                           body: {
                             to: clApproverEmail,
-                            subject: `Inspection Approval Required — Asset ${clSaved.asset_no || clAsset}`,
+                            subject: `Inspection Approval Required - Asset ${clSaved.asset_no || clAsset}`,
                             body: buildApprovalEmailHtml({
                               assetNo: clSaved.asset_no || clAsset,
                               inspector: clInspector || profile?.full_name || '',
@@ -1136,7 +1136,7 @@ export default function Inspections() {
                   style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e' }}>
                   <WifiOff size={14} />
                   <span>
-                    {pendingCount} offline inspection{pendingCount !== 1 ? 's' : ''} queued — will sync when connected.
+                    {pendingCount} offline inspection{pendingCount !== 1 ? 's' : ''} queued - will sync when connected.
                   </span>
                 </div>
               )}
@@ -1176,7 +1176,7 @@ export default function Inspections() {
                       <option value="">Select asset…</option>
                       {masterAssets.map(a => (
                         <option key={a.asset_no} value={a.asset_no}>
-                          {a.asset_no}{a.vehicle_type ? ` — ${a.vehicle_type}` : ''}{a.site ? ` (${a.site})` : ''}
+                          {a.asset_no}{a.vehicle_type ? ` - ${a.vehicle_type}` : ''}{a.site ? ` (${a.site})` : ''}
                         </option>
                       ))}
                     </select>
@@ -1229,7 +1229,7 @@ export default function Inspections() {
                 const selPos = posIdx >= 0 ? clPositions[posIdx] : null
                 return (
                   <div className="space-y-3">
-                    {/* SVG diagram — single source of truth, tap to fill */}
+                    {/* SVG diagram - single source of truth, tap to fill */}
                     <div
                       ref={diagramRef}
                       className="rounded-2xl flex flex-col items-center py-4 px-2"
@@ -1249,7 +1249,7 @@ export default function Inspections() {
                       />
                     </div>
 
-                    {/* Position chips — tap any to jump, shows fill status */}
+                    {/* Position chips - tap any to jump, shows fill status */}
                     <div className="flex flex-wrap gap-1.5">
                       {clPositions.map(p => {
                         const has = !!p.pressure
@@ -1287,7 +1287,7 @@ export default function Inspections() {
                     </div>
                     <p className="text-xs px-0.5" style={{ color: allFilled ? '#16a34a' : '#9ca3af' }}>
                       {allFilled
-                        ? `✓ All ${clPositions.length} tyres filled — ready to save`
+                        ? `✓ All ${clPositions.length} tyres filled - ready to save`
                         : `${filledCount} of ${clPositions.length} filled · ${unfilledPositions.length} remaining`}
                     </p>
 
@@ -1310,7 +1310,7 @@ export default function Inspections() {
                             // Re-check unfilled at call time (state may have just changed)
                             const stillUnfilled = clPositions.find((p, i) => i !== posIdx && !p.pressure)
                             if (stillUnfilled) { setClSelectedPos(stillUnfilled.position); return }
-                            // All filled — close sheet
+                            // All filled - close sheet
                             setClSelectedPos(null)
                             return
                           }
@@ -1436,7 +1436,7 @@ export default function Inspections() {
                     <img src={clSignature} alt="signature"
                       style={{ height: 56, maxWidth: 180, background: '#fff', borderRadius: 8, border: '1px solid var(--hairline)', padding: 4 }} />
                     <div>
-                      <p className="text-xs text-green-400 font-semibold">✓ Signed — {clInspector}</p>
+                      <p className="text-xs text-green-400 font-semibold">✓ Signed - {clInspector}</p>
                       <button onClick={() => setClSignature(null)}
                         className="text-xs text-gray-500 hover:text-red-400 transition-colors mt-0.5">
                         Clear signature
@@ -1470,7 +1470,7 @@ export default function Inspections() {
                   style={{ background: '#fefce8', border: '1px solid #fde047', color: '#854d0e' }}>
                   <span>⚠️</span>
                   <span>
-                    {clPositions.filter(p => !p.pressure).length} tyre{clPositions.filter(p => !p.pressure).length !== 1 ? 's' : ''} still need PSI — tap them on the diagram to fill.
+                    {clPositions.filter(p => !p.pressure).length} tyre{clPositions.filter(p => !p.pressure).length !== 1 ? 's' : ''} still need PSI - tap them on the diagram to fill.
                   </span>
                 </div>
               )}
@@ -1670,7 +1670,7 @@ export default function Inspections() {
             background: 'var(--panel)', borderBottom: '1px solid var(--hairline)',
           }}>
             <span style={{ fontSize: 14, fontWeight: 700, color:'var(--panel-ink)' }}>
-              Inspection Report — {clSaved?.asset_no}
+              Inspection Report - {clSaved?.asset_no}
             </span>
             <div className="flex gap-2">
               <a
@@ -1696,7 +1696,7 @@ export default function Inspections() {
         </div>
       )}
 
-      {/* Status filter pills, search, and table — hidden in checklist mode */}
+      {/* Status filter pills, search, and table - hidden in checklist mode */}
       {activeTab !== 'checklist' && <>
       <div className="flex flex-wrap gap-2">
         {[['all', 'All', 'bg-gray-800 text-gray-300 border-gray-700'],
@@ -1801,7 +1801,7 @@ export default function Inspections() {
                     <div className="px-3 text-gray-300 text-sm truncate">{r.site}</div>
 
                     {/* Asset */}
-                    <div className="px-3 font-mono text-xs text-gray-400 truncate">{r.asset_no || '—'}</div>
+                    <div className="px-3 font-mono text-xs text-gray-400 truncate">{r.asset_no || '-'}</div>
 
                     {/* Date */}
                     <div className="px-3 text-gray-400 text-xs tabular-nums">{r.scheduled_date}</div>
@@ -1823,7 +1823,7 @@ export default function Inspections() {
                     </div>
 
                     {/* Inspector */}
-                    <div className="px-3 text-gray-400 text-xs truncate">{r.inspector || r.attendees || '—'}</div>
+                    <div className="px-3 text-gray-400 text-xs truncate">{r.inspector || r.attendees || '-'}</div>
 
                     {/* Actions */}
                     <div className="px-3">
@@ -1946,13 +1946,13 @@ export default function Inspections() {
               )}
             </div>
 
-            {/* Tyre diagram — inspections only */}
+            {/* Tyre diagram - inspections only */}
             {!isObservationType(form.inspection_type) && !isTrainingType(form.inspection_type) && (
               <div>
                 <label className="label">Vehicle Type</label>
                 <select className="input mb-3" value={form.vehicle_type || ''}
                   onChange={e => { setForm(f => ({ ...f, vehicle_type: e.target.value, tyre_conditions: {} })); setSelectedTyre(null) }}>
-                  <option value="">— select to show tyre diagram —</option>
+                  <option value="">- select to show tyre diagram -</option>
                   {VEHICLE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
 
@@ -2194,7 +2194,7 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
           {showPunctureAlert && (
             <div className="mb-3 px-3 py-2.5 rounded-xl flex items-center gap-2 text-sm font-semibold"
               style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#991b1b' }}>
-              🔴 Puncture detected — immediate action required
+              🔴 Puncture detected - immediate action required
             </div>
           )}
 
@@ -2245,7 +2245,7 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
               onBlur={e  => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none' }}
             />
           </div>
-          {/* tread disabled — re-enable when data collection is ready
+          {/* tread disabled - re-enable when data collection is ready
           <div className="mb-5">
             <label className="text-[11px] font-bold uppercase tracking-widest mb-2 block" style={{ color: '#9ca3af' }}>
               {L.tread}
@@ -2298,7 +2298,7 @@ function RaiseActionModal({ row, onConfirm, onClose }) {
       </div>
       <div className="bg-gray-800 rounded-lg p-3 text-xs text-gray-400 mb-4 space-y-1">
         <p><span className="text-gray-500">Site:</span> {row.site}</p>
-        <p><span className="text-gray-500">Asset:</span> {row.asset_no || '—'}</p>
+        <p><span className="text-gray-500">Asset:</span> {row.asset_no || '-'}</p>
         <p><span className="text-gray-500">Priority:</span> {row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium'}</p>
         {row.findings && <p><span className="text-gray-500">Findings:</span> {row.findings.slice(0, 100)}{row.findings.length > 100 ? '…' : ''}</p>}
       </div>

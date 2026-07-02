@@ -206,7 +206,7 @@ export default function DailyOps() {
           type: 'No Inspection (14d)',
           description: `Vehicle ${asset} has no inspection in last 14 days`,
           asset,
-          detail: 'Inspection overdue — last activity >14 days ago',
+          detail: 'Inspection overdue - last activity >14 days ago',
           link: '/inspections',
         })
       }
@@ -224,7 +224,7 @@ export default function DailyOps() {
         type: r.km_at_removal ? 'Removal' : 'New Fitment',
         asset: r.asset_no,
         site: r.site,
-        detail: `${r.brand || 'Unknown'} | ${r.position || '—'} | ${r.serial_number || 'No Serial'}`,
+        detail: `${r.brand || 'Unknown'} | ${r.position || '-'} | ${r.serial_number || 'No Serial'}`,
       })
     })
     todayIns.forEach(r => {
@@ -360,7 +360,7 @@ export default function DailyOps() {
     doc.setTextColor(22, 163, 74)
     doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
-    doc.text('TYRE PULSE — DAILY OPERATIONS BRIEFING', W / 2, 13, { align: 'center' })
+    doc.text('TYRE PULSE - DAILY OPERATIONS BRIEFING', W / 2, 13, { align: 'center' })
     doc.setTextColor(156, 163, 175)
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
@@ -402,7 +402,7 @@ export default function DailyOps() {
       autoTable(doc, {
         startY: y,
         head: [['Severity', 'Type', 'Asset', 'Description']],
-        body: priorityQueue.slice(0, 15).map(i => [i.severity, i.type, i.asset || '—', i.description]),
+        body: priorityQueue.slice(0, 15).map(i => [i.severity, i.type, i.asset || '-', i.description]),
         theme: 'grid',
         headStyles: { fillColor: [22, 163, 74], textColor: 255, fontSize: 9 },
         bodyStyles: { fontSize: 8, textColor: [209, 213, 219] },
@@ -450,7 +450,7 @@ export default function DailyOps() {
       ['Alerts', todayAlerts.length],
       [`Cost (${activeCurrency})`, todayCost.toLocaleString(undefined, { maximumFractionDigits: 0 })],
     ]
-    win.document.write(`<!DOCTYPE html><html><head><title>Daily Ops — ${selectedDate}</title>
+    win.document.write(`<!DOCTYPE html><html><head><title>Daily Ops - ${selectedDate}</title>
 <style>body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#fff;color:#111}
 h1{font-size:18px;color:#16a34a;margin-bottom:4px}p.sub{color:#666;font-size:12px;margin:0 0 16px}
 table{border-collapse:collapse;width:100%;margin-bottom:20px}
@@ -463,14 +463,14 @@ h2{font-size:14px;color:#16a34a;margin:16px 0 6px}
 .sev-Medium{color:#ca8a04}
 .sev-Low{color:#2563eb}
 </style></head><body>
-<h1>Tyre Pulse — Daily Operations Briefing</h1>
+<h1>Tyre Pulse - Daily Operations Briefing</h1>
 <p class="sub">${fmtDisp(selectedDate)}</p>
 <h2>Today's Activity Summary</h2>
 <table><tr>${rows.map(([k]) => `<th>${k}</th>`).join('')}</tr>
 <tr>${rows.map(([, v]) => `<td>${v}</td>`).join('')}</tr></table>
 ${priorityQueue.length > 0 ? `<h2>Priority Action Queue (${priorityQueue.length})</h2>
 <table><tr><th>Severity</th><th>Type</th><th>Asset</th><th>Description</th></tr>
-${priorityQueue.slice(0, 20).map(i => `<tr><td class="sev-${i.severity}">${i.severity}</td><td>${i.type}</td><td>${i.asset || '—'}</td><td>${i.description}</td></tr>`).join('')}
+${priorityQueue.slice(0, 20).map(i => `<tr><td class="sev-${i.severity}">${i.severity}</td><td>${i.type}</td><td>${i.asset || '-'}</td><td>${i.description}</td></tr>`).join('')}
 </table>` : ''}
 ${siteActivity.length > 0 ? `<h2>Site Activity</h2>
 <table><tr><th>Site</th><th>Events</th></tr>
@@ -627,7 +627,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${s}</td><td>${c}</td></tr>`).join('')}
                         <span className={`text-xs font-semibold w-24 flex-shrink-0 mt-0.5 ${EVENT_COLORS[ev.type] || 'text-gray-400'}`}>{ev.type}</span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium text-white">{ev.asset || '—'}</span>
+                            <span className="text-sm font-medium text-white">{ev.asset || '-'}</span>
                             {ev.site && <span className="text-xs text-gray-500">{ev.site}</span>}
                           </div>
                           <p className="text-xs text-gray-400 truncate">{ev.detail}</p>
@@ -716,7 +716,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${s}</td><td>${c}</td></tr>`).join('')}
               className="w-full flex items-center justify-between text-sm font-bold text-white uppercase tracking-wider mb-3 group">
               <span className="flex items-center gap-2">
                 <BarChart2 size={14} className="text-green-400" /> This Week Summary
-                <span className="text-xs text-gray-500 normal-case font-normal">({fmtShort(thisWeekStart)} – {fmtShort(thisWeekEnd)})</span>
+                <span className="text-xs text-gray-500 normal-case font-normal">({fmtShort(thisWeekStart)} - {fmtShort(thisWeekEnd)})</span>
               </span>
               {weekOpen ? <ChevronUp size={14} className="text-gray-500 group-hover:text-white transition-colors" /> : <ChevronDown size={14} className="text-gray-500 group-hover:text-white transition-colors" />}
             </button>
@@ -761,13 +761,13 @@ ${siteActivity.map(([s, c]) => `<tr><td>${s}</td><td>${c}</td></tr>`).join('')}
                         return (
                           <tr key={wo.id} className={`border-b border-gray-800/50 hover:bg-white/[0.02] transition-colors ${i % 2 === 0 ? '' : 'bg-white/[0.01]'}`}>
                             <td className="px-4 py-2.5 text-gray-300 font-mono text-xs">{fmtShort(wo.scheduled_date)}</td>
-                            <td className="px-4 py-2.5 text-white font-medium">{wo.asset_no || '—'}</td>
+                            <td className="px-4 py-2.5 text-white font-medium">{wo.asset_no || '-'}</td>
                             <td className="px-4 py-2.5 text-gray-400 text-xs">{wo.work_order_no || wo.id?.slice(0, 8)}</td>
                             <td className="px-4 py-2.5">
                               <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-300">{wo.status}</span>
                             </td>
-                            <td className={`px-4 py-2.5 text-xs font-semibold ${pc[wo.priority] || 'text-gray-400'}`}>{wo.priority || '—'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">{wo.site || '—'}</td>
+                            <td className={`px-4 py-2.5 text-xs font-semibold ${pc[wo.priority] || 'text-gray-400'}`}>{wo.priority || '-'}</td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs">{wo.site || '-'}</td>
                           </tr>
                         )
                       })}

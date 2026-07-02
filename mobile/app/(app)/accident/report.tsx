@@ -1,5 +1,5 @@
 /**
- * Accident Report — 3-step form
+ * Accident Report - 3-step form
  *
  * Step 1: Incident Details  (site, vehicle, date/time, location, type, severity, description)
  * Step 2: Damage & People   (injuries, third party, police report, damage desc, cost)

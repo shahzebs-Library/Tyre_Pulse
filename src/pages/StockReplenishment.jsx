@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// StockReplenishment.jsx — Automated Stock Replenishment Intelligence · /stock-replenishment
+// StockReplenishment.jsx - Automated Stock Replenishment Intelligence · /stock-replenishment
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -63,11 +63,11 @@ const BAR_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4']
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmtCurrency(v, currency = 'SAR') {
   const n = parseFloat(v)
-  if (isNaN(n)) return '—'
+  if (isNaN(n)) return '-'
   return `${currency} ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   return new Date(d).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 function computeUrgency(daysRemaining, leadTimeDays) {
@@ -295,7 +295,7 @@ export default function StockReplenishment() {
       const d = new Date(); d.setMonth(d.getMonth() - 5 + i)
       return d.toISOString().slice(0, 7)
     })
-    // Need full tyre_records for 6 months — we only loaded 90d; use what we have
+    // Need full tyre_records for 6 months - we only loaded 90d; use what we have
     const sizeTotals = {}
     tyreRecords.forEach(r => {
       sizeTotals[r.size] = (sizeTotals[r.size] || 0) + 1
@@ -529,10 +529,10 @@ export default function StockReplenishment() {
       startY: y,
       head: [['#', 'Brand', 'Size', 'Site', 'Qty', 'Unit Cost', 'Total', 'Supplier']],
       body: orderLines.map((l, i) => [
-        i + 1, l.brand, l.size, l.site || '—', l.qty,
+        i + 1, l.brand, l.size, l.site || '-', l.qty,
         fmtCurrency(l.unitCost, activeCurrency),
         fmtCurrency(l.totalCost, activeCurrency),
-        l.supplier || '—',
+        l.supplier || '-',
       ]),
       foot: [['', '', '', '', '', 'TOTAL', fmtCurrency(orderTotal, activeCurrency), '']],
       theme: 'striped',
@@ -546,7 +546,7 @@ export default function StockReplenishment() {
     for (let i = 1; i <= pgCount; i++) {
       doc.setPage(i); doc.setFontSize(7); doc.setTextColor(156, 163, 175)
       doc.text(
-        `TyrePulse Fleet Intelligence — Stock Replenishment PO — ${poRef} — Page ${i} of ${pgCount}`,
+        `TyrePulse Fleet Intelligence - Stock Replenishment PO - ${poRef} - Page ${i} of ${pgCount}`,
         14, 290,
       )
     }
@@ -559,7 +559,7 @@ export default function StockReplenishment() {
       setPoResult({ type: 'error', message: 'Add at least one order line before creating a PO.' })
       return
     }
-    // A single PO requires a single vendor — derive from the first supplied supplier.
+    // A single PO requires a single vendor - derive from the first supplied supplier.
     const vendorName = (orderLines.find(l => l.supplier?.trim())?.supplier || '').trim()
     if (!vendorName) {
       setPoResult({ type: 'error', message: 'Enter a supplier name on at least one line to set the PO vendor.' })
@@ -596,7 +596,7 @@ export default function StockReplenishment() {
       const poCountry = activeCountry && activeCountry !== 'All' ? activeCountry : null
       const poSite    = items.find(it => it.site)?.site || null
 
-      // Whitelisted insert — only known purchase_orders columns.
+      // Whitelisted insert - only known purchase_orders columns.
       const payload = {
         po_number:     poNumber,
         vendor_name:   vendorName,
@@ -654,7 +654,7 @@ export default function StockReplenishment() {
     <div className="space-y-6">
       <PageHeader
         title="Stock Replenishment"
-        subtitle={`Procurement intelligence — ${stockData.length} SKUs tracked${lastSync ? ` · Synced ${lastSync.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+        subtitle={`Procurement intelligence - ${stockData.length} SKUs tracked${lastSync ? ` · Synced ${lastSync.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
         icon={Package}
         actions={
           <div className="flex items-center gap-2">
@@ -913,9 +913,9 @@ export default function StockReplenishment() {
                             key={row._key}
                             className={`border-b border-gray-800/60 hover:bg-gray-800/40 transition-colors ${cfg.row}`}
                           >
-                            <td className="px-4 py-3 text-white font-medium">{row.brand || '—'}</td>
-                            <td className="px-4 py-3 text-gray-300 font-mono text-xs">{row.size || '—'}</td>
-                            <td className="px-4 py-3 text-gray-400">{row.site || '—'}</td>
+                            <td className="px-4 py-3 text-white font-medium">{row.brand || '-'}</td>
+                            <td className="px-4 py-3 text-gray-300 font-mono text-xs">{row.size || '-'}</td>
+                            <td className="px-4 py-3 text-gray-400">{row.site || '-'}</td>
                             <td className="px-4 py-3 text-center">
                               <span className={row.qtyInStock <= 0 ? 'text-red-400 font-bold' : 'text-white'}>
                                 {row.qtyInStock ?? 0}
@@ -927,7 +927,7 @@ export default function StockReplenishment() {
                             <td className="px-4 py-3 text-center text-gray-400">
                               {row.consumptionPerDay > 0
                                 ? row.consumptionPerDay.toFixed(2)
-                                : <span className="text-gray-600">—</span>}
+                                : <span className="text-gray-600">-</span>}
                             </td>
                             <td className="px-4 py-3 text-center">
                               <span className={
@@ -957,7 +957,7 @@ export default function StockReplenishment() {
                               <span className={estCostDisplay > 0 ? 'text-emerald-400 text-xs' : 'text-gray-600 text-xs'}>
                                 {estCostDisplay > 0
                                   ? `${activeCurrency} ${estCostDisplay.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-                                  : '—'}
+                                  : '-'}
                               </span>
                             </td>
                             <td className="px-4 py-3">
@@ -1113,7 +1113,7 @@ export default function StockReplenishment() {
                                                   'text-gray-400'
                                     }`}>{val}</span>
                                   ) : (
-                                    <span className="text-gray-700">—</span>
+                                    <span className="text-gray-700">-</span>
                                   )}
                                 </td>
                               )

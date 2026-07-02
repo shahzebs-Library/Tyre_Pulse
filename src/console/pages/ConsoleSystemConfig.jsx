@@ -165,7 +165,7 @@ export default function ConsoleSystemConfig() {
       {(configs.maintenance_mode === 'true') && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-950/50 border border-red-700/50">
           <AlertTriangle size={18} className="text-red-400 flex-shrink-0" />
-          <p className="text-sm text-red-300 font-semibold">Maintenance Mode is ACTIVE — regular users cannot access the app</p>
+          <p className="text-sm text-red-300 font-semibold">Maintenance Mode is ACTIVE - regular users cannot access the app</p>
           <button onClick={() => setVal('maintenance_mode', 'bool', false)}
             className="ml-auto text-xs text-red-300 underline hover:text-red-200">Disable</button>
         </div>

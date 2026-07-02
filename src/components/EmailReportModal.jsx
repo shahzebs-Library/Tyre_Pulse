@@ -40,7 +40,7 @@ export default function EmailReportModal({
   useEffect(() => {
     if (isOpen) {
       setRecipients([''])
-      setSubject(`TyrePulse Report: ${reportTitle} — ${defaultPeriod}`)
+      setSubject(`TyrePulse Report: ${reportTitle} - ${defaultPeriod}`)
       setIncludePdf(true)
       setResult(null)
       setSending(false)
@@ -94,7 +94,7 @@ export default function EmailReportModal({
         )
       }
 
-      const bodyHtml = buildFleetSummaryEmail(kpiSummary, `${reportTitle} — ${defaultPeriod}`)
+      const bodyHtml = buildFleetSummaryEmail(kpiSummary, `${reportTitle} - ${defaultPeriod}`)
 
       await sendReportEmail({
         to: validRecipients,

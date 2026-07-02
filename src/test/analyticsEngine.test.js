@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// analyticsEngine.test.js — Comprehensive unit tests for analyticsEngine.js
+// analyticsEngine.test.js - Comprehensive unit tests for analyticsEngine.js
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from 'vitest'
@@ -293,7 +293,7 @@ describe('bucketByMonth', () => {
     expect(result).toHaveLength(1)
   })
 
-  it('works without valFn — total remains 0', () => {
+  it('works without valFn - total remains 0', () => {
     const records = [{ issue_date: '2024-06-01' }]
     const result = bucketByMonth(records, r => r.issue_date)
     expect(result[0].total).toBe(0)
@@ -690,12 +690,12 @@ describe('detectRiskSpike', () => {
   })
 
   it('detects a spike when recent high-risk rate is > 25% higher than prior', () => {
-    // prior window (2023): all Low — sorted DESC these are older, filling the "prior" slice
+    // prior window (2023): all Low - sorted DESC these are older, filling the "prior" slice
     const priorRecs = Array.from({ length: 50 }, (_, i) => ({
       risk_level: 'Low',
       created_at: new Date(2023, 0, i + 1).toISOString(),
     }))
-    // recent window (2025): all High — sorted DESC these are newer, filling the "recent" slice
+    // recent window (2025): all High - sorted DESC these are newer, filling the "recent" slice
     const recentRecs = Array.from({ length: 50 }, (_, i) => ({
       risk_level: 'High',
       created_at: new Date(2025, 0, i + 1).toISOString(),

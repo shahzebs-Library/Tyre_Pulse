@@ -1,4 +1,4 @@
-# TyrePulse — Legacy → Canonical Data Mapping
+# TyrePulse - Legacy → Canonical Data Mapping
 
 > **Status:** Step 0 design. Defines how every legacy/overlapping table maps to the canonical multi-tenant model owned by the Go API (`docs/TARGET_ARCHITECTURE.md`).
 >
@@ -81,7 +81,7 @@ Reconciliation passes only when: `new_count == old_count − duplicates_collapse
 | Transform | `audit_log_v2` maps richest → set `source='audit_log_v2'`. `audit_log` v1: back-fill nulls (`org_id` resolved from actor where possible). Domain logs: `entity_type` = `inspection`/`accident`, payload into `old/new_values`. |
 | Dedupe key | `(source, source_id)`; events are inherently append-only so no semantic dedupe. |
 | Reconciliation | `new_count == sum(old_counts)`; verify no row drops; spot-check old/new value fidelity on v2 rows. |
-| Rollback | All four legacy logs read-only and retained permanently for forensics (audit immutability — Security Register **R-09**). |
+| Rollback | All four legacy logs read-only and retained permanently for forensics (audit immutability - Security Register **R-09**). |
 
 ---
 
@@ -122,7 +122,7 @@ Reconciliation passes only when: `new_count == old_count − duplicates_collapse
 - **Tenant back-fill:** resolve geographic `site`/`country[]` text → `site_id`/`country_id`/`org_id`. Rows whose site/country cannot be resolved go to an `unmapped` bucket and **block cutover** until corrected.
 - **Storage refs:** never convert `tp-storage://` → public URL during migration. Signed-URL resolution stays server-side.
 - **Idempotency:** every movement/event carries `(source_table, source_id)` so dry-runs and re-runs are safe.
-- **Data-quality flags** (not failures): duplicate serials, invalid pressure/tread, inconsistent odometer, unrealistic tyre-life — surfaced in the reconciliation report for engineering review.
+- **Data-quality flags** (not failures): duplicate serials, invalid pressure/tread, inconsistent odometer, unrealistic tyre-life - surfaced in the reconciliation report for engineering review.
 
 ---
 

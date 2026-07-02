@@ -94,7 +94,7 @@ const FAILURE_PALETTE = [
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 function fmtDate(iso) {
-  if (!iso) return '—'
+  if (!iso) return '-'
   const d = new Date(iso)
   return isNaN(d) ? iso : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
@@ -202,7 +202,7 @@ export default function WarrantyTracker() {
   }, [])
 
   // Persist a single claim (insert or update) then refresh from the server so
-  // the list always reflects committed state — no optimistic divergence.
+  // the list always reflects committed state - no optimistic divergence.
   const upsertClaim = useCallback(async (row, id) => {
     if (id) {
       const { error } = await supabase.from('warranty_claims').update(row).eq('id', id)
@@ -434,7 +434,7 @@ export default function WarrantyTracker() {
     setSaving(true)
     setFormError('')
     try {
-      // Whitelist only real columns — never spread unknown form keys into the row
+      // Whitelist only real columns - never spread unknown form keys into the row
       const base = {
         serial_number: form.serial_number.trim(),
         brand: form.brand.trim(),
@@ -490,7 +490,7 @@ export default function WarrantyTracker() {
     doc.rect(0, 0, 297, 210, 'F')
     doc.setTextColor(249, 250, 251)
     doc.setFontSize(16)
-    doc.text('Tyre Pulse — Warranty Claims Report', 14, 16)
+    doc.text('Tyre Pulse - Warranty Claims Report', 14, 16)
     doc.setFontSize(10)
     doc.setTextColor(156, 163, 175)
     doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')}  |  Total Claims: ${claims.length}`, 14, 23)
@@ -503,7 +503,7 @@ export default function WarrantyTracker() {
         c.km_run?.toLocaleString() || '0',
         c.expected_life_km?.toLocaleString() || '0',
         c.expected_life_km > 0 ? `${((c.km_run / c.expected_life_km) * 100).toFixed(1)}%` : 'N/A',
-        c.credit_amount ? `${cur} ${Number(c.credit_amount).toLocaleString()}` : '—',
+        c.credit_amount ? `${cur} ${Number(c.credit_amount).toLocaleString()}` : '-',
         fmtDate(c.created_at),
       ]),
       styles: { fillColor: [31, 41, 55], textColor: [209, 213, 219], fontSize: 8 },
@@ -522,8 +522,8 @@ export default function WarrantyTracker() {
         head: [['Brand', 'Total Claims', 'Approval Rate', 'Avg Credit', 'Avg km at Failure']],
         body: brandPerf.map(b => [
           b.brand, b.total, `${b.approvalRate.toFixed(1)}%`,
-          b.avgCredit > 0 ? `${cur} ${Math.round(b.avgCredit).toLocaleString()}` : '—',
-          b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() : '—',
+          b.avgCredit > 0 ? `${cur} ${Math.round(b.avgCredit).toLocaleString()}` : '-',
+          b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() : '-',
         ]),
         styles: { fillColor: [31, 41, 55], textColor: [209, 213, 219], fontSize: 9 },
         headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255] },
@@ -598,7 +598,7 @@ export default function WarrantyTracker() {
       ['Serial Number', claim.serial_number],
       ['Brand', claim.brand],
       ['Size', claim.size],
-      ['Supplier', claim.supplier || '—'],
+      ['Supplier', claim.supplier || '-'],
       ['Asset / Vehicle', claim.asset_no],
       ['Site / Location', claim.site],
       ['Fitment Date', fmtDate(claim.fitment_date)],
@@ -615,7 +615,7 @@ export default function WarrantyTracker() {
       doc.setFont(undefined, 'bold')
       doc.text(`${k}:`, 14, y)
       doc.setFont(undefined, 'normal')
-      doc.text(String(v ?? '—'), 80, y)
+      doc.text(String(v ?? '-'), 80, y)
       y += 8
     })
     doc.line(14, y + 2, 196, y + 2)
@@ -853,10 +853,10 @@ export default function WarrantyTracker() {
                               <td className="px-3 py-2.5 text-gray-300 text-xs text-right whitespace-nowrap">{(c.km_run || 0).toLocaleString()}</td>
                               <td className="px-3 py-2.5 text-gray-400 text-xs text-right whitespace-nowrap">{(c.expected_life_km || 0).toLocaleString()}</td>
                               <td className={`px-3 py-2.5 text-xs text-right font-semibold whitespace-nowrap ${lowLife ? 'text-red-400' : 'text-gray-300'}`}>
-                                {pctLife !== null ? `${pctLife.toFixed(1)}%` : '—'}
+                                {pctLife !== null ? `${pctLife.toFixed(1)}%` : '-'}
                               </td>
                               <td className="px-3 py-2.5 text-emerald-400 text-xs text-right whitespace-nowrap">
-                                {c.credit_amount ? fmt(c.credit_amount) : '—'}
+                                {c.credit_amount ? fmt(c.credit_amount) : '-'}
                               </td>
                               <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{fmtDate(c.created_at)}</td>
                               <td className="px-3 py-2.5 whitespace-nowrap">
@@ -879,7 +879,7 @@ export default function WarrantyTracker() {
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                                     <div>
                                       <p className="text-gray-500 mb-1">Country</p>
-                                      <p className="text-gray-200">{c.country || '—'}</p>
+                                      <p className="text-gray-200">{c.country || '-'}</p>
                                     </div>
                                     <div>
                                       <p className="text-gray-500 mb-1">Fitment Date</p>
@@ -891,7 +891,7 @@ export default function WarrantyTracker() {
                                     </div>
                                     <div>
                                       <p className="text-gray-500 mb-1">Supplier</p>
-                                      <p className="text-gray-200">{c.supplier || '—'}</p>
+                                      <p className="text-gray-200">{c.supplier || '-'}</p>
                                     </div>
                                     <div>
                                       <p className="text-gray-500 mb-1">Credit Date</p>
@@ -899,7 +899,7 @@ export default function WarrantyTracker() {
                                     </div>
                                     <div className="col-span-2">
                                       <p className="text-gray-500 mb-1">Notes</p>
-                                      <p className="text-gray-300">{c.notes || '—'}</p>
+                                      <p className="text-gray-300">{c.notes || '-'}</p>
                                     </div>
                                     <div className="flex items-end gap-2">
                                       <button
@@ -986,8 +986,8 @@ export default function WarrantyTracker() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-emerald-400 font-semibold text-sm">{b.avgCredit > 0 ? fmt(b.avgCredit) : '—'}</td>
-                    <td className="px-4 py-3 text-gray-300 text-sm">{b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() + ' km' : '—'}</td>
+                    <td className="px-4 py-3 text-emerald-400 font-semibold text-sm">{b.avgCredit > 0 ? fmt(b.avgCredit) : '-'}</td>
+                    <td className="px-4 py-3 text-gray-300 text-sm">{b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() + ' km' : '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1144,13 +1144,13 @@ export default function WarrantyTracker() {
                 <p className="text-2xl font-bold text-green-400">
                   {Number(roiAvgCost) > 0 && Number(roiAnnualCount) > 0
                     ? `${roiCalc.recoveryRate.toFixed(1)}%`
-                    : '—'}
+                    : '-'}
                 </p>
               </div>
               <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
                 <p className="text-gray-400 text-xs mb-1">Est. Unclaimed Potential</p>
                 <p className="text-2xl font-bold text-yellow-400">
-                  {Number(roiAvgCost) > 0 && Number(roiAnnualCount) > 0 ? fmt(roiCalc.eligibleUnclaimed) : '—'}
+                  {Number(roiAvgCost) > 0 && Number(roiAnnualCount) > 0 ? fmt(roiCalc.eligibleUnclaimed) : '-'}
                 </p>
               </div>
             </div>

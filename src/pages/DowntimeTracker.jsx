@@ -35,7 +35,7 @@ const SHIFT_HOURS   = 8            // assumed productive hours per shift-day
 const BUDGET_THRESHOLD = 50000     // monthly budget threshold (reference line)
 const TARGET_AVAILABILITY = 95     // industry benchmark %
 
-// Assumed downtime hours per removal event by severity — used only as a fallback
+// Assumed downtime hours per removal event by severity - used only as a fallback
 // when a linked work order does not provide actual opened/completed timestamps.
 const SEVERITY_HOURS = { Critical: 4, High: 3, Medium: 2, Low: 2 }
 const SEVERITY_WEIGHT = { Critical: 3, High: 2, Medium: 1, Low: 0.5 }
@@ -75,14 +75,14 @@ const PALETTE = [
 ]
 
 function fmtCurrency(val, sym) {
-  if (!val && val !== 0) return '—'
+  if (!val && val !== 0) return '-'
   if (val >= 1_000_000) return `${sym} ${(val / 1_000_000).toFixed(1)}M`
   if (val >= 1_000)     return `${sym} ${(val / 1_000).toFixed(1)}K`
   return `${sym} ${Math.round(val).toLocaleString()}`
 }
 
 function fmtHours(h) {
-  if (!h && h !== 0) return '—'
+  if (!h && h !== 0) return '-'
   if (h >= 1000) return `${(h / 1000).toFixed(1)}K h`
   return `${h.toFixed(1)} h`
 }
@@ -176,7 +176,7 @@ function ChartCard({ title, children, onExpand }) {
 export default function DowntimeTracker() {
   const { activeCurrency, activeCountry, appSettings } = useSettings()
 
-  // Cost/hour assumption — overridable via the `downtime_rate` setting key.
+  // Cost/hour assumption - overridable via the `downtime_rate` setting key.
   const downtimeRate = useMemo(() => {
     const v = Number(appSettings?.downtime_rate)
     return Number.isFinite(v) && v > 0 ? v : DEFAULT_DOWNTIME_RATE
@@ -499,7 +499,7 @@ export default function DowntimeTracker() {
     const map = {}
     filtered.forEach(r => {
       if (!r.asset_no) return
-      if (!map[r.asset_no]) map[r.asset_no] = { asset: r.asset_no, site: r.site || '—', events: [], totalHours: 0, totalCost: 0, severitySum: 0 }
+      if (!map[r.asset_no]) map[r.asset_no] = { asset: r.asset_no, site: r.site || '-', events: [], totalHours: 0, totalCost: 0, severitySum: 0 }
       const h = downtimeHours(r, actualByAsset).hours
       map[r.asset_no].events.push(r.issue_date)
       map[r.asset_no].totalHours += h
@@ -576,7 +576,7 @@ export default function DowntimeTracker() {
         recs.push({
           type: 'vehicle',
           severity: v.eventCount >= 5 ? 'critical' : v.eventCount >= 3 ? 'high' : 'medium',
-          message: `Vehicle ${v.asset} has had ${v.eventCount} downtime event${v.eventCount > 1 ? 's' : ''} — root cause investigation recommended`,
+          message: `Vehicle ${v.asset} has had ${v.eventCount} downtime event${v.eventCount > 1 ? 's' : ''} - root cause investigation recommended`,
           action: 'Perform full vehicle inspection, alignment check and driver behaviour review.',
         })
       }
@@ -598,7 +598,7 @@ export default function DowntimeTracker() {
         recs.push({
           type: 'site',
           severity: 'high',
-          message: `Site ${site} is ${aboveAvg}% above average downtime — maintenance process review needed`,
+          message: `Site ${site} is ${aboveAvg}% above average downtime - maintenance process review needed`,
           action: 'Audit maintenance schedules, inspect tyre storage conditions and review fitment procedures.',
         })
       })
@@ -610,7 +610,7 @@ export default function DowntimeTracker() {
       recs.push({
         type: 'fleet',
         severity: 'critical',
-        message: `${(critRatio * 100).toFixed(0)}% of events are Critical — predictive maintenance could reduce unplanned events by ~40%`,
+        message: `${(critRatio * 100).toFixed(0)}% of events are Critical - predictive maintenance could reduce unplanned events by ~40%`,
         action: 'Implement weekly pressure monitoring, increase inspection frequency and set up tyre replacement schedule based on km thresholds.',
       })
     }
@@ -620,7 +620,7 @@ export default function DowntimeTracker() {
       recs.push({
         type: 'availability',
         severity: kpis.availability < 90 ? 'critical' : 'high',
-        message: `Fleet availability is ${kpis.availability.toFixed(1)}% — below the ${TARGET_AVAILABILITY}% industry benchmark`,
+        message: `Fleet availability is ${kpis.availability.toFixed(1)}% - below the ${TARGET_AVAILABILITY}% industry benchmark`,
         action: 'Review tyre lifecycle management, increase preventive replacements and track tread depth more frequently.',
       })
     }
@@ -943,10 +943,10 @@ export default function DowntimeTracker() {
           {usingActual
             ? 'taken from actual work-order durations (opened → completed) where a matching work order exists, and otherwise '
             : ''}
-          estimated per severity — Critical 4h, High 3h, Medium/Low 2h per tyre-removal event.
+          estimated per severity - Critical 4h, High 3h, Medium/Low 2h per tyre-removal event.
           Downtime cost is modelled at{' '}
           <span className="text-gray-200 font-medium">{sym} {downtimeRate.toLocaleString()}/hr</span>{' '}
-          {rateIsCustom ? '(configured via settings)' : '(default assumption — set a "downtime_rate" key in Settings to override)'},
+          {rateIsCustom ? '(configured via settings)' : '(default assumption - set a "downtime_rate" key in Settings to override)'},
           assuming {SHIFT_HOURS} productive hours per shift-day. These are planning estimates, not invoiced downtime.
         </p>
       </div>
@@ -994,7 +994,7 @@ export default function DowntimeTracker() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Availability Trend */}
         <div className="lg:col-span-2">
-          <ChartCard title="Fleet Availability Trend — Last 12 Months">
+          <ChartCard title="Fleet Availability Trend - Last 12 Months">
             <div className="h-56">
               <Line data={availabilityTrendData} options={availOpts} />
             </div>
@@ -1053,7 +1053,7 @@ export default function DowntimeTracker() {
 
       {/* Downtime Heatmap */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">Downtime Heatmap — Top 10 Vehicles × Last 12 Months</h3>
+        <h3 className="text-sm font-semibold text-gray-300 mb-4">Downtime Heatmap - Top 10 Vehicles × Last 12 Months</h3>
         {heatmap.rows.length === 0 ? (
           <div className="text-center text-gray-600 text-sm py-8">No vehicle data available</div>
         ) : (
@@ -1138,7 +1138,7 @@ export default function DowntimeTracker() {
                     </td>
                     <td className="px-3 py-2.5 text-gray-300 font-medium">{v.totalHours.toFixed(1)} h</td>
                     <td className="px-3 py-2.5 text-gray-300 font-medium">{fmtCurrency(v.totalCost, sym)}</td>
-                    <td className="px-3 py-2.5 text-gray-500 text-xs">{v.avgBetween ? `${v.avgBetween.toFixed(0)} days` : '—'}</td>
+                    <td className="px-3 py-2.5 text-gray-500 text-xs">{v.avgBetween ? `${v.avgBetween.toFixed(0)} days` : '-'}</td>
                     <td className="px-3 py-2.5">
                       <span className={`font-bold text-xs ${v.riskScore >= 3 ? 'text-red-400' : v.riskScore >= 1.5 ? 'text-orange-400' : v.riskScore >= 0.5 ? 'text-yellow-400' : 'text-green-400'}`}>
                         {v.riskScore.toFixed(2)}

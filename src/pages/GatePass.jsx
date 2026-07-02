@@ -257,7 +257,7 @@ export default function GatePass() {
           { label: 'Total Today',    value: passes.length, color: 'text-white',      icon: Activity },
           { label: 'Cleared',        value: cleared,        color: 'text-green-400', icon: CheckCircle },
           { label: 'Denied',         value: denied,         color: 'text-red-400',   icon: XCircle },
-          { label: 'Clearance Rate', value: clearRate !== null ? `${clearRate}%` : '—', color: clearRate >= 80 ? 'text-green-400' : clearRate >= 60 ? 'text-yellow-400' : 'text-red-400', icon: ShieldCheck },
+          { label: 'Clearance Rate', value: clearRate !== null ? `${clearRate}%` : '-', color: clearRate >= 80 ? 'text-green-400' : clearRate >= 60 ? 'text-yellow-400' : 'text-red-400', icon: ShieldCheck },
         ].map(s => (
           <div key={s.label} className="card text-center">
             <s.icon size={16} className={`mx-auto mb-1 ${s.color} opacity-60`} />
@@ -448,13 +448,13 @@ export default function GatePass() {
                         {new Date(p.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                       </td>
                       <td className="py-2 pr-4 font-mono text-white font-semibold">{p.asset_no}</td>
-                      <td className="py-2 pr-4 text-gray-300">{p.site || '—'}</td>
+                      <td className="py-2 pr-4 text-gray-300">{p.site || '-'}</td>
                       <td className="py-2 pr-4">
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
                           {p.status}
                         </span>
                       </td>
-                      <td className="py-2 text-gray-400 text-xs">{p.denial_reason || '—'}</td>
+                      <td className="py-2 text-gray-400 text-xs">{p.denial_reason || '-'}</td>
                     </tr>
                   )
                 })}

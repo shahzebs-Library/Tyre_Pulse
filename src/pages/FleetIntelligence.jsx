@@ -58,7 +58,7 @@ const DATE_PRESETS = [
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 function fmt(n, dec = 0) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return Number(n).toLocaleString('en-US', {
     minimumFractionDigits: dec,
     maximumFractionDigits: dec,
@@ -66,21 +66,21 @@ function fmt(n, dec = 0) {
 }
 
 function fmtCurrency(n, currency = 'SAR') {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   if (n >= 1_000_000) return `${currency} ${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${currency} ${(n / 1_000).toFixed(0)}K`
   return `${currency} ${fmt(n, 0)}`
 }
 
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   const date = typeof d === 'string' ? new Date(d) : d
-  if (isNaN(date.getTime())) return '—'
+  if (isNaN(date.getTime())) return '-'
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function fmtCpk(n, dec = 4) {
-  if (n == null || isNaN(n) || !isFinite(n)) return '—'
+  if (n == null || isNaN(n) || !isFinite(n)) return '-'
   return Number(n).toFixed(dec)
 }
 
@@ -390,7 +390,7 @@ export default function FleetIntelligence() {
       if (tyreErr) throw tyreErr
       setRecords(tyreData || [])
 
-      // Fleet master — graceful
+      // Fleet master - graceful
       try {
         const { data: fleetData, error: fleetErr } = await supabase
           .from('vehicle_fleet')
@@ -407,7 +407,7 @@ export default function FleetIntelligence() {
         setFleetMasterAvail(false)
       }
 
-      // Inspections — graceful
+      // Inspections - graceful
       try {
         const { data: inspData } = await fetchAllPages((from, to) => supabase
           .from('inspections')
@@ -461,7 +461,7 @@ export default function FleetIntelligence() {
     return m
   }, [fleetMaster])
 
-  // ── Per-vehicle metrics (full dataset — no date filter for register) ───────
+  // ── Per-vehicle metrics (full dataset - no date filter for register) ───────
   const vehicleMetrics = useMemo(() => {
     const byAsset = {}
     for (const r of records) {
@@ -476,7 +476,7 @@ export default function FleetIntelligence() {
       const total_tyre_changes = recs.length
       const total_tyre_cost = recs.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0), 0)
 
-      // CPK — only valid records
+      // CPK - only valid records
       const validRecs = recs.filter(r => {
         const fit = Number(r.km_at_fitment)
         const rem = Number(r.km_at_removal)
@@ -513,7 +513,7 @@ export default function FleetIntelligence() {
         monthly_cost = total_tyre_cost
       }
 
-      // Availability — critical in last 30d
+      // Availability - critical in last 30d
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
       const recentCritical = recs.some(r => {
@@ -525,8 +525,8 @@ export default function FleetIntelligence() {
 
       return {
         asset_no,
-        site: master?.site || recs[0]?.site || '—',
-        vehicle_type: master?.vehicle_type || '—',
+        site: master?.site || recs[0]?.site || '-',
+        vehicle_type: master?.vehicle_type || '-',
         total_tyre_changes,
         total_tyre_cost,
         avg_cpk,
@@ -581,7 +581,7 @@ export default function FleetIntelligence() {
     }
   }, [vehicleMetrics, records])
 
-  // ── Availability timeline — last 12 months ────────────────────────────────
+  // ── Availability timeline - last 12 months ────────────────────────────────
   const availabilityTimeline = useMemo(() => {
     const keys = getLast12MonthKeys()
     return keys.map(mk => {
@@ -616,7 +616,7 @@ export default function FleetIntelligence() {
     })
   }, [records])
 
-  // ── Downtime impact — top 15 vehicles ────────────────────────────────────
+  // ── Downtime impact - top 15 vehicles ────────────────────────────────────
   const downtimeTop15 = useMemo(() => {
     return [...vehicleMetrics]
       .sort((a, b) => b.downtime_hours - a.downtime_hours)
@@ -652,7 +652,7 @@ export default function FleetIntelligence() {
     return { sites, vtypes }
   }, [records, fleetMasterMap])
 
-  // ── Cost trend — last 13 months with regression ───────────────────────────
+  // ── Cost trend - last 13 months with regression ───────────────────────────
   const costTrendData = useMemo(() => {
     const now = new Date()
     const start = new Date(now.getFullYear(), now.getMonth() - 12, 1)
@@ -744,11 +744,11 @@ export default function FleetIntelligence() {
         const latest = recs.sort((a, b) => new Date(b.issue_date) - new Date(a.issue_date))[0]
         return {
           asset_no,
-          site: latest.site || '—',
+          site: latest.site || '-',
           risk_level: latest.risk_level,
           issue_date: latest.issue_date,
-          position: latest.position || '—',
-          brand: latest.brand || '—',
+          position: latest.position || '-',
+          brand: latest.brand || '-',
           count: recs.length,
         }
       })
@@ -807,7 +807,7 @@ export default function FleetIntelligence() {
       total_tyre_cost: `${activeCurrency} ${fmt(v.total_tyre_cost, 0)}`,
       monthly_cost: `${activeCurrency} ${fmt(v.monthly_cost, 0)}`,
       avg_cpk: fmtCpk(v.avg_cpk),
-      avg_km_per_tyre: v.avg_km_per_tyre ? fmt(v.avg_km_per_tyre, 0) : '—',
+      avg_km_per_tyre: v.avg_km_per_tyre ? fmt(v.avg_km_per_tyre, 0) : '-',
     }))
     exportToExcel(
       rows,
@@ -842,7 +842,7 @@ export default function FleetIntelligence() {
         { key: 'downtime_hours',     header: 'Downtime Hrs' },
         { key: 'last_change_date',   header: 'Last Change' },
       ],
-      'Fleet Management Intelligence — Top 20 Vehicles by Cost',
+      'Fleet Management Intelligence - Top 20 Vehicles by Cost',
       `Fleet_Intelligence_PDF_${new Date().toISOString().slice(0, 10)}`,
       'landscape',
     )
@@ -1159,7 +1159,7 @@ export default function FleetIntelligence() {
         <KpiCard
           icon={Activity}
           label="Fleet Avg CPK"
-          value={fleetAggs.fleetAvgCpk != null ? fmtCpk(fleetAggs.fleetAvgCpk) : '—'}
+          value={fleetAggs.fleetAvgCpk != null ? fmtCpk(fleetAggs.fleetAvgCpk) : '-'}
           sub={activeCurrency + '/km'}
           color="purple"
         />
@@ -1176,7 +1176,7 @@ export default function FleetIntelligence() {
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
         <div className="mb-3">
           <h2 className="text-sm font-semibold text-white">Fleet Availability Timeline</h2>
-          <p className="text-xs text-gray-500">Monthly % of vehicles with no Critical/High risk tyre — 95% target dashed</p>
+          <p className="text-xs text-gray-500">Monthly % of vehicles with no Critical/High risk tyre - 95% target dashed</p>
         </div>
         <div style={{ height: 240 }}>
           <Line data={availabilityChartData} options={makeLineOpts(activeCurrency, 'pct')} />
@@ -1188,7 +1188,7 @@ export default function FleetIntelligence() {
         {/* Downtime */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <div className="mb-3">
-            <h2 className="text-sm font-semibold text-white">Downtime Impact — Top 15 Vehicles</h2>
+            <h2 className="text-sm font-semibold text-white">Downtime Impact - Top 15 Vehicles</h2>
             <p className="text-xs text-gray-500">Estimated tyre-change downtime hours · red = &gt;20 hrs</p>
           </div>
           {downtimeTop15.length === 0 ? (
@@ -1225,7 +1225,7 @@ export default function FleetIntelligence() {
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
         <div className="flex items-start justify-between mb-3">
           <div>
-            <h2 className="text-sm font-semibold text-white">Monthly Fleet Cost Trend — Last 13 Months</h2>
+            <h2 className="text-sm font-semibold text-white">Monthly Fleet Cost Trend - Last 13 Months</h2>
             <p className="text-xs text-gray-500">Actual spend + linear regression trend · forecast dot for next month</p>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -1319,7 +1319,7 @@ export default function FleetIntelligence() {
                         <td className="py-2 px-2 text-right">
                           {v.avg_cpk != null && isFinite(v.avg_cpk)
                             ? <span className="text-gray-300">{fmtCpk(v.avg_cpk)}</span>
-                            : <span className="text-gray-600">—</span>
+                            : <span className="text-gray-600">-</span>
                           }
                         </td>
                         <td className="py-2 px-2 text-center">
@@ -1441,7 +1441,7 @@ export default function FleetIntelligence() {
                 <p className="font-mono text-sm font-bold text-white">{benchmarks.best.asset_no}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{benchmarks.best.total_tyre_changes} changes · {fmtCurrency(benchmarks.best.total_tyre_cost, activeCurrency)} total</p>
               </div>
-              <p className="text-xs text-gray-500">Lowest cost per km — benchmark for fleet optimisation</p>
+              <p className="text-xs text-gray-500">Lowest cost per km - benchmark for fleet optimisation</p>
             </>
           ) : (
             <p className="text-gray-500 text-sm">Insufficient CPK data (need ≥5 valid records)</p>
@@ -1471,7 +1471,7 @@ export default function FleetIntelligence() {
                 <p className="font-mono text-sm font-bold text-white">{benchmarks.worst.asset_no}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{benchmarks.worst.total_tyre_changes} changes · {fmtCurrency(benchmarks.worst.total_tyre_cost, activeCurrency)} total</p>
               </div>
-              <p className="text-xs text-gray-500">Highest cost per km — prioritise for root cause investigation</p>
+              <p className="text-xs text-gray-500">Highest cost per km - prioritise for root cause investigation</p>
             </>
           ) : (
             <p className="text-gray-500 text-sm">Insufficient data to identify worst CPK vehicle</p>
@@ -1497,7 +1497,7 @@ export default function FleetIntelligence() {
           </div>
           <div className="bg-gray-800/50 rounded-lg p-3 space-y-1.5">
             <p className="text-xs text-gray-300">
-              Fleet avg CPK: <span className="font-mono font-semibold text-blue-300">{benchmarks.fleetAvgCpk != null ? fmtCpk(benchmarks.fleetAvgCpk) : '—'}</span>
+              Fleet avg CPK: <span className="font-mono font-semibold text-blue-300">{benchmarks.fleetAvgCpk != null ? fmtCpk(benchmarks.fleetAvgCpk) : '-'}</span>
             </p>
             <p className="text-xs text-gray-400">
               If worst 10% of vehicles matched the fleet average CPK, the above savings could be realised annually.
@@ -1533,7 +1533,7 @@ export default function FleetIntelligence() {
           'Available Vehicles': fmt(fleetAggs.available_count),
           'Total Downtime Hours': `${fmt(fleetAggs.total_downtime_hours)} hrs`,
           'Monthly Fleet Tyre Cost': fmtCurrency(fleetAggs.monthly_fleet_cost, activeCurrency),
-          'Fleet Avg CPK': fleetAggs.fleetAvgCpk != null ? fmtCpk(fleetAggs.fleetAvgCpk) : '—',
+          'Fleet Avg CPK': fleetAggs.fleetAvgCpk != null ? fmtCpk(fleetAggs.fleetAvgCpk) : '-',
           'Avg Cost per Vehicle': fmtCurrency(fleetAggs.avg_cost_per_vehicle, activeCurrency),
           'Potential Annual Savings': fmtCurrency(benchmarks.annualSavings, activeCurrency),
         }}

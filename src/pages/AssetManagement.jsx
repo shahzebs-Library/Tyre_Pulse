@@ -83,19 +83,19 @@ const EMPTY_ASSET = (country = 'KSA') => ({
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmt(n, dec = 0) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return Number(n).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
 function fmtCurrency(n, cur = 'SAR') {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   if (n >= 1_000_000) return `${cur} ${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${cur} ${(n / 1_000).toFixed(0)}K`
   return `${cur} ${fmt(n, 0)}`
 }
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   const dt = new Date(d)
-  if (isNaN(dt)) return '—'
+  if (isNaN(dt)) return '-'
   return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 function daysSince(d) {
@@ -211,10 +211,10 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
   const criticalTyres = activeTyres.filter(t => t.risk_level === 'Critical')
   const highTyres = activeTyres.filter(t => t.risk_level === 'High')
   const lowTread = activeTyres.filter(t => parseFloat(t.tread_depth) < 3)
-  if (criticalTyres.length) recommendations.push({ level: 'Critical', msg: `${criticalTyres.length} tyre(s) at Critical risk — immediate replacement required.` })
-  if (highTyres.length) recommendations.push({ level: 'High', msg: `${highTyres.length} tyre(s) at High risk — schedule replacement within 7 days.` })
-  if (lowTread.length) recommendations.push({ level: 'High', msg: `${lowTread.length} tyre(s) below 3mm tread — safety limit approaching.` })
-  if (!activeTyres.length) recommendations.push({ level: 'Medium', msg: 'No active tyre records — verify fitment data is up to date.' })
+  if (criticalTyres.length) recommendations.push({ level: 'Critical', msg: `${criticalTyres.length} tyre(s) at Critical risk - immediate replacement required.` })
+  if (highTyres.length) recommendations.push({ level: 'High', msg: `${highTyres.length} tyre(s) at High risk - schedule replacement within 7 days.` })
+  if (lowTread.length) recommendations.push({ level: 'High', msg: `${lowTread.length} tyre(s) below 3mm tread - safety limit approaching.` })
+  if (!activeTyres.length) recommendations.push({ level: 'Medium', msg: 'No active tyre records - verify fitment data is up to date.' })
   if (recommendations.length === 0) recommendations.push({ level: 'Low', msg: 'All tyres within acceptable parameters. Continue routine inspections.' })
 
   return (
@@ -229,7 +229,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
           <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Asset Profile</p>
           <h2 className="text-xl font-bold text-white">{asset.asset_no}</h2>
           <p className="text-sm text-gray-400">{asset.vehicle_type} · {asset.make} {asset.model} {asset.year}</p>
-          <p className="text-xs text-gray-500 mt-0.5"><MapPin className="inline w-3 h-3 mr-1" />{asset.site ?? '—'}</p>
+          <p className="text-xs text-gray-500 mt-0.5"><MapPin className="inline w-3 h-3 mr-1" />{asset.site ?? '-'}</p>
         </div>
         <div className="flex items-center gap-3">
           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${asset.active ? 'bg-green-900/50 text-green-300' : 'bg-gray-800 text-gray-400'}`}>
@@ -287,21 +287,21 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
                   {activeTyres.map((t, i) => {
                     const days = t.issue_date ? daysSince(t.issue_date) : null
                     const km = (parseFloat(t.km_at_removal) || 0) - (parseFloat(t.km_at_fitment) || 0)
-                    const cpk = km > 0 && t.cost_per_tyre ? (parseFloat(t.cost_per_tyre) / km).toFixed(4) : '—'
+                    const cpk = km > 0 && t.cost_per_tyre ? (parseFloat(t.cost_per_tyre) / km).toFixed(4) : '-'
                     const rc = RISK_COLOR[t.risk_level] ?? { bg: 'bg-gray-800', text: 'text-gray-400' }
                     return (
                       <tr key={t.id ?? i} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
-                        <td className="px-3 py-2 font-mono text-gray-300">{t.position ?? '—'}</td>
-                        <td className="px-3 py-2 text-gray-300">{t.serial_number ?? '—'}</td>
-                        <td className="px-3 py-2 text-gray-300">{t.brand ?? '—'}</td>
-                        <td className="px-3 py-2 text-gray-400">{t.size ?? '—'}</td>
-                        <td className="px-3 py-2 text-gray-300">{t.tread_depth ? `${t.tread_depth}mm` : '—'}</td>
+                        <td className="px-3 py-2 font-mono text-gray-300">{t.position ?? '-'}</td>
+                        <td className="px-3 py-2 text-gray-300">{t.serial_number ?? '-'}</td>
+                        <td className="px-3 py-2 text-gray-300">{t.brand ?? '-'}</td>
+                        <td className="px-3 py-2 text-gray-400">{t.size ?? '-'}</td>
+                        <td className="px-3 py-2 text-gray-300">{t.tread_depth ? `${t.tread_depth}mm` : '-'}</td>
                         <td className="px-3 py-2">
                           {t.risk_level ? (
                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${rc.bg} ${rc.text}`}>{t.risk_level}</span>
-                          ) : <span className="text-gray-600">—</span>}
+                          ) : <span className="text-gray-600">-</span>}
                         </td>
-                        <td className="px-3 py-2 text-gray-400">{days != null ? `${days}d` : '—'}</td>
+                        <td className="px-3 py-2 text-gray-400">{days != null ? `${days}d` : '-'}</td>
                         <td className="px-3 py-2 text-gray-400">{cpk}</td>
                       </tr>
                     )
@@ -317,7 +317,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
         {/* Monthly Cost Chart */}
         <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
           <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-blue-400" /> Tyre Cost — Last 12 Months
+            <TrendingUp className="w-4 h-4 text-blue-400" /> Tyre Cost - Last 12 Months
           </h3>
           <div className="h-44">
             <Line data={chartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
@@ -345,7 +345,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
                       wo.status === 'Completed' ? 'bg-green-900/50 text-green-300' :
                       wo.status === 'Open' ? 'bg-blue-900/50 text-blue-300' :
                       'bg-yellow-900/50 text-yellow-300'
-                    }`}>{wo.status ?? '—'}</span>
+                    }`}>{wo.status ?? '-'}</span>
                   </div>
                 </div>
               ))}
@@ -552,7 +552,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'blue', trend }) {
         <span className="text-xs text-gray-500 uppercase tracking-widest font-medium">{label}</span>
         <Icon className={`w-5 h-5 ${c.icon}`} />
       </div>
-      <p className="text-2xl font-bold text-white leading-tight">{value ?? '—'}</p>
+      <p className="text-2xl font-bold text-white leading-tight">{value ?? '-'}</p>
       {sub && <p className="text-xs text-gray-500">{sub}</p>}
       {trend != null && (
         <p className={`text-xs font-medium flex items-center gap-1 ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -809,12 +809,12 @@ export default function AssetManagement() {
     exportToPdf(
       filteredAssets.map(a => ({
         asset_no: a.asset_no,
-        vehicle_type: a.vehicle_type ?? '—',
-        make: `${a.make ?? ''} ${a.model ?? ''}`.trim() || '—',
-        year: a.year ?? '—',
-        site: a.site ?? '—',
+        vehicle_type: a.vehicle_type ?? '-',
+        make: `${a.make ?? ''} ${a.model ?? ''}`.trim() || '-',
+        year: a.year ?? '-',
+        site: a.site ?? '-',
         active_tyres: a._activeCount,
-        worst_risk: a._worstRisk ?? '—',
+        worst_risk: a._worstRisk ?? '-',
         ytd_cost: fmtCurrency(a._ytdCost, activeCurrency),
         last_service: fmtDate(a._latestDate),
         health_score: `${a._healthScore}/100`,
@@ -1015,12 +1015,12 @@ export default function AssetManagement() {
                             <tr key={a.id ?? a.asset_no ?? i}
                               className="border-b border-gray-800/50 hover:bg-gray-800/40 transition-colors">
                               <td className="px-4 py-3 font-mono font-semibold text-blue-300">{a.asset_no}</td>
-                              <td className="px-4 py-3 text-gray-300">{a.vehicle_type ?? '—'}</td>
+                              <td className="px-4 py-3 text-gray-300">{a.vehicle_type ?? '-'}</td>
                               <td className="px-4 py-3 text-gray-300 max-w-[140px] truncate">
-                                {[a.make, a.model].filter(Boolean).join(' ') || '—'}
+                                {[a.make, a.model].filter(Boolean).join(' ') || '-'}
                               </td>
-                              <td className="px-4 py-3 text-gray-400">{a.year ?? '—'}</td>
-                              <td className="px-4 py-3 text-gray-400 max-w-[120px] truncate">{a.site ?? '—'}</td>
+                              <td className="px-4 py-3 text-gray-400">{a.year ?? '-'}</td>
+                              <td className="px-4 py-3 text-gray-400 max-w-[120px] truncate">{a.site ?? '-'}</td>
                               <td className="px-4 py-3 text-center">
                                 <span className="font-semibold text-white">{a._activeCount}</span>
                                 {a._totalCount > a._activeCount && (
@@ -1030,17 +1030,17 @@ export default function AssetManagement() {
                               <td className="px-4 py-3">
                                 {rc ? (
                                   <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${rc.bg} ${rc.text}`}>{a._worstRisk}</span>
-                                ) : <span className="text-gray-600">—</span>}
+                                ) : <span className="text-gray-600">-</span>}
                               </td>
                               <td className="px-4 py-3 text-gray-300">
-                                {a._ytdCost > 0 ? fmtCurrency(a._ytdCost, activeCurrency) : <span className="text-gray-600">—</span>}
+                                {a._ytdCost > 0 ? fmtCurrency(a._ytdCost, activeCurrency) : <span className="text-gray-600">-</span>}
                               </td>
                               <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
                                 {a._latestDate ? (
                                   <span className={a._noRecentRecord ? 'text-orange-400' : ''}>
                                     {fmtDate(a._latestDate)}
                                   </span>
-                                ) : <span className="text-gray-600">—</span>}
+                                ) : <span className="text-gray-600">-</span>}
                               </td>
                               <td className="px-4 py-3">
                                 <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${a.active ? 'bg-green-900/50 text-green-300' : 'bg-gray-800 text-gray-500'}`}>
@@ -1186,10 +1186,10 @@ export default function AssetManagement() {
                     <Shield className="w-4 h-4 text-purple-400" /> Asset Health Score Matrix
                   </h3>
                   <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-500" />80–100</div>
-                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-500" />60–79</div>
-                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-500" />40–59</div>
-                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500" />0–39</div>
+                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-500" />80-100</div>
+                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-500" />60-79</div>
+                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-500" />40-59</div>
+                    <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500" />0-39</div>
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mb-4">
@@ -1207,7 +1207,7 @@ export default function AssetManagement() {
                       >
                         <div className={`w-full h-1.5 rounded-full mb-2 ${SCORE_COLOR(a._healthScore)}`} />
                         <p className="text-xs font-mono font-semibold text-gray-200 truncate group-hover:text-white">{a.asset_no}</p>
-                        <p className="text-xs text-gray-500 truncate">{a.vehicle_type ?? '—'}</p>
+                        <p className="text-xs text-gray-500 truncate">{a.vehicle_type ?? '-'}</p>
                         <div className="flex items-center justify-between mt-2">
                           <span className="text-lg font-bold text-white">{a._healthScore}</span>
                           {a._worstRisk && (
@@ -1231,7 +1231,7 @@ export default function AssetManagement() {
               {enrichedAssets.filter(a => a.active !== false && a._healthScore < 60).length > 0 && (
                 <div className="bg-gray-900 rounded-xl border border-red-900/30 p-5">
                   <h3 className="text-sm font-semibold text-red-400 mb-4 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4" /> Low Health Assets — Immediate Review Required
+                    <AlertTriangle className="w-4 h-4" /> Low Health Assets - Immediate Review Required
                   </h3>
                   <div className="space-y-2">
                     {[...enrichedAssets]
@@ -1248,7 +1248,7 @@ export default function AssetManagement() {
                             </div>
                             <div>
                               <p className="text-sm font-semibold text-white font-mono">{a.asset_no}</p>
-                              <p className="text-xs text-gray-500">{a.vehicle_type ?? '—'} · {a.site ?? '—'}</p>
+                              <p className="text-xs text-gray-500">{a.vehicle_type ?? '-'} · {a.site ?? '-'}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-4">

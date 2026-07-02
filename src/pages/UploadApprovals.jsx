@@ -167,7 +167,7 @@ export default function UploadApprovals() {
                       <div className="flex items-center gap-3 flex-wrap mt-1 text-xs text-gray-500">
                         <span className="flex items-center gap-1"><Package size={11} />{(p.row_count || 0).toLocaleString()} rows · {meta.label}</span>
                         <span className="flex items-center gap-1"><User size={11} />{p.uploader_name || 'Unknown'}</span>
-                        <span className="flex items-center gap-1"><Globe size={11} />{p.country || '—'}</span>
+                        <span className="flex items-center gap-1"><Globe size={11} />{p.country || '-'}</span>
                         <span className="flex items-center gap-1"><Clock size={11} />{new Date(p.created_at).toLocaleString()}</span>
                       </div>
                       {p.status === 'rejected' && p.review_note && (
@@ -204,7 +204,7 @@ export default function UploadApprovals() {
         </div>
       )}
 
-      {/* Correction modal — view & edit the staged rows before approving */}
+      {/* Correction modal - view & edit the staged rows before approving */}
       {previewing && (
         <EditBatchModal
           batch={previewing}
@@ -271,7 +271,7 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
           <div>
             <h3 className="text-white font-semibold">{batch.file_name || 'Upload'} · {rows.length.toLocaleString()} rows</h3>
-            <p className="text-xs text-gray-500">{editable ? 'Edit any cell, fix a whole column, or remove rows — then Save.' : 'Read-only (already reviewed).'}</p>
+            <p className="text-xs text-gray-500">{editable ? 'Edit any cell, fix a whole column, or remove rows - then Save.' : 'Read-only (already reviewed).'}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white"><XCircle size={20} /></button>
         </div>
@@ -324,7 +324,7 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
                             onChange={e => setCell(idx, c, e.target.value)}
                           />
                         ) : (
-                          <span className="text-gray-300 px-1.5">{r[c] == null ? '—' : String(r[c])}</span>
+                          <span className="text-gray-300 px-1.5">{r[c] == null ? '-' : String(r[c])}</span>
                         )}
                       </td>
                     ))}

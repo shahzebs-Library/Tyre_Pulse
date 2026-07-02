@@ -68,7 +68,7 @@ const TABS = [
 ]
 
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
@@ -126,16 +126,16 @@ function deriveTransfers(records) {
         transfers.push({
           id: `${serial}-${i}`,
           serial,
-          brand: prev.brand || curr.brand || '—',
-          size: prev.size || curr.size || '—',
-          fromAsset: fromAsset || '—',
-          toAsset: toAsset || '—',
-          fromSite: fromSite || '—',
-          toSite: toSite || '—',
+          brand: prev.brand || curr.brand || '-',
+          size: prev.size || curr.size || '-',
+          fromAsset: fromAsset || '-',
+          toAsset: toAsset || '-',
+          fromSite: fromSite || '-',
+          toSite: toSite || '-',
           transferDate: curr.issue_date,
           kmAtTransfer: kmAtRemoval,
           kmRun,
-          category: curr.category || prev.category || '—',
+          category: curr.category || prev.category || '-',
           treadAtTransfer: prev.tread_depth,
           transferType,
           prevRecord: prev,
@@ -190,13 +190,13 @@ function derivePendingReturns(records) {
 
       pending.push({
         serial,
-        brand: last.brand || '—',
-        size: last.size || '—',
-        removedFrom: last.asset_no || '—',
-        site: last.site || '—',
+        brand: last.brand || '-',
+        size: last.size || '-',
+        removedFrom: last.asset_no || '-',
+        site: last.site || '-',
         removalDate,
         daysPending: days,
-        category: last.category || '—',
+        category: last.category || '-',
         treadAtRemoval: last.tread_depth,
         lastRecord: last,
       })
@@ -302,10 +302,10 @@ export default function TyreExchange() {
           const daysSent = r.issue_date ? daysDiff(r.issue_date) : null
           result.push({
             serial,
-            brand: r.brand || '—',
-            size: r.size || '—',
-            sentFromAsset: r.asset_no || '—',
-            sentFromSite: r.site || '—',
+            brand: r.brand || '-',
+            size: r.size || '-',
+            sentFromAsset: r.asset_no || '-',
+            sentFromSite: r.site || '-',
             sendDate: r.issue_date,
             kmAtRemoval: r.km_at_removal,
             treadAtSend: r.tread_depth,
@@ -367,7 +367,7 @@ export default function TyreExchange() {
   }, [records])
 
   const uniqueCategories = useMemo(() => {
-    const c = new Set(transfers.map(t => t.category).filter(v => v && v !== '—'))
+    const c = new Set(transfers.map(t => t.category).filter(v => v && v !== '-'))
     return [...c].sort()
   }, [transfers])
 
@@ -394,8 +394,8 @@ export default function TyreExchange() {
   // ── Site Flow Matrix ──────────────────────────────────────────────────────────
   const siteFlowMatrix = useMemo(() => {
     const sites = [...new Set([
-      ...transfers.map(t => t.fromSite).filter(s => s && s !== '—'),
-      ...transfers.map(t => t.toSite).filter(s => s && s !== '—'),
+      ...transfers.map(t => t.fromSite).filter(s => s && s !== '-'),
+      ...transfers.map(t => t.toSite).filter(s => s && s !== '-'),
     ])].sort()
 
     const matrix = {}
@@ -404,7 +404,7 @@ export default function TyreExchange() {
       for (const to of sites) matrix[from][to] = 0
     }
     for (const t of transfers) {
-      if (t.fromSite !== '—' && t.toSite !== '—' && t.fromSite !== t.toSite) {
+      if (t.fromSite !== '-' && t.toSite !== '-' && t.fromSite !== t.toSite) {
         if (!matrix[t.fromSite]) matrix[t.fromSite] = {}
         matrix[t.fromSite][t.toSite] = (matrix[t.fromSite][t.toSite] || 0) + 1
       }
@@ -583,8 +583,8 @@ export default function TyreExchange() {
         ['To Asset', tx.toAsset],
         ['From Site', tx.fromSite],
         ['To Site', tx.toSite],
-        ['KM at Transfer', tx.kmAtTransfer != null ? tx.kmAtTransfer.toLocaleString() : '—'],
-        ['Tread at Transfer', tx.treadAtTransfer != null ? `${tx.treadAtTransfer} mm` : '—'],
+        ['KM at Transfer', tx.kmAtTransfer != null ? tx.kmAtTransfer.toLocaleString() : '-'],
+        ['Tread at Transfer', tx.treadAtTransfer != null ? `${tx.treadAtTransfer} mm` : '-'],
         ['Category', tx.category],
       ],
       styles: { fontSize: 10, cellPadding: 3 },
@@ -631,7 +631,7 @@ export default function TyreExchange() {
       medium: 'text-yellow-400',
       low: 'text-green-400',
     }
-    return <span className={map[(level || '').toLowerCase()] || 'text-gray-400'}>{level || '—'}</span>
+    return <span className={map[(level || '').toLowerCase()] || 'text-gray-400'}>{level || '-'}</span>
   }
 
   function pendingDaysClass(days) {
@@ -718,7 +718,7 @@ export default function TyreExchange() {
           },
           {
             label: 'Avg KM at Transfer',
-            value: kpis.avgKm > 0 ? kpis.avgKm.toLocaleString() : '—',
+            value: kpis.avgKm > 0 ? kpis.avgKm.toLocaleString() : '-',
             icon: TrendingUp,
             color: 'text-yellow-400',
             bg: 'bg-yellow-900/20 border-yellow-800/50',
@@ -941,11 +941,11 @@ export default function TyreExchange() {
                             <td className="px-4 py-3 text-gray-400">{t.toSite}</td>
                             <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{fmtDate(t.transferDate)}</td>
                             <td className="px-4 py-3 text-right text-gray-300">
-                              {t.kmAtTransfer != null ? t.kmAtTransfer.toLocaleString() : '—'}
+                              {t.kmAtTransfer != null ? t.kmAtTransfer.toLocaleString() : '-'}
                             </td>
                             <td className="px-4 py-3">{transferTypeBadge(t.transferType)}</td>
                             <td className="px-4 py-3 text-right text-gray-300">
-                              {t.treadAtTransfer != null ? `${t.treadAtTransfer}mm` : '—'}
+                              {t.treadAtTransfer != null ? `${t.treadAtTransfer}mm` : '-'}
                             </td>
                             <td className="px-4 py-3 text-center">
                               <button
@@ -1073,10 +1073,10 @@ export default function TyreExchange() {
                             <td className="px-4 py-3 text-gray-400">{r.sentFromSite}</td>
                             <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{fmtDate(r.sendDate)}</td>
                             <td className="px-4 py-3 text-right text-gray-300">
-                              {r.kmAtRemoval != null ? r.kmAtRemoval.toLocaleString() : '—'}
+                              {r.kmAtRemoval != null ? r.kmAtRemoval.toLocaleString() : '-'}
                             </td>
                             <td className="px-4 py-3 text-right text-gray-300">
-                              {r.treadAtSend != null ? `${r.treadAtSend}mm` : '—'}
+                              {r.treadAtSend != null ? `${r.treadAtSend}mm` : '-'}
                             </td>
                             <td className="px-4 py-3">
                               <span className={`px-2 py-0.5 rounded-full text-xs border flex items-center gap-1 w-fit ${
@@ -1092,7 +1092,7 @@ export default function TyreExchange() {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{fmtDate(r.returnDate)}</td>
-                            <td className="px-4 py-3 text-gray-300">{r.returnAsset || '—'}</td>
+                            <td className="px-4 py-3 text-gray-300">{r.returnAsset || '-'}</td>
                           </tr>
                         ))
                       )}
@@ -1164,11 +1164,11 @@ export default function TyreExchange() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Brand</p>
-                      <p className="text-sm text-gray-200">{custodyChain[0]?.brand || '—'}</p>
+                      <p className="text-sm text-gray-200">{custodyChain[0]?.brand || '-'}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Size</p>
-                      <p className="text-sm text-gray-200">{custodyChain[0]?.size || '—'}</p>
+                      <p className="text-sm text-gray-200">{custodyChain[0]?.size || '-'}</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Records</p>
@@ -1217,8 +1217,8 @@ export default function TyreExchange() {
                               <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 text-xs space-y-1">
                                 <p className="text-gray-400 font-medium">{fmtDate(r.issue_date)}</p>
                                 <p className="text-blue-400 font-semibold">{r.asset_no || 'No Asset'}</p>
-                                <p className="text-gray-400">{r.site || '—'}</p>
-                                <p className="text-gray-500">Pos: {r.position || '—'}</p>
+                                <p className="text-gray-400">{r.site || '-'}</p>
+                                <p className="text-gray-500">Pos: {r.position || '-'}</p>
                                 {r.km_at_fitment != null && (
                                   <p className="text-gray-400">Start: {r.km_at_fitment.toLocaleString()} km</p>
                                 )}
@@ -1283,22 +1283,22 @@ export default function TyreExchange() {
                               <tr key={r.id || idx} className="border-t border-gray-800 hover:bg-gray-800/30">
                                 <td className="px-4 py-3 text-gray-500">{idx + 1}</td>
                                 <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{fmtDate(r.issue_date)}</td>
-                                <td className="px-4 py-3 text-blue-400">{r.asset_no || '—'}</td>
-                                <td className="px-4 py-3 text-gray-400">{r.site || '—'}</td>
-                                <td className="px-4 py-3 text-gray-400">{r.position || '—'}</td>
+                                <td className="px-4 py-3 text-blue-400">{r.asset_no || '-'}</td>
+                                <td className="px-4 py-3 text-gray-400">{r.site || '-'}</td>
+                                <td className="px-4 py-3 text-gray-400">{r.position || '-'}</td>
                                 <td className="px-4 py-3 text-right text-gray-400">
-                                  {r.km_at_fitment != null ? r.km_at_fitment.toLocaleString() : '—'}
+                                  {r.km_at_fitment != null ? r.km_at_fitment.toLocaleString() : '-'}
                                 </td>
                                 <td className="px-4 py-3 text-right text-gray-400">
-                                  {r.km_at_removal != null ? r.km_at_removal.toLocaleString() : '—'}
+                                  {r.km_at_removal != null ? r.km_at_removal.toLocaleString() : '-'}
                                 </td>
                                 <td className="px-4 py-3 text-right text-gray-300">
-                                  {kmRun != null ? kmRun.toLocaleString() : '—'}
+                                  {kmRun != null ? kmRun.toLocaleString() : '-'}
                                 </td>
                                 <td className="px-4 py-3 text-right text-gray-300">
-                                  {r.tread_depth != null ? `${r.tread_depth}mm` : '—'}
+                                  {r.tread_depth != null ? `${r.tread_depth}mm` : '-'}
                                 </td>
-                                <td className="px-4 py-3 text-gray-400">{r.category || '—'}</td>
+                                <td className="px-4 py-3 text-gray-400">{r.category || '-'}</td>
                                 <td className="px-4 py-3">{riskBadge(r.risk_level)}</td>
                               </tr>
                             )
@@ -1387,7 +1387,7 @@ export default function TyreExchange() {
                                   {p.daysPending > 30 && p.daysPending <= 60 && <AlertCircle size={12} />}
                                   {p.daysPending}d
                                 </span>
-                              ) : '—'}
+                              ) : '-'}
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center justify-center gap-2">
@@ -1498,7 +1498,7 @@ export default function TyreExchange() {
                         return (
                           <div key={serial} className="flex items-center gap-3">
                             <span className="font-mono text-blue-400 text-xs w-32 truncate">{serial}</span>
-                            <span className="text-xs text-gray-500 w-28 truncate">{rec?.brand || '—'}</span>
+                            <span className="text-xs text-gray-500 w-28 truncate">{rec?.brand || '-'}</span>
                             <div className="flex-1 bg-gray-800 rounded-full h-2">
                               <div
                                 className="bg-blue-600 h-2 rounded-full"
@@ -1603,12 +1603,12 @@ export default function TyreExchange() {
                                       isSelf ? 'bg-gray-800/20 text-gray-600' : val > 0 ? flowCellColor(val) : 'text-gray-700'
                                     }`}
                                   >
-                                    {isSelf ? '—' : val > 0 ? val : '·'}
+                                    {isSelf ? '-' : val > 0 ? val : '·'}
                                   </td>
                                 )
                               })}
                               <td className="px-3 py-2 text-center border border-gray-700 text-blue-400 font-semibold bg-gray-800/30">
-                                {rowTotal || '—'}
+                                {rowTotal || '-'}
                               </td>
                             </tr>
                           )
@@ -1622,7 +1622,7 @@ export default function TyreExchange() {
                             )
                             return (
                               <td key={toSite} className="px-3 py-2 text-center border border-gray-700 text-purple-400 font-semibold">
-                                {colTotal || '—'}
+                                {colTotal || '-'}
                               </td>
                             )
                           })}
@@ -1637,7 +1637,7 @@ export default function TyreExchange() {
               {/* Net flow analysis */}
               {siteFlowMatrix.sites.length > 0 && (
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                  <h3 className="text-sm font-medium text-gray-300 mb-4">Net Flow Analysis — Site Roles</h3>
+                  <h3 className="text-sm font-medium text-gray-300 mb-4">Net Flow Analysis - Site Roles</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>

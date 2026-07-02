@@ -1,4 +1,4 @@
-# TyrePulse Mobile — Architecture & Roadmap
+# TyrePulse Mobile - Architecture & Roadmap
 **React Native 0.79.6 + Expo SDK 53 · Shahzeb Rahman © 2026**
 **Last updated:** June 2026 · **EAS Android build: ✅ green (auto-builds on push to `main`)**
 
@@ -59,7 +59,7 @@ TyrePulse Inspector
 │   └── Submit (asset_no/inspector/created_by/scheduled_date/status='Done') → offline queue → Supabase sync
 │
 ├── History
-│   ├── All inspections (offline + synced) — search + status filters
+│   ├── All inspections (offline + synced) - search + status filters
 │   └── Sync status badges (synced / pending / failed)
 │
 └── Profile
@@ -76,7 +76,7 @@ All 130+ strings translated into English, Arabic (MSA), and Urdu across:
 - Parity verified: 0 missing/extra keys across en/ar/ur; all `t()` keys resolve.
 
 Tyre positions show both code and translated label:
-- `FL` — `أمامي أيسر` (AR) / `آگے بائیں` (UR)
+- `FL` - `أمامي أيسر` (AR) / `آگے بائیں` (UR)
 
 ---
 
@@ -175,7 +175,7 @@ APK available at expo.dev/accounts/ws123na/projects/tyrepulse-inspector
 
 ### Key Build Config
 
-**`app.json` — critical settings:**
+**`app.json` - critical settings:**
 ```json
 {
   "newArchEnabled": false,
@@ -195,10 +195,10 @@ APK available at expo.dev/accounts/ws123na/projects/tyrepulse-inspector
 ```
 
 Why each setting:
-- `newArchEnabled: false` — RN 0.79's New Architecture needs NDK C++ compilation that fails on EAS workers silently
-- `kotlinVersion: "2.0.21"` — RN 0.79.2 requires Kotlin 2.0.x (1.9.x fails)
-- `compileSdkVersion/targetSdkVersion: 35` — required by RN 0.79.2
-- `ndkVersion: "27.1.12297006"` — exact NDK required by RN 0.79's `ReactAndroid/gradle.properties`
+- `newArchEnabled: false` - RN 0.79's New Architecture needs NDK C++ compilation that fails on EAS workers silently
+- `kotlinVersion: "2.0.21"` - RN 0.79.2 requires Kotlin 2.0.x (1.9.x fails)
+- `compileSdkVersion/targetSdkVersion: 35` - required by RN 0.79.2
+- `ndkVersion: "27.1.12297006"` - exact NDK required by RN 0.79's `ReactAndroid/gradle.properties`
 
 ---
 
@@ -206,19 +206,19 @@ Why each setting:
 
 When EAS build succeeds:
 
-### Step 1 — Test APK
+### Step 1 - Test APK
 1. Download APK from expo.dev
 2. Install on Android device (Enable "Unknown sources")
 3. Test all flows: login → inspection → offline → sync → history
 
-### Step 2 — Play Store Account
+### Step 2 - Play Store Account
 1. Create Google Play Developer Account (one-time $25 fee)
 2. Go to `play.google.com/console`
 3. Create new app: "TyrePulse Inspector"
 4. App category: Business / Productivity
 
-### Step 3 — Production Build
-Switch `eas.json` production profile from `apk` to `aab` (Android App Bundle — required by Play Store):
+### Step 3 - Production Build
+Switch `eas.json` production profile from `apk` to `aab` (Android App Bundle - required by Play Store):
 ```json
 "production": {
   "android": { "buildType": "app-bundle" }
@@ -227,21 +227,21 @@ Switch `eas.json` production profile from `apk` to `aab` (Android App Bundle —
 
 Run: `eas build --platform android --profile production`
 
-### Step 4 — Signing
+### Step 4 - Signing
 EAS manages signing keys automatically. For Play Store:
 - EAS generates and stores the keystore on expo.dev
 - Use "Google Play signing" for maximum security
 
-### Step 5 — Store Listing
+### Step 5 - Store Listing
 Required:
-- App icon (512×512 PNG) — already in `mobile/assets/icon.png`
-- Feature graphic (1024×500 PNG) — create
+- App icon (512×512 PNG) - already in `mobile/assets/icon.png`
+- Feature graphic (1024×500 PNG) - create
 - Screenshots (minimum 2, phone size)
 - Short description (80 chars)
 - Full description
 - Privacy policy URL
 
-### Step 6 — Submit
+### Step 6 - Submit
 ```bash
 eas submit --platform android --latest
 ```
@@ -251,22 +251,22 @@ Or upload AAB manually via Play Console.
 
 ## Next Features (Prioritised)
 
-### P0 — Required for v1.0 Launch
+### P0 - Required for v1.0 Launch
 | Feature | Effort | Notes |
 |---------|--------|-------|
 | Working APK build | S | Gradle fix in progress |
 | Photo upload to Supabase Storage | M | `supabase.storage.from('inspection-photos').upload()` |
 | Device testing on Samsung M10 | S | Login → inspection → sync |
 
-### P1 — v1.1
+### P1 - v1.1
 | Feature | Effort | Notes |
 |---------|--------|-------|
 | Barcode/QR scanner (tyre serial) | M | `expo-barcode-scanner` or `expo-camera` built-in |
 | Push notifications | M | `expo-notifications` + Supabase realtime triggers |
-| OTA updates | S | `expo-updates` already installed — configure update URL |
+| OTA updates | S | `expo-updates` already installed - configure update URL |
 | Play Store listing + submission | M | Need screenshots, policy URL |
 
-### P2 — v1.2
+### P2 - v1.2
 | Feature | Effort | Notes |
 |---------|--------|-------|
 | GPS location on inspections | M | `expo-location` |
@@ -274,7 +274,7 @@ Or upload AAB manually via Play Console.
 | Inspection photo gallery (view previous) | M | Supabase Storage + FlatList |
 | Offline photo queue | L | Store base64 in AsyncStorage until sync |
 
-### P3 — v2.0
+### P3 - v2.0
 | Feature | Effort | Notes |
 |---------|--------|-------|
 | AI tyre wear analysis | L | Camera → Anthropic vision API |
@@ -299,7 +299,7 @@ Or upload AAB manually via Play Console.
 
 ## Environment Variables
 
-The anon key and Supabase URL are baked into `eas.json` build profiles — no `.env` file needed for EAS builds.
+The anon key and Supabase URL are baked into `eas.json` build profiles - no `.env` file needed for EAS builds.
 
 For local development with Expo Go or dev client, create `mobile/.env`:
 ```

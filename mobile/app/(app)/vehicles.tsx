@@ -132,7 +132,7 @@ export default function VehiclesScreen() {
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={[styles.cardTitle, { textAlign }]}>{item.asset_no ?? item.fleet_number ?? 'Unknown'}</Text>
                   <Text style={[styles.cardMeta, { textAlign }]} numberOfLines={1}>
-                    {[item.make, item.model, item.vehicle_type].filter(Boolean).join(' · ') || '—'}
+                    {[item.make, item.model, item.vehicle_type].filter(Boolean).join(' · ') || '-'}
                   </Text>
                   <Text style={[styles.cardMeta, { textAlign }]} numberOfLines={1}>
                     {[item.site, item.tyre_size].filter(Boolean).join(' · ')}

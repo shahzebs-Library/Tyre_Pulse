@@ -205,14 +205,14 @@ function TableRow({ a, onEdit, onStatusChange, country }) {
       <td className="px-3 py-2.5">
         <span className={`badge text-xs px-2 py-0.5 rounded-full border ${PRIORITY_BADGE[a.priority]}`}>{a.priority}</span>
       </td>
-      <td className="px-3 py-2.5 text-xs text-gray-400">{a.site || '—'}</td>
-      <td className="px-3 py-2.5 text-xs text-gray-400">{a.assigned_to || '—'}</td>
-      <td className="px-3 py-2.5 text-xs text-gray-400">{a.asset_no || '—'}</td>
+      <td className="px-3 py-2.5 text-xs text-gray-400">{a.site || '-'}</td>
+      <td className="px-3 py-2.5 text-xs text-gray-400">{a.assigned_to || '-'}</td>
+      <td className="px-3 py-2.5 text-xs text-gray-400">{a.asset_no || '-'}</td>
       <td className="px-3 py-2.5 text-xs">
         {od
           ? <span className="text-red-400">{od}d overdue</span>
           : a.due_date ? <span className="text-gray-400">{formatDate(a.due_date, country)}</span>
-          : <span className="text-gray-600">—</span>
+          : <span className="text-gray-600">-</span>
         }
       </td>
       <td className="px-3 py-2.5 text-xs text-gray-500">{daysOpen(a.created_at, a.closed_at)}d</td>

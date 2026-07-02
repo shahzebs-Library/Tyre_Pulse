@@ -148,8 +148,8 @@ export default function ConsoleDashboard() {
                       {(u.full_name ?? '?')[0].toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-white font-medium truncate">{u.full_name ?? '—'}</p>
-                      <p className="text-[10px] text-gray-500 truncate">{u.email ?? u.site ?? '—'}</p>
+                      <p className="text-xs text-white font-medium truncate">{u.full_name ?? '-'}</p>
+                      <p className="text-[10px] text-gray-500 truncate">{u.email ?? u.site ?? '-'}</p>
                     </div>
                     <RoleBadge role={u.role} />
                     {!u.approved && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-300 border border-yellow-700/40">Pending</span>}
@@ -164,7 +164,7 @@ export default function ConsoleDashboard() {
 
       {/* ── AI usage 7-day trend ── */}
       <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-        <h3 className="text-sm font-semibold text-white mb-4">AI Usage — Last 7 Days</h3>
+        <h3 className="text-sm font-semibold text-white mb-4">AI Usage - Last 7 Days</h3>
         {aiTrend.length === 0
           ? <p className="text-xs text-gray-600">No AI usage data yet</p>
           : (
@@ -216,7 +216,7 @@ function KpiCard({ icon: Icon, label, value, sub, color, onClick }) {
     <button onClick={onClick}
       className={`rounded-xl border p-4 text-left transition-all ${colors[color]} ${onClick ? 'hover:brightness-110 cursor-pointer' : 'cursor-default'}`}>
       <Icon size={18} className="mb-2 opacity-80" />
-      <p className="text-xl font-bold text-white">{value ?? '—'}</p>
+      <p className="text-xl font-bold text-white">{value ?? '-'}</p>
       <p className="text-xs font-semibold text-gray-300 mt-0.5">{label}</p>
       {sub && <p className="text-[10px] text-gray-600 mt-0.5">{sub}</p>}
     </button>
@@ -232,5 +232,5 @@ function RoleBadge({ role }) {
   )
 }
 
-function fmtNum(n)    { return n != null ? Number(n).toLocaleString() : '—' }
+function fmtNum(n)    { return n != null ? Number(n).toLocaleString() : '-' }
 function fmtTokens(n) { if (!n) return '0'; const v = Number(n); return v > 1000 ? `${(v/1000).toFixed(1)}k` : v.toString() }

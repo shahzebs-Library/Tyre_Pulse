@@ -1,5 +1,5 @@
 /**
- * SkeletonLoader — pulsing placeholder boxes for any layout shape.
+ * SkeletonLoader - pulsing placeholder boxes for any layout shape.
  * Use instead of ActivityIndicator for content-aware loading states.
  */
 

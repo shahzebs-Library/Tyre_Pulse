@@ -322,7 +322,7 @@ function DriverDrawer({ driver, currency, onClose }) {
         { key: 'risk_level',      header: 'Risk Level' },
         { key: 'removal_reason',  header: 'Removal Reason' },
       ],
-      `Driver History – ${driver.name}`,
+      `Driver History - ${driver.name}`,
       `driver_${driver.name.replace(/\s+/g, '_')}_history`,
       'landscape',
     )
@@ -466,14 +466,14 @@ function DriverDrawer({ driver, currency, onClose }) {
                             key={r.id ?? i}
                             className="border-t border-gray-800/40 hover:bg-white/[0.02] transition-colors"
                           >
-                            <td className="px-3 py-2 text-gray-300 font-medium">{r.asset_no ?? r.asset_number ?? '—'}</td>
-                            <td className="px-3 py-2 text-gray-400">{r.brand ?? '—'}</td>
-                            <td className="px-3 py-2 text-gray-500">{r.issue_date ? r.issue_date.slice(0, 10) : '—'}</td>
-                            <td className="px-3 py-2 text-gray-300">{r.cost_per_tyre != null ? `${currency} ${r.cost_per_tyre}` : '—'}</td>
+                            <td className="px-3 py-2 text-gray-300 font-medium">{r.asset_no ?? r.asset_number ?? '-'}</td>
+                            <td className="px-3 py-2 text-gray-400">{r.brand ?? '-'}</td>
+                            <td className="px-3 py-2 text-gray-500">{r.issue_date ? r.issue_date.slice(0, 10) : '-'}</td>
+                            <td className="px-3 py-2 text-gray-300">{r.cost_per_tyre != null ? `${currency} ${r.cost_per_tyre}` : '-'}</td>
                             <td className={`px-3 py-2 font-mono ${cpkColor(cpk)}`}>{fmtCpk(cpk, currency)}</td>
-                            <td className="px-3 py-2 text-gray-400">{life != null ? fmtKm(life) : '—'}</td>
-                            <td className={`px-3 py-2 font-semibold capitalize ${riskCls}`}>{r.risk_level ?? '—'}</td>
-                            <td className="px-3 py-2 text-gray-500 max-w-[120px] truncate">{r.removal_reason ?? '—'}</td>
+                            <td className="px-3 py-2 text-gray-400">{life != null ? fmtKm(life) : '-'}</td>
+                            <td className={`px-3 py-2 font-semibold capitalize ${riskCls}`}>{r.risk_level ?? '-'}</td>
+                            <td className="px-3 py-2 text-gray-500 max-w-[120px] truncate">{r.removal_reason ?? '-'}</td>
                           </tr>
                         )
                       })}
@@ -714,7 +714,7 @@ export default function DriverManagement() {
         { key: 'riskScore',   header: 'Risk Score' },
         { key: 'performance', header: 'Performance' },
       ],
-      'Driver Intelligence — Ranking Report',
+      'Driver Intelligence - Ranking Report',
       'driver_intelligence_ranking',
       'landscape',
     )
@@ -955,7 +955,7 @@ export default function DriverManagement() {
           style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp size={14} className="text-blue-400" />
-            <h3 className="text-sm font-semibold text-white">Driver Comparison — Avg CPK (Top 10)</h3>
+            <h3 className="text-sm font-semibold text-white">Driver Comparison - Avg CPK (Top 10)</h3>
           </div>
           {cpkChartData.labels.length > 0 ? (
             <div style={{ height: 220 }}>

@@ -1,5 +1,5 @@
 /**
- * Typed offline commands — the Step 1 foundation that will replace the current
+ * Typed offline commands - the Step 1 foundation that will replace the current
  * `recordQueue.ts` (which inserts into an ARBITRARY, client-chosen table:
  * `supabase.from(table).insert(payload)`). A mobile client must never decide
  * which table to write to. Instead it enqueues a typed *intent* that the Go API

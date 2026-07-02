@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// ExecutiveReport.jsx — Executive Intelligence Report · /executive-report
+// ExecutiveReport.jsx - Executive Intelligence Report · /executive-report
 // Full management-ready report: 7 mandatory sections.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -529,7 +529,7 @@ export default function ExecutiveReport() {
         priority: critRate > 0.1 ? 'Critical' : 'High',
         title: 'Enforce Inspection Compliance Across All Sites',
         description: `Fleet inspection compliance is at ${fmtPct(inspComp)}, well below the 85% target. Missing inspections are a leading indicator of tyre failures. A mandatory compliance enforcement programme with site manager accountability must be implemented.`,
-        impact: `Compliance improvement to 90%+ historically reduces failure rate by 20–30%, saving approximately ${fmtCurrency(totalSpend * 0.15, currency)} annually.`,
+        impact: `Compliance improvement to 90%+ historically reduces failure rate by 20-30%, saving approximately ${fmtCurrency(totalSpend * 0.15, currency)} annually.`,
         owner: 'Management',
       })
     }
@@ -559,7 +559,7 @@ export default function ExecutiveReport() {
       recs.push({
         priority: 'High',
         title: 'Driver Behaviour Telematics Programme',
-        description: `Driver behaviour contributes to ${fmtPct(topRootCause.pct)} of tyre incidents. Deploying telematics with speed, harsh braking, and cornering monitoring — combined with driver-specific coaching — will reduce this cause category significantly.`,
+        description: `Driver behaviour contributes to ${fmtPct(topRootCause.pct)} of tyre incidents. Deploying telematics with speed, harsh braking, and cornering monitoring - combined with driver-specific coaching - will reduce this cause category significantly.`,
         impact: `${fmtCurrency(topRootCause.cost * 0.5, currency)} in potential cost avoidance per period.`,
         owner: 'Fleet Manager',
       })
@@ -569,7 +569,7 @@ export default function ExecutiveReport() {
       recs.push({
         priority: 'High',
         title: 'Scrap Rate Root Cause Investigation',
-        description: `Scrap rate at ${fmtPct(scrapRate * 100)} exceeds acceptable limits. Each scrapped tyre represents full cost loss. A structured investigation into premature removal drivers — including improper inflation, fitment errors, and road damage — must be completed within 30 days.`,
+        description: `Scrap rate at ${fmtPct(scrapRate * 100)} exceeds acceptable limits. Each scrapped tyre represents full cost loss. A structured investigation into premature removal drivers - including improper inflation, fitment errors, and road damage - must be completed within 30 days.`,
         impact: `Reducing scrap rate by 50% saves approximately ${fmtCurrency(kpis.scrapRate?.estimatedScrapCost * 0.5, currency)} per period.`,
         owner: 'Workshop',
       })
@@ -578,7 +578,7 @@ export default function ExecutiveReport() {
     if (worstSiteByFailure) {
       recs.push({
         priority: 'Medium',
-        title: `Site Audit: ${worstSiteByFailure.site} — Highest Failure Rate`,
+        title: `Site Audit: ${worstSiteByFailure.site} - Highest Failure Rate`,
         description: `${worstSiteByFailure.site} has the highest failure rate at ${fmtPct(worstSiteByFailure.rate * 100)}. A structured site audit covering inspection compliance, tyre fitment practices, road conditions, and driver behaviour is required to understand and remediate site-specific failure drivers.`,
         impact: `Bringing ${worstSiteByFailure.site} to fleet average failure rate could save ${fmtCurrency(costBySite.find(s => s.site === worstSiteByFailure.site)?.cost * 0.2 || 0, currency)} per period.`,
         owner: 'Fleet Manager',
@@ -610,7 +610,7 @@ export default function ExecutiveReport() {
         priority: 'Medium',
         title: 'Tyre Rotation Compliance Enforcement',
         description: 'Implementing a systematic tyre rotation schedule at 10,000 km intervals will equalise wear across positions, extend average tyre life, and reduce position-specific failure rates, particularly on steer axles.',
-        impact: `Projected tyre life extension of 10–15%, saving approximately ${fmtCurrency(totalSpend * 0.1, currency)} per period.`,
+        impact: `Projected tyre life extension of 10-15%, saving approximately ${fmtCurrency(totalSpend * 0.1, currency)} per period.`,
         owner: 'Workshop',
       })
     }
@@ -624,56 +624,56 @@ export default function ExecutiveReport() {
     const actions30 = [
       {
         action: `Remove all ${critCount} Critical-risk tyres from service immediately`,
-        priority: 'Critical', timeline: '0–7 days',
+        priority: 'Critical', timeline: '0-7 days',
         owner: 'Fleet Manager', saving: fmtCurrency(kpis.scrapRate?.estimatedScrapCost * 0.2, currency), status: 'Open',
       },
       {
         action: 'Audit top 3 highest-failure sites with on-site inspection team',
-        priority: 'Critical', timeline: '7–14 days',
+        priority: 'Critical', timeline: '7-14 days',
         owner: 'Fleet Manager', saving: fmtCurrency(totalSpend * 0.08, currency), status: 'Open',
       },
       {
         action: 'Mandate 100% tyre pressure check before vehicle dispatch',
-        priority: 'High', timeline: '1–7 days',
+        priority: 'High', timeline: '1-7 days',
         owner: 'Workshop', saving: fmtCurrency(topRootCause?.cost * 0.3 || 0, currency), status: 'Open',
       },
       {
         action: 'Issue corrective action notices to all sites below 70% inspection compliance',
-        priority: 'High', timeline: '7–30 days',
+        priority: 'High', timeline: '7-30 days',
         owner: 'Management', saving: fmtCurrency(totalSpend * 0.1, currency), status: 'Open',
       },
     ]
     const actions60 = [
       {
         action: `Initiate procurement review for lowest-performing tyre brand(s)`,
-        priority: 'High', timeline: '30–60 days',
+        priority: 'High', timeline: '30-60 days',
         owner: 'Procurement', saving: fmtCurrency(savingsOpportunity * 0.3, currency), status: 'Open',
       },
       {
         action: 'Deploy telematics driver behaviour scoring across all high-failure vehicles',
-        priority: 'High', timeline: '30–60 days',
+        priority: 'High', timeline: '30-60 days',
         owner: 'Fleet Manager', saving: fmtCurrency(totalSpend * 0.12, currency), status: 'Open',
       },
       {
         action: 'Implement tyre rotation schedule at 10,000 km for all fleet vehicles',
-        priority: 'Medium', timeline: '30–60 days',
+        priority: 'Medium', timeline: '30-60 days',
         owner: 'Workshop', saving: fmtCurrency(totalSpend * 0.1, currency), status: 'Open',
       },
     ]
     const actions90 = [
       {
         action: 'Complete TPMS sensor installation across all fleet vehicles',
-        priority: 'High', timeline: '60–90 days',
+        priority: 'High', timeline: '60-90 days',
         owner: 'Fleet Manager', saving: fmtCurrency(totalSpend * 0.15, currency), status: 'Open',
       },
       {
         action: 'Establish monthly executive tyre KPI review cadence',
-        priority: 'Medium', timeline: '60–90 days',
+        priority: 'Medium', timeline: '60-90 days',
         owner: 'Management', saving: 'Process', status: 'Open',
       },
       {
         action: 'Negotiate revised contracts with top-3 performing vendors based on CPK data',
-        priority: 'Medium', timeline: '60–90 days',
+        priority: 'Medium', timeline: '60-90 days',
         owner: 'Procurement', saving: fmtCurrency(savingsOpportunity * 0.4, currency), status: 'Open',
       },
     ]
@@ -769,35 +769,35 @@ export default function ExecutiveReport() {
       doc.text(`Generated: ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}`, pw / 2, 135, { align: 'center' })
       doc.setFontSize(10)
       doc.setTextColor(110, 231, 183)
-      doc.text('CONFIDENTIAL — FOR MANAGEMENT USE ONLY', pw / 2, 160, { align: 'center' })
+      doc.text('CONFIDENTIAL - FOR MANAGEMENT USE ONLY', pw / 2, 160, { align: 'center' })
       doc.setFontSize(9)
       doc.text('TyrePulse Fleet Intelligence Platform', pw / 2, ph - 15, { align: 'center' })
 
       doc.addPage()
 
-      // Section 1 — KPI Summary Table
+      // Section 1 - KPI Summary Table
       doc.setFillColor(17, 24, 39)
       doc.rect(0, 0, pw, ph, 'F')
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(14)
       doc.setFont('helvetica', 'bold')
-      doc.text('Section 2 — KPI Dashboard', 14, 20)
+      doc.text('Section 2 - KPI Dashboard', 14, 20)
 
       autoTable(doc, {
         startY: 28,
         head: [['KPI', 'Value', 'Status', 'Target']],
         body: [
           ['Fleet Avg CPK', fmtCpk(kpis.cpk.fleetAvgCpk, currency), cpkStatus(kpis.cpk.fleetAvgCpk) === 'green' ? 'Good' : cpkStatus(kpis.cpk.fleetAvgCpk) === 'amber' ? 'Warning' : 'Critical', '< 0.012'],
-          ['Median CPK', fmtCpk(kpis.cpk.medianCpk, currency), '—', '—'],
-          ['Fleet Avg Tyre Life', `${fmtNum(kpis.avgTyreLife.avgKm)} km`, '—', '> 60,000 km'],
+          ['Median CPK', fmtCpk(kpis.cpk.medianCpk, currency), '-', '-'],
+          ['Fleet Avg Tyre Life', `${fmtNum(kpis.avgTyreLife.avgKm)} km`, '-', '> 60,000 km'],
           ['Inspection Compliance', fmtPct(kpis.inspectionCompliance.compliancePct), kpis.inspectionCompliance.compliancePct >= 85 ? 'Good' : 'Warning', '≥ 85%'],
           ['Failure Rate', fmtPct(kpis.failureRate.failureRate * 100), kpis.failureRate.failureRate <= 0.1 ? 'Good' : 'Warning', '< 10%'],
           ['Critical Rate', fmtPct(kpis.failureRate.criticalRate * 100), kpis.failureRate.criticalRate <= 0.05 ? 'Good' : 'Critical', '< 5%'],
           ['Scrap Rate', fmtPct(kpis.scrapRate.scrapRate * 100), kpis.scrapRate.scrapRate <= 0.15 ? 'Good' : 'Warning', '< 15%'],
           ['Fleet Availability', fmtPct(kpis.fleetAvailability.availabilityPct), kpis.fleetAvailability.availabilityPct >= 95 ? 'Good' : 'Warning', '≥ 95%'],
-          ['Total Downtime Hours', `${fmtNum(kpis.downtimeImpact.totalDowntimeHours)} hrs`, '—', '—'],
-          ['Total Spend (Period)', fmtCurrency(totalSpend, currency), '—', '—'],
-          ['Projected Annual Spend', fmtCurrency(projectedAnnual, currency), '—', '—'],
+          ['Total Downtime Hours', `${fmtNum(kpis.downtimeImpact.totalDowntimeHours)} hrs`, '-', '-'],
+          ['Total Spend (Period)', fmtCurrency(totalSpend, currency), '-', '-'],
+          ['Projected Annual Spend', fmtCurrency(projectedAnnual, currency), '-', '-'],
           ['Cost Trend', costTrend.trend.charAt(0).toUpperCase() + costTrend.trend.slice(1), costTrend.trend === 'improving' ? 'Good' : costTrend.trend === 'stable' ? 'Neutral' : 'Warning', 'Improving'],
         ],
         styles: { fillColor: [17, 24, 39], textColor: [209, 213, 219], fontSize: 9, cellPadding: 3 },
@@ -808,13 +808,13 @@ export default function ExecutiveReport() {
 
       doc.addPage()
 
-      // Section 3 — Root Cause Table
+      // Section 3 - Root Cause Table
       doc.setFillColor(17, 24, 39)
       doc.rect(0, 0, pw, ph, 'F')
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(14)
       doc.setFont('helvetica', 'bold')
-      doc.text('Section 3 — Root Cause Analysis', 14, 20)
+      doc.text('Section 3 - Root Cause Analysis', 14, 20)
 
       autoTable(doc, {
         startY: 28,
@@ -833,13 +833,13 @@ export default function ExecutiveReport() {
 
       doc.addPage()
 
-      // Section 5 — Risk Assessment
+      // Section 5 - Risk Assessment
       doc.setFillColor(17, 24, 39)
       doc.rect(0, 0, pw, ph, 'F')
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(14)
       doc.setFont('helvetica', 'bold')
-      doc.text('Section 5 — Risk Assessment', 14, 20)
+      doc.text('Section 5 - Risk Assessment', 14, 20)
 
       autoTable(doc, {
         startY: 28,
@@ -855,13 +855,13 @@ export default function ExecutiveReport() {
 
       doc.addPage()
 
-      // Section 7 — Action Plan
+      // Section 7 - Action Plan
       doc.setFillColor(17, 24, 39)
       doc.rect(0, 0, pw, ph, 'F')
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(14)
       doc.setFont('helvetica', 'bold')
-      doc.text('Section 7 — Action Plan', 14, 20)
+      doc.text('Section 7 - Action Plan', 14, 20)
 
       autoTable(doc, {
         startY: 28,
@@ -938,7 +938,7 @@ export default function ExecutiveReport() {
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
-    doc.text(`${companyName} — Action Plan`, 14, 13)
+    doc.text(`${companyName} - Action Plan`, 14, 13)
     doc.setFontSize(9)
     doc.text(`Generated ${new Date().toLocaleDateString('en-GB')} · Period: ${PERIODS.find(p => p.key === period)?.label}`, pw - 14, 13, { align: 'right' })
 
@@ -1162,7 +1162,7 @@ export default function ExecutiveReport() {
       <div className="max-w-screen-2xl mx-auto px-4 py-6 space-y-8">
 
         {/* ═══════════════════════════════════════════════════════════════
-            SECTION 1 — EXECUTIVE SUMMARY
+            SECTION 1 - EXECUTIVE SUMMARY
         ═══════════════════════════════════════════════════════════════ */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
           <Card className="border-emerald-800/40">
@@ -1172,7 +1172,7 @@ export default function ExecutiveReport() {
                 <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
                   <Star className="w-5 h-5 text-emerald-400" />
                 </div>
-                <h2 className="text-lg font-semibold text-white">Section 1 — Executive Summary</h2>
+                <h2 className="text-lg font-semibold text-white">Section 1 - Executive Summary</h2>
               </div>
               <div className="flex items-center gap-2">
                 <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-red-500/10 text-red-400 border border-red-500/20 tracking-wide">
@@ -1283,13 +1283,13 @@ export default function ExecutiveReport() {
         </motion.div>
 
         {/* ═══════════════════════════════════════════════════════════════
-            SECTION 2 — KPI DASHBOARD
+            SECTION 2 - KPI DASHBOARD
         ═══════════════════════════════════════════════════════════════ */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
           <Card>
             <SectionHeader
               icon={BarChart2}
-              title="Section 2 — KPI Dashboard"
+              title="Section 2 - KPI Dashboard"
               subtitle={`${periodRecords.length.toLocaleString()} tyre records · ${PERIODS.find(p => p.key === period)?.label}`}
               badge="12 Metrics"
             />
@@ -1319,13 +1319,13 @@ export default function ExecutiveReport() {
         </motion.div>
 
         {/* ═══════════════════════════════════════════════════════════════
-            SECTION 3 — ROOT CAUSE ANALYSIS
+            SECTION 3 - ROOT CAUSE ANALYSIS
         ═══════════════════════════════════════════════════════════════ */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
           <Card>
             <SectionHeader
               icon={AlertTriangle}
-              title="Section 3 — Root Cause Analysis"
+              title="Section 3 - Root Cause Analysis"
               subtitle="Failure driver classification across all tyre events in period"
               badge={`${rootCauses.length} Categories`}
             />
@@ -1403,13 +1403,13 @@ export default function ExecutiveReport() {
         </motion.div>
 
         {/* ═══════════════════════════════════════════════════════════════
-            SECTION 4 — FINANCIAL IMPACT
+            SECTION 4 - FINANCIAL IMPACT
         ═══════════════════════════════════════════════════════════════ */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
           <Card>
             <SectionHeader
               icon={DollarSign}
-              title="Section 4 — Financial Impact"
+              title="Section 4 - Financial Impact"
               subtitle="Cost analysis, budget tracking, and financial projections"
             />
 
@@ -1490,13 +1490,13 @@ export default function ExecutiveReport() {
         </motion.div>
 
         {/* ═══════════════════════════════════════════════════════════════
-            SECTION 5 — RISK ASSESSMENT
+            SECTION 5 - RISK ASSESSMENT
         ═══════════════════════════════════════════════════════════════ */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.2 }}>
           <Card>
             <SectionHeader
               icon={ShieldAlert}
-              title="Section 5 — Risk Assessment"
+              title="Section 5 - Risk Assessment"
               subtitle="Fleet risk exposure, site matrix, and risk trend analysis"
             />
 
@@ -1579,7 +1579,7 @@ export default function ExecutiveReport() {
 
             {/* Risk matrix table */}
             <div className="mt-6">
-              <p className="text-xs text-gray-400 font-medium mb-2 uppercase tracking-wide">Risk Matrix — Sites × Risk Level</p>
+              <p className="text-xs text-gray-400 font-medium mb-2 uppercase tracking-wide">Risk Matrix - Sites × Risk Level</p>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
@@ -1600,22 +1600,22 @@ export default function ExecutiveReport() {
                         <td className="py-2 px-3 text-center">
                           {row.Critical > 0
                             ? <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-bold">{row.Critical}</span>
-                            : <span className="text-gray-700">—</span>}
+                            : <span className="text-gray-700">-</span>}
                         </td>
                         <td className="py-2 px-3 text-center">
                           {row.High > 0
                             ? <span className="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-bold">{row.High}</span>
-                            : <span className="text-gray-700">—</span>}
+                            : <span className="text-gray-700">-</span>}
                         </td>
                         <td className="py-2 px-3 text-center">
                           {row.Medium > 0
                             ? <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">{row.Medium}</span>
-                            : <span className="text-gray-700">—</span>}
+                            : <span className="text-gray-700">-</span>}
                         </td>
                         <td className="py-2 px-3 text-center">
                           {row.Low > 0
                             ? <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">{row.Low}</span>
-                            : <span className="text-gray-700">—</span>}
+                            : <span className="text-gray-700">-</span>}
                         </td>
                         <td className="py-2 px-3 text-center text-gray-300">{row.total}</td>
                         <td className="py-2 px-3 text-center">
@@ -1649,8 +1649,8 @@ export default function ExecutiveReport() {
                     <tbody>
                       {top10HighRisk.map((r, i) => (
                         <tr key={r.id || i} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                          <td className="py-2 px-3 text-white font-medium">{r.asset_no || '—'}</td>
-                          <td className="py-2 px-3 text-gray-300">{r.site || '—'}</td>
+                          <td className="py-2 px-3 text-white font-medium">{r.asset_no || '-'}</td>
+                          <td className="py-2 px-3 text-gray-300">{r.site || '-'}</td>
                           <td className="py-2 px-3 text-center">
                             <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${
                               r.risk_level === 'Critical' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'
@@ -1658,9 +1658,9 @@ export default function ExecutiveReport() {
                               {r.risk_level}
                             </span>
                           </td>
-                          <td className="py-2 px-3 text-gray-300">{r.brand || '—'}</td>
-                          <td className="py-2 px-3 text-gray-400">{r.position || '—'}</td>
-                          <td className="py-2 px-3 text-gray-400 max-w-xs truncate">{r.findings?.slice(0, 60) || '—'}</td>
+                          <td className="py-2 px-3 text-gray-300">{r.brand || '-'}</td>
+                          <td className="py-2 px-3 text-gray-400">{r.position || '-'}</td>
+                          <td className="py-2 px-3 text-gray-400 max-w-xs truncate">{r.findings?.slice(0, 60) || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1672,13 +1672,13 @@ export default function ExecutiveReport() {
         </motion.div>
 
         {/* ═══════════════════════════════════════════════════════════════
-            SECTION 6 — RECOMMENDATIONS
+            SECTION 6 - RECOMMENDATIONS
         ═══════════════════════════════════════════════════════════════ */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.25 }}>
           <Card>
             <SectionHeader
               icon={Target}
-              title="Section 6 — Recommendations"
+              title="Section 6 - Recommendations"
               subtitle="Prioritised management recommendations based on fleet intelligence"
               badge={`${recommendations.length} Actions`}
             />
@@ -1713,7 +1713,7 @@ export default function ExecutiveReport() {
         </motion.div>
 
         {/* ═══════════════════════════════════════════════════════════════
-            SECTION 7 — ACTION PLAN
+            SECTION 7 - ACTION PLAN
         ═══════════════════════════════════════════════════════════════ */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.3 }}>
           <Card>
@@ -1723,7 +1723,7 @@ export default function ExecutiveReport() {
                   <CheckCircle className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">Section 7 — Action Plan</h2>
+                  <h2 className="text-lg font-semibold text-white">Section 7 - Action Plan</h2>
                   <p className="text-sm text-gray-400 mt-0.5">30/60/90 day structured delivery plan</p>
                 </div>
               </div>
@@ -1738,9 +1738,9 @@ export default function ExecutiveReport() {
 
             {/* Phase dividers */}
             {[
-              { label: '30-Day Actions — Immediate', days: '0–30', color: 'text-red-400 border-red-500/30 bg-red-500/5', rows: actionPlan.slice(0, 4) },
-              { label: '60-Day Actions — Short Term', days: '30–60', color: 'text-amber-400 border-amber-500/30 bg-amber-500/5', rows: actionPlan.slice(4, 7) },
-              { label: '90-Day Actions — Strategic', days: '60–90', color: 'text-blue-400 border-blue-500/30 bg-blue-500/5', rows: actionPlan.slice(7) },
+              { label: '30-Day Actions - Immediate', days: '0-30', color: 'text-red-400 border-red-500/30 bg-red-500/5', rows: actionPlan.slice(0, 4) },
+              { label: '60-Day Actions - Short Term', days: '30-60', color: 'text-amber-400 border-amber-500/30 bg-amber-500/5', rows: actionPlan.slice(4, 7) },
+              { label: '90-Day Actions - Strategic', days: '60-90', color: 'text-blue-400 border-blue-500/30 bg-blue-500/5', rows: actionPlan.slice(7) },
             ].map(phase => (
               <div key={phase.label} className="mb-5">
                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border mb-3 ${phase.color}`}>

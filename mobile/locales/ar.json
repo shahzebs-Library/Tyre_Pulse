@@ -121,7 +121,7 @@
     "signOut": "تسجيل الخروج",
     "version": "TyrePulse Inspector v1.0.0",
     "syncCompleteTitle": "اكتملت المزامنة",
-    "syncFailed": "فشل — تحقق من الاتصال.",
+    "syncFailed": "فشل - تحقق من الاتصال.",
     "uploaded": "فحص تم رفعه.",
     "uploadsPlural": "فحوصات تم رفعها.",
     "clearTitle": "مسح السجلات المتزامنة",
@@ -165,7 +165,7 @@
     "useLastPressure": "استخدم آخر ضغط"
   },
   "sync": {
-    "offline": "غير متصل — ستتم المزامنة عند الاتصال",
+    "offline": "غير متصل - ستتم المزامنة عند الاتصال",
     "pendingSingle": "فحص في انتظار المزامنة",
     "pendingPlural": "فحوصات في انتظار المزامنة",
     "syncNow": "مزامنة الآن",
@@ -311,8 +311,8 @@
       "cancel": "إلغاء",
       "search": "بحث…",
       "all": "الكل",
-      "dash": "—",
-      "offlineSaved": "تم الحفظ دون اتصال — ستتم المزامنة تلقائياً",
+      "dash": "-",
+      "offlineSaved": "تم الحفظ دون اتصال - ستتم المزامنة تلقائياً",
       "saved": "تم الحفظ",
       "couldNotSave": "تعذّر الحفظ",
       "loading": "جارٍ التحميل…",

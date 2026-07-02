@@ -99,7 +99,7 @@ export default function StatCard({
   } else if (value && /^\d/.test(String(value))) {
     displayVal = String(value).replace(/[\d,]+/, counted.toLocaleString())
   } else {
-    displayVal = value ?? '—'
+    displayVal = value ?? '-'
   }
 
   const card = (

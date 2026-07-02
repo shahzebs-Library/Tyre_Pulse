@@ -540,7 +540,7 @@ export default function Reports() {
                 </span>
                 {allRows.length > PAGE_SIZE && (
                   <span className="text-xs text-gray-500">
-                    Showing {rangeStart}–{rangeEnd} of {allRows.length.toLocaleString()} records
+                    Showing {rangeStart}-{rangeEnd} of {allRows.length.toLocaleString()} records
                   </span>
                 )}
               </div>
@@ -575,7 +575,7 @@ export default function Reports() {
                                     'bg-green-900/50 text-green-300'
                                   }`}>{row[col]}</span>
                                 ) : (
-                                  row[col] ?? '—'
+                                  row[col] ?? '-'
                                 )}
                               </td>
                             ))}
@@ -589,7 +589,7 @@ export default function Reports() {
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between flex-wrap gap-3">
                       <span className="text-xs text-gray-500">
-                        Showing {rangeStart}–{rangeEnd} of {allRows.length.toLocaleString()} records
+                        Showing {rangeStart}-{rangeEnd} of {allRows.length.toLocaleString()} records
                       </span>
                       <div className="flex items-center gap-2">
                         <button
@@ -626,14 +626,14 @@ export default function Reports() {
         pdfColumns={displayCols.map(c => COLUMN_LABELS[c] ?? c)}
         pdfRows={allRows.slice(0, 5000).map(row => displayCols.map(c => row[c] ?? ''))}
         kpiSummary={{
-          'Report Type':    reportType || '—',
+          'Report Type':    reportType || '-',
           'Total Records':  allRows.length.toLocaleString(),
-          'Date From':      dateFrom || '—',
-          'Date To':        dateTo || '—',
+          'Date From':      dateFrom || '-',
+          'Date To':        dateTo || '-',
           'Site Filter':    filterSite || 'All',
           'Country Filter': filterCountry || 'All',
         }}
-        period={dateShortcut || (dateFrom && dateTo ? `${dateFrom} – ${dateTo}` : 'All Time')}
+        period={dateShortcut || (dateFrom && dateTo ? `${dateFrom} - ${dateTo}` : 'All Time')}
       />
     </div>
   )

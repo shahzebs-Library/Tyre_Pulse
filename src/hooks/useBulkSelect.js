@@ -1,5 +1,5 @@
 /**
- * useBulkSelect — manages multi-row selection state for table bulk operations.
+ * useBulkSelect - manages multi-row selection state for table bulk operations.
  *
  * Usage:
  *   const { selected, toggle, toggleAll, clear, isSelected, isAllSelected, count } =

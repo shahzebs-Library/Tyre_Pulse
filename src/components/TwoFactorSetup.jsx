@@ -123,7 +123,7 @@ export default function TwoFactorSetup({ open, onClose, onSuccess }) {
 
   function downloadCodes() {
     const content = [
-      'TyrePulse — Two-Factor Authentication Backup Codes',
+      'TyrePulse - Two-Factor Authentication Backup Codes',
       `Generated: ${new Date().toLocaleString()}`,
       '',
       'Store these codes securely. Each code can only be used once.',
@@ -146,7 +146,7 @@ export default function TwoFactorSetup({ open, onClose, onSuccess }) {
 
   function downloadBackupCodes() {
     const content = [
-      'TyrePulse — Two-Factor Authentication Backup Codes',
+      'TyrePulse - Two-Factor Authentication Backup Codes',
       `Generated: ${new Date().toLocaleString()}`,
       '',
       'Store these codes securely. Each code can only be used once.',

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// WorkOrders.jsx — Workshop Job Card Management · /work-orders
+// WorkOrders.jsx - Workshop Job Card Management · /work-orders
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -87,15 +87,15 @@ const EMPTY_FORM = {
 // ── Helper ────────────────────────────────────────────────────────────────────
 function _fmtCurrencyBase(v, currency = 'SAR') {
   const n = parseFloat(v)
-  if (isNaN(n)) return '—'
+  if (isNaN(n)) return '-'
   return `${currency} ` + n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   return new Date(d).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 function fmtDateTime(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   return new Date(d).toLocaleString('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 function isOverdue(wo) {
@@ -357,9 +357,9 @@ export default function WorkOrders() {
 
     const details = [
       ['Asset No', order.asset_no, 'Status', order.status],
-      ['Tyre Serial', order.tyre_serial || '—', 'Priority', order.priority],
-      ['Position', order.tyre_position || '—', 'Workshop', order.workshop_name || '—'],
-      ['Technician', order.technician_name || '—', 'Site', order.site || '—'],
+      ['Tyre Serial', order.tyre_serial || '-', 'Priority', order.priority],
+      ['Position', order.tyre_position || '-', 'Workshop', order.workshop_name || '-'],
+      ['Technician', order.technician_name || '-', 'Site', order.site || '-'],
       ['Opened', fmtDateTime(order.opened_at), 'Target', fmtDateTime(order.target_completion)],
       ['Started', fmtDateTime(order.started_at), 'Completed', fmtDateTime(order.completed_at)],
     ]
@@ -418,7 +418,7 @@ export default function WorkOrders() {
     const pgCount = doc.internal.getNumberOfPages()
     for (let i = 1; i <= pgCount; i++) {
       doc.setPage(i); doc.setFontSize(7); doc.setTextColor(156, 163, 175)
-      doc.text(`TyrePulse Fleet Intelligence — Job Card — ${order.work_order_no} — Page ${i} of ${pgCount}`, 14, 290)
+      doc.text(`TyrePulse Fleet Intelligence - Job Card - ${order.work_order_no} - Page ${i} of ${pgCount}`, 14, 290)
     }
     doc.save(`${order.work_order_no}-job-card.pdf`)
   }
@@ -472,7 +472,7 @@ export default function WorkOrders() {
     <div className="space-y-6">
       <PageHeader
         title="Work Orders"
-        subtitle={`Workshop job card management — ${orders.length} total`}
+        subtitle={`Workshop job card management - ${orders.length} total`}
         icon={Wrench}
         onRefresh={load}
         actions={
@@ -648,7 +648,7 @@ export default function WorkOrders() {
                         {order.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-400">{order.technician_name || '—'}</td>
+                    <td className="px-4 py-3 text-gray-400">{order.technician_name || '-'}</td>
                     <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{fmtDate(order.opened_at)}</td>
                     <td className={`px-4 py-3 whitespace-nowrap ${overdue ? 'text-red-400 font-medium' : 'text-gray-400'}`}>{fmtDate(order.target_completion)}</td>
                     <td className="px-4 py-3 text-green-400 font-medium">{fmtCurrency(order.total_cost)}</td>

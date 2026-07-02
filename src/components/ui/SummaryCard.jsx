@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import { cn } from '../../lib/cn'
 
 /**
- * SummaryCard — clickable stat card used in filter/summary rows.
+ * SummaryCard - clickable stat card used in filter/summary rows.
  * Visually pops the active state with brand glow.
  */
 export default function SummaryCard({

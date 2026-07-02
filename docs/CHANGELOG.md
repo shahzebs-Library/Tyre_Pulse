@@ -6,11 +6,11 @@ entries on the active development branch.
 
 ## [Unreleased]
 
-### Added — Go backend migration, Step 0 + Step 1
+### Added - Go backend migration, Step 0 + Step 1
 - **Architecture docs (`docs/`)**: `ARCHITECTURE_CURRENT_STATE.md`,
   `TARGET_ARCHITECTURE.md`, `GO_BACKEND_MIGRATION_PLAN.md`,
   `LEGACY_DATA_MAPPING.md`, `SECURITY_RISK_REGISTER.md`,
-  `API_CONTRACT_STRATEGY.md`, and ADRs `0001`–`0004`.
+  `API_CONTRACT_STRATEGY.md`, and ADRs `0001`-`0004`.
 - **Go API foundation (`/backend`)**: config, pgx pool, structured logging +
   request ids, JSON envelope/error model, CORS + rate-limit + recover + access
   log middleware, Supabase JWT verification, `GET /api/v1/health`, `/readyz`,
@@ -24,10 +24,10 @@ entries on the active development branch.
   `mobile/lib/apiClient.ts`, `mobile/lib/offlineCommands.ts`; `API_BASE_URL` in
   both `.env.example` files.
 
-> Step 1 rewires nothing — the web and mobile apps continue to use Supabase
+> Step 1 rewires nothing - the web and mobile apps continue to use Supabase
 > directly. Module cutovers begin in Step 2.
 
-### Added — production-readiness (earlier on this branch)
+### Added - production-readiness (earlier on this branch)
 - Warranty claims, recalls, tyre specifications, tyre rotations, inspection
   schedules, supplier ratings/contracts, and budget planning **persisted to
   Supabase** (previously browser `localStorage` or schema-broken).

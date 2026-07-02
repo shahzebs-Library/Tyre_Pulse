@@ -111,8 +111,8 @@ function TyrePositionDot({ tyre, position }) {
       {showTip && tyre && (
         <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 rounded-lg p-2 text-xs whitespace-nowrap shadow-xl pointer-events-none">
           <p className="text-white font-semibold">{position}</p>
-          <p className="text-gray-400">Tread: {tyre.tread_depth != null ? `${tyre.tread_depth}mm` : '—'}</p>
-          <p style={{ color: riskColor(tyre.risk_level) }}>{tyre.risk_level ?? '—'}</p>
+          <p className="text-gray-400">Tread: {tyre.tread_depth != null ? `${tyre.tread_depth}mm` : '-'}</p>
+          <p style={{ color: riskColor(tyre.risk_level) }}>{tyre.risk_level ?? '-'}</p>
         </div>
       )}
     </div>
@@ -381,7 +381,7 @@ export default function FleetHealthBoard() {
         borderWidth: 1,
         titleColor: '#f9fafb',
         bodyColor: '#9ca3af',
-        callbacks: { label: ctx => ` ${ctx.parsed.y ?? '—'}%` },
+        callbacks: { label: ctx => ` ${ctx.parsed.y ?? '-'}%` },
       },
     },
     scales: {
@@ -445,13 +445,13 @@ export default function FleetHealthBoard() {
   }
 
   function daysFitted(issueDate) {
-    if (!issueDate) return '—'
+    if (!issueDate) return '-'
     const diff = Math.floor((Date.now() - new Date(issueDate)) / 86400000)
     return `${diff}d`
   }
 
   function fmtDate(d) {
-    if (!d) return '—'
+    if (!d) return '-'
     return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
@@ -705,8 +705,8 @@ export default function FleetHealthBoard() {
                             onClick={() => openDrawer(v.asset_no)}
                           >
                             <td className="px-3 py-2.5 font-semibold text-white">{v.asset_no}</td>
-                            <td className="px-3 py-2.5 text-gray-300">{v.site ?? '—'}</td>
-                            <td className="px-3 py-2.5 text-gray-400">{v.country ?? '—'}</td>
+                            <td className="px-3 py-2.5 text-gray-300">{v.site ?? '-'}</td>
+                            <td className="px-3 py-2.5 text-gray-400">{v.country ?? '-'}</td>
                             <td className="px-3 py-2.5">
                               <span className="font-bold" style={{ color: scoreColor(v.score) }}>
                                 {v.score}%
@@ -715,25 +715,25 @@ export default function FleetHealthBoard() {
                             <td className="px-3 py-2.5">
                               {counts.Critical > 0
                                 ? <span className="badge bg-red-900/40 text-red-300 border border-red-800/50">{counts.Critical}</span>
-                                : <span className="text-gray-600">—</span>}
+                                : <span className="text-gray-600">-</span>}
                             </td>
                             <td className="px-3 py-2.5">
                               {counts.High > 0
                                 ? <span className="badge bg-orange-900/40 text-orange-300 border border-orange-800/50">{counts.High}</span>
-                                : <span className="text-gray-600">—</span>}
+                                : <span className="text-gray-600">-</span>}
                             </td>
                             <td className="px-3 py-2.5">
                               {counts.Medium > 0
                                 ? <span className="badge bg-yellow-900/40 text-yellow-300 border border-yellow-800/50">{counts.Medium}</span>
-                                : <span className="text-gray-600">—</span>}
+                                : <span className="text-gray-600">-</span>}
                             </td>
                             <td className="px-3 py-2.5">
                               {counts.Low > 0
                                 ? <span className="badge bg-green-900/40 text-green-300 border border-green-800/50">{counts.Low}</span>
-                                : <span className="text-gray-600">—</span>}
+                                : <span className="text-gray-600">-</span>}
                             </td>
                             <td className="px-3 py-2.5 text-gray-300">
-                              {v.tyres.some(t => t.tread_depth != null) ? `${avgTread.toFixed(1)}mm` : '—'}
+                              {v.tyres.some(t => t.tread_depth != null) ? `${avgTread.toFixed(1)}mm` : '-'}
                             </td>
                             <td className="px-3 py-2.5 text-gray-500 text-xs">{fmtDate(lastDate)}</td>
                           </motion.tr>
@@ -750,7 +750,7 @@ export default function FleetHealthBoard() {
           <div className="card">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp size={16} className="text-green-400" />
-              <h2 className="text-base font-semibold text-white">Fleet Health Trend — Last 12 Months</h2>
+              <h2 className="text-base font-semibold text-white">Fleet Health Trend - Last 12 Months</h2>
             </div>
             <div className="h-48">
               <Line data={trendChartData} options={trendOpts} />
@@ -833,7 +833,7 @@ export default function FleetHealthBoard() {
                     {drawerVehicle.asset_no}
                   </h2>
                   <p className="text-gray-400 text-sm mt-0.5">
-                    {drawerVehicle.site ?? '—'} · {drawerVehicle.country ?? '—'}
+                    {drawerVehicle.site ?? '-'} · {drawerVehicle.country ?? '-'}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -865,19 +865,19 @@ export default function FleetHealthBoard() {
                       <tbody>
                         {drawerVehicle.tyres.map(t => (
                           <tr key={t.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                            <td className="px-2.5 py-2 text-gray-300 font-mono">{t.position ?? '—'}</td>
-                            <td className="px-2.5 py-2 text-gray-400 font-mono">{t.serial_number?.slice(-8) ?? '—'}</td>
-                            <td className="px-2.5 py-2 text-gray-300">{t.brand ?? '—'}</td>
-                            <td className="px-2.5 py-2 text-gray-400">{t.size ?? '—'}</td>
+                            <td className="px-2.5 py-2 text-gray-300 font-mono">{t.position ?? '-'}</td>
+                            <td className="px-2.5 py-2 text-gray-400 font-mono">{t.serial_number?.slice(-8) ?? '-'}</td>
+                            <td className="px-2.5 py-2 text-gray-300">{t.brand ?? '-'}</td>
+                            <td className="px-2.5 py-2 text-gray-400">{t.size ?? '-'}</td>
                             <td className="px-2.5 py-2 text-gray-300">
-                              {t.tread_depth != null ? `${t.tread_depth}mm` : '—'}
+                              {t.tread_depth != null ? `${t.tread_depth}mm` : '-'}
                             </td>
                             <td className="px-2.5 py-2 text-gray-300">
-                              {t.pressure_reading != null ? `${t.pressure_reading}` : '—'}
+                              {t.pressure_reading != null ? `${t.pressure_reading}` : '-'}
                             </td>
                             <td className="px-2.5 py-2">
                               <span className={`badge border text-xs ${riskBgClass(t.risk_level)}`}>
-                                {t.risk_level ?? '—'}
+                                {t.risk_level ?? '-'}
                               </span>
                             </td>
                             <td className="px-2.5 py-2 text-gray-500 flex items-center gap-1">
@@ -979,7 +979,7 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
     .sort((a, b) => new Date(b.issue_date) - new Date(a.issue_date))[0]?.issue_date
 
   function fmtDate(d) {
-    if (!d) return '—'
+    if (!d) return '-'
     return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
@@ -1029,7 +1029,7 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
         {!worst && (
           <span className="text-gray-600 text-xs">No data</span>
         )}
-        <span className="text-gray-600 text-xs">{lastDate ? new Date(lastDate).toLocaleDateString('en-GB', { day:'2-digit', month:'short' }) : '—'}</span>
+        <span className="text-gray-600 text-xs">{lastDate ? new Date(lastDate).toLocaleDateString('en-GB', { day:'2-digit', month:'short' }) : '-'}</span>
       </div>
 
       {/* Drill-in hint */}

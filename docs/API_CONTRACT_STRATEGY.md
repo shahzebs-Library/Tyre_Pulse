@@ -1,4 +1,4 @@
-# TyrePulse — API Contract Strategy
+# TyrePulse - API Contract Strategy
 
 > **Status:** Step 0 design. Governs every `/api/v1` endpoint. The OpenAPI file
 > (`backend/openapi/openapi.yaml`) is the machine-readable source of truth.
@@ -46,7 +46,7 @@ on the response and in every log line for that request.
 Mutating requests carry `Idempotency-Key: <uuid>`. The API records
 `(idem_key, endpoint)` in `idempotency_keys` with the stored status/response.
 A retry with the same key **replays** the original result instead of repeating
-the action — essential for the mobile offline queue.
+the action - essential for the mobile offline queue.
 
 ```
 POST /api/v1/inspections
@@ -68,7 +68,7 @@ Idempotency-Key: 5e9f…   →  201 { "data": { "id": "insp_123" } }
   "meta": { "limit": 2 } }
 ```
 
-## 8. Example — GET /api/v1/me
+## 8. Example - GET /api/v1/me
 ```
 GET /api/v1/me
 Authorization: Bearer <jwt>

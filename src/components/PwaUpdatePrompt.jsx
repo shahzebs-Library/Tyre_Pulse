@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { RefreshCw, Wifi, X } from 'lucide-react'
 
-const UPDATE_INTERVAL_MS = 15 * 60 * 1000 // 15 min — iOS throttles background timers
+const UPDATE_INTERVAL_MS = 15 * 60 * 1000 // 15 min - iOS throttles background timers
 
 export default function PwaUpdatePrompt() {
   const registrationRef = useRef(null)
@@ -16,7 +16,7 @@ export default function PwaUpdatePrompt() {
       if (!registration) return
       registrationRef.current = registration
 
-      // Periodic update poll — calls .update() on the ServiceWorkerRegistration
+      // Periodic update poll - calls .update() on the ServiceWorkerRegistration
       // (previous bug: mistakenly called .update() on a fetch Response, never worked)
       const interval = setInterval(() => {
         if (!navigator.onLine) return

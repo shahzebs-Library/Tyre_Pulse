@@ -1,5 +1,5 @@
 /**
- * VehicleTyreDiagram — Interactive top-down vehicle diagram.
+ * VehicleTyreDiagram - Interactive top-down vehicle diagram.
  *
  * Touch approach: absolute-positioned TouchableOpacity overlays sit on top of
  * the SVG. This is far more reliable than touch handlers inside SVG elements,
@@ -105,7 +105,7 @@ function SharedDefs() {
   )
 }
 
-// ── 3D Tyre visual (no touch handlers — overlays handle touches) ───────────────
+// ── 3D Tyre visual (no touch handlers - overlays handle touches) ───────────────
 interface TyreProps {
   x: number; y: number; w: number; h: number
   risk: RiskKey; label: string
@@ -453,7 +453,7 @@ export default function VehicleTyreDiagram({
       {/* FRONT label */}
       <Text style={styles.frontLabel}>▲ FRONT</Text>
 
-      {/* SVG diagram — purely visual, no touch handlers */}
+      {/* SVG diagram - purely visual, no touch handlers */}
       <View style={{ width, height: svgHeight }}>
         <Svg
           width={width}
@@ -477,7 +477,7 @@ export default function VehicleTyreDiagram({
           ))}
         </Svg>
 
-        {/* Absolute touch overlays — one per tyre, on top of the SVG */}
+        {/* Absolute touch overlays - one per tyre, on top of the SVG */}
         {allTyres.map(t => {
           const pos = toScreen(t.x, t.y, t.w, t.h)
           const isSelected = selectedPosition === t.id

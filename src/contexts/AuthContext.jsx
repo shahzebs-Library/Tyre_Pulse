@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
   const [modulePerms, setModulePerms] = useState(null)
   const [mfaEnabled, setMfaEnabled] = useState(false)
 
-  // Idle timeout — sign out after 30 minutes of inactivity.
+  // Idle timeout - sign out after 30 minutes of inactivity.
   // Uses an in-memory ref instead of localStorage so the timer cannot be
   // bypassed by a user opening DevTools and modifying localStorage values.
   const IDLE_MS = 30 * 60 * 1000

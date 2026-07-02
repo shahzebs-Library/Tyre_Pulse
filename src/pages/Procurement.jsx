@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Procurement.jsx — Purchase Order Management · /procurement
+// Procurement.jsx - Purchase Order Management · /procurement
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -66,11 +66,11 @@ const EMPTY_FORM = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function _fmtCurrencyBase(v, currency = 'SAR') {
   const n = parseFloat(v)
-  if (isNaN(n)) return '—'
+  if (isNaN(n)) return '-'
   return `${currency} ` + n.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   return new Date(d).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 function calcItemTotal(item) {
@@ -481,8 +481,8 @@ export default function Procurement() {
         ['PO Number',        po.po_number,                  'Vendor',        po.vendor_name],
         ['Order Date',       fmtDate(po.order_date),         'Expected Del.', fmtDate(po.expected_delivery)],
         ['Actual Delivery',  fmtDate(po.actual_delivery),    'Priority',      po.priority],
-        ['Requested By',     po.requested_by || '—',         'Approved By',   po.approved_by || '—'],
-        ['Site',             po.site || '—',                 'Budget Code',   po.budget_code || '—'],
+        ['Requested By',     po.requested_by || '-',         'Approved By',   po.approved_by || '-'],
+        ['Site',             po.site || '-',                 'Budget Code',   po.budget_code || '-'],
       ],
       theme: 'striped',
       styles: { fontSize: 9, cellPadding: 3 },
@@ -528,7 +528,7 @@ export default function Procurement() {
     const pgCount = doc.internal.getNumberOfPages()
     for (let i = 1; i <= pgCount; i++) {
       doc.setPage(i); doc.setFontSize(7); doc.setTextColor(156, 163, 175)
-      doc.text(`TyrePulse Fleet Intelligence — Purchase Order — ${po.po_number} — Page ${i} of ${pgCount}`, 14, 290)
+      doc.text(`TyrePulse Fleet Intelligence - Purchase Order - ${po.po_number} - Page ${i} of ${pgCount}`, 14, 290)
     }
     doc.save(`${po.po_number}.pdf`)
   }
@@ -575,7 +575,7 @@ export default function Procurement() {
     <div className="space-y-6">
       <PageHeader
         title="Procurement"
-        subtitle={`Purchase order management — ${orders.length} total orders`}
+        subtitle={`Purchase order management - ${orders.length} total orders`}
         icon={ShoppingCart}
         actions={
           <div className="flex items-center gap-2">
@@ -632,7 +632,7 @@ export default function Procurement() {
           },
           {
             label: 'Budget Used',
-            value: budget > 0 ? `${kpis.budgetVariance?.toFixed(1)}%` : '—',
+            value: budget > 0 ? `${kpis.budgetVariance?.toFixed(1)}%` : '-',
             suffix: '',
             color: kpis.budgetVariance > 100 ? 'red' : kpis.budgetVariance > 80 ? 'yellow' : 'teal',
             icon: BarChart2,
@@ -640,7 +640,7 @@ export default function Procurement() {
           },
           {
             label: 'Avg Lead Time',
-            value: kpis.avgLeadTime !== null ? `${kpis.avgLeadTime}d` : '—',
+            value: kpis.avgLeadTime !== null ? `${kpis.avgLeadTime}d` : '-',
             suffix: '',
             color: 'purple',
             icon: Clock,
@@ -867,7 +867,7 @@ export default function Procurement() {
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-center">{(po.items || []).length}</td>
                     <td className="px-4 py-3 text-green-400 font-medium whitespace-nowrap">{fmtCur(po.total_amount)}</td>
-                    <td className="px-4 py-3 text-gray-400">{po.site || '—'}</td>
+                    <td className="px-4 py-3 text-gray-400">{po.site || '-'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button onClick={() => setViewPO(po)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title="View"><Eye size={13} /></button>
@@ -1209,7 +1209,7 @@ export default function Procurement() {
                 {/* Line items with received qty tracking */}
                 {(viewPO.items || []).length > 0 && (
                   <div>
-                    <p className="text-gray-400 text-xs mb-2 uppercase tracking-wide font-medium">Line Items — Delivery Tracking</p>
+                    <p className="text-gray-400 text-xs mb-2 uppercase tracking-wide font-medium">Line Items - Delivery Tracking</p>
                     <div className="space-y-2">
                       {viewPO.items.map((it, idx) => {
                         const received = it.received_qty ?? 0
@@ -1217,7 +1217,7 @@ export default function Procurement() {
                         return (
                           <div key={idx} className="bg-gray-800 rounded-xl p-3">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-white text-sm font-medium">{it.brand} — {it.size}</span>
+                              <span className="text-white text-sm font-medium">{it.brand} - {it.size}</span>
                               <span className="text-green-400 text-sm font-semibold">{fmtCur(calcItemTotal(it))}</span>
                             </div>
                             <div className="flex items-center justify-between text-xs text-gray-400 mb-2">

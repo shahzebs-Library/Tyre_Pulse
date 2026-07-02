@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// anomalyEngine.test.js — Comprehensive unit tests for anomalyEngine.js
+// anomalyEngine.test.js - Comprehensive unit tests for anomalyEngine.js
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { describe, it, expect } from 'vitest'
@@ -68,9 +68,9 @@ describe('ANOMALY_TYPE_DESC', () => {
   })
 })
 
-// ── detectAnomalies — empty / edge inputs ─────────────────────────────────────
+// ── detectAnomalies - empty / edge inputs ─────────────────────────────────────
 
-describe('detectAnomalies — empty / null inputs', () => {
+describe('detectAnomalies - empty / null inputs', () => {
   it('returns empty array for empty records array', () => {
     expect(detectAnomalies([])).toEqual([])
   })
@@ -96,7 +96,7 @@ describe('detectAnomalies — empty / null inputs', () => {
 
 // ── SHORT_INTERVAL ────────────────────────────────────────────────────────────
 
-describe('detectAnomalies — SHORT_INTERVAL', () => {
+describe('detectAnomalies - SHORT_INTERVAL', () => {
   it('detects HIGH severity when interval < 7 days', () => {
     const records = [
       makeRecord({ asset_no: 'A1', id: 'r001', issue_date: '2024-06-01', serial_no: 'SN-A' }),
@@ -177,7 +177,7 @@ describe('detectAnomalies — SHORT_INTERVAL', () => {
 
 // ── SAME_DAY_BURST ────────────────────────────────────────────────────────────
 
-describe('detectAnomalies — SAME_DAY_BURST', () => {
+describe('detectAnomalies - SAME_DAY_BURST', () => {
   it('detects MEDIUM severity for 2 records on same asset same day', () => {
     const records = [
       makeRecord({ asset_no: 'B1', id: 'b001', issue_date: '2024-07-01', serial_no: 'SN-B1', qty: 1 }),
@@ -247,7 +247,7 @@ describe('detectAnomalies — SAME_DAY_BURST', () => {
 
 // ── RAPID_RECURRENCE ──────────────────────────────────────────────────────────
 
-describe('detectAnomalies — RAPID_RECURRENCE', () => {
+describe('detectAnomalies - RAPID_RECURRENCE', () => {
   it('detects when 3 High-risk events on same asset within 30 days', () => {
     const records = [
       makeRecord({ asset_no: 'C1', id: 'c001', issue_date: '2024-06-01', risk_level: 'High', serial_no: 'SN-H1' }),
@@ -324,7 +324,7 @@ describe('detectAnomalies — RAPID_RECURRENCE', () => {
 
 // ── COST_SPIKE ────────────────────────────────────────────────────────────────
 
-describe('detectAnomalies — COST_SPIKE', () => {
+describe('detectAnomalies - COST_SPIKE', () => {
   // Build a fleet with predictable mean/stdDev for testing z-score
   function buildFleetWithSpike(spikeValue) {
     // 10 records at cost=1000, 1 spike
@@ -346,7 +346,7 @@ describe('detectAnomalies — COST_SPIKE', () => {
 
   it('detects MEDIUM severity when z-score is between 2 and 3', () => {
     // 10 records at 1000, 1 at 4000
-    // mean ≈ 1272, stdDev ≈ 882, z ≈ (4000-1272)/882 ≈ 3.1 — this might be HIGH
+    // mean ≈ 1272, stdDev ≈ 882, z ≈ (4000-1272)/882 ≈ 3.1 - this might be HIGH
     // Use 10 at 1000 and 1 at 3500 to get z ~= 2.5
     const base = Array.from({ length: 10 }, (_, i) =>
       makeRecord({ id: `med-${i}`, cost_per_tyre: 1000, serial_no: `SN-med-${i}` })
@@ -397,7 +397,7 @@ describe('detectAnomalies — COST_SPIKE', () => {
 
 // ── SERIAL_REUSE ──────────────────────────────────────────────────────────────
 
-describe('detectAnomalies — SERIAL_REUSE', () => {
+describe('detectAnomalies - SERIAL_REUSE', () => {
   it('detects serial reuse when same serial_no appears on 2 different assets', () => {
     const records = [
       makeRecord({ asset_no: 'D1', id: 'd001', serial_no: 'SHARED-SN', issue_date: '2024-01-01' }),
@@ -461,7 +461,7 @@ describe('detectAnomalies — SERIAL_REUSE', () => {
 
 // ── DUPLICATE_ENTRY ───────────────────────────────────────────────────────────
 
-describe('detectAnomalies — DUPLICATE_ENTRY', () => {
+describe('detectAnomalies - DUPLICATE_ENTRY', () => {
   it('detects exact duplicate (same asset + serial + date)', () => {
     const records = [
       makeRecord({ asset_no: 'F1', id: 'f001', serial_no: 'DUP-SN', issue_date: '2024-05-01' }),
@@ -519,7 +519,7 @@ describe('detectAnomalies — DUPLICATE_ENTRY', () => {
 
 // ── Output ordering ───────────────────────────────────────────────────────────
 
-describe('detectAnomalies — result ordering', () => {
+describe('detectAnomalies - result ordering', () => {
   it('returns HIGH severity anomalies before MEDIUM ones', () => {
     // SHORT_INTERVAL < 7 days → HIGH; SHORT_INTERVAL 7-30 days → MEDIUM
     const records = [
@@ -586,7 +586,7 @@ describe('summariseAnomalies', () => {
 
 // ── Multiple anomaly types in one run ─────────────────────────────────────────
 
-describe('detectAnomalies — combined scenario', () => {
+describe('detectAnomalies - combined scenario', () => {
   it('can detect multiple anomaly types in a single call', () => {
     // SHORT_INTERVAL: asset X1, 3 days apart
     // DUPLICATE_ENTRY: asset Y1, same serial+date
@@ -609,7 +609,7 @@ describe('detectAnomalies — combined scenario', () => {
 
 // ── Edge cases: single record ─────────────────────────────────────────────────
 
-describe('detectAnomalies — single record edge cases', () => {
+describe('detectAnomalies - single record edge cases', () => {
   it('single record with missing asset_no does not crash', () => {
     const records = [makeRecord({ asset_no: null, id: 'single-no-asset' })]
     expect(() => detectAnomalies(records)).not.toThrow()
@@ -661,7 +661,7 @@ describe('detectAnomalies — single record edge cases', () => {
 
 // ── Edge cases: all-zero costs ────────────────────────────────────────────────
 
-describe('detectAnomalies — all-zero costs', () => {
+describe('detectAnomalies - all-zero costs', () => {
   it('no COST_SPIKE when all records have cost_per_tyre = 0', () => {
     const records = Array.from({ length: 5 }, (_, i) =>
       makeRecord({ id: `zero-${i}`, cost_per_tyre: 0, serial_no: `SN-z${i}` })
@@ -689,7 +689,7 @@ describe('detectAnomalies — all-zero costs', () => {
 
 // ── Edge cases: records missing fields ────────────────────────────────────────
 
-describe('detectAnomalies — records with missing fields', () => {
+describe('detectAnomalies - records with missing fields', () => {
   it('handles records with missing brand gracefully', () => {
     const records = [
       makeRecord({ asset_no: 'TRK-X', id: 'miss-brand-1', issue_date: '2024-06-01', brand: null, serial_no: 'SN-mb1' }),
@@ -710,7 +710,7 @@ describe('detectAnomalies — records with missing fields', () => {
     expect(() => detectAnomalies(records)).not.toThrow()
   })
 
-  it('handles records with zero qty — falls back to 1 for same-day-burst count', () => {
+  it('handles records with zero qty - falls back to 1 for same-day-burst count', () => {
     const records = [
       makeRecord({ asset_no: 'TRK-Z', id: 'zero-qty-1', issue_date: '2024-08-01', qty: 0, serial_no: 'SN-zq1' }),
       makeRecord({ asset_no: 'TRK-Z', id: 'zero-qty-2', issue_date: '2024-08-01', qty: 0, serial_no: 'SN-zq2' }),
@@ -733,7 +733,7 @@ describe('detectAnomalies — records with missing fields', () => {
 
 // ── Edge cases: duplicate serial numbers ─────────────────────────────────────
 
-describe('detectAnomalies — duplicate serial number edge cases', () => {
+describe('detectAnomalies - duplicate serial number edge cases', () => {
   it('empty string serial_no is NOT flagged as serial reuse', () => {
     const records = [
       makeRecord({ asset_no: 'TRK-A', id: 'empty-sn-1', serial_no: '', issue_date: '2024-01-01' }),
@@ -768,7 +768,7 @@ describe('detectAnomalies — duplicate serial number edge cases', () => {
     expect(serials).toEqual(['SERIAL-X', 'SERIAL-Y'])
   })
 
-  it('duplicate entry requires all three fields — different dates means no duplicate', () => {
+  it('duplicate entry requires all three fields - different dates means no duplicate', () => {
     const records = [
       makeRecord({ asset_no: 'TRK-Q', id: 'nd-1', serial_no: 'SN-Q', issue_date: '2024-05-01' }),
       makeRecord({ asset_no: 'TRK-Q', id: 'nd-2', serial_no: 'SN-Q', issue_date: '2024-06-01' }),

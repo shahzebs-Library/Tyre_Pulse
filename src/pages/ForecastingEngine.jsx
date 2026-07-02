@@ -111,7 +111,7 @@ function buildMonthKey(dateStr) {
 // ── Formatters ────────────────────────────────────────────────────────────────
 
 function fmtNum(n, decimals = 0) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return Number(n).toLocaleString(undefined, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -119,7 +119,7 @@ function fmtNum(n, decimals = 0) {
 }
 
 function fmtCurrency(n, currency = 'SAR', compact = false) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   if (compact && Math.abs(n) >= 1_000_000)
     return `${currency} ${(n / 1_000_000).toFixed(1)}M`
   if (compact && Math.abs(n) >= 1_000)
@@ -444,7 +444,7 @@ export default function ForecastingEngine() {
   }, [annualBudgetForecast, lastYearActual, hasLastYear])
 
   const monthsOverBudget = useMemo(() => {
-    if (!fleetMonthlyBudgetTarget) return '—'
+    if (!fleetMonthlyBudgetTarget) return '-'
     return budgetForecast.filter(m => m > fleetMonthlyBudgetTarget).length
   }, [budgetForecast, fleetMonthlyBudgetTarget])
 
@@ -634,7 +634,7 @@ export default function ForecastingEngine() {
     exportToPdf(
       rows,
       ['Brand', 'Last 12mo Actual', 'Next 3mo Forecast', 'Next 12mo Forecast', 'Est. Cost 12mo'],
-      'TyrePulse — Forecasting Engine Report',
+      'TyrePulse - Forecasting Engine Report',
       'Brand Demand Forecast'
     )
   }
@@ -764,7 +764,7 @@ export default function ForecastingEngine() {
         </motion.div>
       )}
 
-      {/* ── Section 3 — Headline KPIs ─────────────────────────────────────── */}
+      {/* ── Section 3 - Headline KPIs ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <MetricCard
           icon={Package}
@@ -801,15 +801,15 @@ export default function ForecastingEngine() {
         <MetricCard
           icon={BarChart2}
           label="Model Confidence"
-          value={forecastAccuracy != null ? `${forecastAccuracy}%` : '—'}
+          value={forecastAccuracy != null ? `${forecastAccuracy}%` : '-'}
           sub="Based on 3-month MAPE"
           color={forecastAccuracy == null ? 'blue' : forecastAccuracy >= 75 ? 'green' : forecastAccuracy >= 50 ? 'amber' : 'red'}
           delay={0.2}
         />
       </div>
 
-      {/* ── Section 4 — Demand Forecast Chart ───────────────────────────── */}
-      <SectionCard title="Demand Forecast — Monthly Replacement Projections" icon={TrendingUp}>
+      {/* ── Section 4 - Demand Forecast Chart ───────────────────────────── */}
+      <SectionCard title="Demand Forecast - Monthly Replacement Projections" icon={TrendingUp}>
         <div className="h-72">
           <Line
             data={demandChartData}
@@ -851,8 +851,8 @@ export default function ForecastingEngine() {
         </div>
       </SectionCard>
 
-      {/* ── Section 5 — Budget Forecast Chart ───────────────────────────── */}
-      <SectionCard title="Budget Forecast — Monthly Spend Projections" icon={DollarSign}>
+      {/* ── Section 5 - Budget Forecast Chart ───────────────────────────── */}
+      <SectionCard title="Budget Forecast - Monthly Spend Projections" icon={DollarSign}>
         <div className="h-72">
           <Line
             data={budgetChartData}
@@ -888,10 +888,10 @@ export default function ForecastingEngine() {
         )}
       </SectionCard>
 
-      {/* ── Two-column row — Brand + Site tables ─────────────────────────── */}
+      {/* ── Two-column row - Brand + Site tables ─────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-        {/* Section 6 — Brand Demand Forecast */}
+        {/* Section 6 - Brand Demand Forecast */}
         <SectionCard title="Brand Demand Forecast" icon={Tag}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -916,7 +916,7 @@ export default function ForecastingEngine() {
           </div>
         </SectionCard>
 
-        {/* Section 7 — Site Demand Forecast */}
+        {/* Section 7 - Site Demand Forecast */}
         <SectionCard title="Site Demand Forecast" icon={MapPin}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -942,7 +942,7 @@ export default function ForecastingEngine() {
         </SectionCard>
       </div>
 
-      {/* ── Section 8 — Inventory Requirement ────────────────────────────── */}
+      {/* ── Section 8 - Inventory Requirement ────────────────────────────── */}
       <SectionCard title="Inventory Requirement Forecast (3-Month Safety Stock × 1.2)" icon={Layers}>
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {/* Table */}
@@ -1008,7 +1008,7 @@ export default function ForecastingEngine() {
         </div>
       </SectionCard>
 
-      {/* ── Section 9 — Failure Rate Forecast ────────────────────────────── */}
+      {/* ── Section 9 - Failure Rate Forecast ────────────────────────────── */}
       <SectionCard title="Failure Rate Forecast" icon={AlertTriangle}>
         <div className="h-64">
           <Line
@@ -1047,7 +1047,7 @@ export default function ForecastingEngine() {
         )}
       </SectionCard>
 
-      {/* ── Section 10 — Vendor Requirement ──────────────────────────────── */}
+      {/* ── Section 10 - Vendor Requirement ──────────────────────────────── */}
       <SectionCard title="Vendor (Brand) Requirement Summary" icon={Package}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -1082,7 +1082,7 @@ export default function ForecastingEngine() {
         </div>
       </SectionCard>
 
-      {/* ── Section 11 — Annual Budget Planning Summary ───────────────────── */}
+      {/* ── Section 11 - Annual Budget Planning Summary ───────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1110,7 +1110,7 @@ export default function ForecastingEngine() {
                 {budgetChange > 0
                   ? <TrendingUp className="w-3.5 h-3.5" />
                   : <TrendingDown className="w-3.5 h-3.5" />}
-                {budgetChange != null ? `${Math.abs(budgetChange).toFixed(1)}% YoY` : '—'}
+                {budgetChange != null ? `${Math.abs(budgetChange).toFixed(1)}% YoY` : '-'}
               </div>
             </div>
           )}
@@ -1120,7 +1120,7 @@ export default function ForecastingEngine() {
             <p className="text-xl font-bold text-white">
               {fleetMonthlyBudgetTarget > 0
                 ? fmtCurrency(fleetMonthlyBudgetTarget, activeCurrency, true)
-                : '—'}
+                : '-'}
             </p>
             <p className="text-xs text-gray-500 mt-1">From fleet master</p>
           </div>
@@ -1178,7 +1178,7 @@ export default function ForecastingEngine() {
           '12-Mo Budget Forecast': fmtCurrency(annualBudgetForecast, activeCurrency, true),
           'Monthly Avg Demand': fmtNum(monthlyAvgDemand, 1),
           'Monthly Avg Budget': fmtCurrency(monthlyAvgBudget, activeCurrency, true),
-          'Model Confidence': forecastAccuracy != null ? `${forecastAccuracy}%` : '—',
+          'Model Confidence': forecastAccuracy != null ? `${forecastAccuracy}%` : '-',
           'Recommended Annual Budget': fmtCurrency(recommendedAnnualBudget, activeCurrency, true),
         }}
         period={`Horizon: Next ${horizon} Months`}

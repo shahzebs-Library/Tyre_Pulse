@@ -1,5 +1,5 @@
 /**
- * Tyre Records — mobile list view
+ * Tyre Records - mobile list view
  *
  * Roles:
  *   admin / manager  → all records, site filter, inline status badge
@@ -220,14 +220,14 @@ export default function RecordsScreen() {
               <View style={[styles.riskStrip, { backgroundColor: RISK_COLOR[item.risk_level ?? ''] ?? '#94a3b8' }]} />
               <View style={styles.cardBody}>
                 <View style={styles.cardTop}>
-                  <Text style={styles.assetNo} numberOfLines={1}>{item.asset_no ?? '—'}</Text>
+                  <Text style={styles.assetNo} numberOfLines={1}>{item.asset_no ?? '-'}</Text>
                   {item.risk_level ? (
                     <View style={[styles.riskBadge, { backgroundColor: RISK_BG[item.risk_level] ?? '#f1f5f9', borderColor: RISK_COLOR[item.risk_level] + '40' }]}>
                       <Text style={[styles.riskText, { color: RISK_COLOR[item.risk_level] }]}>{item.risk_level}</Text>
                     </View>
                   ) : null}
                 </View>
-                <Text style={styles.brand}>{[item.brand, item.serial_no].filter(Boolean).join(' · ') || '—'}</Text>
+                <Text style={styles.brand}>{[item.brand, item.serial_no].filter(Boolean).join(' · ') || '-'}</Text>
                 <View style={styles.cardMeta}>
                   {item.site ? (
                     <View style={styles.metaItem}>
@@ -313,7 +313,7 @@ export default function RecordsScreen() {
               <View style={styles.detailHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.detailAsset}>{detail.asset_no ?? 'Record'}</Text>
-                  <Text style={styles.detailBrand}>{detail.brand ?? '—'}</Text>
+                  <Text style={styles.detailBrand}>{detail.brand ?? '-'}</Text>
                 </View>
                 {detail.risk_level ? (
                   <View style={[styles.riskBadge, { backgroundColor: RISK_BG[detail.risk_level] ?? '#f1f5f9', borderColor: RISK_COLOR[detail.risk_level] + '60' }]}>

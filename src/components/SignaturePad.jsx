@@ -5,11 +5,11 @@ import { X, RotateCcw, Check, PenLine } from 'lucide-react'
  * Canvas-based signature capture pad.
  * Supports mouse and touch. Auto-sizes to container width.
  * Props:
- *   label          – header label text (optional)
- *   inspectorName  – pre-fills name display below pad
- *   employeeId     – pre-fills ID display below pad
- *   onSave(dataUrl) – called with PNG data-URL when user confirms
- *   onClose()      – called when user cancels
+ *   label          - header label text (optional)
+ *   inspectorName  - pre-fills name display below pad
+ *   employeeId     - pre-fills ID display below pad
+ *   onSave(dataUrl) - called with PNG data-URL when user confirms
+ *   onClose()      - called when user cancels
  */
 export default function SignaturePad({ label = 'Inspector Signature', inspectorName = '', employeeId = '', onSave, onClose }) {
   const canvasRef = useRef(null)
@@ -108,7 +108,7 @@ export default function SignaturePad({ label = 'Inspector Signature', inspectorN
   function confirm() {
     if (isEmpty) return
     const canvas = canvasRef.current
-    // Trim to content — export with white background for PDF embedding
+    // Trim to content - export with white background for PDF embedding
     const trimmed = document.createElement('canvas')
     trimmed.width = canvas.width
     trimmed.height = canvas.height

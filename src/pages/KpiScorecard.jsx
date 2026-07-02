@@ -431,7 +431,7 @@ export default function KpiScorecard() {
                   <span className={alert.overage > 0.50 ? 'text-red-400 font-medium' : 'text-amber-400 font-medium'}>
                     {alert.label}
                   </span>
-                  {' '}— {alert.fmt(alert.actual)} vs target {alert.fmt(alert.target)}
+                  {' '}- {alert.fmt(alert.actual)} vs target {alert.fmt(alert.target)}
                   {' '}
                   <span className={alert.overage > 0.50 ? 'text-red-400' : 'text-amber-400'}>
                     (+{(alert.overage * 100).toFixed(0)}% over)
@@ -596,13 +596,13 @@ export default function KpiScorecard() {
                                 )}
                               </span>
                             )
-                            : <span className="text-gray-600 text-xs">—</span>
+                            : <span className="text-gray-600 text-xs">-</span>
                           }
                         </td>
                       )}
                       <td className="py-2 pr-4 text-right">
                         {a.count === 0
-                          ? <span className="text-gray-600">—</span>
+                          ? <span className="text-gray-600">-</span>
                           : <span className={`text-xs px-2 py-0.5 rounded-full ${overBudget ? 'bg-red-900/40 text-red-400' : 'bg-green-900/40 text-green-400'}`}>
                               {overBudget ? `+${activeCurrency} ${(a.totalCost - targets.max_monthly_cost).toLocaleString('en-SA', { maximumFractionDigits: 0 })}` : 'On target'}
                             </span>
@@ -610,7 +610,7 @@ export default function KpiScorecard() {
                       </td>
                       <td className="py-2 pr-4 text-right">
                         <span className={overRisk && a.count > 0 ? 'text-red-400' : 'text-gray-300'}>
-                          {a.count > 0 ? `${a.highRiskPct.toFixed(1)}%` : '—'}
+                          {a.count > 0 ? `${a.highRiskPct.toFixed(1)}%` : '-'}
                         </span>
                       </td>
                       <td className="py-2 text-right">
@@ -633,7 +633,7 @@ export default function KpiScorecard() {
         <div className="card overflow-x-auto">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-medium text-gray-400">
-              Site Performance — {currentMonthStr} (sorted by total cost)
+              Site Performance - {currentMonthStr} (sorted by total cost)
             </h3>
             <p className="text-xs text-gray-500">{siteBreakdown.length} site{siteBreakdown.length !== 1 ? 's' : ''}</p>
           </div>
@@ -673,7 +673,7 @@ export default function KpiScorecard() {
                       </td>
                       <td className="py-2.5 pr-4 text-right">
                         <span className={`text-xs px-2 py-1 rounded ${s.count > 0 ? cellCls(riskFail) : 'text-gray-500'}`}>
-                          {s.count > 0 ? `${s.highRiskPct.toFixed(1)}%` : '—'}
+                          {s.count > 0 ? `${s.highRiskPct.toFixed(1)}%` : '-'}
                         </span>
                       </td>
                       <td className="py-2.5 pr-4 text-right">
@@ -690,7 +690,7 @@ export default function KpiScorecard() {
                         <span className={`text-xs px-2 py-1 rounded ${s.count > 0 ? cellCls(avgFail) : 'text-gray-500'}`}>
                           {s.count > 0
                             ? `${activeCurrency} ${Math.round(s.avgCostPerTyre).toLocaleString()}`
-                            : '—'
+                            : '-'
                           }
                         </span>
                       </td>
@@ -704,12 +704,12 @@ export default function KpiScorecard() {
                   <td className="pt-2 pr-4 text-right font-medium text-gray-300">
                     {activeCurrency} {siteBreakdown.reduce((s, r) => s + r.totalCost, 0).toLocaleString('en-SA', { maximumFractionDigits: 0 })}
                   </td>
-                  <td className="pt-2 pr-4 text-right">—</td>
+                  <td className="pt-2 pr-4 text-right">-</td>
                   <td className="pt-2 pr-4 text-right font-medium text-gray-300">
                     {siteBreakdown.reduce((s, r) => s + r.count, 0)}
                   </td>
-                  <td className="pt-2 pr-4 text-right">—</td>
-                  <td className="pt-2 text-right">—</td>
+                  <td className="pt-2 pr-4 text-right">-</td>
+                  <td className="pt-2 text-right">-</td>
                 </tr>
               </tfoot>
             </table>
@@ -745,12 +745,12 @@ function KpiCard({ label, actual, target, format, invert, higherIsBad, prev, yoy
       </div>
       {delta !== null && (
         <p className={`text-xs mt-1 ${delta === 0 ? 'text-gray-500' : (higherIsBad ? delta > 0 : delta < 0) ? 'text-red-400' : 'text-green-400'}`}>
-          {delta > 0 ? '▲' : delta < 0 ? '▼' : '—'} {format(Math.abs(delta))} vs prev month
+          {delta > 0 ? '▲' : delta < 0 ? '▼' : '-'} {format(Math.abs(delta))} vs prev month
         </p>
       )}
       {yoyDelta !== null && yoyPct !== null && (
         <p className="text-xs mt-0.5 text-gray-500">
-          {yoyDelta > 0 ? '▲' : yoyDelta < 0 ? '▼' : '—'}{' '}
+          {yoyDelta > 0 ? '▲' : yoyDelta < 0 ? '▼' : '-'}{' '}
           {(yoyFormat || format)(Math.abs(yoyDelta))}
           {' '}
           <span className={`${(higherIsBad ? yoyDelta > 0 : yoyDelta < 0) ? 'text-red-400/70' : 'text-green-400/70'}`}>

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// kpiEngine.js — Pure KPI computation library for TyrePulse
+// kpiEngine.js - Pure KPI computation library for TyrePulse
 // No Supabase calls. No React. No side effects.
 // All functions accept raw data arrays and return computed result objects.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -354,7 +354,7 @@ export function computePressureCompliance(inspections = [], targetPct = 90) {
 }
 
 /**
- * Inspection compliance — % completed on time.
+ * Inspection compliance - % completed on time.
  * @param {Object[]} inspections
  * @returns {{ compliancePct, onTimeCount, lateCount, overdueCount, totalScheduled, bySite, byMonth }}
  */
@@ -444,7 +444,7 @@ export function computeRetreadPerformance(records = []) {
 /**
  * Scrap rate calculation.
  * @param {Object[]} records
- * @param {number}   [scrapKmPct=20]  – % of fleet avg km below which a removal is premature scrap
+ * @param {number}   [scrapKmPct=20]  - % of fleet avg km below which a removal is premature scrap
  * @param {number}   [defaultCost=1200]
  * @returns {{ scrapRate, scrapCount, totalCount, estimatedScrapCost, bySite }}
  */
@@ -639,8 +639,8 @@ export function computeVendorPerformance(records = []) {
 
 /**
  * Workshop performance proxied by site.
- * @param {Object[]} records   – tyre change records
- * @param {Object[]} actions   – corrective actions (must have site, status fields)
+ * @param {Object[]} records   - tyre change records
+ * @param {Object[]} actions   - corrective actions (must have site, status fields)
  * @returns {{ bySite: Array<{ site, recordCount, highRiskPct, avgCost, avgCpk, actionCloseRate, score }> }}
  */
 export function computeWorkshopPerformance(records = [], actions = []) {
@@ -674,11 +674,11 @@ export function computeWorkshopPerformance(records = [], actions = []) {
 
 /**
  * Compute all KPIs in a single pass.
- * @param {Object[]} records     – tyre change / removal records
- * @param {Object[]} inspections – inspection records
- * @param {Object[]} actions     – corrective action records
- * @param {number}   fleetSize   – total vehicles in fleet
- * @returns {Object} – all KPI results keyed by name
+ * @param {Object[]} records     - tyre change / removal records
+ * @param {Object[]} inspections - inspection records
+ * @param {Object[]} actions     - corrective action records
+ * @param {number}   fleetSize   - total vehicles in fleet
+ * @returns {Object} - all KPI results keyed by name
  */
 export function computeAllKpis(records = [], inspections = [], actions = [], fleetSize = 0) {
   return {

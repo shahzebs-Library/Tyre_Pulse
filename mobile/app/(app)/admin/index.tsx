@@ -157,7 +157,7 @@ export default function AdminDashboardScreen() {
           </Text>
         </View>
 
-        {/* ── KPI grid (2×3) — replaces cramped horizontal strip ─────────── */}
+        {/* ── KPI grid (2×3) - replaces cramped horizontal strip ─────────── */}
         {loading ? (
           <View style={styles.kpiGrid}>
             {[0,1,2,3,4,5].map(i => (
@@ -223,7 +223,7 @@ export default function AdminDashboardScreen() {
           <QuickAction
             icon="warning-outline"
             label="Accidents"
-            sublabel={stats != null ? `${stats.openAccidents} open` : '—'}
+            sublabel={stats != null ? `${stats.openAccidents} open` : '-'}
             color="#dc2626"
             bg="#fff5f5"
             badge={stats != null && stats.criticalAccidents > 0 ? stats.criticalAccidents : undefined}

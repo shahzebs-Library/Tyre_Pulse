@@ -64,7 +64,7 @@ function IssueSection({ icon: Icon, title, count, color = 'text-yellow-400', bgC
           <Icon size={18} className={color} />
           <span className="font-medium text-white">{title}</span>
           {loading ? (
-            <span className="text-xs text-gray-500 animate-pulse">Checking…</span>
+            <span className="text-xs text-gray-500 animate-pulse">Checking...</span>
           ) : (
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${count > 0 ? bgColor + ' ' + color : 'bg-green-900/20 border-green-700/40 text-green-400'}`}>
               {count > 0 ? `${count} issue${count !== 1 ? 's' : ''}` : 'Clean'}
@@ -869,13 +869,13 @@ export default function DataCleaning() {
             </button>
             <button onClick={approveSelected} disabled={selected.size === 0 || saving}
               className="btn-primary flex items-center gap-2 disabled:opacity-40">
-              <Check size={15} /> {saving ? 'Saving…' : `Approve ${selected.size > 0 ? selected.size : ''}`}
+              <Check size={15} /> {saving ? 'Saving...' : `Approve ${selected.size > 0 ? selected.size : ''}`}
             </button>
           </div>
 
           {approveAllProgress && (
             <div className="card">
-              <p className="text-white font-medium mb-2">Approving all pending records…</p>
+              <p className="text-white font-medium mb-2">Approving all pending records...</p>
               <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
                 <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${(approveAllProgress.done / approveAllProgress.total) * 100}%` }} />
               </div>
@@ -884,7 +884,7 @@ export default function DataCleaning() {
           )}
 
           {loading ? (
-            <div className="text-center py-16 text-gray-500">Classifying records…</div>
+            <div className="text-center py-16 text-gray-500">Classifying records...</div>
           ) : classified.length === 0 ? (
             <div className="text-center py-16 text-gray-500">
               {totalPending === 0 ? '✅ All records have been classified!' : 'No records match the current filter.'}
@@ -905,7 +905,7 @@ export default function DataCleaning() {
                         <div className="flex flex-wrap gap-2 items-baseline">
                           <span className="font-medium text-white">{r.original_description || '-'}</span>
                           {r.original_remarks && r.original_remarks !== r.original_description && (
-                            <span className="text-gray-500 text-xs">"{r.original_remarks.slice(0, 80)}{r.original_remarks.length > 80 ? '…' : ''}"</span>
+                            <span className="text-gray-500 text-xs">"{r.original_remarks.slice(0, 80)}{r.original_remarks.length > 80 ? '...' : ''}"</span>
                           )}
                         </div>
                         <div className="flex gap-3 mt-1 text-xs text-gray-500 flex-wrap">
@@ -965,7 +965,7 @@ export default function DataCleaning() {
           <div className="flex items-center gap-3 flex-wrap">
             <input
               className="input flex-1 min-w-48"
-              placeholder="Search asset, brand, site…"
+              placeholder="Search asset, brand, site..."
               value={cleanedSearch}
               onChange={e => { setCleanedSearch(e.target.value); setCleanedPage(1) }}
             />
@@ -1006,14 +1006,14 @@ export default function DataCleaning() {
               </div>
               <div className="flex gap-3">
                 <button onClick={approveReclassify} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Check size={15} /> {saving ? 'Saving…' : 'Apply Changes'}
+                  <Check size={15} /> {saving ? 'Saving...' : 'Apply Changes'}
                 </button>
                 <button onClick={() => setReclassifyProposed(null)} className="btn-secondary">Cancel</button>
               </div>
             </div>
           )}
 
-          {loading ? <div className="text-center py-12 text-gray-500">Loading…</div> : cleanedRecords.length === 0 ? (
+          {loading ? <div className="text-center py-12 text-gray-500">Loading...</div> : cleanedRecords.length === 0 ? (
             <div className="text-center py-12 text-gray-500">No cleaned records yet</div>
           ) : (
             <div className="card p-0 overflow-hidden">
@@ -1046,7 +1046,7 @@ export default function DataCleaning() {
                         <td className="table-cell">{r.risk_level ? <span className={`badge ${RISK_COLOUR[r.risk_level]}`}>{r.risk_level}</span> : '-'}</td>
                         <td className="table-cell text-gray-400 text-xs max-w-xs truncate">{r.remarks_cleaned ?? '-'}</td>
                         <td className="py-2 pr-3 text-gray-500 text-xs max-w-48 truncate" title={r.remarks || r.description}>
-                          {(r.remarks || r.description || '-').slice(0, 60)}{(r.remarks || r.description || '').length > 60 ? '…' : ''}
+                          {(r.remarks || r.description || '-').slice(0, 60)}{(r.remarks || r.description || '').length > 60 ? '...' : ''}
                         </td>
                         <td className="table-cell text-gray-500">{r.issue_date ?? '-'}</td>
                         <td className="table-cell">
@@ -1109,14 +1109,14 @@ export default function DataCleaning() {
                     {qualityScore !== null ? (
                       <span className={`text-lg font-bold ${scoreColor(qualityScore)}`}>{qualityScore}%</span>
                     ) : (
-                      <span className="text-gray-500 text-sm animate-pulse">…</span>
+                      <span className="text-gray-500 text-sm animate-pulse">...</span>
                     )}
                   </div>
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-white">Overall Data Quality Score</h2>
                   <p className="text-gray-400 text-sm">
-                    {qualityScore === null ? 'Computing across 7 quality checks…' :
+                    {qualityScore === null ? 'Computing across 7 quality checks...' :
                       qualityScore >= 85 ? 'Fleet data quality is healthy' :
                       qualityScore >= 70 ? 'Moderate quality issues detected - action recommended' :
                       'Significant data quality problems - immediate attention required'}
@@ -1136,9 +1136,9 @@ export default function DataCleaning() {
               <div className="flex flex-wrap gap-3">
                 {[
                   { label: 'Total Records', value: totalRecords.toLocaleString(), color: 'text-blue-400' },
-                  { label: 'Serial Issues', value: serialIssues?.count ?? '…', color: (serialIssues?.count ?? 0) > 0 ? 'text-yellow-400' : 'text-green-400' },
-                  { label: 'Duplicates', value: duplicateSerial?.groupCount ?? '…', color: (duplicateSerial?.groupCount ?? 0) > 0 ? 'text-orange-400' : 'text-green-400' },
-                  { label: 'Odometer Errors', value: odometerIssues?.count ?? '…', color: (odometerIssues?.count ?? 0) > 0 ? 'text-red-400' : 'text-green-400' },
+                  { label: 'Serial Issues', value: serialIssues?.count ?? '...', color: (serialIssues?.count ?? 0) > 0 ? 'text-yellow-400' : 'text-green-400' },
+                  { label: 'Duplicates', value: duplicateSerial?.groupCount ?? '...', color: (duplicateSerial?.groupCount ?? 0) > 0 ? 'text-orange-400' : 'text-green-400' },
+                  { label: 'Odometer Errors', value: odometerIssues?.count ?? '...', color: (odometerIssues?.count ?? 0) > 0 ? 'text-red-400' : 'text-green-400' },
                 ].map(s => (
                   <div key={s.label} className="card py-2 px-3 text-center bg-gray-800/60 border-gray-700 min-w-[90px]">
                     <p className={`text-base font-bold ${s.color}`}>{s.value}</p>
@@ -1153,7 +1153,7 @@ export default function DataCleaning() {
                 className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40"
               >
                 <RefreshCw size={14} className={qiLoading ? 'animate-spin' : ''} />
-                {qiLoading ? 'Scanning…' : 'Re-scan'}
+                {qiLoading ? 'Scanning...' : 'Re-scan'}
               </button>
             </div>
 
@@ -1170,7 +1170,7 @@ export default function DataCleaning() {
               ].map(w => (
                 <div key={w.key} className="bg-gray-800/60 rounded-lg px-2 py-2 text-center">
                   <p className={`text-sm font-semibold ${(w.count ?? 0) > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
-                    {w.count === null || w.count === undefined ? <span className="text-gray-600 animate-pulse">…</span> : w.count}
+                    {w.count === null || w.count === undefined ? <span className="text-gray-600 animate-pulse">...</span> : w.count}
                   </p>
                   <p className="text-xs text-gray-500">{w.label}</p>
                   <p className="text-xs text-gray-700 mt-0.5">{w.weight}% weight</p>
@@ -1465,7 +1465,7 @@ export default function DataCleaning() {
                 className="input w-full"
                 value={dupNewSerial}
                 onChange={e => setDupNewSerial(e.target.value)}
-                placeholder="Enter base serial…"
+                placeholder="Enter base serial..."
               />
             </div>
             <div className="bg-gray-800/60 rounded-lg p-3 space-y-1">
@@ -1486,7 +1486,7 @@ export default function DataCleaning() {
                 disabled={fixingDup || !dupNewSerial.trim()}
                 className="btn-primary flex items-center gap-2 disabled:opacity-40"
               >
-                <Check size={15} /> {fixingDup ? 'Saving…' : 'Apply'}
+                <Check size={15} /> {fixingDup ? 'Saving...' : 'Apply'}
               </button>
               <button onClick={() => setDupModal(null)} className="btn-secondary">Cancel</button>
             </div>
@@ -1543,7 +1543,7 @@ export default function DataCleaning() {
                 disabled={fixingOdom}
                 className="btn-primary flex items-center gap-2 disabled:opacity-40"
               >
-                <Check size={15} /> {fixingOdom ? 'Saving…' : 'Save Changes'}
+                <Check size={15} /> {fixingOdom ? 'Saving...' : 'Save Changes'}
               </button>
               <button onClick={() => { setOdomModal(null); setOdomEdits({}) }} className="btn-secondary">Cancel</button>
             </div>

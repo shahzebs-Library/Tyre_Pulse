@@ -3,7 +3,7 @@ import { transformRow, convertAmount } from '../lib/import'
 
 const MAP = [{ sourceHeader: 'Cost', target: 'cost_per_tyre' }]
 
-describe('import engine — currency conversion trail (§12)', () => {
+describe('import engine - currency conversion trail (§12)', () => {
   it('marks same-currency rows without converting', () => {
     const { transformed } = transformRow({ Cost: '100' }, MAP, { module: 'tyre', unitSettings: { currency: 'SAR' }, baseCurrency: 'SAR' })
     expect(transformed.currency_conversion_status).toBe('same_currency')

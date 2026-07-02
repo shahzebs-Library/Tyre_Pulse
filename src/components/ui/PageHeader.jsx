@@ -59,7 +59,7 @@ export default function PageHeader({
             className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"
           >
             <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />
-            {refreshing ? 'Loading…' : 'Refresh'}
+            {refreshing ? 'Loading...' : 'Refresh'}
           </button>
         )}
         {actions}

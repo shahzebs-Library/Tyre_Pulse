@@ -82,7 +82,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
   async function handleFile(f) {
     setFile(f)
     if (!form.title) set('title', f.name.replace(/\.[^.]+$/, ''))
-    setProgress('Reading file…')
+    setProgress('Reading file...')
     try {
       const text = await readTextFromFile(f)
       set('content', text)
@@ -105,7 +105,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
       const tags = form.tags.split(',').map(t => t.trim()).filter(Boolean)
 
       for (let idx = 0; idx < chunks.length; idx++) {
-        setProgress(`Embedding chunk ${idx + 1} / ${chunks.length}…`)
+        setProgress(`Embedding chunk ${idx + 1} / ${chunks.length}...`)
         const chunkContent = chunks[idx]
         const embedding = await generateEmbedding(
           `${form.title}\n\n${chunkContent}`
@@ -167,7 +167,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
             />
             <Upload className="w-8 h-8 text-gray-500 mx-auto mb-2" />
             <p className="text-gray-300 text-sm font-medium">{file ? file.name : 'Drop a file or click to browse'}</p>
-            <p className="text-gray-500 text-xs mt-1">.txt · .md · .csv · .json — or paste text below</p>
+            <p className="text-gray-500 text-xs mt-1">.txt · .md · .csv · .json - or paste text below</p>
           </div>
 
           {/* Title */}
@@ -176,7 +176,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
             <input
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-green-500 transition-colors"
               value={form.title} onChange={e => set('title', e.target.value)}
-              placeholder="e.g. Tyre Pressure SOP — Heavy Fleet"
+              placeholder="e.g. Tyre Pressure SOP - Heavy Fleet"
             />
           </div>
 
@@ -232,7 +232,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-green-500 transition-colors font-mono resize-none"
               rows={8}
               value={form.content} onChange={e => set('content', e.target.value)}
-              placeholder="Paste document text here, or load from file above…"
+              placeholder="Paste document text here, or load from file above..."
             />
           </div>
 
@@ -254,7 +254,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500 text-white text-sm font-semibold hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {uploading ? <Loader className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              {uploading ? 'Indexing…' : 'Upload & Index'}
+              {uploading ? 'Indexing...' : 'Upload & Index'}
             </button>
           </div>
         </div>
@@ -376,7 +376,7 @@ export default function KnowledgeBase() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
           <input
             className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors"
-            placeholder="Search by title, type, site, tag…"
+            placeholder="Search by title, type, site, tag..."
             value={search} onChange={e => setSearch(e.target.value)}
           />
         </div>
@@ -446,7 +446,7 @@ export default function KnowledgeBase() {
       {/* Document list */}
       {loading ? (
         <div className="flex items-center justify-center py-16 text-gray-500">
-          <Loader className="w-6 h-6 animate-spin mr-3" />Loading knowledge base…
+          <Loader className="w-6 h-6 animate-spin mr-3" />Loading knowledge base...
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20 text-gray-500">

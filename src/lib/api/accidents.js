@@ -1,6 +1,6 @@
 /**
- * Accidents service — incident records (accidents). Explicit column lists
- * (no SELECT *); null-safe country scoping. Additive only — mirrors
+ * Accidents service - incident records (accidents). Explicit column lists
+ * (no SELECT *); null-safe country scoping. Additive only - mirrors
  * assets.js / tyres.js.
  */
 import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
@@ -8,7 +8,7 @@ import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 const COLS =
   'id,asset_no,site,country,incident_date,severity,status,accident_type,claim_amount,claim_status,recovered_amount,recovery_status,repair_cost,estimated_damage_cost,driver_name,location,created_at'
 
-// PAGE_COLS includes claim/insurer/police PII — this is the accident owner page;
+// PAGE_COLS includes claim/insurer/police PII - this is the accident owner page;
 // RLS governs access, not the column list. The least-privilege COLS above stay
 // PII-free for analytics/safety consumers; these page-specific functions serve
 // the accident-management owner screen, which legitimately renders every field.
@@ -95,7 +95,7 @@ export async function listAccidentFleet() {
 
 /**
  * Pass-through insert for the owner page (single row or bulk array). The page
- * only checks for an error, so no `.select().single()` — that would reject a
+ * only checks for an error, so no `.select().single()` - that would reject a
  * bulk array insert. Returns the raw Supabase `{ data, error }`.
  * @param {object|object[]} values
  */

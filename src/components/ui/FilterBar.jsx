@@ -14,7 +14,7 @@ import { cn } from '../../lib/cn'
 export default function FilterBar({
   search = '',
   onSearch,
-  placeholder = 'Search…',
+  placeholder = 'Search...',
   selects = [],
   children,
   className,

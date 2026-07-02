@@ -1,5 +1,5 @@
 /**
- * KPI Targets service — kpi_targets records, plus the two supporting reads the
+ * KPI Targets service - kpi_targets records, plus the two supporting reads the
  * KPI Scorecard page needs (tyre_records + open corrective_actions). Explicit
  * column lists (no SELECT *); additive, mirrors correctiveActions.js.
  *
@@ -18,11 +18,11 @@ import { supabase, unwrap, fetchAllPages } from './_client'
 const KPI_TARGET_COLS =
   'id,metric,target_value,year,month,site,region,created_by,updated_at,country,target,unit'
 
-// Column set for the tyre_records analytics read — EXACTLY the page's select.
+// Column set for the tyre_records analytics read - EXACTLY the page's select.
 const TYRE_RECORD_COLS =
   'id,issue_date,risk_level,cost_per_tyre,qty,created_at,country,site'
 
-// Column set for the open corrective_actions read — EXACTLY the page's select.
+// Column set for the open corrective_actions read - EXACTLY the page's select.
 const OPEN_ACTION_COLS = 'id,due_date,status,country'
 
 /**

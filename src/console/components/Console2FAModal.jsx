@@ -279,7 +279,7 @@ export default function Console2FAModal({ onClose }) {
               <button onClick={startEnroll} disabled={loading}
                 className="flex-1 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40 transition-colors"
                 style={{ background: 'linear-gradient(135deg,#1d4ed8,#3b82f6)' }}>
-                {loading ? 'Loading…' : 'Enable 2FA'}
+                {loading ? 'Loading...' : 'Enable 2FA'}
               </button>
             </>
           )}
@@ -311,7 +311,7 @@ export default function Console2FAModal({ onClose }) {
               <button onClick={handleVerify} disabled={loading || code.join('').length !== 6}
                 className="flex-1 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-40"
                 style={{ background: 'linear-gradient(135deg,#1d4ed8,#3b82f6)' }}>
-                {loading ? 'Verifying…' : 'Confirm & Activate'}
+                {loading ? 'Verifying...' : 'Confirm & Activate'}
               </button>
             </>
           )}
@@ -323,7 +323,7 @@ export default function Console2FAModal({ onClose }) {
               </button>
               <button onClick={() => handleUnenroll(verifiedFactors[0]?.id)} disabled={loading}
                 className="flex-1 py-2 rounded-lg text-xs font-semibold text-white bg-red-700 hover:bg-red-600 disabled:opacity-40 transition-colors">
-                {loading ? 'Removing…' : 'Yes, Remove 2FA'}
+                {loading ? 'Removing...' : 'Yes, Remove 2FA'}
               </button>
             </>
           )}

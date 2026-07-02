@@ -1,5 +1,5 @@
 -- ============================================================================
--- tests/rpc_all_modules_commit.sql — self-asserting test for MIGRATIONS_V56.
+-- tests/rpc_all_modules_commit.sql - self-asserting test for MIGRATIONS_V56.
 -- Proves a minimal realistic row for EVERY one of the 10 intake modules commits
 -- via import_commit_batch (10/10). Guards the NOT-NULL-default fix: without V56,
 -- driver/accident/warranty/workorder/inspection fail on NOT-NULL columns the

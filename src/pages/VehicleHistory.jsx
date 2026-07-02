@@ -226,7 +226,7 @@ const DETAIL_TABS = ['Timeline', 'Analysis', 'Red Flags', 'Related Records', 'Fo
 
 export default function VehicleHistory() {
   const { activeCountry, activeCurrency } = useSettings()
-  // Actual cost only — records without a cost contribute 0, never a default.
+  // Actual cost only - records without a cost contribute 0, never a default.
   const dc = 0
 
   const [allRecords, setAllRecords]   = useState([])
@@ -390,7 +390,7 @@ export default function VehicleHistory() {
       <div className="flex items-center justify-center h-64 text-gray-400">
         <div className="text-center">
           <Car size={40} className="mx-auto mb-3 opacity-40" />
-          <p>Loading vehicle history data…</p>
+          <p>Loading vehicle history data...</p>
         </div>
       </div>
     )
@@ -436,7 +436,7 @@ export default function VehicleHistory() {
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               className="input pl-9"
-              placeholder="Search asset number…"
+              placeholder="Search asset number..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -1159,7 +1159,7 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
                     ? 'bg-green-900/30 text-green-400 border-green-700/40'
                     : 'bg-blue-900/30 text-blue-400 border-blue-700/40'
                 }`}>{r.status || '-'}</span>
-                <span className="text-gray-300 flex-1 font-mono text-xs">{r.id?.slice(0, 12)}…</span>
+                <span className="text-gray-300 flex-1 font-mono text-xs">{r.id?.slice(0, 12)}...</span>
                 {r.site && <span className="text-gray-500 text-xs">{r.site}</span>}
                 <span className="text-gray-600 text-xs">{r.created_at?.slice(0, 10) || '-'}</span>
               </div>

@@ -1,4 +1,4 @@
-# TyrePulse Export Guide — PDF | Excel | PowerPoint
+# TyrePulse Export Guide - PDF | Excel | PowerPoint
 
 **Last Updated:** 2026-07-02  
 **Version:** 2.0.0  
@@ -25,9 +25,9 @@ TyrePulse provides **three enterprise-grade export formats** for flexible report
 
 | Format | Use Case | Max Records | Generation Time |
 |--------|----------|-------------|-----------------|
-| **PDF** | Operational detail, inspections, compliance | 10,000 | 200–500ms |
-| **Excel** | Data analysis, multi-sheet workbooks, filtering | 100,000 | 300–800ms |
-| **PowerPoint** | Executive presentations, board meetings, stakeholder communication | 5,000 | 500–1200ms |
+| **PDF** | Operational detail, inspections, compliance | 10,000 | 200-500ms |
+| **Excel** | Data analysis, multi-sheet workbooks, filtering | 100,000 | 300-800ms |
+| **PowerPoint** | Executive presentations, board meetings, stakeholder communication | 5,000 | 500-1200ms |
 
 ### Core Export Functions (`src/lib/exportUtils.js`)
 
@@ -55,9 +55,9 @@ export function exportDailyExecutivePdf(data, filename)
 ### 1. **Core Architecture**
 
 **Library Stack:**
-- `jsPDF` (v4.2.1) — document generation
-- `jspdf-autotable` (v3.8.1) — table layout engine
-- `SVG-to-PNG capture` — vector diagram rendering
+- `jsPDF` (v4.2.1) - document generation
+- `jspdf-autotable` (v3.8.1) - table layout engine
+- `SVG-to-PNG capture` - vector diagram rendering
 
 **Color Palette (Deep Slate + Indigo + Gold):**
 ```javascript
@@ -100,7 +100,7 @@ Page 1: Analytical Summary
 Pages 2+: Data Table (operational detail)
   ├─ Frozen header row (first row always visible)
   ├─ Risk-level cell styling (colors + bold)
-  ├─ Auto-scaled columns (28–50pt width)
+  ├─ Auto-scaled columns (28-50pt width)
   ├─ Page headers/footers (company name, date, page #)
   └─ Page breaks at row boundaries (no orphaned rows)
 ```
@@ -135,7 +135,7 @@ didParseCell: (data) => {
 #### Inspection Detail PDF
 - **Purpose:** Vehicle inspection records with tyre diagrams
 - **Input:** Single inspection row + vehicle type + tyre conditions
-- **Output:** 3–5 page multi-section document
+- **Output:** 3-5 page multi-section document
 
 **Sections:**
 1. Title card with severity ribbon (color-coded by risk level)
@@ -244,8 +244,8 @@ function _deriveNarrative(data) {
            : 'good'
   
   const status = tone === 'crit' ? 'Requires Immediate Attention'
-             : tone === 'warn' ? 'Stable — Monitoring Advised'
-             : 'Healthy — Within Target'
+             : tone === 'warn' ? 'Stable - Monitoring Advised'
+             : 'Healthy - Within Target'
   
   return {
     status,
@@ -269,7 +269,7 @@ function _deriveNarrative(data) {
 ```
 [Report Title]
 Generated | [Date]
-Date range | [From–To]
+Date range | [From-To]
 Organisation | [Company Name]
 Total records | [N]
 
@@ -384,9 +384,9 @@ rows = Array.isArray(rows) ? rows : []
 ### 1. **Core Architecture**
 
 **Library Stack:**
-- `pptxgenjs` (v3.12.0) — presentation generation
-- Native chart engine — embedded, editable charts
-- Light corporate theme — white background, saturated accents
+- `pptxgenjs` (v3.12.0) - presentation generation
+- Native chart engine - embedded, editable charts
+- Light corporate theme - white background, saturated accents
 
 **Color Palette (AA-contrast on white):**
 ```javascript
@@ -419,7 +419,7 @@ const TEAL   = '0D9488'   // teal
 ├─ Title: "Fleet Operations Report"
 ├─ Subtitle: "[Period]" (e.g., "Daily Summary")
 ├─ Right side KPI tiles (4): Vehicles | Tyres | Critical | Actions
-└─ Footer: "CONFIDENTIAL — FOR MANAGEMENT REVIEW"
+└─ Footer: "CONFIDENTIAL - FOR MANAGEMENT REVIEW"
 ```
 
 #### Slide 2: Executive Summary (60-second read)
@@ -489,7 +489,7 @@ function cleanSeries(series) {
       // PowerPoint OOXML validation: no empty labels, no NaN/Infinity values
       const lbl = rawLabels[i]
       const n = Number(rawValues[i])
-      labels.push(lbl == null || String(lbl).trim() === '' ? '—' : String(lbl))
+      labels.push(lbl == null || String(lbl).trim() === '' ? '-' : String(lbl))
       values.push(Number.isFinite(n) ? n : 0)
     }
     return { ...s, labels, values }
@@ -581,7 +581,7 @@ function kpiTile(slide, x, y, w, label, value, color, sub) {
   })
   
   // Value
-  slide.addText(String(value ?? '—'), {
+  slide.addText(String(value ?? '-'), {
     x: x + 0.18, y: y + 0.46, w: w - 0.36, h: 0.62,
     fontSize: 27, bold: true, color
   })
@@ -680,26 +680,26 @@ src/
 │       ├── Helper functions (_pageHeader, _kpiBox, _hBarChart, etc.)
 │       ├── Data analysis (_colIsNumeric, _countBy, _sumBy, etc.)
 │       ├── PDF exports
-│       │   ├── exportToPdf() — generic data tables
-│       │   ├── exportInspectionDetailPdf() — inspections with diagrams
-│       │   └── exportDailyExecutivePdf() — strategic reports
+│       │   ├── exportToPdf() - generic data tables
+│       │   ├── exportInspectionDetailPdf() - inspections with diagrams
+│       │   └── exportDailyExecutivePdf() - strategic reports
 │       ├── Excel exports
-│       │   └── exportToExcel() — multi-sheet workbooks
+│       │   └── exportToExcel() - multi-sheet workbooks
 │       └── PowerPoint exports
-│           └── exportToPptx() — presentation decks
+│           └── exportToPptx() - presentation decks
 │
 ├── pages/
-│   ├── Reports.jsx — custom 5-report builder with filters
-│   ├── ExecutiveReport.jsx — 7-section strategic report
-│   ├── FleetAnalytics.jsx — fleet-level analysis + exports
-│   ├── FleetIntelligence.jsx — availability & utilization
-│   ├── FuelEfficiency.jsx — pressure & compliance impact
-│   ├── BrandPerformance.jsx — vendor analytics
-│   ├── Accidents.jsx — incident tracking
-│   └── Settings.jsx — scheduled reports (daily/weekly/monthly)
+│   ├── Reports.jsx - custom 5-report builder with filters
+│   ├── ExecutiveReport.jsx - 7-section strategic report
+│   ├── FleetAnalytics.jsx - fleet-level analysis + exports
+│   ├── FleetIntelligence.jsx - availability & utilization
+│   ├── FuelEfficiency.jsx - pressure & compliance impact
+│   ├── BrandPerformance.jsx - vendor analytics
+│   ├── Accidents.jsx - incident tracking
+│   └── Settings.jsx - scheduled reports (daily/weekly/monthly)
 │
 └── components/
-    └── EmailReportModal.jsx — email scheduling interface
+    └── EmailReportModal.jsx - email scheduling interface
 ```
 
 ### 2. **Data Flow: UI → Export → File**
@@ -709,9 +709,9 @@ Reports.jsx (config UI)
   ↓
   [filters: date, site, country, asset, brand, risk, inspection type]
   ↓
-  runQuery() — fetch from Supabase, apply filters
+  runQuery() - fetch from Supabase, apply filters
   ↓
-  allRows[] — aggregated & transformed
+  allRows[] - aggregated & transformed
   ↓
   handleExcel() / handlePdf() / handlePptx()
   ↓
@@ -725,11 +725,11 @@ Reports.jsx (config UI)
 ### 3. **Integration Points**
 
 **Reports Page (5 custom report types):**
-- Vehicle History — grouped by asset, brands, high-risk count
-- Cost Analysis — grouped by site + brand
-- Risk Summary — filtered by risk level (High, Critical)
-- Inspection Report — from inspections table
-- Tyre Replacement Log — chronological replacement list
+- Vehicle History - grouped by asset, brands, high-risk count
+- Cost Analysis - grouped by site + brand
+- Risk Summary - filtered by risk level (High, Critical)
+- Inspection Report - from inspections table
+- Tyre Replacement Log - chronological replacement list
 
 **Executive Report:**
 - 7-section strategic report
@@ -837,7 +837,7 @@ if (trend.length >= 3) {
 
 **Solution:**
 ```javascript
-// Slice data for export (Excel/PPTX max 5k–10k, PDF max 10k)
+// Slice data for export (Excel/PPTX max 5k-10k, PDF max 10k)
 const maxRecords = format === 'pptx' ? 5000 : 10000
 const exportData = allRows.slice(0, maxRecords)
 
@@ -853,7 +853,7 @@ if (allRows.length > maxRecords) {
 
 **Solution:**
 ```javascript
-// Only generate charts for top-N items (8–15 max)
+// Only generate charts for top-N items (8-15 max)
 const topBrands = data.topBrands?.slice(0, 8)
 const topSites = data.topSites?.slice(0, 10)
 
@@ -955,7 +955,7 @@ const { data } = await fetchAllPages(
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | **Won't open** | Invalid XLSX (NaN/Infinity) | Use `_parseNum()` to coerce values; test with LibreOffice |
-| **Empty cells** | null/undefined values | Use `?? ''` operator; display as `'—'` in preview |
+| **Empty cells** | null/undefined values | Use `?? ''` operator; display as `'-'` in preview |
 | **Wrong column width** | Dynamic calculation failed | Set manual `wch` values; test with wide/narrow data |
 | **Auto-filter broken** | Bad ref range | Recalculate `ref: 'A1:Z100'` after adding rows |
 | **Formulas not calculated** | XLSX doesn't evaluate | Pre-calculate in JavaScript; export as values only |
@@ -1027,20 +1027,20 @@ console.assert(columns.every(c => c.key && c.header), 'Invalid columns')
 
 ## Best Practices Checklist
 
-- ✅ **Always use `exportToExcel()` for data analysis** — auto-summary + filtering
-- ✅ **Use `exportToPdf()` for operational detail** — compliance-ready styling
-- ✅ **Use `exportToPptx()` for executive presentations** — narrative-first layout
-- ✅ **Test with 100–1k–10k record datasets** — confirm performance
-- ✅ **Color-code risk levels** — visual compliance scanning
-- ✅ **Include date range in filename** — audit trail
-- ✅ **Add company branding to all exports** — professional appearance
-- ✅ **Validate data before export** — use `_parseNum()`, check for nulls
-- ✅ **Provide fallback content for empty datasets** — no blank pages
-- ✅ **Log export events** — analytics + troubleshooting
-- ✅ **Use async/await** — non-blocking UI
-- ✅ **Limit large exports to 5k–10k records** — memory safety
-- ✅ **Test in all browsers** — Chrome, Firefox, Safari, Edge
-- ✅ **Compress large PDFs** — use native viewer preview
+- ✅ **Always use `exportToExcel()` for data analysis** - auto-summary + filtering
+- ✅ **Use `exportToPdf()` for operational detail** - compliance-ready styling
+- ✅ **Use `exportToPptx()` for executive presentations** - narrative-first layout
+- ✅ **Test with 100-1k-10k record datasets** - confirm performance
+- ✅ **Color-code risk levels** - visual compliance scanning
+- ✅ **Include date range in filename** - audit trail
+- ✅ **Add company branding to all exports** - professional appearance
+- ✅ **Validate data before export** - use `_parseNum()`, check for nulls
+- ✅ **Provide fallback content for empty datasets** - no blank pages
+- ✅ **Log export events** - analytics + troubleshooting
+- ✅ **Use async/await** - non-blocking UI
+- ✅ **Limit large exports to 5k-10k records** - memory safety
+- ✅ **Test in all browsers** - Chrome, Firefox, Safari, Edge
+- ✅ **Compress large PDFs** - use native viewer preview
 
 ---
 
@@ -1053,10 +1053,10 @@ console.assert(columns.every(c => c.key && c.header), 'Invalid columns')
 - **PptxGenJS:** https://gitbrent.github.io/PptxGenJS/
 
 ### TyrePulse Export Modules
-- `src/lib/exportUtils.js` — all export functions + helpers
-- `src/pages/Reports.jsx` — custom report builder
-- `src/components/EmailReportModal.jsx` — scheduled delivery
-- `src/lib/formatters.js` — currency + date formatting
+- `src/lib/exportUtils.js` - all export functions + helpers
+- `src/pages/Reports.jsx` - custom report builder
+- `src/components/EmailReportModal.jsx` - scheduled delivery
+- `src/lib/formatters.js` - currency + date formatting
 
 ### Related Guides
 - [Data Import Guide](./DATA_IMPORT_GUIDE.md)

@@ -9,7 +9,7 @@ import PageHeader from '../components/ui/PageHeader'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// Approximate costs per 1K tokens (USD) — update when OpenAI / Anthropic change pricing
+// Approximate costs per 1K tokens (USD) - update when OpenAI / Anthropic change pricing
 const TOKEN_COSTS = {
   'claude-opus-4-8':    { input: 0.015,   output: 0.075   },
   'claude-sonnet-4-6':  { input: 0.003,   output: 0.015   },
@@ -90,7 +90,7 @@ function StatCard({ label, value, sub, icon: Icon, color, bg }) {
   )
 }
 
-// Minimal sparkline rendered as inline SVG — no external chart library needed
+// Minimal sparkline rendered as inline SVG - no external chart library needed
 function Sparkline({ data, dataKey, color = '#16a34a', height = 60 }) {
   if (!data || data.length < 2) return null
   const vals = data.map(d => d[dataKey] ?? 0)
@@ -224,7 +224,7 @@ export default function AiCostMonitor() {
         <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-xl px-4 py-3">
           <AlertCircle className="w-4 h-4" />{error}
           {error.includes('does not exist') && (
-            <span className="ml-2 text-gray-500">— Apply MIGRATIONS_V44 to create the ai_token_logs table.</span>
+            <span className="ml-2 text-gray-500">- Apply MIGRATIONS_V44 to create the ai_token_logs table.</span>
           )}
         </div>
       )}
@@ -234,7 +234,7 @@ export default function AiCostMonitor() {
         <StatCard label="Total Cost" value={formatUSD(totalCost)} sub={`${DATE_RANGES.find(r => r.days === rangeDays)?.label}`} icon={DollarSign} color="text-green-400" bg="bg-green-400/10" />
         <StatCard label="Total Tokens" value={formatTokens(totalTokens)} sub={`${totalCalls.toLocaleString()} calls`} icon={Zap} color="text-blue-400" bg="bg-blue-400/10" />
         <StatCard label="Avg Cost / Call" value={formatUSD(avgCostPerCall)} sub="across all features" icon={TrendingUp} color="text-purple-400" bg="bg-purple-400/10" />
-        <StatCard label="Active Features" value={allFeatures.length || 0} sub={allFeatures.join(', ') || '—'} icon={BarChart2} color="text-yellow-400" bg="bg-yellow-400/10" />
+        <StatCard label="Active Features" value={allFeatures.length || 0} sub={allFeatures.join(', ') || '-'} icon={BarChart2} color="text-yellow-400" bg="bg-yellow-400/10" />
       </div>
 
       {totalCalls === 0 && !loading ? (
@@ -292,7 +292,7 @@ export default function AiCostMonitor() {
               </div>
             )}
 
-            {/* Top sites by spend — CSS horizontal bars */}
+            {/* Top sites by spend - CSS horizontal bars */}
             {topSites.length > 0 && (
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
                 <h3 className="text-white font-semibold mb-4">Spend by Site</h3>
@@ -346,14 +346,14 @@ export default function AiCostMonitor() {
                       <td className="px-4 py-3 text-gray-400 text-xs text-right">{formatTokens(log.prompt_tokens ?? 0)}</td>
                       <td className="px-4 py-3 text-gray-400 text-xs text-right">{formatTokens(log.completion_tokens ?? 0)}</td>
                       <td className="px-4 py-3 text-green-400 text-xs font-medium text-right">{formatUSD(estimateCost(log))}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{log.site ?? '—'}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{log.site ?? '-'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               {logs.length > 50 && (
                 <div className="px-5 py-3 border-t border-gray-800 text-gray-500 text-xs">
-                  Showing 50 of {logs.length.toLocaleString()} records — narrow the date range or filter to see more.
+                  Showing 50 of {logs.length.toLocaleString()} records - narrow the date range or filter to see more.
                 </div>
               )}
             </div>

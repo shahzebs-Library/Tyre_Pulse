@@ -31,7 +31,7 @@ const h = vi.hoisted(() => {
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
 
-// Direct import (not the barrel) — mirrors how the page consumes the service.
+// Direct import (not the barrel) - mirrors how the page consumes the service.
 const accidents = await import('../lib/api/accidents')
 const { ServiceError } = await import('../lib/api/_client')
 
@@ -40,7 +40,7 @@ beforeEach(() => {
   h.state.last = null
 })
 
-describe('accidents owner page — service layer', () => {
+describe('accidents owner page - service layer', () => {
   it('lists a page from accidents ordered by incident_date, ranged, with PII columns', () => {
     const b = accidents.listAccidentsForPage({ country: 'KSA', from: 0, to: 999 })
     expect(b._table).toBe('accidents')
@@ -54,7 +54,7 @@ describe('accidents owner page — service layer', () => {
     expect(b._calls.select).toContain('police_report_no')
     expect(b._calls.select).toContain('policy_no')
     expect(b._calls.select).toContain('claim_amount')
-    // …but never leaks organisation_id (RLS-managed).
+    // ...but never leaks organisation_id (RLS-managed).
     expect(b._calls.select).not.toContain('organisation_id')
   })
 

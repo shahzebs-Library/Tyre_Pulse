@@ -167,7 +167,7 @@ export default function ConsoleLogin() {
                   className="w-full h-11 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                   style={{ background: loading ? 'rgba(249,115,22,0.4)' : 'linear-gradient(135deg, #ea580c, #f97316)', boxShadow: loading ? 'none' : '0 4px 20px rgba(249,115,22,0.35)' }}>
                   {loading
-                    ? <><Spinner /> Verifying…</>
+                    ? <><Spinner /> Verifying...</>
                     : <><Lock size={15} /> Enter Console</>
                   }
                 </button>
@@ -218,7 +218,7 @@ export default function ConsoleLogin() {
                 <button type="submit" disabled={loading || totpCode.join('').length !== 6}
                   className="w-full h-11 rounded-xl font-semibold text-sm transition-all disabled:opacity-40 flex items-center justify-center gap-2"
                   style={{ background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', boxShadow: '0 4px 20px rgba(59,130,246,0.3)' }}>
-                  {loading ? <><Spinner /> Verifying…</> : <><Smartphone size={15} /> Verify Code</>}
+                  {loading ? <><Spinner /> Verifying...</> : <><Smartphone size={15} /> Verify Code</>}
                 </button>
               </form>
 

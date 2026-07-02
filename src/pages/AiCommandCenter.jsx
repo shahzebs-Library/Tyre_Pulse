@@ -655,7 +655,7 @@ export default function AiCommandCenter() {
             {dataLoading ? (
               <span className="flex items-center gap-1.5 text-xs text-gray-500">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                Loading context…
+                Loading context...
               </span>
             ) : (
               <span className="flex items-center gap-1.5 text-xs text-emerald-400">
@@ -870,7 +870,7 @@ export default function AiCommandCenter() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={dataLoading ? 'Loading fleet context…' : 'Ask about CPK, failures, root causes, planning, or data quality…'}
+              placeholder={dataLoading ? 'Loading fleet context...' : 'Ask about CPK, failures, root causes, planning, or data quality...'}
               disabled={loading || dataLoading}
               rows={1}
               className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 pr-12 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none disabled:opacity-50 transition-colors leading-relaxed"

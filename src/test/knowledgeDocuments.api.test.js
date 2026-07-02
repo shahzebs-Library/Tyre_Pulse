@@ -49,7 +49,7 @@ beforeEach(() => {
   h.state.builders = []
 })
 
-describe('service layer — knowledgeDocuments', () => {
+describe('service layer - knowledgeDocuments', () => {
   it('lists from knowledge_documents newest-first and maps embedding presence', async () => {
     // First query: metadata rows. Second query: ids that have an embedding.
     h.state.results = [
@@ -62,7 +62,7 @@ describe('service layer — knowledgeDocuments', () => {
     expect(h.state.builders[0]._table).toBe('knowledge_documents')
     // Presence pass filtered on embedding NOT NULL (no vector transferred).
     expect(h.state.builders[1]._calls.not).toContainEqual(['embedding', 'is', null])
-    // d1 has an embedding (truthy), d2 does not (null) — preserves page contract.
+    // d1 has an embedding (truthy), d2 does not (null) - preserves page contract.
     expect(rows.find(r => r.id === 'd1').embedding).toBe(true)
     expect(rows.find(r => r.id === 'd2').embedding).toBeNull()
   })

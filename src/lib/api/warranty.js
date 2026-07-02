@@ -1,12 +1,12 @@
 /**
- * Warranty service — warranty_claims records. Explicit column lists (no
+ * Warranty service - warranty_claims records. Explicit column lists (no
  * SELECT *); additive, mirrors correctiveActions.js / inspections.js. The
  * WarrantyTracker page is the single boundary onto this table as pages migrate
  * off inline supabase.from() calls.
  *
  * warranty_claims has no country column filter in the page's read path (it
- * loads the full set ordered newest-first), so — unlike country-scoped
- * services — list takes no country option and applies no country predicate.
+ * loads the full set ordered newest-first), so - unlike country-scoped
+ * services - list takes no country option and applies no country predicate.
  *
  * The page also reads tyre_records for warranty context (bulk fitment lookup +
  * a serial autofill lookup) with a column set that differs from the canonical
@@ -22,13 +22,13 @@ const COLS =
   'id,claim_no,serial_number,brand,size,asset_no,site,country,fitment_date,removal_date,km_at_fitment,km_at_removal,km_run,expected_life_km,failure_type,supplier,notes,claim_status,credit_amount,credit_date,created_by,created_at,updated_at'
 
 // Tyre-record columns the page reads for warranty context. Matches the table's
-// warranty-facing shape (serial_number, fitment_date, km_*) — intentionally
+// warranty-facing shape (serial_number, fitment_date, km_*) - intentionally
 // distinct from tyres.js COLS, which serves a different read surface.
 const TYRE_CONTEXT_COLS =
   'id,serial_number,brand,size,asset_no,site,country,fitment_date,km_at_fitment,km_at_removal,supplier'
 
 /**
- * List warranty claims, newest first. No country scoping — the page reads the
+ * List warranty claims, newest first. No country scoping - the page reads the
  * full claim set (RLS enforces tenant isolation).
  */
 export async function listWarrantyClaims() {

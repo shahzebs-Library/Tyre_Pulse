@@ -24,7 +24,7 @@ describe('duplicateRatio', () => {
   })
 
   it('sums duplicate + conflict + liveDuplicate over keyed rows', () => {
-    // 21268/24195 ≈ 0.879 — the real 2021.xlsx figure from QA.
+    // 21268/24195 ≈ 0.879 - the real 2021.xlsx figure from QA.
     expect(duplicateRatio({ keyed: 24195, duplicate: 21268 })).toBeCloseTo(0.879, 3)
     expect(duplicateRatio({ keyed: 100, duplicate: 30, conflict: 10, liveDuplicate: 20 })).toBeCloseTo(0.6, 5)
   })

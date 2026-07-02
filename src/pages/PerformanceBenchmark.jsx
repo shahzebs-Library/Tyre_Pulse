@@ -408,7 +408,7 @@ export default function PerformanceBenchmark() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-950">
-        <div className="text-center"><Loader2 className="animate-spin text-blue-400 mx-auto mb-3" size={40} /><p className="text-gray-400">Loading benchmark data…</p></div>
+        <div className="text-center"><Loader2 className="animate-spin text-blue-400 mx-auto mb-3" size={40} /><p className="text-gray-400">Loading benchmark data...</p></div>
       </div>
     )
   }

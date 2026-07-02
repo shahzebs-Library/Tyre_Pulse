@@ -383,7 +383,7 @@ export default function MaintenanceCalendar() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
           <Loader2 className="animate-spin text-green-400 mx-auto mb-3" size={36} />
-          <p className="text-gray-400 text-sm">Loading maintenance calendar…</p>
+          <p className="text-gray-400 text-sm">Loading maintenance calendar...</p>
         </div>
       </div>
     )

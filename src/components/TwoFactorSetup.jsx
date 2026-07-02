@@ -322,7 +322,7 @@ export default function TwoFactorSetup({ open, onClose, onSuccess }) {
                   className="flex-1 py-3 rounded-xl bg-orange-500 hover:bg-orange-400 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2"
                 >
                   {verifying ? <Loader2 size={15} className="animate-spin" /> : <Shield size={15} />}
-                  {verifying ? 'Verifying…' : 'Verify & Enable'}
+                  {verifying ? 'Verifying...' : 'Verify & Enable'}
                 </button>
               </div>
             </div>

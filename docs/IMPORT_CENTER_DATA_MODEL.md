@@ -1,4 +1,4 @@
-# Data Intake Center — Data Model (V45)
+# Data Intake Center - Data Model (V45)
 
 > Migration `MIGRATIONS_V45_IMPORT_CENTER.sql` (applied). Additive, backward-
 > compatible DB foundation for the Multi-Country Data Intake Center
@@ -18,9 +18,9 @@ import_files (private bytes + metadata)
   trail: import_audit_events (append-only)
 ```
 Live operational tables are **not** written here. The eventual commit step is a
-server-side SECURITY DEFINER RPC (next slice) — never a browser insert.
+server-side SECURITY DEFINER RPC (next slice) - never a browser insert.
 
-## Tables (10) — all org/country-scoped
+## Tables (10) - all org/country-scoped
 Each carries `organisation_id` (default-org, FK), `created_at`, and (where
 relevant) `country`, `created_by`. Highlights:
 
@@ -37,7 +37,7 @@ relevant) `country`, `created_by`. Highlights:
 | `custom_field_catalog` | unknown-field insight | `field_name`, `occurrence_count`, `example_values`, first/last seen, `mapping_status`, `recommendation` (UNIQUE per org/module/country/field) |
 | `import_audit_events` | append-only import trail | `batch_id`, `actor`, `action`, `detail` |
 
-## Security (RLS) — verified
+## Security (RLS) - verified
 Every table: **RESTRICTIVE** org-isolation (`organisation_id = app_current_org()`)
 ANDed on top of permissive **read** (authenticated) + **write**
 (`is_approved_and_unlocked()`). 30 policies total (3 × 10). The `import-files`
@@ -47,7 +47,7 @@ URLs (path convention `org/country/module/batch/uuid`). Country scope on writes
 is enforced by the commit RPC (next slice) in addition to org isolation.
 
 ## Why per-row (not a JSON blob)
-`pending_uploads.rows` stored an entire import as one JSON field — unqueryable,
+`pending_uploads.rows` stored an entire import as one JSON field - unqueryable,
 unreviewable per row, and lossy. `import_rows` stores each source row with its
 raw/mapped/transformed/custom layers, so every original value stays retrievable,
 issues attach per row, and corrected rows can be reprocessed individually.
@@ -55,7 +55,7 @@ issues attach per row, and corrected rows can be reprocessed individually.
 ## Next slices (subsequent PRs)
 1. Phase-0 audit docs (`IMPORT_CENTER_MULTICOUNTRY_AUDIT/SECURITY_PLAN/MIGRATION_PLAN/TEST_CASES.md`).
 2. Server-side commit RPCs (`import_commit_batch`, `import_reprocess_row`,
-   `import_reverse_batch`) — permission + country/org scope + idempotency +
+   `import_reverse_batch`) - permission + country/org scope + idempotency +
    transactional writes into live tables + `target_record_id` linkage + audit.
 3. Shared parse/map/validate engine (`src/lib/import/*`, lazy-loaded xlsx).
 4. Data Intake Center UI + module adapters (Fleet → Tyre → Stock first).

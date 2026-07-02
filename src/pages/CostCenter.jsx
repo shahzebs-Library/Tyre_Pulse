@@ -617,7 +617,7 @@ export default function CostCenter() {
         <div className="flex items-center justify-center py-24">
           <div className="flex items-center gap-3 text-gray-500">
             <Loader2 size={20} className="animate-spin text-green-500" />
-            <span className="text-sm">Loading cost data…</span>
+            <span className="text-sm">Loading cost data...</span>
           </div>
         </div>
       )}

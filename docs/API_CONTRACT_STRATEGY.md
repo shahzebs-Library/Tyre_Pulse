@@ -20,7 +20,7 @@ Every response uses one shape:
 
 ```json
 // success
-{ "data": { "id": "…", "role": "inspector" } }
+{ "data": { "id": "...", "role": "inspector" } }
 // error
 { "error": { "code": "forbidden", "message": "Account is not active." } }
 ```
@@ -50,13 +50,13 @@ the action - essential for the mobile offline queue.
 
 ```
 POST /api/v1/inspections
-Idempotency-Key: 5e9f…   →  201 { "data": { "id": "insp_123" } }
+Idempotency-Key: 5e9f...   →  201 { "data": { "id": "insp_123" } }
 # network retry, same key  →  201 { "data": { "id": "insp_123" } }  (replayed)
 ```
 
 ## 7. Pagination, filtering, sorting, search
 - **Cursor pagination:** `?limit=50&cursor=<opaque>`. Response:
-  `data: { items: [...], next_cursor: "…"|null }` (or `meta.next_cursor`).
+  `data: { items: [...], next_cursor: "..."|null }` (or `meta.next_cursor`).
   Cursors are opaque and stable; no offset scanning for large sets.
 - **Filtering:** explicit query params per field, e.g. `?site=Riyadh&status=open`.
 - **Sorting:** `?sort=created_at&order=desc` (allow-listed fields only).
@@ -73,7 +73,7 @@ Idempotency-Key: 5e9f…   →  201 { "data": { "id": "insp_123" } }
 GET /api/v1/me
 Authorization: Bearer <jwt>
 → 200
-{ "data": { "id": "11111111-…", "email": "i@ex.com", "role": "inspector",
+{ "data": { "id": "11111111-...", "email": "i@ex.com", "role": "inspector",
             "site": "Riyadh", "country": ["KSA"], "approved": true, "locked": false } }
 ```
 

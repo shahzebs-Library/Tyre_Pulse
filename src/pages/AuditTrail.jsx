@@ -219,7 +219,7 @@ export default function AuditTrail() {
         .from('tyre_records').delete().eq('upload_batch_id', deleteTarget.batchId).select('id')
       if (error) throw error
       if ((data?.length ?? 0) === 0) {
-        throw new Error('No records were deleted. Only an Admin can delete tyre records — check your role and retry.')
+        throw new Error('No records were deleted. Only an Admin can delete tyre records - check your role and retry.')
       }
       await logAuditEvent({ action: 'batch_delete', table_name: 'tyre_records', record_count: data.length, details: { batch_id: deleteTarget.batchId } })
       setDeleteTarget(null)
@@ -325,7 +325,7 @@ export default function AuditTrail() {
                   <input
                     type="text"
                     className="input pl-8 w-48"
-                    placeholder="Action, table, user…"
+                    placeholder="Action, table, user..."
                     value={auditSearch}
                     onChange={e => setAuditSearch(e.target.value)}
                   />
@@ -353,7 +353,7 @@ export default function AuditTrail() {
                 </thead>
                 <tbody>
                   {auditLoading ? (
-                    <tr><td colSpan={6} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                    <tr><td colSpan={6} className="text-center py-12 text-gray-500">Loading...</td></tr>
                   ) : visibleAuditRows.length === 0 ? (
                     <tr><td colSpan={6} className="text-center py-12 text-gray-500">No audit events found</td></tr>
                   ) : visibleAuditRows.map(row => (
@@ -441,7 +441,7 @@ export default function AuditTrail() {
                 </thead>
                 <tbody>
                   {uploadLoading ? (
-                    <tr><td colSpan={profile?.role === 'Admin' ? 7 : 6} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                    <tr><td colSpan={profile?.role === 'Admin' ? 7 : 6} className="text-center py-12 text-gray-500">Loading...</td></tr>
                   ) : uploadRows.length === 0 ? (
                     <tr><td colSpan={profile?.role === 'Admin' ? 7 : 6} className="text-center py-12 text-gray-500">No upload history found</td></tr>
                   ) : uploadRows.map(row => (
@@ -516,7 +516,7 @@ export default function AuditTrail() {
             <div className="flex gap-3">
               <button onClick={handleDeleteBatch} disabled={deleteConfirm !== 'DELETE' || deleting}
                 className="btn-primary bg-red-700 hover:bg-red-600 disabled:opacity-40 flex-1">
-                {deleting ? 'Deleting…' : 'Delete Permanently'}
+                {deleting ? 'Deleting...' : 'Delete Permanently'}
               </button>
               <button onClick={() => { setDeleteTarget(null); setDeleteConfirm(''); setDeleteError('') }} className="btn-secondary">Cancel</button>
             </div>

@@ -342,7 +342,7 @@ export default function CustomData() {
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input
                   className="input pl-8 text-sm w-full"
-                  placeholder="Search custom fields…"
+                  placeholder="Search custom fields..."
                   value={statsSearch}
                   onChange={e => setStatsSearch(e.target.value)}
                 />
@@ -476,7 +476,7 @@ export default function CustomData() {
                               disabled={!backfillTarget || backfillRunning}
                               className="btn-primary text-xs py-1.5 px-3 disabled:opacity-40 flex items-center gap-1.5"
                             >
-                              {backfillRunning ? <><RefreshCw size={11} className="animate-spin" /> Running…</> : 'Run Backfill'}
+                              {backfillRunning ? <><RefreshCw size={11} className="animate-spin" /> Running...</> : 'Run Backfill'}
                             </button>
                             <button onClick={() => { setBackfillKey(null); setBackfillResult(null) }} className="btn-secondary text-xs py-1.5 px-3">Done</button>
                           </div>
@@ -631,7 +631,7 @@ export default function CustomData() {
                 {filterKey && (
                   <div className="flex-1 min-w-[180px]">
                     <label className="label text-xs">Field value contains</label>
-                    <input className="input text-sm" placeholder="e.g. Riyadh, ABC-123…"
+                    <input className="input text-sm" placeholder="e.g. Riyadh, ABC-123..."
                       value={filterVal} onChange={e => { setFilterVal(e.target.value); setRecPage(0) }} />
                   </div>
                 )}
@@ -792,7 +792,7 @@ export default function CustomData() {
             )}
             <div className="flex gap-3">
               <button onClick={deleteSynonym} disabled={deleting} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-                <Trash2 size={15} /> {deleting ? 'Deleting…' : 'Delete Synonym'}
+                <Trash2 size={15} /> {deleting ? 'Deleting...' : 'Delete Synonym'}
               </button>
               <button onClick={closeDeleteSynonym} disabled={deleting} className="btn-secondary disabled:opacity-50">Cancel</button>
             </div>

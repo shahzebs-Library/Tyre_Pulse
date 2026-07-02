@@ -623,7 +623,7 @@ export default function PredictiveMaintenance() {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center space-y-3">
           <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-gray-400 text-sm">Loading predictive maintenance data…</p>
+          <p className="text-gray-400 text-sm">Loading predictive maintenance data...</p>
         </div>
       </div>
     )
@@ -1077,7 +1077,7 @@ export default function PredictiveMaintenance() {
                   {[
                     {
                       title: 'Average Tyre Life',
-                      body: `Computed per vehicle from completed tyre records (km_at_removal − km_at_fitment). If insufficient history, falls back to fleet average (${fmt(fleetStats.avgKmLife, 0)} km) or ${fmt(DEFAULT_AVG_KM, 0)} km default.`,
+                      body: `Computed per vehicle from completed tyre records (km_at_removal - km_at_fitment). If insufficient history, falls back to fleet average (${fmt(fleetStats.avgKmLife, 0)} km) or ${fmt(DEFAULT_AVG_KM, 0)} km default.`,
                     },
                     {
                       title: 'Average Daily KM',
@@ -1085,7 +1085,7 @@ export default function PredictiveMaintenance() {
                     },
                     {
                       title: 'Replacement Due Date',
-                      body: 'Predicted as: today + (remaining_km / avg_daily_km). Remaining KM = avg_km_life − km_run_since_fitment.',
+                      body: 'Predicted as: today + (remaining_km / avg_daily_km). Remaining KM = avg_km_life - km_run_since_fitment.',
                     },
                     {
                       title: 'Urgency Classification',

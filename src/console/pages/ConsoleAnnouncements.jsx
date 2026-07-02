@@ -172,7 +172,7 @@ export default function ConsoleAnnouncements() {
                 <div className="col-span-2">
                   <label className="field-label">Title *</label>
                   <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                    className="input-dark" placeholder="System maintenance on Saturday…" />
+                    className="input-dark" placeholder="System maintenance on Saturday..." />
                 </div>
                 <div>
                   <label className="field-label">Type</label>
@@ -204,7 +204,7 @@ export default function ConsoleAnnouncements() {
                 <div className="col-span-2">
                   <label className="field-label">Message *</label>
                   <textarea value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
-                    rows={4} placeholder="Write your announcement message here…"
+                    rows={4} placeholder="Write your announcement message here..."
                     className="input-dark resize-none" />
                 </div>
                 <div className="col-span-2">
@@ -228,7 +228,7 @@ export default function ConsoleAnnouncements() {
               <button onClick={handleSave} disabled={saving}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
                 style={{ background: 'linear-gradient(135deg,#ea580c,#f97316)' }}>
-                {saving ? <><div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" /> Saving…</> : <><Save size={13} /> Save</>}
+                {saving ? <><div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" /> Saving...</> : <><Save size={13} /> Save</>}
               </button>
             </div>
           </div>

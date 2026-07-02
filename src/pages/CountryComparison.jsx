@@ -233,7 +233,7 @@ export default function CountryComparison() {
 
   if (loading) return (
     <div className="space-y-5">
-      <PageHeader title="Country Comparison" subtitle="Loading fleet data…" icon={Globe} />
+      <PageHeader title="Country Comparison" subtitle="Loading fleet data..." icon={Globe} />
       <div className="grid grid-cols-3 gap-4">
         {[...Array(3)].map((_, i) => <div key={i} className="card animate-pulse h-52 bg-gray-800/40" />)}
       </div>

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Hoisted Supabase mock — same shape as api.test.js: a chainable, thenable
+// Hoisted Supabase mock - same shape as api.test.js: a chainable, thenable
 // query builder that records the table, eq/or/gte/range filters, and resolves
 // to a configurable { data, error }. rpc() records name + args.
 const h = vi.hoisted(() => {
@@ -43,7 +43,7 @@ beforeEach(() => {
   h.state.lastRpc = null
 })
 
-describe('service layer — purchaseOrders', () => {
+describe('service layer - purchaseOrders', () => {
   it('createPurchaseOrder inserts into purchase_orders and returns the row', async () => {
     h.state.result = { data: { po_number: 'PO-1' }, error: null }
     const payload = { po_number: 'PO-1', vendor_name: 'Acme', status: 'Draft' }

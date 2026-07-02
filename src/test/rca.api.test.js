@@ -37,7 +37,7 @@ beforeEach(() => {
   h.state.last = null
 })
 
-describe('service layer — rca', () => {
+describe('service layer - rca', () => {
   it('lists from rca_records, newest first', async () => {
     h.state.result = { data: [{ id: 'r1', asset_no: 'V-1' }], error: null }
     const rows = await rca.listRcaRecords({ country: 'All' })

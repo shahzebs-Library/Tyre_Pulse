@@ -1065,7 +1065,7 @@ export default function ComplianceDashboard() {
       {loading && (
         <div className="flex items-center justify-center py-24">
           <RefreshCw size={22} className="text-green-400 animate-spin mr-2" />
-          <span className="text-gray-400 text-sm">Loading compliance data…</span>
+          <span className="text-gray-400 text-sm">Loading compliance data...</span>
         </div>
       )}
       {error && (
@@ -1319,7 +1319,7 @@ export default function ComplianceDashboard() {
                             <input
                               value={treadSearch}
                               onChange={e => { setTreadSearch(e.target.value); setTreadPage(1) }}
-                              placeholder="Search asset, serial, site…"
+                              placeholder="Search asset, serial, site..."
                               className="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
                             />
                           </div>
@@ -1502,7 +1502,7 @@ export default function ComplianceDashboard() {
                             <input
                               value={pressureSearch}
                               onChange={e => { setPressureSearch(e.target.value); setPressurePage(1) }}
-                              placeholder="Search asset, serial, site…"
+                              placeholder="Search asset, serial, site..."
                               className="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
                             />
                           </div>
@@ -1641,7 +1641,7 @@ export default function ComplianceDashboard() {
                             <input
                               value={inspSearch}
                               onChange={e => { setInspSearch(e.target.value); setInspPage(1) }}
-                              placeholder="Search asset, site, inspector…"
+                              placeholder="Search asset, site, inspector..."
                               className="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
                             />
                           </div>

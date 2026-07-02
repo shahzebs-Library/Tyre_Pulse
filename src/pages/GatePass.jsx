@@ -139,7 +139,7 @@ export default function GatePass() {
     }
     try {
       if (status === 'Cleared') {
-        // Route release through the safety gate — refuses when critical defects are open.
+        // Route release through the safety gate - refuses when critical defects are open.
         const { blockers: b } = await gatePasses.createGatePass(values)
         if (b) setBlockers(b)
       } else {
@@ -368,7 +368,7 @@ export default function GatePass() {
             </div>
             {blockers?.blocked && (
               <div className="rounded-lg p-3 mb-3" style={{ background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.45)' }}>
-                <p className="text-red-300 font-semibold text-sm mb-1">⛔ Release blocked — {blockers.total} open critical safety item(s)</p>
+                <p className="text-red-300 font-semibold text-sm mb-1">⛔ Release blocked - {blockers.total} open critical safety item(s)</p>
                 <ul className="text-xs text-red-200/90 space-y-0.5 list-disc pl-4">
                   {blockers.corrective_actions?.map((c) => <li key={c.id}>Corrective action: {c.title} ({c.status})</li>)}
                   {blockers.tyres?.map((t) => <li key={t.id}>Critical tyre {t.serial_no || ''} {t.brand ? `(${t.brand})` : ''}</li>)}
@@ -462,7 +462,7 @@ export default function GatePass() {
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               className="input pl-8 text-sm"
-              placeholder="Search asset, site…"
+              placeholder="Search asset, site..."
               value={logSearch}
               onChange={e => setLogSearch(e.target.value)}
             />
@@ -471,7 +471,7 @@ export default function GatePass() {
 
         {/* Table */}
         {logTab === 'history' && historyLoading ? (
-          <div className="text-center py-8 text-gray-500">Loading…</div>
+          <div className="text-center py-8 text-gray-500">Loading...</div>
         ) : filteredPassList.length === 0 ? (
           <div className="text-center py-8">
             <ShieldCheck size={28} className="text-gray-700 mx-auto mb-2" />

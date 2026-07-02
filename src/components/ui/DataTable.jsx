@@ -77,7 +77,7 @@ export default function DataTable({
                   <td colSpan={columns.length + (selectable ? 1 : 0)} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-muted">
                       <Loader2 className="w-6 h-6 animate-spin text-brand" />
-                      <span className="text-sm">Loading…</span>
+                      <span className="text-sm">Loading...</span>
                     </div>
                   </td>
                 </motion.tr>

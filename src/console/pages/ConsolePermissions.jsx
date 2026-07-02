@@ -174,7 +174,7 @@ export default function ConsolePermissions() {
               saved ? 'bg-green-700 text-white' : 'text-white'
             }`}
             style={!saved ? { background: 'linear-gradient(135deg,#ea580c,#f97316)' } : {}}>
-            {saving ? <><div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
+            {saving ? <><div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" /> Saving...</>
               : saved ? <><CheckCircle size={13} /> Saved</>
               : <><Save size={13} /> Save Changes</>
             }

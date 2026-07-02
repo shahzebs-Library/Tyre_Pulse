@@ -1,4 +1,4 @@
-# Release Guide — TyrePulse Inspector (Android, Google Play Internal Testing)
+# Release Guide - TyrePulse Inspector (Android, Google Play Internal Testing)
 
 Distribution model: **Google Play Internal Testing + EAS Update (OTA)**.
 Build & upload to Play **once**; ship most future changes over-the-air.
@@ -35,7 +35,7 @@ opt-in link. Testers install once from Google Play.
 
 ---
 
-## Day-to-day updates — NO Play upload needed
+## Day-to-day updates - NO Play upload needed
 
 For JS / UI / logic / styling changes (the vast majority):
 

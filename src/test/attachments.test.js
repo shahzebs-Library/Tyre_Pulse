@@ -14,7 +14,7 @@ function row(transformed) {
   return { transformed }
 }
 
-describe('attachments — normaliseId', () => {
+describe('attachments - normaliseId', () => {
   it('strips separators, case, and folds Arabic-Indic digits', () => {
     expect(normaliseId('CLM-2024/00123')).toBe('clm202400123')
     expect(normaliseId('clm_2024 00123')).toBe('clm202400123')
@@ -24,7 +24,7 @@ describe('attachments — normaliseId', () => {
   })
 })
 
-describe('attachments — extOf', () => {
+describe('attachments - extOf', () => {
   it('returns lower-case extension without dot', () => {
     expect(extOf('photo.JPG')).toBe('jpg')
     expect(extOf('a/b/report.PDF')).toBe('pdf')
@@ -34,7 +34,7 @@ describe('attachments — extOf', () => {
   })
 })
 
-describe('attachments — matchAttachment priority & normalisation', () => {
+describe('attachments - matchAttachment priority & normalisation', () => {
   const rows = [
     row({ insurance_claim_no: 'CLM-2024/00123', police_report_no: 'PR-9001', asset_no: 'A-12' }),
     row({ insurance_claim_no: 'CLM-2024/00999', police_report_no: 'PR-7777', asset_no: 'TRK-500' }),
@@ -84,7 +84,7 @@ describe('attachments — matchAttachment priority & normalisation', () => {
   })
 })
 
-describe('attachments — buildMatchRows (unmatched is kept)', () => {
+describe('attachments - buildMatchRows (unmatched is kept)', () => {
   const rows = [row({ insurance_claim_no: 'CLM-1', police_report_no: 'PR-1' })]
 
   it('records matched files with entity + matched status', () => {
@@ -109,7 +109,7 @@ describe('attachments — buildMatchRows (unmatched is kept)', () => {
   })
 })
 
-describe('attachments — extractZip filtering', () => {
+describe('attachments - extractZip filtering', () => {
   async function makeZip(builder) {
     const zip = new JSZip()
     builder(zip)

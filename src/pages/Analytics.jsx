@@ -656,7 +656,7 @@ function AssetBreakdown({ assetMetrics, currency, onMaximize, chartRef }) {
       <div className="flex gap-3">
         <input
           className="input flex-1"
-          placeholder="Search asset number…"
+          placeholder="Search asset number..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -686,7 +686,7 @@ function AssetBreakdown({ assetMetrics, currency, onMaximize, chartRef }) {
                   </span>
                 </td>
                 <td className="py-2 pr-4 text-gray-400 text-right text-xs">{a.failureFreqPerMonth.toFixed(1)}</td>
-                <td className="py-2 pr-4 text-gray-400 text-xs">{a.sites.slice(0, 2).join(', ')}{a.sites.length > 2 ? '…' : ''}</td>
+                <td className="py-2 pr-4 text-gray-400 text-xs">{a.sites.slice(0, 2).join(', ')}{a.sites.length > 2 ? '...' : ''}</td>
                 <td className="py-2 text-gray-400 text-xs">{a.lastSeen || '--'}</td>
               </tr>
             ))}

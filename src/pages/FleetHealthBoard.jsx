@@ -462,7 +462,7 @@ export default function FleetHealthBoard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">Fleet Health Board</h1>
-            <p className="text-gray-400 text-sm mt-1">Loading fleet data…</p>
+            <p className="text-gray-400 text-sm mt-1">Loading fleet data...</p>
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -558,7 +558,7 @@ export default function FleetHealthBoard() {
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input
                   className="input pl-8 w-full text-sm"
-                  placeholder="Search asset, site, country…"
+                  placeholder="Search asset, site, country..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />

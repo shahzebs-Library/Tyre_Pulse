@@ -1,7 +1,7 @@
 // emailService.js - Report email generation and delivery
 import { supabase } from './supabase'
 
-// jspdf is heavy (~400 KB) — load it on first use, never with the page chunk.
+// jspdf is heavy (~400 KB) - load it on first use, never with the page chunk.
 let jsPDF, autoTable
 async function ensurePdf() {
   if (!jsPDF) {

@@ -307,7 +307,7 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
             disabled={!form.asset_no || !form.inspection_date || !form.inspector_name || saving}
             className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
           >
-            {saving ? <><RefreshCw size={13} className="animate-spin" />Saving…</> : <><Check size={13} />Save</>}
+            {saving ? <><RefreshCw size={13} className="animate-spin" />Saving...</> : <><Check size={13} />Save</>}
           </button>
         </div>
       </motion.div>
@@ -443,7 +443,7 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
             disabled={!inspector || !startDate || !endDate || saving}
             className="px-5 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
           >
-            {saving ? <><RefreshCw size={13} className="animate-spin" />Scheduling…</> : <><Check size={13} />Schedule All</>}
+            {saving ? <><RefreshCw size={13} className="animate-spin" />Scheduling...</> : <><Check size={13} />Schedule All</>}
           </button>
         </div>
       </motion.div>
@@ -874,7 +874,7 @@ export default function InspectionPlanner() {
         .select('id')
       if (error) throw error
       if ((data?.length ?? 0) === 0) {
-        throw new Error('The inspection could not be deleted — you may not have permission, or it was already removed.')
+        throw new Error('The inspection could not be deleted - you may not have permission, or it was already removed.')
       }
       setDeleteTarget(null)
       await fetchSchedule()
@@ -1095,7 +1095,7 @@ export default function InspectionPlanner() {
         <KpiCard
           icon={Calendar}
           label="This Week"
-          value={loading ? '…' : kpiData.thisWeek}
+          value={loading ? '...' : kpiData.thisWeek}
           sub="Inspections completed"
           color="blue"
           loading={loading}
@@ -1103,7 +1103,7 @@ export default function InspectionPlanner() {
         <KpiCard
           icon={AlertTriangle}
           label="Overdue"
-          value={loading ? '…' : kpiData.overdue}
+          value={loading ? '...' : kpiData.overdue}
           sub={`> ${interval}d since last`}
           color="red"
           loading={loading}
@@ -1111,7 +1111,7 @@ export default function InspectionPlanner() {
         <KpiCard
           icon={CheckCircle2}
           label="Compliance Rate"
-          value={loading ? '…' : `${kpiData.compliance}%`}
+          value={loading ? '...' : `${kpiData.compliance}%`}
           sub="On-time this month"
           color="green"
           loading={loading}
@@ -1119,7 +1119,7 @@ export default function InspectionPlanner() {
         <KpiCard
           icon={BarChart2}
           label="This Month"
-          value={loading ? '…' : kpiData.thisMonth}
+          value={loading ? '...' : kpiData.thisMonth}
           sub={`vs ${kpiData.lastMonth} last month`}
           color="yellow"
           trend={kpiData.monthTrend}
@@ -1128,7 +1128,7 @@ export default function InspectionPlanner() {
         <KpiCard
           icon={Users}
           label="Inspector Workload"
-          value={loading ? '…' : kpiData.avgPerInspector}
+          value={loading ? '...' : kpiData.avgPerInspector}
           sub={`avg · ${kpiData.activeInspectors} active inspectors`}
           color="purple"
           loading={loading}
@@ -1200,7 +1200,7 @@ export default function InspectionPlanner() {
               {loading ? (
                 <div className="p-8 text-center">
                   <RefreshCw size={20} className="animate-spin text-blue-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">Loading overdue queue…</p>
+                  <p className="text-sm text-gray-400">Loading overdue queue...</p>
                 </div>
               ) : filteredOverdue.length === 0 ? (
                 <div className="p-8 text-center">
@@ -1322,7 +1322,7 @@ export default function InspectionPlanner() {
               {(loading || scheduleLoading) ? (
                 <div className="p-8 text-center">
                   <RefreshCw size={20} className="animate-spin text-blue-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">Loading inspection schedule…</p>
+                  <p className="text-sm text-gray-400">Loading inspection schedule...</p>
                 </div>
               ) : scheduleError ? (
                 <div className="p-8 text-center">
@@ -1632,7 +1632,7 @@ export default function InspectionPlanner() {
               {loading ? (
                 <div className="p-8 text-center">
                   <RefreshCw size={20} className="animate-spin text-yellow-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">Analysing inspection gaps…</p>
+                  <p className="text-sm text-gray-400">Analysing inspection gaps...</p>
                 </div>
               ) : filteredGap.length === 0 ? (
                 <div className="p-8 text-center">
@@ -1745,7 +1745,7 @@ export default function InspectionPlanner() {
                     disabled={deleting}
                     className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium text-white transition-colors inline-flex items-center gap-2 disabled:opacity-50"
                   >
-                    <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete Inspection'}
+                    <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete Inspection'}
                   </button>
                   <button
                     onClick={() => { setDeleteTarget(null); setDeleteError('') }}

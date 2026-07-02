@@ -303,11 +303,11 @@ function Pagination({ page, totalPages, onChange }) {
   if (totalPages <= 7) {
     for (let i = 1; i <= totalPages; i++) pages.push(i)
   } else if (page <= 4) {
-    pages.push(1, 2, 3, 4, 5, '…', totalPages)
+    pages.push(1, 2, 3, 4, 5, '...', totalPages)
   } else if (page >= totalPages - 3) {
-    pages.push(1, '…', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages)
+    pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages)
   } else {
-    pages.push(1, '…', page - 1, page, page + 1, '…', totalPages)
+    pages.push(1, '...', page - 1, page, page + 1, '...', totalPages)
   }
   return (
     <div className="flex items-center justify-between pt-3 border-t border-gray-800 mt-3">
@@ -321,8 +321,8 @@ function Pagination({ page, totalPages, onChange }) {
           <ChevronLeft size={13} />
         </button>
         {pages.map((p, i) =>
-          p === '…'
-            ? <span key={`e-${i}`} className="px-2 py-1 text-gray-600 text-xs">…</span>
+          p === '...'
+            ? <span key={`e-${i}`} className="px-2 py-1 text-gray-600 text-xs">...</span>
             : (
               <button
                 key={p}
@@ -958,7 +958,7 @@ export default function FleetIntelligence() {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center space-y-3">
           <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-gray-400 text-sm">Loading fleet intelligence data…</p>
+          <p className="text-gray-400 text-sm">Loading fleet intelligence data...</p>
         </div>
       </div>
     )
@@ -1258,7 +1258,7 @@ export default function FleetIntelligence() {
             <input
               value={searchAsset}
               onChange={e => setSearchAsset(e.target.value)}
-              placeholder="Search asset no…"
+              placeholder="Search asset no..."
               className="pl-8 pr-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 w-48"
             />
           </div>

@@ -46,7 +46,7 @@ No **error-level** issues remain. Remaining items are cosmetic/UX or need a manu
 | 024 | Notifications stale count | ✅ Resolved | realtime channel + focus refresh (useRealtimeAlerts) |
 | 025 | Map pins overlap | ◑ N/A | no live map feature / needs lat-lng seeding |
 | 026 | QR print layout | ◑ Cosmetic | add `@media print` grid rules |
-| 027 | Compliance ÷0 | ✅ Resolved | `length > 0 ? … : 0` guards |
+| 027 | Compliance ÷0 | ✅ Resolved | `length > 0 ? ... : 0` guards |
 | 028 | Radar all-zeros first load | ◑ Cosmetic | add loading skeleton |
 | 029 | Date locale inconsistency | ◑ Cosmetic | standardise on shared `formatDate()` |
 | 030 | Generic empty states | ◑ Cosmetic | per-page messages |

@@ -1,4 +1,4 @@
-# Google Play Internal Testing — Auto Updates
+# Google Play Internal Testing - Auto Updates
 
 Distribute the inspector app to your team with **automatic Play Store updates**:
 upload once, then every release CI builds + submits a new AAB and testers update
@@ -49,4 +49,4 @@ automatically. No APK sharing, no manual installs.
   later for a public release.
 - `google-service-account.json` is git-ignored; it only ever exists in CI from the secret.
 - For instant JS-only fixes without a store update, EAS Update (OTA) can be added later
-  as a complement — but store builds are still required for native changes.
+  as a complement - but store builds are still required for native changes.

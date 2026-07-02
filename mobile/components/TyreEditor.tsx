@@ -240,7 +240,7 @@ export default function TyreEditor({ data, onChange }: Props) {
           {uploadState === 'uploading' && (
             <View style={styles.uploadBadge}>
               <ActivityIndicator size="small" color="#fff" style={{ transform: [{ scale: 0.7 }] }} />
-              <Text style={styles.uploadBadgeText}>Uploading…</Text>
+              <Text style={styles.uploadBadgeText}>Uploading...</Text>
             </View>
           )}
           {uploadState === 'done' && (

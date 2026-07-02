@@ -37,7 +37,7 @@ const ANALYTICS_ROLES = ['Admin', 'Manager', 'Director']
 const A = true // adminOnly shorthand (was the Admin-only "Intelligence" group)
 
 // Eight operational workspaces (directive Phase 5) + Overview. Every route is
-// unchanged — pages are only regrouped and no journey is removed.
+// unchanged - pages are only regrouped and no journey is removed.
 const NAV_GROUPS = [
   {
     label: 'Overview',
@@ -623,7 +623,7 @@ export default function Layout({ children }) {
                   }}
                 >
                   <Search size={11} className="flex-shrink-0 group-hover:text-green-400 transition-colors" />
-                  <span className="flex-1 text-left font-medium">Search…</span>
+                  <span className="flex-1 text-left font-medium">Search...</span>
                   <kbd className="text-[9px] px-1.5 py-0.5 rounded-md font-mono text-gray-600"
                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
                     ⌘K
@@ -1017,7 +1017,7 @@ export default function Layout({ children }) {
                   ref={searchRef}
                   type="text"
                   className="flex-1 bg-transparent text-white placeholder-gray-600 focus:outline-none text-sm font-medium"
-                  placeholder="Search tyres, actions, RCA, stock…"
+                  placeholder="Search tyres, actions, RCA, stock..."
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                 />

@@ -1,5 +1,5 @@
 /**
- * RCA service — rca_records (Root Cause Analysis) records. Explicit column
+ * RCA service - rca_records (Root Cause Analysis) records. Explicit column
  * lists (no SELECT *); additive, mirrors correctiveActions.js / inspections.js.
  * Single boundary for the rca_records table as pages migrate onto it.
  */
@@ -18,7 +18,7 @@ const LIST_SELECT = `${COLS}, corrective_action:corrective_action_id(id,title,st
 /**
  * List RCA records, newest first, with the linked corrective action embedded.
  * Strict country scoping (exact match, no NULL inclusion) to match the page's
- * prior `.eq('country', …)` behaviour.
+ * prior `.eq('country', ...)` behaviour.
  * @param {{country?:string}} [opts]
  */
 export async function listRcaRecords({ country } = {}) {

@@ -773,7 +773,7 @@ export default function WorkshopManagement() {
               <input
                 value={search}
                 onChange={e => { setSearch(e.target.value); setPage(1) }}
-                placeholder="Search WO#, Asset, Site…"
+                placeholder="Search WO#, Asset, Site..."
                 className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -824,7 +824,7 @@ export default function WorkshopManagement() {
               <input
                 value={techSearch}
                 onChange={e => { setTechSearch(e.target.value); setPage(1) }}
-                placeholder="Technician…"
+                placeholder="Technician..."
                 className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
               />
             </div>
@@ -878,7 +878,7 @@ export default function WorkshopManagement() {
           <div className="flex items-center justify-center py-20">
             <div className="flex items-center gap-3 text-gray-500">
               <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
-              <span className="text-sm">Loading work orders…</span>
+              <span className="text-sm">Loading work orders...</span>
             </div>
           </div>
         )}

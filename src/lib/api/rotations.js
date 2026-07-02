@@ -1,12 +1,12 @@
 /**
- * Rotations service — tyre rotation schedule (tyre_rotations) plus the
+ * Rotations service - tyre rotation schedule (tyre_rotations) plus the
  * paginated tyre_records read the Rotation Compliance page runs to build its
  * analytics. Explicit column lists (no SELECT *), single boundary for the
  * tyre_rotations table as pages migrate off inline supabase.from(...) calls.
  *
  * Scoping mirrors the page exactly:
  *   - tyre_rotations  → null-safe country scoping (country OR NULL) via applyCountry
- *   - tyre_records    → STRICT country eq (matches the page's .eq('country', …))
+ *   - tyre_records    → STRICT country eq (matches the page's .eq('country', ...))
  */
 import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_client'
 
@@ -58,7 +58,7 @@ export async function deleteRotation(id) {
 /**
  * Fully-paged tyre_records read for rotation analytics: ascending by issue_date
  * with STRICT country scoping (exact match, no NULL inclusion) to match the
- * page's prior .eq('country', …) behaviour. Returns the complete dataset.
+ * page's prior .eq('country', ...) behaviour. Returns the complete dataset.
  * @param {{country?:string}} [opts]
  * @returns {Promise<Array>} all matching records
  */

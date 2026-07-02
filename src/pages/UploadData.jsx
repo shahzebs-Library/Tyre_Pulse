@@ -1079,7 +1079,7 @@ export default function UploadData() {
         // A bulk insert fails entirely if ONE row violates a constraint (bad
         // date, out-of-range number, etc.). Retry the batch row-by-row so the
         // good rows still land and only the genuinely-invalid rows are skipped
-        // and logged with their exact reason — no more "whole batch failed".
+        // and logged with their exact reason - no more "whole batch failed".
         for (let j = 0; j < batch.length; j++) {
           const { data: one, error: rowErr } = await supabase.from('tyre_records').insert(batch[j]).select('id')
           if (rowErr) { skipped += 1; skipLog.push({ row: i + j + 1, serial_no: batch[j].serial_no ?? null, error: rowErr.message }) }
@@ -1225,7 +1225,7 @@ export default function UploadData() {
                         <span className="text-green-500 text-xs mt-0.5 flex-shrink-0">✓</span>
                         <div>
                           <span className="text-xs font-semibold text-gray-300">{f.label}</span>
-                          <p className="text-xs text-gray-600 leading-tight">{f.guesses.slice(0,3).join(', ')}…</p>
+                          <p className="text-xs text-gray-600 leading-tight">{f.guesses.slice(0,3).join(', ')}...</p>
                         </div>
                       </div>
                     ))}
@@ -1414,7 +1414,7 @@ export default function UploadData() {
                   <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
                     className="input text-xs pl-7 py-1.5 w-36"
-                    placeholder="Filter fields…"
+                    placeholder="Filter fields..."
                     value={searchMapping}
                     onChange={e => setSearchMapping(e.target.value)}
                   />
@@ -1770,7 +1770,7 @@ export default function UploadData() {
             )}
             {result.skipLog?.length > 0 && (
               <details className="text-sm text-gray-400 mb-4">
-                <summary className="cursor-pointer text-yellow-400">View error log ({result.skipLog.length} row(s) skipped — see reason per row)</summary>
+                <summary className="cursor-pointer text-yellow-400">View error log ({result.skipLog.length} row(s) skipped - see reason per row)</summary>
                 <pre className="mt-2 bg-gray-800 rounded p-3 text-xs overflow-auto">{JSON.stringify(result.skipLog, null, 2)}</pre>
               </details>
             )}

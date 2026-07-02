@@ -57,7 +57,7 @@ describe('runPostImportAutomation', () => {
     expect(h.state.inserts.alerts).toBeUndefined()
   })
 
-  it('is idempotent — skips an asset that already has an active alert', async () => {
+  it('is idempotent - skips an asset that already has an active alert', async () => {
     h.state.tables.import_rows = { data: [row({ t: { asset_no: 'A1', tread_depth: 2 } })], error: null }
     h.state.tables.alerts = { data: [{ asset_no: 'A1' }], error: null }
     const res = await runPostImportAutomation('b1', 'tyre', {})

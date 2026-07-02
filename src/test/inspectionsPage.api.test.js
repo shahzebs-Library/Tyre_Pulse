@@ -41,7 +41,7 @@ beforeEach(() => {
   h.state.last = null
 })
 
-describe('inspections page service — listInspectionsForPage', () => {
+describe('inspections page service - listInspectionsForPage', () => {
   it('selects wide PAGE_COLS, orders scheduled_date desc, ranges, and scopes', async () => {
     await inspectionsApi.listInspectionsForPage({ from: 0, to: 999, country: 'Oman', createdBy: 'u1' })
     const c = h.state.last._calls
@@ -75,7 +75,7 @@ describe('inspections page service — listInspectionsForPage', () => {
   })
 })
 
-describe('inspections page service — getInspectionForPage', () => {
+describe('inspections page service - getInspectionForPage', () => {
   it('looks up by id via single() and unwraps data', async () => {
     h.state.result = { data: { id: 'i1', tyre_conditions: [] }, error: null }
     const row = await inspectionsApi.getInspectionForPage('i1')
@@ -91,7 +91,7 @@ describe('inspections page service — getInspectionForPage', () => {
   })
 })
 
-describe('inspections page service — patchInspection', () => {
+describe('inspections page service - patchInspection', () => {
   it('passes the patch and scopes by id, without a returning select', async () => {
     await inspectionsApi.patchInspection('i1', { status: 'Done', linked_action_id: 'ca1' })
     expect(h.state.last._calls.update).toEqual({ status: 'Done', linked_action_id: 'ca1' })
@@ -100,7 +100,7 @@ describe('inspections page service — patchInspection', () => {
   })
 })
 
-describe('inspections page service — insert/delete', () => {
+describe('inspections page service - insert/delete', () => {
   it('insertInspection inserts without a returning select', async () => {
     await inspectionsApi.insertInspection({ title: 'T' })
     expect(h.state.last._calls.insert).toEqual({ title: 'T' })
@@ -122,7 +122,7 @@ describe('inspections page service — insert/delete', () => {
   })
 })
 
-describe('inspections page service — vehicle_fleet helpers', () => {
+describe('inspections page service - vehicle_fleet helpers', () => {
   it('listInspectionVehicles reads site/asset_no/vehicle_type from vehicle_fleet', async () => {
     h.state.result = { data: [{ site: 'S1', asset_no: 'A1', vehicle_type: 'Bus' }], error: null }
     const rows = await inspectionsApi.listInspectionVehicles()

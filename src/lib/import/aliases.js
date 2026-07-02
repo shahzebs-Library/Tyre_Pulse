@@ -1,14 +1,14 @@
 /**
- * Import Center — master-data alias rewriting (directive Section 9).
+ * Import Center - master-data alias rewriting (directive Section 9).
  *
  * Pure, network-free helpers that normalise inconsistent master-data spellings
  * (e.g. "Qiddiya-1" / "QD G1" → "Qiddiya G1", "Bridge Stone" → "Bridgestone")
  * to canonical values during import. Unmatched values pass through EXACTLY as-is
- * — aliases never auto-create master records and never blank a value.
+ * - aliases never auto-create master records and never blank a value.
  *
  * A caller loads the org/country aliases once (imports.listAliases), builds an
  * O(1) lookup map per entity_type with buildAliasMap, then rewrites rows with
- * applyAliases — no per-row round-trips.
+ * applyAliases - no per-row round-trips.
  *
  * @module import/aliases
  */

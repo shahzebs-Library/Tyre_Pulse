@@ -1,5 +1,5 @@
 /**
- * DailyOps reads — the exact date-windowed selects the Daily Ops board consumes.
+ * DailyOps reads - the exact date-windowed selects the Daily Ops board consumes.
  * Read-only; each returns the raw Supabase / fetchAllPages result the page reads
  * via `.data` inside a Promise.allSettled (so a single failing source never
  * blanks the whole board).

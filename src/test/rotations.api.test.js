@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Chainable, thenable Supabase mock (mirrors src/test/api.test.js) with a
-// range() method so fetchAllPages — used by listRotationRecords — resolves.
+// range() method so fetchAllPages - used by listRotationRecords - resolves.
 const h = vi.hoisted(() => {
   const state = { result: { data: [], error: null }, last: null }
   function from(table) {
@@ -38,7 +38,7 @@ beforeEach(() => {
   h.state.last = null
 })
 
-describe('service layer — rotations (tyre_rotations)', () => {
+describe('service layer - rotations (tyre_rotations)', () => {
   it('lists from tyre_rotations with null-safe country scoping', async () => {
     h.state.result = { data: [{ id: 'r1', asset_no: 'V-1' }], error: null }
     const rows = await rotations.listRotations({ country: 'KSA' })

@@ -1,4 +1,4 @@
-# Data Intake Center — Migration Plan (Phase 0)
+# Data Intake Center - Migration Plan (Phase 0)
 
 > **Scope.** The phased rollout of the Multi-Country Data Intake Center per
 > `Data correction.md` §23. The DB foundation (Phase 1) is **already on `main`**
@@ -19,11 +19,11 @@
 | Phase | Deliverable | Status |
 |---|---|---|
 | **0** | Phase-0 docs (audit, data model, security, migration, test cases) | **This PR** |
-| **1** | Staging schema + commit framework | **DONE** — `import_files/batches/batch_sheets/rows/row_issues/mapping_profiles/mapping_rules/attachment_matches/custom_field_catalog/import_audit_events` (V45); `import_commit_batch/import_reverse_batch/import_reprocess_row/import_target_table` (V46); private `import-files` bucket |
-| **1b** | Country-scope gate + role-based approval RPC + PWA cache exclusions + shared parse/map/validate engine (`src/lib/import/*`) | **Next** — closes the §6 gaps in the audit / §3–§6 of the security plan |
-| **2** | Priority adapters: **Fleet → Tyre → Stock** | **DONE** — engine wired end-to-end for all 3 (parse→map→validate→in-batch+**live-table** dedup→commit); `import_existing_keys` RPC (V47) skips re-imports of existing live records; legacy uploaders (FleetMaster/StockManagement/UploadData) route into the engine via `?module=`; reconciliation report on history; 421 tests incl. Arabic-header/cross-country/dup-serial-as-event/negative-stock scenarios |
-| **3** | Accidents + attachments (ZIP packages, private docs) | **DONE** — accident adapter (ACCIDENT_FIELDS EN+AR synonyms, financial-integrity validation, country+claim_no/police_report_no natural key), live-dedup branch (V48), ZIP evidence ingestion (`attachments.js` extract+match by claim/police/asset → private `import-files` bucket → `import_attachment_matches`), legacy `Accidents.jsx` routed into engine; 450 tests |
-| **4** | Remaining: inspections, work orders, warranty, suppliers, drivers, gate pass, GPS/ERP, custom | **DONE** (live-target modules) — inspection/workorder/warranty/gatepass adapters (canonical fields EN+AR, validation incl. warranty removal-before-fitment & WO total<components, natural keys), live-dedup branches (V49), legacy pages (Inspections/WorkOrders/WarrantyTracker/GatePass) routed into engine; 498 tests. **Suppliers + Drivers now LIVE** — V50 added `suppliers` + `drivers` master tables (org/country-scoped, RLS), wired as full adapters (canonical fields, dedup, legacy pages routed in). **Still staging-only:** GPS/ERP + custom (source-defined / preserved in custom_data catalog — no fixed target table by design). |
+| **1** | Staging schema + commit framework | **DONE** - `import_files/batches/batch_sheets/rows/row_issues/mapping_profiles/mapping_rules/attachment_matches/custom_field_catalog/import_audit_events` (V45); `import_commit_batch/import_reverse_batch/import_reprocess_row/import_target_table` (V46); private `import-files` bucket |
+| **1b** | Country-scope gate + role-based approval RPC + PWA cache exclusions + shared parse/map/validate engine (`src/lib/import/*`) | **Next** - closes the §6 gaps in the audit / §3-§6 of the security plan |
+| **2** | Priority adapters: **Fleet → Tyre → Stock** | **DONE** - engine wired end-to-end for all 3 (parse→map→validate→in-batch+**live-table** dedup→commit); `import_existing_keys` RPC (V47) skips re-imports of existing live records; legacy uploaders (FleetMaster/StockManagement/UploadData) route into the engine via `?module=`; reconciliation report on history; 421 tests incl. Arabic-header/cross-country/dup-serial-as-event/negative-stock scenarios |
+| **3** | Accidents + attachments (ZIP packages, private docs) | **DONE** - accident adapter (ACCIDENT_FIELDS EN+AR synonyms, financial-integrity validation, country+claim_no/police_report_no natural key), live-dedup branch (V48), ZIP evidence ingestion (`attachments.js` extract+match by claim/police/asset → private `import-files` bucket → `import_attachment_matches`), legacy `Accidents.jsx` routed into engine; 450 tests |
+| **4** | Remaining: inspections, work orders, warranty, suppliers, drivers, gate pass, GPS/ERP, custom | **DONE** (live-target modules) - inspection/workorder/warranty/gatepass adapters (canonical fields EN+AR, validation incl. warranty removal-before-fitment & WO total<components, natural keys), live-dedup branches (V49), legacy pages (Inspections/WorkOrders/WarrantyTracker/GatePass) routed into engine; 498 tests. **Suppliers + Drivers now LIVE** - V50 added `suppliers` + `drivers` master tables (org/country-scoped, RLS), wired as full adapters (canonical fields, dedup, legacy pages routed in). **Still staging-only:** GPS/ERP + custom (source-defined / preserved in custom_data catalog - no fixed target table by design). |
 
 Ordering rationale: Fleet first (simplest natural key, feeds asset references),
 Tyre second (richest legacy uploader to preserve), Stock third (financial
@@ -37,20 +37,20 @@ pipeline. Phase 4 modules reuse the same adapter pattern with no new schema.
 Each adapter is a small declarative module under `src/lib/import/adapters/<module>.js`
 plus a `target` entry in `import_target_table()`. It defines:
 
-1. **Canonical field map** — source synonyms (EN/AR) → canonical target columns.
-2. **Natural key** — module-specific, **always org + country scoped**.
-3. **Validation rules** — required fields, ranges, cross-field, ambiguity flags.
-4. **Approval policy** — auto vs required, and which role (from the security plan).
-5. **Commit** — staged rows go live **only** via `import_commit_batch()` (V46).
-6. **Reconciliation** — counts/spot-checks vs the legacy importer before cutover.
-7. **Rollback** — `import_reverse_batch()` removes only this batch's rows.
+1. **Canonical field map** - source synonyms (EN/AR) → canonical target columns.
+2. **Natural key** - module-specific, **always org + country scoped**.
+3. **Validation rules** - required fields, ranges, cross-field, ambiguity flags.
+4. **Approval policy** - auto vs required, and which role (from the security plan).
+5. **Commit** - staged rows go live **only** via `import_commit_batch()` (V46).
+6. **Reconciliation** - counts/spot-checks vs the legacy importer before cutover.
+7. **Rollback** - `import_reverse_batch()` removes only this batch's rows.
 
 The engine (parse → map → stage → validate → review → approve → commit) is shared;
 adapters supply only the module-specific map/key/rules.
 
 ---
 
-## 3. Phase 2 — priority adapters
+## 3. Phase 2 - priority adapters
 
 ### 3.1 Fleet / Asset Master  → `vehicle_fleet`
 
@@ -67,7 +67,7 @@ adapters supply only the module-specific map/key/rules.
 
 | Aspect | Definition |
 |---|---|
-| Canonical map | Reuse the existing strong synonyms from `UploadData.jsx` (fuzzy + Arabic + `field_synonyms`). Importer must first **classify the file** (master list / lifecycle event / stock opening / supplier delivery / inspection / warranty) — not every serial row is the same record type. |
+| Canonical map | Reuse the existing strong synonyms from `UploadData.jsx` (fuzzy + Arabic + `field_synonyms`). Importer must first **classify the file** (master list / lifecycle event / stock opening / supplier delivery / inspection / warranty) - not every serial row is the same record type. |
 | Natural key | Master: `org + country + tyre_serial`. Event: `tyre_serial + asset + event_type + event_date + source_doc/job_card`. |
 | Validation | Serial required; fitted-before-manufacture/purchase blocked; removal-mileage < fitment-mileage blocked; missing cost flagged |
 | Approval | Lifecycle event auto-commits **only when no conflict**; else review |
@@ -87,7 +87,7 @@ adapters supply only the module-specific map/key/rules.
 
 ---
 
-## 4. Phase 3 — accidents + attachments
+## 4. Phase 3 - accidents + attachments
 
 | Aspect | Definition |
 |---|---|
@@ -98,7 +98,7 @@ adapters supply only the module-specific map/key/rules.
 | Natural key | `country/company + accident_no` **or** `claim_no`; if absent → review match on `asset + date + driver + site + approx cost` |
 | Validation | actual cost > approved → flag; recovery > claim → block; missing estimate/invoice/approval/closure → follow-up task |
 | Approval | **Required** (Manager + Finance for cost); never auto-post |
-| Post-commit value | claim follow-up tasks, overdue/unrecovered flags, link tyre/wheel damage to tyre lifecycle, link downtime to asset history — all linked to batch + source row |
+| Post-commit value | claim follow-up tasks, overdue/unrecovered flags, link tyre/wheel damage to tyre lifecycle, link downtime to asset history - all linked to batch + source row |
 | Rollback | `import_reverse_batch`; attachments retained per retention policy |
 
 Urgent field accident reporting stays separate/fast but reuses the same data
@@ -106,7 +106,7 @@ model, validation, private-file rules, and audit trail.
 
 ---
 
-## 5. Phase 4 — remaining adapters (same pattern)
+## 5. Phase 4 - remaining adapters (same pattern)
 
 | Module | Target table | Natural key (org+country scoped) | Approval |
 |---|---|---|---|
@@ -117,7 +117,7 @@ model, validation, private-file rules, and audit trail.
 | Drivers | (driver master) | `org + country + driver_id` | Operational |
 | Gate pass | `gate_passes` | `gatepass_no + country` | Operational |
 | GPS / ERP | staging only / integration | source-defined | Auto after profile approval |
-| Custom | staging only | n/a — preserved in `custom_data` + catalog | n/a |
+| Custom | staging only | n/a - preserved in `custom_data` + catalog | n/a |
 
 Modules without a live target in `import_target_table()` stay in staging and are
 surfaced via the Custom Field Catalogue until promoted.
@@ -131,7 +131,7 @@ surfaced via the Custom Field Catalogue until promoted.
 | Legacy history readable | `pending_uploads`, `column_mappings`, `field_synonyms`, `upload_history` are **untouched** by V45/V46 |
 | No uploader broken before replacement | Each legacy uploader (`UploadData.jsx`, `FleetMaster.jsx`, `StockManagement.jsx`, `Accidents.jsx`) stays live until its adapter is reconciled, then is switched to open the shared engine with the module pre-selected |
 | No schema rename/drop pre-migration | Additive only; cutover per module after reconciliation passes |
-| Rollback safety | `import_reverse_batch()` deletes only rows linked via `target_record_id` — never later valid business activity (Test Case 14) |
+| Rollback safety | `import_reverse_batch()` deletes only rows linked via `target_record_id` - never later valid business activity (Test Case 14) |
 | Green build maintained | Web build/tests + mobile typecheck must stay green at every phase boundary (Test Case 15) |
 
 ---

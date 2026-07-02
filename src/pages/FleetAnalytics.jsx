@@ -88,7 +88,7 @@ export default function FleetAnalytics() {
 
   if (loading) return (
     <div className="space-y-5">
-      <PageHeader title="Fleet Analytics" subtitle="Loading fleet data…" icon={BarChart2} />
+      <PageHeader title="Fleet Analytics" subtitle="Loading fleet data..." icon={BarChart2} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => <div key={i} className="card animate-pulse h-24 bg-gray-800/40" />)}
       </div>
@@ -158,7 +158,7 @@ export default function FleetAnalytics() {
         <div className="flex flex-wrap gap-3 mb-3">
           <input
             className="input flex-1 min-w-48"
-            placeholder="Search asset number…"
+            placeholder="Search asset number..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />

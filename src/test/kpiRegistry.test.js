@@ -5,7 +5,7 @@ import * as analyticsEngine from '../lib/analyticsEngine'
 
 const REQUIRED = ['key', 'name', 'definition', 'formula', 'unit', 'sourceTables', 'filters', 'target', 'owner', 'direction']
 
-describe('KPI registry — integrity', () => {
+describe('KPI registry - integrity', () => {
   it('has the 12 core KPIs with unique keys', () => {
     expect(KPI_REGISTRY.length).toBe(12)
     const keys = KPI_REGISTRY.map((k) => k.key)

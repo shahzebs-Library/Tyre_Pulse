@@ -10,9 +10,9 @@ import { naturalKey } from '../lib/import'
  * row against the set of keys already present in the live table and skips it.
  */
 
-const SEP = String.fromCharCode(1) // keyParts() part separator (U+0001) — must match SQL chr(1)
+const SEP = String.fromCharCode(1) // keyParts() part separator (U+0001) - must match SQL chr(1)
 
-describe('naturalKey — module key construction', () => {
+describe('naturalKey - module key construction', () => {
   it('fleet key = norm(country) | norm(asset_no)', () => {
     expect(naturalKey({ country: 'KSA', asset_no: 'V-100' }, 'fleet')).toBe(`ksa${SEP}v-100`)
     // whitespace + case are normalised identically to the SQL norm()
@@ -66,7 +66,7 @@ function applyLiveDedup(rows, liveKeys, module) {
   })
 }
 
-describe('live dedup — skip transformation', () => {
+describe('live dedup - skip transformation', () => {
   const module = 'fleet'
   const live = new Set([naturalKey({ country: 'KSA', asset_no: 'V-100' }, module)])
 

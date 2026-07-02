@@ -1,5 +1,5 @@
 /**
- * Import Center — accident ZIP attachment ingestion & matching (Phase 3).
+ * Import Center - accident ZIP attachment ingestion & matching (Phase 3).
  *
  * An operator uploads a `.zip` evidence package (photos / police reports /
  * invoices / quotations / insurance docs) for an ACCIDENT import. We:
@@ -11,7 +11,7 @@
  *      in `import_attachment_matches`.
  *
  * Pure, deterministic helpers live here; all I/O (storage upload, DB insert)
- * stays in `src/lib/api/imports.js`. Unmatched files are NEVER dropped — they
+ * stays in `src/lib/api/imports.js`. Unmatched files are NEVER dropped - they
  * are uploaded and recorded with status 'unmatched' so evidence is preserved
  * and can be reconciled later.
  *
@@ -24,7 +24,7 @@ export const MAX_FILE_BYTES = 25 * 1024 * 1024
 export const MAX_ENTRIES = 500
 /**
  * Extensions we accept inside the evidence package. Nested ZIPs are intentionally
- * NOT recursed — a `.zip` entry is rejected with a warning rather than expanded,
+ * NOT recursed - a `.zip` entry is rejected with a warning rather than expanded,
  * to bound work and avoid zip-bomb amplification.
  * @type {ReadonlyArray<string>}
  */
@@ -33,7 +33,7 @@ export const ALLOWED_EXTENSIONS = Object.freeze([
 ])
 
 /**
- * MIME hints by extension — best-effort content type for the storage upload.
+ * MIME hints by extension - best-effort content type for the storage upload.
  * @type {Record<string,string>}
  */
 const MIME_BY_EXT = {
@@ -74,7 +74,7 @@ function baseName(path) {
 
 /**
  * True for ZIP entries we must ignore regardless of extension: directories,
- * macOS resource forks (`__MACOSX/…`, `._foo`), and dotfiles (`.DS_Store`).
+ * macOS resource forks (`__MACOSX/...`, `._foo`), and dotfiles (`.DS_Store`).
  * @param {string} path
  * @param {boolean} isDir
  */
@@ -91,7 +91,7 @@ function isJunkEntry(path, isDir) {
 /**
  * Read a ZIP File/Blob entirely in the browser and return the in-spec files
  * plus a collected list of warnings for everything skipped. Never throws on a
- * bad individual entry — only on a structurally unreadable ZIP.
+ * bad individual entry - only on a structurally unreadable ZIP.
  *
  * Caps applied (in order): junk filtered → extension allow-list → per-file size
  * → total entry count. The entry-count cap counts only accepted files.
@@ -127,26 +127,26 @@ export async function extractZip(file) {
     const ext = extOf(name)
 
     if (!ext) {
-      warnings.push(`Skipped "${name}" — no file extension.`)
+      warnings.push(`Skipped "${name}" - no file extension.`)
       continue
     }
     if (ext === 'zip') {
-      warnings.push(`Skipped "${name}" — nested ZIP archives are not expanded.`)
+      warnings.push(`Skipped "${name}" - nested ZIP archives are not expanded.`)
       continue
     }
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      warnings.push(`Skipped "${name}" — .${ext} files are not allowed.`)
+      warnings.push(`Skipped "${name}" - .${ext} files are not allowed.`)
       continue
     }
 
     const declaredSize = entry._data?.uncompressedSize
     if (typeof declaredSize === 'number' && declaredSize > MAX_FILE_BYTES) {
-      warnings.push(`Skipped "${name}" — ${formatMB(declaredSize)} exceeds the ${formatMB(MAX_FILE_BYTES)} per-file limit.`)
+      warnings.push(`Skipped "${name}" - ${formatMB(declaredSize)} exceeds the ${formatMB(MAX_FILE_BYTES)} per-file limit.`)
       continue
     }
 
     if (files.length >= MAX_ENTRIES) {
-      warnings.push(`Stopped after ${MAX_ENTRIES} files — the archive contains more; remaining entries were skipped.`)
+      warnings.push(`Stopped after ${MAX_ENTRIES} files - the archive contains more; remaining entries were skipped.`)
       break
     }
 
@@ -154,13 +154,13 @@ export async function extractZip(file) {
     try {
       blob = await entry.async('blob')
     } catch (err) {
-      warnings.push(`Skipped "${name}" — could not read entry (${err?.message || 'unknown error'}).`)
+      warnings.push(`Skipped "${name}" - could not read entry (${err?.message || 'unknown error'}).`)
       continue
     }
 
     const sizeBytes = blob.size
     if (sizeBytes > MAX_FILE_BYTES) {
-      warnings.push(`Skipped "${name}" — ${formatMB(sizeBytes)} exceeds the ${formatMB(MAX_FILE_BYTES)} per-file limit.`)
+      warnings.push(`Skipped "${name}" - ${formatMB(sizeBytes)} exceeds the ${formatMB(MAX_FILE_BYTES)} per-file limit.`)
       continue
     }
 
@@ -218,7 +218,7 @@ export const MATCH_FIELDS = Object.freeze([
  * then police report no, then asset no. Comparison is on the normalised
  * identifier (case-insensitive, separators ignored): a row's identifier is a
  * match when it appears as a substring of the normalised filename (this is how
- * operators name evidence — e.g. "claim 12345 front.jpg"). Longer identifiers
+ * operators name evidence - e.g. "claim 12345 front.jpg"). Longer identifiers
  * win ties so a 3-char asset no never shadows a full claim no.
  *
  * Staged rows are the wizard's annotated rows; the matchable identifiers live in
@@ -256,8 +256,8 @@ export function matchAttachment(filename, rows) {
 }
 
 /**
- * A candidate beats the incumbent when its field has higher priority, or — at
- * equal priority — when its matched identifier is longer (more specific).
+ * A candidate beats the incumbent when its field has higher priority, or - at
+ * equal priority - when its matched identifier is longer (more specific).
  */
 function isBetterMatch(candidate, incumbent) {
   if (!incumbent) return true
@@ -314,7 +314,7 @@ export function buildMatchRows({ batchId, items, rows }) {
 
 /**
  * The natural identifier of the matched accident row (claim no preferred, then
- * police report, then asset no) — stored as `matched_entity_id` text since the
+ * police report, then asset no) - stored as `matched_entity_id` text since the
  * row is still in staging (no live UUID yet).
  */
 function resolveEntityId(row, match) {

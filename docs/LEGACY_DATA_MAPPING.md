@@ -33,7 +33,7 @@ Every canonical row carries a tenant path (`org_id`, `country_id`, `project_id`,
 7. **Read-only hold**: legacy table set read-only (revoke INSERT/UPDATE/DELETE), retained ≥ 1 validation cycle.
 8. **Rollback**: re-point clients to legacy (still intact); investigate; no data loss because legacy was never mutated.
 
-Reconciliation passes only when: `new_count == old_count − duplicates_collapsed − intentional_drops` **and** `failures == 0` **and** `unmapped == 0`.
+Reconciliation passes only when: `new_count == old_count - duplicates_collapsed - intentional_drops` **and** `failures == 0` **and** `unmapped == 0`.
 
 ---
 

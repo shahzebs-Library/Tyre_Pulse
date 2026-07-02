@@ -156,7 +156,7 @@ export function layoutCodes(key) {
 
 // ── Legacy diagram-ID → canonical code ─────────────────────────────────────────
 // The inspection diagram / checklist store stable internal tyre IDs (FL, RLo,
-// R1Lo …). Those IDs are reused across vehicle types with different meanings,
+// R1Lo ...). Those IDs are reused across vehicle types with different meanings,
 // so the mapping is type-aware. This converts an internal ID to the display
 // code in the GCC scheme without changing the stored key (preserves history
 // and diagram hit-testing).

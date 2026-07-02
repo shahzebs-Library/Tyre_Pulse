@@ -1,5 +1,5 @@
 /**
- * Alert Thresholds service — alert_thresholds records. Personal notification
+ * Alert Thresholds service - alert_thresholds records. Personal notification
  * rules scoped to the signed-in user. Explicit column lists (no SELECT *);
  * additive, mirrors correctiveActions.js. Single boundary for this table as the
  * AlertThresholds page migrates onto it.

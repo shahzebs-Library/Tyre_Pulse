@@ -1,5 +1,5 @@
 /**
- * Import Center — accident & insurance adapter test matrix (Phase 3).
+ * Import Center - accident & insurance adapter test matrix (Phase 3).
  *
  * Exercises the REAL pure pipeline functions for the accident module: Arabic
  * header mapping, financial-integrity validation, claim/police-report dedup, and
@@ -24,7 +24,7 @@ function buildAccidentRow(rawRow, mapping) {
   return transformed
 }
 
-describe('accident adapter — Arabic header mapping', () => {
+describe('accident adapter - Arabic header mapping', () => {
   it('resolves Arabic accident headers via exactAlias', () => {
     expect(exactAlias('رقم المطالبة', 'accident')).toBe('insurance_claim_no')
     expect(exactAlias('تاريخ الحادث', 'accident')).toBe('incident_date')
@@ -49,7 +49,7 @@ describe('accident adapter — Arabic header mapping', () => {
   })
 })
 
-describe('accident adapter — financial integrity (validateRow)', () => {
+describe('accident adapter - financial integrity (validateRow)', () => {
   const baseMapping = [
     { sourceHeader: 'Asset No', target: 'asset_no' },
     { sourceHeader: 'Incident Date', target: 'incident_date' },
@@ -158,7 +158,7 @@ describe('accident adapter — financial integrity (validateRow)', () => {
   })
 })
 
-describe('accident adapter — duplicate classification', () => {
+describe('accident adapter - duplicate classification', () => {
   it('same country + same claim_no → duplicate', () => {
     const rows = [
       { country: 'KSA', insurance_claim_no: 'CL-100', asset_no: 'V-1', incident_date: '2024-01-12', claim_amount: 1000 },
@@ -199,7 +199,7 @@ describe('accident adapter — duplicate classification', () => {
   })
 })
 
-describe('accident adapter — natural key', () => {
+describe('accident adapter - natural key', () => {
   it('uses claim_no when present', () => {
     expect(naturalKey({ country: 'KSA', insurance_claim_no: 'CL-1' }, 'accident')).not.toBeNull()
   })

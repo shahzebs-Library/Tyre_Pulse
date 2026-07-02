@@ -132,7 +132,7 @@ This installs the full data processing engine at the database level:
 
 | Component | What it does |
 |---|---|
-| **`brand_aliases` table** | Canonical brand name lookup (Bridgestone, Michelin, Goodyear …) |
+| **`brand_aliases` table** | Canonical brand name lookup (Bridgestone, Michelin, Goodyear ...) |
 | **`normalize_brand()`** | Cleans any brand alias → canonical name on every insert/update |
 | **`normalize_site()`** | Trims and title-cases site names |
 | **`normalize_country()`** | Maps KSA/SA/Saudi Arabia → 'KSA', UAE/Dubai → 'UAE', Egypt/Cairo → 'Egypt' |

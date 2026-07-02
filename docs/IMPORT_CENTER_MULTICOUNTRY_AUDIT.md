@@ -1,4 +1,4 @@
-# Data Intake Center — Multi-Country Import Audit (Phase 0)
+# Data Intake Center - Multi-Country Import Audit (Phase 0)
 
 > **Scope.** Read-only audit of the *current* import situation across the TyrePulse
 > platform, and what the new **Multi-Country Data Intake Center** (`Data correction.md`)
@@ -34,14 +34,14 @@ baseline for the migration (Phase 2+).
 
 ---
 
-## 2. Current importers — inventory
+## 2. Current importers - inventory
 
 | Importer | File | Mechanism | Raw preservation | Direct live insert? | Country/org scope |
 |---|---|---|---|---|---|
-| **Tyre upload** (strongest) | `src/pages/UploadData.jsx` (~1,724 lines) | Client parse → smart map → preview → dup review → `pending_uploads` + `tyre_records.insert` / `stock_records.insert` | Partial — unmapped cols → `tyre_records.extra_fields` (capped 50 keys); whole staged set → `pending_uploads.rows` (one JSON blob) | **Yes** (`tyre_records`, `stock_records` chunked inserts) | `country` is free text on `upload_history`; no org scope |
-| **Fleet Master** | `src/pages/FleetMaster.jsx` | Client parse → fixed header map → `vehicle_fleet.upsert(onConflict:'asset_no')` | **None** — unmapped columns dropped | **Yes** (`vehicle_fleet`) | `asset_no` conflict key is **global** — collides across countries |
+| **Tyre upload** (strongest) | `src/pages/UploadData.jsx` (~1,724 lines) | Client parse → smart map → preview → dup review → `pending_uploads` + `tyre_records.insert` / `stock_records.insert` | Partial - unmapped cols → `tyre_records.extra_fields` (capped 50 keys); whole staged set → `pending_uploads.rows` (one JSON blob) | **Yes** (`tyre_records`, `stock_records` chunked inserts) | `country` is free text on `upload_history`; no org scope |
+| **Fleet Master** | `src/pages/FleetMaster.jsx` | Client parse → fixed header map → `vehicle_fleet.upsert(onConflict:'asset_no')` | **None** - unmapped columns dropped | **Yes** (`vehicle_fleet`) | `asset_no` conflict key is **global** - collides across countries |
 | **Stock** | `src/pages/StockManagement.jsx` (+ stock path in `UploadData.jsx`) | Client → `stock_records.insert` + `stock_movements.insert` | **None** for unmapped cols | **Yes** (`stock_records`) | No org/country scope; balance writes unguarded |
-| **Accident bulk** | `src/pages/Accidents.jsx` | Fixed-column template → validate `_valid` flag → `accidents.insert(payload)` | **None** — only template columns kept; extras discarded | **Yes** (`accidents`) | No country scope; no attachment/ZIP package support |
+| **Accident bulk** | `src/pages/Accidents.jsx` | Fixed-column template → validate `_valid` flag → `accidents.insert(payload)` | **None** - only template columns kept; extras discarded | **Yes** (`accidents`) | No country scope; no attachment/ZIP package support |
 | **Mobile** | `mobile/app/*` (`recordQueue`) | Generic queued inserts directly to Supabase tables | None | **Yes** | Table-level RLS only |
 
 ### 2.1 What the tyre uploader does well (must be preserved, not lost)
@@ -50,7 +50,7 @@ baseline for the migration (Phase 2+).
 the bar the shared engine must meet or exceed:
 
 - **Smart mapping** with substring + Levenshtein fuzzy fallback and a confidence
-  score 0–100 (`smartMapping`, `matchScore`).
+  score 0-100 (`smartMapping`, `matchScore`).
 - **Arabic/English synonyms** and transliterations baked into the guess list
   (e.g. `Serial No.` / `رقم التسلسل`); user-defined permanent synonyms from
   `field_synonyms` score 100.
@@ -87,26 +87,26 @@ must lift them to this standard.
 |---|---|---|---|
 | C1 | **Unmapped columns dropped** in Fleet & Stock imports | `FleetMaster.jsx`, `StockManagement.jsx` | `import_rows.raw_source_data` + `custom_data` preserve every cell; `custom_field_catalog` surfaces them (V45) |
 | C2 | **Direct browser/mobile inserts into live tables** (no server guard) | all importers, `recordQueue` | `import_commit_batch()` SECURITY DEFINER RPC is the only commit path (V46); browser inserts to be retired per adapter |
-| C3 | **No country scope** — `asset_no` upsert is globally unique; same asset legitimately exists in 2 countries | `FleetMaster.jsx` (`onConflict:'asset_no'`) | `import_batches.country` (NOT NULL) + country-aware natural keys at commit; org isolation already RESTRICTIVE in RLS (V45) |
+| C3 | **No country scope** - `asset_no` upsert is globally unique; same asset legitimately exists in 2 countries | `FleetMaster.jsx` (`onConflict:'asset_no'`) | `import_batches.country` (NOT NULL) + country-aware natural keys at commit; org isolation already RESTRICTIVE in RLS (V45) |
 | C4 | **Original files not retained privately** | all importers | `import_files` (private `import-files` bucket, `sha256`, metadata-only DB) (V45) |
-| C5 | **Public URLs for accident attachments** | `Accidents.jsx` | Private bucket + signed URLs; path `org/country/module/batch/uuid` (V45 storage policies) — see `IMPORT_CENTER_SECURITY_PLAN.md` |
+| C5 | **Public URLs for accident attachments** | `Accidents.jsx` | Private bucket + signed URLs; path `org/country/module/batch/uuid` (V45 storage policies) - see `IMPORT_CENTER_SECURITY_PLAN.md` |
 
 ### 4.2 High (review quality / approval / provenance)
 
 | # | Gap | Where | Fixed by |
 |---|---|---|---|
-| H1 | **Single JSON blob staging** — no per-row review/issues | `pending_uploads.rows` | `import_rows` (per row) + `import_row_issues` (per field) (V45) |
-| H2 | **No approval workflow** — staged data goes live immediately | Fleet/Stock/Accident | `import_batches.approval_status`; commit blocked unless `approved` (V46) |
+| H1 | **Single JSON blob staging** - no per-row review/issues | `pending_uploads.rows` | `import_rows` (per row) + `import_row_issues` (per field) (V45) |
+| H2 | **No approval workflow** - staged data goes live immediately | Fleet/Stock/Accident | `import_batches.approval_status`; commit blocked unless `approved` (V46) |
 | H3 | **Mapping profile fingerprint too broad** | `column_mappings.fingerprint` | `import_mapping_profiles` keyed by module+source+country+company+fingerprint+**version** (V45) |
 | H4 | **No source-row → live-record link** | all importers | `import_rows.target_record_id` set on commit (V46); enables rollback/reprocess |
-| H5 | **No rollback** — a bad import cannot be reversed safely | all importers | `import_reverse_batch()` deletes only rows linked via `target_record_id` (V46) |
+| H5 | **No rollback** - a bad import cannot be reversed safely | all importers | `import_reverse_batch()` deletes only rows linked via `target_record_id` (V46) |
 | H6 | **Accident fixed columns + no ZIP** | `Accidents.jsx` bulk | `import_attachment_matches` (accident_no/claim_no/asset_no/source_doc/filename pattern) (V45); Phase 3 adapter |
 
 ### 4.3 Medium (consistency / observability / UX)
 
 | # | Gap | Where | Fixed by |
 |---|---|---|---|
-| M1 | **No multi-sheet identity** — sheets flattened | all importers | `import_batch_sheets` (sheet name/order/header/columns/summary) (V45) |
+| M1 | **No multi-sheet identity** - sheets flattened | all importers | `import_batch_sheets` (sheet name/order/header/columns/summary) (V45) |
 | M2 | **No import history/audit per action** | partial (`upload_history` tyre only) | `import_audit_events` (append-only) (V45) |
 | M3 | **Ambiguous dates / mixed units / currency** auto-imported | all importers | Profile carries `date_format`/`timezone`/`source_currency`/`unit_system`; validation engine flags ambiguity (Phase 1 engine) |
 | M4 | **No custom-field insight** for product decisions | none | `custom_field_catalog` (occurrence count, examples, promote/archive) (V45) |
@@ -119,10 +119,10 @@ must lift them to this standard.
 
 | Layer | Artefact | Status |
 |---|---|---|
-| Staging schema | `import_files`, `import_batches`, `import_batch_sheets`, `import_rows`, `import_row_issues`, `import_mapping_profiles`, `import_mapping_rules`, `import_attachment_matches`, `custom_field_catalog`, `import_audit_events` | **DONE — V45**, all org/country-scoped, RLS on every table (RESTRICTIVE org isolation + `is_approved_and_unlocked()` writes) |
-| Private storage | `import-files` bucket (private, 100 MB cap) + storage policies | **DONE — V45** |
-| Commit framework | `import_commit_batch()`, `import_reverse_batch()`, `import_reprocess_row()`, `import_target_table()` | **DONE — V46**, SECURITY DEFINER, org-scoped, atomic, idempotent, audited |
-| Legacy | `pending_uploads`, `column_mappings`, `field_synonyms`, `upload_history` | **Untouched** — remain readable; not yet retired |
+| Staging schema | `import_files`, `import_batches`, `import_batch_sheets`, `import_rows`, `import_row_issues`, `import_mapping_profiles`, `import_mapping_rules`, `import_attachment_matches`, `custom_field_catalog`, `import_audit_events` | **DONE - V45**, all org/country-scoped, RLS on every table (RESTRICTIVE org isolation + `is_approved_and_unlocked()` writes) |
+| Private storage | `import-files` bucket (private, 100 MB cap) + storage policies | **DONE - V45** |
+| Commit framework | `import_commit_batch()`, `import_reverse_batch()`, `import_reprocess_row()`, `import_target_table()` | **DONE - V46**, SECURITY DEFINER, org-scoped, atomic, idempotent, audited |
+| Legacy | `pending_uploads`, `column_mappings`, `field_synonyms`, `upload_history` | **Untouched** - remain readable; not yet retired |
 
 ---
 
@@ -142,7 +142,7 @@ they are **not** regressions, they are the remaining Phase 2+ work.
 3. **Reversal lacks an "unmodified-since-import" guard** (documented limitation in
    `IMPORT_CENTER_COMMIT_FRAMEWORK.md`).
 4. **Existing uploaders still write directly to live tables.** They stay in place
-   until each module's adapter replaces them (Phase 2–4); no destructive change
+   until each module's adapter replaces them (Phase 2-4); no destructive change
    until reconciliation per adapter is documented.
 
 ---

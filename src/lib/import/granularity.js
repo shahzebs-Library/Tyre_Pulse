@@ -1,5 +1,5 @@
 /**
- * Import Center — granularity / "wrong module" heuristic.
+ * Import Center - granularity / "wrong module" heuristic.
  *
  * When an uploaded file has a very high duplicate ratio against the module's
  * NATURAL KEY, the file is almost always at a FINER granularity than the module
@@ -23,7 +23,7 @@ import { MODULE_FIELDS } from './synonyms.js'
 export const WRONG_MODULE_THRESHOLD = 0.6
 
 /**
- * Natural-key field lists per module — kept in lockstep with the NATURAL_KEY
+ * Natural-key field lists per module - kept in lockstep with the NATURAL_KEY
  * extractors in validate.js. Used only to render a human-readable key label;
  * the actual keying is done by validate.naturalKey().
  * @type {Record<string, string[]>}

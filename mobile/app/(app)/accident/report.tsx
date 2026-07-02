@@ -33,7 +33,7 @@ const TYPES: AccidentType[] = [
 ]
 const SEVERITIES: AccidentSeverity[] = ['minor', 'moderate', 'severe', 'fatal']
 
-// A photo counts as "uploaded" once it holds a permanent reference — either a
+// A photo counts as "uploaded" once it holds a permanent reference - either a
 // private-bucket storage ref (tp-storage://, resolved to a signed URL on
 // display) or a legacy public URL. Empty strings are un-uploaded placeholders.
 // The old check only accepted http(s), which silently rejected every private
@@ -612,7 +612,7 @@ export default function AccidentReportScreen() {
             {photosUploading && (
               <View style={styles.uploadingRow}>
                 <ActivityIndicator size="small" color="#dc2626" />
-                <Text style={styles.uploadingText}>Uploading photo…</Text>
+                <Text style={styles.uploadingText}>Uploading photo...</Text>
               </View>
             )}
           </View>

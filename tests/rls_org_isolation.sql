@@ -3,7 +3,7 @@
 --
 -- Proves a user in org A cannot READ or WRITE another organisation's rows, and
 -- can still see their own org's rows (no over-blocking). Self-asserting: raises
--- an exception (non-zero exit) on any failure. Rolls back — leaves no data.
+-- an exception (non-zero exit) on any failure. Rolls back - leaves no data.
 --
 -- Run against a database where V42/V43 are applied and at least one profile
 -- exists in the default org:

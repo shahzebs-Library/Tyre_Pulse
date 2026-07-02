@@ -15,7 +15,7 @@ import {
   SUGGEST_THRESHOLD,
 } from '../lib/import'
 
-describe('import engine — synonyms & mapping', () => {
+describe('import engine - synonyms & mapping', () => {
   it('maps known English headers to canonical targets with high confidence', () => {
     const cols = ['Asset No', 'Tyre Serial', 'Site', 'Pressure (PSI)']
     const out = suggestMapping({ columns: cols, module: 'tyre' })
@@ -34,7 +34,7 @@ describe('import engine — synonyms & mapping', () => {
     expect(exactAlias('الموقع', 'tyre')).toBe('site')
   })
 
-  it('never discards an unmatched column — preserves it as custom', () => {
+  it('never discards an unmatched column - preserves it as custom', () => {
     const out = suggestMapping({ columns: ['Totally Unknown Column'], module: 'tyre' })
     expect(out[0].target).toBeNull()
     expect(out[0].action).toBe('preserve_custom')
@@ -59,7 +59,7 @@ describe('import engine — synonyms & mapping', () => {
       const byHeader = Object.fromEntries(out.map((m) => [m.sourceHeader, m]))
 
       // Acceptance: an identifier column is EITHER demoted to review/preserve_custom
-      // (so the wizard never pre-applies it), OR resolved to a non-currency field —
+      // (so the wizard never pre-applies it), OR resolved to a non-currency field -
       // never an auto/suggest map onto money.
       for (const h of ['Cost Center (100016)', 'Store Code']) {
         const m = byHeader[h]
@@ -106,7 +106,7 @@ describe('import engine — synonyms & mapping', () => {
   })
 })
 
-describe('import engine — transform', () => {
+describe('import engine - transform', () => {
   it('renames to targets, keeps custom, trims values', () => {
     const mapping = [
       { sourceHeader: 'Asset No', target: 'asset_no' },
@@ -122,7 +122,7 @@ describe('import engine — transform', () => {
   })
 })
 
-describe('import engine — work order mapping (real Gulf JC export)', () => {
+describe('import engine - work order mapping (real Gulf JC export)', () => {
   it('maps the key work-order columns to the right target columns', () => {
     const cols = [
       'Veh No.', 'Driver Name', 'Tracking Category', 'Location', 'Workshop Location',
@@ -174,7 +174,7 @@ describe('import engine — work order mapping (real Gulf JC export)', () => {
   })
 })
 
-describe('import engine — tyre spend derivation', () => {
+describe('import engine - tyre spend derivation', () => {
   it('maps quantity and derives the per-line total from qty × unit cost', () => {
     const mapping = [
       { sourceHeader: 'Serial', target: 'serial_no' },
@@ -203,7 +203,7 @@ describe('import engine — tyre spend derivation', () => {
   })
 })
 
-describe('import engine — country-scope guard', () => {
+describe('import engine - country-scope guard', () => {
   it('flags a row whose country differs from the selected import country', () => {
     expect(countryConflict({ country: 'UAE' }, 'KSA')).toBe(true)
     expect(countryConflict({ country: 'United Arab Emirates' }, 'KSA')).toBe(true)
@@ -218,7 +218,7 @@ describe('import engine — country-scope guard', () => {
   })
 })
 
-describe('import engine — validation', () => {
+describe('import engine - validation', () => {
   it('flags a missing required field as an error', () => {
     const res = validateRow({ brand: 'X' }, 'tyre') // no serial_no/asset_no
     expect(res.status).toBe('error')
@@ -234,7 +234,7 @@ describe('import engine — validation', () => {
   })
 })
 
-describe('import engine — duplicate classification', () => {
+describe('import engine - duplicate classification', () => {
   it('flags two rows sharing the natural key as duplicate', () => {
     expect(NATURAL_KEY.tyre).toBeTruthy()
     const rows = [
@@ -250,7 +250,7 @@ describe('import engine — duplicate classification', () => {
   })
 })
 
-describe('import engine — parsing helpers', () => {
+describe('import engine - parsing helpers', () => {
   it('parses delimited CSV text into rows of arrays', () => {
     const aoa = parseDelimitedText('Asset No,Serial\nV-1,SN1\nV-2,SN2')
     expect(Array.isArray(aoa)).toBe(true)

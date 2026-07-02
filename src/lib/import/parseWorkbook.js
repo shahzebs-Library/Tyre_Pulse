@@ -1,5 +1,5 @@
 /**
- * Import Center — workbook/CSV parser.
+ * Import Center - workbook/CSV parser.
  *
  * Pure, browser-friendly parsing engine for the Data Intake Center. Accepts an
  * ArrayBuffer, a Uint8Array, a string, or a Blob/File and returns a normalised,
@@ -17,7 +17,7 @@
  * @module import/parseWorkbook
  */
 
-// xlsx is ~420 KB — load it on the first parse, never with the page chunk.
+// xlsx is ~420 KB - load it on the first parse, never with the page chunk.
 // Module-level binding so the sync closures inside parseWorkbook() can use it
 // after the initial await.
 let XLSX
@@ -97,7 +97,7 @@ export function detectHeaderRow(aoa) {
     const avgLen = cells.filter(Boolean).reduce((a, c) => a + c.length, 0) / nonEmpty
 
     let below = 0
-    // Wide ERP grids often fill only a fraction of their columns per data row —
+    // Wide ERP grids often fill only a fraction of their columns per data row -
     // cap the "populated data row" bar at 8 cells so a 48-column header with
     // 14-cell data rows still qualifies.
     const belowBar = Math.max(2, Math.min(Math.ceil(nonEmpty * 0.5), 8))
@@ -204,11 +204,11 @@ export function parseDelimitedText(text) {
 /**
  * Remove report decoration that is not data:
  *  - any row containing a footer marker cell (GRAND TOTAL, Printed By/Date,
- *    Applied filters:, Page N of M, …) — these appear at the bottom of ERP
+ *    Applied filters:, Page N of M, ...) - these appear at the bottom of ERP
  *    grid exports and must never be uploaded as records;
  *  - TRAILING rows that are nearly empty (≤2 populated cells on a wide sheet),
  *    e.g. printed-date/employee-code stubs and free-text notes after the data.
- * Sparse rows in the middle of the data are kept — only the tail is pruned.
+ * Sparse rows in the middle of the data are kept - only the tail is pruned.
  *
  * @param {Array<Record<string,*>>} rows
  * @param {string[]} headers
@@ -220,7 +220,7 @@ export function stripFooterRows(rows, headers) {
   const filled = (row) => Object.values(row).filter((v) => v !== '' && v != null).length
 
   let out = rows.filter((r) => !isFooterMarker(r))
-  // prune the sparse tail (wide sheets only — a 2-column sheet is legitimately sparse)
+  // prune the sparse tail (wide sheets only - a 2-column sheet is legitimately sparse)
   if (headers.length >= 5) {
     let end = out.length
     while (end > 0 && filled(out[end - 1]) <= 2) end--
@@ -254,7 +254,7 @@ export function sheetFromAoa(aoa, name, sheetOrder, forcedHeaderRow = null) {
         const obj = {}
         headers.forEach((h, ci) => {
           const v = r ? r[ci] : undefined
-          // ERP grids pad cells to fixed width — trim string values so "TM556   "
+          // ERP grids pad cells to fixed width - trim string values so "TM556   "
           // matches "TM556" everywhere (mapping, dedupe, live keys).
           obj[h] = v === undefined ? '' : typeof v === 'string' ? v.trim() : v
         })
@@ -265,12 +265,12 @@ export function sheetFromAoa(aoa, name, sheetOrder, forcedHeaderRow = null) {
 
   let { headers, dataRows } = build(headerRow)
 
-  // Fallback 1 — detection yielded no data rows: use first populated row.
+  // Fallback 1 - detection yielded no data rows: use first populated row.
   if (forcedHeaderRow == null && dataRows.length === 0 && firstPopulated >= 0 && firstPopulated !== headerRow) {
     headerRow = firstPopulated
     ;({ headers, dataRows } = build(headerRow))
   }
-  // Fallback 2 — still nothing: take the densest of the first 30 rows.
+  // Fallback 2 - still nothing: take the densest of the first 30 rows.
   if (forcedHeaderRow == null && dataRows.length === 0 && firstPopulated >= 0) {
     let densest = firstPopulated
     let max = -1
@@ -298,7 +298,7 @@ export function sheetFromAoa(aoa, name, sheetOrder, forcedHeaderRow = null) {
  */
 async function toArrayBuffer(input) {
   if (input == null) throw new Error('parseWorkbook: empty input')
-  // Tag check instead of instanceof — buffers created in another realm
+  // Tag check instead of instanceof - buffers created in another realm
   // (Node fs in tests, iframes, workers) are still real ArrayBuffers.
   const tag = Object.prototype.toString.call(input)
   if (tag === '[object ArrayBuffer]' || tag === '[object SharedArrayBuffer]') return input
@@ -348,8 +348,8 @@ export async function parseWorkbook(arrayBufferOrFile, opts = {}) {
 
   /** Parse markup text (XML Spreadsheet 2003 / HTML grid) via SheetJS. */
   const asMarkup = (text) => {
-    // Some ERP exports (e.g. Ramco) wrap SpreadsheetML in an HTML <xml> island —
-    // hand SheetJS just the <Workbook>…</Workbook> so detection can't miss.
+    // Some ERP exports (e.g. Ramco) wrap SpreadsheetML in an HTML <xml> island -
+    // hand SheetJS just the <Workbook>...</Workbook> so detection can't miss.
     let payload = text
     if (SPREADSHEETML_RE.test(text) && !/^\s*<\?xml/i.test(text)) {
       const m = text.match(/<(?:\w+:)?Workbook[\s\S]*<\/(?:\w+:)?Workbook>/i)
@@ -370,7 +370,7 @@ export async function parseWorkbook(arrayBufferOrFile, opts = {}) {
     const text = new TextDecoder('utf-8').decode(bytes).replace(/^﻿/, '')
     if (!text.trim()) throw new Error('no text content')
     // "XML Spreadsheet 2003" and HTML-table .xls exports are text, but they are
-    // workbooks — route them to SheetJS instead of the CSV splitter.
+    // workbooks - route them to SheetJS instead of the CSV splitter.
     if (MARKUP_START_RE.test(text.slice(0, 512)) || SPREADSHEETML_RE.test(text.slice(0, 4096))) {
       return asMarkup(text)
     }
@@ -439,7 +439,7 @@ export async function sha256OfArrayBuffer(buf) {
     return toHex(digest)
   }
   // Deterministic non-crypto fallback (FNV-1a 64-bit) for environments without
-  // Web Crypto — still stable for dedupe within a session.
+  // Web Crypto - still stable for dedupe within a session.
   return fnv1a64Hex(data)
 }
 
@@ -476,7 +476,7 @@ function normaliseValueForHash(v) {
 /**
  * Stable fingerprint of a sheet's header set: normalised (trimmed, lowercased,
  * whitespace-collapsed), sorted, joined and hashed. Two exports of the same
- * report format collide even when column order or padding differs — used to
+ * report format collide even when column order or padding differs - used to
  * auto-apply the right saved mapping profile.
  *
  * @param {Array<string|{header:string}>} headers

@@ -1,6 +1,6 @@
 # UX & Navigation Plan
 
-**Status:** Phase 0 — planning.
+**Status:** Phase 0 - planning.
 **Track:** In-place hardening of the existing Vite + React 19 / React Router / Tailwind web app and Expo mobile app. No rewrite.
 **Goal:** Reduce ~78 web pages (`src/pages/`) with overlapping analytics/intelligence journeys into **8 clear workspaces**, without breaking routes or removing functionality.
 
@@ -8,7 +8,7 @@
 
 ## 1. Route-preservation & de-duplication rule
 
-> **Keep every existing route working.** Workspaces are a **navigation grouping**, not a routing rewrite. A duplicate journey is **only** removed after its replacement is confirmed to cover the same use case — never before.
+> **Keep every existing route working.** Workspaces are a **navigation grouping**, not a routing rewrite. A duplicate journey is **only** removed after its replacement is confirmed to cover the same use case - never before.
 
 | Rule | Behaviour |
 |---|---|
@@ -64,7 +64,7 @@ Users, settings, uploads, data hygiene, ERP, audit.
 | **Theme** | Consistent light/dark across all workspaces. No mismatched colours, random fonts, or inconsistent spacing. Strong contrast; readable tables. |
 | **RTL / Arabic** | Layout RTL-ready; directional styles, mirrored navigation, Arabic-capable typography. |
 | **Responsive** | Mobile, tablet, and desktop layouts for every workspace. |
-| **States** | Every data surface shows explicit empty, loading, and error states — no blank or thin screens. |
+| **States** | Every data surface shows explicit empty, loading, and error states - no blank or thin screens. |
 | **Fewer charts** | Remove decorative/redundant charts; keep charts that drive a decision. |
 | **Chart drill-down** | Every chart drills down to its **source records** (filtered table view), tied to the central KPI definition. |
 | **Large tables** | Search, filters, pagination, and virtualisation where row counts are high. |
@@ -76,7 +76,7 @@ Users, settings, uploads, data hygiene, ERP, audit.
 
 ## 4. Performance & navigation hygiene
 
-- **Lazy-load export libraries** (`xlsx`, `jspdf`, `pptxgenjs`) only when the user triggers an Excel/PDF/PowerPoint export — they are currently statically imported in web pages and inflate the bundle.
+- **Lazy-load export libraries** (`xlsx`, `jspdf`, `pptxgenjs`) only when the user triggers an Excel/PDF/PowerPoint export - they are currently statically imported in web pages and inflate the bundle.
 - Heavy KPI calculations move out of page components into SQL views / RPCs / scheduled snapshots / React Query caches; pages render retrieved results.
 - Workspace shells code-split per workspace so first paint loads only the active group.
 

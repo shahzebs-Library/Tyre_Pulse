@@ -143,7 +143,7 @@ export default function RecordsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Tyre Records</Text>
           <Text style={styles.subtitle}>
-            {loading ? 'Loading…' : `${total.toLocaleString()} record${total !== 1 ? 's' : ''}${elevated ? '' : ` · ${profile?.site ?? 'My site'}`}`}
+            {loading ? 'Loading...' : `${total.toLocaleString()} record${total !== 1 ? 's' : ''}${elevated ? '' : ` · ${profile?.site ?? 'My site'}`}`}
           </Text>
         </View>
         <TouchableOpacity
@@ -162,7 +162,7 @@ export default function RecordsScreen() {
         <Ionicons name="search-outline" size={16} color="#94a3b8" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search asset, serial, brand…"
+          placeholder="Search asset, serial, brand..."
           placeholderTextColor="#94a3b8"
           value={search}
           onChangeText={setSearch}

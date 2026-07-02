@@ -38,7 +38,7 @@ beforeEach(() => {
   h.state.last = null
 })
 
-describe('service layer — recalls', () => {
+describe('service layer - recalls', () => {
   it('lists from the recalls table, newest first, with no country filter', async () => {
     h.state.result = { data: [{ id: 'r1', recall_number: 'RCL-1' }], error: null }
     const rows = await recalls.listRecalls()

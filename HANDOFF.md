@@ -105,7 +105,7 @@ The `tyre-photos` bucket is **public** (set in MASTER_MIGRATION.sql). All tyre, 
 
 ### Mobile - EAS build fixed (was failing "Gradle build failed with unknown error")
 - **Root cause:** `expo` was pinned to `~54.0.0` while the entire tree was Expo **SDK 53** (RN 0.79, React 19.0.0). SDK 54 needs RN 0.81 - a binary mismatch. Earlier New-Arch/NDK/Kotlin commits were treating symptoms.
-- Pinned `expo` to `~53.0.0` (53.0.27) and aligned every native module to its SDK 53 canonical version (RN 0.79.6, react-native-screens ~4.11.1, react-native-safe-area-context 5.4.0, gesture-handler ~2.24.0, expo-build-properties ~0.14.8, expo-router ~5.1.11, …).
+- Pinned `expo` to `~53.0.0` (53.0.27) and aligned every native module to its SDK 53 canonical version (RN 0.79.6, react-native-screens ~4.11.1, react-native-safe-area-context 5.4.0, gesture-handler ~2.24.0, expo-build-properties ~0.14.8, expo-router ~5.1.11, ...).
 - Added explicit **`expo-asset`** dependency - it was nested under `node_modules/expo/` and Metro couldn't resolve it, breaking the JS bundle phase.
 - CI now uses `npm ci` (was `npm install --legacy-peer-deps`, which masked the mismatch) + npm caching.
 - **Result:** full EAS Android build goes green end-to-end and auto-triggers on merge to `main`.

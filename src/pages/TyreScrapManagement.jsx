@@ -773,7 +773,7 @@ export default function TyreScrapManagement() {
       {loading && (
         <div className="flex items-center justify-center py-20 text-gray-500">
           <Loader2 className="animate-spin mr-3" size={22} />
-          <span>Loading scrap data…</span>
+          <span>Loading scrap data...</span>
         </div>
       )}
 
@@ -1303,7 +1303,7 @@ export default function TyreScrapManagement() {
                   <input
                     value={logSearch}
                     onChange={e => setLogSearch(e.target.value)}
-                    placeholder="Search serial, brand, asset, site…"
+                    placeholder="Search serial, brand, asset, site..."
                     className="w-full pl-8 pr-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-red-600"
                   />
                 </div>

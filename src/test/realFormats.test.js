@@ -1,5 +1,5 @@
 /**
- * Real-format regression tests — the user's actual ERP report files committed
+ * Real-format regression tests - the user's actual ERP report files committed
  * under docs/imports/. These are the formats the business uploads daily; every
  * one must parse (incl. XML Spreadsheet 2003 and HTML-grid .xls), auto-detect
  * its header row, strip report footers, and auto-map its headers.
@@ -33,7 +33,7 @@ const noFooters = (sheet) => {
 }
 
 describe('real ERP formats (docs/imports)', () => {
-  it.skipIf(!has('MONTHLY TYRES CONSUMPTION REPORT.xls'))('Monthly Tyres Consumption (.xls) — header row 3, footers stripped, tyre mapping', async () => {
+  it.skipIf(!has('MONTHLY TYRES CONSUMPTION REPORT.xls'))('Monthly Tyres Consumption (.xls) - header row 3, footers stripped, tyre mapping', async () => {
     const wb = await load('MONTHLY TYRES CONSUMPTION REPORT.xls')
     const s = wb.sheets[0]
     expect(s.headerRow).toBe(2)
@@ -52,7 +52,7 @@ describe('real ERP formats (docs/imports)', () => {
     for (const r of s.rows) expect(r['VEH.NO']).toBe(String(r['VEH.NO']).trim())
   })
 
-  it.skipIf(!has('VEHICLE COMPLAINTS HISTORY.xls'))('Vehicle Complaints History (.xls) — GRAND TOTAL + printed-by footers stripped', async () => {
+  it.skipIf(!has('VEHICLE COMPLAINTS HISTORY.xls'))('Vehicle Complaints History (.xls) - GRAND TOTAL + printed-by footers stripped', async () => {
     const wb = await load('VEHICLE COMPLAINTS HISTORY.xls')
     const s = wb.sheets[0]
     expect(s.headerRow).toBe(2)
@@ -64,7 +64,7 @@ describe('real ERP formats (docs/imports)', () => {
     expect(t['Total BD Hrs']).toBe('breakdown_hours')
   })
 
-  it.skipIf(!has('Work Order Details.xls'))('Work Order Details (XML Spreadsheet 2003) — parses via SheetJS, Trye → tyre_cost', async () => {
+  it.skipIf(!has('Work Order Details.xls'))('Work Order Details (XML Spreadsheet 2003) - parses via SheetJS, Trye → tyre_cost', async () => {
     const wb = await load('Work Order Details.xls')
     const s = wb.sheets[0]
     expect(s.columns.map((c) => c.header)).toContain('Work Order Number')
@@ -75,7 +75,7 @@ describe('real ERP formats (docs/imports)', () => {
     expect(t['Trye']).toBe('tyre_cost')
   })
 
-  it.skipIf(!has('aeqp_grid1 - 663654556509.xls'))('Ramco assets list (HTML-grid .xls) — real headers detected on a wide sparse grid', async () => {
+  it.skipIf(!has('aeqp_grid1 - 663654556509.xls'))('Ramco assets list (HTML-grid .xls) - real headers detected on a wide sparse grid', async () => {
     const wb = await load('aeqp_grid1 - 663654556509.xls')
     const s = wb.sheets[0]
     expect(s.headerRow).toBe(0)
@@ -92,7 +92,7 @@ describe('real ERP formats (docs/imports)', () => {
     expect(t['Driver Issue Date']).toBeUndefined()
   })
 
-  it.skipIf(!has('data.xlsx'))('Open Job Cards follow-up (.xlsx) — "Applied filters" trailer stripped', async () => {
+  it.skipIf(!has('data.xlsx'))('Open Job Cards follow-up (.xlsx) - "Applied filters" trailer stripped', async () => {
     const wb = await load('data.xlsx')
     const s = wb.sheets[0]
     noFooters(s)
@@ -113,7 +113,7 @@ describe('real ERP formats (docs/imports)', () => {
   })
 })
 
-describe('aggregateStagedRows — line-item files collapse to one row per record', () => {
+describe('aggregateStagedRows - line-item files collapse to one row per record', () => {
   const row = (wo, tyre, extra = {}) => ({
     sourceRowNo: 1, raw: { wo, tyre }, mapped: {}, custom: {},
     transformed: { work_order_no: wo, tyre_cost: tyre, ...extra },

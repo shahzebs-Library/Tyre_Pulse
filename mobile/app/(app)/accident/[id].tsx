@@ -442,7 +442,7 @@ Risk Level: [Critical / High / Medium / Low]
             activeOpacity={0.85}
           >
             {analyzing
-              ? <><ActivityIndicator size="small" color="#fff" /><Text style={styles.analyzeBtnText}>Analyzing…</Text></>
+              ? <><ActivityIndicator size="small" color="#fff" /><Text style={styles.analyzeBtnText}>Analyzing...</Text></>
               : <><Ionicons name="sparkles-outline" size={18} color="#fff" /><Text style={styles.analyzeBtnText}>Analyze with AI</Text></>
             }
           </TouchableOpacity>
@@ -475,7 +475,7 @@ Risk Level: [Critical / High / Medium / Low]
               {analyzing || !aiResult
                 ? <View style={styles.aiLoading}>
                     <ActivityIndicator size="large" color="#7c3aed" />
-                    <Text style={styles.aiLoadingText}>Analyzing accident data…</Text>
+                    <Text style={styles.aiLoadingText}>Analyzing accident data...</Text>
                   </View>
                 : <Text style={styles.aiResultText}>{aiResult}</Text>
               }

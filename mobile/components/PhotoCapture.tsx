@@ -9,7 +9,7 @@
  * Offline-safe: if an upload can't complete (no connection), the local file://
  * URI is KEPT in the value array rather than discarded, so the photo is never
  * lost. The typed record queue (recordQueue) re-uploads any pending file:// URI
- * before the record is inserted — matching the inspection queue's behaviour.
+ * before the record is inserted - matching the inspection queue's behaviour.
  */
 import { useState } from 'react'
 import {
@@ -55,7 +55,7 @@ export default function PhotoCapture({ value, onChange, module = 'module', tint 
     try {
       const ref = await uploadModulePhoto(uri, module, idx)
       // On success store the permanent ref; on failure (e.g. offline) KEEP the
-      // local file:// URI — the record queue re-uploads it before insert.
+      // local file:// URI - the record queue re-uploads it before insert.
       const next = [...value, ref || uri]
       onChange(next)
       if (!ref) {

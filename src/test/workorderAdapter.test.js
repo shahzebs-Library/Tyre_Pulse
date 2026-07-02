@@ -1,5 +1,5 @@
 /**
- * Import Center — work order adapter test matrix (Phase 4).
+ * Import Center - work order adapter test matrix (Phase 4).
  *
  * Exercises the REAL pure pipeline functions for the workorder module: Arabic +
  * English header mapping (incl. "job card"), cost-integrity validation
@@ -25,7 +25,7 @@ function buildWorkOrderRow(rawRow, mapping) {
   return transformed
 }
 
-describe('workorder adapter — Arabic/English header mapping', () => {
+describe('workorder adapter - Arabic/English header mapping', () => {
   it('resolves headers via exactAlias', () => {
     expect(exactAlias('رقم أمر العمل', 'workorder')).toBe('work_order_no')
     expect(exactAlias('job card', 'workorder')).toBe('work_order_no')
@@ -61,7 +61,7 @@ describe('workorder adapter — Arabic/English header mapping', () => {
   })
 })
 
-describe('workorder adapter — cost-integrity & required validation (validateRow)', () => {
+describe('workorder adapter - cost-integrity & required validation (validateRow)', () => {
   const baseMapping = [
     { sourceHeader: 'WO No', target: 'work_order_no' },
     { sourceHeader: 'Labour Cost', target: 'labour_cost' },
@@ -103,7 +103,7 @@ describe('workorder adapter — cost-integrity & required validation (validateRo
   })
 })
 
-describe('workorder adapter — duplicate classification (WO-number identity)', () => {
+describe('workorder adapter - duplicate classification (WO-number identity)', () => {
   // Natural key = country + work_order_no.
   const mapping = [
     { sourceHeader: 'WO No', target: 'work_order_no' },
@@ -145,7 +145,7 @@ describe('workorder adapter — duplicate classification (WO-number identity)', 
   })
 })
 
-describe('workorder adapter — natural key', () => {
+describe('workorder adapter - natural key', () => {
   it('is stable and identical for two rows sharing country + work_order_no', () => {
     const a = naturalKey({ country: 'KSA', work_order_no: 'WO-7' }, 'workorder')
     const b = naturalKey({ country: 'KSA', work_order_no: 'WO-7' }, 'workorder')

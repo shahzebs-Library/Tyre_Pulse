@@ -343,7 +343,7 @@ export default function Comparison() {
           className="btn-primary px-6 flex items-center gap-2 disabled:opacity-50"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          {loading ? 'Running…' : ran ? 'Re-run' : 'Run Comparison'}
+          {loading ? 'Running...' : ran ? 'Re-run' : 'Run Comparison'}
         </button>
 
         {!canRun && (

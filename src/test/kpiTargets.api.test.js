@@ -43,7 +43,7 @@ beforeEach(() => {
   h.state.last = null
 })
 
-describe('service layer — kpiTargets', () => {
+describe('service layer - kpiTargets', () => {
   it('lists kpi_targets by year', async () => {
     h.state.result = { data: [{ metric: 'max_monthly_cost', target_value: 150000 }], error: null }
     const res = await kpiTargets.listKpiTargets({ year: 2026 })

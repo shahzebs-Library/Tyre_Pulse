@@ -243,7 +243,7 @@ export default function GlobalSearch({ isOpen, onClose }) {
                 ref={inputRef}
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="Search tyres, vehicles, work orders, reports…"
+                placeholder="Search tyres, vehicles, work orders, reports..."
                 className="flex-1 bg-transparent text-white text-base placeholder-gray-500 focus:outline-none"
               />
               {query && (

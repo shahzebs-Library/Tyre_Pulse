@@ -364,7 +364,7 @@ export default function TyreScanCamera({ onClose, onResult }) {
             >
               <Loader2 className="w-8 h-8 text-green-400" />
             </motion.div>
-            <p className="text-sm text-gray-400 font-medium">Looking up…</p>
+            <p className="text-sm text-gray-400 font-medium">Looking up...</p>
           </div>
         )}
 

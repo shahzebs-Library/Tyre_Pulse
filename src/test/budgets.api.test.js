@@ -42,7 +42,7 @@ beforeEach(() => {
   h.state.last = null
 })
 
-describe('service layer — budgets', () => {
+describe('service layer - budgets', () => {
   it('listBudgets applies year + strict country eq + site order (month optional)', async () => {
     await budgets.listBudgets({ country: 'KSA', year: 2026, month: 3 })
     expect(h.state.last._table).toBe('budgets')

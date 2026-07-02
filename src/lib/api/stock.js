@@ -1,20 +1,20 @@
 /**
- * Stock service — inventory records (stock_records). Explicit column lists
+ * Stock service - inventory records (stock_records). Explicit column lists
  * (no SELECT *); null-safe country scoping. Pages migrate onto these methods
- * instead of inline queries. Additive only — mirrors assets.js / tyres.js.
+ * instead of inline queries. Additive only - mirrors assets.js / tyres.js.
  */
 import { supabase, unwrap, applyCountry, fetchAllPages } from './_client'
 
 const COLS =
   'id,site,description,stock_qty,min_level,critical_level,stock_status,reorder_qty,management_action,region,country,updated_by,updated_at'
 
-// Movement ledger (stock_movements). Full row — the movement-history modal
+// Movement ledger (stock_movements). Full row - the movement-history modal
 // renders every audit field.
 const MOVEMENT_COLS =
   'id,stock_id,site,description,movement_type,qty_before,qty_change,qty_after,reason,reference_no,created_by,created_at'
 
 // Tyre issue rows drive stock velocity / timeline analytics on this page. Only
-// the three columns those computations need — nothing wider.
+// the three columns those computations need - nothing wider.
 const TYRE_ISSUE_COLS = 'site,qty,issue_date'
 
 /**
@@ -53,7 +53,7 @@ export async function updateStock(id, patch) {
 
 /**
  * List stock records for the Stock Management page, ordered by site (A→Z),
- * country-scoped with a strict match ("All" = no filter). No row cap — the page
+ * country-scoped with a strict match ("All" = no filter). No row cap - the page
  * derives status, velocity and reorder suggestions client-side over the full
  * set.
  * @param {{country?:string}} [opts]
@@ -69,7 +69,7 @@ export async function insertStockRecord(values) {
   return unwrap(await supabase.from('stock_records').insert(values).select('id').single())
 }
 
-/** Update a stock record by id (page mutation — no row returned). */
+/** Update a stock record by id (page mutation - no row returned). */
 export async function updateStockRecord(id, patch) {
   return unwrap(await supabase.from('stock_records').update(patch).eq('id', id))
 }
@@ -80,7 +80,7 @@ export async function insertStockMovement(values) {
 }
 
 /**
- * Movement history for one stock record, newest first (capped at 50 — matches
+ * Movement history for one stock record, newest first (capped at 50 - matches
  * the history modal).
  */
 export async function listStockMovements(stockId, limit = 50) {
@@ -97,7 +97,7 @@ export async function listStockMovements(stockId, limit = 50) {
 /**
  * Post a stock movement through the atomic, guarded, audited DB RPC
  * (post_stock_movement). The server computes qty_before/after and blocks a
- * negative balance — no client-side stock math. Returns the RPC payload
+ * negative balance - no client-side stock math. Returns the RPC payload
  * (includes qty_after).
  * @param {{stockId:string, type:string, qty:number, reason?:string, reference?:string}} args
  */
@@ -115,7 +115,7 @@ export async function postStockMovement({ stockId, type, qty, reason, reference 
 
 /**
  * Tyre issue rows (site, qty, issue_date) since a date, paged in full via
- * fetchAllPages. Powers the stock velocity estimate. Not country-scoped —
+ * fetchAllPages. Powers the stock velocity estimate. Not country-scoped -
  * mirrors the page's fleet-wide velocity basis.
  */
 export async function listTyreIssuesSince(sinceDate) {

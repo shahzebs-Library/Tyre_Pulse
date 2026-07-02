@@ -1,10 +1,10 @@
-# Current System Audit — TyrePulse
+# Current System Audit - TyrePulse
 
-**Phase 0 — read-only audit. No schema, data, or behaviour changes are made here.**
+**Phase 0 - read-only audit. No schema, data, or behaviour changes are made here.**
 
-This document inventories the *existing* TyrePulse platform as built today: Vite + React 19 web, Expo SDK 54 / React Native 0.81.5 mobile, and a Supabase backend (Postgres + GoTrue Auth + Storage + Deno Edge Functions). It is the factual baseline for the in-place hardening track. It does **not** propose a new backend, language, or framework — only an honest map of what is here and where the risk sits.
+This document inventories the *existing* TyrePulse platform as built today: Vite + React 19 web, Expo SDK 54 / React Native 0.81.5 mobile, and a Supabase backend (Postgres + GoTrue Auth + Storage + Deno Edge Functions). It is the factual baseline for the in-place hardening track. It does **not** propose a new backend, language, or framework - only an honest map of what is here and where the risk sits.
 
-> Scope guardrail: this audit covers the current React / Expo / Supabase system. The remediation it feeds (Phases 1–6) strengthens that stack in place. No re-platforming is implied or recommended in this document.
+> Scope guardrail: this audit covers the current React / Expo / Supabase system. The remediation it feeds (Phases 1-6) strengthens that stack in place. No re-platforming is implied or recommended in this document.
 
 ---
 
@@ -15,7 +15,7 @@ This document inventories the *existing* TyrePulse platform as built today: Vite
 | Web | Vite, React 19, React Router, Tailwind, React Query, `vite-plugin-pwa` | ~78 pages (`src/pages/`), ~24 components (`src/components/`) |
 | Mobile | Expo SDK 54, React Native 0.81.5, Expo Router | ~35 screens (`mobile/app/(app)/`) |
 | Backend | Supabase Postgres, Auth (GoTrue), Storage, Edge Functions (Deno) | 46 tables, 3 edge functions, 3 storage buckets |
-| AI | Anthropic (chat), OpenAI (embeddings) — server-side only via edge functions | `supabase/functions/chat-ai`, `generate-embedding` |
+| AI | Anthropic (chat), OpenAI (embeddings) - server-side only via edge functions | `supabase/functions/chat-ai`, `generate-embedding` |
 | Reporting | Excel / PDF / PowerPoint libraries in web (`src/lib/exportUtils.js`) | Eager-loaded today |
 
 **Architectural headline:** there is **no application API or service layer**. Web and mobile clients call `supabase.from / rpc / storage / auth` directly from pages, screens, and lib modules. The only server-side boundary is the three edge functions. Security therefore rests almost entirely on Postgres Row Level Security (RLS); the frontend permission system is advisory only.
@@ -30,7 +30,7 @@ Both framings agree on the conclusion: data access is diffuse and ungoverned by 
 
 ## 2. Active tables and purpose
 
-46 tables exist. Grouped by domain (canonical source noted where duplicates exist — see §6).
+46 tables exist. Grouped by domain (canonical source noted where duplicates exist - see §6).
 
 ### Identity & access
 | Table | Purpose |
@@ -44,7 +44,7 @@ Both framings agree on the conclusion: data access is diffuse and ungoverned by 
 | Table | Purpose |
 |---|---|
 | `vehicle_fleet` | **CANONICAL** master asset/vehicle record. |
-| `fleet_master` | **LEGACY** duplicate asset master — overlaps `vehicle_fleet`. |
+| `fleet_master` | **LEGACY** duplicate asset master - overlaps `vehicle_fleet`. |
 | `gate_passes` | Vehicle gate-pass / movement records. |
 
 ### Tyres
@@ -65,8 +65,8 @@ Both framings agree on the conclusion: data access is diffuse and ungoverned by 
 | Table | Purpose |
 |---|---|
 | `accidents` | Accident header record. |
-| `accident_parts` | **Structured child** — damaged parts per accident. |
-| `accident_remarks` | **Structured child** — remarks per accident. |
+| `accident_parts` | **Structured child** - damaged parts per accident. |
+| `accident_remarks` | **Structured child** - remarks per accident. |
 | `accident_audit_log` *(referenced)* | Accident audit trail. |
 
 ### Stock / inventory
@@ -124,7 +124,7 @@ Both framings agree on the conclusion: data access is diffuse and ungoverned by 
 
 There is no service layer, so "module" here means the page/screen cluster issuing the calls. ~43 of ~78 web pages call `supabase.from/rpc` directly; ~30 mobile files do likewise.
 
-| Module | Web entry points (`src/pages/…`) | Mobile (`mobile/app/(app)/…`, `mobile/lib/…`) | Access pattern |
+| Module | Web entry points (`src/pages/...`) | Mobile (`mobile/app/(app)/...`, `mobile/lib/...`) | Access pattern |
 |---|---|---|---|
 | Auth / session | `Login.jsx`, `ResetPassword.jsx`, `src/contexts/AuthContext.jsx` | `mobile/contexts/AuthContext.tsx`, `mobile/lib/supabase.ts` | `supabase.auth.*`, `rpc('get_user_module_permissions')` |
 | Fleet / assets | `FleetMaster.jsx`, `AssetManagement.jsx`, `VehicleHistory.jsx`, `LiveFleetStatus.jsx` | `vehicles.tsx`, `history.tsx` | `from('vehicle_fleet')` / legacy `from('fleet_master')` |
@@ -134,9 +134,9 @@ There is no service layer, so "module" here means the page/screen cluster issuin
 | Stock | `StockManagement.jsx`, `StockReplenishment.jsx` | `stock.tsx`, `mobile/lib/recordQueue.ts` | `from('stock_records'/'stock_movements')` / legacy `from('stock')` |
 | Workshop / work orders | `WorkOrders.jsx`, `WorkshopManagement.jsx` | `work-orders.tsx`, `workorders/` | `from('work_orders')` |
 | RCA / corrective | `RcaRecords.jsx`, `RootCauseEngine.jsx`, `CorrectiveActions.jsx` | `rca.tsx`, `report-issue.tsx` | `from('rca_records'/'corrective_actions')` |
-| Procurement / vendors | `Procurement.jsx`, `SupplierManagement.jsx`, `VendorIntelligence.jsx` | — | `from('purchase_orders')` |
+| Procurement / vendors | `Procurement.jsx`, `SupplierManagement.jsx`, `VendorIntelligence.jsx` | - | `from('purchase_orders')` |
 | Users / admin | `UserManagement.jsx`, `Settings.jsx`, `UploadApprovals.jsx` | `admin/`, `team.tsx`, `profile.tsx` | `from('profiles')`, `rpc` |
-| Data upload / cleaning | `UploadData.jsx`, `DataCleaning.jsx`, `CustomData.jsx`, `ErpSync.jsx` | — | `from('upload_history'/'pending_uploads'/'column_mappings')` |
+| Data upload / cleaning | `UploadData.jsx`, `DataCleaning.jsx`, `CustomData.jsx`, `ErpSync.jsx` | - | `from('upload_history'/'pending_uploads'/'column_mappings')` |
 | Audit | `AuditTrail.jsx` | `mobile/lib/auditDiff.ts` | `from('audit_log'/'audit_log_v2')` |
 | Analytics / KPI / AI | `Analytics.jsx`, `KpiCommandCenter.jsx`, `AiAnalytics.jsx`, `AiCommandCenter.jsx`, + ~30 analytics pages | `analytics/`, `ai/`, `overview.tsx` | `from('kpi_snapshots')`, edge-function `chat-ai` |
 
@@ -154,7 +154,7 @@ All three live in `supabase/functions/` and gate every request through `_shared/
 | `send-email` | Transactional email via Resend. | Role gate; server-side Resend key only. |
 | `generate-embedding` | OpenAI embedding generation for RAG. | Role gate; server-side OpenAI key only. |
 
-**Server-side secret boundary is correct here:** Anthropic, OpenAI, Resend, and `service_role` keys live only inside edge-function secrets, never in client bundles. (The mobile anon-key exposure in §8 is a *separate* issue — anon key only.)
+**Server-side secret boundary is correct here:** Anthropic, OpenAI, Resend, and `service_role` keys live only inside edge-function secrets, never in client bundles. (The mobile anon-key exposure in §8 is a *separate* issue - anon key only.)
 
 ---
 
@@ -194,7 +194,7 @@ These compose multi-table writes or financial/KPI logic on the client, with no t
 | Tyre change / exchange | `mobile/app/(app)/tyre-change.tsx`, `src/pages/TyreExchange.jsx`, `TyreLifecycle.jsx` | Remove → record reason/KM → fit replacement → adjust stock → audit is done as **separate frontend writes**; a failure mid-sequence leaves a half-finished state. Needs a single RPC/transaction. |
 | Stock adjustments | `src/pages/StockManagement.jsx`, `StockReplenishment.jsx` | Totals editable client-side rather than derived from the ledger. |
 | KPI computation | `src/lib/kpiEngine.js`, `analyticsEngine.js`, `aiAnalytics.js` | CPK, tyre life, failure-rate definitions live in client code; risk of divergent numbers across pages. Needs a central KPI definition source. |
-| Offline record creation | `mobile/lib/recordQueue.ts` | Client supplies arbitrary `table` + payload to `supabase.from(table).insert` — see §8. |
+| Offline record creation | `mobile/lib/recordQueue.ts` | Client supplies arbitrary `table` + payload to `supabase.from(table).insert` - see §8. |
 
 ---
 
@@ -202,12 +202,12 @@ These compose multi-table writes or financial/KPI logic on the client, with no t
 
 | # | Finding | Evidence | State |
 |---|---|---|---|
-| 1 | **Anon key hardcoded in mobile config** | `mobile/app.json` (`extra.supabaseAnonKey`), `mobile/eas.json` (all 3 profiles) | OPEN — move to EAS Secrets. Anon key is RLS-protected, but should not be committed. |
-| 2 | **PWA caches authenticated data** | `vite.config.js` runtimeCaching: `/rest/` NetworkFirst 5min, `/auth/` NetworkFirst 60s, `/storage/` **CacheFirst 24h** | OPEN — stop caching authed REST/auth/private storage; clear caches on logout/account switch. |
-| 3 | **`recordQueue` arbitrary-table writes** | `mobile/lib/recordQueue.ts` `enqueueRecord(table,payload)` → `supabase.from(table).insert(payload)` | OPEN — client chooses the table. Replace with typed offline commands. |
+| 1 | **Anon key hardcoded in mobile config** | `mobile/app.json` (`extra.supabaseAnonKey`), `mobile/eas.json` (all 3 profiles) | OPEN - move to EAS Secrets. Anon key is RLS-protected, but should not be committed. |
+| 2 | **PWA caches authenticated data** | `vite.config.js` runtimeCaching: `/rest/` NetworkFirst 5min, `/auth/` NetworkFirst 60s, `/storage/` **CacheFirst 24h** | OPEN - stop caching authed REST/auth/private storage; clear caches on logout/account switch. |
+| 3 | **`recordQueue` arbitrary-table writes** | `mobile/lib/recordQueue.ts` `enqueueRecord(table,payload)` → `supabase.from(table).insert(payload)` | OPEN - client chooses the table. Replace with typed offline commands. |
 | 4 | **`hasPermission()` is UI-only** | `src/contexts/AuthContext.jsx` `ROLE_DEFAULTS` + `hasPermission()` | By design advisory; RLS must be the authority. Verify no table relies on UI gating. |
-| 5 | **No org/site scope in RLS** | `organisations` table empty & unused; RLS scoped geographically via `profiles.site` (text) + `profiles.country` (text[]) | OPEN — cross-org isolation not enforced. |
-| 6 | **No file-metadata table** | No `file_*` table exists; storage paths embedded in records | OPEN — add owner/org/entity/path metadata table for auditable file access. |
+| 5 | **No org/site scope in RLS** | `organisations` table empty & unused; RLS scoped geographically via `profiles.site` (text) + `profiles.country` (text[]) | OPEN - cross-org isolation not enforced. |
+| 6 | **No file-metadata table** | No `file_*` table exists; storage paths embedded in records | OPEN - add owner/org/entity/path metadata table for auditable file access. |
 
 Already-mitigated controls (listed DONE in the security plan): AI model lock, in-memory idle timeout (30 min), generic auth errors (no user enumeration), bulk-upload DB CHECK constraints + client sanitisation, accident photos private + signed URLs, photo extension/size validation, AI per-user rate-limit + response cache + usage logging.
 
@@ -224,12 +224,12 @@ RLS is the real security boundary. Helper functions (`MIGRATIONS_V40_SECURITY_HA
 | `app_is_elevated()` | role ∈ {admin, manager, director}. |
 | `get_my_role()` | Raw role lookup. |
 
-V41 dropped legacy broad `"Auth users full access"` policies on `tyre_records`, `stock_records`, `budgets`, `corrective_actions`, `rca_records`, `upload_history` — a real improvement.
+V41 dropped legacy broad `"Auth users full access"` policies on `tyre_records`, `stock_records`, `budgets`, `corrective_actions`, `rca_records`, `upload_history` - a real improvement.
 
 **Risks:**
 1. **No organisation scope.** RLS keys off role + geography (`site` text, `country` text[]) only. `organisations` is empty and not referenced in any policy. A user whose `country` array overlaps another org's data can read it. Multi-tenant isolation is effectively absent.
 2. **`site` / `country` are loose text.** Free-text `site` and a `country` array make scope checks fragile and typo-sensitive.
-3. **Mobile generic insert bypasses module intent.** With table-level RLS only, `recordQueue` can insert into any table the role can write — RLS may permit rows the UI never intended.
+3. **Mobile generic insert bypasses module intent.** With table-level RLS only, `recordQueue` can insert into any table the role can write - RLS may permit rows the UI never intended.
 4. **No file-row authority.** Storage RLS guards buckets, but there is no DB record binding a file to an owner/org/entity, so file access can't be reasoned about per-record.
 5. **Policy provenance is fragmented** across 48 SQL files (see §11), making it hard to prove the live policy set.
 
@@ -241,7 +241,7 @@ V41 dropped legacy broad `"Auth users full access"` policies on `tyre_records`, 
 
 **Missing validation (server-side):** validation largely lives in React/RN forms. Server-side guarantees exist only where DB CHECK constraints were added (bulk upload). Tyre, inspection, stock, and accident writes rely on client validation that a direct Supabase call or `recordQueue` can bypass.
 
-**Unsafe file access:** buckets are private and signed-URL based (good). The gap is the **absence of a file-metadata table** — file access cannot be audited or scoped per record/org. Plus the stale "public bucket" comments (§5).
+**Unsafe file access:** buckets are private and signed-URL based (good). The gap is the **absence of a file-metadata table** - file access cannot be audited or scoped per record/org. Plus the stale "public bucket" comments (§5).
 
 **Missing org/site scope:** all operational modules (fleet, tyres, inspections, accidents, stock, work orders) lack organisation scope; site/country scope is text-based and unenforced at the data-model level.
 
@@ -266,11 +266,11 @@ Mobile offline today is split across multiple queues:
 | `mobile/lib/photoUpload.ts` | Photo upload → private storage ref. |
 
 **Failure scenarios:**
-1. **Arbitrary-table writes** — `recordQueue` trusts the client for the destination table (security + integrity risk).
-2. **Multi-table operations are not atomic offline** — a tyre change queued as separate inserts can partially sync, leaving inconsistent state (no transaction across the queue).
-3. **Photo/record ordering** — records may flush before their photos upload; the header comment's "upload before queuing" assumption breaks fully offline.
-4. **No conflict resolution** — last-write-wins on flush; concurrent edits from another device are silently overwritten.
-5. **No server-side validation on flush** — queued payloads bypass form validation when replayed directly to `from(table).insert`.
+1. **Arbitrary-table writes** - `recordQueue` trusts the client for the destination table (security + integrity risk).
+2. **Multi-table operations are not atomic offline** - a tyre change queued as separate inserts can partially sync, leaving inconsistent state (no transaction across the queue).
+3. **Photo/record ordering** - records may flush before their photos upload; the header comment's "upload before queuing" assumption breaks fully offline.
+4. **No conflict resolution** - last-write-wins on flush; concurrent edits from another device are silently overwritten.
+5. **No server-side validation on flush** - queued payloads bypass form validation when replayed directly to `from(table).insert`.
 
 Target: replace generic `recordQueue` with **typed offline commands** (the client names an *intent*, never a table), validated and ideally executed via RPC on flush.
 
@@ -297,4 +297,4 @@ Target: replace generic `recordQueue` with **typed offline commands** (the clien
 
 ## 14. Audit conclusion
 
-The platform is feature-rich but rests on a **single thin security layer (RLS) with no application boundary**, **no tenant/org isolation**, **fragmented data, audit, and migration models**, and a **client-trusted mobile offline path**. The mitigations already landed (private buckets + signed URLs, AI model lock + rate limiting, idle timeout, RLS cleanup, bulk-upload constraints) are real and correctly scoped. The remaining work is structural: introduce a service layer, make RLS organisation-aware, replace generic offline writes with typed commands, consolidate duplicate data/audit/dashboard surfaces, and harden client caching — all **in place** on the current React / Expo / Supabase stack.
+The platform is feature-rich but rests on a **single thin security layer (RLS) with no application boundary**, **no tenant/org isolation**, **fragmented data, audit, and migration models**, and a **client-trusted mobile offline path**. The mitigations already landed (private buckets + signed URLs, AI model lock + rate limiting, idle timeout, RLS cleanup, bulk-upload constraints) are real and correctly scoped. The remaining work is structural: introduce a service layer, make RLS organisation-aware, replace generic offline writes with typed commands, consolidate duplicate data/audit/dashboard surfaces, and harden client caching - all **in place** on the current React / Expo / Supabase stack.

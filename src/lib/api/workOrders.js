@@ -1,6 +1,6 @@
 /**
- * Work orders service — workshop jobs (work_orders). Explicit column lists
- * (no SELECT *); null-safe country scoping. Additive only — mirrors
+ * Work orders service - workshop jobs (work_orders). Explicit column lists
+ * (no SELECT *); null-safe country scoping. Additive only - mirrors
  * assets.js / tyres.js.
  */
 import { supabase, unwrap, applyCountry, ServiceError } from './_client'
@@ -53,7 +53,7 @@ export async function updateWorkOrder(id, patch) {
 /**
  * List work orders for the Work Orders page. Returns the full detail-drawer
  * column set (PAGE_COLS), ordered by opened_at (newest first), country-scoped
- * with a strict match ("All" = no filter). No row cap — the page filters,
+ * with a strict match ("All" = no filter). No row cap - the page filters,
  * sorts and paginates client-side.
  * @param {{country?:string}} [opts]
  */
@@ -66,12 +66,12 @@ export async function listWorkOrdersForPage({ country } = {}) {
   return unwrap(await q)
 }
 
-/** Insert a work order (page mutation — no row returned). */
+/** Insert a work order (page mutation - no row returned). */
 export async function insertWorkOrder(values) {
   return unwrap(await supabase.from('work_orders').insert(values))
 }
 
-/** Update a work order by id (page mutation — no row returned). */
+/** Update a work order by id (page mutation - no row returned). */
 export async function updateWorkOrderById(id, patch) {
   return unwrap(await supabase.from('work_orders').update(patch).eq('id', id))
 }
@@ -90,6 +90,6 @@ export async function deleteWorkOrder(id) {
   const { data, error } = await supabase.from('work_orders').delete().eq('id', id).select('id')
   if (error) throw new ServiceError(error.message, error.code, error)
   if ((data?.length ?? 0) === 0) {
-    throw new ServiceError('The work order was not deleted — only an Admin can delete work orders.', '42501')
+    throw new ServiceError('The work order was not deleted - only an Admin can delete work orders.', '42501')
   }
 }

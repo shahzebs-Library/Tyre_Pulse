@@ -1,5 +1,5 @@
 -- ============================================================================
--- tests/rpc_stock_movement.sql — self-asserting test for MIGRATIONS_V52.
+-- tests/rpc_stock_movement.sql - self-asserting test for MIGRATIONS_V52.
 --
 -- Proves post_stock_movement() is one atomic, guarded, audited transaction:
 --   receipt/issue update stock_qty by the signed magnitude; the ledger row math

@@ -204,7 +204,7 @@ export default function Alerts() {
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               className="input pl-8 text-sm"
-              placeholder="Search alerts…"
+              placeholder="Search alerts..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -233,7 +233,7 @@ export default function Alerts() {
               title={lastRefresh ? `Last scanned: ${lastRefresh.toLocaleTimeString()}` : 'Scan fleet'}
             >
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-              {loading ? 'Scanning…' : 'Refresh'}
+              {loading ? 'Scanning...' : 'Refresh'}
             </button>
 
             {/* Exports */}
@@ -308,7 +308,7 @@ export default function Alerts() {
       {loading && active.length === 0 ? (
         <div className="card py-16 flex flex-col items-center gap-3 text-muted">
           <Loader2 className="w-6 h-6 animate-spin text-brand" />
-          <span className="text-sm">Scanning fleet for alerts…</span>
+          <span className="text-sm">Scanning fleet for alerts...</span>
         </div>
       ) : visible.length === 0 ? (
         <motion.div

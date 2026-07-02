@@ -622,7 +622,7 @@ export default function AlertThresholds() {
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search thresholds…"
+              placeholder="Search thresholds..."
               className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-4 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
             />
             {search && (

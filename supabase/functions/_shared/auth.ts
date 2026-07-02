@@ -18,7 +18,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 
 // Any Vercel deployment of this app (stable production alias + the rotating
 // per-push preview subdomains). Safe to allow broadly here because every
-// function still enforces a valid, approved-user JWT via requireApprovedRole —
+// function still enforces a valid, approved-user JWT via requireApprovedRole -
 // the origin allowance alone grants no data access.
 const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/
 

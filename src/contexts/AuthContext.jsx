@@ -81,7 +81,7 @@ export function AuthProvider({ children }) {
 
   // Reacts to a single auth session change. Guarded by currentUserIdRef so that
   // token refreshes, tab re-focus (visibilitychange), and INITIAL_SESSION for
-  // the SAME already-loaded user do NOT toggle `loading` — toggling it would
+  // the SAME already-loaded user do NOT toggle `loading` - toggling it would
   // unmount the whole routed tree (ProtectedRoute renders a spinner while
   // loading) and wipe every page's in-progress state (e.g. the Data Intake
   // wizard). We only do a full (re)load when the user IDENTITY actually changes.
@@ -101,7 +101,7 @@ export function AuthProvider({ children }) {
       return
     }
 
-    // Same user — token refresh / tab refocus / duplicate INITIAL_SESSION.
+    // Same user - token refresh / tab refocus / duplicate INITIAL_SESSION.
     // Keep the fresh session but do not remount the app.
     if (newUserId === currentUserIdRef.current) return
 

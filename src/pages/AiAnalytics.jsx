@@ -351,7 +351,7 @@ export default function AiAnalytics() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-400 text-sm">Loading fleet data…</p>
+        <p className="text-gray-400 text-sm">Loading fleet data...</p>
       </div>
     )
   }
@@ -443,7 +443,7 @@ export default function AiAnalytics() {
                 <div className="w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
                 <p className="text-sm text-gray-400">
                   <AgentBadge agentType={agentType} />
-                  <span className="ml-2">Analysing fleet data…</span>
+                  <span className="ml-2">Analysing fleet data...</span>
                 </p>
               </div>
             )}
@@ -474,7 +474,7 @@ export default function AiAnalytics() {
                 value={question}
                 onChange={e => setQuestion(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={`Ask ${AGENT_LABELS[agentType]}… (Enter to send)`}
+                placeholder={`Ask ${AGENT_LABELS[agentType]}... (Enter to send)`}
                 className="flex-1 bg-transparent resize-none text-sm text-gray-200 placeholder-gray-600 outline-none"
                 disabled={asking}
               />
@@ -612,7 +612,7 @@ export default function AiAnalytics() {
               {messages.slice(-3).reverse().map((m, i) => (
                 <div key={m.ts} className="flex items-center gap-2 text-[10px]">
                   <AgentBadge agentType={m.agent} />
-                  <span className="text-gray-600 truncate">{m.question.slice(0, 45)}{m.question.length > 45 ? '…' : ''}</span>
+                  <span className="text-gray-600 truncate">{m.question.slice(0, 45)}{m.question.length > 45 ? '...' : ''}</span>
                 </div>
               ))}
             </div>

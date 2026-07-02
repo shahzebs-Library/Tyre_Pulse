@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// supplierScorecard.js — Pure supplier scorecard (no AI tokens, no network).
+// supplierScorecard.js - Pure supplier scorecard (no AI tokens, no network).
 // Joins tyre_records + warranty_claims + purchase_orders by supplier.
 // Cost is ACTUAL only (cost_per_tyre); missing → 0, never a settings default.
 // ─────────────────────────────────────────────────────────────────────────────

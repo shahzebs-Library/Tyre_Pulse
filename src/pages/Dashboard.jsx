@@ -545,7 +545,7 @@ export default function Dashboard() {
   const greeting = hourNow < 12 ? 'Good morning' : hourNow < 17 ? 'Good afternoon' : 'Good evening'
   const firstName = (profile?.full_name ?? profile?.username ?? 'there').split(' ')[0]
 
-  if (loading) return <LoadingState message="Loading dashboard…" />
+  if (loading) return <LoadingState message="Loading dashboard..." />
 
   if (error) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center px-6">
@@ -657,7 +657,7 @@ export default function Dashboard() {
           {/* Search */}
           <div className="relative flex-1 min-w-52">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
-            <input className="input pl-8 w-full" placeholder="Search asset, brand, site…" value={search} onChange={e => setSearch(e.target.value)} />
+            <input className="input pl-8 w-full" placeholder="Search asset, brand, site..." value={search} onChange={e => setSearch(e.target.value)} />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
                 <X size={12} />

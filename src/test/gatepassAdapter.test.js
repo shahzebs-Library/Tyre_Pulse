@@ -1,5 +1,5 @@
 /**
- * Import Center — gate-pass adapter test matrix (Phase 4).
+ * Import Center - gate-pass adapter test matrix (Phase 4).
  *
  * Exercises the REAL pure pipeline functions for the gatepass module: Arabic/EN
  * header mapping, required-field enforcement (asset_no + pass_date), and
@@ -25,7 +25,7 @@ function buildGatePassRow(rawRow, mapping) {
   return transformed
 }
 
-describe('gatepass adapter — Arabic/EN header mapping', () => {
+describe('gatepass adapter - Arabic/EN header mapping', () => {
   it('resolves Arabic + English gate-pass headers via exactAlias', () => {
     expect(exactAlias('رقم المعدة', 'gatepass')).toBe('asset_no')
     expect(exactAlias('تاريخ التصريح', 'gatepass')).toBe('pass_date')
@@ -54,7 +54,7 @@ describe('gatepass adapter — Arabic/EN header mapping', () => {
   })
 })
 
-describe('gatepass adapter — required validation (validateRow)', () => {
+describe('gatepass adapter - required validation (validateRow)', () => {
   const baseMapping = [
     { sourceHeader: 'Asset No', target: 'asset_no' },
     { sourceHeader: 'Pass Date', target: 'pass_date' },
@@ -95,7 +95,7 @@ describe('gatepass adapter — required validation (validateRow)', () => {
   })
 })
 
-describe('gatepass adapter — duplicate classification', () => {
+describe('gatepass adapter - duplicate classification', () => {
   it('same country + asset_no + pass_date → duplicate', () => {
     const rows = [
       { country: 'KSA', asset_no: 'V-1', pass_date: '2024-01-12', site: 'Gate A', status: 'Cleared' },
@@ -142,7 +142,7 @@ describe('gatepass adapter — duplicate classification', () => {
   })
 })
 
-describe('gatepass adapter — natural key', () => {
+describe('gatepass adapter - natural key', () => {
   it('builds a key from country + asset_no + pass_date', () => {
     expect(naturalKey({ country: 'KSA', asset_no: 'V-1', pass_date: '2024-01-12' }, 'gatepass')).not.toBeNull()
   })

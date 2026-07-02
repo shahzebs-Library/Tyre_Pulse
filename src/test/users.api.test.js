@@ -41,7 +41,7 @@ beforeEach(() => {
   h.state.lastRpc = null
 })
 
-describe('service layer — users', () => {
+describe('service layer - users', () => {
   it('listProfiles reads from profiles newest-first and returns data', async () => {
     h.state.result = { data: [{ id: 'u1', full_name: 'Ada' }], error: null }
     const rows = await users.listProfiles()

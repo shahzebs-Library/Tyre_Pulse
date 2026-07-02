@@ -271,7 +271,7 @@ export default function QrLabels() {
                 className="btn-primary flex items-center gap-1.5 text-sm disabled:opacity-40"
               >
                 <Download size={14} />
-                {exporting ? 'Exporting…' : `Export PDF${readyItems.length > 0 ? ` (${readyItems.length})` : ''}`}
+                {exporting ? 'Exporting...' : `Export PDF${readyItems.length > 0 ? ` (${readyItems.length})` : ''}`}
               </button>
             </div>
           }
@@ -335,7 +335,7 @@ export default function QrLabels() {
                   style={{ boxShadow: generating ? 'none' : '0 0 20px rgba(22,163,74,0.35)' }}
                 >
                   {generating
-                    ? <><RefreshCw size={13} className="animate-spin" /> Generating…</>
+                    ? <><RefreshCw size={13} className="animate-spin" /> Generating...</>
                     : <><QrCode size={13} /> Generate {pendingItems.length} QR{pendingItems.length !== 1 ? 's' : ''}</>
                   }
                 </button>
@@ -355,7 +355,7 @@ export default function QrLabels() {
             <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
             <input
               className="input pl-8 text-sm"
-              placeholder={mode === 'tyres' ? 'Search serial, brand, site…' : 'Search asset, type, site…'}
+              placeholder={mode === 'tyres' ? 'Search serial, brand, site...' : 'Search asset, type, site...'}
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -447,7 +447,7 @@ export default function QrLabels() {
         {/* ── Records table ────────────────────────────────────────────────────── */}
         <div className="card overflow-hidden p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-gray-500 text-sm">Loading records…</div>
+            <div className="flex items-center justify-center py-16 text-gray-500 text-sm">Loading records...</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

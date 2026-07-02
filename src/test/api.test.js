@@ -40,7 +40,7 @@ beforeEach(() => {
   h.state.lastRpc = null
 })
 
-describe('service layer — assets', () => {
+describe('service layer - assets', () => {
   it('lists from vehicle_fleet and returns data', async () => {
     h.state.result = { data: [{ id: 'a1', asset_no: 'V-1' }], error: null }
     const rows = await assets.listAssets({ limit: 10 })
@@ -73,7 +73,7 @@ describe('service layer — assets', () => {
   })
 })
 
-describe('service layer — tyres', () => {
+describe('service layer - tyres', () => {
   it('lists from tyre_records and filters by risk level', async () => {
     await tyres.listTyreRecords({ riskLevel: 'Critical' })
     expect(h.state.last._table).toBe('tyre_records')
@@ -88,7 +88,7 @@ describe('service layer — tyres', () => {
   })
 })
 
-describe('service layer — stock', () => {
+describe('service layer - stock', () => {
   it('lists from stock_records and returns data', async () => {
     h.state.result = { data: [{ id: 's1' }], error: null }
     const rows = await stock.listStock({ limit: 10 })
@@ -103,7 +103,7 @@ describe('service layer — stock', () => {
   })
 })
 
-describe('service layer — workOrders', () => {
+describe('service layer - workOrders', () => {
   it('lists from work_orders and applies country filter', async () => {
     await workOrders.listWorkOrders({ country: 'UAE', status: 'Open' })
     expect(h.state.last._table).toBe('work_orders')
@@ -117,7 +117,7 @@ describe('service layer — workOrders', () => {
   })
 })
 
-describe('service layer — inspections', () => {
+describe('service layer - inspections', () => {
   it('lists from inspections and applies country filter', async () => {
     await inspections.listInspections({ country: 'Oman', severity: 'High' })
     expect(h.state.last._table).toBe('inspections')
@@ -133,7 +133,7 @@ describe('service layer — inspections', () => {
   })
 })
 
-describe('service layer — accidents', () => {
+describe('service layer - accidents', () => {
   it('lists from accidents and applies country filter', async () => {
     await accidents.listAccidents({ country: 'Qatar', status: 'Open' })
     expect(h.state.last._table).toBe('accidents')
@@ -147,7 +147,7 @@ describe('service layer — accidents', () => {
   })
 })
 
-describe('service layer — gatePasses safety gate', () => {
+describe('service layer - gatePasses safety gate', () => {
   it('lists blockers via the gate_pass_blockers RPC with trimmed asset + country', async () => {
     h.state.rpc = { data: { asset_no: 'A1', total: 0, blocked: false, corrective_actions: [], tyres: [], inspections: [] }, error: null }
     await gatePasses.listGatePassBlockers({ assetNo: '  A1 ', country: 'KSA' })
@@ -179,7 +179,7 @@ describe('service layer — gatePasses safety gate', () => {
   })
 })
 
-describe('service layer — correctiveActions', () => {
+describe('service layer - correctiveActions', () => {
   it('lists from corrective_actions with STRICT country eq (not null-inclusive)', async () => {
     await correctiveActions.listCorrectiveActions({ country: 'KSA' })
     expect(h.state.last._table).toBe('corrective_actions')

@@ -356,7 +356,7 @@ export default function TyreLifecycle() {
       <div className="flex items-center justify-center h-64">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-sm">Loading lifecycle data…</p>
+          <p className="text-gray-400 text-sm">Loading lifecycle data...</p>
         </div>
       </div>
     )
@@ -429,7 +429,7 @@ export default function TyreLifecycle() {
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
-              placeholder="Serial / Asset…"
+              placeholder="Serial / Asset..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
@@ -690,7 +690,7 @@ export default function TyreLifecycle() {
                                   Transfer History - Serial: <span className="text-white font-mono">{r.serial_number}</span>
                                 </p>
                                 {!serialHistory[r.serial_number] ? (
-                                  <p className="text-xs text-gray-600">Loading…</p>
+                                  <p className="text-xs text-gray-600">Loading...</p>
                                 ) : serialHistory[r.serial_number].length === 0 ? (
                                   <p className="text-xs text-gray-600">No history records found</p>
                                 ) : (

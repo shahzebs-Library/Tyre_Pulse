@@ -36,7 +36,7 @@ async function stage(buf, module, country = 'KSA') {
   return { wb, sheet, mapping, rows }
 }
 
-describe('INTAKE STRESS — formats', () => {
+describe('INTAKE STRESS - formats', () => {
   it('xlsx parses', async () => {
     const { sheet } = await stage(xlsxBuf([['Serial', 'Asset'], ['S1', 'A1']]), 'tyre')
     expect(sheet.rows.length).toBe(1)
@@ -56,7 +56,7 @@ describe('INTAKE STRESS — formats', () => {
   it('empty file does not crash', async () => {
     let err = null
     try { await stage(csvBuf(''), 'tyre') } catch (e) { err = e }
-    // acceptable to throw a friendly error OR return 0 rows — just not undefined-crash
+    // acceptable to throw a friendly error OR return 0 rows - just not undefined-crash
     expect(err === null || err instanceof Error).toBe(true)
   })
   it('headers-only file → 0 rows, no crash', async () => {
@@ -73,7 +73,7 @@ describe('INTAKE STRESS — formats', () => {
   })
 })
 
-describe('INTAKE STRESS — messy data', () => {
+describe('INTAKE STRESS - messy data', () => {
   it('Arabic headers map', async () => {
     const { mapping } = await stage(xlsxBuf([['رقم الإطار', 'الموقع'], ['SN1', 'Riyadh']]), 'tyre')
     const targets = mapping.map((m) => m.target)
@@ -106,7 +106,7 @@ describe('INTAKE STRESS — messy data', () => {
   })
 })
 
-describe('INTAKE STRESS — every module parses + maps its required id field', () => {
+describe('INTAKE STRESS - every module parses + maps its required id field', () => {
   const REQUIRED_HEADER = {
     fleet: ['Asset No'], tyre: ['Serial No', 'Asset No'], stock: ['Site', 'Description', 'Qty'],
     accident: ['Asset No', 'Incident Date'], inspection: ['Asset No'], workorder: ['WO No', 'Asset No'],

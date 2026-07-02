@@ -40,7 +40,7 @@ beforeEach(() => {
   h.state.last = null
 })
 
-describe('service layer — warranty', () => {
+describe('service layer - warranty', () => {
   it('lists from warranty_claims (no country filter)', async () => {
     h.state.result = { data: [{ id: 'w1', claim_no: 'WAR-2026-00001' }], error: null }
     const rows = await warranty.listWarrantyClaims()

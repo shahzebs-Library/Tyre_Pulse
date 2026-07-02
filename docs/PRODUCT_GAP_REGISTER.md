@@ -1,8 +1,8 @@
-# Product Gap Register — TyrePulse
+# Product Gap Register - TyrePulse
 
-**Phase 0 — read-only. Companion to `CURRENT_SYSTEM_AUDIT.md` and `SECURITY_HARDENING_PLAN.md`.**
+**Phase 0 - read-only. Companion to `CURRENT_SYSTEM_AUDIT.md` and `SECURITY_HARDENING_PLAN.md`.**
 
-This register enumerates gaps in the *existing* TyrePulse platform (Vite/React 19 web, Expo SDK 54 mobile, Supabase backend) and maps each to a remediation phase. It is scoped to hardening the current stack in place — no re-platforming.
+This register enumerates gaps in the *existing* TyrePulse platform (Vite/React 19 web, Expo SDK 54 mobile, Supabase backend) and maps each to a remediation phase. It is scoped to hardening the current stack in place - no re-platforming.
 
 **Phase legend** (in-place hardening track):
 - **P1** Security & platform foundation (service layer, permissions, secure files, PWA/cache, secrets)
@@ -18,11 +18,11 @@ Items already addressed on the current branch are marked **RESOLVED** and retain
 
 ---
 
-## Critical — security / data risk
+## Critical - security / data risk
 
 | ID | Gap | Severity | Evidence (file / table) | Impact | Recommended fix | Phase |
 |---|---|---|---|---|---|---|
-| C-01 | No organisation scope in RLS; `organisations` table empty & unused | Critical | `organisations` (0 rows); `MIGRATIONS_V40/V41`, `BACKEND_RLS.sql`; `profiles.site`/`country` | Cross-org data exposure — a user can read another org's records via overlapping `country`/`site` | Introduce org_id on operational tables; make RLS org-aware; backfill from geography | P1→P2 |
+| C-01 | No organisation scope in RLS; `organisations` table empty & unused | Critical | `organisations` (0 rows); `MIGRATIONS_V40/V41`, `BACKEND_RLS.sql`; `profiles.site`/`country` | Cross-org data exposure - a user can read another org's records via overlapping `country`/`site` | Introduce org_id on operational tables; make RLS org-aware; backfill from geography | P1→P2 |
 | C-02 | Mobile `recordQueue` writes to arbitrary client-named tables | Critical | `mobile/lib/recordQueue.ts` `saveRecord(table,payload)`→`from(table).insert` | Client chooses destination table/payload; integrity & privilege risk on flush | Replace with typed offline commands (intent, not table); validate on flush | P1→P5 |
 | C-03 | PWA caches authenticated REST/auth/private storage; no logout cache clear | Critical | `vite.config.js` runtimeCaching: `/rest/` 5min, `/auth/` 60s, `/storage/` CacheFirst 24h | Account switch can surface prior user's cached data/files | Cache only app shell/static; drop authed caches; clear on logout/account switch | P1 |
 | C-04 | Anon key hardcoded in committed mobile config | Critical | `mobile/app.json`, `mobile/eas.json` (3 profiles) | Secret committed to VCS; rotation hard; bad precedent | Move to EAS Secrets / `EXPO_PUBLIC_*` at build; remove from committed files | P1 |
@@ -30,13 +30,13 @@ Items already addressed on the current branch are marked **RESOLVED** and retain
 | C-06 | No file-metadata table; file access not auditable/scopable per record | Critical | No `file_*` table; storage paths embedded in records | Cannot prove who may access which file or audit access by org/entity | Add file-metadata table (owner, org, entity_type, entity_id, bucket, path, type, date) | P1→P2 |
 | C-07 | Critical multi-table workflows composed as separate frontend writes | Critical | `mobile/.../tyre-change.tsx`, `src/pages/TyreExchange.jsx`, `TyreLifecycle.jsx` | Mid-sequence failure leaves half-finished tyre/stock state | Wrap remove→event→fit→stock→audit in one RPC/transaction | P3 |
 | C-08 | Stock totals editable client-side; not derived from ledger | Critical | `src/pages/StockManagement.jsx`, `StockReplenishment.jsx`; `stock` vs `stock_records`+`stock_movements` | Manual edits can corrupt stock truth | Make `stock_movements` ledger authoritative; derive balances | P2 |
-| C-R1 | Accident photos public/permanent URLs | Critical | `accident-photos` bucket; `mobile/lib/photoUpload.ts` | Permanent public links to accident imagery | **RESOLVED** — bucket private, returns `storageRef`, 15-min signed URLs | — |
-| C-R2 | User enumeration via auth error messages | Critical | Auth flows | Account discovery | **RESOLVED** — generic auth errors | — |
-| C-R3 | Bulk-upload payloads unvalidated server-side | Critical | bulk upload path | Bad/oversized data into DB | **RESOLVED** — DB CHECK constraints + client sanitisation | — |
+| C-R1 | Accident photos public/permanent URLs | Critical | `accident-photos` bucket; `mobile/lib/photoUpload.ts` | Permanent public links to accident imagery | **RESOLVED** - bucket private, returns `storageRef`, 15-min signed URLs | - |
+| C-R2 | User enumeration via auth error messages | Critical | Auth flows | Account discovery | **RESOLVED** - generic auth errors | - |
+| C-R3 | Bulk-upload payloads unvalidated server-side | Critical | bulk upload path | Bad/oversized data into DB | **RESOLVED** - DB CHECK constraints + client sanitisation | - |
 
 ---
 
-## High — operational risk
+## High - operational risk
 
 | ID | Gap | Severity | Evidence (file / table) | Impact | Recommended fix | Phase |
 |---|---|---|---|---|---|---|
@@ -47,12 +47,12 @@ Items already addressed on the current branch are marked **RESOLVED** and retain
 | H-05 | KPI definitions live in client code; risk of divergent numbers | High | `src/lib/kpiEngine.js`, `analyticsEngine.js`, `aiAnalytics.js` | CPK/tyre-life/failure-rate differ across pages | Centralise KPI definitions (DB views / single module) | P4 |
 | H-06 | Mobile offline not atomic; no conflict resolution | High | `mobile/lib/offlineQueue.ts`, `recordQueue.ts`, `offlineCommands.ts` | Partial sync of multi-step ops; silent overwrite of concurrent edits | Typed commands + RPC execution + conflict strategy | P5 |
 | H-07 | Two parallel asset masters in active use | High | `vehicle_fleet` (canon) vs `fleet_master` (legacy) | Divergent vehicle data; ambiguous source of truth | Compatibility view + reconcile + migrate reads to `vehicle_fleet` | P2 |
-| H-R1 | AI feature unbounded cost/abuse | High | `chat-ai`, `api_rate_limits`, `ai_usage_log` | Token/cost abuse | **RESOLVED** — model lock + 20/min & 500/day + cache + usage log | — |
-| H-R2 | No idle session timeout (web) | High | `src/contexts/AuthContext.jsx` | Unattended sessions | **RESOLVED** — 30-min in-memory idle timeout + MFA | — |
+| H-R1 | AI feature unbounded cost/abuse | High | `chat-ai`, `api_rate_limits`, `ai_usage_log` | Token/cost abuse | **RESOLVED** - model lock + 20/min & 500/day + cache + usage log | - |
+| H-R2 | No idle session timeout (web) | High | `src/contexts/AuthContext.jsx` | Unattended sessions | **RESOLVED** - 30-min in-memory idle timeout + MFA | - |
 
 ---
 
-## Medium — maintainability / performance
+## Medium - maintainability / performance
 
 | ID | Gap | Severity | Evidence (file / table) | Impact | Recommended fix | Phase |
 |---|---|---|---|---|---|---|

@@ -187,7 +187,7 @@ CORS is origin-allowlisted (`ALLOWED_ORIGINS` env, default `tyrepulse.app` + loc
 | Generic records | `tp_record_queue_v1` (SecureStore) | `mobile/lib/recordQueue.ts` - `saveRecord(table, payload)` tries `supabase.from(table).insert(payload)` immediately; on any error enqueues and retries on sync. |
 | PWA inspections (web) | Workbox background sync | `src/lib/offlineQueue.js` - POST queued `NetworkOnly` + background sync. |
 
-**Critical issue:** `recordQueue.ts` lets the **client choose the destination table** (`saveRecord(table, …)`), and `syncRecordQueue()` replays `supabase.from(item.table).insert(item.payload)`. A mobile client must never decide which table to write to. The Go API replaces this with typed, server-routed commands. See Security Register **R-03**.
+**Critical issue:** `recordQueue.ts` lets the **client choose the destination table** (`saveRecord(table, ...)`), and `syncRecordQueue()` replays `supabase.from(item.table).insert(item.payload)`. A mobile client must never decide which table to write to. The Go API replaces this with typed, server-routed commands. See Security Register **R-03**.
 
 ---
 
@@ -232,7 +232,7 @@ All AI/email/embedding provider keys live **only** in Edge Function environment 
 
 ## 12. Database Migration History
 
-- **48 fragmented root SQL files**: `MIGRATIONS_V1` … `MIGRATIONS_V41` plus `MASTER_MIGRATION.sql` (**canonical, 1039 lines**), `MASTER_ENGINE.sql`, `MIGRATIONS_SAFE.sql`, `BACKEND_RLS.sql`, `SUPABASE_SCHEMA.sql`, `MIGRATION_ADMIN_PROFILES.sql`.
+- **48 fragmented root SQL files**: `MIGRATIONS_V1` ... `MIGRATIONS_V41` plus `MASTER_MIGRATION.sql` (**canonical, 1039 lines**), `MASTER_ENGINE.sql`, `MIGRATIONS_SAFE.sql`, `BACKEND_RLS.sql`, `SUPABASE_SCHEMA.sql`, `MIGRATION_ADMIN_PROFILES.sql`.
 - No single linear, traceable migration chain. `MASTER_MIGRATION.sql` is the canonical schema; `MIGRATIONS_SAFE.sql` carries legacy variants.
 - V40 (`MIGRATIONS_V40_SECURITY_HARDENING.sql`) and V41 (`MIGRATIONS_V41_RLS_POLICY_CLEANUP.sql`) hardened RLS helpers and policies.
 - Consolidation into one ordered, version-controlled migration set is a Step-1 prerequisite - Security Register **R-06**.

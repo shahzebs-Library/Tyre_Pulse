@@ -398,7 +398,7 @@ export default function Budgets() {
             </select>
             {Object.keys(plannerEdits).length > 0 && (
               <button onClick={savePlannerEdits} disabled={savingPlanner} className="btn-primary text-sm disabled:opacity-50">
-                {savingPlanner ? 'Saving…' : `Save ${Object.keys(plannerEdits).length} Changes`}
+                {savingPlanner ? 'Saving...' : `Save ${Object.keys(plannerEdits).length} Changes`}
               </button>
             )}
           </div>
@@ -532,7 +532,7 @@ export default function Budgets() {
               <div><label className="label">Monthly Budget ({activeCurrency})</label><input type="number" className="input" value={form.monthly_budget} onChange={e => setForm(f => ({ ...f, monthly_budget: +e.target.value }))} min={0} step={500} required /></div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Save size={16} /> {saving ? 'Saving…' : 'Save'}
+                  <Save size={16} /> {saving ? 'Saving...' : 'Save'}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
               </div>

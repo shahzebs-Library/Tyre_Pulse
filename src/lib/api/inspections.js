@@ -1,6 +1,6 @@
 /**
- * Inspections service — inspection records (inspections). Explicit column lists
- * (no SELECT *); null-safe country scoping. Additive only — mirrors
+ * Inspections service - inspection records (inspections). Explicit column lists
+ * (no SELECT *); null-safe country scoping. Additive only - mirrors
  * assets.js / tyres.js.
  */
 import { supabase, unwrap, applyCountry } from './_client'

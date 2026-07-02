@@ -1,5 +1,5 @@
 /**
- * Import Center — per-row transform / normalise engine.
+ * Import Center - per-row transform / normalise engine.
  *
  * Applies a confirmed mapping to a raw row and produces three views:
  *   - mapped       : source-header → target-key rename (raw values, no coercion).
@@ -319,7 +319,7 @@ export function transformRow(rawRow, mapping, options = {}) {
           transformed.amount_original = c.amount
           transformed.currency_original = c.currency
           transformed[`${target}_currency`] = c.currency
-          // Conversion trail (directive §12) — NEVER silent. Convert only when an
+          // Conversion trail (directive §12) - NEVER silent. Convert only when an
           // APPROVED rate for the row's currency was preloaded into options.fxRates.
           if (baseCurrency && c.currency) {
             if (c.currency === baseCurrency) {
@@ -399,7 +399,7 @@ export function transformRow(rawRow, mapping, options = {}) {
     const q2 = transformed.qty != null && transformed.qty !== 0 ? transformed.qty : (u2 != null ? 1 : null)
     if (u2 != null && q2 != null) transformed.line_total = round(u2 * q2, 2)
     else if (total != null) transformed.line_total = total
-    // total_amount is not a real column — keep line_total, drop the alias so the
+    // total_amount is not a real column - keep line_total, drop the alias so the
     // commit's column-intersection stays clean.
     delete transformed.total_amount
     delete transformed.total_amount_currency

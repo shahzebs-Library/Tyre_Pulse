@@ -1,5 +1,5 @@
 /**
- * Budgets service — budgets records, plus the supporting tyre_records spend read
+ * Budgets service - budgets records, plus the supporting tyre_records spend read
  * the Budgets page needs. Explicit column lists (no SELECT *); additive, mirrors
  * kpiTargets.js / correctiveActions.js.
  *
@@ -21,7 +21,7 @@ import { supabase, unwrap, fetchAllPages } from './_client'
 const BUDGET_COLS =
   'id,site,region,monthly_budget,year,month,created_by,created_at,country,status'
 
-// Column set for the tyre_records spend read — EXACTLY the page's select.
+// Column set for the tyre_records spend read - EXACTLY the page's select.
 const TYRE_RECORD_COLS = 'site, cost_per_tyre, qty, issue_date'
 
 /**

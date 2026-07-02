@@ -1,8 +1,8 @@
-# Security Hardening Plan — TyrePulse
+# Security Hardening Plan - TyrePulse
 
-**Phase 0 — read-only plan. Companion to `CURRENT_SYSTEM_AUDIT.md` and `PRODUCT_GAP_REGISTER.md`.**
+**Phase 0 - read-only plan. Companion to `CURRENT_SYSTEM_AUDIT.md` and `PRODUCT_GAP_REGISTER.md`.**
 
-This plan hardens the *existing* TyrePulse stack in place — Vite/React 19 web, Expo SDK 54 / RN 0.81.5 mobile, Supabase (Postgres + GoTrue Auth + Storage + Deno Edge Functions). It maps the directive's security rules and the 10 confirmed issues to current reality, records what is already mitigated, and defines required actions by phase. No re-platforming, no new backend.
+This plan hardens the *existing* TyrePulse stack in place - Vite/React 19 web, Expo SDK 54 / RN 0.81.5 mobile, Supabase (Postgres + GoTrue Auth + Storage + Deno Edge Functions). It maps the directive's security rules and the 10 confirmed issues to current reality, records what is already mitigated, and defines required actions by phase. No re-platforming, no new backend.
 
 **Phase legend:** P1 Security & platform foundation · P2 Data-model/audit consolidation · P3 Lifecycle/structured data · P5 Mobile offline hardening · P6 Release/perf hardening.
 
@@ -12,7 +12,7 @@ This plan hardens the *existing* TyrePulse stack in place — Vite/React 19 web,
 
 The entire security boundary today is **Postgres RLS plus three role-gated edge functions**. There is no application API layer, so RLS *must* be correct and complete. Recent work materially improved posture (private buckets + signed URLs, AI model lock + rate limiting, idle timeout, RLS broad-policy cleanup, bulk-upload constraints, generic auth errors). The remaining structural risks are **absence of organisation isolation**, **client-trusted mobile writes**, **authenticated-data caching in the PWA**, and **no per-file metadata/authority**.
 
-**Secret boundary (correct today):** Anthropic, OpenAI, Resend, and `service_role` keys live only in edge-function secrets (`supabase/functions/`). Clients hold only the public Supabase URL + anon key. The one exposure is the anon key being *committed* into mobile config (S-01) — RLS-protected, but it must not live in VCS.
+**Secret boundary (correct today):** Anthropic, OpenAI, Resend, and `service_role` keys live only in edge-function secrets (`supabase/functions/`). Clients hold only the public Supabase URL + anon key. The one exposure is the anon key being *committed* into mobile config (S-01) - RLS-protected, but it must not live in VCS.
 
 ---
 
@@ -20,15 +20,15 @@ The entire security boundary today is **Postgres RLS plus three role-gated edge 
 
 | Directive rule | Current reality | Status |
 |---|---|---|
-| Never expose service-role/AI/email/storage/DB secrets to web/mobile | Only in edge-function secrets; clients hold URL + anon key | MET (except anon key committed — S-01) |
-| No public URLs for accident/inspection/warranty/vehicle/report files | All three buckets private; `tp-storage://` refs → 15-min signed URLs | MET (comment cleanup pending — S-08) |
-| Don't trust hidden buttons as access control | `hasPermission()` is UI-only; RLS is authority | MET in principle — must verify RLS on every table (S-04) |
-| RLS must enforce tenant isolation, org scope, roles, private storage, correct writes | Role + geographic scope present; **org isolation absent**; `organisations` empty | PARTIAL — S-05 |
-| Validate file ext/MIME/size/path/uploader; collision-resistant paths; file metadata record | ext/size validated; collision-resistant paths; **no file-metadata table** | PARTIAL — S-06 |
-| PWA must not cache auth/authed REST/private files; clear cache on logout | Caches `/rest/`, `/auth/`, `/storage/`; no logout clear | NOT MET — S-02 |
-| Mobile clients must not choose DB table names | `recordQueue` passes arbitrary `table` to `insert` | NOT MET — S-03 |
-| Confirm VITE/EXPO_PUBLIC vars hold only public URL + anon key; add startup checks | `.env.example` uses `VITE_SUPABASE_URL`/`ANON_KEY`; anon key committed in mobile; no startup secret check | PARTIAL — S-01, S-07 |
-| One consistent audit event format | Four audit tables, no shared schema | NOT MET — S-09 |
+| Never expose service-role/AI/email/storage/DB secrets to web/mobile | Only in edge-function secrets; clients hold URL + anon key | MET (except anon key committed - S-01) |
+| No public URLs for accident/inspection/warranty/vehicle/report files | All three buckets private; `tp-storage://` refs → 15-min signed URLs | MET (comment cleanup pending - S-08) |
+| Don't trust hidden buttons as access control | `hasPermission()` is UI-only; RLS is authority | MET in principle - must verify RLS on every table (S-04) |
+| RLS must enforce tenant isolation, org scope, roles, private storage, correct writes | Role + geographic scope present; **org isolation absent**; `organisations` empty | PARTIAL - S-05 |
+| Validate file ext/MIME/size/path/uploader; collision-resistant paths; file metadata record | ext/size validated; collision-resistant paths; **no file-metadata table** | PARTIAL - S-06 |
+| PWA must not cache auth/authed REST/private files; clear cache on logout | Caches `/rest/`, `/auth/`, `/storage/`; no logout clear | NOT MET - S-02 |
+| Mobile clients must not choose DB table names | `recordQueue` passes arbitrary `table` to `insert` | NOT MET - S-03 |
+| Confirm VITE/EXPO_PUBLIC vars hold only public URL + anon key; add startup checks | `.env.example` uses `VITE_SUPABASE_URL`/`ANON_KEY`; anon key committed in mobile; no startup secret check | PARTIAL - S-01, S-07 |
+| One consistent audit event format | Four audit tables, no shared schema | NOT MET - S-09 |
 
 ---
 
@@ -57,7 +57,7 @@ The entire security boundary today is **Postgres RLS plus three role-gated edge 
 | **S-02** | PWA caches authenticated data; no logout clear | Critical | `vite.config.js` runtimeCaching: `/rest/` NetworkFirst 5min, `/auth/` NetworkFirst 60s, `/storage/` **CacheFirst 24h** | No | Cache only app shell, icons, fonts, safe static assets. **Remove** caching of `/rest/`, `/auth/`, `/storage/`. Clear all user-scoped caches + service-worker caches on logout and on account switch so a new user never sees prior cached data/files | P1 |
 | **S-03** | Mobile client chooses DB table & payload | Critical | `mobile/lib/recordQueue.ts` `saveRecord(table,payload)` → `supabase.from(table).insert(payload)`; flush replays raw payloads | No | Replace with **typed offline commands** (`offlineCommands.ts`): client emits an *intent* (e.g. `submitTyreChange`), never a table name. Validate on flush; route critical multi-table ops through RPC. Retire generic `recordQueue` | P1→P5 |
 | **S-04** | UI permission mistaken for security | Critical | `src/contexts/AuthContext.jsx` `ROLE_DEFAULTS` + `hasPermission()` (UI guard) + `rpc get_user_module_permissions`; RLS helpers `app_role()`/`app_is_active()`/`app_is_elevated()`/`get_my_role()` | Partial (V41 dropped broad "full access" policies) | Audit **every** table to confirm RLS read/write authority independent of UI. Keep `hasPermission` strictly as UI guard. Store real module permissions server-side. Add automated access tests for Admin, Manager, Director, Inspector, Tyre Man, Reporter, Driver | P1 |
-| **S-05** | No organisation isolation in RLS (cross-org access) | Critical | `organisations` table EXISTS but 0 rows and **not referenced in any policy**; scope is geographic only — `profiles.site` (text) + `profiles.country` (text[]); overlapping country/site can expose another org's data | No | Add `org_id` to operational tables; backfill from geography; make RLS org-aware (every operational policy filters by caller's org). Prevent access via URL/payload/browser-state tampering. Normalise loose `site`/`country` to referenced dimensions. Add cross-org isolation tests | P1→P2 |
+| **S-05** | No organisation isolation in RLS (cross-org access) | Critical | `organisations` table EXISTS but 0 rows and **not referenced in any policy**; scope is geographic only - `profiles.site` (text) + `profiles.country` (text[]); overlapping country/site can expose another org's data | No | Add `org_id` to operational tables; backfill from geography; make RLS org-aware (every operational policy filters by caller's org). Prevent access via URL/payload/browser-state tampering. Normalise loose `site`/`country` to referenced dimensions. Add cross-org isolation tests | P1→P2 |
 | **S-06** | No file-metadata table; file access not auditable/scopable | Critical | Buckets private + signed URLs, but no DB record binds a file to owner/org/entity; storage paths embedded ad hoc in records | Partial (storage RLS + signed URLs) | Add **file-metadata table** (owner, organisation, entity_type, entity_id, bucket, storage_path, file_type, uploaded_at). Store only bucket + path in records. Issue signed URLs only after authorising the requester against the metadata row. Add test proving one org cannot access another org's files | P1→P2 |
 | **S-07** | No startup secret/env validation | High | `.env.example` uses `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`; no guard prevents a secret key in `VITE_*`/`EXPO_PUBLIC_*` | No | Add startup checks (web + mobile) asserting only public URL + anon key are present and that no service-role/AI/email pattern appears in client env. Add developer docs. Block local shortcuts that put secret keys in browser/Expo vars | P1 |
 | **S-08** | Stale "public bucket / public URL" comments | Medium | Code path is private + ref-based, but `mobile/lib/photoUpload.ts` (~L70) and `recordQueue.ts` (~L11) comments still describe public buckets/permanent public URLs | Code **RESOLVED**; comments not | Correct comments to reflect private `storageRef` + signed-URL model. Documentation-only cleanup; no code-path change | P1 |
@@ -66,7 +66,7 @@ The entire security boundary today is **Postgres RLS plus three role-gated edge 
 
 ---
 
-## 5. Already-mitigated controls (DONE — recent work on this branch)
+## 5. Already-mitigated controls (DONE - recent work on this branch)
 
 Retained for traceability; do not re-implement.
 
@@ -101,7 +101,7 @@ Add to close S-06:
 
 - Keep existing role names (Admin, Manager, Director, Inspector, Tyre Man, Reporter, Driver) for compatibility.
 - Store **real module permissions in the database**; `rpc get_user_module_permissions` feeds the UI only.
-- `hasPermission()` is and remains a **UI guard** — RLS is the sole authority for reads/writes.
+- `hasPermission()` is and remains a **UI guard** - RLS is the sole authority for reads/writes.
 - Every operational policy enforces **role + organisation + site** scope.
 - Users cannot reach another org's records by editing a URL, payload, or browser/local state.
 - Automated tests cover all seven roles plus cross-org isolation, run in CI before each phase merge.

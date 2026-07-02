@@ -1,5 +1,5 @@
 /**
- * Purchase Orders service — purchase_orders records, plus the two read helpers
+ * Purchase Orders service - purchase_orders records, plus the two read helpers
  * the Stock Replenishment page needs (replenishment stock levels + recent tyre
  * issues used for consumption/cost analytics). Explicit column lists (no
  * SELECT * except where the page relied on it), additive, mirrors the sibling

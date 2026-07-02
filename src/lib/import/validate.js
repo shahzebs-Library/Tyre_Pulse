@@ -1,5 +1,5 @@
 /**
- * Import Center — row validation + duplicate classification.
+ * Import Center - row validation + duplicate classification.
  *
  * validateRow grades a transformed row 'ready' | 'warning' | 'error' with a list
  * of structured issues (required-field, date, numeric, lifecycle, currency).
@@ -116,7 +116,7 @@ export function validateRow(transformed, module) {
   }
 
   // Controlled-vocabulary (CHECK constraint) domains: a non-blank value outside
-  // the target column's allowed set is a WARNING, not a hard error — the import
+  // the target column's allowed set is a WARNING, not a hard error - the import
   // must not be blocked because one mapped column carries a foreign vocabulary
   // (e.g. a "Tracking Category" of "Active" mapped onto work_orders.status). The
   // pipeline preserves the original in custom_data and drops the column before
@@ -157,7 +157,7 @@ export function validateRow(transformed, module) {
         field: 'cost_per_tyre',
         severity: 'warning',
         code: 'CURRENCY_MISSING',
-        message: 'Cost supplied without a currency — defaulting may be required.',
+        message: 'Cost supplied without a currency - defaulting may be required.',
       })
     }
   }
@@ -168,7 +168,7 @@ export function validateRow(transformed, module) {
     const approved = row.claim_approved_amount
     const recovered = row.recovered_amount
     const repair = row.repair_cost
-    // Recovery cannot exceed the claim — a hard data error (block).
+    // Recovery cannot exceed the claim - a hard data error (block).
     if (typeof recovered === 'number' && typeof claim === 'number' && claim > 0 && recovered > claim) {
       issues.push({
         field: 'recovered_amount',
@@ -201,7 +201,7 @@ export function validateRow(transformed, module) {
         field: 'estimated_damage_cost',
         severity: 'warning',
         code: 'ESTIMATE_MISSING',
-        message: 'Claim raised without an estimate — follow-up required.',
+        message: 'Claim raised without an estimate - follow-up required.',
       })
     }
     // No identifier at all → cannot dedup or trace; flag for review match.
@@ -210,7 +210,7 @@ export function validateRow(transformed, module) {
         field: 'insurance_claim_no',
         severity: 'warning',
         code: 'NO_IDENTIFIER',
-        message: 'No claim or police report number — duplicate detection limited; review match required.',
+        message: 'No claim or police report number - duplicate detection limited; review match required.',
       })
     }
   }
@@ -293,7 +293,7 @@ const NATURAL_KEY = {
   workorder: (r) => keyParts([r.country, r.work_order_no]),
   // Warranty: serial + claim ref (serial required).
   warranty: (r) => keyParts([r.country, r.serial_number, r.claim_no]),
-  // Gate pass: no pass number column — asset + pass date.
+  // Gate pass: no pass number column - asset + pass date.
   gatepass: (r) => keyParts([r.country, r.asset_no, r.pass_date]),
   // Supplier master: code preferred, else name.
   supplier: (r) => keyParts([r.country, r.supplier_code || r.supplier_name]),
@@ -387,7 +387,7 @@ export function classifyDuplicates(rows, module) {
 }
 
 /**
- * Compute the natural key for a single row in a module — the SAME key the
+ * Compute the natural key for a single row in a module - the SAME key the
  * server RPC import_existing_keys() builds, so UI live-dedup and tests stay in
  * lockstep with the database. Returns null when the identifying component is
  * absent (key not usable for matching).
@@ -410,7 +410,7 @@ export function naturalKey(row, module) {
 /* ── Country-scope guard ──────────────────────────────────────────────────────
  * The directive's first rule: never mix one country's records into another. When
  * a source row carries its OWN country value that disagrees with the country the
- * import is scoped to, it must be flagged for review — never silently re-filed.
+ * import is scoped to, it must be flagged for review - never silently re-filed.
  */
 const COUNTRY_ALIASES = {
   ksa:     ['ksa', 'sa', 'sau', 'saudi', 'saudi arabia', 'kingdom of saudi arabia', 'k s a', 'المملكة العربية السعودية', 'السعودية'],

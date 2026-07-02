@@ -97,7 +97,7 @@ export default function DataIntakeCenter() {
 
   // Finer-granularity ("wrong module") heuristic: when >60% of keyed rows collapse
   // onto an existing/repeated natural key, the file is likely line-item data staged
-  // against the wrong module. Non-blocking — surfaced as a banner on the Validate step.
+  // against the wrong module. Non-blocking - surfaced as a banner on the Validate step.
   const granularityWarning = useMemo(
     () => wrongModuleWarning(counts, module, WRONG_MODULE_THRESHOLD),
     [counts, module],
@@ -193,7 +193,7 @@ export default function DataIntakeCenter() {
       })
       await imports.saveSheets(id, parsed.sheets)
       setBatchId(id)
-      // seed mapping suggestions — but do NOT pre-apply low-confidence guesses.
+      // seed mapping suggestions - but do NOT pre-apply low-confidence guesses.
       // A 'review' action (confidence < SUGGEST_THRESHOLD) keeps its guess only
       // as a hint; the selected target defaults to null ("preserve as custom")
       // so a weak guess (e.g. Store Code → Country) is never silently applied.
@@ -296,7 +296,7 @@ export default function DataIntakeCenter() {
       const v = validateRow(transformed, module)
       // An out-of-domain enum value would be rejected by the DB CHECK and fail
       // the whole commit. Preserve the original in custom_data and drop the
-      // column so the row still commits (the DB default applies) — the warning
+      // column so the row still commits (the DB default applies) - the warning
       // from validateRow keeps it visible for review.
       const cleanCustom = { ...custom }
       for (const iss of v.issues || []) {
@@ -315,14 +315,14 @@ export default function DataIntakeCenter() {
 
     // Line-item aggregation: a profile can declare that this format carries
     // several rows per business record (e.g. store-issue lines per work order).
-    // Collapse them here — costs summed, every source line preserved in
-    // custom_data.line_items — so the commit produces ONE record per key.
+    // Collapse them here - costs summed, every source line preserved in
+    // custom_data.line_items - so the commit produces ONE record per key.
     const aggCfg = appliedProfile?.unit_settings?.aggregate
     if (aggCfg?.by) rows = aggregateStagedRows(rows, aggCfg)
 
     // Country-scope guard (directive rule #1: never mix countries). A row whose
     // own country value disagrees with the selected import country is flagged for
-    // review — never silently re-filed under the selected country.
+    // review - never silently re-filed under the selected country.
     setCountryAck(false)
     rows.forEach((r) => {
       if (countryConflict(r.transformed, activeCountry)) {
@@ -340,7 +340,7 @@ export default function DataIntakeCenter() {
     rows.forEach((r, i) => { r.dupStatus = withDup[i]?.dup_status || 'none' })
 
     // Live-table duplicate detection (V47). Fault-tolerant: if the RPC is not yet
-    // deployed or errors, fall back to in-batch dedup only — never break the wizard.
+    // deployed or errors, fall back to in-batch dedup only - never break the wizard.
     let liveKeys = null
     try {
       liveKeys = await imports.existingKeys({ module, country: activeCountry })
@@ -373,7 +373,7 @@ export default function DataIntakeCenter() {
       if (r.dupStatus === 'conflict') c.conflict++
       if (r.liveDuplicate) c.liveDuplicate++
       if (r.countryConflict) c.countryConflict++
-      // Rows that produce a usable natural key — the denominator for the
+      // Rows that produce a usable natural key - the denominator for the
       // finer-granularity ("wrong module") duplicate-ratio heuristic.
       if (naturalKey(r.transformed, module) != null) c.keyed++
       // Roll up spend for the batch: prefer the derived per-line total, else
@@ -479,7 +479,7 @@ export default function DataIntakeCenter() {
       if (isElevated) await imports.approveBatch(batchId)
       const res = await imports.commitBatch(batchId)
       setResult(res)
-      // Value-producing automation (directive §20). Best-effort — must never
+      // Value-producing automation (directive §20). Best-effort - must never
       // block or fail the commit the operator already succeeded at.
       if (res?.status === 'committed') {
         imports.runPostImportAutomation(batchId, module, { country: activeCountry })
@@ -498,7 +498,7 @@ export default function DataIntakeCenter() {
         <h1 className="text-2xl font-bold text-white mb-2">Data Intake Center</h1>
         <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-6 text-amber-300 flex gap-3">
           <AlertTriangle className="shrink-0" />
-          <p>Select a single country (top bar) before importing. Every import is scoped to one country — mixing countries is not allowed.</p>
+          <p>Select a single country (top bar) before importing. Every import is scoped to one country - mixing countries is not allowed.</p>
         </div>
       </div>
     )
@@ -509,7 +509,7 @@ export default function DataIntakeCenter() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Database size={22} /> Data Intake Center</h1>
-          <p className="text-sm text-gray-400">Controlled import for <span className="text-white">{activeCountry}</span> — staged, validated, approved, then committed.</p>
+          <p className="text-sm text-gray-400">Controlled import for <span className="text-white">{activeCountry}</span> - staged, validated, approved, then committed.</p>
         </div>
         <button onClick={reset} className="text-sm px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 flex items-center gap-2"><RefreshCw size={15} /> New import</button>
       </div>
@@ -519,7 +519,7 @@ export default function DataIntakeCenter() {
         {STEPS.map((s, i) => (
           <div key={s} className={`flex items-center gap-2 text-sm ${i === step ? 'text-white' : i < step ? 'text-green-400' : 'text-gray-500'}`}>
             <span className={`w-6 h-6 rounded-full grid place-items-center text-xs ${i === step ? 'bg-green-600 text-white' : i < step ? 'bg-green-900/40' : 'bg-gray-800'}`}>{i + 1}</span>
-            {s}{i < STEPS.length - 1 && <span className="text-gray-700 mx-1">—</span>}
+            {s}{i < STEPS.length - 1 && <span className="text-gray-700 mx-1">-</span>}
           </div>
         ))}
       </div>
@@ -542,7 +542,7 @@ export default function DataIntakeCenter() {
             {busy ? <Loader2 className="animate-spin mx-auto text-green-400" /> : <UploadCloud className="mx-auto text-gray-500" size={34} />}
             <p className="mt-2 text-sm text-gray-400">{file ? file.name : 'Choose one or more Excel / CSV files'}</p>
             {fileQueue.length > 0 && (
-              <p className="mt-1 text-xs text-sky-400">{fileQueue.length} more file{fileQueue.length !== 1 ? 's' : ''} queued — offered after this import finishes.</p>
+              <p className="mt-1 text-xs text-sky-400">{fileQueue.length} more file{fileQueue.length !== 1 ? 's' : ''} queued - offered after this import finishes.</p>
             )}
           </label>
 
@@ -567,7 +567,7 @@ export default function DataIntakeCenter() {
           {appliedProfile && (
             <div className="bg-sky-900/20 border border-sky-700/50 rounded-xl p-3 text-sky-300 text-sm flex items-center gap-2">
               <Bookmark size={15} className="shrink-0" />
-              <span>Recognised format — mapping profile <span className="font-semibold text-white">“{appliedProfile.name}”</span> applied automatically{appliedProfile.unit_settings?.aggregate?.by ? ' (line items will be combined per record)' : ''}. Review below and adjust if needed.</span>
+              <span>Recognised format - mapping profile <span className="font-semibold text-white">“{appliedProfile.name}”</span> applied automatically{appliedProfile.unit_settings?.aggregate?.by ? ' (line items will be combined per record)' : ''}. Review below and adjust if needed.</span>
             </div>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -582,7 +582,7 @@ export default function DataIntakeCenter() {
                     className="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs"
                     title="Apply a saved mapping profile"
                   >
-                    <option value="">Apply saved profile…</option>
+                    <option value="">Apply saved profile...</option>
                     {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
@@ -604,7 +604,7 @@ export default function DataIntakeCenter() {
                       <td className="px-3 py-2 text-gray-500 truncate max-w-[160px]">{String(sample ?? '')}</td>
                       <td className="px-3 py-2">
                         <select value={m.target || ''} onChange={(e) => setTarget(m.sourceHeader, e.target.value)} className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs">
-                          <option value="">— preserve as custom —</option>
+                          <option value="">- preserve as custom -</option>
                           {targetOptions.map((t) => <option key={t.key} value={t.key}>{t.label}{t.required ? ' *' : ''}</option>)}
                         </select>
                         {!m.target && m.suggestedTarget && (
@@ -612,7 +612,7 @@ export default function DataIntakeCenter() {
                             type="button"
                             onClick={() => setTarget(m.sourceHeader, m.suggestedTarget)}
                             className="mt-1 block text-[11px] text-amber-400 hover:text-amber-300 underline decoration-dotted"
-                            title="Low-confidence guess — click to apply"
+                            title="Low-confidence guess - click to apply"
                           >
                             Suggested: {targetOptions.find((t) => t.key === m.suggestedTarget)?.label || m.suggestedTarget}
                             {typeof m.suggestedConfidence === 'number' ? ` (${m.suggestedConfidence}%)` : ''}
@@ -656,7 +656,7 @@ export default function DataIntakeCenter() {
             <div className="bg-amber-900/20 border border-amber-600/50 rounded-xl p-4 space-y-2">
               <p className="text-sm text-amber-300 flex items-center gap-2">
                 <AlertTriangle size={16} />
-                This file looks like line-item / finer-grained data — it may be the wrong module.
+                This file looks like line-item / finer-grained data - it may be the wrong module.
               </p>
               <p className="text-xs text-gray-400">
                 The natural key for <span className="text-gray-200 font-semibold">{MODULES.find((m) => m.key === module)?.label || module}</span> is
@@ -676,8 +676,8 @@ export default function DataIntakeCenter() {
                   <tr key={r.sourceRowNo} className="border-t border-gray-800">
                     <td className="px-3 py-1.5 text-gray-500">{r.sourceRowNo}</td>
                     <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${statusColor(r.validationStatus)}`}>{r.validationStatus}</span></td>
-                    <td className="px-3 py-1.5 text-xs text-gray-400">{r.liveDuplicate ? <span className="text-sky-400">already live · skip</span> : r.dupStatus !== 'none' ? r.dupStatus : '—'}</td>
-                    <td className="px-3 py-1.5 text-xs text-gray-500 truncate max-w-[280px]">{r.issues.map((i) => i.message).join('; ') || '—'}</td>
+                    <td className="px-3 py-1.5 text-xs text-gray-400">{r.liveDuplicate ? <span className="text-sky-400">already live · skip</span> : r.dupStatus !== 'none' ? r.dupStatus : '-'}</td>
+                    <td className="px-3 py-1.5 text-xs text-gray-500 truncate max-w-[280px]">{r.issues.map((i) => i.message).join('; ') || '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -718,7 +718,7 @@ export default function DataIntakeCenter() {
               <label className={`block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer ${attachBusy ? 'border-gray-700 opacity-60 pointer-events-none' : 'border-gray-700 hover:border-sky-600/60'}`}>
                 <input type="file" accept=".zip,application/zip" className="hidden" onChange={onAttachmentZip} disabled={attachBusy} />
                 {attachBusy ? <Loader2 className="animate-spin mx-auto text-sky-400" /> : <FileArchive className="mx-auto text-gray-500" size={28} />}
-                <p className="mt-2 text-xs text-gray-400">{attachBusy ? 'Processing package…' : 'Choose a .zip evidence package'}</p>
+                <p className="mt-2 text-xs text-gray-400">{attachBusy ? 'Processing package...' : 'Choose a .zip evidence package'}</p>
               </label>
 
               {attachWarnings.length > 0 && (
@@ -777,7 +777,7 @@ export default function DataIntakeCenter() {
               {module === 'tyre' && counts?.amount > 0 && (
                 <p className="text-sm text-emerald-300 border-t border-gray-800 pt-3">Total tyre amount to be recorded: <span className="font-bold">{fmtMoney(counts.amount)}</span> across {counts.qty || counts.total} tyres.</p>
               )}
-              {!isElevated && <p className="text-xs text-amber-400">Your role can stage but not approve — this will be submitted for approval.</p>}
+              {!isElevated && <p className="text-xs text-amber-400">Your role can stage but not approve - this will be submitted for approval.</p>}
               <button onClick={commit} disabled={busy} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {isElevated ? 'Approve & commit' : 'Submit for approval'}</button>
             </div>
           ) : (
@@ -786,8 +786,8 @@ export default function DataIntakeCenter() {
               : 'bg-green-900/20 border border-green-700/50 text-green-300'}`}>
               {result.status === 'failed' ? <AlertTriangle className="mb-2" /> : <CheckCircle2 className="mb-2" />}
               <p className="font-semibold">
-                {result.status === 'committed' && `Committed — ${result.inserted} row(s) inserted, ${result.skipped} skipped${result.failed ? `, ${result.failed} failed` : ''}.`}
-                {result.status === 'failed' && `No rows could be committed — ${result.failed} row(s) failed. The reasons are listed below.`}
+                {result.status === 'committed' && `Committed - ${result.inserted} row(s) inserted, ${result.skipped} skipped${result.failed ? `, ${result.failed} failed` : ''}.`}
+                {result.status === 'failed' && `No rows could be committed - ${result.failed} row(s) failed. The reasons are listed below.`}
                 {result.status !== 'committed' && result.status !== 'failed' && `Status: ${result.status}`}
               </p>
               {Array.isArray(result.errors) && result.errors.length > 0 && (
@@ -799,9 +799,9 @@ export default function DataIntakeCenter() {
                     </p>
                   ))}
                   {result.failed > result.errors.length && (
-                    <p className="text-[11px] text-red-300/70">…and {result.failed - result.errors.length} more — every failed row's reason is saved on the row (Validation issues, code COMMIT_FAILED).</p>
+                    <p className="text-[11px] text-red-300/70">...and {result.failed - result.errors.length} more - every failed row's reason is saved on the row (Validation issues, code COMMIT_FAILED).</p>
                   )}
-                  <p className="text-[11px] text-red-300/70 pt-1">Fix the source values (or the column mapping) and re-import the file — committed rows are skipped automatically.</p>
+                  <p className="text-[11px] text-red-300/70 pt-1">Fix the source values (or the column mapping) and re-import the file - committed rows are skipped automatically.</p>
                 </div>
               )}
               {automation && (automation.alerts > 0 || automation.actions > 0) && (
@@ -838,7 +838,7 @@ export default function DataIntakeCenter() {
                 return (
                 <tr key={b.id} className="border-t border-gray-800">
                   <td className="px-3 py-1.5 capitalize">{b.module}</td>
-                  <td className="px-3 py-1.5 text-gray-400">{b.country || '—'}</td>
+                  <td className="px-3 py-1.5 text-gray-400">{b.country || '-'}</td>
                   <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${committed ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>{b.import_status}</span></td>
                   <td className="px-3 py-1.5 text-gray-400">{b.imported_rows || 0}/{b.total_rows || 0}</td>
                   <td className="px-3 py-1.5 text-gray-500 text-xs">{b.created_at ? new Date(b.created_at).toLocaleString('en-GB') : ''}</td>
@@ -865,7 +865,7 @@ export default function DataIntakeCenter() {
         <p className="mt-3 text-xs text-gray-600">Original files are stored privately; every source row is preserved. Commits run server-side (permission + country scope + idempotency). <Link to="/upload" className="underline">Legacy upload</Link></p>
       </div>
 
-      {/* uploaded-but-not-imported files (orphans) — nothing is hidden */}
+      {/* uploaded-but-not-imported files (orphans) - nothing is hidden */}
       {orphanFiles.length > 0 && (
         <div className="mt-8">
           <h2 className="text-sm font-semibold text-amber-400/90 mb-2 flex items-center gap-2"><AlertTriangle size={15} /> Uploaded but not yet imported</h2>
@@ -877,8 +877,8 @@ export default function DataIntakeCenter() {
                 {orphanFiles.map((f) => (
                   <tr key={f.id} className="border-t border-gray-800">
                     <td className="px-3 py-1.5 text-gray-300 truncate max-w-[240px]">{f.original_filename}</td>
-                    <td className="px-3 py-1.5 text-gray-400">{f.country || '—'}</td>
-                    <td className="px-3 py-1.5 text-gray-500 text-xs">{f.size_bytes ? `${Math.round(f.size_bytes / 1024)} KB` : '—'}</td>
+                    <td className="px-3 py-1.5 text-gray-400">{f.country || '-'}</td>
+                    <td className="px-3 py-1.5 text-gray-500 text-xs">{f.size_bytes ? `${Math.round(f.size_bytes / 1024)} KB` : '-'}</td>
                     <td className="px-3 py-1.5 text-gray-500 text-xs">{f.created_at ? new Date(f.created_at).toLocaleString('en-GB') : ''}</td>
                     <td className="px-3 py-1.5 text-right">
                       <button onClick={() => deleteOrphan(f)} title="Remove this unused upload"

@@ -117,7 +117,7 @@ export async function exportAccidentPdf(accident: AccidentRecord): Promise<void>
       ${row('Recovery reference', accident.recovery_reference)}
     </table>
     <div class="net">
-      Gross cost ${money(grossCost)} &nbsp;−&nbsp; Recovered ${money(accident.recovered_amount)} &nbsp;=&nbsp;
+      Gross cost ${money(grossCost)} &nbsp;-&nbsp; Recovered ${money(accident.recovered_amount)} &nbsp;=&nbsp;
       <span class="total">Net cost ${money(netCost)}</span>
     </div>
 

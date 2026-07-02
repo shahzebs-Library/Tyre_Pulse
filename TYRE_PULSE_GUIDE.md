@@ -44,7 +44,7 @@ Supported: `.xlsx .xls .xlsm .xlsb .ods .csv .tsv .txt`
    The true header row is found automatically. If it guesses wrong, the **raw
    preview** lets you click the correct header row and it re-maps instantly.
 4. **Smart column mapping** → your column names are matched to system fields
-   (issue date, brand, serial, asset, cost, site, …) across hundreds of
+   (issue date, brand, serial, asset, cost, site, ...) across hundreds of
    variations, abbreviations, and **Arabic** headers. Mappings are remembered
    per file layout, so the next matching file maps itself. You can override any
    mapping by hand.
@@ -218,7 +218,7 @@ Role-adaptive home screen - each user sees only what their role allows.
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Upload button does nothing on "All" | Country safeguard | Pick a specific country in the top bar |
-| "Could not read this file…" | Unreadable/locked/corrupt file | Close it in Excel, or re-save as `.xlsx`/`.csv` |
+| "Could not read this file..." | Unreadable/locked/corrupt file | Close it in Excel, or re-save as `.xlsx`/`.csv` |
 | Wrong columns mapped | Header row mis-detected | Use the raw preview to pick the correct header row |
 | A required field reads low % | Mapping or header issue | Re-map the field or fix the header row |
 | A user can't see data | No country on their profile, or not approved | Admin sets country / approves in Admin → Users |

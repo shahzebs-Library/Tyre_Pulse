@@ -111,7 +111,7 @@ export default function WorkOrdersScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Work Orders</Text>
           <Text style={styles.subtitle}>
-            {loading ? 'Loading…' : `${orders.length} action${orders.length !== 1 ? 's' : ''}${elevated ? '' : ` · ${profile?.site ?? ''}`}`}
+            {loading ? 'Loading...' : `${orders.length} action${orders.length !== 1 ? 's' : ''}${elevated ? '' : ` · ${profile?.site ?? ''}`}`}
           </Text>
         </View>
       </View>
@@ -121,7 +121,7 @@ export default function WorkOrdersScreen() {
         <Ionicons name="search-outline" size={16} color="#94a3b8" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search title, asset, serial…"
+          placeholder="Search title, asset, serial..."
           placeholderTextColor="#94a3b8"
           value={search}
           onChangeText={setSearch}

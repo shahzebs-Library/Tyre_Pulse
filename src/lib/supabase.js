@@ -6,7 +6,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 // Secret-exposure guard. VITE_* values are bundled into public client JS, so
 // only the public Supabase URL + anon key may live there. Anything that looks
 // like a privileged secret (service_role / AI / SMTP / storage keys) must stay
-// server-side in Edge Function secrets — never in a VITE_ variable. This fails
+// server-side in Edge Function secrets - never in a VITE_ variable. This fails
 // loudly in dev and warns in prod rather than silently shipping a leaked key.
 ;(() => {
   const FORBIDDEN = [

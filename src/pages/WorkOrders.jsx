@@ -470,7 +470,7 @@ export default function WorkOrders() {
       <div className="flex items-center justify-center min-h-screen bg-gray-950">
         <div className="text-center">
           <Loader2 className="animate-spin text-blue-400 mx-auto mb-3" size={40} />
-          <p className="text-gray-400">Loading work orders…</p>
+          <p className="text-gray-400">Loading work orders...</p>
         </div>
       </div>
     )
@@ -571,7 +571,7 @@ export default function WorkOrders() {
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
-              placeholder="Search WO#, asset, serial, description…"
+              placeholder="Search WO#, asset, serial, description..."
               className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500"
             />
           </div>
@@ -799,7 +799,7 @@ export default function WorkOrders() {
                 <div>
                   <label className="text-gray-400 text-xs mb-1 block">Description</label>
                   <textarea value={formData.description} onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
-                    rows={3} placeholder="Work description, fault details, observations…"
+                    rows={3} placeholder="Work description, fault details, observations..."
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
                 </div>
                 {/* Labour */}
@@ -856,7 +856,7 @@ export default function WorkOrders() {
                 <div>
                   <label className="text-gray-400 text-xs mb-1 block">Notes</label>
                   <textarea value={formData.notes} onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))}
-                    rows={2} placeholder="Additional notes, follow-up required…"
+                    rows={2} placeholder="Additional notes, follow-up required..."
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
                 </div>
               </div>
@@ -871,7 +871,7 @@ export default function WorkOrders() {
                   <button onClick={handleSave} disabled={saving}
                     className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
                     {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                    {saving ? 'Saving…' : editOrder ? 'Save Changes' : 'Create Work Order'}
+                    {saving ? 'Saving...' : editOrder ? 'Save Changes' : 'Create Work Order'}
                   </button>
                 </div>
               </div>
@@ -899,7 +899,7 @@ export default function WorkOrders() {
               <button onClick={confirmDelete} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                {saving ? 'Deleting…' : 'Delete Work Order'}
+                {saving ? 'Deleting...' : 'Delete Work Order'}
               </button>
               <button onClick={() => { setDeleteTarget(null); setDeleteError('') }} className="btn-secondary">Cancel</button>
             </div>

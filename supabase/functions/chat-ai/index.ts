@@ -155,7 +155,7 @@ serve(async (req) => {
         if (error) console.error('[chat-ai] usage log insert failed:', error.message)
       })
 
-      // AI Cost Monitor dashboard reads ai_token_logs. Fire-and-forget insert —
+      // AI Cost Monitor dashboard reads ai_token_logs. Fire-and-forget insert -
       // wrapped so a logging failure can NEVER affect the user-facing response.
       try {
         svc.from('ai_token_logs').insert({

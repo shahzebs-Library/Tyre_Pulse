@@ -47,7 +47,7 @@ beforeEach(() => {
   h.state.lastRpc = null
 })
 
-describe('service layer — customData: field_synonyms', () => {
+describe('service layer - customData: field_synonyms', () => {
   it('createFieldSynonym inserts into field_synonyms and returns the row', async () => {
     h.state.result = { data: { id: 'fs1', custom_name: 'Reg No' }, error: null, count: 0 }
     const row = await customData.createFieldSynonym({
@@ -72,7 +72,7 @@ describe('service layer — customData: field_synonyms', () => {
   })
 })
 
-describe('service layer — customData: extra field tooling', () => {
+describe('service layer - customData: extra field tooling', () => {
   it('getExtraFieldStats calls the get_extra_field_stats RPC with p_country', async () => {
     h.state.rpc = { data: [{ field_key: 'x', record_count: 3, sample_vals: ['a'] }], error: null }
     const stats = await customData.getExtraFieldStats({ country: 'KSA' })

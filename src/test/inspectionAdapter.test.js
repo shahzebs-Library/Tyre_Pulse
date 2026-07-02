@@ -1,5 +1,5 @@
 /**
- * Import Center — inspection adapter test matrix (Phase 4).
+ * Import Center - inspection adapter test matrix (Phase 4).
  *
  * Exercises the REAL pure pipeline functions for the inspection module: Arabic
  * header mapping, required-field validation, event-level duplicate/conflict
@@ -25,7 +25,7 @@ function buildInspectionRow(rawRow, mapping) {
   return transformed
 }
 
-describe('inspection adapter — Arabic header mapping', () => {
+describe('inspection adapter - Arabic header mapping', () => {
   it('resolves Arabic inspection headers via exactAlias', () => {
     expect(exactAlias('رقم المعدة', 'inspection')).toBe('asset_no')
     expect(exactAlias('تاريخ الفحص', 'inspection')).toBe('inspection_date')
@@ -54,7 +54,7 @@ describe('inspection adapter — Arabic header mapping', () => {
   })
 })
 
-describe('inspection adapter — required-field validation (validateRow)', () => {
+describe('inspection adapter - required-field validation (validateRow)', () => {
   const baseMapping = [
     { sourceHeader: 'Asset No', target: 'asset_no' },
     { sourceHeader: 'Inspection Date', target: 'inspection_date' },
@@ -97,7 +97,7 @@ describe('inspection adapter — required-field validation (validateRow)', () =>
   })
 })
 
-describe('inspection adapter — duplicate classification (event-scoped)', () => {
+describe('inspection adapter - duplicate classification (event-scoped)', () => {
   // Natural key = country + asset_no + inspection_type + inspection_date + inspector.
   const mapping = [
     { sourceHeader: 'Asset No', target: 'asset_no' },
@@ -169,7 +169,7 @@ describe('inspection adapter — duplicate classification (event-scoped)', () =>
   })
 })
 
-describe('inspection adapter — natural key', () => {
+describe('inspection adapter - natural key', () => {
   const mapping = [
     { sourceHeader: 'Asset No', target: 'asset_no' },
     { sourceHeader: 'Inspection Date', target: 'inspection_date' },

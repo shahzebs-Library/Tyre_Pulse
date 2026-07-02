@@ -1,5 +1,5 @@
 /**
- * Import Center — controlled-vocabulary (CHECK constraint) domains.
+ * Import Center - controlled-vocabulary (CHECK constraint) domains.
  *
  * These mirror the LIVE Postgres CHECK constraints on the target tables exactly
  * (verified against information_schema / pg_constraint on project
@@ -58,7 +58,7 @@ export function enumNorm(v) {
 /**
  * Snap a value to its exact domain spelling when it matches loosely; otherwise
  * return it unchanged (validate will flag genuinely-unknown values). Blank/null
- * pass through untouched — enum columns here are all nullable.
+ * pass through untouched - enum columns here are all nullable.
  *
  * @param {*} value
  * @param {string[]} allowed   Exact DB-cased allowed values.
@@ -76,7 +76,7 @@ export function canonicalizeEnum(value, allowed) {
 
 /**
  * Whether a value is within the domain (loose match). Blank is considered valid
- * (nullable column — required-ness is enforced separately).
+ * (nullable column - required-ness is enforced separately).
  * @param {*} value
  * @param {string[]} allowed
  * @returns {boolean}

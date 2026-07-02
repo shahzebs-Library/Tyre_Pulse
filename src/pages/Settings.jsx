@@ -506,7 +506,7 @@ export default function Settings() {
             <div className="flex items-center gap-3 pt-1">
               <button type="submit" disabled={savingProfile}
                 className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
-                <Save size={14} /> {savingProfile ? 'Saving…' : 'Save Profile'}
+                <Save size={14} /> {savingProfile ? 'Saving...' : 'Save Profile'}
               </button>
               {profileMsg && (
                 <span className={`text-sm ${profileMsg.toLowerCase().includes('error') ? 'text-red-400' : 'text-green-400'}`}>
@@ -551,7 +551,7 @@ export default function Settings() {
                 disabled={savingPw || !pwNew || !pwConfirm}
                 className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm"
               >
-                <Save size={14} /> {savingPw ? 'Updating…' : 'Update Password'}
+                <Save size={14} /> {savingPw ? 'Updating...' : 'Update Password'}
               </button>
               {pwMsg && (
                 <span className={`text-sm ${
@@ -662,7 +662,7 @@ export default function Settings() {
             </div>
             <div className="flex items-center gap-3 pt-1">
               <button type="submit" disabled={savingProfile} className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
-                <Save size={14} /> {savingProfile ? 'Saving…' : 'Save Profile'}
+                <Save size={14} /> {savingProfile ? 'Saving...' : 'Save Profile'}
               </button>
               {profileMsg && (
                 <span className={`text-sm ${profileMsg.toLowerCase().includes('error') ? 'text-red-400' : 'text-green-400'}`}>
@@ -754,7 +754,7 @@ export default function Settings() {
             </div>
             <div className="flex items-center gap-3 pt-1">
               <button type="submit" disabled={savingApp} className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
-                <Save size={14} /> {savingApp ? 'Saving…' : 'Save App Settings'}
+                <Save size={14} /> {savingApp ? 'Saving...' : 'Save App Settings'}
               </button>
               {appMsg && <span className="text-green-400 text-sm">{appMsg}</span>}
             </div>
@@ -828,7 +828,7 @@ export default function Settings() {
 
               <div className="flex items-center gap-3 pt-1">
                 <button type="submit" disabled={savingThresholds} className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
-                  <Save size={14} /> {savingThresholds ? 'Saving…' : 'Save Thresholds'}
+                  <Save size={14} /> {savingThresholds ? 'Saving...' : 'Save Thresholds'}
                 </button>
                 {threshMsg && (
                   <span className={`text-sm ${threshMsg.includes('failed') ? 'text-red-400' : 'text-green-400'}`}>
@@ -910,7 +910,7 @@ export default function Settings() {
             </div>
             <div className="flex items-center gap-3 pt-2">
               <button type="submit" disabled={savingKpi} className="btn-primary flex items-center gap-2 disabled:opacity-50 text-sm">
-                <Save size={14} /> {savingKpi ? 'Saving…' : 'Save KPI Targets'}
+                <Save size={14} /> {savingKpi ? 'Saving...' : 'Save KPI Targets'}
               </button>
               <button type="button" onClick={cancelKpiEdit} className="btn-secondary text-sm">
                 Cancel
@@ -1157,7 +1157,7 @@ export default function Settings() {
                           title="Send test email now"
                           className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-blue-900/40 text-blue-400 border border-blue-800/50 hover:bg-blue-800/50 transition-colors disabled:opacity-40"
                         >
-                          <Play size={11} /> {sendingTest === schedule.id ? 'Sending…' : 'Test Send'}
+                          <Play size={11} /> {sendingTest === schedule.id ? 'Sending...' : 'Test Send'}
                         </button>
                         <button
                           type="button"
@@ -1270,7 +1270,7 @@ function TwoFactorCard({ mfaEnabled, onEnable, confirmRemoveMfa, setConfirmRemov
                   className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 disabled:bg-red-900/50 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2"
                 >
                   {removing
-                    ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Removing…</>
+                    ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Removing...</>
                     : 'Yes, Remove 2FA'
                   }
                 </button>

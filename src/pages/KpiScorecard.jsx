@@ -297,7 +297,7 @@ export default function KpiScorecard() {
     }).sort((a, b) => b.totalCost - a.totalCost)
   }, [filteredRecords, filteredActions, currentMonthStr])
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading KPI data…</div>
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading KPI data...</div>
 
   if (error && !records.length) return (
     <div className="space-y-5">
@@ -342,7 +342,7 @@ export default function KpiScorecard() {
           >
             {showYoY ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
             YoY Compare
-            {yoyLoading && <span className="text-xs text-gray-500 ml-1">…</span>}
+            {yoyLoading && <span className="text-xs text-gray-500 ml-1">...</span>}
           </button>
 
           <button
@@ -363,7 +363,7 @@ export default function KpiScorecard() {
               <div className="flex gap-2">
                 <button onClick={() => { setEditing(false); setDraftTargets(targets) }} className="btn-secondary text-sm">Cancel</button>
                 <button onClick={saveTargets} disabled={saving} className="btn-primary text-sm disabled:opacity-50">
-                  {saving ? 'Saving…' : 'Save Targets'}
+                  {saving ? 'Saving...' : 'Save Targets'}
                 </button>
               </div>
             )

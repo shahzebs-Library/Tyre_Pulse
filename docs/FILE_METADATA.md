@@ -5,12 +5,12 @@
 
 ## Why
 Uploaded business files (inspection/accident photos, documents) lived in storage
-with no DB authority record — access wasn't auditable, org-scoped, or tied to the
+with no DB authority record - access wasn't auditable, org-scoped, or tied to the
 owning entity. This adds a per-file record so the **database row is the source of
 truth**, not a URL. Files remain in **private** buckets and are served via
 short-lived **signed URLs** (never public URLs).
 
-## What it adds — `public.file_metadata`
+## What it adds - `public.file_metadata`
 | Column | Purpose |
 |--------|---------|
 | `id` | PK |
@@ -25,13 +25,13 @@ Constraints: unique `(bucket, path)`; `size_bytes` ≤ 100 MB; `content_type`
 restricted to image + PDF. Indexes on org, `(entity_type, entity_id)`, owner.
 
 ## RLS (org-scoped, same V42/V43 pattern)
-- **RESTRICTIVE** `file_metadata_org_isolation` — row's `organisation_id` must
+- **RESTRICTIVE** `file_metadata_org_isolation` - row's `organisation_id` must
   match the caller's org (NULL permitted). ANDs on top of the permissive policies
   → tenant-isolated like every other business table.
-- **read** — authenticated (org-restrictive ANDs).
-- **insert** — only your own files (`owner_id = auth.uid()`) and only when
+- **read** - authenticated (org-restrictive ANDs).
+- **insert** - only your own files (`owner_id = auth.uid()`) and only when
   approved+unlocked.
-- **delete** — owner or elevated role.
+- **delete** - owner or elevated role.
 
 ## Access model
 1. Client uploads bytes to a private bucket (existing flow).

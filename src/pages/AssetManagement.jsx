@@ -512,7 +512,7 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
           <button onClick={handleSave} disabled={saving}
             className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-50 transition-colors flex items-center gap-2">
             {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {saving ? 'Saving…' : 'Save Asset'}
+            {saving ? 'Saving...' : 'Save Asset'}
           </button>
         </div>
       </motion.div>
@@ -895,7 +895,7 @@ export default function AssetManagement() {
                     <input
                       value={search}
                       onChange={e => { setSearch(e.target.value); setPage(0) }}
-                      placeholder="Search by asset no, make, model…"
+                      placeholder="Search by asset no, make, model..."
                       className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
                     />
                   </div>
@@ -962,7 +962,7 @@ export default function AssetManagement() {
 
                 {loading ? (
                   <div className="flex items-center justify-center py-20 text-gray-500">
-                    <RefreshCw className="w-6 h-6 animate-spin mr-3" /> Loading assets…
+                    <RefreshCw className="w-6 h-6 animate-spin mr-3" /> Loading assets...
                   </div>
                 ) : loadError ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center px-6">

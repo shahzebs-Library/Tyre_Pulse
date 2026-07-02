@@ -70,7 +70,7 @@ export async function uploadInspectionPhoto(
  * Upload a captured accident photo to the PRIVATE `accident-photos` bucket.
  * Uses base64 → Uint8Array (RN's fetch().blob() yields empty files in Expo).
  * Returns a tp-storage:// ref (resolved to a short-lived signed URL on display
- * via storageRefs.resolveStorageUrl) — never a permanent public URL — or null
+ * via storageRefs.resolveStorageUrl) - never a permanent public URL - or null
  * on failure.
  *
  * Path is collision-resistant: accidents/<uid>/<timestamp>_<index>_<random4>.<ext>
@@ -164,7 +164,7 @@ export async function uploadModulePhoto(
  * insert. Entries that are already permanent references (tp-storage:// or
  * http) pass through untouched; local file:// URIs are uploaded now and
  * replaced with their refs. Any file:// that still fails to upload (e.g.
- * offline) is DROPPED so no dead local URI is ever persisted — the caller
+ * offline) is DROPPED so no dead local URI is ever persisted - the caller
  * keeps the file:// in its queued payload and this runs again on the next
  * sync attempt.
  *

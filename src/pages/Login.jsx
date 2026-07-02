@@ -695,7 +695,7 @@ export default function Login() {
                     marginTop:4,
                   }}>
                     {loading ? <Loader2 size={16} className="animate-spin"/> : <Zap size={16}/>}
-                    {loading ? 'Signing in…' : !isOnline ? 'No Connection' : 'Sign In'}
+                    {loading ? 'Signing in...' : !isOnline ? 'No Connection' : 'Sign In'}
                     {!loading && isOnline && <ArrowRight size={15}/>}
                   </button>
 
@@ -757,7 +757,7 @@ export default function Login() {
                     boxShadow:'0 4px 24px rgba(22,163,74,0.35)',
                   }}>
                     {forgotLoading ? <Loader2 size={16} className="animate-spin"/> : <Mail size={16}/>}
-                    {forgotLoading ? 'Sending…' : 'Send Reset Link'}
+                    {forgotLoading ? 'Sending...' : 'Send Reset Link'}
                   </button>
                 </motion.form>
               )}
@@ -880,7 +880,7 @@ export default function Login() {
                     boxShadow: loading ? 'none' : '0 4px 28px rgba(22,163,74,0.4)',
                   }}>
                     {loading && <Loader2 size={16} className="animate-spin"/>}
-                    {loading ? 'Creating account…' : 'Create Account'}
+                    {loading ? 'Creating account...' : 'Create Account'}
                     {!loading && <ArrowRight size={15}/>}
                   </button>
                 </motion.form>

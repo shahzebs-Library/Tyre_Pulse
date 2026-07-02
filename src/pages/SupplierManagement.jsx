@@ -311,7 +311,7 @@ function ContractModal({ contract, onSave, onClose }) {
             <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-800 rounded-lg disabled:opacity-50">Cancel</button>
             <button type="submit" disabled={saving} className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-500 rounded-lg font-medium flex items-center gap-1.5 disabled:opacity-50">
               {saving && <Loader2 size={13} className="animate-spin" />}
-              {saving ? 'Saving…' : 'Save Contract'}
+              {saving ? 'Saving...' : 'Save Contract'}
             </button>
           </div>
         </form>
@@ -584,7 +584,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
             <button onClick={saveNotes} disabled={noteSaving}
               className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 ${noteSaved ? 'bg-emerald-700 text-emerald-200' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'}`}>
               {noteSaving && <Loader2 size={11} className="animate-spin" />}
-              {noteSaving ? 'Saving…' : noteSaved ? 'Saved' : 'Save Notes'}
+              {noteSaving ? 'Saving...' : noteSaved ? 'Saved' : 'Save Notes'}
             </button>
             {noteError && (
               <span className="text-xs text-red-400 flex items-center gap-1">
@@ -1703,7 +1703,7 @@ export default function SupplierManagement() {
               )}
               <div className="flex gap-3">
                 <button onClick={deleteContract} disabled={contractDeleting} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-                  <X size={15} /> {contractDeleting ? 'Deleting…' : 'Delete Contract'}
+                  <X size={15} /> {contractDeleting ? 'Deleting...' : 'Delete Contract'}
                 </button>
                 <button onClick={() => { setContractDeleteTarget(null); setContractDeleteError(null) }} className="btn-secondary">Cancel</button>
               </div>

@@ -185,7 +185,7 @@ export default function UploadApprovalsScreen() {
         <Ionicons name="search-outline" size={16} color="#94a3b8" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search file, uploader, country…"
+          placeholder="Search file, uploader, country..."
           placeholderTextColor="#94a3b8"
           value={search}
           onChangeText={setSearch}

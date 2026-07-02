@@ -1,7 +1,7 @@
 # Organisation-Scope Enforcement (Phase 1c / V43)
 
 > Migration: `MIGRATIONS_V43_ORG_SCOPE_ENFORCE.sql` (applied). **Builds on V42**
-> (`MIGRATIONS_V42_ORG_SCOPE_FOUNDATION.sql`, PR #19) — apply V42 first.
+> (`MIGRATIONS_V42_ORG_SCOPE_FOUNDATION.sql`, PR #19) - apply V42 first.
 > Closes the Critical org-isolation gap (security-plan **S3/S4**) by enforcing
 > organisation isolation in RLS.
 
@@ -25,7 +25,7 @@ accident_parts, accident_remarks`.
 ## Why RESTRICTIVE (and therefore safe)
 PostgreSQL **ANDs** restrictive policies on top of *every existing permissive
 policy without modifying them*. So all current role / active / creator rules are
-preserved exactly, and we simply add "…AND the row is in my organisation".
+preserved exactly, and we simply add "...AND the row is in my organisation".
 
 - All existing data is in the single default org (V42) → **nothing changes for
   current users today**.
@@ -35,7 +35,7 @@ preserved exactly, and we simply add "…AND the row is in my organisation".
 - Inline `= app_current_org()` (STABLE, evaluated once) lets the planner use the
   `idx_<t>_org` index.
 
-## Tenant-isolation test — `tests/rls_org_isolation.sql` (PASSED)
+## Tenant-isolation test - `tests/rls_org_isolation.sql` (PASSED)
 Simulates an org-A authenticated user (`SET ROLE authenticated` + JWT `sub`) and
 asserts, inside a rolled-back transaction:
 
@@ -46,7 +46,7 @@ asserts, inside a rolled-back transaction:
 | Insert into a foreign org is **denied** (WITH CHECK) | ✅ blocked (SQLSTATE 42501) |
 
 Run: `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/rls_org_isolation.sql`
-(self-asserting — non-zero exit on any failure).
+(self-asserting - non-zero exit on any failure).
 
 ## Scope / rollout
 - `profiles` keeps its existing scoping (own-row / elevated) and is intentionally

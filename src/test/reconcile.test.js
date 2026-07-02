@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { reconcileBatch } from '../lib/import/reconcile'
 
-describe('import reconciliation — reconcileBatch', () => {
+describe('import reconciliation - reconcileBatch', () => {
   it('returns a fully structured summary shape', () => {
     const out = reconcileBatch({
       import_status: 'committed',

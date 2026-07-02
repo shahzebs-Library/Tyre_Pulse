@@ -228,7 +228,7 @@ export default function TyreExchange() {
   const [custodyInput, setCustodyInput] = useState('')
   const [custodySearched, setCustodySearched] = useState(false)
 
-  // Return / write-off marks — persisted in tyre_status_marks (V62) so they are
+  // Return / write-off marks - persisted in tyre_status_marks (V62) so they are
   // shared across users and devices instead of living in one browser.
   const [returnedSerials, setReturnedSerials] = useState([])
   const [writtenOffSerials, setWrittenOffSerials] = useState([])
@@ -666,7 +666,7 @@ export default function TyreExchange() {
         >
           <RefreshCw size={20} />
         </motion.div>
-        Loading transfer data…
+        Loading transfer data...
       </div>
     )
   }
@@ -1127,7 +1127,7 @@ export default function TyreExchange() {
                         setCustodySearched(true)
                       }
                     }}
-                    placeholder="Enter serial number…"
+                    placeholder="Enter serial number..."
                     className="flex-1 bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
                   />
                   <button

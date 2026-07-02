@@ -1,5 +1,5 @@
 /**
- * Import Center — adapter / migration-plan scenarios.
+ * Import Center - adapter / migration-plan scenarios.
  *
  * Exercises the real pure pipeline functions against the scenarios enumerated in
  * "Data correction.md" §24 and docs/IMPORT_CENTER_TEST_CASES.md. Kept in a
@@ -14,7 +14,7 @@ import {
   classifyDuplicates,
 } from '../lib/import'
 
-describe('adapters — Arabic fleet headers', () => {
+describe('adapters - Arabic fleet headers', () => {
   it('maps Arabic fleet headers (رقم المعدة, الموقع) to asset_no / site', () => {
     // Direct alias resolution.
     expect(exactAlias('رقم المعدة', 'fleet')).toBe('asset_no')
@@ -30,7 +30,7 @@ describe('adapters — Arabic fleet headers', () => {
   })
 })
 
-describe('adapters — country-scoped natural keys', () => {
+describe('adapters - country-scoped natural keys', () => {
   it('same asset_no in two different countries is NOT a duplicate', () => {
     const rows = [
       { country: 'KSA', asset_no: 'V-100' },
@@ -51,7 +51,7 @@ describe('adapters — country-scoped natural keys', () => {
   })
 })
 
-describe('adapters — date validation', () => {
+describe('adapters - date validation', () => {
   it('an unparseable date in a date field yields a DATE_INVALID issue', () => {
     // Build the transformed row exactly as the pipeline would: transformRow
     // produces issue_date=null with issue_date_original preserved.
@@ -78,14 +78,14 @@ describe('adapters — date validation', () => {
   })
 })
 
-describe('adapters — repeated tyre serial is an event, not a drop', () => {
+describe('adapters - repeated tyre serial is an event, not a drop', () => {
   it('repeated serial in same country → duplicate (kept as lifecycle event)', () => {
     const rows = [
       { country: 'KSA', serial_no: 'TS-1', asset_no: 'A1' },
       { country: 'KSA', serial_no: 'TS-1', asset_no: 'A1' },
     ]
     const out = classifyDuplicates(rows, 'tyre')
-    // Both rows are retained and flagged — nothing is discarded.
+    // Both rows are retained and flagged - nothing is discarded.
     expect(out).toHaveLength(2)
     expect(out.every((r) => r.dup_status === 'duplicate')).toBe(true)
   })
@@ -101,7 +101,7 @@ describe('adapters — repeated tyre serial is an event, not a drop', () => {
   })
 })
 
-describe('adapters — numeric sanity', () => {
+describe('adapters - numeric sanity', () => {
   it('negative stock_qty is a NEGATIVE_VALUE error', () => {
     const res = validateRow(
       { site: 'WH1', description: 'Brake pad', stock_qty: -5 },
@@ -112,7 +112,7 @@ describe('adapters — numeric sanity', () => {
   })
 })
 
-describe('adapters — unknown columns are preserved', () => {
+describe('adapters - unknown columns are preserved', () => {
   it('an unmatched column resolves to action preserve_custom (never discarded)', () => {
     const out = suggestMapping({ columns: ['Totally Unknown Column XYZ'], module: 'fleet' })
     expect(out[0].target).toBeNull()
@@ -128,7 +128,7 @@ describe('adapters — unknown columns are preserved', () => {
   })
 })
 
-describe('adapters — missing required field', () => {
+describe('adapters - missing required field', () => {
   it('blank fleet asset_no → error REQUIRED_MISSING', () => {
     const res = validateRow({ asset_no: '', make: 'Volvo' }, 'fleet')
     expect(res.status).toBe('error')

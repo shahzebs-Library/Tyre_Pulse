@@ -1,8 +1,8 @@
-# TyrePulse Inspector — Google Play Store Submission Runbook
+# TyrePulse Inspector - Google Play Store Submission Runbook
 
 This is the end-to-end runbook for shipping the Android app to the Google Play
 Store. All commands run from the `mobile/` directory. No build or submit command
-here has been executed — they require EAS credentials and cost build minutes.
+here has been executed - they require EAS credentials and cost build minutes.
 
 App identity (from `app.json` / `eas.json`):
 
@@ -11,7 +11,7 @@ App identity (from `app.json` / `eas.json`):
 | App name | TyrePulse Inspector |
 | Android package | `com.shahzebrahman.tyrepulseinspector` |
 | Current `version` (semver) | `1.2.0` |
-| Current `versionCode` | `2` (note: `appVersionSource: remote` — EAS manages the authoritative value) |
+| Current `versionCode` | `2` (note: `appVersionSource: remote` - EAS manages the authoritative value) |
 | EAS project ID | `3ed4e62f-e91f-4c78-b1eb-9b7310c08255` |
 | Production build type | `app-bundle` (AAB) ✅ required by Play |
 | Submit track | `internal` |
@@ -35,11 +35,11 @@ App identity (from `app.json` / `eas.json`):
   4. Create a JSON key for the service account and download it.
 - [ ] **EAS / Expo account** with access to project `tyrepulse-inspector` and an
       `EXPO_TOKEN` for CI.
-- [ ] **Android signing keystore** — managed by EAS (`eas credentials`). On the
+- [ ] **Android signing keystore** - managed by EAS (`eas credentials`). On the
       first production build EAS generates and stores the upload keystore; do not
       create one manually. Enroll the app in **Play App Signing** when prompted.
 - [ ] **Privacy policy URL** published and reachable (required for any app that
-      collects personal data — this one does; see §6).
+      collects personal data - this one does; see §6).
 
 ---
 
@@ -47,13 +47,13 @@ App identity (from `app.json` / `eas.json`):
 
 | File | Location | Source | Committed? |
 |---|---|---|---|
-| `google-services.json` | `mobile/google-services.json` | Firebase Console → Android app | **No — gitignored** |
-| `google-service-account.json` | `mobile/google-service-account.json` | Play Console service account key | **No — gitignored** |
+| `google-services.json` | `mobile/google-services.json` | Firebase Console → Android app | **No - gitignored** |
+| `google-service-account.json` | `mobile/google-service-account.json` | Play Console service account key | **No - gitignored** |
 | `notification-icon.png` | `mobile/assets/notification-icon.png` | designer (see §2.1) | Yes (asset) |
 
 Both secret JSON files are now in `mobile/.gitignore`. **Never commit them.**
 In CI they are injected from GitHub secrets (`GOOGLE_SERVICE_ACCOUNT_KEY`,
-and a Firebase secret if you choose to wire one) — see
+and a Firebase secret if you choose to wire one) - see
 `.github/workflows/submit-android.yml`.
 
 ### 2.1 Missing notification icon (build blocker)
@@ -66,7 +66,7 @@ icon. Recommended: **96×96 px** (mdpi baseline; Expo scales it), pure white
 silhouette on full transparency.
 
 Action: have design export a monochrome variant of the TyrePulse mark to
-`mobile/assets/notification-icon.png`. Do not reuse the colored `icon.png` —
+`mobile/assets/notification-icon.png`. Do not reuse the colored `icon.png` -
 Android will render it as a solid white square. Until this file exists, a
 production build referencing the plugin will fail asset resolution.
 
@@ -110,10 +110,10 @@ runs `eas submit ... --latest --non-interactive`.
 | Field | Value |
 |---|---|
 | **App name** (max 30) | TyrePulse Inspector |
-| **Short description** (max 80) | `Fleet tyre inspections, wear tracking & cost analytics — right from your phone.` (78 chars) |
+| **Short description** (max 80) | `Fleet tyre inspections, wear tracking & cost analytics - right from your phone.` (78 chars) |
 | **Category** | Business (alt: Productivity) |
 | **Content rating** | Everyone (complete the IARC questionnaire; no objectionable content) |
-| **Privacy policy URL** | `https://<YOUR-DOMAIN>/privacy` *(placeholder — must be live before review)* |
+| **Privacy policy URL** | `https://<YOUR-DOMAIN>/privacy` *(placeholder - must be live before review)* |
 | **Contact email** | `<support@yourdomain>` |
 | **Website** | `https://tyre-pulse-peach.vercel.app` |
 
@@ -122,27 +122,27 @@ runs `eas submit ... --latest --non-interactive`.
 ```
 TyrePulse Inspector is the field companion for fleet tyre management. Built for
 inspectors, workshop technicians, and fleet managers, it turns every tyre check
-into structured, auditable data — and turns that data into cost and reliability
+into structured, auditable data - and turns that data into cost and reliability
 intelligence.
 
 KEY FEATURES
-• Guided tyre inspections — capture tread depth, pressure, and condition by axle
+• Guided tyre inspections - capture tread depth, pressure, and condition by axle
   position (steer, drive, trailer, lift, tag) with photo evidence.
-• On-vehicle scanning — log tyres against vehicles and positions in seconds.
-• Photo documentation — attach images of wear patterns, damage, and serials
+• On-vehicle scanning - log tyres against vehicles and positions in seconds.
+• Photo documentation - attach images of wear patterns, damage, and serials
   directly to each inspection.
-• Offline-tolerant capture — record inspections in the yard and sync when back
+• Offline-tolerant capture - record inspections in the yard and sync when back
   online.
-• Wear & pressure tracking — monitor tread loss and pressure compliance over time.
-• Cost intelligence — surface cost-per-kilometre (CPK), tyre life, and
+• Wear & pressure tracking - monitor tread loss and pressure compliance over time.
+• Cost intelligence - surface cost-per-kilometre (CPK), tyre life, and
   replacement forecasts for the fleet.
-• Push notifications — get alerted to due inspections and flagged tyres.
-• Secure, role-based access — your fleet data stays protected.
+• Push notifications - get alerted to due inspections and flagged tyres.
+• Secure, role-based access - your fleet data stays protected.
 
 WHY TYREPULSE
 Tyres are one of the largest controllable costs in any fleet. TyrePulse converts
 raw inspection data into root-cause analysis, predictive replacement planning,
-and vendor performance comparison — helping you cut cost-per-kilometre, reduce
+and vendor performance comparison - helping you cut cost-per-kilometre, reduce
 roadside failures, and extend tyre life.
 
 Part of the TyrePulse fleet intelligence platform. Requires a TyrePulse account.
@@ -156,8 +156,8 @@ Part of the TyrePulse fleet intelligence platform. Requires a TyrePulse account.
 |---|---|---|---|
 | App icon (store) | **512 × 512** | 32-bit PNG | No alpha rounding needed; Play applies the mask. |
 | Feature graphic | **1024 × 500** | PNG/JPG | Shown at top of listing; no critical text near edges. |
-| Phone screenshots | **min 2, up to 8** | PNG/JPG | 16:9 or 9:16; 320–3840 px per side. App uses portrait → 9:16. |
-| (Optional) 7" / 10" tablet shots | per Play spec | — | App is phone-only (`supportsTablet: false`); skip. |
+| Phone screenshots | **min 2, up to 8** | PNG/JPG | 16:9 or 9:16; 320-3840 px per side. App uses portrait → 9:16. |
+| (Optional) 7" / 10" tablet shots | per Play spec | - | App is phone-only (`supportsTablet: false`); skip. |
 
 **Screenshots can be generated automatically.** The repo includes
 `.github/workflows/screenshots.yml` ("Take Play Store Screenshots"). Trigger it
@@ -176,7 +176,7 @@ declare the following in Play Console → *App content → Data safety*:
 
 Permissions declared: `CAMERA`, `INTERNET`, `ACCESS_NETWORK_STATE`,
 `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED`, `SCHEDULE_EXACT_ALARM`,
-`USE_EXACT_ALARM`. **No location permission is declared** — do not claim location
+`USE_EXACT_ALARM`. **No location permission is declared** - do not claim location
 collection.
 
 | Data type | Collected? | Purpose | Notes |
@@ -185,12 +185,12 @@ collection.
 | **Photos** | Yes | App functionality | Inspection photos via camera / image picker. |
 | **App activity / inspection data** | Yes | App functionality, analytics | Tyre readings, vehicle records. |
 | **Device / push identifiers** | Yes | App functionality (push) | Expo/FCM push token for notifications. |
-| **Precise/approximate location** | **No** | — | No location permission requested. |
-| **Financial / contacts / messages** | No | — | Not collected. |
+| **Precise/approximate location** | **No** | - | No location permission requested. |
+| **Financial / contacts / messages** | No | - | Not collected. |
 
 Also declare:
 - **Data encrypted in transit:** Yes (HTTPS to Supabase / Expo).
-- **Users can request deletion:** Yes — link the account-deletion path / support
+- **Users can request deletion:** Yes - link the account-deletion path / support
   email in the data-safety and account-deletion sections (Play requires an
   account-deletion route for apps with sign-in).
 - The **camera** permission is justified by inspection photo capture
@@ -232,7 +232,7 @@ declaration form.
   submission.
 - Bump the human-facing **`version`** (`app.json` → `expo.version`, currently
   `1.2.0`) manually using semver when shipping a meaningful release. Note
-  `package.json` version (`1.1.0`) is out of sync with `app.json` (`1.2.0`) —
+  `package.json` version (`1.1.0`) is out of sync with `app.json` (`1.2.0`) -
   align `package.json` to match on the next release for clarity.
 - Play rejects an upload whose `versionCode` is ≤ a previously uploaded one;
   `autoIncrement` prevents this.

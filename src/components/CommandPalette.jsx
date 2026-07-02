@@ -356,7 +356,7 @@ export default function CommandPalette() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={`Search pages, actions… (${isMac ? '⌘' : 'Ctrl'}K)`}
+              placeholder={`Search pages, actions... (${isMac ? '⌘' : 'Ctrl'}K)`}
               className="flex-1 bg-transparent text-white text-lg py-4 outline-none placeholder:text-gray-500"
               autoComplete="off"
               spellCheck={false}

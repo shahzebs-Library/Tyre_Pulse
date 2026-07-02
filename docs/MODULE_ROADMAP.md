@@ -1,6 +1,6 @@
 # Module Roadmap
 
-**Status:** Phase 0 — planning. Maps the directive's Phases 1–6 onto concrete modules in the existing stack.
+**Status:** Phase 0 - planning. Maps the directive's Phases 1-6 onto concrete modules in the existing stack.
 **Track:** Harden the current Vite + React 19 / Expo SDK 54 / Supabase system in place. No new backend, no rewrite.
 **Stack:** Web (~78 pages, `src/pages/`), Mobile (~35 screens, `mobile/app/(app)/`), Supabase Postgres + Auth + Storage + Edge Functions.
 
@@ -25,7 +25,7 @@
 
 ## 2. Phase → module mapping
 
-### Phase 1 — Security & platform foundation
+### Phase 1 - Security & platform foundation
 **Goal:** real authority moves to RLS; files become private; client cache is safe.
 
 | Deliverable | Modules touched | Order |
@@ -36,7 +36,7 @@
 | PWA: stop caching authenticated REST/Auth/private storage; clear user cache on logout | Web shell | 4 |
 | Secret checks: only public URL + anon key client-side; server secrets in Edge Functions | All | 5 |
 
-### Phase 2 — Data model consolidation (see DATA_MODEL_CONSOLIDATION_PLAN.md)
+### Phase 2 - Data model consolidation (see DATA_MODEL_CONSOLIDATION_PLAN.md)
 | Deliverable | Modules | Order |
 |---|---|---|
 | Canonical `vehicle_fleet` + compatibility view over `fleet_master` | Assets | 1 |
@@ -45,7 +45,7 @@
 | Serial-level tyre lifecycle + transactional change RPC | Tyres | 4 |
 | Structured inspection rows alongside JSONB snapshot + auto corrective actions | Inspections | 5 |
 
-### Phase 3 — Operational workflow
+### Phase 3 - Operational workflow
 **Flow:** inspection finding → corrective action → supervisor review → work order → stock reservation/issue → repair/tyre activity → quality check → gate pass → downtime & cost closure.
 
 | Deliverable | Modules |
@@ -55,22 +55,22 @@
 | Bin/location, serial issue tracking, transfers, adjustment approvals, reserved stock, reorder points, PO/GRN linkage, supplier scorecard | Stock, Procurement, SupplierManagement |
 | Accident ↔ asset/driver/site/work order/downtime/tyre/cost; cost & claim split; insurer/policy/claim timeline; private attachments | Accidents |
 
-### Phase 4 — Mobile reliability
+### Phase 4 - Mobile reliability
 | Deliverable | Modules |
 |---|---|
 | Replace generic `recordQueue.ts` with **typed offline commands**: `CreateInspection`, `SubmitTyreChange`, `CreateWorkOrder`, `ReportVehicleIssue`, `SubmitRCA`, `UploadAttachment` (local command id, idempotency key, user, scope, retry, sync state, error, attachments) | Mobile all |
 | No arbitrary table names from client; retry with backoff; no duplicate creation; pending/syncing/failed/completed visibility; preserve offline photos; tokens in secure storage; Expo SQLite for operational offline records; clear org cache on logout; conflict handling | Mobile all |
 
-### Phase 5 — Analytics consolidation
+### Phase 5 - Analytics consolidation
 | Deliverable | Modules |
 |---|---|
 | Group ~78 pages into 8 workspaces (see UX_NAVIGATION_PLAN.md), routes preserved | Reports/Analytics |
-| Central KPI registry (name, definition, formula, source tables, filters, target, owner, refresh) — CPK, cost/vehicle, cost/site, pressure compliance, inspection compliance, failure rate, warranty recovery, downtime, accident loss recovery, stock availability, supplier performance, overdue corrective actions | Reports |
+| Central KPI registry (name, definition, formula, source tables, filters, target, owner, refresh) - CPK, cost/vehicle, cost/site, pressure compliance, inspection compliance, failure rate, warranty recovery, downtime, accident loss recovery, stock availability, supplier performance, overdue corrective actions | Reports |
 | Move heavy KPI math out of components into SQL views / RPCs / scheduled snapshots / React Query | Reports, all dashboards |
 | Lazy-load `xlsx`, `jspdf`, `pptxgenjs` only on export action | Reports |
 | Every chart drill-down to source records | All analytics |
 
-### Phase 6 — UX & quality
+### Phase 6 - UX & quality
 | Deliverable | Modules |
 |---|---|
 | Consistent light/dark, RTL/Arabic readiness, responsive, empty/loading/error states, fewer charts, large-table search/filter/pagination/virtualisation, validation-before-submit, destructive-action confirmation, plain language for field users | All surfaces |
@@ -81,6 +81,6 @@
 
 1. Phase 1 before any data-model change.
 2. Phases run in order; each ends with the release gate green (`npm run test:run`, `npm run build`, `cd mobile && npm run typecheck`).
-3. Module-by-module migration to the data-service layer — never all at once.
+3. Module-by-module migration to the data-service layer - never all at once.
 4. Backward-compatible migrations only; no table drop/rename without reconciliation + rollback.
 5. Small, logical commits; `docs/CHANGELOG_ENGINEERING.md` updated each phase.

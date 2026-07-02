@@ -687,7 +687,7 @@ export default function RecallTracker() {
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search recall #, brand, size…"
+                placeholder="Search recall #, brand, size..."
                 className="w-full pl-8 pr-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-600"
               />
             </div>
@@ -728,7 +728,7 @@ export default function RecallTracker() {
                   {loading && (
                     <tr>
                       <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
-                        <Loader2 className="inline animate-spin mr-2" size={16} /> Loading tyre data…
+                        <Loader2 className="inline animate-spin mr-2" size={16} /> Loading tyre data...
                       </td>
                     </tr>
                   )}
@@ -849,7 +849,7 @@ export default function RecallTracker() {
 
           {loading && (
             <div className="text-center py-12 text-gray-500">
-              <Loader2 className="inline animate-spin mr-2" size={18} /> Scanning fleet data…
+              <Loader2 className="inline animate-spin mr-2" size={18} /> Scanning fleet data...
             </div>
           )}
 
@@ -1059,7 +1059,7 @@ export default function RecallTracker() {
             </table>
           </div>
           <div className="px-4 py-2 border-t border-gray-800 text-xs text-gray-500">
-            Score = 100 − (active × 10 + total critical × 5) · Brands below 60 flagged
+            Score = 100 - (active × 10 + total critical × 5) · Brands below 60 flagged
           </div>
         </div>
       )}
@@ -1166,7 +1166,7 @@ export default function RecallTracker() {
                   <input
                     value={drawerSearch}
                     onChange={e => setDrawerSearch(e.target.value)}
-                    placeholder="Search serial, asset, site…"
+                    placeholder="Search serial, asset, site..."
                     className="pl-7 pr-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-600 w-48"
                   />
                 </div>
@@ -1380,7 +1380,7 @@ export default function RecallTracker() {
                       onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                       rows={3}
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-600 resize-none"
-                      placeholder="Describe the recall issue…"
+                      placeholder="Describe the recall issue..."
                     />
                   </div>
 
@@ -1392,7 +1392,7 @@ export default function RecallTracker() {
                       onChange={e => setForm(f => ({ ...f, action_required: e.target.value }))}
                       rows={2}
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-600 resize-none"
-                      placeholder="Immediate action to take…"
+                      placeholder="Immediate action to take..."
                     />
                   </div>
                 </div>

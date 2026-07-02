@@ -27,7 +27,7 @@ function chip(s) {
 /** Inline reconciliation indicator derived from reconcileBatch(). */
 function ReconcileBadge({ summary }) {
   if (summary.indicator === 'pending') {
-    return <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-500">—</span>
+    return <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-500">-</span>
   }
   const balanced = summary.indicator === 'balanced'
   const cls = balanced ? 'bg-green-900/30 text-green-400' : 'bg-amber-900/30 text-amber-400'
@@ -164,7 +164,7 @@ export default function DataIntakeHistory() {
                     <Fragment key={b.id}>
                     <tr className="border-t border-gray-800 hover:bg-gray-900/40">
                       <td className="px-3 py-2 capitalize">{b.module}</td>
-                      <td className="px-3 py-2 text-gray-400">{b.country || '—'}</td>
+                      <td className="px-3 py-2 text-gray-400">{b.country || '-'}</td>
                       <td className="px-3 py-2"><span className={chip(b.import_status)}>{b.import_status}</span></td>
                       <td className="px-3 py-2 text-gray-400">{b.imported_rows || 0}/{b.total_rows || 0}</td>
                       <td className="px-3 py-2 text-gray-500 text-xs">{b.error_rows || 0} / {b.duplicate_rows || 0}</td>
@@ -214,7 +214,7 @@ export default function DataIntakeHistory() {
             </div>
           )}
 
-          {/* IMPORTS — drill into one batch's rows */}
+          {/* IMPORTS - drill into one batch's rows */}
           {tab === 'imports' && drill && (
             <div className="space-y-3">
               <button onClick={() => setDrill(null)} className="text-sm text-gray-400 hover:text-white">← Back to imports</button>
@@ -229,9 +229,9 @@ export default function DataIntakeHistory() {
                         <tr key={r.id} className="border-t border-gray-800">
                           <td className="px-3 py-1.5 text-gray-500">{r.source_row_no}</td>
                           <td className="px-3 py-1.5 text-xs">{r.validation_status}</td>
-                          <td className="px-3 py-1.5 text-xs text-gray-400">{r.dup_status !== 'none' ? r.dup_status : '—'}</td>
+                          <td className="px-3 py-1.5 text-xs text-gray-400">{r.dup_status !== 'none' ? r.dup_status : '-'}</td>
                           <td className="px-3 py-1.5 text-xs text-gray-400">{r.action}</td>
-                          <td className="px-3 py-1.5 text-xs text-gray-500 truncate max-w-[180px]">{r.target_record_id || '—'}</td>
+                          <td className="px-3 py-1.5 text-xs text-gray-500 truncate max-w-[180px]">{r.target_record_id || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -250,7 +250,7 @@ export default function DataIntakeHistory() {
                 ))}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[['Success rate', `${quality.successRate}%`, 'text-green-400'], ['Validation error rate', `${quality.validationErrorRate}%`, 'text-red-400'], ['Duplicate rate', `${quality.duplicateRate}%`, 'text-amber-400'], ['Avg approval time', quality.avgApprovalHours == null ? '—' : `${quality.avgApprovalHours}h`, 'text-white']].map(([l, v, c]) => (
+                {[['Success rate', `${quality.successRate}%`, 'text-green-400'], ['Validation error rate', `${quality.validationErrorRate}%`, 'text-red-400'], ['Duplicate rate', `${quality.duplicateRate}%`, 'text-amber-400'], ['Avg approval time', quality.avgApprovalHours == null ? '-' : `${quality.avgApprovalHours}h`, 'text-white']].map(([l, v, c]) => (
                   <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">{l}</p><p className={`text-2xl font-bold ${c}`}>{v}</p></div>
                 ))}
               </div>
@@ -285,7 +285,7 @@ export default function DataIntakeHistory() {
                 {quality.latest.map((i) => (
                   <div key={i.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs border-t border-gray-800/60 py-1.5 first:border-t-0">
                     <span className="capitalize text-gray-300 font-medium">{i.module}</span>
-                    <span className="text-gray-500">{i.country || '—'}</span>
+                    <span className="text-gray-500">{i.country || '-'}</span>
                     <span className={chip(i.status)}>{i.status}</span>
                     <span className="text-gray-500">{i.importedRows}/{i.totalRows} rows</span>
                     <span className="text-gray-600 ml-auto">{i.createdAt ? new Date(i.createdAt).toLocaleString('en-GB') : ''}</span>
@@ -301,15 +301,15 @@ export default function DataIntakeHistory() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Name</th><th className="text-left px-3 py-2">Module</th><th className="text-left px-3 py-2">Source</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">v</th><th className="text-left px-3 py-2">Last used</th></tr></thead>
                 <tbody>
-                  {profiles.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-600">No saved mapping profiles yet — save one from a mapping step.</td></tr>}
+                  {profiles.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-600">No saved mapping profiles yet - save one from a mapping step.</td></tr>}
                   {profiles.map((p) => (
                     <tr key={p.id} className="border-t border-gray-800">
                       <td className="px-3 py-2 font-medium">{p.name}</td>
                       <td className="px-3 py-2 capitalize text-gray-400">{p.module}</td>
-                      <td className="px-3 py-2 text-gray-400">{p.source_system || '—'}</td>
+                      <td className="px-3 py-2 text-gray-400">{p.source_system || '-'}</td>
                       <td className="px-3 py-2 text-gray-400">{p.country || 'any'}</td>
                       <td className="px-3 py-2 text-gray-500">{p.version}</td>
-                      <td className="px-3 py-2 text-gray-500 text-xs">{p.last_used_at ? new Date(p.last_used_at).toLocaleDateString('en-GB') : '—'}</td>
+                      <td className="px-3 py-2 text-gray-500 text-xs">{p.last_used_at ? new Date(p.last_used_at).toLocaleDateString('en-GB') : '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -367,7 +367,7 @@ export default function DataIntakeHistory() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Entity</th><th className="text-left px-3 py-2">Raw value</th><th className="text-left px-3 py-2"></th><th className="text-left px-3 py-2">Canonical</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Added</th></tr></thead>
                   <tbody>
-                    {aliases.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-600">No master-data aliases yet — add one to normalise inconsistent site/supplier/brand spellings on import.</td></tr>}
+                    {aliases.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-600">No master-data aliases yet - add one to normalise inconsistent site/supplier/brand spellings on import.</td></tr>}
                     {aliases.map((a) => (
                       <tr key={a.id} className="border-t border-gray-800">
                         <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 capitalize">{a.entity_type}</span></td>
@@ -375,7 +375,7 @@ export default function DataIntakeHistory() {
                         <td className="px-3 py-2 text-gray-600"><ChevronRight size={14} /></td>
                         <td className="px-3 py-2 font-medium text-white">{a.canonical_value}</td>
                         <td className="px-3 py-2 text-gray-400">{a.country || 'any'}</td>
-                        <td className="px-3 py-2 text-gray-500 text-xs">{a.created_at ? new Date(a.created_at).toLocaleDateString('en-GB') : '—'}</td>
+                        <td className="px-3 py-2 text-gray-500 text-xs">{a.created_at ? new Date(a.created_at).toLocaleDateString('en-GB') : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -387,7 +387,7 @@ export default function DataIntakeHistory() {
           {/* FX RATES */}
           {tab === 'fx' && (
             <div className="space-y-4">
-              <p className="text-xs text-gray-500">Approval-gated exchange rates. Imports convert a monetary value to the base currency <span className="text-gray-300">only</span> when an approved rate exists for its currency — never a silent or fabricated rate. Rate direction: 1 quote currency = rate × base currency.</p>
+              <p className="text-xs text-gray-500">Approval-gated exchange rates. Imports convert a monetary value to the base currency <span className="text-gray-300">only</span> when an approved rate exists for its currency - never a silent or fabricated rate. Rate direction: 1 quote currency = rate × base currency.</p>
               {isElevated && (
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-wrap items-end gap-3">
                   <div><label className="block text-xs text-gray-500 mb-1">Base (report)</label><input value={fxForm.baseCurrency} onChange={(e) => setFxForm((f) => ({ ...f, baseCurrency: e.target.value }))} placeholder="USD" maxLength={3} className="w-20 bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm uppercase" /></div>
@@ -402,7 +402,7 @@ export default function DataIntakeHistory() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Pair</th><th className="text-left px-3 py-2">Rate</th><th className="text-left px-3 py-2">Date</th><th className="text-left px-3 py-2">Source</th><th className="text-left px-3 py-2">Status</th><th className="text-right px-3 py-2">Action</th></tr></thead>
                   <tbody>
-                    {fxRates.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-600">No FX rates yet — add a draft, then approve it to enable conversion.</td></tr>}
+                    {fxRates.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-gray-600">No FX rates yet - add a draft, then approve it to enable conversion.</td></tr>}
                     {fxRates.map((r) => (
                       <tr key={r.id} className="border-t border-gray-800">
                         <td className="px-3 py-2 font-medium">{r.quote_currency} → {r.base_currency}</td>
@@ -412,7 +412,7 @@ export default function DataIntakeHistory() {
                         <td className="px-3 py-2"><span className={`text-xs px-2 py-0.5 rounded ${r.approved ? 'bg-green-900/30 text-green-400' : 'bg-amber-900/30 text-amber-400'}`}>{r.approved ? 'approved' : 'draft'}</span></td>
                         <td className="px-3 py-2 text-right">{!r.approved && isElevated
                           ? <button onClick={() => approveFx(r.id)} className="text-xs px-2 py-1 rounded border border-gray-700 text-gray-300 hover:text-green-400 hover:border-green-700/50 inline-flex items-center gap-1"><CheckCircle2 size={12} /> Approve</button>
-                          : <span className="text-gray-600 text-xs">—</span>}</td>
+                          : <span className="text-gray-600 text-xs">-</span>}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -236,7 +236,7 @@ export default function RcaRecords() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             className="input pl-9 w-52"
-            placeholder="Search asset, serial, brand…"
+            placeholder="Search asset, serial, brand..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -262,7 +262,7 @@ export default function RcaRecords() {
         >
           <option value="">All Root Causes</option>
           {rootCauseOptions.map(rc => (
-            <option key={rc} value={rc}>{rc.length > 40 ? rc.slice(0, 40) + '…' : rc}</option>
+            <option key={rc} value={rc}>{rc.length > 40 ? rc.slice(0, 40) + '...' : rc}</option>
           ))}
         </select>
         {(search || filterFrom || filterTo || filterRootCause) && (
@@ -276,7 +276,7 @@ export default function RcaRecords() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-gray-500">Loading…</div>
+        <div className="text-center py-12 text-gray-500">Loading...</div>
       ) : records.length === 0 ? (
         /* Better empty state */
         <div className="flex flex-col items-center justify-center py-20 gap-4">
@@ -421,7 +421,7 @@ export default function RcaRecords() {
                   disabled={creatingAction}
                   className="btn-primary w-full text-sm disabled:opacity-50"
                 >
-                  {creatingAction ? 'Creating…' : '+ Create Corrective Action from this RCA'}
+                  {creatingAction ? 'Creating...' : '+ Create Corrective Action from this RCA'}
                 </button>
               </div>
             )}
@@ -511,7 +511,7 @@ export default function RcaRecords() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Save size={16} /> {saving ? 'Saving…' : 'Save'}
+                  <Save size={16} /> {saving ? 'Saving...' : 'Save'}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
               </div>

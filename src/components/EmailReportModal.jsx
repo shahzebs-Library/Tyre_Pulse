@@ -335,7 +335,7 @@ export default function EmailReportModal({
                 {sending ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Sending…
+                    Sending...
                   </>
                 ) : (
                   <>

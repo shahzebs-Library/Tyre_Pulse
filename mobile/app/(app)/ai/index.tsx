@@ -546,7 +546,7 @@ export default function AICommandCenter() {
                   <View style={ds.aiAvatar}><Ionicons name="sparkles" size={12} color="#fff" /></View>
                   <View>
                     <TypingDots />
-                    {contextLabel ? <Text style={ds.fetchingLabel}>{contextLabel}…</Text> : null}
+                    {contextLabel ? <Text style={ds.fetchingLabel}>{contextLabel}...</Text> : null}
                   </View>
                 </View>
               ) : null
@@ -570,7 +570,7 @@ export default function AICommandCenter() {
               style={ds.input}
               value={input}
               onChangeText={setInput}
-              placeholder="Ask about fleet costs, risks, tyres…"
+              placeholder="Ask about fleet costs, risks, tyres..."
               placeholderTextColor="#94a3b8"
               multiline
               maxLength={500}

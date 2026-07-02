@@ -623,7 +623,7 @@ export default function InspectionIntelligence() {
       <div className="flex items-center justify-center h-80">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-sm">Loading inspection data…</p>
+          <p className="text-gray-400 text-sm">Loading inspection data...</p>
         </div>
       </div>
     )
@@ -727,7 +727,7 @@ export default function InspectionIntelligence() {
             <Search size={14} className="text-gray-500 flex-shrink-0" />
             <input
               className="input text-sm py-1.5 flex-1"
-              placeholder="Search asset, site, inspector…"
+              placeholder="Search asset, site, inspector..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -902,7 +902,7 @@ export default function InspectionIntelligence() {
                           disabled={raisingAlert === v.asset_no}
                           className="btn-primary text-xs px-3 py-1 disabled:opacity-50"
                         >
-                          {raisingAlert === v.asset_no ? 'Raising…' : 'Raise Alert'}
+                          {raisingAlert === v.asset_no ? 'Raising...' : 'Raise Alert'}
                         </button>
                       )}
                     </td>

@@ -1,12 +1,12 @@
 /**
- * Recalls service — tyre recall / batch-quality records (recalls table). Single
+ * Recalls service - tyre recall / batch-quality records (recalls table). Single
  * boundary for that table as pages migrate off inline supabase.from() calls.
  * Explicit least-privilege column list (no SELECT *); consistent ServiceError
  * handling via unwrap. Mirrors correctiveActions.js / assets.js style.
  *
  * Scoping note: the RecallTracker page loads recalls with no country filter
  * (RLS handles tenant/country isolation server-side), so list/get here apply no
- * country predicate — behaviour-preserving. `country` is still written on
+ * country predicate - behaviour-preserving. `country` is still written on
  * create/update via the caller-supplied row.
  */
 import { supabase, unwrap, fetchAllPages } from './_client'

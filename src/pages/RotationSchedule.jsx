@@ -612,7 +612,7 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
                 rows={3}
-                placeholder="Optional workshop notes…"
+                placeholder="Optional workshop notes..."
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm resize-none focus:outline-none focus:border-blue-500 placeholder-gray-600"
               />
             </div>
@@ -642,7 +642,7 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
               Cancel
             </button>
             <button onClick={handleSave} disabled={saving} className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors disabled:opacity-50">
-              {saving ? 'Saving…' : 'Save to Schedule'}
+              {saving ? 'Saving...' : 'Save to Schedule'}
             </button>
           </div>
         </motion.div>
@@ -981,7 +981,7 @@ export default function RotationSchedule() {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
       <div className="text-center space-y-3">
         <RotateCcw size={36} className="text-green-400 animate-spin mx-auto" />
-        <p className="text-gray-400 text-sm">Loading rotation data…</p>
+        <p className="text-gray-400 text-sm">Loading rotation data...</p>
       </div>
     </div>
   )
@@ -1153,7 +1153,7 @@ export default function RotationSchedule() {
                     <input
                       value={search}
                       onChange={e => { setSearch(e.target.value); setPage(1) }}
-                      placeholder="Search asset or site…"
+                      placeholder="Search asset or site..."
                       className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
                     />
                   </div>
@@ -1609,7 +1609,7 @@ export default function RotationSchedule() {
                 ) : schedLoading ? (
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
                     <RotateCcw size={32} className="text-blue-400 animate-spin mx-auto mb-3" />
-                    <p className="text-gray-400 text-sm">Loading scheduled rotations…</p>
+                    <p className="text-gray-400 text-sm">Loading scheduled rotations...</p>
                   </div>
                 ) : schedules.length === 0 ? (
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">

@@ -1,5 +1,5 @@
 /**
- * AiAnalytics reads — the exact tyre/inspection/corrective-action selects the
+ * AiAnalytics reads - the exact tyre/inspection/corrective-action selects the
  * AI Smart Analytics page consumes. Read-only; returns the raw Supabase /
  * fetchAllPages result the page reads via `.data` (error-tolerant bulk load).
  */

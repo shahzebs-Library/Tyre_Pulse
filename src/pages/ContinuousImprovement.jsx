@@ -1118,7 +1118,7 @@ export default function ContinuousImprovement() {
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <RefreshCw size={32} className="text-blue-400 animate-spin" />
-          <p className="text-gray-400 text-sm">Loading continuous improvement data…</p>
+          <p className="text-gray-400 text-sm">Loading continuous improvement data...</p>
         </div>
       </div>
     )
@@ -1426,7 +1426,7 @@ export default function ContinuousImprovement() {
                               disabled={closingId === a.id}
                               className="px-2 py-0.5 rounded bg-green-800/50 hover:bg-green-700/50 text-green-300 text-[10px] transition-colors disabled:opacity-50"
                             >
-                              {closingId === a.id ? '…' : 'Close'}
+                              {closingId === a.id ? '...' : 'Close'}
                             </button>
                           </td>
                         </tr>

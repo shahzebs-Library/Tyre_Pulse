@@ -521,7 +521,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${s}</td><td>${c}</td></tr>`).join('')}
         <div className="flex items-center justify-center py-20">
           <div className="flex items-center gap-3 text-gray-400">
             <RefreshCw size={18} className="animate-spin text-green-400" />
-            <span>Loading daily operations data…</span>
+            <span>Loading daily operations data...</span>
           </div>
         </div>
       )}

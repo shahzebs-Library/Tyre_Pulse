@@ -113,7 +113,7 @@ export default function BrandPerformance() {
 
   if (loading) return (
     <div className="space-y-5">
-      <PageHeader title="Brand Performance" subtitle="Loading brand data…" icon={BarChart2} />
+      <PageHeader title="Brand Performance" subtitle="Loading brand data..." icon={BarChart2} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => <div key={i} className="card animate-pulse h-24 bg-gray-800/40" />)}
       </div>
@@ -337,7 +337,7 @@ export default function BrandPerformance() {
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
               <input
                 className="input pl-7 text-xs py-1.5 w-36"
-                placeholder="Search brand…"
+                placeholder="Search brand..."
                 value={tableSearch}
                 onChange={e => setTableSearch(e.target.value)}
               />

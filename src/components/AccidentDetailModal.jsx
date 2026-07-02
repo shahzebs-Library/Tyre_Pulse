@@ -109,7 +109,7 @@ export default function AccidentDetailModal({ accidentId, onClose, onChanged }) 
   if (loading) {
     return (
       <Backdrop onClose={onClose}>
-        <div className="bg-gray-900 border border-gray-700 rounded-xl p-12 text-center text-gray-500">Loading…</div>
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-12 text-center text-gray-500">Loading...</div>
       </Backdrop>
     )
   }
@@ -307,7 +307,7 @@ function TrackerTab({ acc, elevated, onSaved, setErr }) {
       </div>
       <Inp label="Status update note" value={f.status_update_note} onChange={v => set('status_update_note', v)} placeholder="Optional note for this update" />
       <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-        <Save size={16} /> {saving ? 'Saving…' : 'Save Tracker'}
+        <Save size={16} /> {saving ? 'Saving...' : 'Save Tracker'}
       </button>
     </div>
   )
@@ -443,7 +443,7 @@ function ClaimTab({ acc, elevated, onSaved, setErr }) {
 
       <NetCostCard />
       <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-        <Save size={16} /> {saving ? 'Saving…' : 'Save Claim & Recovery'}
+        <Save size={16} /> {saving ? 'Saving...' : 'Save Claim & Recovery'}
       </button>
     </div>
   )
@@ -465,7 +465,7 @@ function ActivityTab({ accidentId }) {
   }, [accidentId])
 
   if (err) return <p className="text-sm text-red-400">{err}</p>
-  if (rows === null) return <p className="text-sm text-gray-500">Loading activity…</p>
+  if (rows === null) return <p className="text-sm text-gray-500">Loading activity...</p>
   if (rows.length === 0) return <p className="text-sm text-gray-500">No changes recorded yet.</p>
 
   return (
@@ -587,7 +587,7 @@ function PartsTab({ acc, parts, partsTotal, elevated, profile, reload, setErr })
             <Inp label="Unit cost" type="number" value={f.unit_cost} onChange={v => set('unit_cost', v)} />
           </div>
           <div className="flex gap-2">
-            <button onClick={add} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50"><Plus size={16} /> {saving ? 'Adding…' : 'Add Part'}</button>
+            <button onClick={add} disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50"><Plus size={16} /> {saving ? 'Adding...' : 'Add Part'}</button>
             <button onClick={() => setAdding(false)} className="btn-secondary">Cancel</button>
           </div>
         </div>
@@ -622,7 +622,7 @@ function LogTab({ acc, remarks, profile, reload, setErr }) {
       <div className="flex gap-2">
         <input
           className="input flex-1"
-          placeholder="Add an update (e.g. insurance rejected claim)…"
+          placeholder="Add an update (e.g. insurance rejected claim)..."
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') add() }}

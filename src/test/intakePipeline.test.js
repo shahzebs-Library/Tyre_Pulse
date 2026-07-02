@@ -32,7 +32,7 @@ function stageRow(raw, mapping) {
   return { transformed, custom: cleanCustom, status: v.status, issues: v.issues }
 }
 
-describe('intake pipeline — end-to-end parse→map→validate (workorder)', () => {
+describe('intake pipeline - end-to-end parse→map→validate (workorder)', () => {
   it('parses an Excel upload and auto-maps the Gulf JC headers', async () => {
     const wb = await parseWorkbook(makeWorkbook())
     expect(wb.sheets[0].rows.length).toBe(2)
@@ -45,13 +45,13 @@ describe('intake pipeline — end-to-end parse→map→validate (workorder)', ()
     expect(t['Vehicle In Date']).toBe('opened_at')
   })
 
-  it('a foreign status value does NOT error the row — it warns, is stageable, and is preserved in custom', async () => {
+  it('a foreign status value does NOT error the row - it warns, is stageable, and is preserved in custom', async () => {
     const wb = await parseWorkbook(makeWorkbook())
     const sheet = wb.sheets[0]
     const mapping = suggestMapping({ columns: sheet.columns, module: 'workorder' })
     const staged = sheet.rows.map((r) => stageRow(r, mapping))
 
-    // Every row is committable (warning, not error) — this is the fix.
+    // Every row is committable (warning, not error) - this is the fix.
     expect(staged.every((s) => s.status !== 'error')).toBe(true)
     // The out-of-domain status was dropped from the committed data...
     expect(staged[0].transformed.status).toBeUndefined()

@@ -22,7 +22,7 @@ vi.mock('xlsx', () => {
 
 vi.mock('jspdf', () => {
   // Robust doc stub: any drawing/layout method (rect, roundedRect, setDrawColor,
-  // line, addPage, …) resolves to a no-op spy, while the few properties the code
+  // line, addPage, ...) resolves to a no-op spy, while the few properties the code
   // reads back (internal dimensions, lastAutoTable.finalY) return real values.
   const makeDoc = () => {
     const data = {

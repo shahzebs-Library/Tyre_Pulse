@@ -1,5 +1,5 @@
 /**
- * Import Center — canonical field dictionaries + Arabic/English synonym lists.
+ * Import Center - canonical field dictionaries + Arabic/English synonym lists.
  *
  * Each MODULE (fleet, tyre, stock) maps to a real destination table and a fixed
  * set of canonical target columns. Synonyms are scoped per module so a tyre-only
@@ -190,7 +190,7 @@ const STOCK_FIELDS = [
 
 /**
  * Accident identity in this DB is the insurance claim no (preferred) or police
- * report no — there is no dedicated accident_no column. asset_no + incident_date
+ * report no - there is no dedicated accident_no column. asset_no + incident_date
  * form the minimum usable record; claim/police identifiers drive dedup.
  * @type {CanonicalField[]}
  */
@@ -519,7 +519,7 @@ export function fieldDef(key, module) {
 }
 
 /**
- * All synonyms (raw) for a target key within a module — used by fuzzy scoring.
+ * All synonyms (raw) for a target key within a module - used by fuzzy scoring.
  * @param {string} key
  * @param {'fleet'|'tyre'|'stock'} module
  * @returns {string[]}

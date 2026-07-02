@@ -320,7 +320,7 @@ export default function AccidentClaimsPanel({ accident, onChanged }: Props) {
               style={styles.remarkInput}
               value={newRemark}
               onChangeText={setNewRemark}
-              placeholder="Add an update (e.g. insurance rejected claim)…"
+              placeholder="Add an update (e.g. insurance rejected claim)..."
               placeholderTextColor="#94a3b8"
               multiline
             />

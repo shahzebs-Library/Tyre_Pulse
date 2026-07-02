@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { buildAliasMap, applyAliases, applyAliasesToRow } from '../lib/import'
 import { normaliseToken } from '../lib/import/synonyms'
 
-describe('import engine — master-data aliases', () => {
+describe('import engine - master-data aliases', () => {
   const aliases = [
     { raw_value: 'Qiddiya-1', canonical_value: 'Qiddiya G1', canonical_id: 'q1' },
     { raw_value: 'QD G1', canonical_value: 'Qiddiya G1' },

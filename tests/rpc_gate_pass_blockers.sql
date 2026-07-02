@@ -1,5 +1,5 @@
 -- ============================================================================
--- tests/rpc_gate_pass_blockers.sql — self-asserting test for MIGRATIONS_V53.
+-- tests/rpc_gate_pass_blockers.sql - self-asserting test for MIGRATIONS_V53.
 --
 -- Proves gate_pass_blockers() surfaces open critical safety defects and marks
 -- the asset blocked, is country-scoped, and excludes resolved items. Seeds a
@@ -40,5 +40,5 @@ BEGIN
   res := public.gate_pass_blockers('GATE-BAD', 'UAE');
   IF (res->>'total')::int <> 0 THEN RAISE EXCEPTION 'FAIL country isolation %', res; END IF;
 
-  RAISE EXCEPTION 'PASS_ROLLBACK: gate_pass_blockers — 3 open blockers, Done excluded, country-scoped ✓';
+  RAISE EXCEPTION 'PASS_ROLLBACK: gate_pass_blockers - 3 open blockers, Done excluded, country-scoped ✓';
 END $$;

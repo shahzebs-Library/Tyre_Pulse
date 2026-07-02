@@ -819,7 +819,7 @@ export default function DowntimeTracker() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 size={28} className="animate-spin text-green-400" />
-        <span className="ml-3 text-gray-400">Loading downtime data…</span>
+        <span className="ml-3 text-gray-400">Loading downtime data...</span>
       </div>
     )
   }
@@ -919,7 +919,7 @@ export default function DowntimeTracker() {
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
-              placeholder="Search asset…"
+              placeholder="Search asset..."
               value={assetSearch}
               onChange={e => setAssetSearch(e.target.value)}
               className="pl-7 pr-7 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600 w-36"

@@ -1,4 +1,4 @@
-# TyrePulse Inspector — React Native Mobile App
+# TyrePulse Inspector - React Native Mobile App
 
 Tyre Man workflow: Login → Inspect → Submit → Sync.
 Same Supabase backend as the web app.
@@ -16,7 +16,7 @@ cp .env.example .env
 #   EXPO_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 #   EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 
-# 3. Install EAS CLI (cloud build — no Android Studio needed)
+# 3. Install EAS CLI (cloud build - no Android Studio needed)
 npm install -g eas-cli
 
 # 4. Log in to Expo
@@ -26,14 +26,14 @@ eas login
 ## Build Android APK (no Android Studio needed)
 
 ```bash
-# Preview APK — downloads a .apk you can install directly
+# Preview APK - downloads a .apk you can install directly
 eas build --platform android --profile preview
 
-# Production AAB — for Play Store upload
+# Production AAB - for Play Store upload
 eas build --platform android --profile production
 ```
 
-EAS builds in the cloud (~8–12 min). You get a download link when done.
+EAS builds in the cloud (~8-12 min). You get a download link when done.
 
 ## Run locally (needs Android device/emulator)
 
@@ -54,6 +54,6 @@ npx expo start
 ## Assets
 
 Branded placeholders are committed in `assets/` so the build works out of the box. Replace before Play Store submission:
-- `assets/icon.png` — 1024×1024px app icon
-- `assets/splash.png` — 1284×2778px splash screen
-- `assets/adaptive-icon.png` — 1024×1024px Android adaptive icon foreground
+- `assets/icon.png` - 1024×1024px app icon
+- `assets/splash.png` - 1284×2778px splash screen
+- `assets/adaptive-icon.png` - 1024×1024px Android adaptive icon foreground

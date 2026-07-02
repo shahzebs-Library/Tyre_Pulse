@@ -246,7 +246,7 @@ export default function UserManagementScreen() {
         <Ionicons name="search-outline" size={16} color="#94a3b8" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search name, username, employee ID, site…"
+          placeholder="Search name, username, employee ID, site..."
           placeholderTextColor="#94a3b8"
           value={search}
           onChangeText={setSearch}

@@ -1,5 +1,5 @@
 /**
- * Gate-pass service — daily vehicle exit clearance (gate_passes) plus the
+ * Gate-pass service - daily vehicle exit clearance (gate_passes) plus the
  * Phase-3 safety gate. A vehicle must NOT be released while critical safety
  * defects are open; clearing is refused (server-informed via gate_pass_blockers)
  * when open blockers exist. Explicit column lists; null-safe country scoping.

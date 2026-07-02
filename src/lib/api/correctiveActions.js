@@ -1,5 +1,5 @@
 /**
- * Corrective Actions service — corrective_actions records. Explicit column
+ * Corrective Actions service - corrective_actions records. Explicit column
  * lists (no SELECT *); additive, mirrors assets.js / inspections.js. Many pages
  * read corrective_actions (RCA, KPIs, executive reports, gate-pass blockers),
  * so this is the single boundary for that table as pages migrate onto it.
@@ -14,7 +14,7 @@ const COLS =
 
 /**
  * List corrective actions, newest first. Strict country scoping (exact match,
- * no NULL inclusion) to match the page's prior `.eq('country', …)` behaviour.
+ * no NULL inclusion) to match the page's prior `.eq('country', ...)` behaviour.
  * @param {{country?:string}} [opts]
  */
 export async function listCorrectiveActions({ country } = {}) {

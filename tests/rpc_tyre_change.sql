@@ -1,5 +1,5 @@
 -- ============================================================================
--- tests/rpc_tyre_change.sql — self-asserting test for MIGRATIONS_V50.
+-- tests/rpc_tyre_change.sql - self-asserting test for MIGRATIONS_V50.
 --
 -- Proves apply_tyre_change() is a single all-or-nothing transaction:
 --   (1) the removed tyre_records row is closed (status='Removed', km/date/reason)
@@ -10,7 +10,7 @@
 --
 -- Runs entirely inside a DO block and RAISEs 'PASS_ROLLBACK' at the end so the
 -- transaction aborts and NO test data is left behind. Any failed assertion
--- RAISEs 'FAIL …' first. Replace :uid/:org with a real approved+unlocked profile
+-- RAISEs 'FAIL ...' first. Replace :uid/:org with a real approved+unlocked profile
 -- and its org when running via psql, or run the DO block as-is if those defaults
 -- exist. Verified green against the live schema (caught a generated-column bug
 -- in an earlier draft: fitment_date must not be inserted).

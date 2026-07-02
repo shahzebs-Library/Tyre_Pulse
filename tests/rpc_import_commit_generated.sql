@@ -1,7 +1,7 @@
 -- ============================================================================
 -- tests/rpc_import_commit_generated.sql
 -- Self-asserting proof that import_commit_batch (V54) excludes DB-computed
--- columns from its INSERT list — the fix for the Work Order commit 400.
+-- columns from its INSERT list - the fix for the Work Order commit 400.
 -- Run inside a transaction; asserts via RAISE EXCEPTION; always ROLLBACKs.
 -- ============================================================================
 BEGIN;
@@ -10,10 +10,10 @@ DO $$
 DECLARE
   v_target   text := 'work_orders';
   v_enriched jsonb := jsonb_build_object(
-                        'total_cost', 999,        -- GENERATED ALWAYS — must be dropped
-                        'labour_cost', 100,        -- real column   — must be kept
-                        'parts_cost', 50,          -- real column   — must be kept
-                        'work_type', 'Repair');    -- real column   — must be kept
+                        'total_cost', 999,        -- GENERATED ALWAYS - must be dropped
+                        'labour_cost', 100,        -- real column   - must be kept
+                        'parts_cost', 50,          -- real column   - must be kept
+                        'work_type', 'Repair');    -- real column   - must be kept
   v_cols text;
 BEGIN
   -- Precondition: the column really is generated (otherwise the test is moot).

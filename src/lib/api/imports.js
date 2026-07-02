@@ -1,5 +1,5 @@
 /**
- * Imports service — the only place the Data Intake Center talks to the import_*
+ * Imports service - the only place the Data Intake Center talks to the import_*
  * staging tables (V45) and the commit RPCs (V46). Thin Supabase wrappers with
  * explicit columns; every method throws on error.
  */
@@ -74,7 +74,7 @@ export async function uploadOriginalFile(file, { module, country, sha256 }) {
   }
   const { data, error } = await supabase.from('import_files').insert(row).select('id').single()
   if (error) {
-    // 23505 = duplicate sha256 for this org — recover instead of dead-ending.
+    // 23505 = duplicate sha256 for this org - recover instead of dead-ending.
     if (error.code === '23505') {
       await supabase.storage.from(BUCKET).remove([path]).catch(() => {})
       const prior = await findFileBySha(sha256)
@@ -98,8 +98,8 @@ export async function uploadOriginalFile(file, { module, country, sha256 }) {
 /**
  * Upload one extracted attachment (from an accident evidence ZIP) to the PRIVATE
  * import-files bucket and record it in import_files. We reuse the import-files
- * bucket (not accident-photos) so EVERY artefact of an import — the source
- * workbook and its evidence package — lives under one org/country/batch path,
+ * bucket (not accident-photos) so EVERY artefact of an import - the source
+ * workbook and its evidence package - lives under one org/country/batch path,
  * shares one RLS surface, and is governed by one retention policy. Downloads are
  * always via short-lived signed URLs; no public URL is ever produced.
  *
@@ -282,7 +282,7 @@ const AUTOMATION_LIMITS = { TREAD_MIN_MM: 3, PRESSURE_MIN: 90, PRESSURE_LOW_REPE
  * Value-producing automation (directive §20). After a batch commits, generate
  * org/country-scoped operational alerts + corrective actions from the just-
  * committed rows. Best-effort and idempotent (skips assets already alerted /
- * with an open action); NEVER throws — the commit result stays authoritative.
+ * with an open action); NEVER throws - the commit result stays authoritative.
  *
  * @returns {Promise<{alerts:number, actions:number, skipped:number, error?:string}>}
  */
@@ -308,7 +308,7 @@ export async function runPostImportAutomation(batchId, module, opts = {}) {
       const bits = [t.serial_no && `serial ${t.serial_no}`, lowTread && `tread ${tread}mm`, critical && 'risk Critical'].filter(Boolean)
       alertCand.push({
         asset_no: t.asset_no, alert_type: 'tyre_risk', severity: critical ? 'critical' : 'high',
-        message: `Imported tyre on ${t.asset_no}${bits.length ? ' — ' + bits.join(', ') : ''}.`,
+        message: `Imported tyre on ${t.asset_no}${bits.length ? ' - ' + bits.join(', ') : ''}.`,
         site: t.site ?? null, country: scopeCountry ?? t.country ?? null,
         resolved: false, is_active: true, created_by: user?.id ?? null,
       })
@@ -328,7 +328,7 @@ export async function runPostImportAutomation(batchId, module, opts = {}) {
     for (const [asset, a] of byAsset) {
       if (a.count < limits.PRESSURE_LOW_REPEAT) continue
       actionCand.push({
-        title: `Repeated low tyre pressure — asset ${asset}`, priority: 'high',
+        title: `Repeated low tyre pressure - asset ${asset}`, priority: 'high',
         site: a.site, region: null,
         description: `${a.count} tyres on asset ${asset} imported with pressure below ${limits.PRESSURE_MIN}.`,
         root_cause: 'Under-inflation', asset_no: asset, tyre_serial: a.serial,
@@ -444,7 +444,7 @@ export async function getBatchRows(batchId, limit = 500) {
  * Permanently delete an import batch and (via ON DELETE CASCADE) its staged
  * rows, sheets and attachment matches. Use for abandoned / draft / staged /
  * rejected batches. A COMMITTED batch must be reversed first (reverseBatch) so
- * the live rows it produced are removed too — this guards against orphaning them.
+ * the live rows it produced are removed too - this guards against orphaning them.
  */
 export async function deleteBatch(batchId) {
   const { error } = await supabase.from('import_batches').delete().eq('id', batchId)
@@ -454,7 +454,7 @@ export async function deleteBatch(batchId) {
 /**
  * Recently uploaded original files, each tagged with whether it ever became a
  * batch (hasBatch) / was committed (committed) / is an ORPHAN (uploaded but no
- * batch — e.g. an abandoned attempt). Surfaces files that would otherwise be
+ * batch - e.g. an abandoned attempt). Surfaces files that would otherwise be
  * invisible in the batch-centric views.
  */
 export async function listFiles({ country, limit = 25 } = {}) {
@@ -549,7 +549,7 @@ export async function saveProfile(profile, rules = []) {
 /**
  * Exact-format recognition: find the active mapping profile whose header
  * fingerprint matches this upload. When found the wizard applies it
- * automatically — the user's known report formats map with zero clicks.
+ * automatically - the user's known report formats map with zero clicks.
  */
 export async function findProfileByFingerprint({ module, fingerprint }) {
   if (!fingerprint) return null
@@ -592,7 +592,7 @@ export async function listAliases({ entityType, country } = {}) {
 
 /**
  * Create or update one alias. Manual upsert (the unique key is on
- * COALESCE(country,'') — a functional index PostgREST can't name for onConflict).
+ * COALESCE(country,'') - a functional index PostgREST can't name for onConflict).
  * organisation_id is set by the table DEFAULT + RLS, never by the client.
  */
 export async function saveAlias({ entityType, country, rawValue, canonicalValue, canonicalId } = {}) {
@@ -638,7 +638,7 @@ export async function listCurrencyRates({ baseCurrency, quoteCurrency, approvedO
 
 /**
  * Preload a { [quoteCurrency]: { rate, rate_date, source } } map of the newest
- * APPROVED rate ≤ today for a base currency — fed into transformRow so currency
+ * APPROVED rate ≤ today for a base currency - fed into transformRow so currency
  * conversion stays synchronous and only ever uses approved rates.
  */
 export async function listApprovedRatesMap({ baseCurrency } = {}) {

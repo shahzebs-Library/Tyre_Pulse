@@ -862,7 +862,7 @@ export default function Inspections() {
     }
   }
 
-  if (loading || authLoading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading…</div>
+  if (loading || authLoading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>
 
   const tabConfig = [
     { key: 'all',          label: 'All',          icon: null,            count: counts.all },
@@ -1130,7 +1130,7 @@ export default function Inspections() {
                       style={{ background: '#4338ca' }}
                     >
                       {clSendingEmail
-                        ? <><span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" /> Sending…</>
+                        ? <><span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" /> Sending...</>
                         : <><Send size={13} className="inline mr-1" /> Send Approval Request</>
                       }
                     </button>
@@ -1197,7 +1197,7 @@ export default function Inspections() {
                         if (e.target.value) loadFleetInfo(e.target.value)
                       }}
                     >
-                      <option value="">Select asset…</option>
+                      <option value="">Select asset...</option>
                       {masterAssets.map(a => (
                         <option key={a.asset_no} value={a.asset_no}>
                           {a.asset_no}{a.vehicle_type ? ` - ${a.vehicle_type}` : ''}{a.site ? ` (${a.site})` : ''}
@@ -1225,7 +1225,7 @@ export default function Inspections() {
                   <label className="label">{CHECKLIST_LABELS[lang].site}</label>
                   {masterSites.length > 0 ? (
                     <select className="input" value={clSite} onChange={e => setClSite(e.target.value)}>
-                      <option value="">Select site…</option>
+                      <option value="">Select site...</option>
                       {masterSites.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   ) : (
@@ -1661,7 +1661,7 @@ export default function Inspections() {
                     color:'var(--panel-ink)', fontSize: 13, fontWeight: 700, cursor: approverSig ? 'pointer' : 'not-allowed',
                   }}
                 >
-                  {approveSubmitting ? 'Saving…' : '✓ Approve & Sign'}
+                  {approveSubmitting ? 'Saving...' : '✓ Approve & Sign'}
                 </button>
               </div>
             )}
@@ -1745,7 +1745,7 @@ export default function Inspections() {
 
       {/* Search + site filter */}
       <div className="flex flex-wrap gap-3">
-        <input className="input flex-1 min-w-48" placeholder="Search title, site, asset, inspector, attendees…"
+        <input className="input flex-1 min-w-48" placeholder="Search title, site, asset, inspector, attendees..."
           value={search} onChange={e => setSearch(e.target.value)} />
         <select className="input w-44" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
           <option value="all">All Sites</option>
@@ -1908,7 +1908,7 @@ export default function Inspections() {
               <label className="label">Title *</label>
               <input className="input" value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="Descriptive title…" />
+                placeholder="Descriptive title..." />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -2062,13 +2062,13 @@ export default function Inspections() {
               <label className="label">{isTrainingType(form.inspection_type) ? 'Training Content' : 'Findings'}</label>
               <textarea className="input h-20 resize-none" value={form.findings}
                 onChange={e => setForm(f => ({ ...f, findings: e.target.value }))}
-                placeholder={isTrainingType(form.inspection_type) ? 'Topics covered…' : 'What was found…'} />
+                placeholder={isTrainingType(form.inspection_type) ? 'Topics covered...' : 'What was found...'} />
             </div>
             <div>
               <label className="label">Notes</label>
               <textarea className="input h-16 resize-none" value={form.notes}
                 onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="Additional notes…" />
+                placeholder="Additional notes..." />
             </div>
 
             {/* Photo upload */}
@@ -2110,7 +2110,7 @@ export default function Inspections() {
             <button onClick={save}
               disabled={saving || !form.title?.trim() || !form.site?.trim() || !form.scheduled_date}
               className="btn-primary flex-1 disabled:opacity-50">
-              {saving ? 'Saving…' : form.id ? 'Save Changes' : 'Add'}
+              {saving ? 'Saving...' : form.id ? 'Save Changes' : 'Add'}
             </button>
           </div>
         </Modal>
@@ -2328,7 +2328,7 @@ function RaiseActionModal({ row, onConfirm, onClose }) {
         <p><span className="text-gray-500">Site:</span> {row.site}</p>
         <p><span className="text-gray-500">Asset:</span> {row.asset_no || '-'}</p>
         <p><span className="text-gray-500">Priority:</span> {row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium'}</p>
-        {row.findings && <p><span className="text-gray-500">Findings:</span> {row.findings.slice(0, 100)}{row.findings.length > 100 ? '…' : ''}</p>}
+        {row.findings && <p><span className="text-gray-500">Findings:</span> {row.findings.slice(0, 100)}{row.findings.length > 100 ? '...' : ''}</p>}
       </div>
       <div className="flex gap-3">
         <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>

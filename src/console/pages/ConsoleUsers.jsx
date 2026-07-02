@@ -137,7 +137,7 @@ export default function ConsoleUsers() {
         <div className="relative flex-1 min-w-48">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(0) }}
-            placeholder="Search name, email, site…"
+            placeholder="Search name, email, site..."
             className="w-full h-9 bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
         </div>
         <select value={filterRole} onChange={e => { setFilterRole(e.target.value); setPage(0) }}
@@ -320,7 +320,7 @@ export default function ConsoleUsers() {
               <button onClick={handleEditSave} disabled={saving}
                 className="flex-1 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
                 style={{ background: 'linear-gradient(135deg,#ea580c,#f97316)' }}>
-                {saving ? 'Saving…' : 'Save Changes'}
+                {saving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>

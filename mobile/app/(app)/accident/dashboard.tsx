@@ -204,7 +204,7 @@ export default function AccidentDashboardScreen() {
           <Ionicons name="search-outline" size={16} color="#94a3b8" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search asset, site, type, reporter…"
+            placeholder="Search asset, site, type, reporter..."
             placeholderTextColor="#94a3b8"
             value={search}
             onChangeText={setSearch}

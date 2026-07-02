@@ -129,7 +129,7 @@ export default function TyreRecords() {
   })
 
   function openAdd() {
-    // Cost is left blank so the user enters the ACTUAL cost — no settings default
+    // Cost is left blank so the user enters the ACTUAL cost - no settings default
     // is written into a record.
     setForm(EMPTY_FORM('', activeCountry !== 'All' ? activeCountry : 'KSA'))
     setEditRecord({})
@@ -157,7 +157,7 @@ export default function TyreRecords() {
     const payload = {
       ...form,
       qty: +form.qty || 1,
-      // Store the actual entered cost, or null when left blank — never a default.
+      // Store the actual entered cost, or null when left blank - never a default.
       cost_per_tyre: form.cost_per_tyre !== '' && form.cost_per_tyre != null ? +form.cost_per_tyre : null,
       km_at_fitment: form.km_at_fitment !== '' ? +form.km_at_fitment : null,
       km_at_removal: form.km_at_removal !== '' ? +form.km_at_removal : null,
@@ -221,7 +221,7 @@ export default function TyreRecords() {
         // (only Admin may delete tyre records).
         throw new Error(
           (profile?.role || '').toLowerCase() === 'admin'
-            ? 'No records were deleted. They may already be gone — refresh and retry.'
+            ? 'No records were deleted. They may already be gone - refresh and retry.'
             : 'You do not have permission to delete tyre records. Only an Admin can delete.',
         )
       }
@@ -340,7 +340,7 @@ export default function TyreRecords() {
       <FilterBar
         search={search}
         onSearch={v => { setSearch(v); setPage(0) }}
-        placeholder="Search asset, serial, MIS, job card…"
+        placeholder="Search asset, serial, MIS, job card..."
         selects={[
           { value: siteFilter,  onChange: v => { setSiteFilter(v); setPage(0) },  placeholder: 'All Sites',       options: sites.map(s  => ({ value: s, label: s })) },
           { value: brandFilter, onChange: v => { setBrandFilter(v); setPage(0) }, placeholder: 'All Brands',      options: brands.map(b => ({ value: b, label: b })) },
@@ -480,7 +480,7 @@ export default function TyreRecords() {
 
                       {/* Cost */}
                       <div className="px-4 text-gray-300 text-xs tabular-nums">
-                        {r.cost_per_tyre != null ? formatCurrencyCompact(r.cost_per_tyre, activeCurrency) : <span className="text-muted">—</span>}
+                        {r.cost_per_tyre != null ? formatCurrencyCompact(r.cost_per_tyre, activeCurrency) : <span className="text-muted">-</span>}
                       </div>
 
                       {/* CPK */}
@@ -629,12 +629,12 @@ export default function TyreRecords() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Site</label>
-                <input className="input" list="site-list" value={form.site} onChange={F('site')} placeholder="Select or type…" />
+                <input className="input" list="site-list" value={form.site} onChange={F('site')} placeholder="Select or type..." />
                 <datalist id="site-list">{sites.map(s => <option key={s} value={s} />)}</datalist>
               </div>
               <div>
                 <label className="label">Brand</label>
-                <input className="input" list="brand-list" value={form.brand} onChange={F('brand')} placeholder="Select or type…" />
+                <input className="input" list="brand-list" value={form.brand} onChange={F('brand')} placeholder="Select or type..." />
                 <datalist id="brand-list">{brands.map(b => <option key={b} value={b} />)}</datalist>
               </div>
             </div>
@@ -681,7 +681,7 @@ export default function TyreRecords() {
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {saving ? 'Saving…' : 'Save Record'}
+                {saving ? 'Saving...' : 'Save Record'}
               </button>
               <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">Cancel</button>
             </div>
@@ -724,7 +724,7 @@ export default function TyreRecords() {
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {saving ? 'Updating…' : `Update ${bulkCount} Records`}
+                {saving ? 'Updating...' : `Update ${bulkCount} Records`}
               </button>
               <button type="button" onClick={() => setShowBulkEdit(false)} className="btn-secondary">Cancel</button>
             </div>
@@ -751,7 +751,7 @@ export default function TyreRecords() {
           <div className="flex gap-3">
             <button onClick={deleteSelected} disabled={saving} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              {saving ? 'Deleting…' : `Delete ${bulkCount} Records`}
+              {saving ? 'Deleting...' : `Delete ${bulkCount} Records`}
             </button>
             <button onClick={() => setShowDeleteConfirm(false)} className="btn-secondary">Cancel</button>
           </div>

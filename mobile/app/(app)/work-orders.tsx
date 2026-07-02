@@ -217,7 +217,7 @@ export default function WorkOrdersScreen() {
                 ))}
               </View>
               <Text style={styles.label}>{t('modules.common.details')}</Text>
-              <TextInput style={[styles.input, styles.textarea]} placeholder="What needs doing…" placeholderTextColor="#94a3b8" value={desc} onChangeText={setDesc} multiline />
+              <TextInput style={[styles.input, styles.textarea]} placeholder="What needs doing..." placeholderTextColor="#94a3b8" value={desc} onChangeText={setDesc} multiline />
               <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={create} disabled={saving}>
                 {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>{t('modules.workOrders.create')}</Text>}
               </TouchableOpacity>

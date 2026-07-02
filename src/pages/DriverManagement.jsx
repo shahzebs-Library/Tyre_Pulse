@@ -617,7 +617,7 @@ export default function DriverManagement() {
       .slice(0, 10)
 
     return {
-      labels: top10.map(d => d.name.length > 14 ? d.name.slice(0, 14) + '…' : d.name),
+      labels: top10.map(d => d.name.length > 14 ? d.name.slice(0, 14) + '...' : d.name),
       datasets: [{
         label: `Avg CPK (${activeCurrency})`,
         data: top10.map(d => parseFloat(d.avgCpk.toFixed(4))),
@@ -637,7 +637,7 @@ export default function DriverManagement() {
       .slice(0, 12)
 
     return {
-      labels: top.map(d => d.name.length > 16 ? d.name.slice(0, 16) + '…' : d.name),
+      labels: top.map(d => d.name.length > 16 ? d.name.slice(0, 16) + '...' : d.name),
       datasets: [{
         label: 'Failure Rate %',
         data: top.map(d => parseFloat(d.failureRate.toFixed(1))),
@@ -727,7 +727,7 @@ export default function DriverManagement() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
         <div className="w-10 h-10 rounded-full border-2 border-green-600/20 border-t-green-500 animate-spin" />
-        <p className="text-gray-500 text-sm">Loading driver intelligence…</p>
+        <p className="text-gray-500 text-sm">Loading driver intelligence...</p>
       </div>
     )
   }
@@ -829,7 +829,7 @@ export default function DriverManagement() {
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
             <input
               type="text"
-              placeholder="Search driver…"
+              placeholder="Search driver..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-3 py-2 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none"

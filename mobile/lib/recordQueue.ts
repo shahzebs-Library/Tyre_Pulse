@@ -1,5 +1,5 @@
 /**
- * recordQueue — TYPED offline command queue.
+ * recordQueue - TYPED offline command queue.
  *
  * Mobile clients MUST NOT choose Supabase table names. Every write is a typed
  * command whose `type` is looked up in the COMMANDS registry, which fixes the
@@ -226,7 +226,7 @@ export async function syncRecordQueue(): Promise<{ synced: number; failed: numbe
   let synced = 0, failed = 0
   for (const item of queue) {
     if (item.sync_status === 'synced') continue
-    // Guard: never trust a stored type — reject anything not in the allow-list.
+    // Guard: never trust a stored type - reject anything not in the allow-list.
     if (!isCommandType(item.type)) {
       item.sync_status = 'failed'
       item.error = 'Unknown command type'
@@ -240,7 +240,7 @@ export async function syncRecordQueue(): Promise<{ synced: number; failed: numbe
       // the queued item so we never re-upload them on a subsequent attempt.
       const { payload: prepared, pending } = await resolveCommandPhotos(item.type, clean)
       item.payload = prepared
-      if (pending) throw new Error('Photos pending upload — will retry')
+      if (pending) throw new Error('Photos pending upload - will retry')
       const { error } = await supabase.from(COMMANDS[item.type].table).insert(prepared)
       if (error) throw error
       item.sync_status = 'synced'
@@ -260,7 +260,7 @@ export async function syncRecordQueue(): Promise<{ synced: number; failed: numbe
     }
   }
   await save(queue)
-  // Prune synced entries — they are safely in the database, and keeping them
+  // Prune synced entries - they are safely in the database, and keeping them
   // would grow SecureStore without bound. Pending/failed entries are preserved
   // so retries and manual "retry failed" still work.
   const remaining = queue.filter(i => i.sync_status !== 'synced')
@@ -305,7 +305,7 @@ const TABLE_TO_TYPE: Record<string, CommandType> = {
 }
 
 /**
- * @deprecated Back-compat shim. Callers should migrate to saveCommand(type, …).
+ * @deprecated Back-compat shim. Callers should migrate to saveCommand(type, ...).
  * Rejects any table not in the allow-list.
  */
 export async function saveRecord(

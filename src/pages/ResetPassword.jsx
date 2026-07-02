@@ -73,11 +73,11 @@ export default function ResetPassword() {
                 <span className="text-3xl">✅</span>
               </div>
               <p className="text-white font-semibold text-lg">Password updated!</p>
-              <p className="text-gray-400 text-sm mt-2">Redirecting you to sign in…</p>
+              <p className="text-gray-400 text-sm mt-2">Redirecting you to sign in...</p>
             </div>
           ) : !ready ? (
             <div className="text-center py-8">
-              <p className="text-gray-400 text-sm">Verifying reset link…</p>
+              <p className="text-gray-400 text-sm">Verifying reset link...</p>
               <p className="text-gray-600 text-xs mt-2">
                 If nothing happens,{' '}
                 <button onClick={() => navigate('/login')} className="text-green-400 hover:underline">
@@ -127,7 +127,7 @@ export default function ResetPassword() {
               </div>
 
               <button type="submit" disabled={loading} className="btn-primary w-full">
-                {loading ? 'Updating…' : 'Set New Password →'}
+                {loading ? 'Updating...' : 'Set New Password →'}
               </button>
             </form>
           )}

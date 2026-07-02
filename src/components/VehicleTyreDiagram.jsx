@@ -1376,7 +1376,7 @@ const LAYOUTS = {
 };
 
 // Relabel every tyre's display label to the canonical GCC position code
-// (LHF1, LHRO, RHCI …) while keeping the internal `id` stable, so saved
+// (LHF1, LHRO, RHCI ...) while keeping the internal `id` stable, so saved
 // inspections and diagram hit-testing continue to match.
 Object.entries(LAYOUTS).forEach(([typeKey, layout]) => {
   layout.tyres.forEach(t => { t.label = legacyPositionCode(typeKey, t.id) })

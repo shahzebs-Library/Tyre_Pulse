@@ -1,5 +1,5 @@
 /**
- * Assets service — fleet master data (vehicle_fleet). Explicit column lists
+ * Assets service - fleet master data (vehicle_fleet). Explicit column lists
  * (no SELECT *) so new/sensitive columns are never exposed by accident.
  */
 import { supabase, unwrap, applyCountry } from './_client'

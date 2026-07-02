@@ -1,9 +1,9 @@
 /**
- * Knowledge Documents service — knowledge_documents (RAG corpus). Single
+ * Knowledge Documents service - knowledge_documents (RAG corpus). Single
  * boundary for that table as pages migrate off inline supabase. Explicit,
  * least-privilege column lists (no SELECT *).
  *
- * Read policy: the `embedding` column is a vector(1536) — never shipped to the
+ * Read policy: the `embedding` column is a vector(1536) - never shipped to the
  * browser on reads (huge payload, and pages render metadata + a presence badge,
  * not the raw vector). Reads therefore SELECT metadata columns only and derive a
  * lightweight boolean `embedding` presence flag via a second id-only query

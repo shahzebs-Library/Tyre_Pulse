@@ -409,7 +409,7 @@ export default function Reports() {
                 <input
                   list="site-list"
                   className="input w-full"
-                  placeholder="Filter by site…"
+                  placeholder="Filter by site..."
                   value={filterSite}
                   onChange={e => setFilterSite(e.target.value)}
                 />
@@ -430,14 +430,14 @@ export default function Reports() {
             {reportType === 'Vehicle History' && (
               <div>
                 <label className="label">Asset Number</label>
-                <input className="input w-full" placeholder="Asset no…" value={filterAsset} onChange={e => setFilterAsset(e.target.value)} />
+                <input className="input w-full" placeholder="Asset no..." value={filterAsset} onChange={e => setFilterAsset(e.target.value)} />
               </div>
             )}
 
             {(reportType === 'Cost Analysis' || reportType === 'Tyre Replacement Log') && (
               <div>
                 <label className="label">Brand</label>
-                <input className="input w-full" placeholder="Filter by brand…" value={filterBrand} onChange={e => setFilterBrand(e.target.value)} />
+                <input className="input w-full" placeholder="Filter by brand..." value={filterBrand} onChange={e => setFilterBrand(e.target.value)} />
               </div>
             )}
 
@@ -531,7 +531,7 @@ export default function Reports() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center h-40 text-gray-400">Running report…</div>
+            <div className="flex items-center justify-center h-40 text-gray-400">Running report...</div>
           ) : (
             <>
               <div className="flex items-center gap-3 flex-wrap">

@@ -131,7 +131,7 @@ export default function ConsoleAuditLog() {
         <div className="relative flex-1 min-w-48">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search action, type, details, admin…"
+            placeholder="Search action, type, details, admin..."
             className="w-full h-9 bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-orange-500" />
         </div>
         <select value={filterAction} onChange={e => { setFilterAction(e.target.value); setPage(0) }}
@@ -193,7 +193,7 @@ export default function ConsoleAuditLog() {
                     <td className="px-4 py-2.5">
                       <div>
                         <p className="text-white text-[11px]">{adminCache[log.admin_id]?.full_name ?? '-'}</p>
-                        <p className="text-gray-600 text-[10px]">{adminCache[log.admin_id]?.email ?? log.admin_id?.slice(0, 8) + '…'}</p>
+                        <p className="text-gray-600 text-[10px]">{adminCache[log.admin_id]?.email ?? log.admin_id?.slice(0, 8) + '...'}</p>
                       </div>
                     </td>
                     <td className="px-4 py-2.5">

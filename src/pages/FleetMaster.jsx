@@ -243,7 +243,7 @@ export default function FleetMaster() {
         .from('vehicle_fleet').delete().eq('id', deleteTarget.id).select('id')
       if (error) throw error
       if ((data?.length ?? 0) === 0) {
-        throw new Error('The vehicle could not be deleted — you may not have permission, or it was already removed.')
+        throw new Error('The vehicle could not be deleted - you may not have permission, or it was already removed.')
       }
       setShowDeleteConfirm(false)
       setDeleteTarget(null)
@@ -444,7 +444,7 @@ export default function FleetMaster() {
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   className="input pl-9"
-                  placeholder="Search asset, fleet no, make, model…"
+                  placeholder="Search asset, fleet no, make, model..."
                   value={search}
                   onChange={e => { setSearch(e.target.value); setPage(0) }}
                 />
@@ -473,7 +473,7 @@ export default function FleetMaster() {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={10} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                    <tr><td colSpan={10} className="text-center py-12 text-gray-500">Loading...</td></tr>
                   ) : records.length === 0 ? (
                     <tr><td colSpan={10} className="text-center py-12 text-gray-500">No vehicles found</td></tr>
                   ) : records.map(r => (
@@ -619,7 +619,7 @@ export default function FleetMaster() {
             {uploadStep === 'uploading' && (
               <div className="text-center py-12">
                 <div className="animate-spin h-10 w-10 rounded-full border-2 border-gray-700 border-t-blue-500 mx-auto mb-4" />
-                <p className="text-white font-medium">Upserting fleet records…</p>
+                <p className="text-white font-medium">Upserting fleet records...</p>
               </div>
             )}
 
@@ -713,7 +713,7 @@ export default function FleetMaster() {
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
                   <label className="label">Site</label>
-                  <input className="input" list="fleet-site-list" value={form.site} onChange={F('site')} placeholder="Select or type…" />
+                  <input className="input" list="fleet-site-list" value={form.site} onChange={F('site')} placeholder="Select or type..." />
                   <datalist id="fleet-site-list">{sites.map(s => <option key={s} value={s} />)}</datalist>
                 </div>
                 <div>
@@ -760,13 +760,13 @@ export default function FleetMaster() {
               </div>
               <div className="mt-3">
                 <label className="label">Notes</label>
-                <textarea className="input" rows={2} value={form.notes} onChange={F('notes')} placeholder="Any additional notes…" />
+                <textarea className="input" rows={2} value={form.notes} onChange={F('notes')} placeholder="Any additional notes..." />
               </div>
             </div>
 
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                <Save size={15} /> {saving ? 'Saving…' : 'Save Vehicle'}
+                <Save size={15} /> {saving ? 'Saving...' : 'Save Vehicle'}
               </button>
               <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">Cancel</button>
             </div>
@@ -789,7 +789,7 @@ export default function FleetMaster() {
           )}
           <div className="flex gap-3">
             <button onClick={deleteRecord} disabled={saving} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-              <Trash2 size={15} /> {saving ? 'Deleting…' : 'Delete Vehicle'}
+              <Trash2 size={15} /> {saving ? 'Deleting...' : 'Delete Vehicle'}
             </button>
             <button onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }} className="btn-secondary">Cancel</button>
           </div>

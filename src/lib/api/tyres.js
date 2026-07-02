@@ -1,5 +1,5 @@
 /**
- * Tyres service — tyre records (tyre_records). Explicit column lists; null-safe
+ * Tyres service - tyre records (tyre_records). Explicit column lists; null-safe
  * country scoping. Pages migrate onto these methods instead of inline queries.
  */
 import { supabase, unwrap, applyCountry } from './_client'

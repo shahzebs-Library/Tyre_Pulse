@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { transformRow, validateRow } from '../lib/import'
 import { canonicalizeEnum, isInEnum, ENUM_DOMAINS } from '../lib/import/enums.js'
 
-describe('import engine — controlled-vocabulary (CHECK) enums', () => {
+describe('import engine - controlled-vocabulary (CHECK) enums', () => {
   describe('canonicalizeEnum', () => {
     const WORK_TYPE = ENUM_DOMAINS.workorder.work_type
     it('snaps case-different values to the exact DB spelling', () => {
@@ -75,7 +75,7 @@ describe('import engine — controlled-vocabulary (CHECK) enums', () => {
       expect(res.issues.some((i) => i.code === 'ENUM_INVALID')).toBe(false)
     })
     it('applies the correct per-module domain for a shared column name (status)', () => {
-      // fleet.status domain is Active/Inactive/... — "Open" (a work-order status) is invalid here.
+      // fleet.status domain is Active/Inactive/... - "Open" (a work-order status) is invalid here.
       const res = validateRow({ status: 'Open' }, 'fleet')
       expect(res.issues.some((i) => i.code === 'ENUM_INVALID' && i.field === 'status')).toBe(true)
     })

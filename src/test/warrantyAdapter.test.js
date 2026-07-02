@@ -1,5 +1,5 @@
 /**
- * Import Center — warranty-claim adapter test matrix (Phase 4).
+ * Import Center - warranty-claim adapter test matrix (Phase 4).
  *
  * Exercises the REAL pure pipeline functions for the warranty module: Arabic/EN
  * header mapping, fitment/removal lifecycle validation (km + date), required-field
@@ -25,7 +25,7 @@ function buildWarrantyRow(rawRow, mapping) {
   return transformed
 }
 
-describe('warranty adapter — Arabic/EN header mapping', () => {
+describe('warranty adapter - Arabic/EN header mapping', () => {
   it('resolves Arabic + English warranty headers via exactAlias', () => {
     expect(exactAlias('رقم الإطار', 'warranty')).toBe('serial_number')
     expect(exactAlias('رقم المطالبة', 'warranty')).toBe('claim_no')
@@ -57,7 +57,7 @@ describe('warranty adapter — Arabic/EN header mapping', () => {
   })
 })
 
-describe('warranty adapter — lifecycle + required validation (validateRow)', () => {
+describe('warranty adapter - lifecycle + required validation (validateRow)', () => {
   const baseMapping = [
     { sourceHeader: 'Serial Number', target: 'serial_number' },
     { sourceHeader: 'Claim No', target: 'claim_no' },
@@ -114,7 +114,7 @@ describe('warranty adapter — lifecycle + required validation (validateRow)', (
   })
 })
 
-describe('warranty adapter — duplicate classification', () => {
+describe('warranty adapter - duplicate classification', () => {
   it('same country + serial_number + claim_no → duplicate', () => {
     const rows = [
       { country: 'KSA', serial_number: 'SN-100', claim_no: 'WAR-100', claim_status: 'Approved', credit_amount: 500, asset_no: 'V-1' },
@@ -170,7 +170,7 @@ describe('warranty adapter — duplicate classification', () => {
   })
 })
 
-describe('warranty adapter — natural key', () => {
+describe('warranty adapter - natural key', () => {
   it('builds a key from country + serial_number + claim_no', () => {
     expect(naturalKey({ country: 'KSA', serial_number: 'SN-1', claim_no: 'WAR-1' }, 'warranty')).not.toBeNull()
   })

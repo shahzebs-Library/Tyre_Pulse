@@ -572,7 +572,7 @@ export default function Procurement() {
       <div className="flex items-center justify-center min-h-screen bg-gray-950">
         <div className="text-center">
           <Loader2 className="animate-spin text-orange-400 mx-auto mb-3" size={40} />
-          <p className="text-gray-400">Loading procurement data…</p>
+          <p className="text-gray-400">Loading procurement data...</p>
         </div>
       </div>
     )
@@ -787,7 +787,7 @@ export default function Procurement() {
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
-              placeholder="Search PO#, vendor, site, budget code…"
+              placeholder="Search PO#, vendor, site, budget code..."
               className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500"
             />
           </div>
@@ -1078,7 +1078,7 @@ export default function Procurement() {
                 <div>
                   <label className="text-gray-400 text-xs mb-1 block">Notes</label>
                   <textarea value={formData.notes} onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))}
-                    rows={3} placeholder="Additional details, delivery instructions, special requirements…"
+                    rows={3} placeholder="Additional details, delivery instructions, special requirements..."
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500 resize-none" />
                 </div>
               </div>
@@ -1096,7 +1096,7 @@ export default function Procurement() {
                   <button onClick={handleSave} disabled={saving}
                     className="flex items-center gap-2 px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
                     {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                    {saving ? 'Saving…' : editPO ? 'Save Changes' : 'Create PO'}
+                    {saving ? 'Saving...' : editPO ? 'Save Changes' : 'Create PO'}
                   </button>
                 </div>
               </div>

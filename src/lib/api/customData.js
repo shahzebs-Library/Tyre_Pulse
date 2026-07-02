@@ -1,12 +1,12 @@
 /**
- * Custom Data service — field_synonyms (upload-mapping dictionary) plus the
+ * Custom Data service - field_synonyms (upload-mapping dictionary) plus the
  * extra_fields tooling behind the Custom Data Manager page. Single Supabase
  * boundary for that domain: least-privilege column lists (no SELECT *), the
  * extra-field stats RPC, synonym CRUD, and the tyre_records reads/writes used
  * by the backfill / export flows.
  *
  * The tyre_records helpers here are intentionally narrow (only the columns the
- * page touches) and do NOT overlap tyres.js — they exist solely for the
+ * page touches) and do NOT overlap tyres.js - they exist solely for the
  * extra_fields backfill/export and a generic dynamic-column patch.
  */
 import { supabase, unwrap, fetchAllPages } from './_client'
@@ -92,7 +92,7 @@ export async function listRecordsWithExtraFields({ country, filterKey, filterVal
 
 /**
  * Fetch ALL tyre_records where `fieldKey` exists in extra_fields but the
- * canonical `target` column is still null — the candidate set for a backfill.
+ * canonical `target` column is still null - the candidate set for a backfill.
  * Returns the raw fetchAllPages `{ data, error, truncated }` so the caller can
  * short-circuit on error exactly as before.
  * @param {{fieldKey: string, target: string}} opts

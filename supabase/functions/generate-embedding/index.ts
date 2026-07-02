@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, jsonResponse, requireApprovedRole } from '../_shared/auth.ts'
 
-// Per-model embedding price in USD per 1M tokens (input only — no completion side).
+// Per-model embedding price in USD per 1M tokens (input only - no completion side).
 const EMBEDDING_PRICING: Record<string, number> = {
   'text-embedding-3-small': 0.02,
   'text-embedding-3-large': 0.13,

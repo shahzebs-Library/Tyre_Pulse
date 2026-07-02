@@ -1,8 +1,8 @@
-// send-scheduled-reports — cron-driven delivery of scheduled report digests.
+// send-scheduled-reports - cron-driven delivery of scheduled report digests.
 //
 // Invoked every 15 minutes by pg_cron (V61) with an `x-cron-secret` header.
 // The secret lives in the service-role-only `cron_config` table, so only the
-// database's own cron job can trigger real work — a stray anon call is a 401.
+// database's own cron job can trigger real work - a stray anon call is a 401.
 //
 // For every ACTIVE schedule whose next_run_at has passed (or is null), it
 // builds a live KPI digest for the schedule's report type, emails it to the
@@ -85,7 +85,7 @@ async function buildDigest(svc: any) {
     const { data } = await svc.rpc('report_tyre_summary', { p_country: 'All', p_from: since, p_to: null })
     if (data) spend = Number(data.total_cost ?? data.total_amount ?? null)
     if (!Number.isFinite(spend)) spend = null
-  } catch { /* keep null — never fabricate */ }
+  } catch { /* keep null - never fabricate */ }
 
   return { since, tyres30d, highRisk, openWo, openCa, accidents30d, spend }
 }
@@ -99,7 +99,7 @@ const TYPE_LABEL: Record<string, string> = {
 }
 
 function fmt(n: number | null): string {
-  return n == null ? '—' : n.toLocaleString('en-US')
+  return n == null ? '-' : n.toLocaleString('en-US')
 }
 
 function renderHtml(s: Schedule, d: Awaited<ReturnType<typeof buildDigest>>, appUrl: string): string {
@@ -111,14 +111,14 @@ function renderHtml(s: Schedule, d: Awaited<ReturnType<typeof buildDigest>>, app
   return `
   <div style="font-family:Segoe UI,Arial,sans-serif;max-width:640px;margin:auto;color:#0f172a">
     <div style="background:#0f172a;border-radius:12px 12px 0 0;padding:20px 24px;color:#fff">
-      <div style="font-size:18px;font-weight:800">TyrePulse — ${TYPE_LABEL[s.report_type] ?? s.report_type}</div>
+      <div style="font-size:18px;font-weight:800">TyrePulse - ${TYPE_LABEL[s.report_type] ?? s.report_type}</div>
       <div style="font-size:12px;color:#94a3b8">Scheduled digest “${s.name}” · last 30 days · generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC</div>
     </div>
     <div style="border:1px solid #e2e8f0;border-top:0;border-radius:0 0 12px 12px;padding:20px 24px">
       <table role="presentation" width="100%" cellspacing="8"><tr>
         ${tile('Tyre records (30d)', fmt(d.tyres30d))}
         ${tile('High/Critical risk', fmt(d.highRisk), d.highRisk ? '#b91c1c' : '#047857')}
-        ${tile('30d tyre spend', d.spend == null ? '—' : d.spend.toLocaleString('en-US', { maximumFractionDigits: 0 }))}
+        ${tile('30d tyre spend', d.spend == null ? '-' : d.spend.toLocaleString('en-US', { maximumFractionDigits: 0 }))}
       </tr><tr>
         ${tile('Open work orders', fmt(d.openWo))}
         ${tile('Open actions', fmt(d.openCa), d.openCa ? '#b45309' : '#047857')}
@@ -126,7 +126,7 @@ function renderHtml(s: Schedule, d: Awaited<ReturnType<typeof buildDigest>>, app
       </tr></table>
       <p style="font-size:13px;color:#475569;line-height:1.6">
         Values are live counts from your fleet data since ${d.since}. A dash means the
-        metric could not be read at send time — nothing is ever estimated in this digest.
+        metric could not be read at send time - nothing is ever estimated in this digest.
       </p>
       <a href="${appUrl}" style="display:inline-block;background:#16a34a;color:#fff;font-weight:700;font-size:13px;padding:10px 18px;border-radius:8px;text-decoration:none">Open TyrePulse</a>
       <p style="font-size:11px;color:#94a3b8;margin-top:16px">You receive this because you are a recipient of the “${s.name}” schedule. Manage schedules in TyrePulse → Scheduled Reports.</p>
@@ -180,7 +180,7 @@ serve(async (req) => {
         body: JSON.stringify({
           from: FROM_EMAIL,
           to: recipients,
-          subject: `TyrePulse ${TYPE_LABEL[s.report_type] ?? 'Report'} — ${s.name}`,
+          subject: `TyrePulse ${TYPE_LABEL[s.report_type] ?? 'Report'} - ${s.name}`,
           html: renderHtml(s, digest, APP_URL),
         }),
       })

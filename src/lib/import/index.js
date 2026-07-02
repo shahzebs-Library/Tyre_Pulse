@@ -1,5 +1,5 @@
 /**
- * Import Center engine — barrel.
+ * Import Center engine - barrel.
  *
  * The client-side parse → map → transform → validate pipeline that stages rows
  * into the import_* tables (V45) and commits them via the import_commit_batch

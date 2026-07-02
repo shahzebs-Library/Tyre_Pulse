@@ -738,7 +738,7 @@ export default function Accidents() {
               title: 'Accident & Claims Tracker',
               currency: activeCurrency,
               company: appSettings?.company_name,
-              dateRange: (filterFrom || filterTo) ? `${filterFrom || '…'} to ${filterTo || '…'}` : 'All dates',
+              dateRange: (filterFrom || filterTo) ? `${filterFrom || '...'} to ${filterTo || '...'}` : 'All dates',
               meta: { Scope: activeCountry !== 'All' ? activeCountry : 'All countries' },
             })}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
@@ -1175,7 +1175,7 @@ export default function Accidents() {
                   <div className="relative">
                     <input
                       className="input pr-8" required
-                      placeholder="Type to search…"
+                      placeholder="Type to search..."
                       value={assetQuery}
                       onChange={e => {
                         setAssetQuery(e.target.value)
@@ -1469,7 +1469,7 @@ export default function Accidents() {
                 className="btn-primary flex items-center gap-2 text-sm disabled:opacity-40"
               >
                 {bulkImporting
-                  ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Importing…</>
+                  ? <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" /> Importing...</>
                   : <><CheckCircle2 size={14} /> Import {bulkRows.filter(r => r._valid).length} Valid Rows</>}
               </button>
               <button type="button" onClick={() => setShowBulk(false)} className="btn-secondary text-sm">Close</button>

@@ -157,7 +157,7 @@ export default function StockManagement() {
 
     const qtyChange = editId ? newQty - prevQty : newQty
     if (qtyChange !== 0 || !editId) {
-      // Best-effort audit movement — original ignored insert errors here.
+      // Best-effort audit movement - original ignored insert errors here.
       try {
         await stock.insertStockMovement({
           stock_id:      stockId,
@@ -183,7 +183,7 @@ export default function StockManagement() {
     const rec = historyFor
     setSaving(true); setError('')
     // Atomic, guarded, audited ledger post. The server computes qty_before/after
-    // and blocks a negative balance — no client-side stock math.
+    // and blocks a negative balance - no client-side stock math.
     let data
     try {
       data = await stock.postStockMovement({
@@ -456,7 +456,7 @@ export default function StockManagement() {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={11} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                    <tr><td colSpan={11} className="text-center py-12 text-gray-500">Loading...</td></tr>
                   ) : records.length === 0 ? (
                     <tr><td colSpan={11} className="text-center py-12 text-gray-500">No stock records yet</td></tr>
                   ) : records.map(r => {
@@ -694,7 +694,7 @@ export default function StockManagement() {
                 className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <ArrowLeftRight size={16} />
-                {transferring ? 'Transferring…' : 'Transfer Stock'}
+                {transferring ? 'Transferring...' : 'Transfer Stock'}
               </button>
             </form>
           </div>
@@ -794,7 +794,7 @@ export default function StockManagement() {
                 </thead>
                 <tbody>
                   {tlLoading ? (
-                    <tr><td colSpan={4} className="text-center py-12 text-gray-500">Loading…</td></tr>
+                    <tr><td colSpan={4} className="text-center py-12 text-gray-500">Loading...</td></tr>
                   ) : tlByDate.length === 0 ? (
                     <tr><td colSpan={4} className="text-center py-12 text-gray-500">No records in this period</td></tr>
                   ) : tlByDate.map(([date, vals]) => {
@@ -870,7 +870,7 @@ export default function StockManagement() {
                     disabled={saving || adjForm.qty_change === 0}
                     className="btn-primary text-xs px-3 py-1.5 disabled:opacity-50"
                   >
-                    {saving ? 'Saving…' : 'Log Movement'}
+                    {saving ? 'Saving...' : 'Log Movement'}
                   </button>
                   <span className="text-xs text-gray-500 self-center">
                     New qty: {historyFor.stock_qty + (adjForm.qty_change || 0)}
@@ -882,7 +882,7 @@ export default function StockManagement() {
             {/* History table */}
             <div className="overflow-y-auto flex-1">
               {loadingMov ? (
-                <div className="text-center py-8 text-gray-500">Loading…</div>
+                <div className="text-center py-8 text-gray-500">Loading...</div>
               ) : movements.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">No movement history yet</div>
               ) : (
@@ -960,7 +960,7 @@ export default function StockManagement() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Save size={16} /> {saving ? 'Saving…' : 'Save'}
+                  <Save size={16} /> {saving ? 'Saving...' : 'Save'}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
               </div>

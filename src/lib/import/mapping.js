@@ -1,7 +1,7 @@
 /**
- * Import Center — column → canonical-field mapping suggester.
+ * Import Center - column → canonical-field mapping suggester.
  *
- * Produces a per-source-header mapping plan with a 0–100 confidence and an
+ * Produces a per-source-header mapping plan with a 0-100 confidence and an
  * action, using (in priority order):
  *   1. saved profile rules (explicit, score 100),
  *   2. exact module-scoped alias match (score 100),
@@ -10,8 +10,8 @@
  *
  * Confidence → action bands:
  *   - >= 90        → 'auto'    (auto-map)
- *   - 60–89        → 'suggest' (pre-selected, user confirms)
- *   - 1–59 (>0)    → 'review'  (do NOT auto-map)
+ *   - 60-89        → 'suggest' (pre-selected, user confirms)
+ *   - 1-59 (>0)    → 'review'  (do NOT auto-map)
  *   - no match     → 'preserve_custom' (NEVER discarded)
  *
  * Two source headers are never mapped to the same target unless an explicit
@@ -27,7 +27,7 @@ import { MODULE_FIELDS, exactAlias, normaliseToken, synonymsFor } from './synony
  * @typedef {Object} MappingSuggestion
  * @property {string} sourceHeader
  * @property {string|null} target
- * @property {number} confidence            0–100
+ * @property {number} confidence            0-100
  * @property {'auto'|'suggest'|'review'|'preserve_custom'} action
  * @property {string} [reason]              How the match was derived.
  */
@@ -45,7 +45,7 @@ const SUGGEST_THRESHOLD = 60
 /* ── Fuzzy scoring (adapted from the proven legacy uploader) ─────────────────── */
 
 /**
- * Levenshtein distance — fuzzy fallback when substring/word match fails.
+ * Levenshtein distance - fuzzy fallback when substring/word match fails.
  * @param {string} a
  * @param {string} b
  * @returns {number}
@@ -70,7 +70,7 @@ function levenshtein(a, b) {
 /**
  * Identifier tokens that mark a column as a code/reference rather than a value.
  * Kept as whole-word tokens so we never trip on substrings inside real words
- * (e.g. "code" must not fire on "current km" — it won't, we match on words).
+ * (e.g. "code" must not fire on "current km" - it won't, we match on words).
  */
 const IDENTIFIER_TOKENS = new Set(['center', 'centre', 'code', 'id', 'no', 'number', 'ref'])
 
@@ -98,7 +98,7 @@ function hasIdentifierToken(normHeader) {
 /**
  * True when sampled values look like codes/IDs rather than monetary numbers:
  * short, no decimal point, and either non-numeric (alphanumeric/dashes) or a
- * single constant repeated id. Conservative — an empty/decimal-bearing sample
+ * single constant repeated id. Conservative - an empty/decimal-bearing sample
  * returns false so legitimate currency columns are never penalised.
  * @param {Array<*>} [values]
  * @returns {boolean}
@@ -149,7 +149,7 @@ function scoreHeader(header, guesses, opts = {}) {
     if (h.includes(g) || g.includes(h)) {
       // Longer overlaps relative to the header are more trustworthy.
       const ratio = Math.min(h.length, g.length) / Math.max(h.length, g.length)
-      const s = Math.round(70 + ratio * 18) // 70–88
+      const s = Math.round(70 + ratio * 18) // 70-88
       if (s > best) {
         best = s
         matchedGuess = raw
@@ -220,7 +220,7 @@ const NUMERIC_FIELD_TYPES = new Set(['number', 'integer', 'currency', 'pressure'
 
 /**
  * Nudge a fuzzy score using sampled column type vs. the field's expected type.
- * Rewards agreement modestly, penalises a clear mismatch — never flips a strong
+ * Rewards agreement modestly, penalises a clear mismatch - never flips a strong
  * exact/substring match.
  * @param {number} score
  * @param {string} sampleType
@@ -228,7 +228,7 @@ const NUMERIC_FIELD_TYPES = new Set(['number', 'integer', 'currency', 'pressure'
  * @returns {number}
  */
 /**
- * Hard guard: a header that literally says "…date" must never map to a
+ * Hard guard: a header that literally says "...date" must never map to a
  * non-date field ("Driver Issue Date" → operator_name was a real miss on a
  * fleet export). Caps such scores to review-level so they are never
  * auto-applied; explicit profile/alias matches (score 100) are unaffected.

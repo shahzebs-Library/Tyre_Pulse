@@ -1,6 +1,6 @@
 # Data Model Consolidation Plan
 
-**Status:** Phase 0 — planning only. No schema is altered by this document.
+**Status:** Phase 0 - planning only. No schema is altered by this document.
 **Track:** Hardening of the existing Vite + React 19 / Expo SDK 54 / Supabase Postgres stack. No migration to any new backend.
 **Non-negotiable:** Backward-compatible only. No table is dropped or renamed without a migration, reconciliation report, backup, read-only window, and rollback. Existing screens keep working throughout.
 
@@ -8,7 +8,7 @@
 
 ## 1. Why this plan exists
 
-The database holds **46 tables** spread across **48 fragmented root SQL files** (`MIGRATIONS_V1.sql` … `MIGRATIONS_V41_RLS_POLICY_CLEANUP.sql`, plus `MASTER_MIGRATION.sql` and `MIGRATIONS_SAFE.sql`). Several business domains have **two competing masters**, and audit history is split across **four** tables. The platform cannot claim a single source of truth until these are consolidated under controlled, reversible steps.
+The database holds **46 tables** spread across **48 fragmented root SQL files** (`MIGRATIONS_V1.sql` ... `MIGRATIONS_V41_RLS_POLICY_CLEANUP.sql`, plus `MASTER_MIGRATION.sql` and `MIGRATIONS_SAFE.sql`). Several business domains have **two competing masters**, and audit history is split across **four** tables. The platform cannot claim a single source of truth until these are consolidated under controlled, reversible steps.
 
 This plan names the **canonical** source per domain and defines the **backward-compatible path** to reach it without data loss or screen breakage.
 
@@ -48,7 +48,7 @@ Every consolidation below follows the **same five-stage pattern**. Do not skip a
 |---|---|
 | **Canonical** | `vehicle_fleet` |
 | **Legacy** | `fleet_master` (rename to `fleet_master_legacy` at Stage 1; never dropped during cutover) |
-| **Scope model** | Geographic only — `site` (text) + `country` (text[]) on `profiles`, enforced by RLS via `app_role()` / `app_is_active()` / `app_is_elevated()`. The `organisations` table **exists but holds 0 rows and is not in RLS**; org scoping is **forward-compatible** (column reserved, populated later), not active today. |
+| **Scope model** | Geographic only - `site` (text) + `country` (text[]) on `profiles`, enforced by RLS via `app_role()` / `app_is_active()` / `app_is_elevated()`. The `organisations` table **exists but holds 0 rows and is not in RLS**; org scoping is **forward-compatible** (column reserved, populated later), not active today. |
 
 ### 3.2 Canonical asset field set
 
@@ -73,7 +73,7 @@ The canonical master asset record (on/projected onto `vehicle_fleet`) must carry
 | `pressure_standard` | Target pressure per position class (steer/drive/trailer). |
 | `inspection_frequency` | Drives inspection schedules / compliance KPI. |
 
-Fields not yet present become **additive, nullable** columns on `vehicle_fleet` via migration — never a rename of existing columns.
+Fields not yet present become **additive, nullable** columns on `vehicle_fleet` via migration - never a rename of existing columns.
 
 ### 3.3 Path
 
@@ -85,7 +85,7 @@ Fields not yet present become **additive, nullable** columns on `vehicle_fleet` 
 
 ---
 
-## 4. Inventory / Stock — movement-ledger model
+## 4. Inventory / Stock - movement-ledger model
 
 ### 4.1 Decision
 
@@ -103,9 +103,9 @@ current_available =
   + receipts
   + returns
   + transfer_in
-  − issues
-  − transfer_out
-  − scrap
+  - issues
+  - transfer_out
+  - scrap
   ± approved_adjustments
 ```
 
@@ -113,21 +113,21 @@ Every term is a typed row in `stock_movements` (`movement_type`, `qty`, `item`, 
 
 ### 4.3 Keep-screens-working strategy
 
-- Existing `StockManagement.jsx`, `StockReplenishment.jsx`, and mobile `stock.tsx` continue to read `stock_records` for balances — unchanged contract.
+- Existing `StockManagement.jsx`, `StockReplenishment.jsx`, and mobile `stock.tsx` continue to read `stock_records` for balances - unchanged contract.
 - The legacy `stock` table is exposed as a **compatibility view** over `stock_records` so any direct legacy reads resolve.
 - Writes that today mutate totals are converted to **ledger inserts** behind the data-service layer; the projection updates the balance. Screens see the same numbers, now provably derived.
 - Reconciliation report compares legacy `stock` quantities against the ledger-derived balance per item/site; any delta is recorded as a one-time **opening_balance** movement so the ledger reproduces the legacy figure exactly.
 
 ---
 
-## 5. Audit history — one unified event format
+## 5. Audit history - one unified event format
 
 ### 5.1 Decision
 
 | | |
 |---|---|
 | **Canonical** | new `audit_events` table |
-| **Legacy** | `audit_log`, `audit_log_v2`, `inspection_audit_log`, `accident_audit_log` — backfilled, then writers retired |
+| **Legacy** | `audit_log`, `audit_log_v2`, `inspection_audit_log`, `accident_audit_log` - backfilled, then writers retired |
 
 ### 5.2 Unified audit event format
 
@@ -155,7 +155,7 @@ Every term is a typed row in `stock_movements` (`movement_type`, `qty`, `item`, 
 
 ---
 
-## 6. Tyre lifecycle — serial-level identity + transactional change workflow
+## 6. Tyre lifecycle - serial-level identity + transactional change workflow
 
 ### 6.1 Serial-level identity
 
@@ -182,11 +182,11 @@ Mobile (`tyre-change.tsx`) and web (`TyreExchange.jsx`, `TyreLifecycle.jsx`) cal
 
 ### 6.3 Recently-added supporting tables
 
-`warranty_claims`, `recalls`, `tyre_specifications`, `tyre_rotations`, `inspection_schedules`, `supplier_ratings`, `supplier_contracts` already exist (real, RLS-protected) and are wired into the lifecycle (warranty claim, recall, spec, rotation, schedule, supplier scorecard) — no new duplicates are created for these.
+`warranty_claims`, `recalls`, `tyre_specifications`, `tyre_rotations`, `inspection_schedules`, `supplier_ratings`, `supplier_contracts` already exist (real, RLS-protected) and are wired into the lifecycle (warranty claim, recall, spec, rotation, schedule, supplier scorecard) - no new duplicates are created for these.
 
 ---
 
-## 7. Inspections — structured rows alongside the JSONB snapshot
+## 7. Inspections - structured rows alongside the JSONB snapshot
 
 ### 7.1 Decision
 

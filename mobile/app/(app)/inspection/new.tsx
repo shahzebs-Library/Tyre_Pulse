@@ -275,7 +275,7 @@ export default function NewInspectionScreen() {
       country: profile?.country ?? null,
     }
 
-    // Resolve any photo_uri still lacking a photo_url before the ONLINE insert —
+    // Resolve any photo_uri still lacking a photo_url before the ONLINE insert -
     // the eager per-position upload may have failed, and a dead local file://
     // URI must never be persisted. Deep-copy the map first (same as
     // offlineQueue.syncQueue) so a failure never corrupts component state.
@@ -290,7 +290,7 @@ export default function NewInspectionScreen() {
       )
       if (hasLocalPhotos) {
         // Uploads each pending photo and sets photo_url; on failure photo_url
-        // stays null — a file:// URI is never written into photo_url.
+        // stays null - a file:// URI is never written into photo_url.
         await uploadAllPositionPhotos(conditionsCopy, `online_${crypto.randomUUID()}`)
       }
       const { error } = await supabase.from('inspections').insert(resolvedPayload)
@@ -350,7 +350,7 @@ export default function NewInspectionScreen() {
                   style={[styles.input, { textAlign }]}
                   value={selectedSite}
                   onChangeText={v => { setSelectedSite(v); setSelectedVehicle(null) }}
-                  placeholder="Type your site name…"
+                  placeholder="Type your site name..."
                   placeholderTextColor="#94a3b8"
                   autoCapitalize="words"
                 />

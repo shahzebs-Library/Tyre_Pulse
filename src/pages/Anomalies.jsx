@@ -201,7 +201,7 @@ export default function Anomalies() {
           disabled={running || loading}
           className="btn-primary text-sm disabled:opacity-50 min-w-36"
         >
-          {running ? 'Scanning…' : hasRun ? '↻ Re-scan' : '▶ Run Scan'}
+          {running ? 'Scanning...' : hasRun ? '↻ Re-scan' : '▶ Run Scan'}
         </button>
         {hasRun && (
           <>
@@ -314,7 +314,7 @@ export default function Anomalies() {
             type="text"
             value={assetSearch}
             onChange={e => { setAssetSearch(e.target.value); setViewMode('search') }}
-            placeholder="Search by asset number to see its anomalies…"
+            placeholder="Search by asset number to see its anomalies..."
             className="input pl-9 w-full"
           />
           {assetSearch && (

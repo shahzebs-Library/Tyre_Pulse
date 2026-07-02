@@ -801,7 +801,7 @@ export default function StockReplenishment() {
                   <input
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    placeholder="Search brand, size, site…"
+                    placeholder="Search brand, size, site..."
                     className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
@@ -1314,7 +1314,7 @@ export default function StockReplenishment() {
                   {creatingPO
                     ? <Loader2 size={16} className="animate-spin" />
                     : <ShoppingCart size={16} />}
-                  {creatingPO ? 'Creating PO…' : 'Create Purchase Order'}
+                  {creatingPO ? 'Creating PO...' : 'Create Purchase Order'}
                 </button>
                 <button
                   onClick={exportOrderExcel}

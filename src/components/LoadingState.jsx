@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import { cn } from '../lib/cn'
 
-export default function LoadingState({ message = 'Loading…', fullPage = false }) {
+export default function LoadingState({ message = 'Loading...', fullPage = false }) {
   return (
     <div className={cn('flex flex-col items-center justify-center gap-4', fullPage ? 'h-screen' : 'py-20')}>
       {/* Animated ring */}

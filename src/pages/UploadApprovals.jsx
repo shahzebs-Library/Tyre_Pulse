@@ -136,7 +136,7 @@ export default function UploadApprovals() {
     setActing(b.id); setError('')
     try {
       await imports.approveBatch(b.id)
-      await imports.commitBatch(b.id) // server-side import_commit_batch — validated & idempotent
+      await imports.commitBatch(b.id) // server-side import_commit_batch - validated & idempotent
       await loadIntake()
     } catch (e) {
       console.error('[UploadApprovals] approveIntake failed:', e)
@@ -213,7 +213,7 @@ export default function UploadApprovals() {
           <Search size={15} className="text-gray-500" />
           <input
             className="bg-transparent text-sm text-white placeholder-gray-500 outline-none flex-1"
-            placeholder="Search file, uploader, country…"
+            placeholder="Search file, uploader, country..."
             value={search} onChange={e => setSearch(e.target.value)}
           />
         </div>
@@ -247,7 +247,7 @@ export default function UploadApprovals() {
                           {b.warning_rows > 0 && <span className="text-yellow-400">{b.warning_rows} warn</span>}
                           {b.error_rows > 0 && <span className="text-red-400">{b.error_rows} error</span>}
                           {b.duplicate_rows > 0 && <span className="text-gray-400">{b.duplicate_rows} dup</span>}
-                          <span className="flex items-center gap-1"><Globe size={11} />{b.country || '—'}</span>
+                          <span className="flex items-center gap-1"><Globe size={11} />{b.country || '-'}</span>
                           <span className="flex items-center gap-1"><Clock size={11} />{new Date(b.created_at).toLocaleString()}</span>
                         </div>
                       </div>
@@ -263,7 +263,7 @@ export default function UploadApprovals() {
                       <button onClick={() => approveIntake(b)} disabled={busy || (b.ready_rows || 0) === 0}
                         title={(b.ready_rows || 0) === 0 ? 'No ready rows to commit' : 'Approve and commit to live tables'}
                         className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
-                        {busy ? <Loader size={14} className="animate-spin" /> : <CheckCircle size={14} />} {busy ? 'Committing…' : 'Approve & Commit'}
+                        {busy ? <Loader size={14} className="animate-spin" /> : <CheckCircle size={14} />} {busy ? 'Committing...' : 'Approve & Commit'}
                       </button>
                     </div>
                   </div>
@@ -319,7 +319,7 @@ export default function UploadApprovals() {
                         </button>
                         <button onClick={() => approve(p)} disabled={busy}
                           className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
-                          <CheckCircle size={14} /> {busy ? 'Approving…' : 'Approve'}
+                          <CheckCircle size={14} /> {busy ? 'Approving...' : 'Approve'}
                         </button>
                       </>
                     ) : (
@@ -384,7 +384,7 @@ function IntakeRowsModal({ data, onClose }) {
         <div className="px-5 py-3 border-b border-gray-800 flex items-center gap-2 bg-gray-800/40">
           <Search size={14} className="text-gray-500" />
           <input className="bg-transparent text-sm text-white placeholder-gray-500 outline-none flex-1"
-            placeholder="Filter staged rows…" value={search} onChange={e => setSearch(e.target.value)} />
+            placeholder="Filter staged rows..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="overflow-auto p-4 flex-1">
           {rows.length === 0 ? (
@@ -401,13 +401,13 @@ function IntakeRowsModal({ data, onClose }) {
               <tbody>
                 {visible.map(r => (
                   <tr key={r.id} className="border-b border-gray-800/50">
-                    <td className="px-2 py-1 text-gray-500">{r.source_row_no ?? '—'}</td>
+                    <td className="px-2 py-1 text-gray-500">{r.source_row_no ?? '-'}</td>
                     <td className={`px-2 py-1 font-medium ${statusColor(r.validation_status)}`}>
                       {r.validation_status}{r.dup_status && r.dup_status !== 'none' ? ` · ${r.dup_status}` : ''}
                     </td>
                     {cols.map(c => (
                       <td key={c} className="px-2 py-1 text-gray-300 whitespace-nowrap">
-                        {r.transformed_data?.[c] == null ? '—' : String(r.transformed_data[c])}
+                        {r.transformed_data?.[c] == null ? '-' : String(r.transformed_data[c])}
                       </td>
                     ))}
                   </tr>
@@ -486,13 +486,13 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
             <div className="flex items-center gap-2 bg-gray-800/40 rounded-lg px-3 py-1.5 flex-1 min-w-[180px]">
               <Search size={14} className="text-gray-500" />
               <input className="bg-transparent text-sm text-white placeholder-gray-500 outline-none flex-1"
-                placeholder="Filter rows…" value={search} onChange={e => setSearch(e.target.value)} />
+                placeholder="Filter rows..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div className="flex items-end gap-2">
               <div>
                 <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">Fix whole column</label>
                 <select className="input text-sm py-1.5" value={bulkCol} onChange={e => setBulkCol(e.target.value)}>
-                  <option value="">Column…</option>
+                  <option value="">Column...</option>
                   {cols.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
@@ -556,7 +556,7 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
             <div className="flex gap-2">
               <button onClick={onClose} className="btn-secondary text-sm px-3 py-1.5">Close</button>
               <button onClick={save} disabled={saving || !dirty} className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-40">
-                <Save size={14} /> {saving ? 'Saving…' : 'Save corrections'}
+                <Save size={14} /> {saving ? 'Saving...' : 'Save corrections'}
               </button>
             </div>
           </div>

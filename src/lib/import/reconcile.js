@@ -1,5 +1,5 @@
 /**
- * Import Center — post-commit reconciliation.
+ * Import Center - post-commit reconciliation.
  *
  * After a batch is committed via the import_commit_batch RPC (V46), an operator
  * must be able to confirm that the import "balanced": that every staged row was
@@ -11,13 +11,13 @@
  * "balanced" / amber "review" indicator from its output.
  *
  * Row accounting model (V45/V46):
- *   total_rows      — rows staged from the source file.
- *   ready_rows      — passed validation (status 'ready').
- *   warning_rows    — committed with warnings.
- *   error_rows      — rejected by validation (never inserted).
- *   duplicate_rows  — flagged as duplicate/conflict against the natural key.
- *   imported_rows   — rows actually inserted into the destination table.
- *   skipped_rows    — rows intentionally skipped at commit (e.g. dedupe choice).
+ *   total_rows      - rows staged from the source file.
+ *   ready_rows      - passed validation (status 'ready').
+ *   warning_rows    - committed with warnings.
+ *   error_rows      - rejected by validation (never inserted).
+ *   duplicate_rows  - flagged as duplicate/conflict against the natural key.
+ *   imported_rows   - rows actually inserted into the destination table.
+ *   skipped_rows    - rows intentionally skipped at commit (e.g. dedupe choice).
  *
  * Balance identity (committed batches):
  *   imported_rows + skipped_rows + error_rows === total_rows
@@ -108,7 +108,7 @@ export function reconcileBatch(batch) {
       const sign = variance > 0 ? 'unaccounted' : 'over-counted'
       discrepancies.push(
         `Row count does not balance: expected ${expected}, accounted for ${accountedFor} ` +
-          `(imported ${imported} + skipped ${skipped} + errors ${errors}) — ${Math.abs(variance)} ${sign}.`,
+          `(imported ${imported} + skipped ${skipped} + errors ${errors}) - ${Math.abs(variance)} ${sign}.`,
       )
     }
     if (errors > expected) {

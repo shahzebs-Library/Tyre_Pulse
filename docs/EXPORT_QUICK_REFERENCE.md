@@ -59,7 +59,7 @@ exportToPptx({
 | Feature | PDF | Excel | PowerPoint |
 |---------|-----|-------|-----------|
 | **Max Records** | 10,000 | 100,000 | 5,000 |
-| **Gen Time** | 200–500ms | 300–800ms | 500–1200ms |
+| **Gen Time** | 200-500ms | 300-800ms | 500-1200ms |
 | **Best For** | Operational detail, compliance | Data analysis, filtering | Executive presentations |
 | **Color Styling** | ✅ Full support | ✅ Limited | ✅ Full support |
 | **Charts** | Horizontal bars only | None (data only) | Doughnuts, bars, areas |
@@ -267,7 +267,7 @@ const filename = `TyrePulse_${reportType.replace(/\s+/g, '_')}_${new Date().toIS
 
 | Action | Impact | Best Practice |
 |--------|--------|---|
-| **Paginate large exports** | -70% memory | Limit to 5k–10k records |
+| **Paginate large exports** | -70% memory | Limit to 5k-10k records |
 | **Use specific columns** | -40% query time | Select only needed fields from DB |
 | **Cache SVG diagrams** | -60% PDF gen time | Store converted PNGs in memory |
 | **Async generate** | 0ms UI freeze | Use `await exportToPptx()` |
@@ -280,9 +280,9 @@ const filename = `TyrePulse_${reportType.replace(/\s+/g, '_')}_${new Date().toIS
 - **Full Guide:** `docs/EXPORT_GUIDE.md`
 - **Implementation:** `src/lib/exportUtils.js` (1,600+ lines)
 - **Report Pages:** 
-  - `src/pages/Reports.jsx` — custom builder
-  - `src/pages/ExecutiveReport.jsx` — strategic report
-  - `src/pages/FleetAnalytics.jsx` — analytics + export
+  - `src/pages/Reports.jsx` - custom builder
+  - `src/pages/ExecutiveReport.jsx` - strategic report
+  - `src/pages/FleetAnalytics.jsx` - analytics + export
 - **Email Scheduling:** `src/components/EmailReportModal.jsx`
 - **Formatters:** `src/lib/formatters.js`
 

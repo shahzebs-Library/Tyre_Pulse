@@ -36,7 +36,7 @@ beforeEach(() => {
   h.state.last = null
 })
 
-describe('service layer — alertThresholds', () => {
+describe('service layer - alertThresholds', () => {
   it('lists from alert_thresholds', async () => {
     h.state.result = { data: [{ id: 't1', name: 'Low tread' }], error: null }
     const rows = await alertThresholds.listAlertThresholds({ userId: 'u1' })

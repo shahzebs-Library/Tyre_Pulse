@@ -472,7 +472,7 @@ export default function CorrectiveActions() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input
             className="input pl-9 text-sm"
-            placeholder="Search title, asset, site…"
+            placeholder="Search title, asset, site..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -685,7 +685,7 @@ export default function CorrectiveActions() {
                 <label className="label">Title *</label>
                 <input
                   className="input"
-                  placeholder="Describe the corrective action…"
+                  placeholder="Describe the corrective action..."
                   value={form.title}
                   onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                   required
@@ -745,7 +745,7 @@ export default function CorrectiveActions() {
                 <label className="label">Root Cause</label>
                 <select className="input" value={form.root_cause}
                   onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))}>
-                  <option value="">Select root cause…</option>
+                  <option value="">Select root cause...</option>
                   {ROOT_CAUSES.map(r => <option key={r}>{r}</option>)}
                 </select>
               </div>
@@ -754,7 +754,7 @@ export default function CorrectiveActions() {
                 <label className="label">Description</label>
                 <textarea className="input" rows={3} value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Detailed description of the issue and actions taken…" />
+                  placeholder="Detailed description of the issue and actions taken..." />
               </div>
 
               {/* Photo */}
@@ -782,7 +782,7 @@ export default function CorrectiveActions() {
 
               <div className="flex gap-3 pt-2 border-t border-gray-800">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Save size={15} /> {saving ? 'Saving…' : 'Save Action'}
+                  <Save size={15} /> {saving ? 'Saving...' : 'Save Action'}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
               </div>

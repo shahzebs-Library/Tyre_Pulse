@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// kpi/registry.js — Central KPI registry (Phase 5)
+// kpi/registry.js - Central KPI registry (Phase 5)
 // Pure module. No network, no Supabase, no React. Declarative KPI metadata only.
 // `compute` references an EXISTING exported fn in kpiEngine.js / analyticsEngine.js
-// by name — this file never re-implements KPI math. Where no pure compute fn
+// by name - this file never re-implements KPI math. Where no pure compute fn
 // exists yet, `compute` is null (flagged in notes) rather than fabricated.
 // ─────────────────────────────────────────────────────────────────────────────
 

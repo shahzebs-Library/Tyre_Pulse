@@ -1,5 +1,5 @@
 /**
- * Import Center — line-item aggregation.
+ * Import Center - line-item aggregation.
  *
  * Some ERP exports are LINE-ITEM files: several rows per business record
  * (e.g. "Work Order Details" store-issues with one row per issued item, where
@@ -31,7 +31,7 @@ const STATUS_RANK = { error: 3, warning: 2, ready: 1 }
  * Collapse annotated wizard rows into one row per natural key.
  *
  * @param {Array<Object>} rows  Annotated rows from runValidation (each with
- *   raw / mapped / transformed / custom / issues / validationStatus / …).
+ *   raw / mapped / transformed / custom / issues / validationStatus / ...).
  * @param {{ by: string, sum?: string[] }} cfg
  * @returns {Array<Object>} aggregated rows (rows without the key pass through)
  */
@@ -63,18 +63,18 @@ export function aggregateStagedRows(rows, cfg) {
       continue
     }
 
-    // merge: sum the declared cost/qty fields…
+    // merge: sum the declared cost/qty fields...
     for (const f of sumFields) {
       const merged = addNum(existing.transformed[f], r.transformed?.[f])
       if (merged != null) existing.transformed[f] = merged
     }
-    // …first non-empty wins for every other transformed field…
+    // ...first non-empty wins for every other transformed field...
     for (const [k, v] of Object.entries(r.transformed || {})) {
       if (sumFields.includes(k)) continue
       const cur = existing.transformed[k]
       if ((cur == null || cur === '') && v != null && v !== '') existing.transformed[k] = v
     }
-    // …keep every source line for audit, merge issues, keep worst status.
+    // ...keep every source line for audit, merge issues, keep worst status.
     existing.custom.line_items.push(r.raw)
     existing.custom.line_count += 1
     for (const iss of r.issues || []) {

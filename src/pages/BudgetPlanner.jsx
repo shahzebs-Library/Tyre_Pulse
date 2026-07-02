@@ -779,7 +779,7 @@ export default function BudgetPlanner() {
   if (loading || budgetsLoading) return (
     <div className="flex items-center justify-center h-96">
       <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-      <span className="ml-3 text-gray-400">Loading budget data…</span>
+      <span className="ml-3 text-gray-400">Loading budget data...</span>
     </div>
   )
 
@@ -1138,7 +1138,7 @@ export default function BudgetPlanner() {
                     )}
                     {cpkImproved && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Target CPK (−15%)</span>
+                        <span className="text-gray-500">Target CPK (-15%)</span>
                         <span className="text-green-400 font-medium">{fmtCpk(cpkImproved, activeCurrency)}</span>
                       </div>
                     )}
@@ -1211,7 +1211,7 @@ export default function BudgetPlanner() {
                 className="w-full h-2 bg-gray-800 rounded-full appearance-none cursor-pointer accent-purple-500"
               />
               <div className="flex justify-between text-xs text-gray-600 mt-1">
-                <span>−30% (fewer)</span>
+                <span>-30% (fewer)</span>
                 <span>+30% (more)</span>
               </div>
             </div>

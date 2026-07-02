@@ -29,14 +29,14 @@ const AGENTS: Record<AgentKey, {
 }> = {
   analyst: {
     label: 'Analyst', icon: 'bar-chart-outline', color: '#3b82f6', bg: '#eff6ff',
-    placeholder: 'Ask about KPIs, cost trends, fleet performance…',
+    placeholder: 'Ask about KPIs, cost trends, fleet performance...',
     system: `You are TyrePulse's Fleet Analyst Agent. You analyse fleet KPIs, tyre cost trends,
 site comparisons, and operational metrics. Provide concise, actionable insights.
 Format your answers with clear headings and bullet points. Be data-driven.`,
   },
   engineer: {
     label: 'Tyre Engineer', icon: 'construct-outline', color: '#f59e0b', bg: '#fffbeb',
-    placeholder: 'Ask about tyre failures, wear patterns, pressure issues…',
+    placeholder: 'Ask about tyre failures, wear patterns, pressure issues...',
     system: `You are TyrePulse's Tyre Engineer Agent. You diagnose tyre failures, analyse wear patterns,
 root causes of pressure loss, alignment issues, and overloading. Always:
 1. State the root cause
@@ -47,14 +47,14 @@ root causes of pressure loss, alignment issues, and overloading. Always:
   },
   qa: {
     label: 'QA Data', icon: 'shield-outline', color: '#8b5cf6', bg: '#f5f3ff',
-    placeholder: 'Ask about data quality, duplicates, anomalies…',
+    placeholder: 'Ask about data quality, duplicates, anomalies...',
     system: `You are TyrePulse's QA Data Agent. You identify data quality issues, duplicate entries,
 anomalous readings, inconsistent serials, and suspicious values in fleet data.
 Flag each issue clearly with: Issue Type · Severity · Recommended Fix.`,
   },
   planner: {
     label: 'Planner', icon: 'calendar-outline', color: '#10b981', bg: '#f0fdf4',
-    placeholder: 'Ask about maintenance schedules, budgets, forecasts…',
+    placeholder: 'Ask about maintenance schedules, budgets, forecasts...',
     system: `You are TyrePulse's Fleet Planner Agent. You forecast tyre replacements,
 maintenance schedules, budget requirements, and procurement needs.
 Provide specific timelines, quantities, and cost estimates where possible.`,

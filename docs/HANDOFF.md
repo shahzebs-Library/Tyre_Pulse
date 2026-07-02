@@ -1,6 +1,6 @@
 # TyrePulse — Session Handoff
 
-_Last updated: 2026-07-02 · branch `main` (clean, fully pushed) · migrations V40→V60 live_
+_Last updated: 2026-07-02 (night) · branch `main` (clean, fully pushed) · migrations V40→V62 live · P2 backlog CLOSED_
 
 ## TL;DR
 The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.js/DB migration on this track). The **Multi-Country Data Intake Center** (+ its 4 follow-on gaps), most of the `Current issues fixing.md` program (Phases 0–3, plus Phase 5 KPI registry + nav regroup), **the P0/P1 fixes from `docs/PROJECT_AUDIT_2026-07.md`** (mobile accident/offline/sync/logout, web error states, security V57–V59), **per-row-resilient import commits (V60)** and **the 5 real company formats** (`docs/imports/` — auto-recognised profiles, cost-of-record rule, line-item aggregation) are built, **tested, and on `main`**. The Go backend and native Android app stay **off `main`** on their own branches (frozen, not abandoned).
@@ -21,6 +21,23 @@ The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.j
 - Commit trailer: `Co-Authored-By:` the current assistant + the `Claude-Session:` line (see recent `git log` for the exact form). Push `git push -u origin main`. No PR unless asked. Model id stays chat-only (never in commits/code).
 
 ## DONE and on `main`
+
+### 2026-07-02 night — export work + P2 wave (see CHANGELOG_ENGINEERING.md)
+- **Export libs lazy-loaded:** xlsx/jspdf/pptxgenjs are async chunks loading on
+  the first export/parse click (31 pages + exportUtils/parseWorkbook/
+  emailService; manualChunks unpinned — pinning dragged helpers back into
+  every page's initial load). Verified in dist/.
+- **Scheduled report delivery (V61):** pg_cron every 15 min →
+  `send-scheduled-reports` edge fn (secret-gated via service-role-only
+  cron_config); live KPI digest email; report_send_log tracks every outcome;
+  1h backoff on failure. Verified end-to-end live. OWNER ACTION: set
+  RESEND_API_KEY edge-function secret for mail to actually leave.
+- **P2 backlog CLOSED (multi-agent wave):** currency/date sweep across 33
+  pages (activeCurrency everywhere, Rand/U4 fixed); confirm dialogs on all
+  destructive deletes; V62 localStorage→DB (tyre_disposals, tyre_status_marks,
+  procurement budget → settings, Settings schedules → report_schedules);
+  mobile H8 (online photo re-upload) + M4 (queue pruning).
+- Remaining backlog is P3/P4 only — see PROJECT_GAP_ANALYSIS.md.
 
 ### 2026-07-02 session (see CHANGELOG_ENGINEERING.md for detail)
 - **Security V57–V59:** work_orders/PO write policies approval-gated; definer

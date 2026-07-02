@@ -228,21 +228,21 @@ export default function TyreExchange() {
   const [custodyInput, setCustodyInput] = useState('')
   const [custodySearched, setCustodySearched] = useState(false)
 
-  // Pending returns localStorage
-  const [returnedSerials, setReturnedSerials] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('tp_tyre_returns') || '[]')
-    } catch {
-      return []
-    }
-  })
-  const [writtenOffSerials, setWrittenOffSerials] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('tp_tyre_writeoffs') || '[]')
-    } catch {
-      return []
-    }
-  })
+  // Return / write-off marks — persisted in tyre_status_marks (V62) so they are
+  // shared across users and devices instead of living in one browser.
+  const [returnedSerials, setReturnedSerials] = useState([])
+  const [writtenOffSerials, setWrittenOffSerials] = useState([])
+  const [markError, setMarkError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('tyre_status_marks').select('serial,mark_type').then(({ data }) => {
+      if (cancelled || !data) return
+      setReturnedSerials(data.filter((m) => m.mark_type === 'returned').map((m) => m.serial))
+      setWrittenOffSerials(data.filter((m) => m.mark_type === 'written_off').map((m) => m.serial))
+    })
+    return () => { cancelled = true }
+  }, [])
 
   // Selected transfer for certificate
   const [certTransfer, setCertTransfer] = useState(null)
@@ -465,17 +465,23 @@ export default function TyreExchange() {
   }, [transfers])
 
   // ── Actions ───────────────────────────────────────────────────────────────────
-  function markReturned(serial) {
-    const updated = [...returnedSerials, serial]
-    setReturnedSerials(updated)
-    localStorage.setItem('tp_tyre_returns', JSON.stringify(updated))
+  // Optimistic update + DB persist; rolled back with a visible error on failure
+  // so a rejected write can never silently pretend to be saved.
+  async function persistMark(serial, markType, list, setList) {
+    setMarkError('')
+    const prev = list
+    setList([...list, serial])
+    const { error } = await supabase.from('tyre_status_marks')
+      .upsert({ serial, mark_type: markType }, { onConflict: 'serial,mark_type' })
+    if (error) {
+      setList(prev)
+      setMarkError(`Could not save the ${markType.replace('_', '-')} mark for ${serial}: ${error.message}`)
+    }
   }
 
-  function markWrittenOff(serial) {
-    const updated = [...writtenOffSerials, serial]
-    setWrittenOffSerials(updated)
-    localStorage.setItem('tp_tyre_writeoffs', JSON.stringify(updated))
-  }
+  function markReturned(serial) { persistMark(serial, 'returned', returnedSerials, setReturnedSerials) }
+
+  function markWrittenOff(serial) { persistMark(serial, 'written_off', writtenOffSerials, setWrittenOffSerials) }
 
   function clearFilters() {
     setFilterFromSite('')
@@ -1331,6 +1337,10 @@ export default function TyreExchange() {
                     These should be investigated or written off.
                   </span>
                 </div>
+              )}
+
+              {markError && (
+                <div className="bg-red-900/30 border border-red-700 rounded-xl p-3 text-red-300 text-sm">{markError}</div>
               )}
 
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">

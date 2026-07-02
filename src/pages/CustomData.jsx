@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { supabase } from '../lib/supabase'
 import * as customData from '../lib/api/customData'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -74,6 +75,11 @@ export default function CustomData() {
   const [newMapsTo, setNewMapsTo]   = useState('')
   const [addError, setAddError]     = useState('')
   const [addSaving, setAddSaving]   = useState(false)
+
+  // Delete synonym confirmation
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteError, setDeleteError]   = useState('')
+  const [deleting, setDeleting]         = useState(false)
 
   // Promote from custom field
   const [promoteKey, setPromoteKey] = useState(null)
@@ -153,9 +159,34 @@ export default function CustomData() {
     setAddSaving(false)
   }
 
-  async function deleteSynonym(id) {
-    try { await customData.deleteFieldSynonym(id) } catch { /* optimistic removal below */ }
-    setSynonyms(s => s.filter(x => x.id !== id))
+  function confirmDeleteSynonym(synonym) {
+    setDeleteTarget(synonym)
+    setDeleteError('')
+  }
+
+  function closeDeleteSynonym() {
+    setDeleteTarget(null)
+    setDeleteError('')
+  }
+
+  async function deleteSynonym() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const { data, error } = await supabase
+        .from('field_synonyms').delete().eq('id', deleteTarget.id).select('id')
+      if (error) throw error
+      if ((data?.length ?? 0) === 0) {
+        throw new Error('The synonym could not be deleted — you may not have permission, or it was already removed.')
+      }
+      setSynonyms(s => s.filter(x => x.id !== deleteTarget.id))
+      setDeleteTarget(null)
+    } catch (e) {
+      setDeleteError(e.message || 'Delete failed. Please try again.')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   // Promote a custom field key to a permanent synonym
@@ -556,7 +587,7 @@ export default function CustomData() {
                           {s.last_used_at ? new Date(s.last_used_at).toLocaleDateString() : '—'}
                         </td>
                         <td className="table-cell">
-                          <button onClick={() => deleteSynonym(s.id)} className="p-1.5 rounded hover:bg-red-900/30 text-gray-600 hover:text-red-400 transition-colors">
+                          <button onClick={() => confirmDeleteSynonym(s)} className="p-1.5 rounded hover:bg-red-900/30 text-gray-600 hover:text-red-400 transition-colors">
                             <Trash2 size={13} />
                           </button>
                         </td>
@@ -727,6 +758,47 @@ export default function CustomData() {
         )}
 
       </AnimatePresence>
+
+      {/* ── Delete Synonym Confirmation ─────────────────────────────────────── */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
+          onClick={() => { if (!deleting) closeDeleteSynonym() }}
+        >
+          <div
+            className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg p-6 my-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white">Delete Synonym</h2>
+              <button onClick={closeDeleteSynonym} className="text-gray-400 hover:text-white"><X size={18} /></button>
+            </div>
+            <div className="flex gap-3 mb-4">
+              <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-white font-medium">
+                  Delete synonym <span className="font-mono text-yellow-300">{deleteTarget.custom_name}</span>?
+                </p>
+                <p className="text-gray-400 text-sm mt-1">
+                  Future uploads will no longer auto-map this column to{' '}
+                  <span className="text-green-300 font-medium">
+                    {CANONICAL_FIELDS.find(f => f.key === deleteTarget.maps_to)?.label ?? deleteTarget.maps_to}
+                  </span>. Existing records are not affected.
+                </p>
+              </div>
+            </div>
+            {deleteError && (
+              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
+            )}
+            <div className="flex gap-3">
+              <button onClick={deleteSynonym} disabled={deleting} className="btn-danger flex items-center gap-2 disabled:opacity-50">
+                <Trash2 size={15} /> {deleting ? 'Deleting…' : 'Delete Synonym'}
+              </button>
+              <button onClick={closeDeleteSynonym} disabled={deleting} className="btn-secondary disabled:opacity-50">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -65,8 +65,6 @@ const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'S
 
 const DAYS_OF_MONTH = Array.from({ length: 28 }, (_, i) => i + 1)
 
-const REPORT_FORMATS = ['PDF', 'Excel', 'Both']
-
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => {
   const h = String(i).padStart(2, '0')
   return `${h}:00`
@@ -80,7 +78,6 @@ const EMPTY_SCHEDULE = {
   dayOfMonth: 1,
   time: '06:00',
   recipients: '',
-  format: 'PDF',
   active: true,
 }
 
@@ -133,11 +130,11 @@ export default function Settings() {
   const [savingKpi, setSavingKpi]           = useState(false)
   const [kpiMsg, setKpiMsg]                 = useState('')
 
-  // Scheduled Reports — persisted to localStorage
-  const [schedules, setSchedules] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('tp_scheduled_reports') || '[]') }
-    catch { return [] }
-  })
+  // Scheduled Reports — persisted in report_schedules (same table the
+  // Scheduled Reports page and the pg_cron delivery function use), so
+  // schedules made here actually send and are visible to the whole team.
+  const [schedules, setSchedules] = useState([])
+  const [scheduleError, setScheduleError] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
   const [newSchedule, setNewSchedule] = useState({ ...EMPTY_SCHEDULE })
   const [sendingTest, setSendingTest] = useState(null) // schedule id
@@ -155,11 +152,7 @@ export default function Settings() {
   const [mfaMsg, setMfaMsg]                     = useState('')
   const [confirmRemoveMfa, setConfirmRemoveMfa] = useState(false)
 
-  useEffect(() => {
-    localStorage.setItem('tp_scheduled_reports', JSON.stringify(schedules))
-  }, [schedules])
-
-  useEffect(() => { loadSettings(); loadUploadHistory(); loadKpiTargets(); loadAlertThresholds() }, [])
+  useEffect(() => { loadSettings(); loadUploadHistory(); loadKpiTargets(); loadAlertThresholds(); loadSchedules() }, [])
   useEffect(() => { setAppSettings(s => ({ ...s, ...globalSettings })) }, [globalSettings])
   useEffect(() => {
     if (profile) setProfileForm({ full_name: profile.full_name ?? '', username: profile.username ?? '' })
@@ -325,21 +318,73 @@ export default function Settings() {
     setKpiMsg('')
   }
 
-  function addSchedule() {
+  // report_schedules row ⇄ this section's UI shape
+  const DOW_TO_NUM = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 }
+  const NUM_TO_DOW = Object.fromEntries(Object.entries(DOW_TO_NUM).map(([k, v]) => [v, k]))
+  const NAME_TO_TYPE = {
+    'Fleet Summary': 'fleet', 'KPI Report': 'kpi', 'Vendor Intelligence': 'cost',
+    'Executive Report': 'executive', 'Forecasting': 'kpi', 'Work Orders Summary': 'cost',
+  }
+  const rowToUi = (r) => ({
+    id: r.id,
+    reportName: r.name,
+    frequency: (r.frequency || 'daily').replace(/^./, (c) => c.toUpperCase()),
+    dayOfWeek: NUM_TO_DOW[r.day_of_week ?? 1] ?? 'Monday',
+    dayOfMonth: r.day_of_month ?? 1,
+    time: r.time_of_day || '06:00',
+    recipients: (r.recipients || []).join(', '),
+    active: r.active !== false,
+  })
+
+  async function loadSchedules() {
+    const { data, error } = await supabase
+      .from('report_schedules')
+      .select('id,name,report_type,frequency,day_of_week,day_of_month,time_of_day,recipients,active')
+      .order('created_at', { ascending: true })
+    if (error) { setScheduleError(error.message); return }
+    setSchedules((data || []).map(rowToUi))
+  }
+
+  async function addSchedule() {
     if (!newSchedule.recipients.trim()) return
-    const entry = { ...newSchedule, id: Date.now().toString() }
-    setSchedules(prev => [...prev, entry])
+    setScheduleError('')
+    const { error } = await supabase.from('report_schedules').insert({
+      name: newSchedule.reportName,
+      report_type: NAME_TO_TYPE[newSchedule.reportName] || 'executive',
+      frequency: newSchedule.frequency.toLowerCase(),
+      day_of_week: DOW_TO_NUM[newSchedule.dayOfWeek] ?? 1,
+      day_of_month: newSchedule.dayOfMonth || 1,
+      time_of_day: newSchedule.time,
+      recipients: newSchedule.recipients.split(',').map((e) => e.trim()).filter(Boolean),
+      active: newSchedule.active !== false,
+      created_by: profile?.id ?? null,
+    })
+    if (error) { setScheduleError(`Could not save the schedule: ${error.message}`); return }
     setNewSchedule({ ...EMPTY_SCHEDULE })
     setShowAddForm(false)
+    await loadSchedules()
   }
 
-  function deleteSchedule(id) {
-    setSchedules(prev => prev.filter(s => s.id !== id))
+  async function deleteSchedule(id) {
+    setScheduleError('')
+    const { data, error } = await supabase.from('report_schedules').delete().eq('id', id).select('id')
+    if (error || (data?.length ?? 0) === 0) {
+      setScheduleError(error?.message || 'The schedule could not be deleted — check your permissions.')
+      return
+    }
     setTestMsg(prev => { const n = { ...prev }; delete n[id]; return n })
+    await loadSchedules()
   }
 
-  function toggleScheduleActive(id) {
-    setSchedules(prev => prev.map(s => s.id === id ? { ...s, active: !s.active } : s))
+  async function toggleScheduleActive(id) {
+    const target = schedules.find(s => s.id === id)
+    if (!target) return
+    setScheduleError('')
+    const { error } = await supabase.from('report_schedules')
+      .update({ active: !target.active, next_run_at: null }) // delivery fn recomputes
+      .eq('id', id)
+    if (error) { setScheduleError(`Could not update the schedule: ${error.message}`); return }
+    await loadSchedules()
   }
 
   async function handleTestSend(schedule) {
@@ -356,8 +401,8 @@ export default function Settings() {
           This is a test send for your scheduled report:<br><br>
           <strong>Report:</strong> ${schedule.reportName}<br>
           <strong>Schedule:</strong> ${getScheduleLabel(schedule)}<br>
-          <strong>Format:</strong> ${schedule.format}<br><br>
-          Automated delivery requires a cron service or Supabase Edge Function with pg_cron.
+          <strong>Delivery:</strong> Email digest<br><br>
+          Automated delivery runs every 15 minutes via the send-scheduled-reports function.
         </p>`,
       })
       setTestMsg(prev => ({ ...prev, [schedule.id]: 'Test sent successfully' }))
@@ -947,6 +992,10 @@ export default function Settings() {
           </button>
         </div>
 
+        {scheduleError && (
+          <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{scheduleError}</p>
+        )}
+
         {/* Info panel */}
         <div className="flex items-start gap-3 bg-blue-950/40 border border-blue-800/40 rounded-lg px-4 py-3 mb-5">
           <Calendar size={16} className="text-blue-400 mt-0.5 shrink-0" />
@@ -1002,11 +1051,8 @@ export default function Settings() {
                 </select>
               </div>
               <div>
-                <label className="label">Format</label>
-                <select className="input" value={newSchedule.format}
-                  onChange={e => setNewSchedule(s => ({ ...s, format: e.target.value }))}>
-                  {REPORT_FORMATS.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
+                <label className="label">Delivery</label>
+                <div className="input flex items-center text-gray-400 text-sm cursor-default select-none">Email digest</div>
               </div>
               <div className={newSchedule.frequency === 'Daily' ? 'sm:col-span-2 lg:col-span-1' : ''}>
                 <label className="label flex items-center gap-1"><Mail size={12} /> Recipients</label>
@@ -1070,7 +1116,7 @@ export default function Settings() {
                     </td>
                     <td className="py-3 px-3">
                       <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 border border-gray-700">
-                        {schedule.format}
+                        Email digest
                       </span>
                     </td>
                     <td className="py-3 px-3 max-w-xs">

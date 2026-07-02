@@ -472,6 +472,9 @@ export default function InspectionPlanner() {
   const [tab, setTab] = useState('overdue')
   const [modal, setModal] = useState(null) // null | 'schedule' | 'bulk' | 'edit'
   const [editTarget, setEditTarget] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const [prefillAsset, setPrefillAsset] = useState(null)
   const [selectedBulk, setSelectedBulk] = useState([])
   const [overdueSearch, setOverdueSearch] = useState('')
@@ -859,16 +862,26 @@ export default function InspectionPlanner() {
     }
   }
 
-  async function handleDeleteSchedule(id) {
+  async function handleDeleteSchedule() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setDeleteError('')
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('inspection_schedules')
         .delete()
-        .eq('id', id)
+        .eq('id', deleteTarget.id)
+        .select('id')
       if (error) throw error
+      if ((data?.length ?? 0) === 0) {
+        throw new Error('The inspection could not be deleted — you may not have permission, or it was already removed.')
+      }
+      setDeleteTarget(null)
       await fetchSchedule()
     } catch (err) {
-      setScheduleError(err?.message || 'Failed to delete inspection.')
+      setDeleteError(err?.message || 'Failed to delete inspection. Please try again.')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -1387,7 +1400,7 @@ export default function InspectionPlanner() {
                                   <X size={12} className="text-yellow-400" />
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteSchedule(item.id)}
+                                  onClick={() => { setDeleteError(''); setDeleteTarget(item) }}
                                   className="p-1.5 bg-gray-700 hover:bg-red-900/50 rounded-lg transition-colors"
                                   title="Delete"
                                 >
@@ -1691,6 +1704,59 @@ export default function InspectionPlanner() {
             onClose={() => setModal(null)}
             onSave={handleBulkSave}
           />
+        )}
+        {deleteTarget && (
+          <div key="delete-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg shadow-2xl"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+                <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                  <Trash2 size={16} className="text-red-400" />
+                  Delete Scheduled Inspection
+                </h3>
+                <button
+                  onClick={() => { setDeleteTarget(null); setDeleteError('') }}
+                  className="p-1 hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <X size={16} className="text-gray-400" />
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="flex gap-3 mb-4">
+                  <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-white font-medium">
+                      Delete inspection for <span className="font-mono text-blue-400">{deleteTarget.asset_no}</span>
+                      {deleteTarget.inspection_date ? ` on ${deleteTarget.inspection_date}` : ''}?
+                    </p>
+                    <p className="text-gray-400 text-sm mt-1">This removes the scheduled inspection permanently. Completed inspection records are not affected.</p>
+                  </div>
+                </div>
+                {deleteError && (
+                  <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleDeleteSchedule}
+                    disabled={deleting}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium text-white transition-colors inline-flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete Inspection'}
+                  </button>
+                  <button
+                    onClick={() => { setDeleteTarget(null); setDeleteError('') }}
+                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

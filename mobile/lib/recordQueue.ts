@@ -260,6 +260,11 @@ export async function syncRecordQueue(): Promise<{ synced: number; failed: numbe
     }
   }
   await save(queue)
+  // Prune synced entries — they are safely in the database, and keeping them
+  // would grow SecureStore without bound. Pending/failed entries are preserved
+  // so retries and manual "retry failed" still work.
+  const remaining = queue.filter(i => i.sync_status !== 'synced')
+  if (remaining.length !== queue.length) await save(remaining)
   return { synced, failed }
 }
 

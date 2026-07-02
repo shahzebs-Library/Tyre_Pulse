@@ -11,6 +11,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { enqueueInspection } from '../../../lib/offlineQueue'
+import { uploadAllPositionPhotos } from '../../../lib/photoUpload'
 import TyrePositionCard from '../../../components/TyrePositionCard'
 import TyreDetailModal from '../../../components/TyreDetailModal'
 import VehicleTyreDiagram from '../../../components/VehicleTyreDiagram'
@@ -274,12 +275,32 @@ export default function NewInspectionScreen() {
       country: profile?.country ?? null,
     }
 
+    // Resolve any photo_uri still lacking a photo_url before the ONLINE insert —
+    // the eager per-position upload may have failed, and a dead local file://
+    // URI must never be persisted. Deep-copy the map first (same as
+    // offlineQueue.syncQueue) so a failure never corrupts component state.
+    const conditionsCopy: Record<string, TyrePositionData> = JSON.parse(
+      JSON.stringify(payload.tyre_conditions ?? {})
+    )
+    const resolvedPayload = { ...payload, tyre_conditions: conditionsCopy }
+
     try {
-      const { error } = await supabase.from('inspections').insert(payload)
+      const hasLocalPhotos = Object.values(conditionsCopy).some(
+        pos => pos.photo_uri && !pos.photo_url
+      )
+      if (hasLocalPhotos) {
+        // Uploads each pending photo and sets photo_url; on failure photo_url
+        // stays null — a file:// URI is never written into photo_url.
+        await uploadAllPositionPhotos(conditionsCopy, `online_${crypto.randomUUID()}`)
+      }
+      const { error } = await supabase.from('inspections').insert(resolvedPayload)
       if (error) throw error
       setStep('submit')
     } catch {
-      await enqueueInspection(payload)
+      // Queue the photo-resolved copy: already-uploaded photos keep their
+      // photo_url (no duplicate upload on sync); still-local URIs retain
+      // photo_uri so the offline sync retries the upload.
+      await enqueueInspection(resolvedPayload)
       setStep('submit')
     } finally {
       setSubmitting(false)

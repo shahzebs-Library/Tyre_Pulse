@@ -112,3 +112,13 @@ mobile deps synced - typecheck now fully clean.
 - **Mobile:** online inspection submit re-uploads pending photos (H8);
   typed record queue prunes synced entries (M4).
 - Gate: 701/701 tests · build green · mobile typecheck clean.
+
+## 2026-07-02 (late) — Multi-org onboarding completion (V63–V67)
+- V63 custom_data columns on all import targets; V64 set_module_permissions RPC +
+  editable Access Control matrix; V65 super-admin cross-org; V66 3 country orgs
+  (KSA/UAE/Egypt) + user→org assignment UI; **V67**: Admin role ALSO sees all
+  orgs (app_is_org_admin helper on the 38 org-isolation policies) and assigning
+  a user's country auto-sets their organisation (admin_update_profile). Old
+  12-arg overload dropped. All rolled-back-verified.
+- Read docs/"Master Build…Instruction.md" (owner directive: tenant branding,
+  Report Center, PDF/PPTX quality, docs discipline) — folded into the backlog.

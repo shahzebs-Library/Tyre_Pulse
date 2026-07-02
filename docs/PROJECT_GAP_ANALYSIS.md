@@ -68,7 +68,7 @@ mobile typecheck clean).
 
 ## Scoreboard
 
-- **Migrations applied & live-verified:** V40 → V62 (every one proven with a rolled-back self-asserting SQL test).
+- **Migrations applied & live-verified:** V40 → V67 (every one proven with a rolled-back self-asserting SQL test).
 - **Gate:** 701 web tests · build green · mobile typecheck clean (0 errors).
 - **Security advisors:** 0 ERROR-level findings.
 - **Intake:** all 10 modules commit end-to-end; 5 company formats auto-recognised.

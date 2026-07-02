@@ -1,27 +1,37 @@
 /**
  * PhotoCapture
  *
- * Reusable multi-photo capture grid. Captures via camera, uploads each image
- * to the public `tyre-photos` Supabase Storage bucket, and reports back an
- * array of permanent public URLs. Used by Report Issue, RCA and Tyre Change.
+ * Reusable multi-photo capture grid. Captures via camera and uploads each image
+ * to the PRIVATE `tyre-photos` bucket (module-scoped), reporting back an array
+ * of tp-storage:// references (resolved to short-lived signed URLs on display).
+ * Used by Report Issue, RCA and Tyre Change.
+ *
+ * Offline-safe: if an upload can't complete (no connection), the local file://
+ * URI is KEPT in the value array rather than discarded, so the photo is never
+ * lost. The typed record queue (recordQueue) re-uploads any pending file:// URI
+ * before the record is inserted — matching the inspection queue's behaviour.
  */
 import { useState } from 'react'
 import {
   View, Text, TouchableOpacity, Image, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
+import { uploadModulePhoto } from '../lib/photoUpload'
 import * as ImagePicker from 'expo-image-picker'
-import { uploadAccidentPhoto } from '../lib/photoUpload'
 
 interface Props {
-  value: string[]                       // permanent public URLs
+  value: string[]                       // tp-storage:// refs, or file:// URIs pending upload
   onChange: (urls: string[]) => void
+  /** Module slug used for the storage path + bucket scoping. */
+  module?: string
   tint?: string
   max?: number
   label?: string
 }
 
-export default function PhotoCapture({ value, onChange, tint = '#16a34a', max = 6, label = 'Add Photo' }: Props) {
+const isPending = (u?: string) => !!u && u.startsWith('file://')
+
+export default function PhotoCapture({ value, onChange, module = 'module', tint = '#16a34a', max = 6, label = 'Add Photo' }: Props) {
   // local preview URIs, parallel to `value`
   const [localUris, setLocalUris] = useState<string[]>([])
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
@@ -39,13 +49,21 @@ export default function PhotoCapture({ value, onChange, tint = '#16a34a', max = 
     const uri = result.assets[0].uri
     const idx = value.length
     setLocalUris(prev => [...prev, uri])
-    onChange([...value, ''])          // placeholder slot for instant preview
+    onChange([...value, uri])          // keep the local URI so nothing is lost
 
     setUploadingIndex(idx)
     try {
-      const url = await uploadAccidentPhoto(uri, idx)
-      onChange([...value, url || ''])  // replace the placeholder slot at idx
-      if (!url) Alert.alert('Upload failed', 'Could not upload photo. Check your connection and retry.')
+      const ref = await uploadModulePhoto(uri, module, idx)
+      // On success store the permanent ref; on failure (e.g. offline) KEEP the
+      // local file:// URI — the record queue re-uploads it before insert.
+      const next = [...value, ref || uri]
+      onChange(next)
+      if (!ref) {
+        Alert.alert(
+          'Saved offline',
+          'Photo will upload automatically when you are back online.',
+        )
+      }
     } finally {
       setUploadingIndex(null)
     }
@@ -64,8 +82,11 @@ export default function PhotoCapture({ value, onChange, tint = '#16a34a', max = 
           {uploadingIndex === index && (
             <View style={styles.overlay}><ActivityIndicator size="small" color="#fff" /></View>
           )}
-          {uploadingIndex !== index && url ? (
+          {uploadingIndex !== index && url && !isPending(url) ? (
             <View style={styles.cloud}><Ionicons name="cloud-done" size={12} color="#fff" /></View>
+          ) : null}
+          {uploadingIndex !== index && isPending(url) ? (
+            <View style={styles.pending}><Ionicons name="cloud-offline" size={12} color="#fff" /></View>
           ) : null}
           {uploadingIndex !== index && (
             <TouchableOpacity style={styles.del} onPress={() => remove(index)} hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}>
@@ -91,6 +112,7 @@ const styles = StyleSheet.create({
   thumb: { width: '100%', height: '100%' },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
   cloud: { position: 'absolute', bottom: 4, left: 4, backgroundColor: 'rgba(22,163,74,0.85)', borderRadius: 8, padding: 2 },
+  pending: { position: 'absolute', bottom: 4, left: 4, backgroundColor: 'rgba(245,158,11,0.9)', borderRadius: 8, padding: 2 },
   del: { position: 'absolute', top: 3, right: 3, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 10 },
   add: { width: SIZE, height: SIZE, borderRadius: 10, borderWidth: 2, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4 },
   addText: { fontSize: 10.5, fontWeight: '700', textAlign: 'center' },

@@ -33,6 +33,14 @@ const TYPES: AccidentType[] = [
 ]
 const SEVERITIES: AccidentSeverity[] = ['minor', 'moderate', 'severe', 'fatal']
 
+// A photo counts as "uploaded" once it holds a permanent reference — either a
+// private-bucket storage ref (tp-storage://, resolved to a signed URL on
+// display) or a legacy public URL. Empty strings are un-uploaded placeholders.
+// The old check only accepted http(s), which silently rejected every private
+// storage ref → submit stayed disabled and photos were dropped from the insert.
+const isUploadedPhoto = (u?: string | null): boolean =>
+  !!u && (u.startsWith('tp-storage://') || u.startsWith('http'))
+
 export default function AccidentReportScreen() {
   const { allowed, loading: guardLoading } = useRoleGuard(['admin', 'manager', 'director', 'inspector', 'tyre_man'])
   const { profile } = useAuth()
@@ -130,7 +138,7 @@ export default function AccidentReportScreen() {
   }
 
   function validateStep3(): boolean {
-    const uploadedPhotos = photoUrls.filter(u => u && u.startsWith('http'))
+    const uploadedPhotos = photoUrls.filter(isUploadedPhoto)
     if (uploadedPhotos.length === 0) {
       Alert.alert(t('accident.alertRequired'), t('accident.alertPhoto'))
       return false
@@ -168,7 +176,7 @@ export default function AccidentReportScreen() {
         estimated_damage_cost:  draft.estimated_damage_cost
                                   ? parseFloat(draft.estimated_damage_cost)
                                   : null,
-        photos:                 photoUrls.filter(u => u && u.startsWith('http')),
+        photos:                 photoUrls.filter(isUploadedPhoto),
         notes:                  draft.notes || null,
         status:                 'reported',
         country:                profile?.country ?? null,
@@ -612,10 +620,10 @@ export default function AccidentReportScreen() {
           <TouchableOpacity
             style={[
               styles.submitBtn,
-              (submitting || photosUploading || photoUrls.filter(u => u?.startsWith('http')).length === 0) && styles.nextBtnDisabled,
+              (submitting || photosUploading || photoUrls.filter(isUploadedPhoto).length === 0) && styles.nextBtnDisabled,
             ]}
             onPress={handleSubmit}
-            disabled={submitting || photosUploading || photoUrls.filter(u => u?.startsWith('http')).length === 0}
+            disabled={submitting || photosUploading || photoUrls.filter(isUploadedPhoto).length === 0}
           >
             {submitting
               ? <ActivityIndicator size="small" color="#fff" />

@@ -191,7 +191,7 @@ export default function RcaScreen() {
               <Text style={styles.label}>{t('modules.rca.rootCause')}</Text>
               <TextInput style={[styles.input, styles.textarea]} placeholder={t('modules.rca.rootCausePh')} placeholderTextColor="#94a3b8" value={rootCause} onChangeText={setRootCause} multiline />
               <Text style={styles.label}>{t('modules.common.photos')}</Text>
-              <PhotoCapture value={photos} onChange={setPhotos} tint="#7c3aed" />
+              <PhotoCapture value={photos} onChange={setPhotos} module="rca" tint="#7c3aed" />
               <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={create} disabled={saving}>
                 {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>{t('modules.rca.save')}</Text>}
               </TouchableOpacity>

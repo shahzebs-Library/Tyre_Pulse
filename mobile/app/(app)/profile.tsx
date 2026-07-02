@@ -9,6 +9,10 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage, Language } from '../../contexts/LanguageContext'
 import { getPendingCount, syncQueue, retryFailed, clearSynced, getQueue } from '../../lib/offlineQueue'
+import {
+  getPendingRecordCount, syncRecordQueue, retryFailedRecords,
+  clearSyncedRecords, getRecordQueue,
+} from '../../lib/recordQueue'
 import { canAccessAdmin, canManageUsers, canUseAI, canViewAccidents } from '../../lib/permissions'
 import {
   requestNotificationPermission,
@@ -44,10 +48,12 @@ export default function ProfileScreen() {
     : (profile?.role ?? '')
 
   async function load() {
-    const count = await getPendingCount()
-    const queue = await getQueue()
-    setPending(count)
-    setQueueTotal(queue.length)
+    // Include BOTH queues: inspections and the typed record queue.
+    const [inspCount, recCount, inspQueue, recQueue] = await Promise.all([
+      getPendingCount(), getPendingRecordCount(), getQueue(), getRecordQueue(),
+    ])
+    setPending(inspCount + recCount)
+    setQueueTotal(inspQueue.length + recQueue.length)
   }
 
   useEffect(() => { load() }, [])
@@ -81,9 +87,11 @@ export default function ProfileScreen() {
   async function handleSync() {
     setSyncing(true)
     try {
-      await retryFailed()
-      const { synced, failed } = await syncQueue()
+      await Promise.all([retryFailed(), retryFailedRecords()])
+      const [insp, recs] = await Promise.all([syncQueue(), syncRecordQueue()])
       await load()
+      const synced = insp.synced + recs.synced
+      const failed = insp.failed + recs.failed
       const uploadedLabel = synced !== 1 ? t('profile.uploadsPlural') : t('profile.uploaded')
       const failedSuffix = failed > 0 ? ` ${failed} ${t('profile.syncFailed')}` : ''
       Alert.alert(t('profile.syncCompleteTitle'), `${synced} ${uploadedLabel}${failedSuffix}`)
@@ -100,7 +108,7 @@ export default function ProfileScreen() {
         { text: t('common.cancel'), style: 'cancel' },
         {
           text: t('profile.clearConfirm'), style: 'destructive',
-          onPress: async () => { await clearSynced(); load() },
+          onPress: async () => { await Promise.all([clearSynced(), clearSyncedRecords()]); load() },
         },
       ]
     )

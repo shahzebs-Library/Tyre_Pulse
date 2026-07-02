@@ -2,6 +2,20 @@ import { createContext, useContext, useEffect, useRef, useState, ReactNode } fro
 import type { User, AuthError, RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { Profile, normaliseRole } from '../lib/types'
+import { syncQueue, clearQueue } from '../lib/offlineQueue'
+import { syncRecordQueue, clearRecordQueue } from '../lib/recordQueue'
+import { clearPushToken, cancelDailyInspectionReminder } from '../lib/notifications'
+
+/** Wipe all device-local, user-scoped state (offline queues + local reminders)
+ *  so a different account on a shared device cannot inherit the prior user's
+ *  pending records or notifications. Local-only; safe to call unauthenticated. */
+async function clearLocalUserState(): Promise<void> {
+  await Promise.allSettled([
+    clearQueue(),
+    clearRecordQueue(),
+    cancelDailyInspectionReminder(),
+  ])
+}
 
 interface AuthContextType {
   user: User | null
@@ -74,6 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null)
         unsubscribeFromProfile()
+        // On any sign-out (manual OR forced lockout) purge device-local queues.
+        clearLocalUserState().catch(() => {})
       }
       setLoading(false)
     })
@@ -124,6 +140,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    const uid = user?.id
+    // While still authenticated: best-effort flush of this user's pending work
+    // under their OWN session (so nothing is lost when online), then clear their
+    // push token so pushes aren't delivered to the next account on this device.
+    try { await Promise.allSettled([syncQueue(), syncRecordQueue()]) } catch { /* best-effort */ }
+    if (uid) { try { await clearPushToken(uid) } catch { /* best-effort */ } }
+    // Local queues are wiped centrally by the SIGNED_OUT handler below.
     await supabase.auth.signOut()
   }
 

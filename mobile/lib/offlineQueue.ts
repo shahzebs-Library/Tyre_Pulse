@@ -114,3 +114,11 @@ export async function clearSynced(): Promise<void> {
   const filtered = queue.filter(i => i.sync_status !== 'synced')
   await saveQueue(filtered)
 }
+
+/**
+ * Wipe the ENTIRE inspection queue (pending included). Used on logout so a
+ * different account on a shared device cannot inherit this user's queued work.
+ */
+export async function clearQueue(): Promise<void> {
+  await secureStorage.removeItem(QUEUE_KEY)
+}

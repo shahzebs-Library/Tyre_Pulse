@@ -14,6 +14,7 @@
  */
 import { supabase } from './supabase'
 import { secureStorage } from './secureStorage'
+import { uploadModulePhoto } from './photoUpload'
 
 const KEY = 'tp_record_queue_v2'
 const MAX_RETRIES = 8
@@ -106,6 +107,44 @@ function backoffMs(retry: number): number {
   return Math.min(BASE_BACKOFF_MS * 2 ** retry, 30 * 60_000) // cap 30 min
 }
 
+/** Module slug used for photo storage paths, per command. */
+const TYPE_TO_MODULE: Record<CommandType, string> = {
+  TYRE_CHANGE: 'tyre-change',
+  WORK_ORDER: 'work-order',
+  RCA: 'rca',
+  REPORT_ISSUE: 'report-issue',
+}
+
+/**
+ * Resolve a command's `photos` array before insert: upload any local file://
+ * URIs to storage and replace them with permanent tp-storage:// refs. Already-
+ * uploaded refs pass through. A file:// that can't be uploaded (offline / file
+ * gone) is KEPT so the next sync attempt retries it, and `pending` is set true
+ * so the caller keeps the record queued rather than inserting without photos.
+ */
+async function resolveCommandPhotos(
+  type: CommandType,
+  payload: Record<string, any>,
+): Promise<{ payload: Record<string, any>; pending: boolean }> {
+  const photos = payload.photos
+  if (!Array.isArray(photos) || photos.length === 0) return { payload, pending: false }
+
+  const out: string[] = []
+  let pending = false
+  let i = 0
+  for (const p of photos) {
+    if (typeof p === 'string' && p.startsWith('file://')) {
+      const ref = await uploadModulePhoto(p, TYPE_TO_MODULE[type], i)
+      if (ref) out.push(ref)
+      else { out.push(p); pending = true } // keep local URI for a later retry
+    } else if (p) {
+      out.push(p)
+    }
+    i++
+  }
+  return { payload: { ...payload, photos: out.length ? out : null }, pending }
+}
+
 export async function getRecordQueue(): Promise<QueuedRecord[]> {
   try {
     const raw = await secureStorage.getItem(KEY)
@@ -165,7 +204,14 @@ export async function saveCommand(
   }
   const clean = sanitize(type, payload)
   try {
-    const { error } = await supabase.from(COMMANDS[type].table).insert(clean)
+    // Upload any locally-captured photos first; keep the record queued (never
+    // insert without them) if any can't be uploaded right now.
+    const { payload: prepared, pending } = await resolveCommandPhotos(type, clean)
+    if (pending) {
+      await enqueueCommand(type, prepared, idempotencyKey)
+      return { ok: true, offline: true }
+    }
+    const { error } = await supabase.from(COMMANDS[type].table).insert(prepared)
     if (error) throw error
     return { ok: true, offline: false }
   } catch (e: any) {
@@ -190,7 +236,12 @@ export async function syncRecordQueue(): Promise<{ synced: number; failed: numbe
     if (item.next_attempt_at && Date.parse(item.next_attempt_at) > now) continue
     try {
       const clean = sanitize(item.type, item.payload)
-      const { error } = await supabase.from(COMMANDS[item.type].table).insert(clean)
+      // Upload any still-local photos and persist the resolved refs back onto
+      // the queued item so we never re-upload them on a subsequent attempt.
+      const { payload: prepared, pending } = await resolveCommandPhotos(item.type, clean)
+      item.payload = prepared
+      if (pending) throw new Error('Photos pending upload — will retry')
+      const { error } = await supabase.from(COMMANDS[item.type].table).insert(prepared)
       if (error) throw error
       item.sync_status = 'synced'
       item.synced_at = new Date().toISOString()
@@ -229,6 +280,14 @@ export async function retryFailedRecords(): Promise<void> {
 export async function clearSyncedRecords(): Promise<void> {
   const queue = await getRecordQueue()
   await save(queue.filter(i => i.sync_status !== 'synced'))
+}
+
+/**
+ * Wipe the ENTIRE typed record queue (pending included). Used on logout so a
+ * different account on a shared device cannot inherit this user's queued work.
+ */
+export async function clearRecordQueue(): Promise<void> {
+  await secureStorage.removeItem(KEY)
 }
 
 /** Legacy table names → command types, so any un-migrated call site still routes

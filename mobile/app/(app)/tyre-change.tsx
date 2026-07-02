@@ -139,7 +139,7 @@ export default function TyreChangeScreen() {
           <TextInput style={[styles.input, styles.textarea, { textAlign }]} placeholder={t('modules.tyreChange.reasonPh')} placeholderTextColor="#94a3b8" value={removalReason} onChangeText={setRemovalReason} multiline />
 
           <Text style={[styles.label, { textAlign }]}>{`${t('modules.common.photos')} ${t('modules.common.optional')}`}</Text>
-          <PhotoCapture value={photos} onChange={setPhotos} tint="#0284c7" />
+          <PhotoCapture value={photos} onChange={setPhotos} module="tyre-change" tint="#0284c7" />
 
           <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={submit} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : (

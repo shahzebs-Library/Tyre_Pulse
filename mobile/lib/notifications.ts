@@ -91,6 +91,22 @@ export async function registerPushToken(userId: string): Promise<string | null> 
   }
 }
 
+/**
+ * Clear this user's push token from their profile on logout, so pushes targeted
+ * at them are not delivered to a shared device now used by another account.
+ * Best-effort — must be called while still authenticated (RLS-scoped update).
+ */
+export async function clearPushToken(userId: string): Promise<void> {
+  try {
+    await supabase
+      .from('profiles')
+      .update({ push_token: null, push_token_updated_at: new Date().toISOString() })
+      .eq('id', userId)
+  } catch (err) {
+    if (__DEV__) console.warn('[Notifications] clearPushToken failed:', err)
+  }
+}
+
 // ── Local notification helpers ────────────────────────────────────────────────
 
 export async function notifySyncSuccess(synced: number): Promise<void> {

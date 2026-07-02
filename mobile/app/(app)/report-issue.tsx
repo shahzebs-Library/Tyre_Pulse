@@ -143,7 +143,7 @@ export default function ReportIssueScreen() {
           />
 
           <Text style={[styles.label, { textAlign }]}>{`${t('modules.common.photos')} ${t('modules.common.optional')}`}</Text>
-          <PhotoCapture value={photos} onChange={setPhotos} tint="#e11d48" />
+          <PhotoCapture value={photos} onChange={setPhotos} module="report-issue" tint="#e11d48" />
 
           <TouchableOpacity style={[styles.submit, saving && { opacity: 0.6 }]} onPress={submit} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : (

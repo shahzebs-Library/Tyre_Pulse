@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { getPendingCount, syncQueue, retryFailed } from '../lib/offlineQueue'
+import {
+  getPendingRecordCount, syncRecordQueue, retryFailedRecords,
+} from '../lib/recordQueue'
 import { useLanguage } from '../contexts/LanguageContext'
 import { addNetworkStateListener } from 'expo-network'
 
@@ -13,16 +16,19 @@ export default function SyncBanner() {
   const pulse = new Animated.Value(1)
 
   const refresh = useCallback(async () => {
-    const count = await getPendingCount()
-    setPending(count)
+    // Count BOTH offline queues: inspections and the typed record queue
+    // (tyre changes / RCA / issues). Previously only inspections were counted,
+    // so users believed everything had synced when record writes had not.
+    const [insp, recs] = await Promise.all([getPendingCount(), getPendingRecordCount()])
+    setPending(insp + recs)
   }, [])
 
   const attemptSync = useCallback(async () => {
     if (syncing) return
     setSyncing(true)
     try {
-      await retryFailed()
-      await syncQueue()
+      await Promise.all([retryFailed(), retryFailedRecords()])
+      await Promise.all([syncQueue(), syncRecordQueue()])
     } finally {
       await refresh()
       setSyncing(false)

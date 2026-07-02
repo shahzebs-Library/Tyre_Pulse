@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
+import * as analytics from '../lib/api/analyticsReads'
 import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText, Award } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
@@ -77,9 +77,9 @@ export default function CountryComparison() {
       setLoading(true)
       // Server-side per-country aggregates (accurate over the full dataset, fast).
       const [mRes, aRes, tRes] = await Promise.all([
-        supabase.rpc('report_country_metrics', { p_from: dateFrom || null, p_to: dateTo || null }),
-        supabase.from('corrective_actions').select('id,country,status,due_date,priority'),
-        supabase.rpc('report_country_trends', { p_from: dateFrom || null, p_to: dateTo || null }),
+        analytics.reportCountryMetrics({ from: dateFrom, to: dateTo }),
+        analytics.listCorrectiveActionsBrief(),
+        analytics.reportCountryTrends({ from: dateFrom, to: dateTo }),
       ])
       setCountryMetrics(mRes.data ?? [])
       setActions(aRes.data ?? [])

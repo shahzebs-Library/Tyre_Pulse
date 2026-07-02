@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../lib/supabase'
+import * as analytics from '../lib/api/analyticsReads'
 import { useSettings } from '../contexts/SettingsContext'
 import { bucketByMonth, linearRegression, recordCost } from '../lib/analyticsEngine'
 import { BarChart2, Download, FileText } from 'lucide-react'
@@ -38,7 +38,7 @@ export default function FleetAnalytics() {
 
   useEffect(() => {
     setLoading(true)
-    supabase.rpc('report_asset_metrics', { p_country: activeCountry, p_from: null, p_to: null })
+    analytics.reportAssetMetrics({ country: activeCountry })
       .then(({ data }) => {
         const m = data || []
         setAssetMetrics(m)
@@ -50,9 +50,8 @@ export default function FleetAnalytics() {
   // Lazy-load the selected asset's raw rows for the detail view.
   useEffect(() => {
     if (!selected) { setSelectedRecords([]); return }
-    let q = supabase.from('tyre_records').select('*').eq('asset_no', selected).order('issue_date', { ascending: false })
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    q.then(({ data }) => setSelectedRecords(data || []))
+    analytics.listAssetTyreRecords({ assetNo: selected, country: activeCountry })
+      .then(({ data }) => setSelectedRecords(data || []))
   }, [selected, activeCountry])
 
   const sorted = useMemo(() => {

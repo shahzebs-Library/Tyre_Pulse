@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// agents/index.js — Agent registry and shared AI caller
+// agents/index.js - Agent registry and shared AI caller
 // Routes all AI calls through the `chat-ai` Supabase Edge Function.
-// API keys live server-side only — never exposed in the browser bundle.
+// API keys live server-side only - never exposed in the browser bundle.
 // ─────────────────────────────────────────────────────────────────────────────
 import { supabase } from '../supabase'
 

@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'manager' | 'director' | 'inspector' | 'tyre_man' | 'reporter'
 
-/** Countries the platform operates in — mirrors the web SettingsContext list.
+/** Countries the platform operates in - mirrors the web SettingsContext list.
  *  A user's country drives data isolation and stamps their mobile-created rows. */
 export const COUNTRIES = ['KSA', 'UAE', 'Egypt'] as const
 export type Country = (typeof COUNTRIES)[number]
@@ -54,9 +54,9 @@ export interface TyrePositionData {
   pressure_psi: string
   tread_depth_mm: string
   condition: TyreCondition
-  /** Local file URI — used for immediate on-device preview only */
+  /** Local file URI - used for immediate on-device preview only */
   photo_uri: string | null
-  /** Permanent public Supabase Storage URL — persists after reinstall */
+  /** Permanent public Supabase Storage URL - persists after reinstall */
   photo_url: string | null
   notes: string
 }
@@ -306,7 +306,7 @@ export const STATUS_COLORS: Record<AccidentStatus, string> = {
   closed:       '#6b7280',
 }
 
-// Iconic representations — distinct glyphs so severity / status read at a glance.
+// Iconic representations - distinct glyphs so severity / status read at a glance.
 export const SEVERITY_ICONS: Record<AccidentSeverity, string> = {
   minor:    'alert-circle-outline',
   moderate: 'warning-outline',

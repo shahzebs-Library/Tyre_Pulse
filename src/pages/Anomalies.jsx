@@ -81,11 +81,11 @@ function AnomalyTypeGroup({ typeName, items }) {
                 <tbody>
                   {anomaly.records.map((r, ri) => (
                     <tr key={ri} className="border-b border-white/5 last:border-0">
-                      <td className="py-1 pr-3 text-gray-400">{r.issue_date ?? '—'}</td>
-                      <td className="py-1 pr-3 text-gray-300">{r.brand ?? '—'}</td>
-                      <td className="py-1 pr-3 text-gray-400 font-mono">{r.serial_no ?? '—'}</td>
-                      <td className="py-1 pr-3 text-gray-400">{r.site ?? '—'}</td>
-                      <td className="py-1 text-gray-300">{r.cost_per_tyre ? formatCurrencyCompact(r.cost_per_tyre) : '—'}</td>
+                      <td className="py-1 pr-3 text-gray-400">{r.issue_date ?? '-'}</td>
+                      <td className="py-1 pr-3 text-gray-300">{r.brand ?? '-'}</td>
+                      <td className="py-1 pr-3 text-gray-400 font-mono">{r.serial_no ?? '-'}</td>
+                      <td className="py-1 pr-3 text-gray-400">{r.site ?? '-'}</td>
+                      <td className="py-1 text-gray-300">{r.cost_per_tyre ? formatCurrencyCompact(r.cost_per_tyre) : '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -253,7 +253,7 @@ export default function Anomalies() {
       {/* Header */}
       {header}
 
-      {/* What this scans — info cards */}
+      {/* What this scans - info cards */}
       {!hasRun && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Object.entries(ANOMALY_TYPES).map(([key, type]) => (
@@ -497,11 +497,11 @@ function AnomalyDetail({ anomaly: a }) {
           <tbody>
             {a.records.map(r => (
               <tr key={r.id} className="border-b border-gray-800/40">
-                <td className="py-1.5 pr-3 text-gray-300">{r.issue_date || '—'}</td>
-                <td className="py-1.5 pr-3 font-mono text-blue-400">{r.asset_no || '—'}</td>
-                <td className="py-1.5 pr-3 font-mono text-gray-400">{r.serial_no || '—'}</td>
-                <td className="py-1.5 pr-3 text-gray-300">{r.brand || '—'}</td>
-                <td className="py-1.5 pr-3 text-gray-400">{r.site || '—'}</td>
+                <td className="py-1.5 pr-3 text-gray-300">{r.issue_date || '-'}</td>
+                <td className="py-1.5 pr-3 font-mono text-blue-400">{r.asset_no || '-'}</td>
+                <td className="py-1.5 pr-3 font-mono text-gray-400">{r.serial_no || '-'}</td>
+                <td className="py-1.5 pr-3 text-gray-300">{r.brand || '-'}</td>
+                <td className="py-1.5 pr-3 text-gray-400">{r.site || '-'}</td>
                 <td className="py-1.5 pr-3">
                   <span className={`px-1.5 py-0.5 rounded text-xs ${
                     r.risk_level === 'High' ? 'bg-red-900/40 text-red-400' :
@@ -510,7 +510,7 @@ function AnomalyDetail({ anomaly: a }) {
                   }`}>{r.risk_level || '?'}</span>
                 </td>
                 <td className="py-1.5 text-right text-gray-400">
-                  {r.cost_per_tyre ? formatCurrencyCompact(r.cost_per_tyre, activeCurrency) : '—'}
+                  {r.cost_per_tyre ? formatCurrencyCompact(r.cost_per_tyre, activeCurrency) : '-'}
                 </td>
               </tr>
             ))}

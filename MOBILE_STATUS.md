@@ -1,4 +1,4 @@
-# TyrePulse Mobile — Status Audit (June 2026)
+# TyrePulse Mobile - Status Audit (June 2026)
 
 ## Build Configuration
 
@@ -26,7 +26,7 @@
 ### (app)/
 | File | Status | Notes |
 |------|--------|-------|
-| index.tsx | Done | Home — greeting, sync badge, quick start, scanner shortcut |
+| index.tsx | Done | Home - greeting, sync badge, quick start, scanner shortcut |
 | scanner.tsx | Done | expo-camera CameraView, barcode + QR, torch, rescan |
 | history.tsx | Done | Offline + synced inspections, search, status filter badges |
 | profile.tsx | Done | Inspector info, language toggle, offline queue stats, sign-out |
@@ -64,7 +64,7 @@
 
 | Gap | Impact |
 |-----|--------|
-| Photo upload to Supabase Storage | Photos saved as local URI only — lost on reinstall, never synced to server |
+| Photo upload to Supabase Storage | Photos saved as local URI only - lost on reinstall, never synced to server |
 | Offline photo queue | No base64/storage-ref queuing; photos cannot be deferred with inspection |
 | Accident module | 3 screens exist with no documented scope or working implementation |
 | Admin screens (ai-chat, users) | Exist but not integrated with backend or RBAC |
@@ -72,24 +72,24 @@
 | GPS on inspections | Not implemented (expo-location not in package.json) |
 | OTA update URL | expo-updates installed but update URL not configured in app.json |
 | network listener | syncQueue is not auto-triggered; no expo-network listener wired in the app layout |
-| No SQLite | All offline data in AsyncStorage — no query capability, size limits apply at scale |
+| No SQLite | All offline data in AsyncStorage - no query capability, size limits apply at scale |
 | iOS build profile | eas.json has no iOS profile; no Apple Dev Account setup |
 
 ---
 
 ## Critical Code Issues
 
-1. **No auto-sync trigger** — `offlineQueue.ts` implements `syncQueue()` but nothing in the app layout or any context subscribes to `expo-network` state changes to call it automatically. Sync only happens when the user manually taps "Sync Now" in Profile.
+1. **No auto-sync trigger** - `offlineQueue.ts` implements `syncQueue()` but nothing in the app layout or any context subscribes to `expo-network` state changes to call it automatically. Sync only happens when the user manually taps "Sync Now" in Profile.
 
-2. **Supabase anon key in eas.json** — key is committed in plaintext across all three build profiles (development, preview, production). Should be moved to EAS environment secrets (`eas secret:create`).
+2. **Supabase anon key in eas.json** - key is committed in plaintext across all three build profiles (development, preview, production). Should be moved to EAS environment secrets (`eas secret:create`).
 
-3. **Photos are local-only** — `TyrePositionData.photo_url` field exists in the type but is never populated. `photo_uri` is a local file path that becomes invalid after app reinstall or on a different device.
+3. **Photos are local-only** - `TyrePositionData.photo_url` field exists in the type but is never populated. `photo_uri` is a local file path that becomes invalid after app reinstall or on a different device.
 
-4. **No RBAC enforcement on screens** — `admin/` routes are accessible without checking `isAdminOrAbove()`. The `_layout.tsx` for `(app)` should gate admin routes against the profile role.
+4. **No RBAC enforcement on screens** - `admin/` routes are accessible without checking `isAdminOrAbove()`. The `_layout.tsx` for `(app)` should gate admin routes against the profile role.
 
-5. **AsyncStorage size limit** — at scale (hundreds of inspections per inspector), AsyncStorage JSON blobs will degrade. SQLite (`expo-sqlite`) should replace AsyncStorage for the queue.
+5. **AsyncStorage size limit** - at scale (hundreds of inspections per inspector), AsyncStorage JSON blobs will degrade. SQLite (`expo-sqlite`) should replace AsyncStorage for the queue.
 
-6. **`user: any` in AuthContext** — `user` is typed `any` instead of `User` from `@supabase/supabase-js`, losing type safety across the app.
+6. **`user: any` in AuthContext** - `user` is typed `any` instead of `User` from `@supabase/supabase-js`, losing type safety across the app.
 
 ---
 
@@ -122,7 +122,7 @@
 Inspections without photos have reduced evidentiary value. Implement base64 photo storage in the offline queue, upload to `inspection-photos` bucket on sync, populate `photo_url` in the payload. This unblocks real-world field use.
 
 **2. Auto-sync on network reconnect**
-Wire `expo-network` `addNetworkStateListener` in the root `_layout.tsx` so `syncQueue()` fires automatically when connectivity returns. Currently sync is manual-only — inspectors will forget.
+Wire `expo-network` `addNetworkStateListener` in the root `_layout.tsx` so `syncQueue()` fires automatically when connectivity returns. Currently sync is manual-only - inspectors will forget.
 
 **3. RBAC enforcement on admin routes**
 Gate `app/(app)/admin/*` behind `isAdminOrAbove(profile.role)` in `(app)/_layout.tsx`. Without this, any authenticated user can access admin screens.

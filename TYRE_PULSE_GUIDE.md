@@ -1,11 +1,11 @@
-# Tyre Pulse — Operations & Feature Guide
+# Tyre Pulse - Operations & Feature Guide
 
 A practical guide to running Tyre Pulse: how countries keep data separated, how
 to upload any spreadsheet, what each role can do, and how every module works.
 
 ---
 
-## 1. Core concept — Countries keep data separated
+## 1. Core concept - Countries keep data separated
 
 **One rule: the country decides who owns the data.**
 
@@ -24,7 +24,7 @@ to upload any spreadsheet, what each role can do, and how every module works.
 2. Top bar → **UAE** → upload all UAE files.
 3. Done. No country column, no manual tagging, no mixing.
 
-> Uploading is **blocked when the top bar shows "All"** — you must pick a real
+> Uploading is **blocked when the top bar shows "All"** - you must pick a real
 > country first. This is the safeguard that makes mixing impossible.
 
 ---
@@ -36,7 +36,7 @@ Supported: `.xlsx .xls .xlsm .xlsb .ods .csv .tsv .txt`
 ### What happens, step by step
 1. **Drop the file.** If a file is mislabelled (a `.csv` that is really Excel, or
    an odd encoding), it auto-tries the other format. If it genuinely cannot be
-   read, you get a clear message — never a frozen screen.
+   read, you get a clear message - never a frozen screen.
 2. **Multiple sheets** → pick which tabs to import. Pivot/summary tabs are
    flagged "looks like a pivot" and pre-skipped. If only one tab has data, this
    step is skipped automatically.
@@ -55,7 +55,7 @@ Supported: `.xlsx .xls .xlsm .xlsb .ods .csv .tsv .txt`
    optional AI pass for low-confidence rows).
 7. **Country stamp** → every row tagged with the selected country.
 8. **De-dupe** → re-uploading the same file is detected ("data you've already
-   uploaded — N matching records"); skip duplicates so records never double.
+   uploaded - N matching records"); skip duplicates so records never double.
 
 ### Upload tips
 - Pick the **country first**, then upload.
@@ -75,7 +75,7 @@ and enforced in the database, not just the UI.
 | **Admin** | Full control | Create / edit / delete | User management, deletes, all modules |
 | **Manager** | Site/fleet management | Create / edit | No hard deletes |
 | **Director** | Executive oversight | Read-only | Dashboards, reports, analytics |
-| **Inspector** | Field inspections | — | Creates inspections |
+| **Inspector** | Field inspections | - | Creates inspections |
 | **Tyre Man** | Workshop / fittings | Create | Records tyre changes |
 | **Reporter** | Data entry | Create | Logs records |
 
@@ -89,7 +89,7 @@ and enforced in the database, not just the UI.
 
 ## 4. Screenshots
 
-Screenshots are **real captures of your own app and data** — generated on demand,
+Screenshots are **real captures of your own app and data** - generated on demand,
 never mockups. They are not committed by default (data is environment-specific),
 so generate them locally:
 
@@ -108,8 +108,8 @@ Capture **after** loading data for at least one country so screens aren't empty.
 
 | Env | Meaning | Default |
 |-----|---------|---------|
-| `SHOT_ID` | Login identifier (email / username / employee id) | — (required) |
-| `SHOT_PW` | Login password | — (required) |
+| `SHOT_ID` | Login identifier (email / username / employee id) | - (required) |
+| `SHOT_PW` | Login password | - (required) |
 | `SHOT_BASE` | App URL | `http://localhost:5173` |
 | `SHOT_WIDTH` / `SHOT_HEIGHT` | Viewport size | `1440` / `900` |
 
@@ -146,32 +146,32 @@ Capture **after** loading data for at least one country so screens aren't empty.
 Every screen has real data, search, filters, actions, and loading/empty/error
 states.
 
-- **Dashboard** — fleet KPIs, risk breakdown, cost, top sites/brands, monthly
+- **Dashboard** - fleet KPIs, risk breakdown, cost, top sites/brands, monthly
   trend. Country-aware and refreshes with new data.
-- **Tyre Records** — full records with search/filter, bulk **Scrap**, export.
-- **Upload Data** — the importer described in section 2.
-- **Inspections / Inspection Planner / Inspection Intelligence** — schedule,
+- **Tyre Records** - full records with search/filter, bulk **Scrap**, export.
+- **Upload Data** - the importer described in section 2.
+- **Inspections / Inspection Planner / Inspection Intelligence** - schedule,
   record, and analyse inspections; inspector quality scoring; data-quality flags.
-- **Pressure Intelligence** — pressure compliance, under/over-inflation, by site.
-- **Accidents** — incident logging, claims, recovery tracking, parts, audit of
+- **Pressure Intelligence** - pressure compliance, under/over-inflation, by site.
+- **Accidents** - incident logging, claims, recovery tracking, parts, audit of
   who-changed-what, net cost after recovery.
-- **Work Orders / Workshop Management** — jobs, technicians, labour/parts cost.
-- **Safety & Compliance** — compliance scoring across tyres, inspections,
+- **Work Orders / Workshop Management** - jobs, technicians, labour/parts cost.
+- **Safety & Compliance** - compliance scoring across tyres, inspections,
   accidents.
-- **Reports / Executive Report** — country- and period-correct reports; export to
+- **Reports / Executive Report** - country- and period-correct reports; export to
   **PDF / Excel / PowerPoint** (charts are native and editable).
-- **Predictive / Forecasting / Fleet Intelligence** — replacement and budget
+- **Predictive / Forecasting / Fleet Intelligence** - replacement and budget
   forecasting, fleet odometer and registration.
-- **Budgets / Purchase Orders / Stock** — planning, procurement, inventory.
-- **Audit Trail** — immutable record of changes (management/admin view).
-- **AI Command Center** — natural-language questions answered from your data
+- **Budgets / Purchase Orders / Stock** - planning, procurement, inventory.
+- **Audit Trail** - immutable record of changes (management/admin view).
+- **AI Command Center** - natural-language questions answered from your data
   using retrieval (no full-data dumps).
 
 ---
 
 ## 6. Mobile app
 
-Role-adaptive home screen — each user sees only what their role allows.
+Role-adaptive home screen - each user sees only what their role allows.
 
 - **Create**: tyre change, inspection (with per-tyre photos), accident report,
   issue/corrective action, RCA, work order. All auto-stamped with the user's
@@ -188,12 +188,12 @@ Role-adaptive home screen — each user sees only what their role allows.
 
 ## 7. Clean-slate test flow (recommended first run)
 
-1. **Admin → Users** — give every user a **country**.
+1. **Admin → Users** - give every user a **country**.
 2. Top bar → **KSA**:
    - Upload your **vehicle/asset list**.
    - Upload your **tyre records**.
-3. Top bar → **UAE** — repeat with UAE files.
-4. **Mobile** — log in as a KSA user and create a tyre change / inspection /
+3. Top bar → **UAE** - repeat with UAE files.
+4. **Mobile** - log in as a KSA user and create a tyre change / inspection /
    accident; confirm it appears under KSA only.
 5. Check **Dashboard**, **Reports**, and the **PowerPoint export** populate with
    that country's data.
@@ -205,11 +205,11 @@ Role-adaptive home screen — each user sees only what their role allows.
 
 ## 8. Data integrity guarantees
 
-- **No country mixing** — country is stamped by the system, never by the file.
-- **No duplicates** — re-uploads are detected and can be skipped.
-- **Least privilege** — every write is checked by role in the database.
-- **Immutable audit** — changes are logged and cannot be edited away.
-- **Null-safe views** — uncategorised legacy rows never silently disappear.
+- **No country mixing** - country is stamped by the system, never by the file.
+- **No duplicates** - re-uploads are detected and can be skipped.
+- **Least privilege** - every write is checked by role in the database.
+- **Immutable audit** - changes are logged and cannot be edited away.
+- **Null-safe views** - uncategorised legacy rows never silently disappear.
 
 ---
 

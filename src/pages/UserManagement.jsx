@@ -1307,7 +1307,7 @@ export default function UserManagement() {
               </div>
               <p className="text-xs text-gray-500 mt-2">
                 {(editForm.country ?? []).length === 0
-                  ? 'No restriction — user can see all countries.'
+                  ? 'No restriction - user can see all countries.'
                   : `Restricted to: ${editForm.country.join(', ')}`}
               </p>
             </div>

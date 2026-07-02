@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// aiRouter.js — Multi-agent routing for TyrePulse AI OS
+// aiRouter.js - Multi-agent routing for TyrePulse AI OS
 // Classifies every query and routes to the best agent.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ export const AGENT_DESCRIPTIONS = {
 
 /**
  * Classify a user query into an agent type based on keyword/pattern matching.
- * Rules are ordered by specificity — QA and Planner checked before Engineer and Analyst.
+ * Rules are ordered by specificity - QA and Planner checked before Engineer and Analyst.
  * @param {string} query
  * @returns {string} AGENT_TYPES value
  */

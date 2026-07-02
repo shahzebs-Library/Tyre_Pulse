@@ -427,7 +427,7 @@ export default function DataCleaning() {
       const { data: tyreData } = await q
       const allAssets = [...new Set((tyreData ?? []).map(r => r.asset_no))]
 
-      // Try inspections table — graceful fallback
+      // Try inspections table - graceful fallback
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
       const cutoff = thirtyDaysAgo.toISOString().split('T')[0]
@@ -522,9 +522,9 @@ export default function DataCleaning() {
         if (isNaN(fit) || isNaN(rem)) return
         const life = rem - fit
         if (life >= 0 && life < 500) {
-          issues.push({ ...r, life, issue_type: `Life only ${life} km — likely entry error` })
+          issues.push({ ...r, life, issue_type: `Life only ${life} km - likely entry error` })
         } else if (life > 400000) {
-          issues.push({ ...r, life, issue_type: `Life ${life.toLocaleString()} km — unrealistically high` })
+          issues.push({ ...r, life, issue_type: `Life ${life.toLocaleString()} km - unrealistically high` })
         }
       })
 
@@ -533,7 +533,7 @@ export default function DataCleaning() {
         if (r.cost_per_tyre === null || r.cost_per_tyre === undefined) return false
         const c = parseFloat(r.cost_per_tyre)
         return !isNaN(c) && (c > 50000 || c < 50)
-      }).map(r => ({ ...r, issue_type: `Cost ${parseFloat(r.cost_per_tyre).toLocaleString()} — outside normal range (50–50,000)` }))
+      }).map(r => ({ ...r, issue_type: `Cost ${parseFloat(r.cost_per_tyre).toLocaleString()} - outside normal range (50-50,000)` }))
 
       const combined = [...issues, ...costIssues.filter(r => !issues.find(i => i.id === r.id))]
       setUnrealisticLife({ count: combined.length, issues: combined })
@@ -795,7 +795,7 @@ export default function DataCleaning() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <PageHeader
           title="Data Cleaning Engine"
-          subtitle="Rule-based auto-classification + Quality Intelligence — zero AI tokens required"
+          subtitle="Rule-based auto-classification + Quality Intelligence - zero AI tokens required"
           icon={Wand2}
         />
         <div className="flex gap-3">
@@ -903,7 +903,7 @@ export default function DataCleaning() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap gap-2 items-baseline">
-                          <span className="font-medium text-white">{r.original_description || '—'}</span>
+                          <span className="font-medium text-white">{r.original_description || '-'}</span>
                           {r.original_remarks && r.original_remarks !== r.original_description && (
                             <span className="text-gray-500 text-xs">"{r.original_remarks.slice(0, 80)}{r.original_remarks.length > 80 ? '…' : ''}"</span>
                           )}
@@ -926,7 +926,7 @@ export default function DataCleaning() {
                         )}
                       </div>
                       <div className="flex-shrink-0 flex flex-col gap-2 items-end" onClick={e => e.stopPropagation()}>
-                        <span className={`text-xs font-medium ${CONFIDENCE_COLOUR[result?.confidence] ?? 'text-gray-500'}`}>{result?.confidence ?? '—'} confidence</span>
+                        <span className={`text-xs font-medium ${CONFIDENCE_COLOUR[result?.confidence] ?? 'text-gray-500'}`}>{result?.confidence ?? '-'} confidence</span>
                         <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-600"
                           value={result?.category ?? ''} onChange={e => setOverride(r.id, 'category', e.target.value)}>
                           {ALL_CATEGORY_LABELS.map(c => <option key={c} value={c}>{c}</option>)}
@@ -935,7 +935,7 @@ export default function DataCleaning() {
                           value={result?.risk_level ?? ''} onChange={e => setOverride(r.id, 'risk_level', e.target.value)}>
                           {['Critical', 'High', 'Medium', 'Low'].map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
-                        <span className={`badge text-xs ${RISK_COLOUR[result?.risk_level] ?? 'bg-gray-800 text-gray-400'}`}>{result?.risk_level ?? '—'}</span>
+                        <span className={`badge text-xs ${RISK_COLOUR[result?.risk_level] ?? 'bg-gray-800 text-gray-400'}`}>{result?.risk_level ?? '-'}</span>
                       </div>
                     </div>
                   </div>
@@ -947,7 +947,7 @@ export default function DataCleaning() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-400">
-                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalPending)} of {totalPending.toLocaleString()} pending
+                Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, totalPending)} of {totalPending.toLocaleString()} pending
               </p>
               <div className="flex items-center gap-2">
                 <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40"><ChevronLeft size={16} /></button>
@@ -990,7 +990,7 @@ export default function DataCleaning() {
               <div className="space-y-2 mb-4">
                 {reclassifyProposed.map(r => (
                   <div key={r.id} className={`flex items-center gap-4 px-3 py-2 rounded-lg text-sm ${r.changed ? 'bg-yellow-900/20 border border-yellow-700/40' : 'bg-gray-800/40'}`}>
-                    <span className="text-gray-300 flex-1">{r.original_description?.slice(0, 60) ?? '—'}</span>
+                    <span className="text-gray-300 flex-1">{r.original_description?.slice(0, 60) ?? '-'}</span>
                     {r.changed ? (
                       <>
                         <span className="text-gray-500 line-through text-xs">{r.orig_category}</span>
@@ -1039,16 +1039,16 @@ export default function DataCleaning() {
                           <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
                             checked={cleanedSelected.has(r.id)} onChange={() => setCleanedSelected(s => { const n = new Set(s); n.has(r.id) ? n.delete(r.id) : n.add(r.id); return n })} />
                         </td>
-                        <td className="table-cell font-medium text-white">{r.asset_no ?? '—'}</td>
-                        <td className="table-cell">{r.brand ?? '—'}</td>
-                        <td className="table-cell">{r.site ?? '—'}</td>
-                        <td className="table-cell">{r.category ?? '—'}</td>
-                        <td className="table-cell">{r.risk_level ? <span className={`badge ${RISK_COLOUR[r.risk_level]}`}>{r.risk_level}</span> : '—'}</td>
-                        <td className="table-cell text-gray-400 text-xs max-w-xs truncate">{r.remarks_cleaned ?? '—'}</td>
+                        <td className="table-cell font-medium text-white">{r.asset_no ?? '-'}</td>
+                        <td className="table-cell">{r.brand ?? '-'}</td>
+                        <td className="table-cell">{r.site ?? '-'}</td>
+                        <td className="table-cell">{r.category ?? '-'}</td>
+                        <td className="table-cell">{r.risk_level ? <span className={`badge ${RISK_COLOUR[r.risk_level]}`}>{r.risk_level}</span> : '-'}</td>
+                        <td className="table-cell text-gray-400 text-xs max-w-xs truncate">{r.remarks_cleaned ?? '-'}</td>
                         <td className="py-2 pr-3 text-gray-500 text-xs max-w-48 truncate" title={r.remarks || r.description}>
-                          {(r.remarks || r.description || '—').slice(0, 60)}{(r.remarks || r.description || '').length > 60 ? '…' : ''}
+                          {(r.remarks || r.description || '-').slice(0, 60)}{(r.remarks || r.description || '').length > 60 ? '…' : ''}
                         </td>
-                        <td className="table-cell text-gray-500">{r.issue_date ?? '—'}</td>
+                        <td className="table-cell text-gray-500">{r.issue_date ?? '-'}</td>
                         <td className="table-cell">
                           <button
                             onClick={() => undoClassification(r)}
@@ -1118,8 +1118,8 @@ export default function DataCleaning() {
                   <p className="text-gray-400 text-sm">
                     {qualityScore === null ? 'Computing across 7 quality checks…' :
                       qualityScore >= 85 ? 'Fleet data quality is healthy' :
-                      qualityScore >= 70 ? 'Moderate quality issues detected — action recommended' :
-                      'Significant data quality problems — immediate attention required'}
+                      qualityScore >= 70 ? 'Moderate quality issues detected - action recommended' :
+                      'Significant data quality problems - immediate attention required'}
                   </p>
                   {prevScore && qualityScore !== null && (
                     <div className="mt-1 flex items-center gap-2">
@@ -1195,8 +1195,8 @@ export default function DataCleaning() {
                 renderItem={(r) => (
                   <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg text-xs">
                     <span className="text-white font-mono">{r.tyre_serial || <span className="text-gray-600 italic">empty</span>}</span>
-                    <span className="text-gray-500">{r.asset_no ?? '—'}</span>
-                    <span className="text-gray-500">{r.site ?? '—'}</span>
+                    <span className="text-gray-500">{r.asset_no ?? '-'}</span>
+                    <span className="text-gray-500">{r.site ?? '-'}</span>
                     <span className="text-gray-600">{r.issue_date ?? ''}</span>
                     <span className="ml-auto text-yellow-400 font-medium">{r.issue_type}</span>
                   </div>
@@ -1239,7 +1239,7 @@ export default function DataCleaning() {
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {g.records.map(r => (
                         <span key={r.id} className="bg-gray-700/50 px-2 py-0.5 rounded text-gray-400">
-                          {r.asset_no ?? '—'} · {r.issue_date ?? 'no date'}
+                          {r.asset_no ?? '-'} · {r.issue_date ?? 'no date'}
                         </span>
                       ))}
                     </div>
@@ -1259,18 +1259,18 @@ export default function DataCleaning() {
             bgColor="bg-red-900/20 border-red-700/40"
           >
             {invalidPressure?.notApplicable ? (
-              <p className="text-xs text-gray-500">pressure_reading column not found in tyre_records — not applicable for this dataset.</p>
+              <p className="text-xs text-gray-500">pressure_reading column not found in tyre_records - not applicable for this dataset.</p>
             ) : (
               <>
-                <p className="text-xs text-gray-500 mb-3">Pressure readings outside the valid range of 20–200 PSI.</p>
+                <p className="text-xs text-gray-500 mb-3">Pressure readings outside the valid range of 20-200 PSI.</p>
                 {invalidPressure?.records && (
                   <ExpandableList
                     items={invalidPressure.records}
                     renderItem={(r) => (
                       <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg text-xs">
-                        <span className="text-white font-mono">{r.tyre_serial || '—'}</span>
-                        <span className="text-gray-500">{r.asset_no ?? '—'}</span>
-                        <span className="text-gray-500">{r.site ?? '—'}</span>
+                        <span className="text-white font-mono">{r.tyre_serial || '-'}</span>
+                        <span className="text-gray-500">{r.asset_no ?? '-'}</span>
+                        <span className="text-gray-500">{r.site ?? '-'}</span>
                         <span className="ml-auto text-red-400 font-semibold">{r.pressure_reading} PSI</span>
                       </div>
                     )}
@@ -1290,7 +1290,7 @@ export default function DataCleaning() {
             bgColor="bg-yellow-900/20 border-yellow-700/40"
           >
             {missingTread?.notApplicable ? (
-              <p className="text-xs text-gray-500">tread_depth column not found — not applicable for this dataset.</p>
+              <p className="text-xs text-gray-500">tread_depth column not found - not applicable for this dataset.</p>
             ) : (
               <>
                 <div className="flex items-center gap-4 mb-3">
@@ -1316,9 +1316,9 @@ export default function DataCleaning() {
                     items={missingTread.records}
                     renderItem={(r) => (
                       <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg text-xs">
-                        <span className="text-white font-mono">{r.tyre_serial || '—'}</span>
-                        <span className="text-gray-500">{r.asset_no ?? '—'}</span>
-                        <span className="text-gray-500">{r.site ?? '—'}</span>
+                        <span className="text-white font-mono">{r.tyre_serial || '-'}</span>
+                        <span className="text-gray-500">{r.asset_no ?? '-'}</span>
+                        <span className="text-gray-500">{r.site ?? '-'}</span>
                         <span className="text-gray-600">{r.issue_date ?? ''}</span>
                         <span className="ml-auto text-yellow-400">tread: {r.tread_depth ?? 'null'}</span>
                       </div>
@@ -1339,7 +1339,7 @@ export default function DataCleaning() {
             bgColor="bg-blue-900/20 border-blue-700/40"
           >
             {missingInspect?.notApplicable ? (
-              <p className="text-xs text-gray-500">Inspections table not found — check not applicable for this database configuration.</p>
+              <p className="text-xs text-gray-500">Inspections table not found - check not applicable for this database configuration.</p>
             ) : (
               <>
                 <p className="text-xs text-gray-500 mb-3">Vehicles with active tyres that have no inspection record in the last 30 days.</p>
@@ -1374,10 +1374,10 @@ export default function DataCleaning() {
                 items={odometerIssues.issues}
                 renderItem={(r) => (
                   <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg text-xs border border-red-900/20">
-                    <span className="text-white font-mono">{r.tyre_serial || '—'}</span>
-                    <span className="text-gray-500">{r.asset_no ?? '—'}</span>
-                    <span className="text-gray-400">Fit: {parseFloat(r.km_at_fitment)?.toLocaleString() ?? '—'}</span>
-                    <span className="text-gray-400">Rem: {parseFloat(r.km_at_removal)?.toLocaleString() ?? '—'}</span>
+                    <span className="text-white font-mono">{r.tyre_serial || '-'}</span>
+                    <span className="text-gray-500">{r.asset_no ?? '-'}</span>
+                    <span className="text-gray-400">Fit: {parseFloat(r.km_at_fitment)?.toLocaleString() ?? '-'}</span>
+                    <span className="text-gray-400">Rem: {parseFloat(r.km_at_removal)?.toLocaleString() ?? '-'}</span>
                     <span className={`ml-auto font-medium text-xs px-2 py-0.5 rounded border ${severityBadge(r.severity)}`}>{r.issue_type}</span>
                     {isAdmin && (
                       <button
@@ -1402,14 +1402,14 @@ export default function DataCleaning() {
             color="text-orange-400"
             bgColor="bg-orange-900/20 border-orange-700/40"
           >
-            <p className="text-xs text-gray-500 mb-3">Life &lt; 500 km or &gt; 400,000 km; cost outside 50–50,000 range (if column exists).</p>
+            <p className="text-xs text-gray-500 mb-3">Life &lt; 500 km or &gt; 400,000 km; cost outside 50-50,000 range (if column exists).</p>
             {unrealisticLife?.issues && (
               <ExpandableList
                 items={unrealisticLife.issues}
                 renderItem={(r) => (
                   <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg text-xs border border-orange-900/20">
-                    <span className="text-white font-mono">{r.tyre_serial || '—'}</span>
-                    <span className="text-gray-500">{r.asset_no ?? '—'}</span>
+                    <span className="text-white font-mono">{r.tyre_serial || '-'}</span>
+                    <span className="text-gray-500">{r.asset_no ?? '-'}</span>
                     {r.life !== undefined && <span className="text-gray-400">{r.life?.toLocaleString()} km life</span>}
                     {r.cost_per_tyre && <span className="text-gray-400">Cost: {parseFloat(r.cost_per_tyre)?.toLocaleString()}</span>}
                     <span className="text-orange-400 font-medium ml-auto text-right">{r.issue_type}</span>
@@ -1438,7 +1438,7 @@ export default function DataCleaning() {
               The classifier will run on all <strong className="text-white">{stats.pending.toLocaleString()}</strong> pending records and save the results automatically.
               {filterSite && ` Only records from "${filterSite}" will be processed.`}
             </p>
-            <p className="text-yellow-300 text-sm mb-4">Low-confidence classifications will still be saved — no manual review step.</p>
+            <p className="text-yellow-300 text-sm mb-4">Low-confidence classifications will still be saved - no manual review step.</p>
             <div className="flex gap-3">
               <button onClick={approveAll} className="btn-primary flex items-center gap-2">
                 <CheckCheck size={15} /> Approve All
@@ -1472,7 +1472,7 @@ export default function DataCleaning() {
               {dupModal.group.records.map((r, i) => (
                 <div key={r.id} className="flex items-center gap-3 text-xs">
                   <span className="text-gray-500 w-5">{i + 1}.</span>
-                  <span className="text-gray-400">{r.asset_no ?? '—'}</span>
+                  <span className="text-gray-400">{r.asset_no ?? '-'}</span>
                   <span className="text-gray-600">{r.issue_date ?? ''}</span>
                   <span className="ml-auto font-mono text-orange-300">
                     {i === 0 ? dupModal.group.serial : `${dupNewSerial}-${String(i + 1).padStart(2, '0')}`}
@@ -1500,8 +1500,8 @@ export default function DataCleaning() {
           <div className="space-y-4">
             <div className="bg-gray-800/60 rounded-lg p-3 text-xs space-y-1">
               <div className="flex justify-between"><span className="text-gray-500">Record ID</span><span className="text-white font-mono">{odomModal.record.id}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Serial</span><span className="text-white">{odomModal.record.tyre_serial || '—'}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Asset</span><span className="text-white">{odomModal.record.asset_no || '—'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Serial</span><span className="text-white">{odomModal.record.tyre_serial || '-'}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Asset</span><span className="text-white">{odomModal.record.asset_no || '-'}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Issue</span><span className="text-red-400">{odomModal.record.issue_type}</span></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1531,7 +1531,7 @@ export default function DataCleaning() {
                 const life = r - f
                 return (
                   <p className={`text-xs font-medium ${life < 0 ? 'text-red-400' : life < 500 ? 'text-yellow-400' : life > 400000 ? 'text-yellow-400' : 'text-green-400'}`}>
-                    Computed life: {life.toLocaleString()} km {life < 0 ? '— still invalid' : life >= 500 && life <= 400000 ? '— looks valid' : '— unusual value'}
+                    Computed life: {life.toLocaleString()} km {life < 0 ? '- still invalid' : life >= 500 && life <= 400000 ? '- looks valid' : '- unusual value'}
                   </p>
                 )
               }

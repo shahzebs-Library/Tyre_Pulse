@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// alertEngine.js — Rule-based alert detection (no AI tokens)
+// alertEngine.js - Rule-based alert detection (no AI tokens)
 // Call detectAlerts(supabase, country) to get live alert list.
 // country = null means all countries.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ function detectVehicleInactivity(tyreRecords = [], thresholds = {}) {
       return {
         type: ALERT_TYPES.VEHICLE_INACTIVE,
         severity: daysSince >= 180 ? 'high' : 'medium',
-        title: `Vehicle ${assetNo} — No Activity`,
+        title: `Vehicle ${assetNo} - No Activity`,
         message: `No tyre records for ${daysSince} days. Last seen: ${info.date.toLocaleDateString()}`,
         site: info.site,
         meta: { assetNo, daysSince, lastSeen: info.date.toISOString() },
@@ -82,7 +82,7 @@ function detectHighCpk(tyreRecords = [], thresholds = {}) {
       return {
         type: ALERT_TYPES.HIGH_CPK,
         severity: assetAvg > threshold*1.5 ? 'high' : 'medium',
-        title: `High CPK — ${assetNo}`,
+        title: `High CPK - ${assetNo}`,
         message: `Avg CPK ${assetAvg.toFixed(4)} SAR/km is ${(assetAvg/avgCpk).toFixed(1)}x fleet average (${avgCpk.toFixed(4)})`,
         meta: { assetNo, assetAvg, fleetAvg: avgCpk, ratio: assetAvg/avgCpk },
       }
@@ -122,9 +122,9 @@ function detectDataQuality(tyreRecords = [], thresholds = {}) {
 }
 
 /**
- * Main entry point — fetches all needed data and returns alerts array.
+ * Main entry point - fetches all needed data and returns alerts array.
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
- * @param {string|null} country  — 'KSA' | 'UAE' | 'Egypt' | null (all)
+ * @param {string|null} country  - 'KSA' | 'UAE' | 'Egypt' | null (all)
  * @returns {Promise<Alert[]>}
  */
 export async function detectAlerts(supabase, country = null) {
@@ -328,7 +328,7 @@ export async function detectAlerts(supabase, country = null) {
 }
 
 /**
- * Count alerts by severity — used for the badge in Layout
+ * Count alerts by severity - used for the badge in Layout
  */
 export function countAlertsBySeverity(alerts) {
   const counts = { critical: 0, high: 0, medium: 0, info: 0 }

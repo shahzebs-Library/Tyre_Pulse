@@ -205,17 +205,17 @@ export default function ConsoleUsers() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <p className="font-semibold text-white truncate">{user.full_name ?? '—'}</p>
+                            <p className="font-semibold text-white truncate">{user.full_name ?? '-'}</p>
                             {user.is_super_admin && <Shield size={10} className="text-orange-400 flex-shrink-0" />}
                           </div>
-                          <p className="text-gray-500 truncate">{user.email ?? '—'}</p>
+                          <p className="text-gray-500 truncate">{user.email ?? '-'}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <RoleBadge role={user.role} />
                     </td>
-                    <td className="px-4 py-3 text-gray-400">{user.site ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-400">{user.site ?? '-'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {user.locked
@@ -227,7 +227,7 @@ export default function ConsoleUsers() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-500">
-                      {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+                      {user.created_at ? new Date(user.created_at).toLocaleDateString() : '-'}
                     </td>
                     <td className="px-4 py-3">
                       <div className="relative flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
@@ -272,7 +272,7 @@ export default function ConsoleUsers() {
           {total > PAGE_SIZE && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800 bg-gray-900/30">
               <p className="text-xs text-gray-500">
-                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+                Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
               </p>
               <div className="flex gap-2">
                 <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
@@ -391,7 +391,7 @@ function RoleBadge({ role }) {
     Driver: 'text-yellow-300 bg-yellow-900/30',
   }
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${c[role] ?? 'text-gray-400 bg-gray-800'}`}>{role ?? '—'}</span>
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${c[role] ?? 'text-gray-400 bg-gray-800'}`}>{role ?? '-'}</span>
   )
 }
 

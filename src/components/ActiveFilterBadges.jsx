@@ -1,14 +1,14 @@
 import { X } from 'lucide-react'
 
 /**
- * ActiveFilterBadges — renders dismissible chips for active URL filters.
+ * ActiveFilterBadges - renders dismissible chips for active URL filters.
  *
  * Props:
- *   filters      — current filter object  { status, country, ... }
- *   defaults     — default values object  (same shape as filters)
- *   labels       — optional display names { status: 'Status', country: 'Country', ... }
- *   onRemove     — (key: string) => void  called when user clicks × on a chip
- *   onReset      — () => void             called when "Clear all" is clicked
+ *   filters      - current filter object  { status, country, ... }
+ *   defaults     - default values object  (same shape as filters)
+ *   labels       - optional display names { status: 'Status', country: 'Country', ... }
+ *   onRemove     - (key: string) => void  called when user clicks × on a chip
+ *   onReset      - () => void             called when "Clear all" is clicked
  *
  * Renders nothing when no filter deviates from its default.
  */

@@ -39,7 +39,7 @@ function persist(notifications) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications))
   } catch {
-    // Storage quota exceeded — silently ignore
+    // Storage quota exceeded - silently ignore
   }
 }
 
@@ -69,9 +69,9 @@ function classifyTyreRecord(record) {
     return {
       severity: 'Critical',
       type:     'tyre_critical',
-      title:    `Critical Tyre — ${record.asset_no || 'Unknown Asset'}`,
+      title:    `Critical Tyre - ${record.asset_no || 'Unknown Asset'}`,
       message:  tread <= CRITICAL_TREAD
-        ? `Tread depth ${tread}mm on ${record.brand || 'unknown brand'} (${record.serial_no || 'no serial'}) — immediate action required.`
+        ? `Tread depth ${tread}mm on ${record.brand || 'unknown brand'} (${record.serial_no || 'no serial'}) - immediate action required.`
         : `Risk level Critical on ${record.brand || 'unknown brand'} (${record.serial_no || 'no serial'}).`,
       assetNo: record.asset_no || null,
     }
@@ -81,7 +81,7 @@ function classifyTyreRecord(record) {
     return {
       severity: 'High',
       type:     'pressure_variance',
-      title:    `Pressure Variance Alert — ${record.asset_no || 'Unknown Asset'}`,
+      title:    `Pressure Variance Alert - ${record.asset_no || 'Unknown Asset'}`,
       message:  `Pressure variance of ${pressVar}% detected on ${record.brand || 'unknown brand'} (${record.serial_no || 'no serial'}).`,
       assetNo: record.asset_no || null,
     }
@@ -91,7 +91,7 @@ function classifyTyreRecord(record) {
     return {
       severity: 'High',
       type:     'tyre_high_risk',
-      title:    `High Risk Tyre — ${record.asset_no || 'Unknown Asset'}`,
+      title:    `High Risk Tyre - ${record.asset_no || 'Unknown Asset'}`,
       message:  `High risk tyre detected: ${record.brand || 'unknown brand'} (${record.serial_no || 'no serial'}) at site ${record.site || 'unknown'}.`,
       assetNo: record.asset_no || null,
     }
@@ -192,7 +192,7 @@ export function useRealtimeAlerts() {
         config: { broadcast: { self: false } },
       })
 
-      // tyre_records — INSERT
+      // tyre_records - INSERT
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'tyre_records' },
@@ -208,7 +208,7 @@ export function useRealtimeAlerts() {
         }
       )
 
-      // tyre_records — UPDATE
+      // tyre_records - UPDATE
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'tyre_records' },
@@ -224,7 +224,7 @@ export function useRealtimeAlerts() {
         }
       )
 
-      // alerts — INSERT
+      // alerts - INSERT
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'alerts' },
@@ -235,7 +235,7 @@ export function useRealtimeAlerts() {
 
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR') {
-          console.warn('[useRealtimeAlerts] Channel error — will retry automatically.')
+          console.warn('[useRealtimeAlerts] Channel error - will retry automatically.')
         }
       })
 

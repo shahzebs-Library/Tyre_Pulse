@@ -135,7 +135,7 @@ export default function AccidentDetailModal({ accidentId, onClose, onChanged }) 
               <h2 className="text-lg font-semibold text-white truncate">
                 {acc.asset_no || 'Accident'} <span className="text-gray-500 font-normal">· #{String(acc.id).slice(0, 8).toUpperCase()}</span>
               </h2>
-              <p className="text-xs text-gray-500">{acc.site || '—'} · {acc.incident_date ? new Date(acc.incident_date).toLocaleDateString() : '—'}</p>
+              <p className="text-xs text-gray-500">{acc.site || '-'} · {acc.incident_date ? new Date(acc.incident_date).toLocaleDateString() : '-'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -203,11 +203,11 @@ function OverviewTab({ acc }) {
         <KV label="Severity" value={acc.severity} />
         <KV label="Status" value={acc.status} />
         <KV label="Country" value={acc.country} />
-        <KV label="Repair cost" value={acc.repair_cost != null ? formatCurrency(acc.repair_cost) : '—'} />
-        <KV label="Parts cost" value={acc.parts_cost != null ? formatCurrency(acc.parts_cost) : '—'} />
+        <KV label="Repair cost" value={acc.repair_cost != null ? formatCurrency(acc.repair_cost) : '-'} />
+        <KV label="Parts cost" value={acc.parts_cost != null ? formatCurrency(acc.parts_cost) : '-'} />
         <KV label="Insurance claim no" value={acc.insurance_claim_no} />
         <KV label="Inspector" value={acc.inspector} />
-        <KV label="Reported" value={acc.created_at ? new Date(acc.created_at).toLocaleString() : '—'} />
+        <KV label="Reported" value={acc.created_at ? new Date(acc.created_at).toLocaleString() : '-'} />
       </div>
       {acc.description && (
         <div>
@@ -383,10 +383,10 @@ function ClaimTab({ acc, elevated, onSaved, setErr }) {
           <KV label="Driver" value={acc.driver_name} />
           <KV label="Insurer" value={acc.insurer} />
           <KV label="Policy / Claim no" value={acc.policy_no} />
-          <KV label="Claim amount" value={acc.claim_amount != null ? formatCurrency(acc.claim_amount) : '—'} />
-          <KV label="Approved" value={acc.claim_approved_amount != null ? formatCurrency(acc.claim_approved_amount) : '—'} />
-          <KV label="Deductible" value={acc.deductible != null ? formatCurrency(acc.deductible) : '—'} />
-          <KV label="Recovered amount" value={acc.recovered_amount != null ? formatCurrency(acc.recovered_amount) : '—'} highlight />
+          <KV label="Claim amount" value={acc.claim_amount != null ? formatCurrency(acc.claim_amount) : '-'} />
+          <KV label="Approved" value={acc.claim_approved_amount != null ? formatCurrency(acc.claim_approved_amount) : '-'} />
+          <KV label="Deductible" value={acc.deductible != null ? formatCurrency(acc.deductible) : '-'} />
+          <KV label="Recovered amount" value={acc.recovered_amount != null ? formatCurrency(acc.recovered_amount) : '-'} highlight />
           <KV label="Recovery source" value={RECOVERY_SOURCE_LABELS[acc.recovery_source ?? 'none']} />
           <KV label="Recovery date" value={acc.recovery_date} />
         </div>
@@ -727,7 +727,7 @@ function KV({ label, value, highlight }) {
   return (
     <div>
       <p className="text-[11px] uppercase tracking-wide text-gray-500 font-semibold">{label}</p>
-      <p className={`text-sm font-medium mt-0.5 ${highlight && value ? 'text-green-400' : 'text-gray-200'}`}>{value || '—'}</p>
+      <p className={`text-sm font-medium mt-0.5 ${highlight && value ? 'text-green-400' : 'text-gray-200'}`}>{value || '-'}</p>
     </div>
   )
 }

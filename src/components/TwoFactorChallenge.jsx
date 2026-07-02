@@ -128,7 +128,7 @@ export default function TwoFactorChallenge({ open, factorId, onSuccess, onCancel
                   autoComplete="one-time-code"
                   disabled={verifying}
                 />
-                {/* auto-submits on 6 digits — show subtle hint */}
+                {/* auto-submits on 6 digits - show subtle hint */}
                 <p className="text-gray-600 text-xs text-center mt-2">Code submits automatically when complete</p>
               </div>
             ) : (
@@ -160,7 +160,7 @@ export default function TwoFactorChallenge({ open, factorId, onSuccess, onCancel
               </div>
             )}
 
-            {/* verify button (backup mode only — TOTP auto-verifies) */}
+            {/* verify button (backup mode only - TOTP auto-verifies) */}
             {useBackup && (
               <button
                 onClick={() => verify(backupCode)}

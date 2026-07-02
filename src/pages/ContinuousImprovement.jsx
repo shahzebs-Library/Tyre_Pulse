@@ -71,12 +71,12 @@ const CHART_BASE = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n, decimals = 0) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return Number(n).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 }
 
 function fmtCur(n, currency, decimals = 0) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return `${currency} ${fmt(n, decimals)}`
 }
 
@@ -234,7 +234,7 @@ function CategoryAccordion({ categoryKey, opportunities, onCreateAction, created
           >
             <div className="px-3 pb-3 space-y-2 border-t border-gray-800">
               {opportunities.length === 0 ? (
-                <p className="text-xs text-gray-600 py-3 text-center">No improvement opportunities detected — performing well in this area.</p>
+                <p className="text-xs text-gray-600 py-3 text-center">No improvement opportunities detected - performing well in this area.</p>
               ) : (
                 opportunities.map((opp, i) => (
                   <OpportunityRow
@@ -466,7 +466,7 @@ export default function ContinuousImprovement() {
       result.cost.push({
         key: 'brand-switch',
         title: `Switch procurement from ${worst.brand} to ${best.brand}`,
-        description: `${worst.brand} has CPK ${fmt(worst.avgCpk, 4)} vs ${best.brand} at ${fmt(best.avgCpk, 4)} — a ${fmt((worst.avgCpk - best.avgCpk) / best.avgCpk * 100, 1)}% difference. Migrating procurement could generate significant annual savings.`,
+        description: `${worst.brand} has CPK ${fmt(worst.avgCpk, 4)} vs ${best.brand} at ${fmt(best.avgCpk, 4)} - a ${fmt((worst.avgCpk - best.avgCpk) / best.avgCpk * 100, 1)}% difference. Migrating procurement could generate significant annual savings.`,
         priority: 'High',
         saving: annualSaving > 0 ? annualSaving : 0,
         currency: cur,
@@ -494,7 +494,7 @@ export default function ContinuousImprovement() {
     if (siteCosts.length > 1 && siteCosts[0].avg > fleetAvgCost * 1.2) {
       result.cost.push({
         key: 'site-cost-audit',
-        title: `Audit ${siteCosts[0].site} cost controls — ${fmt(((siteCosts[0].avg / fleetAvgCost) - 1) * 100, 0)}% above fleet average`,
+        title: `Audit ${siteCosts[0].site} cost controls - ${fmt(((siteCosts[0].avg / fleetAvgCost) - 1) * 100, 0)}% above fleet average`,
         description: `Site ${siteCosts[0].site} averages ${fmtCur(siteCosts[0].avg, cur)} per tyre replacement vs fleet average ${fmtCur(fleetAvgCost, cur)}. A procurement and workshop audit may identify overspend drivers.`,
         priority: 'Medium',
         saving: Math.round((siteCosts[0].avg - fleetAvgCost) * siteCosts[0].count),
@@ -528,7 +528,7 @@ export default function ContinuousImprovement() {
         priority: 'High',
         saving: Math.round(highCpkVehicles.reduce((s, v) => s + (v.avg - fleetAvgCpk) * 50000 * v.count, 0)),
         currency: cur,
-        details: highCpkVehicles.map(v => `${v.asset}: CPK ${fmt(v.avg, 4)} — ${fmt(((v.avg / fleetAvgCpk) - 1) * 100, 0)}% above average`),
+        details: highCpkVehicles.map(v => `${v.asset}: CPK ${fmt(v.avg, 4)} - ${fmt(((v.avg / fleetAvgCpk) - 1) * 100, 0)}% above average`),
       })
     }
 
@@ -548,7 +548,7 @@ export default function ContinuousImprovement() {
         result.reliability.push({
           key: `pos-failure-${pos}`,
           title: `High failure rate on ${pos} position (${fmt(rate, 1)}%)`,
-          description: `${pos} tyres are failing at ${fmt(rate, 1)}% — above the 20% threshold. Inspect all ${pos} tyres immediately. Likely causes: inflation non-compliance, alignment, or load distribution issues.`,
+          description: `${pos} tyres are failing at ${fmt(rate, 1)}% - above the 20% threshold. Inspect all ${pos} tyres immediately. Likely causes: inflation non-compliance, alignment, or load distribution issues.`,
           priority: rate > 35 ? 'High' : 'Medium',
           impactPct: rate - 20,
           details: [`${v.failures} failures out of ${v.total} tyres on ${pos} position`],
@@ -569,7 +569,7 @@ export default function ContinuousImprovement() {
       if (rate > fleetFailureRate * 1.3 && rate > 10) {
         result.reliability.push({
           key: `site-failure-${site}`,
-          title: `${site} failure rate ${fmt(rate, 1)}% — ${fmt(rate - fleetFailureRate, 1)}pp above fleet average`,
+          title: `${site} failure rate ${fmt(rate, 1)}% - ${fmt(rate - fleetFailureRate, 1)}pp above fleet average`,
           description: `Site ${site} has a significantly elevated failure rate. A reliability review covering workshop practices, tyre selection, and maintenance compliance is recommended.`,
           priority: 'Medium',
           site,
@@ -590,7 +590,7 @@ export default function ContinuousImprovement() {
       if (rate > fleetFailureRate * 1.4 && rate > 12) {
         result.reliability.push({
           key: `brand-failure-${brand}`,
-          title: `${brand} failure rate ${fmt(rate, 1)}% — review procurement`,
+          title: `${brand} failure rate ${fmt(rate, 1)}% - review procurement`,
           description: `${brand} tyres show above-average failure rate. Consider replacing with higher-reliability brands if CPK analysis supports this decision.`,
           priority: 'Medium',
           details: [`Fleet avg failure rate: ${fmt(fleetFailureRate, 1)}%`, `${brand}: ${fmt(rate, 1)}% (${v.failures}/${v.total} tyres)`],
@@ -609,7 +609,7 @@ export default function ContinuousImprovement() {
         title: `${overdueActions.length} corrective actions overdue (>14 days open)`,
         description: `These open actions represent unresolved operational risks. Escalation and assignment review required to restore action close rate.`,
         priority: overdueActions.length > 10 ? 'High' : 'Medium',
-        details: overdueActions.slice(0, 6).map(a => `${a.title} — ${daysOpen(a.created_at)}d open${a.site ? ` (${a.site})` : ''}`),
+        details: overdueActions.slice(0, 6).map(a => `${a.title} - ${daysOpen(a.created_at)}d open${a.site ? ` (${a.site})` : ''}`),
       })
     }
 
@@ -642,7 +642,7 @@ export default function ContinuousImprovement() {
         title: `${openActionsByPriority.filter(a => a.priority === 'High').length} high-priority actions still open`,
         description: `High-priority corrective actions are accumulating. Review assignment, escalate unresolved items, and implement daily action tracking.`,
         priority: 'High',
-        details: openActionsByPriority.filter(a => a.priority === 'High').slice(0, 5).map(a => `${a.title}${a.site ? ` — ${a.site}` : ''}`),
+        details: openActionsByPriority.filter(a => a.priority === 'High').slice(0, 5).map(a => `${a.title}${a.site ? ` - ${a.site}` : ''}`),
       })
     }
 
@@ -679,7 +679,7 @@ export default function ContinuousImprovement() {
     if (metrics.inspectionCompliance < 75) {
       result.inspection.push({
         key: 'fleet-inspection-compliance',
-        title: `Fleet inspection compliance at ${fmt(metrics.inspectionCompliance, 1)}% — critical`,
+        title: `Fleet inspection compliance at ${fmt(metrics.inspectionCompliance, 1)}% - critical`,
         description: `Overall inspection compliance is critically low. Without systematic inspections, pressure non-compliance and wear issues go undetected. A structured inspection programme rollout is required.`,
         priority: 'High',
         impactPct: 75 - metrics.inspectionCompliance,
@@ -726,7 +726,7 @@ export default function ContinuousImprovement() {
     if (highScrapSites.length > 0) {
       result.maintenance.push({
         key: 'high-scrap-sites',
-        title: `${highScrapSites.length} site(s) with elevated scrap rate — workshop audit required`,
+        title: `${highScrapSites.length} site(s) with elevated scrap rate - workshop audit required`,
         description: `These sites are generating scrap tyres at above-average rates. Root causes likely include poor installation practice, under-inflation, or overloading. Workshop audit recommended.`,
         priority: 'Medium',
         details: highScrapSites.map(s => `${s.site}: ${fmt(s.rate, 1)}% scrap rate`),
@@ -740,7 +740,7 @@ export default function ContinuousImprovement() {
       if (steerFR > driveFR * 1.5) {
         result.maintenance.push({
           key: 'steer-wear',
-          title: `Steer tyres failing ${fmt(steerFR / Math.max(driveFR, 1), 1)}× faster than drive — rotation non-compliance signal`,
+          title: `Steer tyres failing ${fmt(steerFR / Math.max(driveFR, 1), 1)}× faster than drive - rotation non-compliance signal`,
           description: `Steer tyre failure rate significantly exceeds drive axle, suggesting tyre rotation is not being performed. Implement mandatory rotation schedule.`,
           priority: 'Medium',
           details: [`Steer failure rate: ${fmt(steerFR, 1)}%`, `Drive failure rate: ${fmt(driveFR, 1)}%`],
@@ -753,7 +753,7 @@ export default function ContinuousImprovement() {
     if (brandCpks.length >= 2) {
       result.procurement.push({
         key: 'brand-cpk-ranking',
-        title: `Brand CPK ranking — procurement consolidation opportunity`,
+        title: `Brand CPK ranking - procurement consolidation opportunity`,
         description: `Fleet is using ${brandCpks.length} brands with CPK variance of ${fmt(brandCpks[brandCpks.length-1].avgCpk - brandCpks[0].avgCpk, 4)}. Consolidating to top 2-3 performers could reduce CPK significantly.`,
         priority: brandCpks.length > 8 ? 'High' : 'Medium',
         details: brandCpks.slice(0, 6).map(b => `${b.brand}: CPK ${fmt(b.avgCpk, 4)} (${b.count} tyres)`),
@@ -763,7 +763,7 @@ export default function ContinuousImprovement() {
     if (brandCpks.length > 8) {
       result.procurement.push({
         key: 'vendor-consolidation',
-        title: `${brandCpks.length} active brands — vendor consolidation recommended`,
+        title: `${brandCpks.length} active brands - vendor consolidation recommended`,
         description: `Operating with ${brandCpks.length} different tyre brands increases inventory complexity, reduces negotiating power, and complicates quality control. Consolidate to 3-5 preferred brands.`,
         priority: 'Medium',
         saving: Math.round(metrics.avgCostPerTyre * records.length * 0.05),
@@ -791,7 +791,7 @@ export default function ContinuousImprovement() {
       const adoptionSaving = Math.round((newTyreCpk - retreadCpk) * 50000 * records.length * 0.15)
       result.procurement.push({
         key: 'retread-adoption',
-        title: `Increase retread adoption — ${fmt(((newTyreCpk - retreadCpk) / newTyreCpk) * 100, 0)}% lower CPK than new tyres`,
+        title: `Increase retread adoption - ${fmt(((newTyreCpk - retreadCpk) / newTyreCpk) * 100, 0)}% lower CPK than new tyres`,
         description: `Retreads are outperforming new tyres on CPK. Increasing retread adoption from ${fmt(retreads.length / records.length * 100, 0)}% to 25-30% of replacements could generate significant annual savings.`,
         priority: 'Medium',
         saving: adoptionSaving > 0 ? adoptionSaving : 0,
@@ -805,7 +805,7 @@ export default function ContinuousImprovement() {
     } else if (retreads.length < 5 && records.length > 50) {
       result.procurement.push({
         key: 'retread-opportunity',
-        title: `Low retread usage (${fmt(retreads.length / Math.max(records.length, 1) * 100, 1)}%) — evaluate retread programme`,
+        title: `Low retread usage (${fmt(retreads.length / Math.max(records.length, 1) * 100, 1)}%) - evaluate retread programme`,
         description: `Fleet retread adoption is very low. A structured retread evaluation programme could reduce tyre costs by 30-50% on eligible axle positions (drive and trailer).`,
         priority: 'Low',
         details: [`Current retreads: ${retreads.length} of ${records.length} total`, 'Typical retread saving: 30-50% cost reduction per tyre'],
@@ -1256,7 +1256,7 @@ export default function ContinuousImprovement() {
         <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
           <Star size={14} className="text-yellow-400" />
           Improvement Opportunity Finder
-          <span className="text-xs text-gray-600 font-normal">— auto-generated from fleet data</span>
+          <span className="text-xs text-gray-600 font-normal">- auto-generated from fleet data</span>
           <span className="ml-auto text-xs text-gray-500">{totalOpps} opportunities across 6 categories</span>
         </h2>
         <div className="space-y-3">
@@ -1277,7 +1277,7 @@ export default function ContinuousImprovement() {
       <div>
         <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
           <BarChart2 size={14} className="text-blue-400" />
-          Progress Tracking — Last 12 Months
+          Progress Tracking - Last 12 Months
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
@@ -1406,7 +1406,7 @@ export default function ContinuousImprovement() {
                       return (
                         <tr key={a.id} className="border-b border-gray-800/60 hover:bg-gray-800/30">
                           <td className="py-1.5 pr-2 max-w-[180px] truncate text-gray-300">{a.title}</td>
-                          <td className="py-1.5 pr-2 text-gray-500">{a.site ?? '—'}</td>
+                          <td className="py-1.5 pr-2 text-gray-500">{a.site ?? '-'}</td>
                           <td className="py-1.5 pr-2">
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${PRIORITY_BADGE[a.priority] ?? PRIORITY_BADGE.Medium}`}>
                               {a.priority}
@@ -1449,7 +1449,7 @@ export default function ContinuousImprovement() {
           <Target size={14} className="text-purple-400" />
           KPI vs Target Scorecard
           {kpiScorecard.length === 0 && (
-            <span className="ml-2 text-xs text-gray-600 font-normal">— configure targets in KPI Scorecard settings</span>
+            <span className="ml-2 text-xs text-gray-600 font-normal">- configure targets in KPI Scorecard settings</span>
           )}
         </h2>
 
@@ -1484,7 +1484,7 @@ export default function ContinuousImprovement() {
                         k.status === 'Close' ? 'text-yellow-400' :
                         'text-red-400'
                       }`}>
-                        {k.gap != null ? (k.gap >= 0 ? '+' : '') + k.fmt(k.gap) : '—'}
+                        {k.gap != null ? (k.gap >= 0 ? '+' : '') + k.fmt(k.gap) : '-'}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
@@ -1535,9 +1535,9 @@ export default function ContinuousImprovement() {
           <Info size={13} /> Score Methodology
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-gray-500">
-          <div className="flex gap-2"><span className="text-green-400 font-semibold">≥75</span> — Excellent: sustain & extend programme</div>
-          <div className="flex gap-2"><span className="text-yellow-400 font-semibold">50–74</span> — Progressing: intensify action tracking</div>
-          <div className="flex gap-2"><span className="text-red-400 font-semibold">&lt;50</span> — Critical: immediate escalation required</div>
+          <div className="flex gap-2"><span className="text-green-400 font-semibold">≥75</span> - Excellent: sustain & extend programme</div>
+          <div className="flex gap-2"><span className="text-yellow-400 font-semibold">50-74</span> - Progressing: intensify action tracking</div>
+          <div className="flex gap-2"><span className="text-red-400 font-semibold">&lt;50</span> - Critical: immediate escalation required</div>
           <div className="flex gap-2"><span className="text-gray-400 font-semibold">Score</span> = Cost (25) + Reliability (25) + Compliance (25) + Close Rate (25)</div>
         </div>
       </div>

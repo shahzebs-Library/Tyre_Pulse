@@ -1,13 +1,13 @@
 import React from 'react';
 import { legacyPositionCode } from '../lib/tyrePositions';
 
-// ── Vehicle type normaliser — maps any DB/prop value to a LAYOUTS key ──────────
+// ── Vehicle type normaliser - maps any DB/prop value to a LAYOUTS key ──────────
 function resolveVehicleType(vt) {
   if (!vt) return 'Pickup'
   if (LAYOUTS[vt]) return vt                                             // exact match
   const s = vt.toLowerCase().trim()
 
-  // Plate-number prefix detection — first 2 alpha chars of asset_no
+  // Plate-number prefix detection - first 2 alpha chars of asset_no
   const prefix = (vt.match(/^[A-Za-z]+/) || [''])[0].toUpperCase().slice(0, 2)
   const PREFIX_MAP = {
     TM: 'Tri-mixer',
@@ -49,13 +49,13 @@ function Tyre({ x, y, w, h, id, risk = 'none', onClick, label }) {
   return (
     <g onClick={() => onClick?.(id)} style={{ cursor: onClick ? 'pointer' : 'default' }}>
       <defs>
-        {/* Rubber gradient — dark edges, slight sheen */}
+        {/* Rubber gradient - dark edges, slight sheen */}
         <radialGradient id={`${uid}-rubber`} cx="35%" cy="30%" r="65%">
           <stop offset="0%"   stopColor="#2d2d2d" />
           <stop offset="70%"  stopColor="#111111" />
           <stop offset="100%" stopColor="#0a0a0a" />
         </radialGradient>
-        {/* Rim gradient — metallic 3D */}
+        {/* Rim gradient - metallic 3D */}
         <radialGradient id={`${uid}-rim`} cx="35%" cy="30%" r="65%">
           <stop offset="0%"   stopColor={col.rim} stopOpacity="1" />
           <stop offset="60%"  stopColor={col.glow} />
@@ -183,7 +183,7 @@ function SharedDefs() {
 // VEHICLE BODIES
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── 1. PICKUP — dark navy blue metallic ───────────────────────────────────────
+// ── 1. PICKUP - dark navy blue metallic ───────────────────────────────────────
 function PickupBody() {
   return (
     <g filter="url(#bodyShadow)">
@@ -216,7 +216,7 @@ function PickupBody() {
       <ellipse cx="100" cy="305" rx="78" ry="10" fill="rgba(0,0,0,0.3)" />
 
       {/* === BODY === */}
-      {/* Side body panels — dark trim line */}
+      {/* Side body panels - dark trim line */}
       <path d="M 60,70 L 60,275 Q 60,283 72,285 L 128,285 Q 140,283 140,275 L 140,70"
         fill="none" stroke="#1e3a8a" strokeWidth="1" />
 
@@ -311,7 +311,7 @@ function PickupBody() {
   );
 }
 
-// ── 2. CANTER — white commercial truck with orange stripe ─────────────────────
+// ── 2. CANTER - white commercial truck with orange stripe ─────────────────────
 function CanterBody() {
   return (
     <g filter="url(#bodyShadow)">
@@ -353,7 +353,7 @@ function CanterBody() {
       {/* Cab section */}
       <rect x="58" y="18" width="84" height="100" rx="5" fill="url(#ctBody)" />
 
-      {/* Front bumper — heavy chrome */}
+      {/* Front bumper - heavy chrome */}
       <rect x="58" y="8" width="84" height="14" rx="4" fill="url(#chrome)" />
       {/* Bull bar */}
       <rect x="68" y="10" width="64" height="5" rx="2" fill="#94a3b8" />
@@ -361,7 +361,7 @@ function CanterBody() {
       <rect x="62" y="10" width="8" height="10" rx="2" fill="url(#headlight)" />
       <rect x="130" y="10" width="8" height="10" rx="2" fill="url(#headlight)" />
 
-      {/* Headlights — rectangular */}
+      {/* Headlights - rectangular */}
       <rect x="58" y="11" width="26" height="11" rx="3" fill="url(#headlight)" />
       <rect x="116" y="11" width="26" height="11" rx="3" fill="url(#headlight)" />
       {/* DRL */}
@@ -430,7 +430,7 @@ function CanterBody() {
   );
 }
 
-// ── 3. TRI-MIXER — Green Concrete Company livery (white + green) ──────────────
+// ── 3. TRI-MIXER - Green Concrete Company livery (white + green) ──────────────
 // Brand: greenconcrete.sa · "Think, Believe, Green" · Deep green #006C35 + bright #00A850
 function TriMixerBody() {
   return (
@@ -474,7 +474,7 @@ function TriMixerBody() {
 
       <ellipse cx="100" cy="352" rx="80" ry="10" fill="rgba(0,0,0,0.25)" />
 
-      {/* === CAB — white === */}
+      {/* === CAB - white === */}
       <path d="M 70,14 Q 57,14 56,28 L 54,108 L 54,125 L 146,125 L 146,108 L 144,28 Q 143,14 130,14 Z"
         fill="url(#tmBody)" />
 
@@ -488,10 +488,10 @@ function TriMixerBody() {
       {/* Headlights */}
       <rect x="58" y="7" width="24" height="12" rx="3" fill="url(#headlight)" />
       <rect x="118" y="7" width="24" height="12" rx="3" fill="url(#headlight)" />
-      {/* Green DRL strip — brand color */}
+      {/* Green DRL strip - brand color */}
       <rect x="60" y="18" width="80" height="3" rx="1" fill="#00A850" opacity="0.95" />
 
-      {/* Hood — white */}
+      {/* Hood - white */}
       <rect x="60" y="21" width="80" height="42" rx="4" fill="url(#tmHood)" />
       <line x1="100" y1="23" x2="100" y2="62" stroke="#cbd5e1" strokeWidth="1" opacity="0.7" />
       {[0,1,2].map(i => (
@@ -532,7 +532,7 @@ function TriMixerBody() {
         <rect key={i} x="68" y={148 + i * 50} width="64" height="6" fill="#475569" />
       ))}
 
-      {/* === DRUM — white with green fins === */}
+      {/* === DRUM - white with green fins === */}
       <ellipse cx="100" cy="228" rx="44" ry="100" fill="url(#tmDrum)" />
       <ellipse cx="100" cy="228" rx="44" ry="100"
         fill="none" stroke="#94a3b8" strokeWidth="1.5" />
@@ -586,14 +586,14 @@ function TriMixerBody() {
       {/* Green rear strip */}
       <rect x="82" y="337" width="36" height="6" rx="2" fill="#006C35" opacity="0.8" />
 
-      {/* Mirrors — green */}
+      {/* Mirrors - green */}
       <rect x="39" y="52" width="17" height="9" rx="3" fill="#006C35" stroke="#004d26" strokeWidth="0.5" />
       <rect x="144" y="52" width="17" height="9" rx="3" fill="#006C35" stroke="#004d26" strokeWidth="0.5" />
     </g>
   );
 }
 
-// ── 4. CONCRETE PUMP — Green Concrete Company livery (white + green) ──────────
+// ── 4. CONCRETE PUMP - Green Concrete Company livery (white + green) ──────────
 // Brand: greenconcrete.sa · Saudi Arabia · #006C35 deep green + #00A850 bright green
 function ConcretePumpBody() {
   return (
@@ -646,7 +646,7 @@ function ConcretePumpBody() {
 
       <ellipse cx="100" cy="362" rx="90" ry="11" fill="rgba(0,0,0,0.25)" />
 
-      {/* === CAB — white === */}
+      {/* === CAB - white === */}
       <path d="M 70,14 Q 57,14 56,28 L 54,110 L 54,128 L 146,128 L 146,110 L 144,28 Q 143,14 130,14 Z"
         fill="url(#cpBody)" />
 
@@ -663,7 +663,7 @@ function ConcretePumpBody() {
       {/* Green DRL strip */}
       <rect x="60" y="18" width="80" height="3" rx="1" fill="#00A850" opacity="0.95" />
 
-      {/* Hood — white */}
+      {/* Hood - white */}
       <rect x="60" y="21" width="80" height="44" rx="4" fill="url(#cpHood)" />
       <line x1="100" y1="23" x2="100" y2="64" stroke="#cbd5e1" strokeWidth="1" opacity="0.7" />
       {[0,1,2].map(i => (
@@ -702,7 +702,7 @@ function ConcretePumpBody() {
       <rect x="68" y="129" width="11" height="222" fill="#334155" />
       <rect x="121" y="129" width="11" height="222" fill="#334155" />
 
-      {/* === OUTRIGGER BEAMS — green === */}
+      {/* === OUTRIGGER BEAMS - green === */}
       <rect x="20" y="142" width="50" height="10" rx="3" fill="url(#cpOutrigger)" />
       <rect x="130" y="142" width="50" height="10" rx="3" fill="url(#cpOutrigger)" />
       {/* Front stabiliser pads */}
@@ -718,14 +718,14 @@ function ConcretePumpBody() {
       <rect x="14" y="236" width="10" height="14" rx="2" fill="#004d26" opacity="0.8" />
       <rect x="176" y="236" width="10" height="14" rx="2" fill="#004d26" opacity="0.8" />
 
-      {/* === PUMP BODY — white === */}
+      {/* === PUMP BODY - white === */}
       <rect x="58" y="129" width="84" height="220" rx="4" fill="url(#cpPump)" />
 
       {/* Green side stripe on pump body */}
       <rect x="58" y="129" width="5" height="220" fill="#006C35" opacity="0.8" rx="2" />
       <rect x="137" y="129" width="5" height="220" fill="#006C35" opacity="0.8" rx="2" />
 
-      {/* === HOPPER — green branded === */}
+      {/* === HOPPER - green branded === */}
       <rect x="66" y="135" width="68" height="58" rx="6" fill="url(#cpHopper)" />
       <rect x="70" y="139" width="60" height="46" rx="4" fill="#14532d" opacity="0.5" />
       <ellipse cx="100" cy="164" rx="24" ry="17" fill="#052e16" />
@@ -757,7 +757,7 @@ function ConcretePumpBody() {
       <line x1="100" y1="294" x2="100" y2="298" stroke="#00A850" strokeWidth="1.2" />
       <text x="100" y="302" textAnchor="middle" fontSize="3.8" fontWeight="900" fill="white">GCC</text>
 
-      {/* === BOOM ARM — green === */}
+      {/* === BOOM ARM - green === */}
       <rect x="66" y="263" width="68" height="12" rx="4" fill="url(#cpBoom)" stroke="#00A850" strokeWidth="0.8" />
       <rect x="70" y="276" width="60" height="10" rx="4" fill="url(#cpBoom)" stroke="#00A850" strokeWidth="0.8" />
       <rect x="74" y="287" width="52" height="10" rx="4" fill="url(#cpBoom)" stroke="#00A850" strokeWidth="0.8" />
@@ -775,14 +775,14 @@ function ConcretePumpBody() {
       <rect x="116" y="349" width="22" height="8" rx="2" fill="url(#brakeLight)" />
       <rect x="86" y="350" width="28" height="6" rx="2" fill="#006C35" opacity="0.8" />
 
-      {/* Mirrors — green */}
+      {/* Mirrors - green */}
       <rect x="39" y="55" width="17" height="9" rx="3" fill="#006C35" stroke="#004d26" strokeWidth="0.8" />
       <rect x="144" y="55" width="17" height="9" rx="3" fill="#006C35" stroke="#004d26" strokeWidth="0.8" />
     </g>
   );
 }
 
-// ── 5. WHEEL LOADER — CAT yellow articulated ──────────────────────────────────
+// ── 5. WHEEL LOADER - CAT yellow articulated ──────────────────────────────────
 function WheelLoaderBody() {
   return (
     <g filter="url(#bodyShadow)">
@@ -895,7 +895,7 @@ function WheelLoaderBody() {
   );
 }
 
-// ── 6. BUS — white staff/transit bus with green GCC stripe ───────────────────
+// ── 6. BUS - white staff/transit bus with green GCC stripe ───────────────────
 // 6 tyres: 2 front single + 4 rear dual  (like a full-size coach)
 function BusBody() {
   return (
@@ -921,7 +921,7 @@ function BusBody() {
 
       <ellipse cx="100" cy="340" rx="86" ry="10" fill="rgba(0,0,0,0.25)" />
 
-      {/* === MAIN BODY — wide rectangular coach === */}
+      {/* === MAIN BODY - wide rectangular coach === */}
       <path d="M 52,20 Q 40,20 38,34 L 36,290 Q 36,305 52,308 L 148,308 Q 164,305 164,290 L 164,34 Q 162,20 148,20 Z"
         fill="url(#busRoof)" />
 
@@ -936,19 +936,19 @@ function BusBody() {
       <rect x="144" y="12" width="18" height="11" rx="3" fill="url(#headlight)" />
       {/* Green DRL */}
       <rect x="40" y="23" width="120" height="3" rx="1" fill="#00A850" opacity="0.9" />
-      {/* Front windshield — wide panoramic */}
+      {/* Front windshield - wide panoramic */}
       <path d="M 42,26 L 158,26 L 155,48 L 45,48 Z" fill="url(#glassGrad)" />
       <path d="M 46,27 L 120,27 L 118,40 L 48,40 Z" fill="url(#glassReflect)" opacity="0.5" />
       {/* Wiper */}
       <line x1="60" y1="46" x2="96" y2="30" stroke="#475569" strokeWidth="0.8" opacity="0.6" />
       <line x1="140" y1="46" x2="104" y2="30" stroke="#475569" strokeWidth="0.8" opacity="0.6" />
 
-      {/* === GREEN STRIPE — runs full length === */}
+      {/* === GREEN STRIPE - runs full length === */}
       <rect x="36" y="130" width="128" height="14" fill="url(#busStripe)" />
       <text x="100" y="139.5" textAnchor="middle" fontSize="4.5" fontWeight="800"
         fill="white" letterSpacing="0.8">GREEN CONCRETE COMPANY</text>
 
-      {/* === SIDE WINDOWS — left column (visible top-down as thin strips) === */}
+      {/* === SIDE WINDOWS - left column (visible top-down as thin strips) === */}
       {/* Left side windows */}
       {[0,1,2,3,4,5].map(i => (
         <rect key={i} x="36" y={55 + i * 38} width="8" height="26" rx="2"
@@ -960,9 +960,9 @@ function BusBody() {
           fill="url(#busWindow)" opacity="0.85" />
       ))}
 
-      {/* === INTERIOR — seats visible from top === */}
+      {/* === INTERIOR - seats visible from top === */}
       <rect x="44" y="50" width="112" height="248" rx="3" fill="#f8fafc" opacity="0.15" />
-      {/* Seat rows — left aisle */}
+      {/* Seat rows - left aisle */}
       {[0,1,2,3,4,5,6,7,8].map(i => (
         <g key={i}>
           <rect x="46" y={56 + i * 27} width="22" height="16" rx="3" fill="#e2e8f0" opacity="0.5" />
@@ -989,14 +989,14 @@ function BusBody() {
       <circle cx="42" cy="303" r="4" fill="#374151" stroke="#1f2937" strokeWidth="1" />
       <circle cx="42" cy="303" r="2" fill="#111827" />
 
-      {/* Mirrors — large coach mirrors */}
+      {/* Mirrors - large coach mirrors */}
       <rect x="16" y="30" width="20" height="10" rx="3" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="0.8" />
       <rect x="164" y="30" width="20" height="10" rx="3" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="0.8" />
     </g>
   );
 }
 
-// ── 7. TATA — blue Tata Prima heavy truck ─────────────────────────────────────
+// ── 7. TATA - blue Tata Prima heavy truck ─────────────────────────────────────
 // Tata brand: deep blue #003087, accent blue #0072CE, silver trim
 // 6 tyres: 2 front single + 4 rear dual
 function TataBody() {
@@ -1034,11 +1034,11 @@ function TataBody() {
 
       <ellipse cx="100" cy="298" rx="80" ry="10" fill="rgba(0,0,0,0.28)" />
 
-      {/* === CAB — Tata Prima style, blue === */}
+      {/* === CAB - Tata Prima style, blue === */}
       <path d="M 68,14 Q 56,14 55,27 L 53,112 L 53,128 L 147,128 L 147,112 L 145,27 Q 144,14 132,14 Z"
         fill="url(#tataCab)" />
 
-      {/* Front bumper — heavy chrome + bull bar */}
+      {/* Front bumper - heavy chrome + bull bar */}
       <rect x="56" y="5" width="88" height="13" rx="4" fill="url(#chrome)" />
       {/* Bull bar crossbar */}
       <rect x="60" y="8" width="80" height="4" rx="2" fill="#94a3b8" />
@@ -1094,7 +1094,7 @@ function TataBody() {
         <rect key={i} x="67" y={145 + i * 45} width="66" height="6" fill="#475569" />
       ))}
 
-      {/* === CARGO BOX — white with blue stripe === */}
+      {/* === CARGO BOX - white with blue stripe === */}
       <rect x="57" y="129" width="86" height="152" rx="3" fill="url(#tataCargo)" />
       {/* Blue side stripes */}
       <rect x="57" y="129" width="5" height="152" fill="#003087" opacity="0.8" rx="1" />
@@ -1116,14 +1116,14 @@ function TataBody() {
       <circle cx="55" cy="268" r="3.5" fill="#374151" stroke="#1f2937" strokeWidth="0.8" />
       <circle cx="55" cy="268" r="1.8" fill="#111827" />
 
-      {/* Mirrors — Tata Prima style */}
+      {/* Mirrors - Tata Prima style */}
       <rect x="37" y="54" width="17" height="10" rx="3" fill="#0072CE" stroke="#003087" strokeWidth="0.8" />
       <rect x="146" y="54" width="17" height="10" rx="3" fill="#0072CE" stroke="#003087" strokeWidth="0.8" />
     </g>
   );
 }
 
-// ── 8. ASHOK LEYLAND — red/white AL heavy truck ───────────────────────────────
+// ── 8. ASHOK LEYLAND - red/white AL heavy truck ───────────────────────────────
 // AL brand: dark red #C41E3A, accent #E8192C, silver/white body
 // 6 tyres: 2 front single + 4 rear dual
 function AshokLeylandBody() {
@@ -1164,16 +1164,16 @@ function AshokLeylandBody() {
 
       <ellipse cx="100" cy="298" rx="80" ry="10" fill="rgba(0,0,0,0.28)" />
 
-      {/* === CAB — white === */}
+      {/* === CAB - white === */}
       <path d="M 68,14 Q 56,14 55,27 L 53,112 L 53,128 L 147,128 L 147,112 L 145,27 Q 144,14 132,14 Z"
         fill="url(#alCab)" />
 
-      {/* Front bumper — red AL style */}
+      {/* Front bumper - red AL style */}
       <rect x="56" y="5" width="88" height="13" rx="4" fill="url(#alStripe)" />
       {/* Chrome over-rider */}
       <rect x="62" y="7" width="76" height="7" rx="3" fill="url(#chrome)" />
 
-      {/* Headlights — round style (AL signature) */}
+      {/* Headlights - round style (AL signature) */}
       <ellipse cx="66" cy="12" rx="12" ry="9" fill="url(#headlight)" />
       <ellipse cx="134" cy="12" rx="12" ry="9" fill="url(#headlight)" />
       <ellipse cx="66" cy="12" rx="7" ry="5.5" fill="#fde047" opacity="0.7" />
@@ -1181,7 +1181,7 @@ function AshokLeylandBody() {
       {/* Red DRL accent */}
       <rect x="57" y="20" width="86" height="2.5" rx="1" fill="#E8192C" opacity="0.9" />
 
-      {/* Hood — white */}
+      {/* Hood - white */}
       <rect x="58" y="23" width="84" height="44" rx="4" fill="url(#alHood)" />
       <line x1="100" y1="25" x2="100" y2="66" stroke="#e2e8f0" strokeWidth="1" opacity="0.8" />
       {[0,1,2].map(i => (
@@ -1189,7 +1189,7 @@ function AshokLeylandBody() {
           fill="#e2e8f0" opacity="0.6" />
       ))}
 
-      {/* AL Badge on hood — circular logo */}
+      {/* AL Badge on hood - circular logo */}
       <circle cx="100" cy="44" r="12" fill="url(#alBadge)" />
       <circle cx="100" cy="44" r="12" fill="none" stroke="#fca5a5" strokeWidth="0.8" />
       {/* AL text */}
@@ -1223,7 +1223,7 @@ function AshokLeylandBody() {
         <rect key={i} x="67" y={145 + i * 45} width="66" height="6" fill="#475569" />
       ))}
 
-      {/* === CARGO BOX — white with red stripes === */}
+      {/* === CARGO BOX - white with red stripes === */}
       <rect x="57" y="129" width="86" height="152" rx="3" fill="url(#alCargo)" />
       {/* Red side stripes */}
       <rect x="57" y="129" width="5" height="152" fill="#C41E3A" opacity="0.8" rx="1" />
@@ -1248,7 +1248,7 @@ function AshokLeylandBody() {
       <circle cx="55" cy="268" r="3.5" fill="#374151" stroke="#1f2937" strokeWidth="0.8" />
       <circle cx="55" cy="268" r="1.8" fill="#111827" />
 
-      {/* Mirrors — white */}
+      {/* Mirrors - white */}
       <rect x="37" y="54" width="17" height="10" rx="3" fill="#e2e8f0" stroke="#C41E3A" strokeWidth="1" />
       <rect x="146" y="54" width="17" height="10" rx="3" fill="#e2e8f0" stroke="#C41E3A" strokeWidth="1" />
     </g>

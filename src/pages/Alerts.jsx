@@ -160,7 +160,7 @@ export default function Alerts() {
     <div className="space-y-5">
       <PageHeader
         title="Alerts"
-        subtitle="Real-time fleet monitoring — vehicle health, CPK anomalies, data quality"
+        subtitle="Real-time fleet monitoring - vehicle health, CPK anomalies, data quality"
         icon={Bell}
         badge={active.length > 0 ? `${active.length} active` : undefined}
       />

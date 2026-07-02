@@ -245,7 +245,7 @@ function TyreManShell({ children, alertCount }) {
       className="min-h-screen flex flex-col"
       style={{ background: '#f0f5f1' }}
     >
-      {/* Fixed top header — light */}
+      {/* Fixed top header - light */}
       <header
         className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4"
         style={{
@@ -308,7 +308,7 @@ function TyreManShell({ children, alertCount }) {
         {children}
       </main>
 
-      {/* Fixed bottom tab bar — light */}
+      {/* Fixed bottom tab bar - light */}
       <nav
         className="fixed bottom-0 left-0 right-0 z-30"
         aria-label="Tyre Man navigation"
@@ -978,7 +978,7 @@ export default function Layout({ children }) {
       {/* Global search */}
       <GlobalSearch isOpen={globalSearchOpen} onClose={() => setGlobalSearchOpen(false)} />
 
-      {/* Command palette — Ctrl/Cmd+K */}
+      {/* Command palette - Ctrl/Cmd+K */}
       <CommandPalette />
 
       {/* ── Search palette ───────────────────────────────────────────────────── */}

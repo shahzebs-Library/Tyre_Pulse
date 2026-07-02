@@ -89,9 +89,9 @@ describe('ALERT_TYPES and SEVERITY constants', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — empty data
+// detectAlerts - empty data
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — empty data', () => {
+describe('detectAlerts - empty data', () => {
   it('returns empty array when all data sources are empty', async () => {
     const supabase = makeSupabaseMock()
     const alerts = await detectAlerts(supabase, null)
@@ -106,9 +106,9 @@ describe('detectAlerts — empty data', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — STOCK_CRITICAL alerts
+// detectAlerts - STOCK_CRITICAL alerts
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — STOCK_CRITICAL', () => {
+describe('detectAlerts - STOCK_CRITICAL', () => {
   it('generates CRITICAL severity when stock_qty is 0', async () => {
     const supabase = makeSupabaseMock({
       stockRecords: [
@@ -184,9 +184,9 @@ describe('detectAlerts — STOCK_CRITICAL', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — BUDGET_OVERAGE alerts
+// detectAlerts - BUDGET_OVERAGE alerts
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — BUDGET_OVERAGE', () => {
+describe('detectAlerts - BUDGET_OVERAGE', () => {
   it('generates INFO alert when monthly_budget < 1000 for current month/year', async () => {
     const now = new Date()
     const supabase = makeSupabaseMock({
@@ -264,10 +264,10 @@ describe('detectAlerts — BUDGET_OVERAGE', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — OVERDUE_ACTION alerts
+// detectAlerts - OVERDUE_ACTION alerts
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — OVERDUE_ACTION', () => {
-  it('generates MEDIUM severity for action overdue 1–7 days', async () => {
+describe('detectAlerts - OVERDUE_ACTION', () => {
+  it('generates MEDIUM severity for action overdue 1-7 days', async () => {
     const due = new Date()
     due.setDate(due.getDate() - 5) // 5 days ago
     const supabase = makeSupabaseMock({
@@ -281,7 +281,7 @@ describe('detectAlerts — OVERDUE_ACTION', () => {
     expect(actionAlert.severity).toBe(SEVERITY.MEDIUM)
   })
 
-  it('generates HIGH severity for action overdue 8–14 days', async () => {
+  it('generates HIGH severity for action overdue 8-14 days', async () => {
     const due = new Date()
     due.setDate(due.getDate() - 10) // 10 days ago
     const supabase = makeSupabaseMock({
@@ -377,9 +377,9 @@ describe('detectAlerts — OVERDUE_ACTION', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — RISK_SPIKE alerts
+// detectAlerts - RISK_SPIKE alerts
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — RISK_SPIKE', () => {
+describe('detectAlerts - RISK_SPIKE', () => {
   it('does not generate risk spike alert when fewer than 20 tyre records', async () => {
     const supabase = makeSupabaseMock({
       tyreRecords: Array.from({ length: 15 }, (_, i) => ({
@@ -439,10 +439,10 @@ describe('detectAlerts — RISK_SPIKE', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — INSPECTION_OVERDUE alerts
+// detectAlerts - INSPECTION_OVERDUE alerts
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — INSPECTION_OVERDUE', () => {
-  it('generates MEDIUM severity inspection alert for 0–7 days overdue', async () => {
+describe('detectAlerts - INSPECTION_OVERDUE', () => {
+  it('generates MEDIUM severity inspection alert for 0-7 days overdue', async () => {
     const scheduled = new Date()
     scheduled.setDate(scheduled.getDate() - 3) // 3 days ago
     const supabase = makeSupabaseMock({
@@ -542,9 +542,9 @@ describe('detectAlerts — INSPECTION_OVERDUE', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — Sorting by severity
+// detectAlerts - Sorting by severity
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — Sorting by severity', () => {
+describe('detectAlerts - Sorting by severity', () => {
   it('returns alerts sorted critical first, then high, medium, info', async () => {
     const now = new Date()
     // Critical: stock_qty=0 (critical)
@@ -570,9 +570,9 @@ describe('detectAlerts — Sorting by severity', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — Multiple concurrent alerts
+// detectAlerts - Multiple concurrent alerts
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — Multiple concurrent alerts', () => {
+describe('detectAlerts - Multiple concurrent alerts', () => {
   it('generates multiple alert types from same call', async () => {
     const now = new Date()
     const due = new Date()
@@ -599,9 +599,9 @@ describe('detectAlerts — Multiple concurrent alerts', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — Records with null/missing fields
+// detectAlerts - Records with null/missing fields
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — Records with null/missing fields', () => {
+describe('detectAlerts - Records with null/missing fields', () => {
   it('stock record missing description falls back to "Tyre stock" text', async () => {
     const supabase = makeSupabaseMock({
       stockRecords: [
@@ -682,7 +682,7 @@ describe('countAlertsBySeverity', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ALERT_TYPES extended — VEHICLE_INACTIVE, HIGH_CPK, DATA_QUALITY
+// ALERT_TYPES extended - VEHICLE_INACTIVE, HIGH_CPK, DATA_QUALITY
 // ─────────────────────────────────────────────────────────────────────────────
 describe('ALERT_TYPES extended constants', () => {
   it('ALERT_TYPES includes VEHICLE_INACTIVE', () => {
@@ -705,9 +705,9 @@ describe('ALERT_TYPES extended constants', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — VEHICLE_INACTIVE alerts
+// detectAlerts - VEHICLE_INACTIVE alerts
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — VEHICLE_INACTIVE', () => {
+describe('detectAlerts - VEHICLE_INACTIVE', () => {
   function makeTyreRecord(assetNo, daysAgo, site = 'Site A') {
     const d = new Date()
     d.setDate(d.getDate() - daysAgo)
@@ -757,7 +757,7 @@ describe('detectAlerts — VEHICLE_INACTIVE', () => {
     const supabase = makeSupabaseMock({
       tyreRecords: [
         makeTyreRecord('TRK-04', 200),  // old record
-        makeTyreRecord('TRK-04', 20),   // recent record — should override
+        makeTyreRecord('TRK-04', 20),   // recent record - should override
       ],
     })
     const alerts = await detectAlerts(supabase, null)
@@ -789,9 +789,9 @@ describe('detectAlerts — VEHICLE_INACTIVE', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — HIGH_CPK alerts
+// detectAlerts - HIGH_CPK alerts
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — HIGH_CPK', () => {
+describe('detectAlerts - HIGH_CPK', () => {
   function makeCpkRecord(assetNo, costPerTyre, kmFitment, kmRemoval, index = 0) {
     return {
       id: `cpk-${assetNo}-${index}`,
@@ -822,7 +822,7 @@ describe('detectAlerts — HIGH_CPK', () => {
     const fleetRecords = Array.from({ length: 8 }, (_, i) =>
       makeCpkRecord(`FLEET-${i}`, 500, 0, 10000, i)   // CPK = 500/10000 = 0.05
     )
-    // Outlier: CPK = 5000/1000 = 5.0 — 100x fleet avg, well above 2.5x threshold
+    // Outlier: CPK = 5000/1000 = 5.0 - 100x fleet avg, well above 2.5x threshold
     const outlierA = makeCpkRecord('OUTLIER', 5000, 0, 1000, 0)
     const outlierB = makeCpkRecord('OUTLIER', 5000, 1000, 2000, 1)
 
@@ -871,7 +871,7 @@ describe('detectAlerts — HIGH_CPK', () => {
   it('skips records where km_at_removal <= km_at_fitment', async () => {
     const supabase = makeSupabaseMock({
       tyreRecords: Array.from({ length: 6 }, (_, i) =>
-        makeCpkRecord(`BAD-KM-${i}`, 500, 5000, 3000, i)  // removal < fitment — invalid
+        makeCpkRecord(`BAD-KM-${i}`, 500, 5000, 3000, i)  // removal < fitment - invalid
       ),
     })
     const alerts = await detectAlerts(supabase, null)
@@ -881,9 +881,9 @@ describe('detectAlerts — HIGH_CPK', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// detectAlerts — DATA_QUALITY alerts
+// detectAlerts - DATA_QUALITY alerts
 // ─────────────────────────────────────────────────────────────────────────────
-describe('detectAlerts — DATA_QUALITY', () => {
+describe('detectAlerts - DATA_QUALITY', () => {
   function makeQualityRecord(overrides = {}, index = 0) {
     return {
       id: `dq-${index}`,
@@ -899,7 +899,7 @@ describe('detectAlerts — DATA_QUALITY', () => {
   }
 
   it('generates DATA_QUALITY alert when more than 30% of records have no cost', async () => {
-    // 7 records with no cost, 3 with cost — missing cost rate = 70% > 30% threshold
+    // 7 records with no cost, 3 with cost - missing cost rate = 70% > 30% threshold
     const noCostRecords = Array.from({ length: 7 }, (_, i) =>
       makeQualityRecord({ cost_per_tyre: 0 }, i)
     )

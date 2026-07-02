@@ -254,7 +254,7 @@ export default function QrLabels() {
       <div className="space-y-6">
         <PageHeader
           title="QR Label Generator"
-          subtitle="Auto-generate QR code labels for tyres and vehicles — print and stick on assets"
+          subtitle="Auto-generate QR code labels for tyres and vehicles - print and stick on assets"
           icon={QrCode}
           actions={
             <div className="flex gap-2 flex-wrap">
@@ -323,7 +323,7 @@ export default function QrLabels() {
             </div>
           </div>
 
-          {/* Generate button — right side */}
+          {/* Generate button - right side */}
           {selected.size > 0 && (
             <div className="flex items-center gap-3 ml-auto">
               <span className="text-xs text-gray-500">{selected.size} selected</span>
@@ -384,7 +384,7 @@ export default function QrLabels() {
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
                   <QrCode size={13} className="text-green-400" />
-                  Label Preview — {readyItems.length} generated
+                  Label Preview - {readyItems.length} generated
                 </h3>
                 <span className="text-xs text-gray-600">Print-ready · {LABEL_SIZES[labelSize].desc} labels</span>
               </div>
@@ -416,7 +416,7 @@ export default function QrLabels() {
                           TYREPULSE
                         </div>
 
-                        {/* QR image — white background so codes are scannable */}
+                        {/* QR image - white background so codes are scannable */}
                         <div className="flex items-center justify-center p-2 bg-white">
                           <img
                             src={qrImages[item.id]}
@@ -498,10 +498,10 @@ export default function QrLabels() {
                             className="w-4 h-4 rounded accent-green-500 cursor-pointer"
                           />
                         </td>
-                        <td className="px-3 py-2.5 font-mono text-xs text-white">{val || '—'}</td>
-                        {mode === 'tyres'  && <td className="px-3 py-2.5 text-gray-300 text-xs">{item.brand || '—'}</td>}
-                        {mode === 'assets' && <td className="px-3 py-2.5 text-gray-300 text-xs">{item.vehicle_type || '—'}</td>}
-                        <td className="px-3 py-2.5 text-gray-400 text-xs">{item.site || '—'}</td>
+                        <td className="px-3 py-2.5 font-mono text-xs text-white">{val || '-'}</td>
+                        {mode === 'tyres'  && <td className="px-3 py-2.5 text-gray-300 text-xs">{item.brand || '-'}</td>}
+                        {mode === 'assets' && <td className="px-3 py-2.5 text-gray-300 text-xs">{item.vehicle_type || '-'}</td>}
+                        <td className="px-3 py-2.5 text-gray-400 text-xs">{item.site || '-'}</td>
                         {mode === 'tyres' && (
                           <td className="px-3 py-2.5">
                             {item.status && (
@@ -519,7 +519,7 @@ export default function QrLabels() {
                           ) : isSelected ? (
                             <span className="text-xs text-yellow-500">Pending</span>
                           ) : (
-                            <span className="text-xs text-gray-700">—</span>
+                            <span className="text-xs text-gray-700">-</span>
                           )}
                         </td>
                       </tr>
@@ -548,10 +548,10 @@ export default function QrLabels() {
           </h3>
           <ol className="space-y-1 text-xs text-gray-500 list-decimal list-inside leading-relaxed">
             <li>Choose <strong className="text-gray-400">Tyre Serials</strong> (serial-level labels) or <strong className="text-gray-400">Vehicle Assets</strong> (vehicle-level labels)</li>
-            <li>Tick the rows you want — or use <strong className="text-gray-400">Select All</strong></li>
-            <li>Click <strong className="text-gray-400">Generate QRs</strong> — a live preview appears above the table</li>
+            <li>Tick the rows you want - or use <strong className="text-gray-400">Select All</strong></li>
+            <li>Click <strong className="text-gray-400">Generate QRs</strong> - a live preview appears above the table</li>
             <li>
-              <strong className="text-gray-400">Print Labels</strong> opens the browser print dialog — print on A4 label sheets
+              <strong className="text-gray-400">Print Labels</strong> opens the browser print dialog - print on A4 label sheets
               (3 × 4 = 12 per page). Or use <strong className="text-gray-400">Export PDF</strong> for a ready-to-send file.
             </li>
             <li>Cut and stick labels onto the tyre or vehicle windscreen / chassis plate</li>

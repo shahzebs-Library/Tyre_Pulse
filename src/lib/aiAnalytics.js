@@ -7,7 +7,7 @@ const AGENT_SYSTEMS = {
 You receive pre-aggregated fleet statistics and must deliver deep analytical responses.
 Your analysis must cover: KPIs, trends, cost patterns, site comparisons, brand performance, risk distribution, root insights.
 Never summarise shallowly. Always extract non-obvious insights.
-Respond ONLY with valid JSON matching this exact structure — no markdown, no text outside the JSON:
+Respond ONLY with valid JSON matching this exact structure - no markdown, no text outside the JSON:
 {
   "answer": "3-5 sentences with concrete numbers and meaningful insight",
   "agentType": "analyst",
@@ -28,7 +28,7 @@ Set chartData null if chartType is "none". Keep table rows to 15 max. Currency i
 You diagnose tyre failures, identify root causes, evaluate wear patterns, and recommend engineering interventions.
 Always investigate: inflation, alignment, load, driver behavior, road conditions, maintenance quality.
 Link every finding to a financial and operational impact.
-Respond ONLY with valid JSON — no markdown, no text outside JSON:
+Respond ONLY with valid JSON - no markdown, no text outside JSON:
 {
   "answer": "3-5 sentences with engineering diagnosis and specific findings",
   "agentType": "tyre_engineer",
@@ -48,7 +48,7 @@ Set chartData null if no chart applies. Currency is SAR.`,
   qa_data: `You are TyrePulse QA Data Agent, a data quality specialist for fleet tyre management.
 You identify: duplicates, invalid serials, missing readings, inconsistent entries, suspicious patterns, data integrity issues.
 Quantify every issue found. Provide specific remediation steps.
-Respond ONLY with valid JSON — no markdown, no text outside JSON:
+Respond ONLY with valid JSON - no markdown, no text outside JSON:
 {
   "answer": "3-5 sentences with specific data quality findings and counts",
   "agentType": "qa_data",
@@ -67,7 +67,7 @@ Respond ONLY with valid JSON — no markdown, no text outside JSON:
   planner: `You are TyrePulse Planner Agent, a maintenance planning and forecasting specialist.
 You produce: replacement schedules, budget forecasts, procurement plans, workshop load analysis, upcoming risk predictions.
 Always quantify: when, how many, at what cost, what priority.
-Respond ONLY with valid JSON — no markdown, no text outside JSON:
+Respond ONLY with valid JSON - no markdown, no text outside JSON:
 {
   "answer": "3-5 sentences with concrete forecast numbers and timeline",
   "agentType": "planner",
@@ -195,9 +195,9 @@ export function buildDataContext(records = [], anomalies = [], inspections = [],
 // ── Main AI call ───────────────────────────────────────────────────────────────
 /**
  * @param {string}   question
- * @param {Object}   dataContext   — from buildDataContext()
- * @param {string}   [agentType]   — 'analyst' | 'tyre_engineer' | 'qa_data' | 'planner'
- * @param {Array}    [history]     — [{ role: 'user'|'assistant', content: string }]
+ * @param {Object}   dataContext   - from buildDataContext()
+ * @param {string}   [agentType]   - 'analyst' | 'tyre_engineer' | 'qa_data' | 'planner'
+ * @param {Array}    [history]     - [{ role: 'user'|'assistant', content: string }]
  */
 export async function askAI(question, dataContext, agentType = 'analyst', history = []) {
   const system = AGENT_SYSTEMS[agentType] ?? AGENT_SYSTEMS.analyst

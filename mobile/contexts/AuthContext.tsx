@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       // Return a generic message for all Supabase auth failures to prevent
-      // user enumeration — the specific reason is logged server-side by GoTrue.
+      // user enumeration - the specific reason is logged server-side by GoTrue.
       return { error: new Error('Invalid credentials. Please try again.') }
     }
     return { error: null }

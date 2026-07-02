@@ -62,7 +62,7 @@ export async function syncQueue(): Promise<{ synced: number; failed: number }> {
         await uploadAllPositionPhotos(conditionsCopy, item.id)
       }
 
-      // Build the final payload — replace tyre_conditions with photo-resolved copy
+      // Build the final payload - replace tyre_conditions with photo-resolved copy
       const resolvedPayload: InspectionPayload = {
         ...item.payload,
         tyre_conditions: conditionsCopy,

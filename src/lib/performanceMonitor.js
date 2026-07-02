@@ -1,4 +1,4 @@
-// performanceMonitor.js — Query and render performance tracking
+// performanceMonitor.js - Query and render performance tracking
 const _metrics = []
 const MAX_METRICS = 200
 

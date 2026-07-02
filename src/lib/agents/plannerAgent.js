@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// plannerAgent.js — Maintenance scheduling, forecasting, workshop load balancing
+// plannerAgent.js - Maintenance scheduling, forecasting, workshop load balancing
 // Routes queries about future planning, replacement forecasts, and budgets.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -13,12 +13,12 @@ import {
 } from '../kpiEngine'
 import { callAiEdgeFunction } from './index'
 
-const SYSTEM_PROMPT = `You are TyrePulse Planner Agent — a senior maintenance planner and fleet operations specialist.
+const SYSTEM_PROMPT = `You are TyrePulse Planner Agent - a senior maintenance planner and fleet operations specialist.
 Your role: maintenance scheduling, tyre replacement forecasting, budget planning, and workshop load balancing.
 
 For every plan provide exactly this structure:
 
-1. Timeline: Specific dates, weeks, or months — not vague timeframes
+1. Timeline: Specific dates, weeks, or months - not vague timeframes
 2. Resource Requirements: Number of tyres, estimated labour hours, projected cost
 3. Priority Order: Which vehicles or sites to action first (with justification)
 4. Budget Impact: Monthly and annual cost estimates with assumptions stated
@@ -29,7 +29,7 @@ Planning principles:
 - Flag vehicles approaching tyre end-of-life based on km patterns
 - Recommend procurement lead times (typically 2-4 weeks for standard tyres)
 - Account for seasonal variations if data shows patterns
-- Balance workshop capacity — avoid scheduling all replacements in same week
+- Balance workshop capacity - avoid scheduling all replacements in same week
 - Prioritise Critical and High risk vehicles
 - Always provide confidence level for forecasts (High / Medium / Low) with reasoning
 
@@ -53,7 +53,7 @@ export async function runPlannerAgent(query, {
   const cached = getCached(cacheKey)
   if (cached) return cached
 
-  // Retrieve data if not pre-loaded — use 12-month window for planning context
+  // Retrieve data if not pre-loaded - use 12-month window for planning context
   let data = records
   if (!data.length) {
     data = await retrieveFleetKpiContext(site, 600, 12)
@@ -81,7 +81,7 @@ export async function runPlannerAgent(query, {
     ? (costTrend.avgMonthlyCost ?? 0) * 12
     : 0
 
-  // Sites with highest CPK — prioritise for intervention
+  // Sites with highest CPK - prioritise for intervention
   const highPrioritySites = siteCpk.slice(0, 3)
 
   // Best value brands for procurement recommendation
@@ -110,7 +110,7 @@ export async function runPlannerAgent(query, {
     `- Annual budget estimate: ${annualForecast?.toFixed(0) ?? 'N/A'}`,
     `- Cost trend: ${costTrend.trend} (slope: ${costTrend.slope?.toFixed(0) ?? 0} per month)`,
     ``,
-    `## Site Priorities (Highest CPK — Act First)`,
+    `## Site Priorities (Highest CPK - Act First)`,
     highPrioritySites.length
       ? highPrioritySites.map(s => `- ${s.site}: CPK ${s.avgCpk?.toFixed(3)}, ${s.count} records`).join('\n')
       : '- No site data available',

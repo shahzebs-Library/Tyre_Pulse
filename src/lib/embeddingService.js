@@ -1,4 +1,4 @@
-// embeddingService.js — Text embedding generation for RAG
+// embeddingService.js - Text embedding generation for RAG
 // Uses Supabase Edge Function as proxy to avoid exposing API keys client-side
 import { supabase } from './supabase'
 

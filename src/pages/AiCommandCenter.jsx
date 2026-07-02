@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// AiCommandCenter.jsx — Multi-agent AI interface for TyrePulse AI OS
+// AiCommandCenter.jsx - Multi-agent AI interface for TyrePulse AI OS
 // Route: /ai-command-center
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ function escapeHtml(str) {
 }
 
 function renderInline(text) {
-  // Escape all HTML first — prevents XSS from AI-generated content
+  // Escape all HTML first - prevents XSS from AI-generated content
   const safe = escapeHtml(text)
   return safe
     .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
@@ -606,7 +606,7 @@ export default function AiCommandCenter() {
 
     doc.setFontSize(16)
     doc.setTextColor(30, 30, 30)
-    doc.text('TyrePulse AI Command Center — Chat Export', margin, y)
+    doc.text('TyrePulse AI Command Center - Chat Export', margin, y)
     y += 6
     doc.setFontSize(9)
     doc.setTextColor(120, 120, 120)
@@ -619,7 +619,7 @@ export default function AiCommandCenter() {
       const isUser = msg.role === 'user'
       doc.setFontSize(8)
       doc.setTextColor(isUser ? 37 : 110, isUser ? 99 : 110, isUser ? 235 : 110)
-      doc.text(isUser ? `You — ${msg.timestamp}` : `${AGENT_LABELS[msg.agentType] ?? 'AI'} Agent — ${msg.timestamp}`, margin, y)
+      doc.text(isUser ? `You - ${msg.timestamp}` : `${AGENT_LABELS[msg.agentType] ?? 'AI'} Agent - ${msg.timestamp}`, margin, y)
       y += 4
 
       doc.setFontSize(9)
@@ -648,7 +648,7 @@ export default function AiCommandCenter() {
     <div className="space-y-6">
       <PageHeader
         title="AI Command Center"
-        subtitle="Multi-agent fleet intelligence — Analyst · Engineer · QA · Planner"
+        subtitle="Multi-agent fleet intelligence - Analyst · Engineer · QA · Planner"
         icon={Brain}
         actions={
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -726,7 +726,7 @@ export default function AiCommandCenter() {
                   >
                     <option value="">No specific vehicle</option>
                     {filteredAssets.map(a => (
-                      <option key={a.asset_no} value={a.asset_no}>{a.asset_no}{a.vehicle_type ? ` — ${a.vehicle_type}` : ''}</option>
+                      <option key={a.asset_no} value={a.asset_no}>{a.asset_no}{a.vehicle_type ? ` - ${a.vehicle_type}` : ''}</option>
                     ))}
                   </select>
                 </div>
@@ -790,7 +790,7 @@ export default function AiCommandCenter() {
             </div>
             <h2 className="text-white font-semibold text-lg mb-2">TyrePulse AI Command Center</h2>
             <p className="text-gray-400 text-sm mb-8 leading-relaxed">
-              Ask any question about your fleet — tyre costs, failure analysis, data quality, or maintenance planning.
+              Ask any question about your fleet - tyre costs, failure analysis, data quality, or maintenance planning.
               The AI router automatically dispatches to the best specialist agent.
             </p>
 
@@ -859,7 +859,7 @@ export default function AiCommandCenter() {
           <div className={`flex items-center gap-2 mb-2 text-xs ${AGENT_COLORS[previewAgent].text}`}>
             <Zap className="w-3 h-3" />
             Will route to: <span className="font-medium">{AGENT_LABELS[previewAgent]} Agent</span>
-            <span className="text-gray-600">— {AGENT_DESCRIPTIONS[previewAgent]}</span>
+            <span className="text-gray-600">- {AGENT_DESCRIPTIONS[previewAgent]}</span>
           </div>
         )}
 

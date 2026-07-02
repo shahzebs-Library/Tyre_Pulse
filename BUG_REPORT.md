@@ -1,18 +1,18 @@
-# TyrePulse — Bug Report & Status Tracker
-**Originally generated:** 2026-06-12 (72 pages, Playwright + manual audit)
-**Last verified / updated:** 2026-06-14 — re-audited after V19–V24 migrations, Expo SDK 54 upgrade, the accident-claims/recovery/audit module, and the dashboard/reports/security hardening work.
+# TyrePulse - Bug Report & Status Tracker
+**Originally created:** 2026-06-12 (72 pages, Playwright + manual audit)
+**Last verified / updated:** 2026-07-02 - re-ran the upload/import flow end-to-end in a real browser; fixed two data-integrity bugs in the column mapper (see 034).
 
 > Keep this file updated: when a bug is fixed, set its status to ✅ with a one-line note. Re-run a full audit after major releases.
 
-## Status summary (2026-06-14)
+## Status summary (2026-07-02)
 
 | Severity | Total | ✅ Resolved | ◑ Partial / cosmetic | ⚠️ Re-verify on device |
 |----------|-------|-------------|----------------------|------------------------|
-| Critical | 8 | 8 | 0 | 0 |
+| Critical | 9 | 9 | 0 | 0 |
 | High | 11 | 7 | 0 | 4 |
-| Medium | 9 | 5 | 4 | 0 |
+| Medium | 10 | 5 | 5 | 0 |
 | Low | 5 | 2 | 3 | 0 |
-| **Total** | **33** | **22** | **7** | **4** |
+| **Total** | **35** | **23** | **8** | **4** |
 
 No **error-level** issues remain. Remaining items are cosmetic/UX or need a manual device pass (offline/exports/PDF).
 
@@ -34,7 +34,7 @@ No **error-level** issues remain. Remaining items are cosmetic/UX or need a manu
 | 012 | Dashboard CPK NaN | ✅ Resolved | kpiEngine returns guarded scalars |
 | 013 | Reports PDF silent fail | ⚠️ Re-verify | `autoTable` registered; live-SVG capture added (Inspections) |
 | 014 | Tyre-changes date filter | ⚠️ Re-verify | confirm gte/lte applied |
-| 015 | Driver Behavior no data | ✅ Resolved | groups by `driver_name` with `'Unassigned'` fallback (DriverManagement.jsx:110) — null-safe |
+| 015 | Driver Behavior no data | ✅ Resolved | groups by `driver_name` with `'Unassigned'` fallback (DriverManagement.jsx:110) - null-safe |
 | 016 | Predictive spinner stuck | ✅ Resolved | `catch { setLoading(false) }` present |
 | 017 | Inventory double-count | ◑ Re-verify | confirm distinct/status filter on stock |
 | 018 | Cost-analysis ÷0 | ✅ Resolved | `_isValidRecord` guarantees `remKm > fitKm` |
@@ -53,25 +53,29 @@ No **error-level** issues remain. Remaining items are cosmetic/UX or need a manu
 | 031 | Sidebar active route | ✅ Resolved | `NavLink` `isActive` (prefix match) |
 | 032 | Mobile table overflow | ⚠️ Re-verify | audit `overflow-x-auto` on remaining tables |
 | 033 | Favicon / title | ✅ Resolved | `index.html` has TyrePulse title + favicon set |
+| 034 | Upload column mapper corrupted data | ✅ Resolved | Optional "SR No." field was stealing the Date/Serial columns, so issue dates landed on junk values like `0770-01-01`. Mapper now assigns the strongest match first and rejects impossible dates (UploadData.jsx). 8 regression tests added. |
+| 035 | Country resets to "All" on upload page reload | ◑ Partial | Admin's country choice is not persisted, so the Upload button starts disabled after any hard reload until they re-pick a country. Persist the selection (localStorage or profile). |
 
 ## Remaining work (prioritised)
 
-**Functional — verify on a real device/login (can't be done headless):**
+**Functional - verify on a real device/login (can't be done headless):**
 - 009 bulk actions, 010 CSV export, 013 PDF generation, 014 date filter, 017 inventory counts, 019 workshop submit, 032 mobile tables.
 
-**Code — small, safe follow-ups:**
+**Code - small, safe follow-ups:**
 - 020 Country refresh: extend the `applyCountry()` + focus-refresh pattern to any remaining list pages.
+- 035 Persist the country selection so the upload page keeps it across reloads.
+- Decide whether admin uploads should also route through the approval queue (today only non-admin uploads are staged for approval; admin uploads write live immediately).
 
 **Cosmetic / design:**
 - 026 print CSS, 028 radar skeleton, 029 date locale, 030 empty states.
 
 ## Architecture / design debt (still valid)
-1. `kpiEngine.js` returns objects not scalars — consumers must destructure (guards now in place).
+1. `kpiEngine.js` returns objects not scalars - consumers must destructure (guards now in place).
 2. Consolidate `audit_log` → `audit_log_v2` (canonical).
 3. Centralise currency in one `useCurrency()` hook (most pages already use `activeCurrency`).
-4. `fleet_master.active` nullable — consider `SET DEFAULT true`.
+4. `fleet_master.active` nullable - consider `SET DEFAULT true`.
 5. Add React Error Boundaries per page (a single crash shouldn't white-screen the app).
 6. **Theme**: still a mixed dark/light identity (Work Orders + Engineering KPI use dark cards; analytics pages light). Pick one (light-content SaaS recommended) and align.
 
 ## Security posture (2026-06-14)
-Tracked in migrations V19–V24. Supabase advisor: **0 errors**; anon can read 0 sensitive rows; functions hardened (pinned search_path, anon EXECUTE revoked). Only outstanding toggle is **Leaked Password Protection** — Supabase **Pro-plan only**, so accepted as plan-limited on Free.
+Tracked in migrations V19-V24. Supabase advisor: **0 errors**; anon can read 0 sensitive rows; functions hardened (pinned search_path, anon EXECUTE revoked). Only outstanding toggle is **Leaked Password Protection** - Supabase **Pro-plan only**, so accepted as plan-limited on Free.

@@ -52,11 +52,11 @@ export function ConsoleAuthProvider({ children }) {
   }
 
   /**
-   * signIn — step 1 of login.
+   * signIn - step 1 of login.
    * Returns:
-   *   { error }                          — credentials wrong / not super admin
-   *   { mfaRequired: true, factorId, challengeId } — TOTP enrolled, step 2 needed
-   *   { error: null }                    — fully logged in (no MFA enrolled)
+   *   { error }                          - credentials wrong / not super admin
+   *   { mfaRequired: true, factorId, challengeId } - TOTP enrolled, step 2 needed
+   *   { error: null }                    - fully logged in (no MFA enrolled)
    */
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
@@ -76,7 +76,7 @@ export function ConsoleAuthProvider({ children }) {
     // Check MFA assurance level
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
     if (aal?.nextLevel === 'aal2' && aal?.currentLevel !== 'aal2') {
-      // User has TOTP enrolled — need to verify
+      // User has TOTP enrolled - need to verify
       const { data: factors } = await supabase.auth.mfa.listFactors()
       const totpFactor = factors?.totp?.find(f => f.status === 'verified')
       if (totpFactor) {
@@ -91,7 +91,7 @@ export function ConsoleAuthProvider({ children }) {
       }
     }
 
-    // No MFA or already at aal2 — log the session and proceed
+    // No MFA or already at aal2 - log the session and proceed
     await supabase.from('console_sessions').insert({
       admin_id: data.user.id, action: 'login', target_type: 'system',
       details: { email, user_agent: navigator.userAgent }
@@ -100,7 +100,7 @@ export function ConsoleAuthProvider({ children }) {
   }
 
   /**
-   * verifyMfa — step 2. Call after signIn returns mfaRequired:true.
+   * verifyMfa - step 2. Call after signIn returns mfaRequired:true.
    */
   async function verifyMfa(factorId, challengeId, code) {
     const { error } = await supabase.auth.mfa.verify({ factorId, challengeId, code })
@@ -117,7 +117,7 @@ export function ConsoleAuthProvider({ children }) {
   }
 
   /**
-   * enrollMfa — start TOTP setup. Returns { qrCode, secret, factorId } or { error }.
+   * enrollMfa - start TOTP setup. Returns { qrCode, secret, factorId } or { error }.
    */
   async function enrollMfa() {
     const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', issuer: 'TyrePulse Console' })
@@ -132,7 +132,7 @@ export function ConsoleAuthProvider({ children }) {
   }
 
   /**
-   * confirmMfaEnrollment — verify the first TOTP code to activate the factor.
+   * confirmMfaEnrollment - verify the first TOTP code to activate the factor.
    */
   async function confirmMfaEnrollment(factorId, code) {
     const { data: challenge, error: chalErr } = await supabase.auth.mfa.challenge({ factorId })
@@ -144,7 +144,7 @@ export function ConsoleAuthProvider({ children }) {
   }
 
   /**
-   * unenrollMfa — remove a TOTP factor.
+   * unenrollMfa - remove a TOTP factor.
    */
   async function unenrollMfa(factorId) {
     const { error } = await supabase.auth.mfa.unenroll({ factorId })
@@ -154,7 +154,7 @@ export function ConsoleAuthProvider({ children }) {
   }
 
   /**
-   * listMfaFactors — get current TOTP factors.
+   * listMfaFactors - get current TOTP factors.
    */
   async function listMfaFactors() {
     const { data } = await supabase.auth.mfa.listFactors()

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// MaintenanceCalendar.jsx — Visual Maintenance Calendar · /maintenance-calendar
+// MaintenanceCalendar.jsx - Visual Maintenance Calendar · /maintenance-calendar
 // Combines Work Orders (target_completion) + Tyre Alerts (risk-based) into a
 // unified month/week/day calendar with KPI cards and upcoming events sidebar.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,13 +57,13 @@ function isSameDay(a, b) {
 }
 
 function fmtDisplay(dateStr) {
-  if (!dateStr) return '—'
+  if (!dateStr) return '-'
   const d = new Date(dateStr + 'T00:00:00')
   return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function fmtShort(dateStr) {
-  if (!dateStr) return '—'
+  if (!dateStr) return '-'
   const d = new Date(dateStr + 'T00:00:00')
   return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short' })
 }
@@ -83,9 +83,9 @@ function buildWorkOrderEvents(orders, todayStr) {
         type:        isOverdue ? 'overdue_work_order' : 'work_order',
         priority:    o.priority || 'Medium',
         title:       o.work_order_no || 'Work Order',
-        subtitle:    `${o.asset_no || '—'} · ${o.work_type || '—'}`,
-        asset:       o.asset_no || '—',
-        description: o.description || o.work_type || '—',
+        subtitle:    `${o.asset_no || '-'} · ${o.work_type || '-'}`,
+        asset:       o.asset_no || '-',
+        description: o.description || o.work_type || '-',
         status:      o.status,
         isOverdue,
         raw:         o,
@@ -116,10 +116,10 @@ function buildTyreEvents(tyres, todayStr) {
         date:        dateStr,
         type,
         priority:    t.risk_level === 'Critical' ? 'Critical' : 'High',
-        title:       `${t.asset_no || t.asset_number || '—'}`,
-        subtitle:    `${t.risk_level} Risk · ${t.brand || '—'}`,
-        asset:       t.asset_no || t.asset_number || '—',
-        description: `Tread: ${t.tread_depth ?? '?'}mm · Brand: ${t.brand || '—'} · Serial: ${t.serial_no || '—'}`,
+        title:       `${t.asset_no || t.asset_number || '-'}`,
+        subtitle:    `${t.risk_level} Risk · ${t.brand || '-'}`,
+        asset:       t.asset_no || t.asset_number || '-',
+        description: `Tread: ${t.tread_depth ?? '?'}mm · Brand: ${t.brand || '-'} · Serial: ${t.serial_no || '-'}`,
         status:      'Pending Replacement',
         isOverdue:   false,
         raw:         t,
@@ -297,7 +297,7 @@ export default function MaintenanceCalendar() {
     return cells
   }, [currentDate, view])
 
-  // Week view: Mon–Sun (or Sun–Sat, we'll use Sun start)
+  // Week view: Mon-Sun (or Sun-Sat, we'll use Sun start)
   const weekDays = useMemo(() => {
     if (view !== 'week') return []
     const base = view === 'week' ? currentDate : today
@@ -355,7 +355,7 @@ export default function MaintenanceCalendar() {
       const sun = new Date(currentDate)
       sun.setDate(sun.getDate() - sun.getDay())
       const sat = addDays(sun, 6)
-      return `${fmtShort(toDateStr(sun))} – ${fmtShort(toDateStr(sat))} ${sat.getFullYear()}`
+      return `${fmtShort(toDateStr(sun))} - ${fmtShort(toDateStr(sat))} ${sat.getFullYear()}`
     }
     const d = selectedDay || currentDate
     return fmtDisplay(toDateStr(d))
@@ -693,7 +693,7 @@ export default function MaintenanceCalendar() {
                     >
                       {dayEvs.length === 0 && (
                         <div className="h-full flex items-center justify-center">
-                          <span className="text-gray-800 text-xs">—</span>
+                          <span className="text-gray-800 text-xs">-</span>
                         </div>
                       )}
                       <div className="space-y-1">
@@ -936,7 +936,7 @@ export default function MaintenanceCalendar() {
                   ].filter(Boolean).map(([label, value]) => (
                     <div key={label} className="flex justify-between py-2 border-b border-gray-800">
                       <span className="text-gray-500 text-sm">{label}</span>
-                      <span className="text-white text-sm font-medium text-right max-w-[220px] truncate">{value || '—'}</span>
+                      <span className="text-white text-sm font-medium text-right max-w-[220px] truncate">{value || '-'}</span>
                     </div>
                   ))}
                 </div>

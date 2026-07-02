@@ -18,9 +18,9 @@ const COUNTRY_DATE_LOCALE = {
  * @param {Intl.DateTimeFormatOptions} [opts]
  */
 export function formatDate(d, country = 'All', opts = { day: '2-digit', month: 'short', year: 'numeric' }) {
-  if (!d) return '—'
+  if (!d) return '-'
   const date = d instanceof Date ? d : new Date(d)
-  if (isNaN(date.getTime())) return '—'
+  if (isNaN(date.getTime())) return '-'
   const locale = COUNTRY_DATE_LOCALE[country] ?? 'en-US'
   return date.toLocaleDateString(locale, opts)
 }
@@ -43,9 +43,9 @@ export function formatMonth(d, country = 'All') {
  * Format a datetime string (includes time).
  */
 export function formatDateTime(d, country = 'All') {
-  if (!d) return '—'
+  if (!d) return '-'
   const date = d instanceof Date ? d : new Date(d)
-  if (isNaN(date.getTime())) return '—'
+  if (isNaN(date.getTime())) return '-'
   const locale = COUNTRY_DATE_LOCALE[country] ?? 'en-US'
   return date.toLocaleString(locale, {
     day: '2-digit', month: 'short', year: 'numeric',
@@ -63,7 +63,7 @@ export function formatDateTime(d, country = 'All') {
  */
 export function formatCurrency(v, currency = 'SAR', decimals = 2) {
   const n = parseFloat(v)
-  if (isNaN(n)) return '—'
+  if (isNaN(n)) return '-'
   return `${currency} ${n.toLocaleString('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -75,7 +75,7 @@ export function formatCurrency(v, currency = 'SAR', decimals = 2) {
  */
 export function formatCurrencyCompact(v, currency = 'SAR') {
   const n = parseFloat(v)
-  if (isNaN(n)) return '—'
+  if (isNaN(n)) return '-'
   if (Math.abs(n) >= 1_000_000) return `${currency} ${(n / 1_000_000).toFixed(2)}M`
   if (Math.abs(n) >= 1_000)     return `${currency} ${(n / 1_000).toFixed(1)}k`
   return `${currency} ${n.toFixed(0)}`
@@ -86,18 +86,18 @@ export function formatCurrencyCompact(v, currency = 'SAR') {
  */
 export function formatCurrencyK(v, currency = 'SAR') {
   const n = parseFloat(v)
-  if (isNaN(n)) return '—'
+  if (isNaN(n)) return '-'
   return `${currency} ${(n / 1_000).toFixed(1)}k`
 }
 
 // ── Number utilities ───────────────────────────────────────────────────────
 
 /**
- * Format a number with fixed decimals, returning '—' for invalid input.
+ * Format a number with fixed decimals, returning '-' for invalid input.
  */
 export function fmt(v, decimals = 2) {
   const n = parseFloat(v)
-  if (isNaN(n)) return '—'
+  if (isNaN(n)) return '-'
   return n.toLocaleString('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -109,7 +109,7 @@ export function fmt(v, decimals = 2) {
  */
 export function formatKm(v) {
   const n = parseFloat(v)
-  if (isNaN(n) || n === 0) return '—'
+  if (isNaN(n) || n === 0) return '-'
   if (n >= 1000) return `${(n / 1000).toFixed(0)}k km`
   return `${n.toFixed(0)} km`
 }

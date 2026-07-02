@@ -29,12 +29,12 @@ export function canReportAccident(role: UserRole | null | undefined): boolean {
   return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
 }
 
-/** Accident dashboard / list — review surface. Tyre techs excluded. */
+/** Accident dashboard / list - review surface. Tyre techs excluded. */
 export function canViewAccidents(role: UserRole | null | undefined): boolean {
   return role === 'inspector' || isAdminOrAbove(role)
 }
 
-/** Browse vehicles & raise tasks/alerts — operational field staff. */
+/** Browse vehicles & raise tasks/alerts - operational field staff. */
 export function canViewFleet(role: UserRole | null | undefined): boolean {
   return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
 }
@@ -49,12 +49,12 @@ export function canDoRca(role: UserRole | null | undefined): boolean {
   return role === 'inspector' || isAdminOrAbove(role)
 }
 
-/** Stock / inventory management — management only. */
+/** Stock / inventory management - management only. */
 export function canManageStock(role: UserRole | null | undefined): boolean {
   return isAdminOrAbove(role)
 }
 
-/** Fleet KPI overview / reports — management only. */
+/** Fleet KPI overview / reports - management only. */
 export function canViewOverview(role: UserRole | null | undefined): boolean {
   return isAdminOrAbove(role)
 }
@@ -64,7 +64,7 @@ export function canAccessAdmin(role: UserRole | null | undefined): boolean {
   return isAdminOrAbove(role)
 }
 
-/** User management — create/approve/edit accounts. Admin only. */
+/** User management - create/approve/edit accounts. Admin only. */
 export function canManageUsers(role: UserRole | null | undefined): boolean {
   return isAdmin(role)
 }
@@ -79,7 +79,7 @@ export function canReviewAccidents(role: UserRole | null | undefined): boolean {
   return isAdminOrAbove(role)
 }
 
-/** Tyre records list — all roles with operational access. */
+/** Tyre records list - all roles with operational access. */
 export function canViewRecords(role: UserRole | null | undefined): boolean {
   return role === 'inspector' || role === 'tyre_man' || role === 'reporter' || isAdminOrAbove(role)
 }
@@ -89,12 +89,12 @@ export function canEditRecords(role: UserRole | null | undefined): boolean {
   return role === 'admin' || role === 'manager'
 }
 
-/** Fleet analytics — management roles only. */
+/** Fleet analytics - management roles only. */
 export function canViewAnalytics(role: UserRole | null | undefined): boolean {
   return isAdminOrAbove(role)
 }
 
-/** Corrective actions / work orders — field staff + management. */
+/** Corrective actions / work orders - field staff + management. */
 export function canViewWorkOrders(role: UserRole | null | undefined): boolean {
   return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
 }
@@ -104,7 +104,7 @@ export function canUpdateWorkOrders(role: UserRole | null | undefined): boolean 
   return role === 'inspector' || role === 'tyre_man' || isAdminOrAbove(role)
 }
 
-/** PDF report generation — management + reporter. */
+/** PDF report generation - management + reporter. */
 export function canViewReports(role: UserRole | null | undefined): boolean {
   return isAdminOrAbove(role) || role === 'reporter'
 }

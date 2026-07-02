@@ -1,5 +1,5 @@
 /**
- * Reports — mobile PDF generation & sharing
+ * Reports - mobile PDF generation & sharing
  *
  * Available to: admin · manager · director · reporter
  * Generates a fleet summary PDF with KPIs, risk breakdown, top sites,
@@ -155,8 +155,8 @@ function header(title: string, subtitle: string): string {
     <h1>${esc(title)}</h1><p class="sub">${esc(subtitle)}</p>`
 }
 function footer(): string { return `<footer>Generated ${new Date().toLocaleString()} · TyrePulse Inspector</footer></body></html>` }
-function esc(v: any): string { return v == null ? '—' : String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string)) }
-function money(n: any): string { return n == null ? '—' : 'SAR ' + Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }) }
+function esc(v: any): string { return v == null ? '-' : String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string)) }
+function money(n: any): string { return n == null ? '-' : 'SAR ' + Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }) }
 function riskBadge(r: string | null): string {
   const cls = r === 'Critical' ? 'cr' : r === 'High' ? 'hi' : r === 'Medium' ? 'me' : 'lo'
   return `<span class="badge ${cls}">${esc(r ?? 'Unknown')}</span>`
@@ -246,7 +246,7 @@ async function buildOpenActions(site: string | null, elevated: boolean): Promise
            <td>${esc(a.asset_no)}</td>
            <td>${esc(a.site)}</td>
            <td>${esc(a.assigned_to)}</td>
-           <td>${a.due_date ? esc(a.due_date.slice(0, 10)) : '—'}</td>
+           <td>${a.due_date ? esc(a.due_date.slice(0, 10)) : '-'}</td>
          </tr>`).join('')}
        </table>`
     + footer()

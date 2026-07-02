@@ -141,7 +141,7 @@ export default function FleetAnalytics() {
           { label: 'Avg Cost/Asset',
             value: assetMetrics.length
               ? formatCurrencyCompact(assetMetrics.reduce((s, a) => s + a.totalCost, 0) / assetMetrics.length, activeCurrency)
-              : '—',
+              : '-',
             color: 'text-green-400' },
         ].map(({ label, value, color }, i) => (
           <motion.div key={label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
@@ -291,7 +291,7 @@ export default function FleetAnalytics() {
                   <td className="py-2 pr-4 text-right text-xs text-gray-400">{a.failureFreqPerMonth.toFixed(1)}</td>
                   <td className="py-2 pr-4 text-gray-400 text-xs">{a.sites.slice(0, 2).join(', ')}</td>
                   <td className="py-2 pr-4 text-gray-400 text-xs">{a.brands.slice(0, 2).join(', ')}</td>
-                  <td className="py-2 text-gray-500 text-xs">{a.lastSeen || '—'}</td>
+                  <td className="py-2 text-gray-500 text-xs">{a.lastSeen || '-'}</td>
                 </tr>
               ))}
             </tbody>
@@ -304,7 +304,7 @@ export default function FleetAnalytics() {
           )}
           {filtered.length > 100 && (
             <p className="text-xs text-gray-500 text-center pt-3">
-              Showing 100 of {filtered.length} assets — refine search to narrow
+              Showing 100 of {filtered.length} assets - refine search to narrow
             </p>
           )}
         </div>
@@ -435,7 +435,7 @@ function AssetDrillDown({ asset, currency }) {
                   <span className="text-xs text-gray-400">{latest.brand || 'Unknown brand'}</span>
                   <span className="text-xs text-gray-400">{latest.category || 'Uncategorised'}</span>
                   <span className="text-xs text-gray-500 ml-auto">{recs.length} event{recs.length !== 1 ? 's' : ''}</span>
-                  <span className="text-xs text-gray-600">{latest.issue_date || '—'}</span>
+                  <span className="text-xs text-gray-600">{latest.issue_date || '-'}</span>
                 </div>
               )
             })}
@@ -464,10 +464,10 @@ function AssetDrillDown({ asset, currency }) {
             <tbody>
               {asset.records.slice(0, 30).map(r => (
                 <tr key={r.id} className="border-b border-gray-800/30 hover:bg-gray-800/20">
-                  <td className="py-1.5 pr-3 text-gray-400">{r.issue_date || '—'}</td>
-                  <td className="py-1.5 pr-3 font-mono text-gray-400">{r.serial_no || '—'}</td>
-                  <td className="py-1.5 pr-3 text-gray-300">{r.brand || '—'}</td>
-                  <td className="py-1.5 pr-3 text-gray-400">{r.category || '—'}</td>
+                  <td className="py-1.5 pr-3 text-gray-400">{r.issue_date || '-'}</td>
+                  <td className="py-1.5 pr-3 font-mono text-gray-400">{r.serial_no || '-'}</td>
+                  <td className="py-1.5 pr-3 text-gray-300">{r.brand || '-'}</td>
+                  <td className="py-1.5 pr-3 text-gray-400">{r.category || '-'}</td>
                   <td className="py-1.5 pr-3">
                     <span className={`px-1.5 py-0.5 rounded text-xs border ${RISK_BADGE[r.risk_level] || RISK_BADGE.Unknown}`}>
                       {r.risk_level || '?'}
@@ -476,7 +476,7 @@ function AssetDrillDown({ asset, currency }) {
                   <td className="py-1.5 pr-3 text-right text-gray-400">
                     {formatCurrencyCompact(recordCost(r), currency)}
                   </td>
-                  <td className="py-1.5 text-gray-500 max-w-xs truncate">{r.remarks_cleaned || r.remarks || '—'}</td>
+                  <td className="py-1.5 text-gray-500 max-w-xs truncate">{r.remarks_cleaned || r.remarks || '-'}</td>
                 </tr>
               ))}
             </tbody>

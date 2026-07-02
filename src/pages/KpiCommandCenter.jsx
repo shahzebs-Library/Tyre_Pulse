@@ -317,7 +317,7 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
       <div className="flex items-end justify-between mb-3">
         <div>
           <div className={`text-3xl font-bold ${rating.color}`}>
-            {value != null && !isNaN(value) ? b.format(value) : '—'}
+            {value != null && !isNaN(value) ? b.format(value) : '-'}
           </div>
           {pctChange != null && (
             <div className={`flex items-center gap-1 text-xs mt-1 ${isImproving ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -370,7 +370,7 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
                   b.higherIsBetter
                     ? `${value >= b.good ? '+' : ''}${((value - b.good) / b.good * 100).toFixed(1)}%`
                     : `${value <= b.good ? '' : '+'}${((value - b.good) / b.good * 100).toFixed(1)}%`
-                ) : '—'}
+                ) : '-'}
               </div>
             ) : (
               <div className={c}>{b.format(v)}</div>
@@ -451,7 +451,7 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
         >
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h3 className="text-white font-bold text-lg">{b.label} — Monthly Trend</h3>
+              <h3 className="text-white font-bold text-lg">{b.label} - Monthly Trend</h3>
               <p className="text-gray-400 text-sm">{b.description}</p>
             </div>
             <button onClick={onClose} className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors">
@@ -494,7 +494,7 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function KpiCommandCenter() {
   const { activeCountry, activeCurrency, appSettings } = useSettings()
-  // Currency-aware benchmark set — shadows nothing; all display formatting below uses this.
+  // Currency-aware benchmark set - shadows nothing; all display formatting below uses this.
   const BENCHMARKS = useMemo(() => makeBenchmarks(activeCurrency), [activeCurrency])
   const [period, setPeriod] = useState('90d')
   const [customFrom, setCustomFrom] = useState('')
@@ -725,8 +725,8 @@ export default function KpiCommandCenter() {
           ? last3[2] < last3[0]
           : last3[2] > last3[0]
         if (trend && score < 85) {
-          const chg = last3[0] !== 0 ? Math.abs((last3[2] - last3[0]) / last3[0] * 100).toFixed(1) : '—'
-          alerts.push({ type: 'deteriorating', kpi: key, label: b.label, value: b.format(val), msg: `deteriorating — ${chg}% over last 3 months`, severity: 1 })
+          const chg = last3[0] !== 0 ? Math.abs((last3[2] - last3[0]) / last3[0] * 100).toFixed(1) : '-'
+          alerts.push({ type: 'deteriorating', kpi: key, label: b.label, value: b.format(val), msg: `deteriorating - ${chg}% over last 3 months`, severity: 1 })
         }
       }
     })
@@ -791,7 +791,7 @@ export default function KpiCommandCenter() {
           ? b.higherIsBetter
             ? `${val >= b.good ? '+' : ''}${((val - b.good) / b.good * 100).toFixed(1)}%`
             : `${val <= b.good ? '' : '+'}${((val - b.good) / b.good * 100).toFixed(1)}%`
-          : '—'
+          : '-'
         return [b.label, b.format(val), `${score.toFixed(0)}/100`, rating.label, delta, b.format(b.world_class), b.format(b.good), b.format(b.average), b.format(b.poor)]
       }),
       theme: 'striped',
@@ -878,7 +878,7 @@ export default function KpiCommandCenter() {
       {/* Header */}
       <PageHeader
         title="KPI Command Center"
-        subtitle={`Real-time fleet performance intelligence — ${records.length.toLocaleString()} tyre records`}
+        subtitle={`Real-time fleet performance intelligence - ${records.length.toLocaleString()} tyre records`}
         icon={Command}
         actions={<>
           <div className="flex items-center bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
@@ -967,7 +967,7 @@ export default function KpiCommandCenter() {
                   <Icon size={14} className={`mx-auto mb-1 ${rating.color}`} />
                   <div className="text-gray-500 text-xs mb-1 truncate">{b.label.replace(' Compliance', '').replace('Cost Per Km ', 'CPK').replace('Avg ', '')}</div>
                   <div className={`text-lg font-bold ${rating.color}`}>
-                    {val != null && !isNaN(val) ? b.format(val) : '—'}
+                    {val != null && !isNaN(val) ? b.format(val) : '-'}
                   </div>
                   <div className={`text-xs mt-0.5 ${rating.color}`}>{rating.label}</div>
                   <div className="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
@@ -1014,7 +1014,7 @@ export default function KpiCommandCenter() {
             <Layers size={16} className="text-purple-400" />
             Fleet vs Benchmark
           </h3>
-          <p className="text-gray-500 text-xs mb-4">Static industry reference targets. All KPIs normalized 0–100. Higher = better.</p>
+          <p className="text-gray-500 text-xs mb-4">Static industry reference targets. All KPIs normalized 0-100. Higher = better.</p>
           <div className="h-72">
             <Radar data={radarData} options={{
               responsive: true,
@@ -1116,7 +1116,7 @@ export default function KpiCommandCenter() {
                           <td key={m.month}
                             onClick={() => setDrillKpi(key)}
                             className={`px-3 py-2.5 text-center font-medium cursor-pointer hover:opacity-80 transition-opacity rounded ${cellBg(key, val)}`}>
-                            {val != null && !isNaN(val) ? b.format(val) : '—'}
+                            {val != null && !isNaN(val) ? b.format(val) : '-'}
                           </td>
                         )
                       })}
@@ -1170,7 +1170,7 @@ export default function KpiCommandCenter() {
                       return (
                         <td key={key} className={`px-3 py-2.5 text-center font-medium rounded ${cellBg(key, val)}`}>
                           <div className="flex items-center justify-center gap-1">
-                            {val != null && !isNaN(val) ? b.format(val) : '—'}
+                            {val != null && !isNaN(val) ? b.format(val) : '-'}
                             {isBest && siteKpiData.length > 1 && <Star size={9} className="text-yellow-400" />}
                           </div>
                         </td>
@@ -1220,7 +1220,7 @@ export default function KpiCommandCenter() {
                       </span>
                     </div>
                     <p className="text-gray-400 text-xs mt-0.5">
-                      <span className={`font-medium ${typeConfig.color}`}>{a.value}</span> — {a.msg}
+                      <span className={`font-medium ${typeConfig.color}`}>{a.value}</span> - {a.msg}
                     </p>
                   </div>
                 </div>
@@ -1255,7 +1255,7 @@ export default function KpiCommandCenter() {
                     <div className="text-white text-sm font-medium truncate">{b.label}</div>
                     <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
                       <span>Target: <span className="text-gray-300">{b.format(target)}</span></span>
-                      <span>Actual: <span className="text-gray-300">{val != null ? b.format(val) : '—'}</span></span>
+                      <span>Actual: <span className="text-gray-300">{val != null ? b.format(val) : '-'}</span></span>
                       {gap != null && (
                         <span>Gap: <span className={onTrack ? 'text-emerald-400' : 'text-red-400'}>
                           {b.higherIsBetter ? (gap >= 0 ? '+' : '') : (gap <= 0 ? '' : '+')}
@@ -1308,7 +1308,7 @@ export default function KpiCommandCenter() {
           <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
               <AlertOctagon size={16} className="text-red-400" />
-              <h3 className="text-white font-semibold">Bottom 5 Vehicles — Needs Attention</h3>
+              <h3 className="text-white font-semibold">Bottom 5 Vehicles - Needs Attention</h3>
             </div>
             <div className="divide-y divide-gray-800">
               {vehicleScores.worst.map((v, i) => (

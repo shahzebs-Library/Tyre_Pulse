@@ -1,4 +1,4 @@
-// emailService.js — Report email generation and delivery
+// emailService.js - Report email generation and delivery
 import { supabase } from './supabase'
 
 // jspdf is heavy (~400 KB) — load it on first use, never with the page chunk.
@@ -106,7 +106,7 @@ export async function generateReportPdf(title, subtitle, columns, rows, summaryR
     doc.setFontSize(7)
     doc.setTextColor(156, 163, 175)
     doc.text(
-      `TyrePulse Fleet Intelligence — Confidential — Page ${i} of ${pageCount}`,
+      `TyrePulse Fleet Intelligence - Confidential - Page ${i} of ${pageCount}`,
       14,
       202
     )
@@ -208,7 +208,7 @@ export function buildFleetSummaryEmail(kpiData, period) {
     ${Object.keys(kpiData).length > 0 ? `
     <div style="background: #eff6ff; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; padding: 16px 28px;">
       <p style="margin: 0; color: #1d4ed8; font-size: 13px;">
-        <strong>📎 PDF Report Attached</strong> — A full detailed report with data tables is attached to this email.
+        <strong>📎 PDF Report Attached</strong> - A full detailed report with data tables is attached to this email.
       </p>
     </div>` : ''}
 

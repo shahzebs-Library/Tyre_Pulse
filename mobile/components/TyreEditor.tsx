@@ -150,7 +150,7 @@ export default function TyreEditor({ data, onChange }: Props) {
             <Text style={styles.matchMeta}>
               {[matched.brand, matched.size, matched.tyre_position ?? matched.position, matched.asset_no]
                 .filter(Boolean)
-                .join('  ·  ') || '—'}
+                .join('  ·  ') || '-'}
             </Text>
             {lastPressure && !data.pressure_psi ? (
               <TouchableOpacity
@@ -202,7 +202,7 @@ export default function TyreEditor({ data, onChange }: Props) {
         )}
       </View>
 
-      {/* Condition — emoji + icon picker (matches web ✅⚠️❌🔴) */}
+      {/* Condition - emoji + icon picker (matches web ✅⚠️❌🔴) */}
       <View style={styles.field}>
         <Text style={styles.label}>{t('tyre.condition')}</Text>
         <View style={styles.conditionGrid}>

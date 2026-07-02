@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// analystAgent.js — KPI trends, cost breakdown, fleet comparison
+// analystAgent.js - KPI trends, cost breakdown, fleet comparison
 // Routes queries about metrics, performance, and comparative analysis.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -14,7 +14,7 @@ import {
 import { retrieveFleetKpiContext, assembleContext, getCached, setCache } from '../ragService'
 import { callAiEdgeFunction } from './index'
 
-const SYSTEM_PROMPT = `You are TyrePulse Analyst Agent — a senior fleet data analyst and tyre cost specialist.
+const SYSTEM_PROMPT = `You are TyrePulse Analyst Agent - a senior fleet data analyst and tyre cost specialist.
 Your role: analyse fleet tyre KPIs, cost trends, brand performance, and comparative site/fleet data.
 
 For every analysis always provide exactly this structure:
@@ -27,7 +27,7 @@ For every analysis always provide exactly this structure:
 
 Rules:
 - Reference actual data values from context (CPK, cost figures, percentages)
-- Be concise — every sentence must add value
+- Be concise - every sentence must add value
 - Currency is the fleet's reporting currency (SAR unless otherwise indicated)
 - Flag data coverage gaps honestly
 - Do not fabricate data not present in context`

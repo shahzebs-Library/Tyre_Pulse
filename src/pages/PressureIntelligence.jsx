@@ -130,14 +130,14 @@ function KpiCard({ title, value, sub, icon: Icon, color, alert }) {
 
 // ── Histogram bands ───────────────────────────────────────────────────────────
 const HISTOGRAM_BANDS = [
-  { label: '0–60',    min: 0,   max: 60,  color: 'rgba(239,68,68,0.8)' },
-  { label: '60–80',   min: 60,  max: 80,  color: 'rgba(239,68,68,0.65)' },
-  { label: '80–90',   min: 80,  max: 90,  color: 'rgba(249,115,22,0.8)' },
-  { label: '90–100',  min: 90,  max: 100, color: 'rgba(234,179,8,0.8)' },
-  { label: '100–110', min: 100, max: 110, color: 'rgba(34,197,94,0.8)' },
-  { label: '110–120', min: 110, max: 120, color: 'rgba(34,197,94,0.8)' },
-  { label: '120–130', min: 120, max: 130, color: 'rgba(234,179,8,0.75)' },
-  { label: '130–140', min: 130, max: 140, color: 'rgba(249,115,22,0.75)' },
+  { label: '0-60',    min: 0,   max: 60,  color: 'rgba(239,68,68,0.8)' },
+  { label: '60-80',   min: 60,  max: 80,  color: 'rgba(239,68,68,0.65)' },
+  { label: '80-90',   min: 80,  max: 90,  color: 'rgba(249,115,22,0.8)' },
+  { label: '90-100',  min: 90,  max: 100, color: 'rgba(234,179,8,0.8)' },
+  { label: '100-110', min: 100, max: 110, color: 'rgba(34,197,94,0.8)' },
+  { label: '110-120', min: 110, max: 120, color: 'rgba(34,197,94,0.8)' },
+  { label: '120-130', min: 120, max: 130, color: 'rgba(234,179,8,0.75)' },
+  { label: '130-140', min: 130, max: 140, color: 'rgba(249,115,22,0.75)' },
   { label: '140+',    min: 140, max: Infinity, color: 'rgba(239,68,68,0.8)' },
 ]
 
@@ -912,7 +912,7 @@ export default function PressureIntelligence() {
                   <div key={pos} className="flex items-center gap-1.5 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5">
                     <span className="text-xs text-gray-400">{pos}:</span>
                     <span className="text-xs font-bold text-white">{psi} PSI</span>
-                    <span className="text-xs text-gray-600">({Math.round(psi * 0.9)}–{Math.round(psi * 1.1)} OK)</span>
+                    <span className="text-xs text-gray-600">({Math.round(psi * 0.9)}-{Math.round(psi * 1.1)} OK)</span>
                   </div>
                 ))}
                 <div className="flex items-center gap-1.5 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5">
@@ -1100,7 +1100,7 @@ export default function PressureIntelligence() {
                 {anomalies.length === 0 ? (
                   <div className="flex flex-col items-center py-12 gap-2">
                     <CheckCircle size={28} className="text-green-500" />
-                    <p className="text-gray-400 text-sm">No pressure anomalies detected — full compliance!</p>
+                    <p className="text-gray-400 text-sm">No pressure anomalies detected - full compliance!</p>
                   </div>
                 ) : (
                   <>
@@ -1119,18 +1119,18 @@ export default function PressureIntelligence() {
                               key={r.id ?? i}
                               className="border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors"
                             >
-                              <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '—'}</td>
-                              <td className="py-2 pr-3 text-gray-300">{r.position || '—'}</td>
-                              <td className="py-2 pr-3 text-gray-400 font-mono">{r.serial || '—'}</td>
+                              <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '-'}</td>
+                              <td className="py-2 pr-3 text-gray-300">{r.position || '-'}</td>
+                              <td className="py-2 pr-3 text-gray-400 font-mono">{r.serial || '-'}</td>
                               <td className={`py-2 pr-3 font-bold ${r.status === 'critical_under' ? 'text-red-400' : r.status === 'under' ? 'text-orange-400' : 'text-amber-400'}`}>
                                 {r.reading} PSI
                               </td>
                               <td className="py-2 pr-3 text-gray-400">{r.spec} PSI</td>
                               <td className="py-2 pr-3 text-gray-300">{r.devPct.toFixed(1)}%</td>
                               <td className="py-2 pr-3"><StatusBadge status={r.status} /></td>
-                              <td className="py-2 pr-3 text-gray-400">{r.inspector || '—'}</td>
-                              <td className="py-2 pr-3 text-gray-500 whitespace-nowrap">{r.date || '—'}</td>
-                              <td className="py-2 pr-3 text-gray-400">{r.site || '—'}</td>
+                              <td className="py-2 pr-3 text-gray-400">{r.inspector || '-'}</td>
+                              <td className="py-2 pr-3 text-gray-500 whitespace-nowrap">{r.date || '-'}</td>
+                              <td className="py-2 pr-3 text-gray-400">{r.site || '-'}</td>
                               <td className="py-2">
                                 <button
                                   onClick={() => setAssetDrilldown(r.asset_no === assetDrilldown ? null : r.asset_no)}
@@ -1149,7 +1149,7 @@ export default function PressureIntelligence() {
                     {/* Pagination */}
                     <div className="flex items-center justify-between mt-3">
                       <p className="text-xs text-gray-500">
-                        {(anomalyPage - 1) * ANOMALY_PAGE_SIZE + 1}–{Math.min(anomalyPage * ANOMALY_PAGE_SIZE, anomalies.length)} of {anomalies.length}
+                        {(anomalyPage - 1) * ANOMALY_PAGE_SIZE + 1}-{Math.min(anomalyPage * ANOMALY_PAGE_SIZE, anomalies.length)} of {anomalies.length}
                       </p>
                       <div className="flex items-center gap-1">
                         <button
@@ -1185,7 +1185,7 @@ export default function PressureIntelligence() {
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Eye size={14} className="text-blue-400" />
-                        <span className="text-sm font-semibold text-white">Pressure History — {assetDrilldown}</span>
+                        <span className="text-sm font-semibold text-white">Pressure History - {assetDrilldown}</span>
                         <span className="text-xs text-gray-500">{assetHistory.length} readings</span>
                       </div>
                       <button onClick={() => setAssetDrilldown(null)} className="text-gray-500 hover:text-white">
@@ -1204,17 +1204,17 @@ export default function PressureIntelligence() {
                         <tbody>
                           {assetHistory.map((r, i) => (
                             <tr key={i} className="border-b border-gray-800/40">
-                              <td className="py-1.5 pr-3 text-gray-400">{r.date || '—'}</td>
-                              <td className="py-1.5 pr-3 text-gray-300">{r.position || '—'}</td>
-                              <td className="py-1.5 pr-3 text-gray-400 font-mono">{r.serial || '—'}</td>
+                              <td className="py-1.5 pr-3 text-gray-400">{r.date || '-'}</td>
+                              <td className="py-1.5 pr-3 text-gray-300">{r.position || '-'}</td>
+                              <td className="py-1.5 pr-3 text-gray-400 font-mono">{r.serial || '-'}</td>
                               <td className={`py-1.5 pr-3 font-bold ${r.status === 'critical_under' ? 'text-red-400' : r.status === 'under' ? 'text-orange-400' : r.status === 'over' ? 'text-amber-400' : 'text-green-400'}`}>
                                 {r.reading} PSI
                               </td>
                               <td className="py-1.5 pr-3 text-gray-500">{r.spec} PSI</td>
                               <td className="py-1.5 pr-3 text-gray-300">{r.devPct.toFixed(1)}%</td>
                               <td className="py-1.5 pr-3"><StatusBadge status={r.status} /></td>
-                              <td className="py-1.5 pr-3 text-gray-400">{r.inspector || '—'}</td>
-                              <td className="py-1.5 pr-3 text-gray-400">{r.site || '—'}</td>
+                              <td className="py-1.5 pr-3 text-gray-400">{r.inspector || '-'}</td>
+                              <td className="py-1.5 pr-3 text-gray-400">{r.site || '-'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1263,7 +1263,7 @@ export default function PressureIntelligence() {
                                 <span className="text-gray-300 text-xs">{ins.consistency}</span>
                               </div>
                             </td>
-                            <td className="py-2 pr-4 text-gray-500 max-w-xs truncate">{ins.sites || '—'}</td>
+                            <td className="py-2 pr-4 text-gray-500 max-w-xs truncate">{ins.sites || '-'}</td>
                             <td className="py-2">
                               {ins.flag && (
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/30 text-yellow-300 border border-yellow-700/40 whitespace-nowrap">

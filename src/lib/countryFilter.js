@@ -7,7 +7,7 @@
  */
 export function applyCountry(query, country) {
   if (!country || country === 'All') return query
-  // PostgREST or() — match the country, or rows with no country assigned.
+  // PostgREST or() - match the country, or rows with no country assigned.
   return query.or(`country.eq.${country},country.is.null`)
 }
 

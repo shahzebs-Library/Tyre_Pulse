@@ -150,7 +150,7 @@ export default function TasksScreen() {
                 <View style={{ flex: 1, gap: 4 }}>
                   <Text style={[styles.cardTitle, { textAlign }]} numberOfLines={2}>{item.title}</Text>
                   <Text style={[styles.cardMeta, { textAlign }]}>
-                    {[item.site, item.asset_no].filter(Boolean).join(' · ') || '—'}
+                    {[item.site, item.asset_no].filter(Boolean).join(' · ') || '-'}
                   </Text>
                   <View style={[styles.badges, isRTL && styles.rowR]}>
                     <View style={[styles.badge, { backgroundColor: pc + '1a' }]}>

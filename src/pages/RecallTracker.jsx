@@ -616,7 +616,7 @@ export default function RecallTracker() {
               <AlertOctagon className="text-red-400 shrink-0" size={20} />
               <div>
                 <p className="font-bold text-red-300 text-sm">
-                  {activeRecalls.length} Active Recall{activeRecalls.length !== 1 ? 's' : ''} —&nbsp;
+                  {activeRecalls.length} Active Recall{activeRecalls.length !== 1 ? 's' : ''} -&nbsp;
                   {totalAffectedCount} fleet {totalAffectedCount === 1 ? 'tyre' : 'tyres'} may be affected
                 </p>
                 <p className="text-red-400/80 text-xs">Immediate review required. Click to view active recalls.</p>
@@ -883,7 +883,7 @@ export default function RecallTracker() {
                       <Flag className={b.rate >= 60 ? 'text-red-400' : 'text-orange-400'} size={14} />
                     </div>
                     <p className="font-semibold text-gray-100">
-                      {b.brand} — Batch <span className="font-mono text-yellow-300">{b.prefix}****</span>
+                      {b.brand} - Batch <span className="font-mono text-yellow-300">{b.prefix}****</span>
                     </p>
                     <p className={`text-sm mt-0.5 ${b.rate >= 60 ? 'text-red-400' : 'text-orange-400'}`}>
                       {b.failed} of {b.total} tyres failed ({b.rate}% failure rate)
@@ -1148,7 +1148,7 @@ export default function RecallTracker() {
                     <Badge label={drawer.severity} cfg={SEVERITY_CFG[drawer.severity]} small />
                     <Badge label={drawer.status} cfg={STATUS_CFG[drawer.status]} small />
                   </div>
-                  <p className="text-gray-400 text-sm">{drawer.brand} — {drawer.description}</p>
+                  <p className="text-gray-400 text-sm">{drawer.brand} - {drawer.description}</p>
                   <p className="text-xs text-gray-500 mt-1">{drawer.action_required}</p>
                 </div>
                 <button onClick={() => setDrawer(null)} className="text-gray-500 hover:text-gray-200 shrink-0">
@@ -1362,7 +1362,7 @@ export default function RecallTracker() {
 
                   {/* Serial prefix */}
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Serial Prefix Pattern <span className="text-gray-500">(optional — first 4 chars, e.g. MH23)</span></label>
+                    <label className="block text-xs text-gray-400 mb-1">Serial Prefix Pattern <span className="text-gray-500">(optional - first 4 chars, e.g. MH23)</span></label>
                     <input
                       value={form.affected_serial_prefix}
                       onChange={e => setForm(f => ({ ...f, affected_serial_prefix: e.target.value.toUpperCase().slice(0, 4) }))}

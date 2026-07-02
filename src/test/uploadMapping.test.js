@@ -4,7 +4,7 @@ import { scoreHeader, smartMapping, parseDate, TYRE_FIELDS } from '../pages/Uplo
 // Headers from a typical ERP tyre-consumption export.
 const ERP_HEADERS = ['Date', 'Serial No', 'Description', 'Brand', 'Vehicle No', 'Tyre Position', 'Fixed KM', 'Job Card', 'Remarks']
 
-describe('smartMapping — greedy assignment regressions', () => {
+describe('smartMapping - greedy assignment regressions', () => {
   const map = smartMapping(ERP_HEADERS, TYRE_FIELDS)
 
   it('maps every required field to its exact column', () => {
@@ -30,7 +30,7 @@ describe('smartMapping — greedy assignment regressions', () => {
   })
 })
 
-describe('scoreHeader — empty-guess guard', () => {
+describe('scoreHeader - empty-guess guard', () => {
   it('ignores guesses that normalise to an empty string', () => {
     expect(scoreHeader('Date', ['#']).score).toBe(0)
     expect(scoreHeader('Anything', ['#', '.', '-']).score).toBe(0)
@@ -41,7 +41,7 @@ describe('scoreHeader — empty-guess guard', () => {
   })
 })
 
-describe('parseDate — junk rejection', () => {
+describe('parseDate - junk rejection', () => {
   it('rejects job-card codes that JS Date mis-parses as ancient years', () => {
     expect(parseDate('JC-770')).toBeNull()
     expect(parseDate('770')).toBeNull()

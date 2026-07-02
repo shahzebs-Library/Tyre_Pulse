@@ -254,7 +254,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
-        {/* ── System Console — completely isolated from main app ── */}
+        {/* ── System Console - completely isolated from main app ── */}
         <Route path="/console/login" element={
           <ConsoleAuthProvider>
             <ConsoleLogin />

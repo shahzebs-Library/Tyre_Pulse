@@ -193,7 +193,7 @@ export default function AlertsScreen() {
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={[styles.cardTitle, { textAlign }]}>{item.asset_no ?? 'Unknown asset'}</Text>
                   <Text style={[styles.cardMeta, { textAlign }]}>
-                    {[item.site, item.brand, item.position].filter(Boolean).join(' · ') || '—'}
+                    {[item.site, item.brand, item.position].filter(Boolean).join(' · ') || '-'}
                   </Text>
                   <Text style={[styles.cardMeta, { textAlign }]}>
                     {item.serial_no ? `SN ${item.serial_no}` : ''}{item.tread_depth != null ? `  ·  ${item.tread_depth}mm` : ''}

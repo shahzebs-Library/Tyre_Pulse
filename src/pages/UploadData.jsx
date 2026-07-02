@@ -55,7 +55,7 @@ function StepBar({ current }) {
 // ── Fuzzy matching engine ─────────────────────────────────────────────────────
 
 /**
- * Levenshtein distance — used as fuzzy fallback when substring match fails.
+ * Levenshtein distance - used as fuzzy fallback when substring match fails.
  */
 function levenshtein(a, b) {
   const m = a.length, n = b.length
@@ -85,7 +85,7 @@ function normalise(s) {
 }
 
 /**
- * Compute a match score 0–100 between a file header and a set of synonym strings.
+ * Compute a match score 0-100 between a file header and a set of synonym strings.
  * Returns { score, matchedGuess }
  */
 export function scoreHeader(header, guesses) {
@@ -95,11 +95,11 @@ export function scoreHeader(header, guesses) {
   for (const raw of guesses) {
     const g = normalise(raw)
     // Guesses that normalise to nothing (e.g. "#") would substring-match every
-    // header and let a low-value field steal a critical column — skip them.
+    // header and let a low-value field steal a critical column - skip them.
     if (!g || !h) continue
     // 1. Exact match
     if (h === g) return { score: 100, matchedGuess: raw }
-    // 2. Substring — header contains guess, or guess contains header
+    // 2. Substring - header contains guess, or guess contains header
     if (h.includes(g) || g.includes(h)) {
       if (70 > best) { best = 70; matchedGuess = raw }
       continue
@@ -112,7 +112,7 @@ export function scoreHeader(header, guesses) {
       const s = Math.round(55 * overlap / Math.max(hw.size, gw.length))
       if (s > best) { best = s; matchedGuess = raw }
     }
-    // 4. Levenshtein — short strings only (avoid false positives on long strings)
+    // 4. Levenshtein - short strings only (avoid false positives on long strings)
     if (h.length <= 20 && g.length <= 20) {
       const dist = levenshtein(h, g)
       const maxLen = Math.max(h.length, g.length)
@@ -318,8 +318,8 @@ const STOCK_FIELDS = [
 
 /**
  * Returns: { [canonicalKey]: { header: string | null, score: number, band: string } }
- * Uses a greedy best-match assignment — each source column can only be used once.
- * synonyms: [{ custom_name, maps_to }] — user-defined permanent mappings (score 100).
+ * Uses a greedy best-match assignment - each source column can only be used once.
+ * synonyms: [{ custom_name, maps_to }] - user-defined permanent mappings (score 100).
  */
 export function smartMapping(headers, fields, synonyms = []) {
   // Build synonym lookup: normalised custom_name → maps_to
@@ -328,7 +328,7 @@ export function smartMapping(headers, fields, synonyms = []) {
 
   const scores = {}
   fields.forEach(f => {
-    // Check synonyms first — they score 100 (exact)
+    // Check synonyms first - they score 100 (exact)
     const synHeader = headers.find(h => synLookup[normalise(h)] === f.key)
     if (synHeader) {
       scores[f.key] = [{ h: synHeader, score: 100, matchedGuess: synHeader }, ...headers.filter(h => h !== synHeader).map(h => ({ h, ...scoreHeader(h, f.guesses) })).sort((a, b) => b.score - a.score)]
@@ -500,12 +500,12 @@ function extractAoa(aoa, forcedHeaderRow = null) {
   let hIdx = forcedHeaderRow != null ? forcedHeaderRow : detectHeaderRow(aoa)
   let { headers, rows } = build(hIdx)
 
-  // Fallback 1 — detection found no data rows: use the first populated row.
+  // Fallback 1 - detection found no data rows: use the first populated row.
   if (forcedHeaderRow == null && rows.length === 0 && firstPopulated >= 0 && firstPopulated !== hIdx) {
     hIdx = firstPopulated
     ;({ headers, rows } = build(hIdx))
   }
-  // Fallback 2 — still nothing: take the densest row in the first 30 as header.
+  // Fallback 2 - still nothing: take the densest row in the first 30 as header.
   if (forcedHeaderRow == null && rows.length === 0 && firstPopulated >= 0) {
     let densest = firstPopulated, max = -1
     for (let i = 0; i < Math.min(aoa.length, 30); i++) {
@@ -600,13 +600,13 @@ export default function UploadData() {
 
   const activeFields  = uploadType === 'stock' ? STOCK_FIELDS  : TYRE_FIELDS
 
-  // Load permanent synonyms once — injected into smart mapping for 100% confidence
+  // Load permanent synonyms once - injected into smart mapping for 100% confidence
   useEffect(() => {
     supabase.from('field_synonyms').select('custom_name, maps_to').eq('table_target', 'tyre_records')
       .then(({ data }) => { if (data) setSynonyms(data) })
   }, [])
 
-  // Unmapped source columns — shown in a warning strip so user sees what's being dropped
+  // Unmapped source columns - shown in a warning strip so user sees what's being dropped
   const unmappedSource = useMemo(() => {
     const used = new Set(Object.values(mapping).filter(Boolean))
     return headers.filter(h => !used.has(h))
@@ -629,7 +629,7 @@ export default function UploadData() {
 
     let finalMapping
     if (saved?.mapping) {
-      // Saved mapping stores { key: headerString } — rebuild scores from that
+      // Saved mapping stores { key: headerString } - rebuild scores from that
       finalMapping = saved.mapping
       setSavedMappingId(saved.id)
       setMappingSource('memory')
@@ -641,7 +641,7 @@ export default function UploadData() {
       })
       setMappingScores(scores)
     } else {
-      // Smart auto-mapping — inject user-defined permanent synonyms
+      // Smart auto-mapping - inject user-defined permanent synonyms
       const sm = smartMapping(hdrs, activeFields, synonyms)
       finalMapping = {}
       const scores = {}
@@ -674,7 +674,7 @@ export default function UploadData() {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 50 * 1024 * 1024) {
-      setError('File too large — maximum 50 MB. Split the file into smaller parts and upload separately.')
+      setError('File too large - maximum 50 MB. Split the file into smaller parts and upload separately.')
       return
     }
     setFileName(file.name)
@@ -684,9 +684,9 @@ export default function UploadData() {
 
     const reader = new FileReader()
     // Without this, a file that fails to read (open in Excel, too large, blocked)
-    // would silently do nothing — the upload box would just sit there.
+    // would silently do nothing - the upload box would just sit there.
     reader.onerror = () =>
-      setError(`Could not read "${file.name}". It may be open in another program, too large, or corrupted — close it elsewhere and try again.`)
+      setError(`Could not read "${file.name}". It may be open in another program, too large, or corrupted - close it elsewhere and try again.`)
 
     reader.onload = async (ev) => {
       const buf = ev.target.result
@@ -713,7 +713,7 @@ export default function UploadData() {
           return { name, rows: t.rows.length, selected: t.rows.length > 0 && !likelyPivot, likelyPivot }
         })
         const withData = opts.filter(o => o.rows > 0)
-        // Skip the sheet picker when only one sheet actually holds data — many
+        // Skip the sheet picker when only one sheet actually holds data - many
         // ERP exports carry one data tab plus title/metadata/pivot tabs.
         if (withData.length <= 1) {
           const target = withData[0]?.name ?? wb.SheetNames[0]
@@ -734,7 +734,7 @@ export default function UploadData() {
       }
     }
 
-    // Always read as ArrayBuffer — works for both binary workbooks and text
+    // Always read as ArrayBuffer - works for both binary workbooks and text
     // (TextDecoder derives the text), and lets either path act as a fallback.
     reader.readAsArrayBuffer(file)
   }
@@ -819,7 +819,7 @@ export default function UploadData() {
       const sample = batchClassify(built.slice(0, 2000).map((r, i) => ({ id: i, description: r.description, remarks: r.remarks })))
       const auto = sample.filter(c => c.confidence !== 'Low').length
       const examples = sample.slice(0, 4).map((c, i) => ({
-        text: [built[i]?.description, built[i]?.remarks].filter(Boolean).join(' · ').slice(0, 60) || '—',
+        text: [built[i]?.description, built[i]?.remarks].filter(Boolean).join(' · ').slice(0, 60) || '-',
         category: c.category, risk: c.risk_level, conf: c.confidence,
       }))
       setCleanPreview({ total: sample.length, auto, review: sample.length - auto, examples })
@@ -1026,7 +1026,7 @@ export default function UploadData() {
 
     let records = buildRows(headers, rows, mapping).map(r => sanitiseRow({
       ...r,
-      // Force the selected country onto every row — ignore any country column in
+      // Force the selected country onto every row - ignore any country column in
       // the file so an upload can never mix or mislabel countries.
       country:         uploadCountry,
       region:          profile?.region ?? uploadCountry,
@@ -1202,7 +1202,7 @@ export default function UploadData() {
                   <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm font-semibold text-yellow-300">Fleet data has a dedicated upload</p>
-                    <p className="text-sm text-gray-400 mt-1">Use Fleet Master for vehicle imports — it has correct column mapping and validation.</p>
+                    <p className="text-sm text-gray-400 mt-1">Use Fleet Master for vehicle imports - it has correct column mapping and validation.</p>
                     <a href="/fleet-master" className="inline-block mt-2 text-sm text-green-400 underline hover:text-green-300">Go to Fleet Master →</a>
                   </div>
                 </div>
@@ -1217,7 +1217,7 @@ export default function UploadData() {
                   </div>
                   <p className="text-xs text-gray-400 mb-3">
                     The smart mapping engine recognises hundreds of column name variations, abbreviations, and Arabic headers.
-                    Use any naming convention — the engine will match automatically. You can adjust any mapping before uploading.
+                    Use any naming convention - the engine will match automatically. You can adjust any mapping before uploading.
                   </p>
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                     {(uploadType === 'stock' ? STOCK_FIELDS : TYRE_FIELDS).filter(f => f.required).map(f => (
@@ -1269,7 +1269,7 @@ export default function UploadData() {
         {step === 'sheets' && (
           <div className="card space-y-4">
             <h2 className="text-base font-semibold text-white">Select Sheets to Import</h2>
-            <p className="text-sm text-gray-400">This workbook has {sheetOptions.length} sheets. Choose which to include — pivot and summary sheets are suggested to skip.</p>
+            <p className="text-sm text-gray-400">This workbook has {sheetOptions.length} sheets. Choose which to include - pivot and summary sheets are suggested to skip.</p>
             <div className="space-y-2">
               {sheetOptions.map((s, i) => (
                 <label key={s.name} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${s.selected ? 'border-green-700/50 bg-green-900/10' : 'border-gray-700 bg-gray-800/30'}`}>
@@ -1327,13 +1327,13 @@ export default function UploadData() {
               )}
             </div>
 
-            {/* Raw file preview + header-row override — see exactly what was read */}
+            {/* Raw file preview + header-row override - see exactly what was read */}
             {rawAoa.length > 0 && (
               <div className="card">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                   <div>
                     <h2 className="text-base font-semibold text-white">File Preview</h2>
-                    <p className="text-xs text-gray-500 mt-0.5">If the wrong row was detected as the header, pick the correct one — the table re-maps instantly.</p>
+                    <p className="text-xs text-gray-500 mt-0.5">If the wrong row was detected as the header, pick the correct one - the table re-maps instantly.</p>
                   </div>
                   <label className="flex items-center gap-2 text-xs text-gray-400">
                     Header row:
@@ -1344,7 +1344,7 @@ export default function UploadData() {
                     >
                       {rawAoa.slice(0, 15).map((r, i) => {
                         const label = (r || []).filter(c => c != null && String(c).trim() !== '').slice(0, 4).join(' | ').slice(0, 50)
-                        return <option key={i} value={i}>Row {i + 1}{label ? ` — ${label}` : ' (empty)'}</option>
+                        return <option key={i} value={i}>Row {i + 1}{label ? ` - ${label}` : ' (empty)'}</option>
                       })}
                     </select>
                   </label>
@@ -1366,7 +1366,7 @@ export default function UploadData() {
                   </table>
                 </div>
                 {rows.length === 0 && (
-                  <p className="text-xs text-yellow-400 mt-2">No data rows detected below the current header row — try selecting a different header row above.</p>
+                  <p className="text-xs text-yellow-400 mt-2">No data rows detected below the current header row - try selecting a different header row above.</p>
                 )}
               </div>
             )}
@@ -1393,7 +1393,7 @@ export default function UploadData() {
             {unmappedSource.length > 0 && (
               <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl px-4 py-3">
                 <p className="text-xs font-semibold text-gray-400 mb-1.5">
-                  {unmappedSource.length} column{unmappedSource.length !== 1 ? 's' : ''} from your file are not mapped to any field — they will be saved in <code className="text-gray-300">extra_fields</code> and not lost:
+                  {unmappedSource.length} column{unmappedSource.length !== 1 ? 's' : ''} from your file are not mapped to any field - they will be saved in <code className="text-gray-300">extra_fields</code> and not lost:
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {unmappedSource.map(h => (
@@ -1425,7 +1425,7 @@ export default function UploadData() {
               <div className="flex flex-wrap items-center gap-3 mb-4 text-xs text-gray-500">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Exact / High match</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" /> Medium match</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> No match — please select</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> No match - please select</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-600 inline-block" /> Optional / Skipped</span>
               </div>
 
@@ -1511,7 +1511,7 @@ export default function UploadData() {
                   <AlertTriangle size={18} className="text-yellow-400" />
                   <span className="font-semibold text-yellow-300">Duplicate Check Results</span>
                 </div>
-                {dupCheck.reupload && <p className="text-yellow-300 text-sm mb-2">This looks like data you have already uploaded — {dupCheck.exact.length} matching records found.</p>}
+                {dupCheck.reupload && <p className="text-yellow-300 text-sm mb-2">This looks like data you have already uploaded - {dupCheck.exact.length} matching records found.</p>}
                 <div className="flex gap-4 text-sm mb-3">
                   {dupCheck.exact.length > 0 && <span className="text-red-300">{dupCheck.exact.length} exact duplicate{dupCheck.exact.length !== 1 ? 's' : ''}</span>}
                   {dupCheck.conflicts.length > 0 && <span className="text-orange-300">{dupCheck.conflicts.length} serial conflict{dupCheck.conflicts.length !== 1 ? 's' : ''}</span>}
@@ -1604,7 +1604,7 @@ export default function UploadData() {
                   </table>
                 </div>
                 {quality.some(qf => qf.required && qf.fillPct < 50) && (
-                  <p className="text-xs text-red-400 mt-2">⚠ A required field is under 50% filled — check the column mapping or header row before uploading.</p>
+                  <p className="text-xs text-red-400 mt-2">⚠ A required field is under 50% filled - check the column mapping or header row before uploading.</p>
                 )}
               </div>
             )}
@@ -1627,7 +1627,7 @@ export default function UploadData() {
                       <div key={i} className="flex items-center gap-2 text-xs">
                         <span className="text-gray-400 truncate max-w-xs">{ex.text}</span>
                         <ChevronRight size={11} className="text-gray-600 flex-shrink-0" />
-                        <span className="text-gray-300">{ex.category || '—'}</span>
+                        <span className="text-gray-300">{ex.category || '-'}</span>
                         {ex.risk && <span className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">{ex.risk}</span>}
                         <span className={`px-1.5 py-0.5 rounded ${ex.conf === 'Low' ? 'bg-yellow-900/40 text-yellow-400' : 'bg-green-900/40 text-green-400'}`}>{ex.conf}</span>
                       </div>
@@ -1638,7 +1638,7 @@ export default function UploadData() {
                   <input type="checkbox" className="accent-purple-500 mt-0.5" checked={useAI} onChange={e => setUseAI(e.target.checked)} />
                   <span className="text-sm text-gray-300">
                     Clean low-confidence rows with AI
-                    <span className="text-xs text-gray-500 block">Routes the {cleanPreview.review.toLocaleString()} "need review" rows through the secure chat-ai function (Claude) for better category/risk. Uses AI tokens — off by default.</span>
+                    <span className="text-xs text-gray-500 block">Routes the {cleanPreview.review.toLocaleString()} "need review" rows through the secure AI cleaning function for better category/risk. Uses AI tokens - off by default.</span>
                   </span>
                 </label>
               </div>
@@ -1653,7 +1653,7 @@ export default function UploadData() {
                   </thead>
                   <tbody>
                     {preview.map((row, i) => (
-                      <tr key={i}>{activeFields.filter(f => mapping[f.key]).map(f => <td key={f.key} className="table-cell">{String(row[f.key] ?? '—')}</td>)}</tr>
+                      <tr key={i}>{activeFields.filter(f => mapping[f.key]).map(f => <td key={f.key} className="table-cell">{String(row[f.key] ?? '-')}</td>)}</tr>
                     ))}
                   </tbody>
                 </table>
@@ -1668,7 +1668,7 @@ export default function UploadData() {
               ) : (
                 <div className="mt-4 mb-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2">
                   <p className="text-emerald-300 text-sm">
-                    Uploading to <span className="font-bold">{activeCountry}</span> — every row will be stamped with this country.
+                    Uploading to <span className="font-bold">{activeCountry}</span> - every row will be stamped with this country.
                   </p>
                 </div>
               )}
@@ -1727,7 +1727,7 @@ export default function UploadData() {
                 <h2 className="text-xl font-bold text-white">{result.pending ? 'Submitted for Approval' : 'Upload Complete'}</h2>
                 <p className="text-gray-500 text-sm">
                   {result.pending
-                    ? `${(result.submitted ?? 0).toLocaleString()} ${result.pending ? 'records' : ''} sent to an administrator — they will appear once approved.`
+                    ? `${(result.submitted ?? 0).toLocaleString()} ${result.pending ? 'records' : ''} sent to an administrator - they will appear once approved.`
                     : 'Records imported and classified successfully'}
                 </p>
               </div>
@@ -1745,7 +1745,7 @@ export default function UploadData() {
                 <Info size={18} className="text-purple-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-white font-medium">
-                    {result.extraColCount} extra column{result.extraColCount !== 1 ? 's' : ''} saved as custom data — nothing was lost
+                    {result.extraColCount} extra column{result.extraColCount !== 1 ? 's' : ''} saved as custom data - nothing was lost
                   </p>
                   <p className="text-sm text-gray-400 mt-0.5">
                     All columns that don't match a standard field are preserved in Custom Data. You can browse, search, export, or teach the system to recognise them permanently.

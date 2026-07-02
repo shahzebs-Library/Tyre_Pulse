@@ -80,9 +80,9 @@ beforeEach(() => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// exportToExcel — data mapping / row transformation
+// exportToExcel - data mapping / row transformation
 // ─────────────────────────────────────────────────────────────────────────────
-describe('exportToExcel — data row mapping', () => {
+describe('exportToExcel - data row mapping', () => {
   it('maps column keys to headers in each display row', async () => {
     const rows    = [{ id: 1, name: 'Goodyear', size: '225/45R17' }]
     const columns = ['id', 'name', 'size']
@@ -160,9 +160,9 @@ describe('exportToExcel — data row mapping', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// exportToExcel — column width calculation
+// exportToExcel - column width calculation
 // ─────────────────────────────────────────────────────────────────────────────
-describe('exportToExcel — column width calculation', () => {
+describe('exportToExcel - column width calculation', () => {
   it('sets ws["!cols"] with one entry per header', async () => {
     const rows    = [{ a: 'hello', b: 'world' }]
     const columns = ['a', 'b']
@@ -210,9 +210,9 @@ describe('exportToExcel — column width calculation', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// exportToPdf — PDF generation
+// exportToPdf - PDF generation
 // ─────────────────────────────────────────────────────────────────────────────
-describe('exportToPdf — PDF generation', () => {
+describe('exportToPdf - PDF generation', () => {
   it('creates a jsPDF instance with landscape orientation by default', async () => {
     await exportToPdf([], [], 'Test Report', 'test')
 
@@ -243,7 +243,7 @@ describe('exportToPdf — PDF generation', () => {
     expect(tableOptions.body).toEqual([['Riyadh', '5']])
   })
 
-  it('maps null/undefined cell values to em-dash "—" in table body', async () => {
+  it('maps null/undefined cell values to em-dash "-" in table body', async () => {
     const rows    = [{ site: 'Riyadh', notes: null }]
     const columns = [{ key: 'site', header: 'Site' }, { key: 'notes', header: 'Notes' }]
 
@@ -290,9 +290,9 @@ describe('exportToPdf — PDF generation', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// exportToPptx — PowerPoint generation
+// exportToPptx - PowerPoint generation
 // ─────────────────────────────────────────────────────────────────────────────
-describe('exportToPptx — PowerPoint generation', () => {
+describe('exportToPptx - PowerPoint generation', () => {
   it('returns a Promise', async () => {
     const result = exportToPptx({ totalTyres: 0, totalCost: 0, openActions: 0, highRisk: 0, period: 'Q1 2024' })
     expect(result).toBeInstanceOf(Promise)
@@ -354,10 +354,10 @@ describe('exportToPptx — PowerPoint generation', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// formatSAR — internal currency formatting (tested via exportToPptx KPI tile values)
+// formatSAR - internal currency formatting (tested via exportToPptx KPI tile values)
 // We exercise the formatSAR logic by checking what gets passed to addText
 // ─────────────────────────────────────────────────────────────────────────────
-describe('formatSAR — currency formatting logic (via exportToPptx)', () => {
+describe('formatSAR - currency formatting logic (via exportToPptx)', () => {
   it('formats value >= 1,000,000 as "SAR X.XM"', async () => {
     // We test the function behavior indirectly by verifying the slide's addText calls
     // contain a formatted SAR string for totalCost = 2_500_000

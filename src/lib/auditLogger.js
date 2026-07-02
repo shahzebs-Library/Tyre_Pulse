@@ -1,4 +1,4 @@
-// auditLogger.js — Audit event logging for CLAUDE.md compliance
+// auditLogger.js - Audit event logging
 import { supabase } from './supabase'
 
 const SESSION_ID = crypto.randomUUID()
@@ -25,7 +25,7 @@ export async function logAuditEvent({
       session_id: SESSION_ID,
     })
   } catch {
-    // Audit logging is non-critical — never throw
+    // Audit logging is non-critical - never throw
   }
 }
 

@@ -671,7 +671,7 @@ export default function Accidents() {
     })
   }
 
-  // Full export — every incident + claim + recovery + cost field ("everything").
+  // Full export - every incident + claim + recovery + cost field ("everything").
   const EXPORT_FIELDS = [
     ['incident_date', 'Date', r => r.incident_date],
     ['asset_no', 'Asset', r => r.asset_no],
@@ -1350,9 +1350,9 @@ export default function Accidents() {
               <button onClick={() => setShowBulk(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
             </div>
 
-            {/* Step 1 — download template */}
+            {/* Step 1 - download template */}
             <div className="bg-gray-800/60 border border-gray-700/60 rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-gray-200">Step 1 — Download Template</p>
+              <p className="text-sm font-semibold text-gray-200">Step 1 - Download Template</p>
               <p className="text-xs text-gray-400 leading-relaxed">
                 Use the official template to ensure correct column mapping. Required columns:
                 <span className="text-gray-300 font-mono"> incident_date</span>,
@@ -1373,9 +1373,9 @@ export default function Accidents() {
               </button>
             </div>
 
-            {/* Step 2 — upload file */}
+            {/* Step 2 - upload file */}
             <div className="bg-gray-800/60 border border-gray-700/60 rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-gray-200">Step 2 — Upload Your File</p>
+              <p className="text-sm font-semibold text-gray-200">Step 2 - Upload Your File</p>
               <input
                 ref={bulkInputRef}
                 type="file"
@@ -1421,12 +1421,12 @@ export default function Accidents() {
                     {bulkRows.slice(0, 50).map(r => (
                       <tr key={r._row} className={`border-t border-gray-800 ${r._valid ? '' : 'bg-red-950/20'}`}>
                         <td className="px-3 py-1.5 text-gray-500">{r._row}</td>
-                        <td className="px-3 py-1.5 text-gray-300 font-mono">{r.incident_date || '—'}</td>
-                        <td className="px-3 py-1.5 text-white font-medium">{r.asset_no || '—'}</td>
-                        <td className="px-3 py-1.5 text-gray-400">{r.site || '—'}</td>
+                        <td className="px-3 py-1.5 text-gray-300 font-mono">{r.incident_date || '-'}</td>
+                        <td className="px-3 py-1.5 text-white font-medium">{r.asset_no || '-'}</td>
+                        <td className="px-3 py-1.5 text-gray-400">{r.site || '-'}</td>
                         <td className="px-3 py-1.5 text-gray-400">{r.severity}</td>
                         <td className="px-3 py-1.5 text-gray-400">{r.status}</td>
-                        <td className="px-3 py-1.5 text-gray-400">{r.repair_cost ?? '—'}</td>
+                        <td className="px-3 py-1.5 text-gray-400">{r.repair_cost ?? '-'}</td>
                         <td className="px-3 py-1.5 text-center">
                           {r._valid
                             ? <CheckCircle2 size={13} className="text-green-400 mx-auto" />

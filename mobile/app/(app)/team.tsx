@@ -148,7 +148,7 @@ export default function TeamScreen() {
                   <Text style={[styles.cardTitle, { textAlign }]}>{item.full_name ?? item.username ?? 'Unknown'}</Text>
                   <View style={[styles.badges, isRTL && styles.rowR]}>
                     <View style={[styles.roleBadge, { backgroundColor: rc + '1a' }]}>
-                      <Text style={[styles.roleText, { color: rc }]}>{ROLE_LABEL[rk] ? t(`modules.teamRoles.${rk}`) : item.role ?? '—'}</Text>
+                      <Text style={[styles.roleText, { color: rc }]}>{ROLE_LABEL[rk] ? t(`modules.teamRoles.${rk}`) : item.role ?? '-'}</Text>
                     </View>
                     {item.site && <Text style={styles.cardMeta}>{item.site}</Text>}
                     {item.approved === false && (

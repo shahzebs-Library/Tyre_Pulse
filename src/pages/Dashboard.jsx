@@ -193,7 +193,7 @@ export default function Dashboard() {
   useEffect(() => { applyShortcut('This Month') }, [])
   useEffect(() => { load() }, [activeCountry, dateFrom, dateTo])
 
-  // Note: no window-focus reload — it made the page appear to refresh on its
+  // Note: no window-focus reload - it made the page appear to refresh on its
   // own when switching tabs. Use the manual Refresh button to re-pull on demand.
 
   async function load() {
@@ -213,7 +213,7 @@ export default function Dashboard() {
         flt(supabase.from('corrective_actions').select('id,status', { count: 'exact' })),
         flt(supabase.from('tyre_records').select('id,issue_date,brand,asset_no,site,risk_level').order('created_at', { ascending: false }).limit(8)),
         flt(supabase.from('corrective_actions').select('id,title,priority,site,status').eq('status','Open').order('created_at', { ascending: false }).limit(8)),
-        // Full-fleet aggregates (server-side) — accurate beyond the 1000-row page cap.
+        // Full-fleet aggregates (server-side) - accurate beyond the 1000-row page cap.
         supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: dateFrom || null, p_to: dateTo || null }),
       ])
       // Surface a hard failure (offline / RLS-denied) instead of rendering an
@@ -437,7 +437,7 @@ export default function Dashboard() {
       `Fleet holds ${(s.total_records||0).toLocaleString()} tyre records across ${(s.top_sites||[]).length}+ sites, with ${highRisk} flagged high-risk or critical.`,
       brands[0] ? `${brands[0].brand} is the most-deployed brand (${brands[0].count} records).` : 'Brand distribution unavailable.',
       totalCost > 0 ? `Period tyre spend totals ${cur} ${Math.round(totalCost).toLocaleString()}; ${(s.cost_by_site||[])[0]?.site || 'lead site'} carries the largest share.` : 'No tyre cost recorded for the period.',
-      actions.length ? `${actions.length} corrective actions are open — ${actions.filter(a=>a.priority==='Critical'||a.priority==='High').length} high priority.` : 'No open corrective actions.',
+      actions.length ? `${actions.length} corrective actions are open - ${actions.filter(a=>a.priority==='Critical'||a.priority==='High').length} high priority.` : 'No open corrective actions.',
     ]
     const recommendations = [
       critical > 0 ? { priority:'Critical', text:`Replace ${critical} critical tyres before next deployment.` } : null,
@@ -518,20 +518,20 @@ export default function Dashboard() {
       monthlyBudget: null,
       monthlySpend: monthCost,
       ytdSpend: Number(sYtd?.total_cost) || 0,
-      criticalAlerts: critRows.map(t=>({ message:`Critical tyre risk on ${t.asset_no||'unknown'}`, asset: t.asset_no||'—', site: t.site||'—', severity:'Critical' })),
+      criticalAlerts: critRows.map(t=>({ message:`Critical tyre risk on ${t.asset_no||'unknown'}`, asset: t.asset_no||'-', site: t.site||'-', severity:'Critical' })),
       openActions: actions.map(a=>({ title: a.title, priority: a.priority, site: a.site, assignee: a.assigned_to||'Unassigned' })),
       topDefects,
       siteBreakdown,
       insights: [
         `Fleet recorded ${totalTyres.toLocaleString()} tyre records with ${criticalTyres} critical cases.`,
         goodTyres > 0 && totalTyres > 0 ? `${Math.round((goodTyres/totalTyres)*100)}% of tyres are within safe operating parameters.` : 'Tyre risk distribution requires management review.',
-        actions.length > 0 ? `${actions.length} corrective actions are pending resolution — prioritize ${actions.filter(a=>a.priority==='Critical'||a.priority==='High').length} high priority items.` : 'No open corrective actions.',
+        actions.length > 0 ? `${actions.length} corrective actions are pending resolution - prioritize ${actions.filter(a=>a.priority==='Critical'||a.priority==='High').length} high priority items.` : 'No open corrective actions.',
         monthCost > 0 ? `Monthly tyre spend of ${activeCurrency} ${Math.round(monthCost).toLocaleString()} recorded this month.` : 'No tyre cost records for this month.',
       ].filter(Boolean),
       recommendations: [
-        criticalTyres > 0 ? { priority:'Critical', text:`${criticalTyres} tyres in critical condition — schedule immediate replacement before next vehicle deployment.` } : null,
-        warningTyres > 3  ? { priority:'High',     text:`${warningTyres} tyres showing high-risk wear patterns — schedule inspection and replacement within 7 days.` } : null,
-        actions.length > 5 ? { priority:'Medium',   text:`${actions.length} open corrective actions backlog — review assignments and resolve overdue items.` } : null,
+        criticalTyres > 0 ? { priority:'Critical', text:`${criticalTyres} tyres in critical condition - schedule immediate replacement before next vehicle deployment.` } : null,
+        warningTyres > 3  ? { priority:'High',     text:`${warningTyres} tyres showing high-risk wear patterns - schedule inspection and replacement within 7 days.` } : null,
+        actions.length > 5 ? { priority:'Medium',   text:`${actions.length} open corrective actions backlog - review assignments and resolve overdue items.` } : null,
         { priority:'Low', text:'Maintain weekly tyre pressure checks and monthly tread depth measurements across all fleet sites.' },
       ].filter(Boolean),
     }, `TyrePulse_Daily_Report_${today}`)
@@ -580,7 +580,7 @@ export default function Dashboard() {
         <div className="absolute top-0 left-8 right-8 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(22,163,74,0.6) 30%, rgba(74,222,128,0.8) 50%, rgba(22,163,74,0.6) 70%, transparent)' }} />
 
         <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-          {/* Left — greeting */}
+          {/* Left - greeting */}
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-green-600 uppercase tracking-[0.12em] mb-1">
               {greeting}
@@ -611,7 +611,7 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Right — fleet health + export */}
+          {/* Right - fleet health + export */}
           <div className="flex items-center gap-5 flex-shrink-0">
             <HealthRing score={fleetHealthScore} />
 
@@ -716,7 +716,7 @@ export default function Dashboard() {
         <ActionTile to="/ai-command-center" icon={Cpu}   label="AI Command"       color="#d8b4fe" bg="rgba(139,92,246,0.08)" border="rgba(139,92,246,0.2)" />
       </div>
 
-      {/* ── INTEL ROW — Avg Life + Seasonal ──────────────────────────────── */}
+      {/* ── INTEL ROW - Avg Life + Seasonal ──────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Avg tyre life */}
         <div className="card flex flex-col items-center justify-center text-center gap-1 py-6">
@@ -726,7 +726,7 @@ export default function Dashboard() {
           </div>
           <p className="text-label">Avg Tyre Life</p>
           <p className="text-3xl font-extrabold text-blue-400 leading-none mt-1">
-            {tyreLife?.avgLifeDays != null ? tyreLife.avgLifeDays : '—'}
+            {tyreLife?.avgLifeDays != null ? tyreLife.avgLifeDays : '-'}
           </p>
           <p className="text-xs text-gray-600">days</p>
           {tyreLife?.avgLifeKm != null && <p className="text-[10px] text-gray-700 mt-0.5">{tyreLife.avgLifeKm.toLocaleString()} km avg</p>}

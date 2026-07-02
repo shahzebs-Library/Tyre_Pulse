@@ -159,7 +159,7 @@ export default function ConsoleAIUsage() {
       {/* Trend chart */}
       {trend.length > 0 && (
         <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-          <h3 className="text-sm font-semibold text-white mb-4">Daily Trend — Cost ($)</h3>
+          <h3 className="text-sm font-semibold text-white mb-4">Daily Trend - Cost ($)</h3>
           <div className="flex items-end gap-1 h-24">
             {trend.map(d => {
               const maxCost = Math.max(...trend.map(x => x.cost), 0.0001)
@@ -213,8 +213,8 @@ export default function ConsoleAIUsage() {
                     <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">
                       {new Date(log.created_at).toLocaleString()}
                     </td>
-                    <td className="px-4 py-2.5 text-gray-300 capitalize">{log.feature ?? '—'}</td>
-                    <td className="px-4 py-2.5 font-mono text-gray-400 text-[10px]">{log.model ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-gray-300 capitalize">{log.feature ?? '-'}</td>
+                    <td className="px-4 py-2.5 font-mono text-gray-400 text-[10px]">{log.model ?? '-'}</td>
                     <td className="px-4 py-2.5 text-right text-gray-500">{(log.prompt_tokens ?? 0).toLocaleString()}</td>
                     <td className="px-4 py-2.5 text-right text-gray-500">{(log.completion_tokens ?? 0).toLocaleString()}</td>
                     <td className="px-4 py-2.5 text-right text-white font-semibold">{(log.total_tokens ?? 0).toLocaleString()}</td>
@@ -222,7 +222,7 @@ export default function ConsoleAIUsage() {
                       ${Number(log.cost_usd ?? 0).toFixed(5)}
                     </td>
                     <td className="px-4 py-2.5 text-right text-gray-500">
-                      {log.latency_ms ? `${log.latency_ms}ms` : '—'}
+                      {log.latency_ms ? `${log.latency_ms}ms` : '-'}
                     </td>
                   </tr>
                 ))}
@@ -231,7 +231,7 @@ export default function ConsoleAIUsage() {
             {total > PAGE_SIZE && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800 bg-gray-900/30">
                 <p className="text-xs text-gray-500">
-                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()}
+                  {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()}
                 </p>
                 <div className="flex gap-2">
                   <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}

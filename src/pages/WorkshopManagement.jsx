@@ -279,14 +279,14 @@ function JobDrawer({ job, onClose, currency }) {
               { label: 'Site', value: job.site },
               { label: 'Work Type', value: job.work_type },
               { label: 'Assigned To', value: job.assigned_to },
-              { label: 'Created', value: job.created_at ? formatDateTime(job.created_at) : '—' },
-              { label: 'Scheduled', value: job.scheduled_date ? formatDate(job.scheduled_date) : '—' },
-              { label: 'Completed', value: job.completed_at ? formatDateTime(job.completed_at) : '—' },
+              { label: 'Created', value: job.created_at ? formatDateTime(job.created_at) : '-' },
+              { label: 'Scheduled', value: job.scheduled_date ? formatDate(job.scheduled_date) : '-' },
+              { label: 'Completed', value: job.completed_at ? formatDateTime(job.completed_at) : '-' },
               { label: 'Turnaround', value: fmtHours(ta) },
             ].map(({ label, value }) => (
               <div key={label} className="bg-gray-900 rounded-lg p-3">
                 <p className="text-xs text-gray-500 mb-1">{label}</p>
-                <p className="text-sm text-white font-medium">{value || '—'}</p>
+                <p className="text-sm text-white font-medium">{value || '-'}</p>
               </div>
             ))}
           </div>
@@ -324,8 +324,8 @@ function JobDrawer({ job, onClose, currency }) {
                   />
                 </div>
                 <div className="flex justify-between mt-1.5 text-xs text-gray-500">
-                  <span>Labour {job.total_cost > 0 ? fmtPct(((job.labour_cost || 0) / job.total_cost) * 100) : '—'}</span>
-                  <span>Parts {job.total_cost > 0 ? fmtPct(((job.parts_cost || 0) / job.total_cost) * 100) : '—'}</span>
+                  <span>Labour {job.total_cost > 0 ? fmtPct(((job.labour_cost || 0) / job.total_cost) * 100) : '-'}</span>
+                  <span>Parts {job.total_cost > 0 ? fmtPct(((job.parts_cost || 0) / job.total_cost) * 100) : '-'}</span>
                 </div>
               </div>
             )}
@@ -978,7 +978,7 @@ export default function WorkshopManagement() {
                   {/* Job Volume Chart */}
                   <ChartCard
                     title="Job Volume by Site"
-                    subtitle="Completed jobs per site — last 12 months"
+                    subtitle="Completed jobs per site - last 12 months"
                     height={280}
                   >
                     {jobVolumeChart && jobVolumeChart.datasets.length > 0 ? (
@@ -1013,7 +1013,7 @@ export default function WorkshopManagement() {
                   {/* Turnaround Trend */}
                   <ChartCard
                     title="Turnaround Time Trend"
-                    subtitle="12-month rolling average hours — lower is better"
+                    subtitle="12-month rolling average hours - lower is better"
                     height={240}
                   >
                     {taTrendChart ? (
@@ -1106,9 +1106,9 @@ export default function WorkshopManagement() {
                                 <td className="px-4 py-3 text-blue-400 font-mono text-xs whitespace-nowrap group-hover:text-blue-300">
                                   {job.work_order_no || job.id?.slice(0, 8)}
                                 </td>
-                                <td className="px-4 py-3 text-gray-300 font-medium whitespace-nowrap">{job.asset_no || '—'}</td>
-                                <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{job.site || '—'}</td>
-                                <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{job.work_type || '—'}</td>
+                                <td className="px-4 py-3 text-gray-300 font-medium whitespace-nowrap">{job.asset_no || '-'}</td>
+                                <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{job.site || '-'}</td>
+                                <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{job.work_type || '-'}</td>
                                 <td className="px-4 py-3 whitespace-nowrap">
                                   {job.priority && (
                                     <span className={`px-2 py-0.5 rounded text-xs font-medium border ${priorityBadgeClass(job.priority)}`}>
@@ -1123,15 +1123,15 @@ export default function WorkshopManagement() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{job.assigned_to || '—'}</td>
+                                <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{job.assigned_to || '-'}</td>
                                 <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                                  {job.created_at ? formatDate(job.created_at) : '—'}
+                                  {job.created_at ? formatDate(job.created_at) : '-'}
                                 </td>
                                 <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                                  {job.scheduled_date ? formatDate(job.scheduled_date) : '—'}
+                                  {job.scheduled_date ? formatDate(job.scheduled_date) : '-'}
                                 </td>
                                 <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                                  {job.completed_at ? formatDate(job.completed_at) : '—'}
+                                  {job.completed_at ? formatDate(job.completed_at) : '-'}
                                 </td>
                                 <td className="px-4 py-3 text-gray-300 whitespace-nowrap font-medium">
                                   {fmtCurrency(job.total_cost, activeCurrency)}
@@ -1147,7 +1147,7 @@ export default function WorkshopManagement() {
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
                         <span className="text-xs text-gray-500">
-                          Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filteredOrders.length)} of {filteredOrders.length}
+                          Showing {((page - 1) * PAGE_SIZE) + 1}-{Math.min(page * PAGE_SIZE, filteredOrders.length)} of {filteredOrders.length}
                         </span>
                         <div className="flex items-center gap-1">
                           <button
@@ -1351,7 +1351,7 @@ export default function WorkshopManagement() {
                   {/* Cost stacked bar */}
                   <ChartCard
                     title="Labour vs Parts Cost"
-                    subtitle="Monthly stacked breakdown — identify cost drivers"
+                    subtitle="Monthly stacked breakdown - identify cost drivers"
                     height={300}
                   >
                     {costChart ? (

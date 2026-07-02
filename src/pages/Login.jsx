@@ -187,7 +187,7 @@ export default function Login() {
   const { isDark, toggleTheme } = useTheme()
   const navigate            = useNavigate()
 
-  // Navigate to dashboard once auth state resolves — avoids race with async fetchProfile
+  // Navigate to dashboard once auth state resolves - avoids race with async fetchProfile
   useEffect(() => {
     if (!authLoading && user) navigate('/', { replace: true })
   }, [user, authLoading, navigate])
@@ -268,7 +268,7 @@ export default function Login() {
       setLoading(false)
       return
     }
-    // Success — reset counters
+    // Success - reset counters
     setLoginAttempts(0)
     setCooldownUntil(0)
     // on success: useEffect above handles navigation once AuthContext resolves user + profile
@@ -427,7 +427,7 @@ export default function Login() {
               </span>
             </h2>
             <p style={{ fontSize:14, color:'rgba(255,255,255,0.45)', lineHeight:1.6, margin:0, maxWidth:340 }}>
-              Enterprise-grade tyre lifecycle management, AI-powered analytics, and real-time fleet intelligence — all in one platform.
+              Enterprise-grade tyre lifecycle management, AI-powered analytics, and real-time fleet intelligence - all in one platform.
             </p>
           </div>
 
@@ -775,7 +775,7 @@ export default function Login() {
                     <CheckCircle2 size={30} style={{color:'#4ade80'}}/>
                   </div>
                   <div style={{fontSize:18, fontWeight:800, color:'#fff', marginBottom:8, letterSpacing:'-0.02em'}}>Reset link sent!</div>
-                  <div style={{fontSize:13, color:'rgba(255,255,255,0.4)', lineHeight:1.6}}>Check your inbox — link expires in 60 minutes.</div>
+                  <div style={{fontSize:13, color:'rgba(255,255,255,0.4)', lineHeight:1.6}}>Check your inbox - link expires in 60 minutes.</div>
                   <button onClick={() => { setForgotMode(false); setForgotSent(false) }} style={{
                     marginTop:22, width:'100%', padding:'12px', borderRadius:14, border:'none',
                     background:'linear-gradient(135deg, #16a34a, #15803d)',
@@ -930,7 +930,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Responsive split — show left panel on large screens */}
+      {/* Responsive split - show left panel on large screens */}
       <style>{`
         @media (min-width: 1024px) {
           .lg-panel { display: flex !important; }
@@ -938,7 +938,7 @@ export default function Login() {
         }
       `}</style>
 
-      {/* MFA challenge modal — shown after password succeeds but AAL2 is required */}
+      {/* MFA challenge modal - shown after password succeeds but AAL2 is required */}
       <TwoFactorChallenge
         open={!!mfaState}
         factorId={mfaState?.factorId}

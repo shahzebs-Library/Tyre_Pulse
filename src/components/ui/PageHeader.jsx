@@ -3,12 +3,12 @@ import { RefreshCw } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 /**
- * PageHeader — standard premium page header used across all pages.
+ * PageHeader - standard premium page header used across all pages.
  *
  * @param {string}   title
  * @param {string}   subtitle
- * @param {ReactNode} icon       — optional Lucide icon component
- * @param {ReactNode} actions    — right-side action buttons
+ * @param {ReactNode} icon       - optional Lucide icon component
+ * @param {ReactNode} actions    - right-side action buttons
  * @param {string}   className
  */
 export default function PageHeader({

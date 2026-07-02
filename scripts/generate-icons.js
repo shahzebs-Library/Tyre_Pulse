@@ -15,7 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 const ICONS_DIR = path.join(ROOT, 'public', 'icons')
 
-// TyrePulse brand icon SVG — dark navy background, blue tyre wheel
+// TyrePulse brand icon SVG - dark navy background, blue tyre wheel
 const ICON_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" fill="#0f172a"/>
@@ -45,7 +45,7 @@ const ICON_SVG = `
 const MASKABLE_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" fill="#0f172a"/>
-  <!-- Tyre rubber: thick outer ring — slightly smaller to honour safe zone -->
+  <!-- Tyre rubber: thick outer ring - slightly smaller to honour safe zone -->
   <circle cx="256" cy="256" r="185" fill="none" stroke="#1d4ed8" stroke-width="68"/>
   <!-- Rim border -->
   <circle cx="256" cy="256" r="146" fill="none" stroke="#3b82f6" stroke-width="5"/>

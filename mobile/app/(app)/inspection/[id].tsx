@@ -121,7 +121,7 @@ export default function InspectionDetailScreen() {
                         {c?.condition ?? c?.risk ?? 'Recorded'}
                       </Text>
                       <Text style={[styles.condMeta, { textAlign }]}>
-                        {[c?.tread_depth != null ? `${c.tread_depth}mm` : null, c?.pressure != null ? `${c.pressure} psi` : null, c?.brand, c?.serial].filter(Boolean).join(' · ') || '—'}
+                        {[c?.tread_depth != null ? `${c.tread_depth}mm` : null, c?.pressure != null ? `${c.pressure} psi` : null, c?.brand, c?.serial].filter(Boolean).join(' · ') || '-'}
                       </Text>
                     </View>
                   </View>
@@ -148,7 +148,7 @@ function Meta({ icon, label, value }: { icon: string; label: string; value: stri
       <Ionicons name={icon as any} size={14} color="#94a3b8" />
       <View>
         <Text style={styles.metaLabel}>{label}</Text>
-        <Text style={styles.metaValue}>{value || '—'}</Text>
+        <Text style={styles.metaValue}>{value || '-'}</Text>
       </View>
     </View>
   )

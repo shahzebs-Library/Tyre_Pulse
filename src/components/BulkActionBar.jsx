@@ -2,13 +2,13 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X, CheckSquare } from 'lucide-react'
 
 /**
- * BulkActionBar — floats above the bottom of the screen when rows are selected.
+ * BulkActionBar - floats above the bottom of the screen when rows are selected.
  *
  * Props:
- *   count        — number of selected items
- *   onClear      — deselect all
- *   actions      — array of { label, icon: LucideComponent, onClick, variant?: 'danger' | 'default', disabled?: boolean }
- *   entityLabel  — singular label e.g. "tyre" (shows "3 tyres selected")
+ *   count        - number of selected items
+ *   onClear      - deselect all
+ *   actions      - array of { label, icon: LucideComponent, onClick, variant?: 'danger' | 'default', disabled?: boolean }
+ *   entityLabel  - singular label e.g. "tyre" (shows "3 tyres selected")
  */
 export default function BulkActionBar({ count, onClear, actions = [], entityLabel = 'item' }) {
   return (

@@ -1,4 +1,4 @@
-// GlobalSearch.jsx — Cmd/Ctrl+K universal search across all TyrePulse data
+// GlobalSearch.jsx - Cmd/Ctrl+K universal search across all TyrePulse data
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -96,7 +96,7 @@ async function searchAll(query) {
     results.tyres = tyres.value.data.map(r => ({
       id: r.id,
       primary: r.serial_number,
-      secondary: `${r.asset_number || '—'} · ${r.brand || '—'}`,
+      secondary: `${r.asset_number || '-'} · ${r.brand || '-'}`,
       badge: r.risk_level,
       badgeColor: r.risk_level === 'Critical' ? 'text-red-400' : r.risk_level === 'High' ? 'text-orange-400' : 'text-gray-400',
       route: '/tyres',
@@ -106,7 +106,7 @@ async function searchAll(query) {
     results.vehicles = vehicles.value.data.map(r => ({
       id: r.id,
       primary: r.asset_no,
-      secondary: `${r.make || ''} ${r.model || ''} · ${r.site || '—'}`.trim(),
+      secondary: `${r.make || ''} ${r.model || ''} · ${r.site || '-'}`.trim(),
       badge: r.vehicle_type,
       badgeColor: 'text-blue-400',
       route: '/fleet-master',
@@ -116,7 +116,7 @@ async function searchAll(query) {
     results.inspections = inspections.value.data.map(r => ({
       id: r.id,
       primary: r.asset_no,
-      secondary: `${r.inspector || '—'} · ${r.inspection_date ? new Date(r.inspection_date).toLocaleDateString('en-US') : '—'}`,
+      secondary: `${r.inspector || '-'} · ${r.inspection_date ? new Date(r.inspection_date).toLocaleDateString('en-US') : '-'}`,
       badge: r.site,
       badgeColor: 'text-yellow-400',
       route: '/inspections',
@@ -135,8 +135,8 @@ async function searchAll(query) {
   if (stock.status === 'fulfilled' && stock.value.data?.length) {
     results.stock = stock.value.data.map(r => ({
       id: r.id,
-      primary: `${r.brand || '—'} ${r.size || ''}`.trim(),
-      secondary: `${r.site || '—'} · Qty: ${r.quantity ?? '—'}`,
+      primary: `${r.brand || '-'} ${r.size || ''}`.trim(),
+      secondary: `${r.site || '-'} · Qty: ${r.quantity ?? '-'}`,
       badge: null,
       badgeColor: '',
       route: '/stock',

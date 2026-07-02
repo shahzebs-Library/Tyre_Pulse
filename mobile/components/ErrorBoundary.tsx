@@ -15,7 +15,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
-    // Log full details only in development — production logs are world-readable on Android
+    // Log full details only in development - production logs are world-readable on Android
     if (__DEV__) {
       console.error('[ErrorBoundary] Caught error:', error.message)
       console.error('[ErrorBoundary] Stack:', info.componentStack)

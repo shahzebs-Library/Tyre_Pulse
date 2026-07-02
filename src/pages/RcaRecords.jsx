@@ -300,7 +300,7 @@ export default function RcaRecords() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelectedRecord(r)}>
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className="font-semibold text-white">{r.asset_no ?? '—'}{r.photo_data && <Camera className="inline w-3 h-3 ml-1.5 text-gray-500" title="Has photo" />}</span>
+                    <span className="font-semibold text-white">{r.asset_no ?? '-'}{r.photo_data && <Camera className="inline w-3 h-3 ml-1.5 text-gray-500" title="Has photo" />}</span>
                     {r.tyre_serial && <span className="text-xs text-gray-400">Serial: {r.tyre_serial}</span>}
                     {r.brand && <span className="badge bg-green-900/40 text-green-300 border border-green-700/50">{r.brand}</span>}
                     {r.country && <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 border border-gray-700">{r.country}</span>}

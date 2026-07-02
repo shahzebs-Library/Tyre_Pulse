@@ -2,7 +2,7 @@
  * useRoleGuard
  *
  * Redirects unauthorized users away from protected screens.
- * Runs after profile is loaded — shows a spinner during the check.
+ * Runs after profile is loaded - shows a spinner during the check.
  *
  * Usage:
  *   const { allowed } = useRoleGuard(['admin'])           // admin only
@@ -28,7 +28,7 @@ export function useRoleGuard(allowedRoles: UserRole[]): { allowed: boolean; load
     const permitted = role !== null && allowedRoles.includes(role)
 
     if (!permitted) {
-      // Redirect to home — user lacks required role
+      // Redirect to home - user lacks required role
       setAllowed(false)
       router.replace('/')
     } else {

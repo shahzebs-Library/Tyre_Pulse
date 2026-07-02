@@ -50,7 +50,7 @@ export default function ScannerScreen() {
       return
     }
 
-    // 2) Tyre serial match (shared resolver — serials span several columns)
+    // 2) Tyre serial match (shared resolver - serials span several columns)
     const tyre = await lookupTyreBySerial(code)
     if (tyre) {
       setResolved({ kind: 'tyre', code, tyre })
@@ -282,7 +282,7 @@ function Detail({ label, value, align }: { label: string; value: string | null; 
   return (
     <View style={styles.detailItem}>
       <Text style={[styles.detailLabel, { textAlign: align }]}>{label}</Text>
-      <Text style={[styles.detailValue, { textAlign: align }]}>{value || '—'}</Text>
+      <Text style={[styles.detailValue, { textAlign: align }]}>{value || '-'}</Text>
     </View>
   )
 }

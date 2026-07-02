@@ -375,7 +375,7 @@ export default function VendorIntelligence() {
         recs.push({
           priority: 'Critical',
           icon: 'cost',
-          text: `${worst.brand} has the highest CPK at ${fmtCpk(worst.avgCpk, activeCurrency)}/km — significantly above fleet benchmark. Initiate replacement procurement evaluation.`,
+          text: `${worst.brand} has the highest CPK at ${fmtCpk(worst.avgCpk, activeCurrency)}/km - significantly above fleet benchmark. Initiate replacement procurement evaluation.`,
         })
       }
       if (best && best.avgCpk != null && best.avgCpk <= 1.0 && best.count >= 5) {
@@ -401,7 +401,7 @@ export default function VendorIntelligence() {
       recs.push({
         priority: 'High',
         icon: 'scrap',
-        text: `${v.brand} has a ${fmtPct(v.scrapRate)} scrap rate — indicative of premature removal or quality issues. Engineering review recommended.`,
+        text: `${v.brand} has a ${fmtPct(v.scrapRate)} scrap rate - indicative of premature removal or quality issues. Engineering review recommended.`,
       })
     })
 
@@ -420,7 +420,7 @@ export default function VendorIntelligence() {
         recs.push({
           priority: 'Critical',
           icon: 'action',
-          text: `${w.site} has 0% corrective action close rate. Escalation to site management required — open actions are accumulating without resolution.`,
+          text: `${w.site} has 0% corrective action close rate. Escalation to site management required - open actions are accumulating without resolution.`,
         })
       })
 
@@ -706,7 +706,7 @@ export default function VendorIntelligence() {
 
       <PageHeader
         title="Vendor & Workshop Intelligence"
-        subtitle="Objective performance ranking for tyre brands and workshop sites — cost efficiency, reliability, and procurement intelligence"
+        subtitle="Objective performance ranking for tyre brands and workshop sites - cost efficiency, reliability, and procurement intelligence"
         icon={Trophy}
         actions={
           <div className="flex items-center gap-2">
@@ -998,7 +998,7 @@ export default function VendorIntelligence() {
 
                   {/* Radar chart */}
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">Brand Comparison Radar — Top 5</p>
+                    <p className="text-xs font-semibold text-gray-300 mb-1">Brand Comparison Radar - Top 5</p>
                     <p className="text-[10px] text-gray-600 mb-3">Normalized 0-100 across 5 performance dimensions</p>
                     {radarData ? (
                       <div style={{ height: 300 }}>
@@ -1014,7 +1014,7 @@ export default function VendorIntelligence() {
                   {/* CPK bar chart */}
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                     <p className="text-xs font-semibold text-gray-300 mb-1">CPK by Brand ({activeCurrency}/km)</p>
-                    <p className="text-[10px] text-gray-600 mb-3">Green ≤1.0 · Amber 1-2 · Red ≥2 — sorted best to worst</p>
+                    <p className="text-[10px] text-gray-600 mb-3">Green ≤1.0 · Amber 1-2 · Red ≥2 - sorted best to worst</p>
                     {cpkBarData.labels.length > 0 ? (
                       <div style={{ height: 280 }}>
                         <Bar
@@ -1047,7 +1047,7 @@ export default function VendorIntelligence() {
                   {/* Tyre Life bar chart */}
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                     <p className="text-xs font-semibold text-gray-300 mb-1">Average Tyre Life by Brand</p>
-                    <p className="text-[10px] text-gray-600 mb-3">Higher = longer-lasting tyre — sorted descending</p>
+                    <p className="text-[10px] text-gray-600 mb-3">Higher = longer-lasting tyre - sorted descending</p>
                     {lifeBarData.labels.length > 0 ? (
                       <div style={{ height: 280 }}>
                         <Bar
@@ -1428,7 +1428,7 @@ export default function VendorIntelligence() {
                 {/* Action Close Rate */}
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                   <p className="text-xs font-semibold text-gray-300 mb-1">Corrective Action Close Rate by Site (%)</p>
-                  <p className="text-[10px] text-gray-600 mb-3">% of corrective actions resolved — green ≥70% · amber 40-70% · red &lt;40%</p>
+                  <p className="text-[10px] text-gray-600 mb-3">% of corrective actions resolved - green ≥70% · amber 40-70% · red &lt;40%</p>
                   <div style={{ height: 220 }}>
                     <Bar
                       data={workshopCloseData}
@@ -1589,13 +1589,13 @@ export default function VendorIntelligence() {
                 <TrendingDown size={14} className="text-green-400" />
                 <span className="text-xs font-semibold text-green-300">Best Value Brand</span>
               </div>
-              <p className="text-lg font-black text-white">{execSummary.bestBrand?.brand ?? '—'}</p>
+              <p className="text-lg font-black text-white">{execSummary.bestBrand?.brand ?? '-'}</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {execSummary.bestBrand?.avgCpk != null
                   ? `Avg CPK: ${fmtCpk(execSummary.bestBrand.avgCpk, activeCurrency)}/km`
                   : 'No CPK data'}
               </p>
-              <p className="text-[11px] text-green-400/70 mt-1">Lowest cost per km — recommended for increased procurement</p>
+              <p className="text-[11px] text-green-400/70 mt-1">Lowest cost per km - recommended for increased procurement</p>
             </div>
 
             {/* Worst Value Brand */}
@@ -1604,13 +1604,13 @@ export default function VendorIntelligence() {
                 <TrendingUp size={14} className="text-red-400" />
                 <span className="text-xs font-semibold text-red-300">Highest Cost Brand</span>
               </div>
-              <p className="text-lg font-black text-white">{execSummary.worstBrand?.brand ?? '—'}</p>
+              <p className="text-lg font-black text-white">{execSummary.worstBrand?.brand ?? '-'}</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {execSummary.worstBrand?.avgCpk != null
                   ? `Avg CPK: ${fmtCpk(execSummary.worstBrand.avgCpk, activeCurrency)}/km`
                   : 'No CPK data'}
               </p>
-              <p className="text-[11px] text-red-400/70 mt-1">Highest cost per km — evaluate specification or supplier change</p>
+              <p className="text-[11px] text-red-400/70 mt-1">Highest cost per km - evaluate specification or supplier change</p>
             </div>
 
             {/* Estimated Annual Saving */}
@@ -1622,11 +1622,11 @@ export default function VendorIntelligence() {
               <p className="text-lg font-black text-yellow-300">
                 {execSummary.estAnnualSaving > 0
                   ? fmtCurrency(execSummary.estAnnualSaving, activeCurrency)
-                  : '—'}
+                  : '-'}
               </p>
               <p className="text-[11px] text-yellow-400/70 mt-1">
                 {execSummary.estAnnualSaving > 0
-                  ? `If fleet switches from ${execSummary.worstBrand?.brand ?? '—'} to ${execSummary.bestBrand?.brand ?? '—'}`
+                  ? `If fleet switches from ${execSummary.worstBrand?.brand ?? '-'} to ${execSummary.bestBrand?.brand ?? '-'}`
                   : 'Switch best and worst brand CPK to unlock saving estimate'}
               </p>
             </div>
@@ -1637,7 +1637,7 @@ export default function VendorIntelligence() {
                 <CheckCircle size={14} className="text-blue-400" />
                 <span className="text-xs font-semibold text-blue-300">Best Performing Site</span>
               </div>
-              <p className="text-lg font-black text-white">{execSummary.bestSite?.site ?? '—'}</p>
+              <p className="text-lg font-black text-white">{execSummary.bestSite?.site ?? '-'}</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {execSummary.bestSite
                   ? `Score: ${execSummary.bestSite.displayScore.toFixed(0)}/100 · ${fmtNum(execSummary.bestSite.highRiskPct)}% high risk`
@@ -1652,7 +1652,7 @@ export default function VendorIntelligence() {
                 <AlertTriangle size={14} className="text-orange-400" />
                 <span className="text-xs font-semibold text-orange-300">Site Needing Attention</span>
               </div>
-              <p className="text-lg font-black text-white">{execSummary.worstSite?.site ?? '—'}</p>
+              <p className="text-lg font-black text-white">{execSummary.worstSite?.site ?? '-'}</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {execSummary.worstSite
                   ? `Score: ${execSummary.worstSite.displayScore.toFixed(0)}/100 · ${fmtNum(execSummary.worstSite.highRiskPct)}% high risk`
@@ -1697,12 +1697,12 @@ export default function VendorIntelligence() {
         ])}
         kpiSummary={{
           'Total Brands Tracked': String(enrichedVendors.length),
-          'Best Value Brand': execSummary.bestBrand?.brand ?? '—',
-          'Best Brand CPK': execSummary.bestBrand?.avgCpk != null ? fmtCpk(execSummary.bestBrand.avgCpk, activeCurrency) : '—',
-          'Highest Cost Brand': execSummary.worstBrand?.brand ?? '—',
+          'Best Value Brand': execSummary.bestBrand?.brand ?? '-',
+          'Best Brand CPK': execSummary.bestBrand?.avgCpk != null ? fmtCpk(execSummary.bestBrand.avgCpk, activeCurrency) : '-',
+          'Highest Cost Brand': execSummary.worstBrand?.brand ?? '-',
           'Total Fleet Investment': fmtCurrency(execSummary.totalFleetInvestment, activeCurrency),
-          'Potential Annual Saving': execSummary.estAnnualSaving > 0 ? fmtCurrency(execSummary.estAnnualSaving, activeCurrency) : '—',
-          'Best Performing Site': execSummary.bestSite?.site ?? '—',
+          'Potential Annual Saving': execSummary.estAnnualSaving > 0 ? fmtCurrency(execSummary.estAnnualSaving, activeCurrency) : '-',
+          'Best Performing Site': execSummary.bestSite?.site ?? '-',
           'Total Records Analysed': String(filteredRecords.length),
         }}
         period={`Period: ${datePreset}`}

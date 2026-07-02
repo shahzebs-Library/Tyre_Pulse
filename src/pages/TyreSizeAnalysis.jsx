@@ -1051,7 +1051,7 @@ export default function TyreSizeAnalysis() {
           </h2>
           <div className="flex gap-3 text-xs text-gray-500">
             <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-800 inline-block" /> &lt;{BENCHMARK_GOOD}</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-yellow-800 inline-block" /> {BENCHMARK_GOOD}–{BENCHMARK_AVG}</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-yellow-800 inline-block" /> {BENCHMARK_GOOD}-{BENCHMARK_AVG}</span>
             <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-800 inline-block" /> &gt;{BENCHMARK_AVG}</span>
           </div>
         </div>
@@ -1076,7 +1076,7 @@ export default function TyreSizeAnalysis() {
                       const cpk = matrixData.matrix[sz]?.[br]
                       return (
                         <td key={br} className={`px-4 py-3 text-center font-mono rounded-sm ${cpk != null ? cpkBgCell(cpk) : 'text-gray-700'}`}>
-                          {cpk != null ? `${cpk.toFixed(3)}` : '—'}
+                          {cpk != null ? `${cpk.toFixed(3)}` : '-'}
                         </td>
                       )
                     })}
@@ -1118,7 +1118,7 @@ export default function TyreSizeAnalysis() {
                     <tr key={p.pos} className={`border-b border-gray-800/50 ${i % 2 === 0 ? 'bg-gray-900' : 'bg-gray-950'}`}>
                       <td className="px-4 py-2.5 text-gray-200 font-medium">{p.pos}</td>
                       <td className="px-4 py-2.5 text-gray-400 font-mono text-xs">
-                        {p.required.join(', ') || '—'}
+                        {p.required.join(', ') || '-'}
                       </td>
                       <td className={`px-4 py-2.5 text-right ${p.nonStd > 0 ? 'text-red-400' : 'text-gray-500'}`}>
                         {p.nonStd}
@@ -1150,7 +1150,7 @@ export default function TyreSizeAnalysis() {
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <h2 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-green-400" />
-            Top Size-Brand Combos — CPK Trend (12 months)
+            Top Size-Brand Combos - CPK Trend (12 months)
           </h2>
           {trendData.datasets.length === 0 ? (
             <div className="flex items-center justify-center h-56 text-gray-500 text-sm">No trend data available</div>
@@ -1175,7 +1175,7 @@ export default function TyreSizeAnalysis() {
         {consolidationOps.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-500">
             <CheckCircle className="w-10 h-10 text-green-700" />
-            <p className="text-sm">No consolidation opportunities detected — fleet is well optimized</p>
+            <p className="text-sm">No consolidation opportunities detected - fleet is well optimized</p>
           </div>
         ) : (
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">

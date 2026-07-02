@@ -139,7 +139,7 @@ export default function StockScreen() {
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={[styles.cardTitle, { textAlign }]} numberOfLines={2}>{item.description ?? 'Item'}</Text>
                   <Text style={[styles.cardMeta, { textAlign }]}>
-                    {item.site ?? '—'}{item.min_level != null ? ` · ${t('modules.stock.min')} ${item.min_level}` : ''}
+                    {item.site ?? '-'}{item.min_level != null ? ` · ${t('modules.stock.min')} ${item.min_level}` : ''}
                   </Text>
                   <View style={[styles.statusBadge, { backgroundColor: sc + '1a' }]}>
                     <Text style={[styles.statusText, { color: sc }]}>{STATUS_LABEL[st] ?? st}</Text>

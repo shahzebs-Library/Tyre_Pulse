@@ -1,5 +1,5 @@
 /**
- * useWakeLock.js — Screen Wake Lock API hook.
+ * useWakeLock.js - Screen Wake Lock API hook.
  *
  * Prevents the screen from sleeping while the user is actively
  * filling out a tyre inspection checklist on mobile.
@@ -28,7 +28,7 @@ export function useWakeLock() {
         lockRef.current = null
       })
     } catch {
-      // NotAllowedError (document not visible) or not supported — ignore
+      // NotAllowedError (document not visible) or not supported - ignore
     }
   }, [])
 
@@ -63,7 +63,7 @@ export function useWakeLock() {
 }
 
 /**
- * Minimal vibration helper — wraps navigator.vibrate with feature detection.
+ * Minimal vibration helper - wraps navigator.vibrate with feature detection.
  * pattern: number (ms) | number[] ([vibrate, pause, vibrate, ...])
  */
 export function vibrate(pattern) {
@@ -73,7 +73,7 @@ export function vibrate(pattern) {
 }
 
 /**
- * Badge API helper — set app badge to count, or clear it.
+ * Badge API helper - set app badge to count, or clear it.
  */
 export function setAppBadge(count) {
   if ('setAppBadge' in navigator) {
@@ -88,7 +88,7 @@ export function setAppBadge(count) {
 }
 
 /**
- * Web Share API helper — falls back to clipboard copy.
+ * Web Share API helper - falls back to clipboard copy.
  * @param {{ title, text, url?, files? }} data
  * @returns {Promise<'shared'|'copied'|'unsupported'>}
  */

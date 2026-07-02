@@ -3,7 +3,7 @@
  *
  * Review and approve pending user registrations.
  * Search, filter by role, and manage all profiles.
- * Admin-only screen — accessed from the Admin tab.
+ * Admin-only screen - accessed from the Admin tab.
  */
 
 import { useState, useCallback, useEffect } from 'react'
@@ -149,7 +149,7 @@ export default function UserManagementScreen() {
 
   async function changeCountry(user: UserProfile) {
     // A user's country controls what data they see and stamps their
-    // mobile-created records — keeping countries isolated.
+    // mobile-created records - keeping countries isolated.
     Alert.alert(
       'Set Country',
       `Current: ${user.country ?? 'none'}`,
@@ -283,7 +283,7 @@ export default function UserManagementScreen() {
             <Ionicons name="people-outline" size={52} color="#a78bfa" />
             <Text style={styles.emptyTitle}>No users found</Text>
             <Text style={styles.emptyHint}>
-              {filter === 'pending' ? 'No pending approvals — you\'re all caught up' : 'Try adjusting your search'}
+              {filter === 'pending' ? 'No pending approvals - you\'re all caught up' : 'Try adjusting your search'}
             </Text>
           </View>
         ) : (
@@ -305,7 +305,7 @@ export default function UserManagementScreen() {
                       </Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.name}>{user.full_name ?? user.username ?? '—'}</Text>
+                      <Text style={styles.name}>{user.full_name ?? user.username ?? '-'}</Text>
                       {user.username && user.full_name && (
                         <Text style={styles.username}>@{user.username}</Text>
                       )}

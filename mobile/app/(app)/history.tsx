@@ -128,7 +128,7 @@ export default function HistoryScreen() {
       ? new Date(item.inspection_date + 'T00:00:00').toLocaleDateString(dateLocale, {
           day: 'numeric', month: 'short', year: 'numeric',
         })
-      : '—'
+      : '-'
 
     const statusLabel = item.sync_status === 'synced' ? t('common.synced')
       : item.sync_status === 'pending' ? t('common.pending')

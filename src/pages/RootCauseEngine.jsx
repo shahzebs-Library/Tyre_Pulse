@@ -522,7 +522,7 @@ export default function RootCauseEngine() {
       if (!vehicleMap[r.asset_no]) {
         vehicleMap[r.asset_no] = {
           asset_no: r.asset_no,
-          site: r.site || '—',
+          site: r.site || '-',
           totalIncidents: 0,
           causeCounts: {},
           totalCost: 0,
@@ -553,7 +553,7 @@ export default function RootCauseEngine() {
         const avgCPK = avgKmLife && avgCost ? avgCost / avgKmLife : null
         return {
           ...v,
-          topCause: topCauseEntry ? topCauseEntry[0] : '—',
+          topCause: topCauseEntry ? topCauseEntry[0] : '-',
           avgCPK,
         }
       })
@@ -588,7 +588,7 @@ export default function RootCauseEngine() {
       count: c.count.toLocaleString(),
       total_cost: Math.round(c.totalCost).toLocaleString(),
       pct: filtered.length > 0 ? ((c.count / filtered.length) * 100).toFixed(1) + '%' : '0%',
-      top_asset: topN(c.records, 'asset_no', 1)[0]?.name || '—',
+      top_asset: topN(c.records, 'asset_no', 1)[0]?.name || '-',
     }))
     exportToPdf(
       rows,
@@ -768,14 +768,14 @@ export default function RootCauseEngine() {
         <StatCard
           icon={TrendingUp}
           label="Top Root Cause"
-          value={topCause ? topCause.cause.split(' ').slice(0, 2).join(' ') : '—'}
+          value={topCause ? topCause.cause.split(' ').slice(0, 2).join(' ') : '-'}
           sub={topCause ? `${fmtNum(topCause.count)} records` : 'No data'}
           color="text-red-400"
         />
         <StatCard
           icon={DollarSign}
           label="Top Cause Cost"
-          value={topCause ? fmtCost(topCause.totalCost, currency) : '—'}
+          value={topCause ? fmtCost(topCause.totalCost, currency) : '-'}
           sub={topCause ? `for ${topCause.cause}` : 'No data'}
           color="text-amber-400"
         />
@@ -923,7 +923,7 @@ export default function RootCauseEngine() {
                             {count}
                           </span>
                         ) : (
-                          <span className="text-gray-800">—</span>
+                          <span className="text-gray-800">-</span>
                         )}
                       </td>
                     )
@@ -1001,7 +1001,7 @@ export default function RootCauseEngine() {
                 <p className="text-lg font-bold text-indigo-400">
                   {deepDiveData.avgCPK != null
                     ? `${currency} ${deepDiveData.avgCPK.toFixed(4)}`
-                    : '—'}
+                    : '-'}
                 </p>
                 <p className="text-xs text-gray-600">Cost per km</p>
               </div>
@@ -1097,7 +1097,7 @@ export default function RootCauseEngine() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-gray-500 font-medium">
-                    Affected Records — {fmtNum(deepDiveData.totalRecs)} total
+                    Affected Records - {fmtNum(deepDiveData.totalRecs)} total
                   </p>
                   {deepDiveData.totalPages > 1 && (
                     <div className="flex items-center gap-2">
@@ -1136,10 +1136,10 @@ export default function RootCauseEngine() {
                     <tbody className="divide-y divide-gray-800/50">
                       {deepDiveData.paginated.map(r => (
                         <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
-                          <td className="py-2 px-3 text-gray-200 font-mono">{r.asset_no || '—'}</td>
-                          <td className="py-2 px-3 text-gray-300">{r.site || '—'}</td>
-                          <td className="py-2 px-3 text-gray-300">{r.brand || '—'}</td>
-                          <td className="py-2 px-3 text-gray-400">{r.issue_date || '—'}</td>
+                          <td className="py-2 px-3 text-gray-200 font-mono">{r.asset_no || '-'}</td>
+                          <td className="py-2 px-3 text-gray-300">{r.site || '-'}</td>
+                          <td className="py-2 px-3 text-gray-300">{r.brand || '-'}</td>
+                          <td className="py-2 px-3 text-gray-400">{r.issue_date || '-'}</td>
                           <td className="py-2 px-3">
                             <span
                               className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
@@ -1158,7 +1158,7 @@ export default function RootCauseEngine() {
                               className="block truncate"
                               style={{ maxWidth: 260 }}
                             >
-                              {(r.findings || r.description || r.remarks || '—').slice(0, 90)}
+                              {(r.findings || r.description || r.remarks || '-').slice(0, 90)}
                             </span>
                           </td>
                         </tr>
@@ -1221,7 +1221,7 @@ export default function RootCauseEngine() {
                       {fmtCost(v.totalCost, currency)}
                     </td>
                     <td className="py-2 px-3 text-right text-gray-400">
-                      {v.avgCPK != null ? `${currency} ${v.avgCPK.toFixed(4)}` : '—'}
+                      {v.avgCPK != null ? `${currency} ${v.avgCPK.toFixed(4)}` : '-'}
                     </td>
                     <td className="py-2 px-3 text-center">
                       <a

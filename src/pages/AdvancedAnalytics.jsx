@@ -94,23 +94,23 @@ const H_BAR_OPTS = {
 // ── Utility helpers ───────────────────────────────────────────────────────────
 
 function fmt(n, digits = 0) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return Number(n).toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits })
 }
 
 // Delegates to the shared formatter; currency always supplied from activeCurrency.
 function fmtCur(n, currency) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return formatCurrencyCompact(n, currency)
 }
 
 function fmtPct(n) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return `${Number(n).toFixed(1)}%`
 }
 
 function fmtCpk(n, currency) {
-  if (n == null || isNaN(n)) return '—'
+  if (n == null || isNaN(n)) return '-'
   return `${currency} ${Number(n).toFixed(4)}/km`
 }
 
@@ -301,7 +301,7 @@ export default function AdvancedAnalytics() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 1 — TREND ANALYSIS
+  // TAB 1 - TREND ANALYSIS
   // ═══════════════════════════════════════════════════════════════════════════
   const trendData = useMemo(() => {
     if (!filtered.length) return null
@@ -346,7 +346,7 @@ export default function AdvancedAnalytics() {
   }, [filtered])
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 2 — SEASONAL ANALYSIS
+  // TAB 2 - SEASONAL ANALYSIS
   // ═══════════════════════════════════════════════════════════════════════════
   const seasonalData = useMemo(() => {
     if (!filtered.length) return null
@@ -364,7 +364,7 @@ export default function AdvancedAnalytics() {
   }, [filtered])
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 3 — GEOGRAPHIC ANALYSIS
+  // TAB 3 - GEOGRAPHIC ANALYSIS
   // ═══════════════════════════════════════════════════════════════════════════
   const geoData = useMemo(() => {
     if (!filtered.length) return null
@@ -388,7 +388,7 @@ export default function AdvancedAnalytics() {
   }, [filtered])
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 4 — COUNTRY COMPARISON
+  // TAB 4 - COUNTRY COMPARISON
   // ═══════════════════════════════════════════════════════════════════════════
   const countryData = useMemo(() => {
     if (!filtered.length) return null
@@ -414,7 +414,7 @@ export default function AdvancedAnalytics() {
   }, [filtered])
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 5 — BRANCH COMPARISON
+  // TAB 5 - BRANCH COMPARISON
   // ═══════════════════════════════════════════════════════════════════════════
   const branchData = useMemo(() => {
     if (!filtered.length) return null
@@ -446,7 +446,7 @@ export default function AdvancedAnalytics() {
   }, [filtered])
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 6 — VEHICLE COMPARISON
+  // TAB 6 - VEHICLE COMPARISON
   // ═══════════════════════════════════════════════════════════════════════════
   const vehicleData = useMemo(() => {
     if (!filtered.length) return null
@@ -475,7 +475,7 @@ export default function AdvancedAnalytics() {
   }, [filtered])
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 7 — DRIVER COMPARISON (vehicle-proxy)
+  // TAB 7 - DRIVER COMPARISON (vehicle-proxy)
   // ═══════════════════════════════════════════════════════════════════════════
   const driverData = useMemo(() => {
     if (!filtered.length) return null
@@ -495,7 +495,7 @@ export default function AdvancedAnalytics() {
   }, [filtered, vehicleData])
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 8 — BRAND COMPARISON
+  // TAB 8 - BRAND COMPARISON
   // ═══════════════════════════════════════════════════════════════════════════
   const brandData = useMemo(() => {
     if (!filtered.length) return null
@@ -544,7 +544,7 @@ export default function AdvancedAnalytics() {
   }, [filtered])
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 9 — FAILURE PATTERN ANALYSIS
+  // TAB 9 - FAILURE PATTERN ANALYSIS
   // ═══════════════════════════════════════════════════════════════════════════
   const failureData = useMemo(() => {
     if (!filtered.length) return null
@@ -601,10 +601,10 @@ export default function AdvancedAnalytics() {
 
     // Km life histogram buckets
     const BUCKETS = [
-      { label: '0–10K',   min: 0,      max: 10000 },
-      { label: '10–30K',  min: 10000,  max: 30000 },
-      { label: '30–60K',  min: 30000,  max: 60000 },
-      { label: '60–100K', min: 60000,  max: 100000 },
+      { label: '0-10K',   min: 0,      max: 10000 },
+      { label: '10-30K',  min: 10000,  max: 30000 },
+      { label: '30-60K',  min: 30000,  max: 60000 },
+      { label: '60-100K', min: 60000,  max: 100000 },
       { label: '100K+',   min: 100000, max: Infinity },
     ]
     const kmCounts = BUCKETS.map(b => {
@@ -653,7 +653,7 @@ export default function AdvancedAnalytics() {
       { key: 'cost_per_tyre', header: `Cost (${activeCurrency})` },
       { key: 'issue_date', header: 'Date' },
     ]
-    exportToPdf(filtered, cols, `Advanced Analytics — ${activeTab}`, `advanced_analytics_${activeTab}`)
+    exportToPdf(filtered, cols, `Advanced Analytics - ${activeTab}`, `advanced_analytics_${activeTab}`)
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -975,7 +975,7 @@ function SeasonalTab({ data, currency }) {
           <Info size={15} className="text-yellow-400 mt-0.5 shrink-0" />
           <p className="text-xs text-yellow-300">
             <strong>{worstCostMonth.month}</strong> has the highest tyre costs (
-            {fmtCur(worstCostMonth.cost, currency)}) — investigate seasonal road conditions,
+            {fmtCur(worstCostMonth.cost, currency)}) - investigate seasonal road conditions,
             vehicle loading patterns, or inspection compliance for this period.
           </p>
         </div>
@@ -1025,7 +1025,7 @@ function SeasonalTab({ data, currency }) {
                     {fmtCur(s.cost, currency)}
                   </td>
                   <td className="py-1.5 px-2 text-right text-gray-300">
-                    {s.count ? fmtCur(s.cost / s.count, currency) : '—'}
+                    {s.count ? fmtCur(s.cost / s.count, currency) : '-'}
                   </td>
                   <td className="py-1.5 px-2 text-right text-gray-300">{fmt(s.blowouts)}</td>
                 </tr>
@@ -1154,7 +1154,7 @@ function GeoTab({ data, currency }) {
                         className="py-1.5 px-1 text-center text-gray-200"
                         style={{ backgroundColor: v != null ? heatColor(v, heatMin, heatMax) : 'transparent' }}
                       >
-                        {v != null ? `${v.toFixed(0)}%` : '—'}
+                        {v != null ? `${v.toFixed(0)}%` : '-'}
                       </td>
                     ))}
                   </tr>
@@ -1365,7 +1365,7 @@ function BranchTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
                   <td className="py-1.5 px-2 text-right text-gray-300">{fmtCur(b.totalCost, currency)}</td>
                   <td className="py-1.5 px-2 text-right text-gray-400">{fmtCur(b.avgCost, currency)}</td>
                   <td className="py-1.5 px-2 text-right text-gray-400">{fmtCpk(b.avgCpk, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{b.avgLife ? fmt(b.avgLife) : '—'}</td>
+                  <td className="py-1.5 px-2 text-right text-gray-400">{b.avgLife ? fmt(b.avgLife) : '-'}</td>
                   <td className={`py-1.5 px-2 text-right font-medium ${b.failRate > 20 ? 'text-red-400' : b.failRate > 10 ? 'text-yellow-400' : 'text-emerald-400'}`}>
                     {fmtPct(b.failRate)}
                   </td>
@@ -1458,7 +1458,7 @@ function VehicleTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
       </div>
 
       <Card>
-        <SectionTitle>All Vehicles — Tyre Cost Analysis</SectionTitle>
+        <SectionTitle>All Vehicles - Tyre Cost Analysis</SectionTitle>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
@@ -1493,9 +1493,9 @@ function VehicleTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
                   <td className="py-1.5 px-2 text-right text-gray-300">{fmt(v.count)}</td>
                   <td className="py-1.5 px-2 text-right text-gray-300">{fmtCur(v.totalCost, currency)}</td>
                   <td className="py-1.5 px-2 text-right text-gray-400">{fmtCpk(v.avgCpk, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{v.avgLife ? fmt(v.avgLife) : '—'}</td>
+                  <td className="py-1.5 px-2 text-right text-gray-400">{v.avgLife ? fmt(v.avgLife) : '-'}</td>
                   <td className={`py-1.5 px-2 text-right font-medium ${v.failCount > 3 ? 'text-red-400' : 'text-gray-300'}`}>{fmt(v.failCount)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-500">{v.lastSeen || '—'}</td>
+                  <td className="py-1.5 px-2 text-right text-gray-500">{v.lastSeen || '-'}</td>
                   <td className="py-1.5 px-2 text-center">
                     {v.isOutlier && <span className="px-1.5 py-0.5 bg-red-900/50 text-red-400 rounded text-xs">⚠ High CPK</span>}
                   </td>
@@ -1547,15 +1547,15 @@ function DriverTab({ data, currency }) {
         <Info size={15} className="text-blue-400 mt-0.5 shrink-0" />
         <p className="text-xs text-blue-300">
           {hasDriverData
-            ? 'Driver name patterns detected in findings — analysis reflects both driver assignments and vehicle-level tyre consumption.'
+            ? 'Driver name patterns detected in findings - analysis reflects both driver assignments and vehicle-level tyre consumption.'
             : 'Driver data is not available as a direct column. This analysis uses vehicle asset numbers as a proxy for driver performance, reflecting vehicle-level tyre consumption.'}
         </p>
       </div>
 
       <div className="grid grid-cols-3 md:grid-cols-3 gap-4">
         <MetricTile label="Vehicles Analyzed" value={fmt(worst10.length + best10.length)} sub="sample shown" />
-        <MetricTile label="Highest Cost Vehicle" value={worst10[0]?.assetNo ?? '—'} sub={fmtCur(worst10[0]?.totalCost, currency)} />
-        <MetricTile label="Lowest Cost Vehicle" value={best10[0]?.assetNo ?? '—'} sub={fmtCur(best10[0]?.totalCost, currency)} />
+        <MetricTile label="Highest Cost Vehicle" value={worst10[0]?.assetNo ?? '-'} sub={fmtCur(worst10[0]?.totalCost, currency)} />
+        <MetricTile label="Lowest Cost Vehicle" value={best10[0]?.assetNo ?? '-'} sub={fmtCur(best10[0]?.totalCost, currency)} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1733,7 +1733,7 @@ function BrandTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
                   </td>
                   <td className="py-1.5 px-2 text-right text-gray-300">{fmt(b.count)}</td>
                   <td className="py-1.5 px-2 text-right text-gray-400">{fmtCpk(b.avgCpk, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{b.avgLife ? fmt(b.avgLife) : '—'}</td>
+                  <td className="py-1.5 px-2 text-right text-gray-400">{b.avgLife ? fmt(b.avgLife) : '-'}</td>
                   <td className={`py-1.5 px-2 text-right font-medium ${b.failureRate > 20 ? 'text-red-400' : b.failureRate > 10 ? 'text-yellow-400' : 'text-emerald-400'}`}>
                     {fmtPct(b.failureRate)}
                   </td>
@@ -1826,9 +1826,9 @@ function FailureTab({ data, currency }) {
     <div className="space-y-5">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
         <MetricTile label="Total Failures" value={fmt(catEntries.reduce((s, [, v]) => s + v, 0))} sub="High + Critical records" />
-        <MetricTile label="Top Failure Type" value={catEntries[0]?.[0] ?? '—'} sub={`${fmt(catEntries[0]?.[1])} records`} />
-        <MetricTile label="Highest Fail Position" value={posRates[0]?.pos ?? '—'} sub={fmtPct(posRates[0]?.rate)} />
-        <MetricTile label="Highest Fail Brand" value={brandRates[0]?.brand ?? '—'} sub={fmtPct(brandRates[0]?.rate)} />
+        <MetricTile label="Top Failure Type" value={catEntries[0]?.[0] ?? '-'} sub={`${fmt(catEntries[0]?.[1])} records`} />
+        <MetricTile label="Highest Fail Position" value={posRates[0]?.pos ?? '-'} sub={fmtPct(posRates[0]?.rate)} />
+        <MetricTile label="Highest Fail Brand" value={brandRates[0]?.brand ?? '-'} sub={fmtPct(brandRates[0]?.rate)} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1863,7 +1863,7 @@ function FailureTab({ data, currency }) {
       {/* Month × Category heatmap */}
       {heatmap.length > 0 && (
         <Card>
-          <SectionTitle>Failure Seasonality — Month × Category Heat Map</SectionTitle>
+          <SectionTitle>Failure Seasonality - Month × Category Heat Map</SectionTitle>
           <div className="overflow-x-auto">
             <table className="text-xs">
               <thead>
@@ -1884,7 +1884,7 @@ function FailureTab({ data, currency }) {
                         className="py-1.5 px-1 text-center text-gray-200"
                         style={{ backgroundColor: v > 0 ? heatColor(v, 0, heatMax) : 'transparent' }}
                       >
-                        {v > 0 ? v : '—'}
+                        {v > 0 ? v : '-'}
                       </td>
                     ))}
                   </tr>

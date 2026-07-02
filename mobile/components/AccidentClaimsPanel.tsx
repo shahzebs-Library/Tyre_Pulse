@@ -36,7 +36,7 @@ const RECOVERY_SOURCES: RecoverySource[] = ['none', 'insurer', 'third_party', 'd
 const RECOVERY_STATUSES: RecoveryStatus[] = ['pending', 'partial', 'recovered', 'written_off']
 
 function money(n: number | null | undefined): string {
-  if (n == null || isNaN(Number(n))) return '—'
+  if (n == null || isNaN(Number(n))) return '-'
   return `SAR ${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 }
 
@@ -402,7 +402,7 @@ function Row({ label, value, highlight }: { label: string; value?: string | null
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={[styles.infoValue, highlight && value ? styles.infoValueHi : null]}>{value || '—'}</Text>
+      <Text style={[styles.infoValue, highlight && value ? styles.infoValueHi : null]}>{value || '-'}</Text>
     </View>
   )
 }

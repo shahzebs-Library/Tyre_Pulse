@@ -107,12 +107,12 @@ function daysAgo(dateStr) {
 }
 
 function fmtDate(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function fmtShortDate(d) {
-  if (!d) return '—'
+  if (!d) return '-'
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
 }
 
@@ -202,8 +202,8 @@ function TyreDot({ tyre, label }) {
       {tip && tyre && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 rounded-lg p-2 text-xs whitespace-nowrap shadow-xl pointer-events-none">
           <p className="text-white font-semibold">{label}</p>
-          <p className="text-gray-400">{tyre.brand ?? '—'}</p>
-          {/* tread_depth disabled — re-enable when ready */}
+          <p className="text-gray-400">{tyre.brand ?? '-'}</p>
+          {/* tread_depth disabled - re-enable when ready */}
           {tyre.pressure_reading != null && <p className="text-gray-400">PSI: {tyre.pressure_reading}</p>}
           <p style={{ color: riskColor(tyre.risk_level) }}>{tyre.risk_level}</p>
         </div>
@@ -469,7 +469,7 @@ export default function LiveFleetStatus() {
 
       if (fleetRes.error) throw fleetRes.error
       if (tyreRes.error)  throw tyreRes.error
-      // inspections and alerts are best-effort — don't throw
+      // inspections and alerts are best-effort - don't throw
 
       setFleetData(fleetRes.data   ?? [])
       setTyreRecords(tyreRes.data  ?? [])
@@ -721,7 +721,7 @@ export default function LiveFleetStatus() {
       {/* ── Page Header ── */}
       <PageHeader
         title="Live Fleet Status"
-        subtitle={`Morning briefing — real-time vehicle & tyre health${lastUpdated ? ` · Updated ${lastUpdated.toLocaleTimeString()}` : ''}`}
+        subtitle={`Morning briefing - real-time vehicle & tyre health${lastUpdated ? ` · Updated ${lastUpdated.toLocaleTimeString()}` : ''}`}
         icon={Radio}
         actions={<>
           <button
@@ -987,10 +987,10 @@ export default function LiveFleetStatus() {
                                 <span className="text-white font-semibold">{v.asset_no}</span>
                               </div>
                             </td>
-                            <td className="px-3 py-2.5 text-gray-400 font-mono text-xs">{v.fleet_number ?? '—'}</td>
-                            <td className="px-3 py-2.5 text-gray-300 whitespace-nowrap">{v.vehicle_type ?? '—'}</td>
-                            <td className="px-3 py-2.5 text-gray-400">{v.site ?? '—'}</td>
-                            <td className="px-3 py-2.5 text-gray-400 max-w-24 truncate">{v.operator_name ?? '—'}</td>
+                            <td className="px-3 py-2.5 text-gray-400 font-mono text-xs">{v.fleet_number ?? '-'}</td>
+                            <td className="px-3 py-2.5 text-gray-300 whitespace-nowrap">{v.vehicle_type ?? '-'}</td>
+                            <td className="px-3 py-2.5 text-gray-400">{v.site ?? '-'}</td>
+                            <td className="px-3 py-2.5 text-gray-400 max-w-24 truncate">{v.operator_name ?? '-'}</td>
                             <td className="px-3 py-2.5 whitespace-nowrap">
                               <div className="flex items-center gap-1 text-xs">
                                 {v.criticalCount > 0 && (
@@ -1030,7 +1030,7 @@ export default function LiveFleetStatus() {
                                   <Bell size={9} />{v.alertCount}
                                 </span>
                               ) : (
-                                <span className="text-gray-700 text-xs">—</span>
+                                <span className="text-gray-700 text-xs">-</span>
                               )}
                             </td>
                             <td className="px-3 py-2.5">
@@ -1361,17 +1361,17 @@ export default function LiveFleetStatus() {
                             .sort((a, b) => (a.position ?? '').localeCompare(b.position ?? ''))
                             .map((t, i) => (
                             <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                              <td className="px-2.5 py-2 text-gray-300 font-mono font-semibold">{t.position ?? '—'}</td>
-                              <td className="px-2.5 py-2 text-gray-300">{t.brand ?? '—'}</td>
+                              <td className="px-2.5 py-2 text-gray-300 font-mono font-semibold">{t.position ?? '-'}</td>
+                              <td className="px-2.5 py-2 text-gray-300">{t.brand ?? '-'}</td>
                               <td className="px-2.5 py-2 text-gray-300">
                                 {t.tread_depth != null ? (
                                   <span style={{ color: t.tread_depth < 3 ? '#dc2626' : t.tread_depth < 5 ? '#ca8a04' : '#16a34a' }}>
                                     {t.tread_depth}mm
                                   </span>
-                                ) : '—'}
+                                ) : '-'}
                               </td>
                               <td className="px-2.5 py-2 text-gray-300">
-                                {t.pressure_reading != null ? `${t.pressure_reading}` : '—'}
+                                {t.pressure_reading != null ? `${t.pressure_reading}` : '-'}
                               </td>
                               <td className="px-2.5 py-2">
                                 {t.risk_level ? (
@@ -1379,12 +1379,12 @@ export default function LiveFleetStatus() {
                                     {t.risk_level}
                                   </span>
                                 ) : (
-                                  <span className="text-gray-600">—</span>
+                                  <span className="text-gray-600">-</span>
                                 )}
                               </td>
                               <td className="px-2.5 py-2 text-gray-500 flex items-center gap-1">
                                 <Clock size={9} />
-                                {t.issue_date ? `${daysAgo(t.issue_date)}d` : '—'}
+                                {t.issue_date ? `${daysAgo(t.issue_date)}d` : '-'}
                               </td>
                             </tr>
                           ))}

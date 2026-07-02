@@ -22,7 +22,7 @@ import { cn } from '../lib/cn'
 
 const PAGE_SIZE = 25
 
-// WCAG AA–compliant on light (white/off-white) backgrounds
+// WCAG AA-compliant on light (white/off-white) backgrounds
 const RISK_STYLE = {
   Critical: 'bg-red-100 text-red-700 border-red-200',
   High:     'bg-orange-100 text-orange-700 border-orange-200',
@@ -39,7 +39,7 @@ const EMPTY_FORM = (defaultCost = 1200, country = 'KSA') => ({
 
 const EMPTY_BULK = { site: '', brand: '', cost_per_tyre: '', risk_level: '', category: '' }
 
-// Column definitions for the virtual grid — widths must sum to 100% or use fixed px
+// Column definitions for the virtual grid - widths must sum to 100% or use fixed px
 const COL_WIDTHS = [40, 96, 110, 130, 96, 100, 100, 100, 88, 88, 72, 80]
 
 export default function TyreRecords() {
@@ -69,7 +69,7 @@ export default function TyreRecords() {
   const [form, setForm]                   = useState(() => EMPTY_FORM())
   const [bulkForm, setBulkForm]           = useState(EMPTY_BULK)
 
-  // Bulk selection — driven by the current page's records
+  // Bulk selection - driven by the current page's records
   const {
     selected,
     selectedRows,
@@ -303,7 +303,7 @@ export default function TyreRecords() {
 
   function F(field) { return e => setForm(f => ({ ...f, [field]: e.target.value })) }
 
-  // Shared column header style — mirrors the virtual row grid
+  // Shared column header style - mirrors the virtual row grid
   const headerGridStyle = {
     display: 'grid',
     gridTemplateColumns: COL_WIDTHS.map(w => `${w}px`).join(' '),
@@ -381,7 +381,7 @@ export default function TyreRecords() {
             style={{ height: '520px', minWidth: `${COL_WIDTHS.reduce((a, b) => a + b, 0)}px` }}
           >
             {loading ? (
-              // Skeleton rows — not virtualised (only 8 items, short-lived)
+              // Skeleton rows - not virtualised (only 8 items, short-lived)
               <div>
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div
@@ -451,31 +451,31 @@ export default function TyreRecords() {
                       </div>
 
                       {/* Date */}
-                      <div className="px-4 text-muted text-xs tabular-nums truncate">{r.issue_date ?? '—'}</div>
+                      <div className="px-4 text-muted text-xs tabular-nums truncate">{r.issue_date ?? '-'}</div>
 
                       {/* Asset No */}
-                      <div className="px-4 font-semibold text-white text-sm truncate">{r.asset_no ?? '—'}</div>
+                      <div className="px-4 font-semibold text-white text-sm truncate">{r.asset_no ?? '-'}</div>
 
                       {/* Serial No */}
-                      <div className="px-4 text-gray-400 text-xs font-mono truncate">{r.serial_no ?? '—'}</div>
+                      <div className="px-4 text-gray-400 text-xs font-mono truncate">{r.serial_no ?? '-'}</div>
 
                       {/* Brand */}
-                      <div className="px-4 text-gray-300 text-sm truncate">{r.brand ?? '—'}</div>
+                      <div className="px-4 text-gray-300 text-sm truncate">{r.brand ?? '-'}</div>
 
                       {/* Site */}
-                      <div className="px-4 text-gray-400 text-sm truncate">{r.site ?? '—'}</div>
+                      <div className="px-4 text-gray-400 text-sm truncate">{r.site ?? '-'}</div>
 
                       {/* MIS No */}
-                      <div className="px-4 text-gray-400 text-xs truncate">{r.mis_number ?? '—'}</div>
+                      <div className="px-4 text-gray-400 text-xs truncate">{r.mis_number ?? '-'}</div>
 
                       {/* Job Card */}
-                      <div className="px-4 text-gray-400 text-xs truncate">{r.job_card ?? '—'}</div>
+                      <div className="px-4 text-gray-400 text-xs truncate">{r.job_card ?? '-'}</div>
 
                       {/* Risk */}
                       <div className="px-4">
                         {r.risk_level
                           ? <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium border', RISK_STYLE[r.risk_level] ?? 'bg-surface-3 text-muted border-[var(--border-dim)]')}>{r.risk_level}</span>
-                          : <span className="text-muted">—</span>}
+                          : <span className="text-muted">-</span>}
                       </div>
 
                       {/* Cost */}
@@ -519,7 +519,7 @@ export default function TyreRecords() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 bg-surface-1 border-t border-[var(--border-dim)]">
             <p className="text-xs text-muted">
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()} records
+              {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()} records
             </p>
             <div className="flex items-center gap-1">
               <button
@@ -666,14 +666,14 @@ export default function TyreRecords() {
               <div>
                 <label className="label">Risk Level</label>
                 <select className="input" value={form.risk_level} onChange={F('risk_level')}>
-                  <option value="">— None —</option>
+                  <option value="">- None -</option>
                   {['Critical', 'High', 'Medium', 'Low'].map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">Category</label>
                 <select className="input" value={form.category} onChange={F('category')}>
-                  <option value="">— None —</option>
+                  <option value="">- None -</option>
                   {ALL_CATEGORY_LABELS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
@@ -705,18 +705,18 @@ export default function TyreRecords() {
               <datalist id="brand-list-bulk">{brands.map(b => <option key={b} value={b} />)}</datalist>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><label className="label">Cost</label><input type="number" className="input" value={bulkForm.cost_per_tyre} onChange={e => setBulkForm(f => ({ ...f, cost_per_tyre: e.target.value }))} placeholder="—" min={0} /></div>
+              <div><label className="label">Cost</label><input type="number" className="input" value={bulkForm.cost_per_tyre} onChange={e => setBulkForm(f => ({ ...f, cost_per_tyre: e.target.value }))} placeholder="-" min={0} /></div>
               <div>
                 <label className="label">Risk Level</label>
                 <select className="input" value={bulkForm.risk_level} onChange={e => setBulkForm(f => ({ ...f, risk_level: e.target.value }))}>
-                  <option value="">— Keep existing —</option>
+                  <option value="">- Keep existing -</option>
                   {['Critical', 'High', 'Medium', 'Low'].map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">Category</label>
                 <select className="input" value={bulkForm.category} onChange={e => setBulkForm(f => ({ ...f, category: e.target.value }))}>
-                  <option value="">— Keep existing —</option>
+                  <option value="">- Keep existing -</option>
                   {ALL_CATEGORY_LABELS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>

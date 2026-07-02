@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
-// Generic hook — callers pass a queryKey and a fetcher fn
+// Generic hook - callers pass a queryKey and a fetcher fn
 export function useSupabaseQuery(queryKey, fetcher, options = {}) {
   return useQuery({ queryKey, queryFn: fetcher, ...options })
 }

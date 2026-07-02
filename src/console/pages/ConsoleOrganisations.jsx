@@ -52,7 +52,7 @@ export default function ConsoleOrganisations() {
   async function loadOrgStats(orgId) {
     if (orgStats[orgId]) return
     // tyre_records is country-scoped, not organisation-scoped, so a per-org tyre
-    // count isn't available from the data model — report the platform total.
+    // count isn't available from the data model - report the platform total.
     const [{ count: users }, { count: tyres }] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('organisation_id', orgId),
       supabase.from('tyre_records').select('id', { count: 'exact', head: true }),
@@ -243,7 +243,7 @@ export default function ConsoleOrganisations() {
                       }
                     </td>
                     <td className="px-4 py-3 text-gray-500">
-                      {org.created_at ? new Date(org.created_at).toLocaleDateString() : '—'}
+                      {org.created_at ? new Date(org.created_at).toLocaleDateString() : '-'}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end" onClick={e => e.stopPropagation()}>
@@ -271,8 +271,8 @@ export default function ConsoleOrganisations() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           <Stat label="Users" value={orgStats[org.id]?.users ?? '…'} icon={Users} color="blue" />
                           <Stat label="Tyre Records" value={orgStats[org.id]?.tyres ?? '…'} icon={Database} color="orange" />
-                          <Stat label="Contact" value={org.contact_email ?? '—'} icon={Globe} color="purple" />
-                          <Stat label="Plan" value={org.plan ?? '—'} icon={Eye} color="green" />
+                          <Stat label="Contact" value={org.contact_email ?? '-'} icon={Globe} color="purple" />
+                          <Stat label="Plan" value={org.plan ?? '-'} icon={Eye} color="green" />
                         </div>
                         {org.countries && org.countries.length > 0 && (
                           <div className="mt-3">
@@ -432,7 +432,7 @@ function PlanBadge({ plan }) {
     enterprise: 'text-orange-400 bg-orange-900/20 border-orange-800/40',
   }
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold capitalize ${c[plan] ?? c.trial}`}>{plan ?? '—'}</span>
+    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold capitalize ${c[plan] ?? c.trial}`}>{plan ?? '-'}</span>
   )
 }
 

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// PerformanceBenchmark.jsx — Fleet vs Industry Benchmarking · /benchmark
+// PerformanceBenchmark.jsx - Fleet vs Industry Benchmarking · /benchmark
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
@@ -364,7 +364,7 @@ export default function PerformanceBenchmark() {
     const pgCount = doc.internal.getNumberOfPages()
     for (let i = 1; i <= pgCount; i++) {
       doc.setPage(i); doc.setFontSize(7); doc.setTextColor(156, 163, 175)
-      doc.text(`TyrePulse Fleet Benchmarking — Page ${i} of ${pgCount}`, 14, 202)
+      doc.text(`TyrePulse Fleet Benchmarking - Page ${i} of ${pgCount}`, 14, 202)
     }
     doc.save(`performance-benchmark-${new Date().toISOString().slice(0, 10)}.pdf`)
   }
@@ -418,7 +418,7 @@ export default function PerformanceBenchmark() {
       {/* Header */}
       <PageHeader
         title="Performance Benchmarking"
-        subtitle={`Fleet performance vs industry standards — ${filtered.length} tyre records`}
+        subtitle={`Fleet performance vs industry standards - ${filtered.length} tyre records`}
         icon={Target}
         actions={<>
           <select value={period} onChange={e => setPeriod(e.target.value)}

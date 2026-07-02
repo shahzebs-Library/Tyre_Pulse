@@ -370,7 +370,7 @@ export default function SerialTracker() {
                     { label: 'First Used',      value: formatDate(stats.first.issue_date) },
                     { label: 'Total Records',   value: records.length },
                     { label: 'Vehicles Used',   value: stats.assets },
-                    { label: 'Days in Service', value: stats.days || '—' },
+                    { label: 'Days in Service', value: stats.days || '-' },
                   ].map(s => (
                     <div key={s.label} className="bg-gray-800/50 rounded-lg p-3 text-center">
                       <p className="text-lg font-bold text-white">{s.value}</p>
@@ -405,7 +405,7 @@ export default function SerialTracker() {
                             <div className="text-xs font-mono text-gray-500 w-24 flex-shrink-0 pt-0.5">{formatDate(r.issue_date)}</div>
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-                                <span className="text-gray-400">{r.site || '—'}</span>
+                                <span className="text-gray-400">{r.site || '-'}</span>
                                 {r.position && <span className="text-gray-500">Pos: <span className="text-white font-mono">{r.position}</span></span>}
                                 {r.risk_level && <span className={riskColor(r.risk_level)}>{r.risk_level}</span>}
                                 {r.cost > 0 && <span className="text-gray-500">{formatCurrencyCompact(r.cost)}</span>}
@@ -554,10 +554,10 @@ export default function SerialTracker() {
                         <tr key={r.serial} className="border-b border-gray-800/50 hover:bg-gray-800/20">
                           <td className="py-2 pr-4 font-mono text-white">{r.serial}</td>
                           <td className="py-2 pr-4 text-gray-400 text-xs">{formatDate(r.first_seen)}</td>
-                          <td className="py-2 pr-4 font-mono text-gray-300 text-xs">{r.last_asset || '—'}</td>
+                          <td className="py-2 pr-4 font-mono text-gray-300 text-xs">{r.last_asset || '-'}</td>
                           <td className="py-2 pr-4 text-gray-300 text-right">{r.total_records}</td>
                           <td className="py-2 pr-4 text-gray-400 text-right text-xs">
-                            {r.cost > 0 ? formatCurrencyCompact(r.cost) : '—'}
+                            {r.cost > 0 ? formatCurrencyCompact(r.cost) : '-'}
                           </td>
                           <td className="py-2">
                             {r.status === 'Not Found' ? (

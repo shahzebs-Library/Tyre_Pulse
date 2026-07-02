@@ -13,7 +13,7 @@ function generateYears(count = 5) {
 }
 
 /**
- * ChartModal — fullscreen chart enlargement with optional filter controls.
+ * ChartModal - fullscreen chart enlargement with optional filter controls.
  *
  * Props:
  *   open            boolean
@@ -25,7 +25,7 @@ function generateYears(count = 5) {
  *   onFilterChange  (key, value) => void
  *   filterOptions   { sites: string[], brands: string[], years: number[] }
  *   showGranularity boolean (default false)
- *   showMonth       boolean — override: force show/hide month picker
+ *   showMonth       boolean - override: force show/hide month picker
  *   showSite        boolean (default true when sites provided)
  *   showBrand       boolean (default true when brands provided)
  */

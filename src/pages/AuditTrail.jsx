@@ -370,10 +370,10 @@ export default function AuditTrail() {
                             <span className={`badge border ${ACTION_BADGE[row.action] ?? 'bg-gray-800 text-gray-400 border-gray-700'}`}>
                               {row.action}
                             </span>
-                          ) : '—'}
+                          ) : '-'}
                         </td>
-                        <td className="table-cell text-gray-400">{row.table_name ?? '—'}</td>
-                        <td className="table-cell text-gray-200 text-right">{row.record_count ?? '—'}</td>
+                        <td className="table-cell text-gray-400">{row.table_name ?? '-'}</td>
+                        <td className="table-cell text-gray-200 text-right">{row.record_count ?? '-'}</td>
                         <td className="table-cell">
                           {row.details && Object.keys(row.details).length > 0 ? (
                             <button
@@ -382,7 +382,7 @@ export default function AuditTrail() {
                             >
                               {expandedRow === row.id ? 'Hide' : 'Show'}
                             </button>
-                          ) : <span className="text-gray-700">—</span>}
+                          ) : <span className="text-gray-700">-</span>}
                         </td>
                       </tr>
                       {expandedRow === row.id && (
@@ -403,7 +403,7 @@ export default function AuditTrail() {
             {auditPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
                 <p className="text-sm text-gray-400">
-                  Showing {auditPage * PAGE_SIZE + 1}–{Math.min((auditPage + 1) * PAGE_SIZE, auditTotal)} of {auditTotal.toLocaleString()}
+                  Showing {auditPage * PAGE_SIZE + 1}-{Math.min((auditPage + 1) * PAGE_SIZE, auditTotal)} of {auditTotal.toLocaleString()}
                 </p>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setAuditPage(p => Math.max(0, p - 1))} disabled={auditPage === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40">
@@ -449,7 +449,7 @@ export default function AuditTrail() {
                       <td className="table-cell text-gray-200 max-w-xs truncate">
                         {Array.isArray(row.file_names)
                           ? row.file_names.join(', ')
-                          : (row.file_names ?? '—')}
+                          : (row.file_names ?? '-')}
                       </td>
                       <td className="table-cell text-green-400 text-right font-medium">
                         {(row.records_added ?? 0).toLocaleString()}
@@ -463,7 +463,7 @@ export default function AuditTrail() {
                       <td className="table-cell text-gray-400 text-xs whitespace-nowrap">
                         {formatDateTime(row.uploaded_at)}
                       </td>
-                      <td className="table-cell text-gray-400">{row.region ?? '—'}</td>
+                      <td className="table-cell text-gray-400">{row.region ?? '-'}</td>
                       {profile?.role === 'Admin' && (
                         <td className="table-cell">
                           {row.batch_id ? (
@@ -471,7 +471,7 @@ export default function AuditTrail() {
                               className="text-xs text-red-400 border border-red-800/50 hover:bg-red-900/20 px-2 py-1 rounded transition-colors">
                               Delete Batch
                             </button>
-                          ) : <span className="text-gray-700 text-xs">—</span>}
+                          ) : <span className="text-gray-700 text-xs">-</span>}
                         </td>
                       )}
                     </tr>
@@ -483,7 +483,7 @@ export default function AuditTrail() {
             {uploadPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
                 <p className="text-sm text-gray-400">
-                  Showing {uploadPage * PAGE_SIZE + 1}–{Math.min((uploadPage + 1) * PAGE_SIZE, uploadTotal)} of {uploadTotal.toLocaleString()}
+                  Showing {uploadPage * PAGE_SIZE + 1}-{Math.min((uploadPage + 1) * PAGE_SIZE, uploadTotal)} of {uploadTotal.toLocaleString()}
                 </p>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setUploadPage(p => Math.max(0, p - 1))} disabled={uploadPage === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40">

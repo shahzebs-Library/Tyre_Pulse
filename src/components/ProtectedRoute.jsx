@@ -7,7 +7,7 @@ export default function ProtectedRoute({ children }) {
   if (loading) return <LoadingSpinner />
   if (!user) return <Navigate to="/login" replace />
 
-  // Block unapproved accounts — approved must be explicitly true
+  // Block unapproved accounts - approved must be explicitly true
   // null / undefined = legacy account treated as approved; false = explicitly pending
   if (profile && profile.approved === false) {
     return (

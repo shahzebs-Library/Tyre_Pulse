@@ -1,5 +1,5 @@
 /**
- * Home Screen — role-aware mission control
+ * Home Screen - role-aware mission control
  *
  * Inspector / Tyre Man  → inspection-focused: sync status, quick scan, today's count
  * Manager / Director    → fleet health mini-dashboard + navigation shortcuts
@@ -148,7 +148,7 @@ export default function HomeScreen() {
   const quickActions = getQuickActions(role ?? null)
 
   const load = useCallback(async () => {
-    // Phase 1: offline queue (AsyncStorage — instant)
+    // Phase 1: offline queue (AsyncStorage - instant)
     const count = await getPendingCount()
     setPendingCount(count)
 
@@ -326,7 +326,7 @@ export default function HomeScreen() {
                     <Text style={s.fleetAlertText}>
                       {fleetHealth.criticalCount > 0
                         ? `${fleetHealth.criticalCount} critical tyre${fleetHealth.criticalCount > 1 ? 's' : ''} need attention`
-                        : `${fleetHealth.openWorkOrders} work orders open — review recommended`}
+                        : `${fleetHealth.openWorkOrders} work orders open - review recommended`}
                     </Text>
                     <Ionicons name="chevron-forward" size={13} color="#dc2626" />
                   </TouchableOpacity>

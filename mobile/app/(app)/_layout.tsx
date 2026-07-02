@@ -61,7 +61,7 @@ export default function AppLayout() {
 
   if (!user) return <Redirect href="/(auth)/login" />
 
-  // Access gate — admin controls entry. A locked or not-yet-approved account
+  // Access gate - admin controls entry. A locked or not-yet-approved account
   // cannot use the app until an admin grants/restores access.
   if (profile && (profile.approved === false || profile.locked === true)) {
     return <AccessGate locked={profile.locked === true} onSignOut={signOut} />
@@ -110,7 +110,7 @@ export default function AppLayout() {
         )
       })}
 
-      {/* Hidden routes — reachable via router.push but never in the tab bar */}
+      {/* Hidden routes - reachable via router.push but never in the tab bar */}
       <Tabs.Screen name="scanner"         options={{ href: null }} />
       <Tabs.Screen name="tasks"           options={{ href: null }} />
       <Tabs.Screen name="alerts"          options={{ href: null }} />

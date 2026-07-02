@@ -1,5 +1,5 @@
 /**
- * Tyre Position Intelligence — canonical axle/position naming.
+ * Tyre Position Intelligence - canonical axle/position naming.
  *
  * Single source of truth for the fleet position-coding scheme used across
  * the Green Concrete tyre inspection / consumption reports.
@@ -93,7 +93,7 @@ export function normalizePosition(pos) {
  */
 export function describePosition(raw) {
   const p = parsePosition(raw)
-  if (!p) return raw ? String(raw) : '—'
+  if (!p) return raw ? String(raw) : '-'
   if (p.side === null) return p.axleNo ? `${p.axle} ${p.axleNo}` : p.axle
   return [SIDE[p.side], AXLE[p.axle], p.axleNo ? `Axle ${p.axleNo}` : null, IO[p.io]]
     .filter(Boolean).join(' ')
@@ -119,7 +119,7 @@ export function canonicalCode(raw) {
 export const AXLE_LAYOUTS = {
   // 5-axle line / placing pump (2 steer + 3 single rear)
   '5_AXLE_PUMP': {
-    label: '5 Axles — Pump',
+    label: '5 Axles - Pump',
     rows: [['LHF1', 'RHF1'], ['LHF2', 'RHF2'], ['LHR1', 'RHR1'], ['LHR2', 'RHR2'], ['LHR3', 'RHR3']],
   },
   // Truck-mixer / 8x4 (2 steer + center dual + rear dual)
@@ -143,7 +143,7 @@ export const AXLE_LAYOUTS = {
   },
   // 4x2 light / pickup (1 steer + 1 rear)
   '4X2': {
-    label: '4×2 — Pickup / Car',
+    label: '4×2 - Pickup / Car',
     rows: [['LHF1', 'RHF1'], ['LHR1', 'RHR1']],
   },
 }

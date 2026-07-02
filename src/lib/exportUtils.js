@@ -2,7 +2,7 @@ import { formatCurrencyCompact, formatDate } from './formatters.js'
 
 // ── Lazy-loaded heavy libraries ────────────────────────────────────────────────
 // xlsx (~420 KB), jspdf (~400 KB) and pptxgenjs (~385 KB) must never ship with a
-// page's initial chunk — they load on the first export click and are then
+// page's initial chunk - they load on the first export click and are then
 // memoised. Module-level bindings keep every internal helper working unchanged;
 // each public export awaits the loader for the engine(s) it needs.
 let XLSX, jsPDF, autoTable, pptxgen
@@ -24,7 +24,7 @@ async function ensurePptx() {
   return pptxgen
 }
 
-// ── Brand palette — deep slate + indigo + gold (no green/AI references) ────────
+// ── Brand palette - deep slate + indigo + gold (no green/AI references) ────────
 const P = {
   // Darks
   ink:      [8,   12,  28],   // near-black navy
@@ -38,7 +38,7 @@ const P = {
   gold:     [245, 158, 11],   // KPI values / highlights
   amber:    [180, 83,  9],    // gold-dark
 
-  // Status — rich, not neon
+  // Status - rich, not neon
   emerald:  [4,   120, 87],   // good
   crimson:  [153, 27,  27],   // critical
   scarlet:  [194, 65,  12],   // high
@@ -86,8 +86,8 @@ function _deriveNarrative(data) {
   const tone   = (critShare >= 15 || comp < 70) ? 'crit'
                : (critShare >= 5  || comp < 85) ? 'warn' : 'good'
   const status = tone === 'crit' ? 'Requires Immediate Attention'
-               : tone === 'warn' ? 'Stable — Monitoring Advised'
-               : 'Healthy — Within Target'
+               : tone === 'warn' ? 'Stable - Monitoring Advised'
+               : 'Healthy - Within Target'
 
   const p1 = `The fleet ${tone === 'crit' ? 'requires immediate attention' : tone === 'warn' ? 'is stable but warrants close monitoring' : 'is healthy and operating within target parameters'}. `
     + `Of ${totalT.toLocaleString()} monitored tyre records, ${good.toLocaleString()} (${comp}%) sit within safe operating limits, `
@@ -194,19 +194,19 @@ function _pageHeader(doc, title, subtitle, company = '') {
   doc.setFillColor(...P.indigo)
   doc.rect(0, 20, pw, 2.5, 'F')
 
-  // Company name — left
+  // Company name - left
   doc.setFontSize(8)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(...P.gold)
   doc.text((company || 'FLEET OPERATIONS').toUpperCase(), 14, 8)
 
-  // Title — left
+  // Title - left
   doc.setFontSize(11)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(...P.white)
   doc.text(title, 14, 15)
 
-  // Subtitle + date — right
+  // Subtitle + date - right
   if (subtitle) {
     doc.setFontSize(7.5)
     doc.setFont('helvetica', 'normal')
@@ -263,7 +263,7 @@ function _kpiBox(doc, x, y, w, h, value, label, subtext, accentRgb) {
   doc.setFontSize(22)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(r * 0.65, g * 0.65, b * 0.65)
-  doc.text(String(value ?? '—'), x + w / 2, y + h / 2 + 2, { align: 'center' })
+  doc.text(String(value ?? '-'), x + w / 2, y + h / 2 + 2, { align: 'center' })
   // Label
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'normal')
@@ -384,7 +384,7 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
   const { body, tyres } = layout
   const tc = tyreConditions || {}
 
-  // Body — very dark slate
+  // Body - very dark slate
   doc.setFillColor(10, 16, 32)
   doc.setDrawColor(...P.iron)
   doc.setLineWidth(0.5)
@@ -447,7 +447,7 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
     doc.setDrawColor(28, 34, 52)
     doc.setLineWidth(0.25)
     doc.roundedRect(tx + tw * 0.07, ty + th * 0.07, tw * 0.86, th * 0.86, rx * 0.55, rx * 0.55, 'S')
-    // Rim — risk coloured
+    // Rim - risk coloured
     doc.setFillColor(r, g, b)
     doc.setDrawColor(clamp(r - 50, 0, 255), clamp(g - 50, 0, 255), clamp(b - 50, 0, 255))
     doc.setLineWidth(0.2)
@@ -578,7 +578,7 @@ function _sumByGroup(rows, groupKey, valKey) {
 }
 const _RISK_RGB_PDF = { critical: P.crimson, high: P.scarlet, medium: P.gold, low: P.emerald, none: P.ghost }
 
-// Clean horizontal bar chart (vector — crisp at any zoom). entries: [[label, value]]
+// Clean horizontal bar chart (vector - crisp at any zoom). entries: [[label, value]]
 function _hBarChart(doc, x, y, w, h, entries, accentRgb, fmt) {
   if (!entries.length) return
   const max   = Math.max(...entries.map(e => e[1]), 1)
@@ -602,7 +602,7 @@ function _hBarChart(doc, x, y, w, h, entries, accentRgb, fmt) {
   })
 }
 
-// ── PDF Report Export — auto KPI summary + charts, then the data table ───────────
+// ── PDF Report Export - auto KPI summary + charts, then the data table ───────────
 export async function exportToPdf(rows, columns, title, filename = 'report', orientation = 'landscape', company = '', opts = {}) {
   await ensurePdf()
   const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' })
@@ -650,7 +650,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
     cardsRow.forEach((c, i) => _kpiBox(doc, 14 + i * (cw + 4), y, cw, 26, c.v, c.l, null, c.rgb))
     y += 33
 
-    // Charts — two columns
+    // Charts - two columns
     const half = (PW - 28 - 8) / 2
     const chartY = y + 6
     const chartH = 74
@@ -749,7 +749,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
   doc.save(`${filename}.pdf`)
 }
 
-// ── Inspection Detail PDF — captures DOM SVG if provided ──────────────────────
+// ── Inspection Detail PDF - captures DOM SVG if provided ──────────────────────
 /**
  * @param {Object}  row          - inspection record
  * @param {Object}  [opts]
@@ -765,7 +765,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const mx      = 14
 
   // ── PAGE 1 ─────────────────────────────────────────────────────────────────
-  _pageHeader(doc, 'Vehicle Inspection Report', `Asset: ${row.asset_no || '—'}`, company)
+  _pageHeader(doc, 'Vehicle Inspection Report', `Asset: ${row.asset_no || '-'}`, company)
   let y = 30
 
   // Title card with severity ribbon
@@ -784,7 +784,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...P.ghost)
-  doc.text(`${row.inspection_type || '—'}  ·  ${row.status || '—'}`, mx + 8, y + 13)
+  doc.text(`${row.inspection_type || '-'}  ·  ${row.status || '-'}`, mx + 8, y + 13)
   // Severity badge
   doc.setFillColor(...sevRgb)
   doc.roundedRect(pw - mx - 32, y + 4, 30, 8, 2, 2, 'F')
@@ -794,18 +794,18 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   doc.text((row.severity || 'MEDIUM').toUpperCase(), pw - mx - 17, y + 9.5, { align: 'center' })
   y += 21
 
-  // Meta grid — 2-col, 4 rows
+  // Meta grid - 2-col, 4 rows
   const metaL = [
-    ['Scheduled Date', row.scheduled_date || '—'],
-    ['Site',           row.site || '—'],
-    ['Inspector',      row.inspector || row.attendees || '—'],
-    ['Company',        company || '—'],
+    ['Scheduled Date', row.scheduled_date || '-'],
+    ['Site',           row.site || '-'],
+    ['Inspector',      row.inspector || row.attendees || '-'],
+    ['Company',        company || '-'],
   ]
   const metaR = [
-    ['Asset No.',      row.asset_no || '—'],
-    ['Vehicle Type',   row.vehicle_type || '—'],
-    ['Status',         row.status || '—'],
-    ['Findings Count', String(Object.keys(row.tyre_conditions || {}).length || '—')],
+    ['Asset No.',      row.asset_no || '-'],
+    ['Vehicle Type',   row.vehicle_type || '-'],
+    ['Status',         row.status || '-'],
+    ['Findings Count', String(Object.keys(row.tyre_conditions || {}).length || '-')],
   ]
   const half = (pw - mx * 2) / 2
   metaL.forEach(([lbl, val], i) => {
@@ -874,7 +874,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
       doc.addImage(captured.dataUrl, 'PNG', mx + 2, y + 4, dW, dH)
       diagramH = bgH
 
-      // Legend — right side
+      // Legend - right side
       const legendX = mx + dW + 8
       let legendY   = y + 8
       doc.setFontSize(6.5); doc.setFont('helvetica','bold'); doc.setTextColor(...P.mist)
@@ -972,11 +972,11 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
       head: [['Position', 'Pressure', 'Tread', 'Condition', 'Risk', 'Notes']],
       body: tyreEntries.map(([pos, d]) => [
         pos,
-        d.pressure ? `${d.pressure} PSI` : '—',
-        d.tread    ? `${d.tread} mm`     : '—',
-        d.condition ?? RISK_LABEL[d.risk] ?? '—',
+        d.pressure ? `${d.pressure} PSI` : '-',
+        d.tread    ? `${d.tread} mm`     : '-',
+        d.condition ?? RISK_LABEL[d.risk] ?? '-',
         RISK_LABEL[d.risk] ?? 'Unknown',
-        d.notes ?? '—',
+        d.notes ?? '-',
       ]),
       margin: { left: mx, right: mx },
       theme: 'grid',
@@ -1102,9 +1102,9 @@ function _buildRecommendations(riskCounts, totalT, row) {
     if (risk === 'warning')  warnPos.push(pos)
     if (typeof d === 'object' && d?.pressure && Number(d.pressure) < 80) lowPsiPos.push(pos)
   })
-  if (critPos.length)  recs.push({ urgent: true,  text: `IMMEDIATE: ${critPos.length} tyre(s) in critical condition at ${critPos.join(', ')} — remove vehicle from service until replaced.` })
+  if (critPos.length)  recs.push({ urgent: true,  text: `IMMEDIATE: ${critPos.length} tyre(s) in critical condition at ${critPos.join(', ')} - remove vehicle from service until replaced.` })
   if (warnPos.length)  recs.push({ urgent: false, text: `Schedule replacement within 7 days for position(s) ${warnPos.join(', ')} showing abnormal wear or damage.` })
-  if (lowPsiPos.length) recs.push({ urgent: true, text: `${lowPsiPos.length} tyre(s) below 80 PSI at ${lowPsiPos.join(', ')} — re-inflate to specification and inspect for slow leaks.` })
+  if (lowPsiPos.length) recs.push({ urgent: true, text: `${lowPsiPos.length} tyre(s) below 80 PSI at ${lowPsiPos.join(', ')} - re-inflate to specification and inspect for slow leaks.` })
   if (row.severity === 'Critical' || row.severity === 'High') recs.push({ urgent: true, text: 'Escalate to Fleet Manager and issue corrective action work order before next deployment.' })
   if (!recs.length && totalT > 0) recs.push({ urgent: false, text: 'All positions checked. Maintain standard weekly pressure monitoring and monthly tread depth checks.' })
   return recs
@@ -1334,8 +1334,8 @@ export async function exportDailyExecutivePdf(data, filename) {
     const costKpis = [
       { l: 'Monthly Spend',   v: fmtCurr(data.monthlySpend),  rgb: data.monthlySpend > (data.monthlyBudget || Infinity) ? [...P.crimson] : [...P.emerald] },
       { l: 'YTD Spend',       v: fmtCurr(data.ytdSpend),      rgb: P.indigo },
-      { l: 'Cost / km',       v: data.costPerKm ? `SAR ${data.costPerKm.toFixed(3)}` : '—', rgb: [...P.gold] },
-      { l: 'Budget Variance', v: (data.monthlyBudget && data.monthlySpend) ? fmtCurr(Math.abs(data.monthlyBudget - data.monthlySpend)) : '—', rgb: [...P.emerald] },
+      { l: 'Cost / km',       v: data.costPerKm ? `SAR ${data.costPerKm.toFixed(3)}` : '-', rgb: [...P.gold] },
+      { l: 'Budget Variance', v: (data.monthlyBudget && data.monthlySpend) ? fmtCurr(Math.abs(data.monthlyBudget - data.monthlySpend)) : '-', rgb: [...P.emerald] },
       { l: 'Vehicles w/ Alerts', v: data.vehiclesWithAlerts ?? 0, rgb: [...P.scarlet] },
     ]
     doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
@@ -1380,8 +1380,8 @@ export async function exportDailyExecutivePdf(data, filename) {
         startY: 37,
         head: [['Site', 'Vehicles', 'Alerts', 'Compliance', 'Status']],
         body: data.siteBreakdown.map(s => [
-          s.name, s.vehicles ?? '—', s.alerts ?? '—',
-          s.compliance ? `${s.compliance}%` : '—',
+          s.name, s.vehicles ?? '-', s.alerts ?? '-',
+          s.compliance ? `${s.compliance}%` : '-',
           s.compliance >= 90 ? '✓ Good' : s.compliance >= 70 ? '⚠ Monitor' : '✗ Action',
         ]),
         margin: { left: PW / 2 + 4, right: 14 },
@@ -1426,7 +1426,7 @@ export async function exportDailyExecutivePdf(data, filename) {
       autoTable(doc, {
         startY: y + 4,
         head: [['#', 'Alert', 'Asset', 'Site', 'Severity']],
-        body: alerts.slice(0, 12).map((a, i) => [i + 1, a.message, a.asset ?? '—', a.site ?? '—', a.severity ?? 'High']),
+        body: alerts.slice(0, 12).map((a, i) => [i + 1, a.message, a.asset ?? '-', a.site ?? '-', a.severity ?? 'High']),
         margin: { left: 14, right: PW / 2 + 2 },
         theme: 'grid',
         styles: { fontSize: 7.5, cellPadding: 2 },
@@ -1444,7 +1444,7 @@ export async function exportDailyExecutivePdf(data, filename) {
       autoTable(doc, {
         startY: y + 4,
         head: [['Action', 'Priority', 'Site', 'Assignee']],
-        body: actions.slice(0, 12).map(a => [a.title, a.priority ?? 'Medium', a.site ?? '—', a.assignee ?? 'Unassigned']),
+        body: actions.slice(0, 12).map(a => [a.title, a.priority ?? 'Medium', a.site ?? '-', a.assignee ?? 'Unassigned']),
         margin: { left: PW / 2 + 4, right: 14 },
         theme: 'grid',
         styles: { fontSize: 7.5, cellPadding: 2 },
@@ -1541,7 +1541,7 @@ export async function exportDailyExecutivePdf(data, filename) {
   doc.save(`${safeF}.pdf`)
 }
 
-// ── PowerPoint Export — light executive theme, native editable charts ─────────
+// ── PowerPoint Export - light executive theme, native editable charts ─────────
 export async function exportToPptx(data, filename = 'TyrePulse_Report') {
   await ensurePptx()
   const pptx = new pptxgen()
@@ -1593,7 +1593,7 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
     slide.addShape(rect, { x, y, w, h: 1.55, fill: { color: CARD }, line: { color: BORDER, width: 1 }, rounding: true, shadow: SHADOW })
     slide.addShape(rect, { x, y, w, h: 0.09, fill: { color } })
     slide.addText(String(label).toUpperCase(), { x: x + 0.18, y: y + 0.2, w: w - 0.36, h: 0.3, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
-    slide.addText(String(value ?? '—'), { x: x + 0.18, y: y + 0.46, w: w - 0.36, h: 0.62, fontSize: 27, bold: true, color })
+    slide.addText(String(value ?? '-'), { x: x + 0.18, y: y + 0.46, w: w - 0.36, h: 0.62, fontSize: 27, bold: true, color })
     if (sub) slide.addText(String(sub), { x: x + 0.18, y: y + 1.1, w: w - 0.36, h: 0.35, fontSize: 9, color: SUBTLE })
   }
   function sectionTitle(slide, x, y, text, color = INK) {
@@ -1623,7 +1623,7 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
       for (let i = 0; i < len; i++) {
         const lbl = rawLabels[i]
         const n = Number(rawValues[i])
-        labels.push(lbl == null || String(lbl).trim() === '' ? '—' : String(lbl))
+        labels.push(lbl == null || String(lbl).trim() === '' ? '-' : String(lbl))
         values.push(Number.isFinite(n) ? n : 0)
       }
       return { ...s, labels, values }
@@ -1651,8 +1651,8 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
   const acts     = typeof data.openActions === 'number' ? data.openActions : (data.openActions?.length || 0)
   const tone     = highShare >= 15 ? CRIM : highShare >= 5 ? SCAR : EMER
   const statusTxt = highShare >= 15 ? 'Requires Immediate Attention'
-                  : highShare >= 5  ? 'Stable — Monitoring Advised'
-                  : 'Healthy — Within Target'
+                  : highShare >= 5  ? 'Stable - Monitoring Advised'
+                  : 'Healthy - Within Target'
   const trend    = data.monthlyTrend || []
   const trendDelta = trend.length >= 2 ? trend[trend.length - 1].count - trend[0].count : 0
   const trendDir = trendDelta > 0 ? 'rising' : trendDelta < 0 ? 'easing' : 'flat'
@@ -1669,7 +1669,7 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
   s1.addText(period, { x: 0.6, y: 3.75, w: 8.5, h: 0.6, fontSize: 18, color: SLATE })
   s1.addShape(rect, { x: 0.62, y: 4.5, w: 1.6, h: 0.06, fill: { color: GOLD } })
   s1.addText(`Generated ${nowStr()}${data.generatedBy ? `   ·   Prepared by ${data.generatedBy}` : ''}`, { x: 0.6, y: 4.7, w: 8.5, h: 0.4, fontSize: 11, color: MUTED })
-  s1.addText('CONFIDENTIAL — FOR MANAGEMENT REVIEW', { x: 0.6, y: 6.8, w: 8, h: 0.4, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
+  s1.addText('CONFIDENTIAL - FOR MANAGEMENT REVIEW', { x: 0.6, y: 6.8, w: 8, h: 0.4, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
   const coverKpis = [
     { l: 'Vehicles', v: (data.totalVehicles ?? 0).toLocaleString(), c: INDIGO },
     { l: 'Tyres',    v: totalT.toLocaleString(),                     c: EMER },
@@ -1814,10 +1814,10 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
     const priCol = { Critical: CRIM, High: SCAR, Medium: GOLD, Low: EMER }
     const head = ['Action', 'Site', 'Priority', 'Status'].map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: SLATE }, fontSize: 11, align: 'left' } }))
     const rows = data.recentActions.slice(0, 14).map((a, i) => ([
-      { text: a.title || '—', options: { color: INK, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
-      { text: a.site || '—', options: { color: SUBTLE, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
-      { text: a.priority || '—', options: { color: priCol[a.priority] || SUBTLE, bold: true, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
-      { text: a.status || '—', options: { color: SUBTLE, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
+      { text: a.title || '-', options: { color: INK, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
+      { text: a.site || '-', options: { color: SUBTLE, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
+      { text: a.priority || '-', options: { color: priCol[a.priority] || SUBTLE, bold: true, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
+      { text: a.status || '-', options: { color: SUBTLE, fontSize: 10, fill: { color: i % 2 ? PANEL : CARD } } },
     ]))
     s.addTable([head, ...rows], { x: 0.4, y: 1.35, w: 12.55, colW: [6.8, 2.6, 1.7, 1.45], border: { type: 'solid', color: BORDER, pt: 0.5 }, rowH: 0.34, valign: 'middle' })
     footer(s, slideNo)

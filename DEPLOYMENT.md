@@ -1,4 +1,4 @@
-# TyrePulse — Full Deployment Guide
+# TyrePulse - Full Deployment Guide
 **Readymix Concrete Company · Built by Shahzeb Rahman © 2026**
 
 ---
@@ -29,24 +29,24 @@ Install these on your machine before starting:
 - **Git** (to clone the repo)
 - A **Supabase account** (free tier is fine) → https://supabase.com
 - A **Vercel account** (free tier is fine) → https://vercel.com  
-  *(or Netlify → https://netlify.com — instructions below)*
+  *(or Netlify → https://netlify.com - instructions below)*
 
 ---
 
-## PART 1 — SUPABASE BACKEND SETUP
+## PART 1 - SUPABASE BACKEND SETUP
 
-### Step 1.1 — Create a Supabase Project
+### Step 1.1 - Create a Supabase Project
 
 1. Go to https://supabase.com → **New Project**
 2. Choose your organisation
 3. **Project name:** `TyrePulse` (or anything you like)
 4. **Database password:** Set a strong password and save it somewhere safe
 5. **Region:** Choose the closest to Saudi Arabia → `ap-southeast-1` (Singapore) or `eu-central-1` (Frankfurt)
-6. Click **Create new project** — wait 1–2 minutes for it to spin up
+6. Click **Create new project** - wait 1-2 minutes for it to spin up
 
 ---
 
-### Step 1.2 — Run the Main Database Schema
+### Step 1.2 - Run the Main Database Schema
 
 1. In your Supabase dashboard → click **SQL Editor** (left sidebar)
 2. Click **New Query**
@@ -69,7 +69,7 @@ This creates all the main tables:
 
 ---
 
-### Step 1.3 — Run the Phase 2 Migrations
+### Step 1.3 - Run the Phase 2 Migrations
 
 1. In SQL Editor → **New Query**
 2. Open `MIGRATIONS.sql` from this repo
@@ -85,7 +85,7 @@ This adds:
 
 ---
 
-### Step 1.4 — Enable Role-Based Access Control (RLS)
+### Step 1.4 - Enable Role-Based Access Control (RLS)
 
 This step enforces which roles (Admin / Manager / Reporter / Director) can read, write, update, and delete each table. **Run this after the previous two SQL files.**
 
@@ -97,16 +97,16 @@ This creates a `get_my_role()` helper function and replaces the permissive "full
 
 | Role | What they can do |
 |---|---|
-| **Admin** | Full access — read, write, update, delete everything |
+| **Admin** | Full access - read, write, update, delete everything |
 | **Manager** | Read everything; edit records, close actions, manage stock / KPI targets |
 | **Director** | Read-only across all tables |
 | **Reporter** | Read everything; can upload data and log corrective actions; cannot delete |
 
-> After running this file, only Admin users can change Settings or delete records. New accounts default to Reporter — promote them via the `profiles` table.
+> After running this file, only Admin users can change Settings or delete records. New accounts default to Reporter - promote them via the `profiles` table.
 
 ---
 
-### Step 1.4a — Run Multi-Country Migrations
+### Step 1.4a - Run Multi-Country Migrations
 
 1. In SQL Editor → **New Query**
 2. Open `MIGRATIONS_V2.sql` from this repo
@@ -122,7 +122,7 @@ This adds:
 
 ---
 
-### Step 1.4b — Run the Master Data Engine
+### Step 1.4b - Run the Master Data Engine
 
 1. In SQL Editor → **New Query**
 2. Open `MASTER_ENGINE.sql` from this repo
@@ -148,7 +148,7 @@ This installs the full data processing engine at the database level:
 
 ---
 
-### Step 1.4c — Run Extra Fields + RCA Country Migrations
+### Step 1.4c - Run Extra Fields + RCA Country Migrations
 
 1. In SQL Editor → **New Query**, open `MIGRATIONS_V3.sql` → paste → **Run**
    - Adds `extra_fields jsonb` to `tyre_records` so unmapped Excel columns are preserved
@@ -161,7 +161,7 @@ This installs the full data processing engine at the database level:
 
 ---
 
-### Step 1.5 — Set Up Photo Storage
+### Step 1.5 - Set Up Photo Storage
 
 1. In Supabase dashboard → **Storage** (left sidebar)
 2. Click **New bucket**
@@ -186,19 +186,19 @@ for select using (bucket_id = 'tyre-photos');
 
 ---
 
-### Step 1.6 — Get Your API Keys
+### Step 1.6 - Get Your API Keys
 
 1. Supabase dashboard → **Settings** (gear icon, bottom left)
 2. Click **API**
-3. Copy two values — you'll need them in the next step:
-   - **Project URL** — looks like `https://abcdefghijkl.supabase.co`
-   - **anon public** key — a long JWT string starting with `eyJ...`
+3. Copy two values - you'll need them in the next step:
+   - **Project URL** - looks like `https://abcdefghijkl.supabase.co`
+   - **anon public** key - a long JWT string starting with `eyJ...`
 
 > ⚠️ Never share the `service_role` key. Only use the `anon` key in the frontend.
 
 ---
 
-### Step 1.7 — Configure Authentication Settings
+### Step 1.7 - Configure Authentication Settings
 
 1. Supabase dashboard → **Authentication** → **Providers**
 2. **Email** provider → make sure it is **Enabled**
@@ -208,9 +208,9 @@ for select using (bucket_id = 'tyre-photos');
 
 ---
 
-## PART 2 — FRONTEND SETUP
+## PART 2 - FRONTEND SETUP
 
-### Step 2.1 — Clone and Install
+### Step 2.1 - Clone and Install
 
 ```bash
 # Clone the repository
@@ -223,7 +223,7 @@ npm install
 
 ---
 
-### Step 2.2 — Create Your Environment File
+### Step 2.2 - Create Your Environment File
 
 ```bash
 # Copy the example file
@@ -237,11 +237,11 @@ VITE_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-> The `.env` file is listed in `.gitignore` — it will never be committed to Git.
+> The `.env` file is listed in `.gitignore` - it will never be committed to Git.
 
 ---
 
-### Step 2.3 — Test Locally
+### Step 2.3 - Test Locally
 
 ```bash
 npm run dev
@@ -253,21 +253,21 @@ Open http://localhost:5173 in your browser. You should see the TyrePulse login s
 
 ---
 
-### Step 2.4 — Build for Production
+### Step 2.4 - Build for Production
 
 ```bash
 npm run build
 ```
 
-This creates a `dist/` folder with the optimised static files. You never need to run a Node server — these are just HTML/JS/CSS files that any static host can serve.
+This creates a `dist/` folder with the optimised static files. You never need to run a Node server - these are just HTML/JS/CSS files that any static host can serve.
 
 ---
 
-## PART 3 — DEPLOYING TO VERCEL (Recommended)
+## PART 3 - DEPLOYING TO VERCEL (Recommended)
 
 Vercel is the easiest option. Free tier handles this app's traffic easily.
 
-### Option A — Deploy via Vercel CLI
+### Option A - Deploy via Vercel CLI
 
 ```bash
 # Install Vercel CLI globally (one-time)
@@ -288,7 +288,7 @@ vercel
 vercel --prod
 ```
 
-### Option B — Deploy via Vercel Dashboard (no CLI)
+### Option B - Deploy via Vercel Dashboard (no CLI)
 
 1. Go to https://vercel.com → **Add New Project**
 2. Connect your GitHub account → select the `tyre_pulse` repository
@@ -304,7 +304,7 @@ Vercel gives you a URL like `https://tyrepulse-xyz.vercel.app`. Every time you p
 
 ---
 
-## PART 3B — DEPLOYING TO NETLIFY (Alternative)
+## PART 3B - DEPLOYING TO NETLIFY (Alternative)
 
 ```bash
 # Install Netlify CLI
@@ -325,25 +325,25 @@ Or via Netlify dashboard:
 
 ---
 
-## PART 4 — POST-DEPLOYMENT CHECKLIST
+## PART 4 - POST-DEPLOYMENT CHECKLIST
 
 After your site is live, do these steps in order:
 
-### ✅ 4.1 — Create Your Admin Account
+### ✅ 4.1 - Create Your Admin Account
 
 1. Go to your live URL → **Create Account** tab
 2. Sign up with your email
 3. Check email → confirm your address
-4. Log in — you'll have **Reporter** role initially
+4. Log in - you'll have **Reporter** role initially
 
-### ✅ 4.2 — Promote Yourself to Admin
+### ✅ 4.2 - Promote Yourself to Admin
 
 1. Supabase dashboard → **Table Editor** → `profiles` table
 2. Find your row → click **Edit**
 3. Change `role` from `Reporter` to `Admin`
 4. Save
 
-### ✅ 4.3 — Configure Default Settings
+### ✅ 4.3 - Configure Default Settings
 
 1. Log into TyrePulse → go to **Settings** page
 2. Confirm:
@@ -352,7 +352,7 @@ After your site is live, do these steps in order:
    - **Currency:** SAR
    - **Default Cost per Tyre:** 1200 (or your standard price)
 
-### ✅ 4.4 — Set KPI Targets
+### ✅ 4.4 - Set KPI Targets
 
 1. Go to **KPI Scorecard** page
 2. Click **Edit Targets**
@@ -363,14 +363,14 @@ After your site is live, do these steps in order:
    - Max Avg Cost / Tyre
 4. Click **Save Targets**
 
-### ✅ 4.5 — Test Upload
+### ✅ 4.5 - Test Upload
 
 1. Go to **Upload Data**
 2. Upload a small test Excel file (even 5 rows)
 3. Map the columns → confirm
 4. Check **Tyre Records** to see the data
 
-### ✅ 4.6 — Run First Anomaly Scan
+### ✅ 4.6 - Run First Anomaly Scan
 
 1. Go to **Anomaly Detection**
 2. Click **Run Scan**
@@ -378,7 +378,7 @@ After your site is live, do these steps in order:
 
 ---
 
-## PART 5 — ADDING MORE USERS
+## PART 5 - ADDING MORE USERS
 
 ### Invite Method (Recommended)
 
@@ -401,7 +401,7 @@ Users can register themselves via the **Create Account** tab on the login page. 
 
 ---
 
-## PART 6 — KEEPING DATA SAFE
+## PART 6 - KEEPING DATA SAFE
 
 ### Automatic Backups
 
@@ -422,7 +422,7 @@ For Readymix fleet size this is more than enough. Upgrade to Pro ($25/mo) only i
 
 ---
 
-## PART 7 — CUSTOM DOMAIN (Optional)
+## PART 7 - CUSTOM DOMAIN (Optional)
 
 ### On Vercel:
 1. Vercel dashboard → your project → **Settings** → **Domains**
@@ -435,7 +435,7 @@ For Readymix fleet size this is more than enough. Upgrade to Pro ($25/mo) only i
 
 ---
 
-## PART 8 — LOCAL DEVELOPMENT REFERENCE
+## PART 8 - LOCAL DEVELOPMENT REFERENCE
 
 ```bash
 # Start dev server (hot reload)
@@ -453,7 +453,7 @@ npm run preview
 
 ---
 
-## PART 9 — PROJECT STRUCTURE
+## PART 9 - PROJECT STRUCTURE
 
 ```
 tyre_pulse/
@@ -506,7 +506,7 @@ tyre_pulse/
 
 ---
 
-## PART 10 — TROUBLESHOOTING
+## PART 10 - TROUBLESHOOTING
 
 ### "Invalid API key" or blank screen after login
 
@@ -516,8 +516,8 @@ tyre_pulse/
 
 ### "relation does not exist" database error
 
-- You haven't run `MIGRATIONS.sql` yet — do Step 1.3
-- Or the table name has a typo — check Supabase → Table Editor
+- You haven't run `MIGRATIONS.sql` yet - do Step 1.3
+- Or the table name has a typo - check Supabase → Table Editor
 
 ### Email confirmation not arriving
 
@@ -532,29 +532,29 @@ tyre_pulse/
 ### Excel upload not mapping columns
 
 - Column mapping uses header names. Accepted names for each field are in `src/lib/tyreClassifier.js`
-- On first upload, map manually — the app remembers for next time (stored in `column_mappings` table)
+- On first upload, map manually - the app remembers for next time (stored in `column_mappings` table)
 
 ### "Row level security" policy error
 
-- Run `BACKEND_RLS.sql` — this replaces the permissive default policies with role-based ones
+- Run `BACKEND_RLS.sql` - this replaces the permissive default policies with role-based ones
 - Make sure you're logged in (authenticated) before accessing data
 
 ---
 
-## PART 11 — ENVIRONMENT VARIABLES REFERENCE
+## PART 11 - ENVIRONMENT VARIABLES REFERENCE
 
 | Variable | Where to find it | Example |
 |---|---|---|
 | `VITE_SUPABASE_URL` | Supabase → Settings → API → Project URL | `https://abcd1234.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | Supabase → Settings → API → anon public | `eyJhbGciOiJ...` |
 
-These are the **only** two variables the app needs. There is no separate backend server, no database connection string — Supabase handles all of that through its API.
+These are the **only** two variables the app needs. There is no separate backend server, no database connection string - Supabase handles all of that through its API.
 
 ---
 
-## PART 12 — UPDATING THE APP
+## PART 12 - UPDATING THE APP
 
-When new code is pushed to the `main` branch (or `claude/todo-implementation-bYKx5`):
+When new code is pushed to the `main` branch:
 
 ```bash
 git pull origin main
@@ -570,7 +570,7 @@ vercel --prod
 # or: git push (if Vercel is connected to GitHub, it deploys automatically)
 ```
 
-If new SQL migrations are needed, they will be in `MIGRATIONS.sql` or a versioned file like `MIGRATIONS_V2.sql` — run only the new sections in Supabase SQL Editor. The `MASTER_ENGINE.sql` file is idempotent (`CREATE OR REPLACE`) and can be re-run safely to pick up any updates.
+If new SQL migrations are needed, they will be in `MIGRATIONS.sql` or a versioned file like `MIGRATIONS_V2.sql` - run only the new sections in Supabase SQL Editor. The `MASTER_ENGINE.sql` file is idempotent (`CREATE OR REPLACE`) and can be re-run safely to pick up any updates.
 
 ---
 

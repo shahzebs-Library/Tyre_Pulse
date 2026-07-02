@@ -2,13 +2,13 @@ import { Search, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 /**
- * FilterBar — glassmorphic filter row with search + selects + optional extra controls.
+ * FilterBar - glassmorphic filter row with search + selects + optional extra controls.
  *
- * @param {string}   search         — controlled search value
- * @param {function} onSearch       — onChange(value)
+ * @param {string}   search         - controlled search value
+ * @param {function} onSearch       - onChange(value)
  * @param {string}   placeholder
- * @param {Array}    selects        — [{ value, onChange, options:[{value,label}], placeholder }]
- * @param {ReactNode} children      — extra controls appended to the right
+ * @param {Array}    selects        - [{ value, onChange, options:[{value,label}], placeholder }]
+ * @param {ReactNode} children      - extra controls appended to the right
  * @param {string}   className
  */
 export default function FilterBar({

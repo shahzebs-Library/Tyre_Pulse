@@ -1,5 +1,5 @@
 /**
- * useFilterState — syncs filter state bidirectionally with URL search params.
+ * useFilterState - syncs filter state bidirectionally with URL search params.
  *
  * Usage:
  *   const [filters, setFilter, resetFilters, hasActiveFilters, setFilters] = useFilterState({
@@ -11,9 +11,9 @@
  *   })
  *
  * Reading: filters.status, filters.search, etc.
- * Writing: setFilter('status', 'Active')  — updates URL + state atomically
+ * Writing: setFilter('status', 'Active')  - updates URL + state atomically
  * Batch:   setFilters({ status: 'Active', country: 'KSA' })
- * Reset:   resetFilters()  — clears all back to defaults
+ * Reset:   resetFilters()  - clears all back to defaults
  *
  * URL example: /tyres?status=Active&country=KSA&brand=Bridgestone
  *
@@ -39,7 +39,7 @@ export function useFilterState(defaults = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-  // Set a single filter — removes param if value matches default (keeps URL clean)
+  // Set a single filter - removes param if value matches default (keeps URL clean)
   const setFilter = useCallback(
     (key, value) => {
       setSearchParams(

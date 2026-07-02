@@ -1,5 +1,5 @@
 /**
- * accidentPdf — generate and share a full accident/claim PDF on device.
+ * accidentPdf - generate and share a full accident/claim PDF on device.
  * Pulls the latest parts + case log, renders an HTML report, prints to PDF
  * (expo-print) and opens the share sheet (expo-sharing).
  */
@@ -15,10 +15,10 @@ import {
 } from './types'
 
 const esc = (v: any): string =>
-  v == null ? '—' : String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+  v == null ? '-' : String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
 
 const money = (n: any): string =>
-  n == null || isNaN(Number(n)) ? '—' : 'SAR ' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 })
+  n == null || isNaN(Number(n)) ? '-' : 'SAR ' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 })
 
 function row(label: string, value: any): string {
   return `<tr><td class="l">${esc(label)}</td><td class="v">${esc(value)}</td></tr>`

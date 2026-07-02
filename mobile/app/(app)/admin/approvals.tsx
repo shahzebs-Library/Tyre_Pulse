@@ -77,7 +77,7 @@ export default function UploadApprovalsScreen() {
   function approve(p: PendingUpload) {
     Alert.alert(
       'Approve Upload',
-      `Insert ${p.row_count} ${TYPE_META[p.upload_type]?.label ?? 'records'} into ${p.country ?? '—'}?`,
+      `Insert ${p.row_count} ${TYPE_META[p.upload_type]?.label ?? 'records'} into ${p.country ?? '-'}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -250,7 +250,7 @@ export default function UploadApprovalsScreen() {
                         <Ionicons name="chevron-down" size={10} color="#0891b2" />
                       </TouchableOpacity>
                     ) : (
-                      <View style={styles.chip}><Ionicons name="earth-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{p.country || '—'}</Text></View>
+                      <View style={styles.chip}><Ionicons name="earth-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{p.country || '-'}</Text></View>
                     )}
                     <View style={styles.chip}><Ionicons name="time-outline" size={11} color="#64748b" /><Text style={styles.chipText}>{new Date(p.created_at).toLocaleDateString()}</Text></View>
                   </View>

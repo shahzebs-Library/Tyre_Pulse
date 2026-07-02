@@ -51,9 +51,9 @@ export default function TyreScan() {
   function handleScanResult(result) {
     const entry = {
       serial:    result.serial,
-      brand:     result.tyre?.brand     ?? '—',
-      asset:     result.tyre?.asset_no  ?? '—',
-      site:      result.tyre?.site      ?? '—',
+      brand:     result.tyre?.brand     ?? '-',
+      asset:     result.tyre?.asset_no  ?? '-',
+      site:      result.tyre?.site      ?? '-',
       risk:      result.tyre?.risk_level ?? null,
       status:    result.tyre?.status    ?? null,
       tread:     result.tyre?.tread_depth != null ? `${result.tyre.tread_depth} mm` : null,
@@ -172,7 +172,7 @@ export default function TyreScan() {
                     <p className="text-sm font-bold text-white font-mono truncate">{entry.serial}</p>
                     <p className="text-[10px] text-gray-500 truncate mt-0.5">
                       {entry.found
-                        ? [entry.brand, entry.asset, entry.site].filter(v => v && v !== '—').join(' · ')
+                        ? [entry.brand, entry.asset, entry.site].filter(v => v && v !== '-').join(' · ')
                         : 'Not found in database'}
                     </p>
                   </div>

@@ -29,7 +29,7 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 
 // Persistence model on the existing `budgets` table:
 // The UI works with a single ANNUAL figure per site plus one fleet-wide annual
-// budget — it does not edit 12 individual monthly rows. We map those onto the
+// budget - it does not edit 12 individual monthly rows. We map those onto the
 // table using a sentinel `month = 0` ("whole-year allocation") row per
 // (site, region, year). The column is `monthly_budget`, so we store the monthly
 // equivalent (annual / 12) and reconstruct annual = monthly_budget * 12 on load.
@@ -104,7 +104,7 @@ export default function BudgetPlanner() {
   const [error, setError] = useState(null)
   const [exporting, setExporting] = useState(false)
 
-  // Site budget editing — siteBudgets holds ANNUAL amounts keyed by site name
+  // Site budget editing - siteBudgets holds ANNUAL amounts keyed by site name
   const [siteBudgets, setSiteBudgets] = useState({})
   const [storedAnnual, setStoredAnnual] = useState(null) // fleet-wide annual override
   const [budgetsLoading, setBudgetsLoading] = useState(true)
@@ -563,16 +563,16 @@ export default function BudgetPlanner() {
   const recommendations = useMemo(() => {
     const recs = []
     overBudgetSites.forEach(s => {
-      recs.push(`Review ${s.site}: ${fmtPct(s.pct - 100)} over budget — prioritise CPK optimisation.`)
+      recs.push(`Review ${s.site}: ${fmtPct(s.pct - 100)} over budget - prioritise CPK optimisation.`)
     })
     brandData.filter(b => b.cpkChange > 10).forEach(b => {
-      recs.push(`${b.brand} CPK worsened by ${fmtPct(b.cpkChange)} YoY — consider vendor review or brand switch.`)
+      recs.push(`${b.brand} CPK worsened by ${fmtPct(b.cpkChange)} YoY - consider vendor review or brand switch.`)
     })
     if (projectedYearEnd > annualBudget * 1.1) {
-      recs.push(`Projected year-end (${fmt(projectedYearEnd, activeCurrency)}) exceeds budget by >10% — adjust procurement plan.`)
+      recs.push(`Projected year-end (${fmt(projectedYearEnd, activeCurrency)}) exceeds budget by >10% - adjust procurement plan.`)
     }
     if (scenarioProjection?.saving > 0) {
-      recs.push(`What-If scenario saves ${fmt(scenarioProjection.saving, activeCurrency)}/yr — validate CPK targets with engineering team.`)
+      recs.push(`What-If scenario saves ${fmt(scenarioProjection.saving, activeCurrency)}/yr - validate CPK targets with engineering team.`)
     }
     return recs.slice(0, 5)
   }, [overBudgetSites, brandData, projectedYearEnd, annualBudget, activeCurrency, scenarioProjection])
@@ -959,7 +959,7 @@ export default function BudgetPlanner() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-white font-semibold flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-blue-400" />
-            Budget vs Actual — Monthly {selectedYear}
+            Budget vs Actual - Monthly {selectedYear}
           </h2>
           <span className="text-xs text-gray-500">Red bars = actual exceeds budget</span>
         </div>
@@ -1108,7 +1108,7 @@ export default function BudgetPlanner() {
           className="bg-gray-900 border border-red-900/50 rounded-xl p-5">
           <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-red-400" />
-            CPK Efficiency — Over-Budget Sites
+            CPK Efficiency - Over-Budget Sites
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {overBudgetSites.map(s => {
@@ -1288,7 +1288,7 @@ export default function BudgetPlanner() {
           className="bg-gray-900 border border-gray-800 rounded-xl p-5">
           <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
             <PieIcon className="w-5 h-5 text-amber-400" />
-            Brand Spend Distribution — {selectedYear}
+            Brand Spend Distribution - {selectedYear}
           </h2>
           {brandData.some(b => b.thisYear > 0) ? (
             <div className="h-60">

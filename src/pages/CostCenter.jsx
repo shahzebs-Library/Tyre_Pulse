@@ -522,7 +522,7 @@ export default function CostCenter() {
           { key: 'totalCost', header: 'Total Cost' },
           { key: 'avgCpk',    header: 'Avg CPK' },
         ],
-        'Cost Center — Cost by Site',
+        'Cost Center - Cost by Site',
         'CostCenter_Report',
         'landscape',
         '',

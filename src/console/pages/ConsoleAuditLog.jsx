@@ -192,7 +192,7 @@ export default function ConsoleAuditLog() {
                     </td>
                     <td className="px-4 py-2.5">
                       <div>
-                        <p className="text-white text-[11px]">{adminCache[log.admin_id]?.full_name ?? '—'}</p>
+                        <p className="text-white text-[11px]">{adminCache[log.admin_id]?.full_name ?? '-'}</p>
                         <p className="text-gray-600 text-[10px]">{adminCache[log.admin_id]?.email ?? log.admin_id?.slice(0, 8) + '…'}</p>
                       </div>
                     </td>
@@ -200,11 +200,11 @@ export default function ConsoleAuditLog() {
                       <ActionBadge action={log.action} />
                     </td>
                     <td className="px-4 py-2.5 text-gray-400">
-                      <span className="capitalize">{log.target_type ?? '—'}</span>
+                      <span className="capitalize">{log.target_type ?? '-'}</span>
                       {log.target_id && <span className="text-gray-700 text-[10px] ml-1">#{log.target_id.slice(0, 8)}</span>}
                     </td>
                     <td className="px-4 py-2.5 text-gray-500 max-w-xs truncate">
-                      {log.details ? Object.entries(log.details).map(([k, v]) => `${k}: ${v}`).join(', ') : '—'}
+                      {log.details ? Object.entries(log.details).map(([k, v]) => `${k}: ${v}`).join(', ') : '-'}
                     </td>
                   </tr>
                   {expanded === log.id && (
@@ -225,7 +225,7 @@ export default function ConsoleAuditLog() {
           {total > PAGE_SIZE && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800 bg-gray-900/30">
               <p className="text-xs text-gray-500">
-                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()}
+                {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()}
               </p>
               <div className="flex gap-2">
                 <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
@@ -245,7 +245,7 @@ function ActionBadge({ action }) {
   const cls = ACTION_COLORS[action] ?? 'bg-gray-800 text-gray-400 border-gray-700'
   return (
     <span className={`inline-flex items-center text-[10px] px-2 py-0.5 rounded border font-semibold capitalize whitespace-nowrap ${cls}`}>
-      {(action ?? '—').replace(/_/g, ' ')}
+      {(action ?? '-').replace(/_/g, ' ')}
     </span>
   )
 }

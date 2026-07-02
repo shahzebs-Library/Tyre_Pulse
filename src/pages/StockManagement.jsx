@@ -324,13 +324,13 @@ export default function StockManagement() {
       head: [['Field', 'Value']],
       body: [
         ['Site',            rec.site],
-        ['Description',     rec.description || '—'],
+        ['Description',     rec.description || '-'],
         ['Current Stock',   String(rec.stock_qty)],
         ['Critical Level',  String(rec.critical_level)],
         ['Min Level',       String(rec.min_level)],
         ['Reorder Qty',     String(Math.max(0, (rec.min_level || 5) * 3 - rec.stock_qty))],
         ['Status',          deriveStatus(rec)],
-        ['Requested By',    profile?.full_name || profile?.username || '—'],
+        ['Requested By',    profile?.full_name || profile?.username || '-'],
         ['Date',            new Date().toLocaleDateString('en-GB')],
       ],
       styles: { fillColor: [30, 40, 60], textColor: [220, 220, 240], fontSize: 11 },
@@ -356,7 +356,7 @@ export default function StockManagement() {
 
   function exportPdf() {
     const rows = records.map(r => [
-      r.site, r.description || '—', r.stock_qty, r.min_level, r.critical_level, deriveStatus(r),
+      r.site, r.description || '-', r.stock_qty, r.min_level, r.critical_level, deriveStatus(r),
     ])
     exportToPdf(rows, ['Site', 'Description', 'Stock', 'Min', 'Critical', 'Status'],
       'Stock Management', 'stock-records')
@@ -480,7 +480,7 @@ export default function StockManagement() {
                     return (
                       <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
                         <td className="table-cell font-medium text-white">{r.site}</td>
-                        <td className="table-cell text-gray-300">{r.description ?? '—'}</td>
+                        <td className="table-cell text-gray-300">{r.description ?? '-'}</td>
                         <td className="table-cell">
                           <span className={
                             status === 'Critical' ? 'text-red-400 font-bold' :
@@ -495,7 +495,7 @@ export default function StockManagement() {
                         </td>
                         <td className="table-cell">
                           <span className={avg > 0 ? 'text-gray-300 text-xs' : 'text-gray-600 text-xs'}>
-                            {avg > 0 ? `${avg}/mo` : '—'}
+                            {avg > 0 ? `${avg}/mo` : '-'}
                           </span>
                         </td>
                         <td className="table-cell">
@@ -507,7 +507,7 @@ export default function StockManagement() {
                           <div className="flex flex-col gap-1">
                             {r.management_action ? (
                               <span className="truncate">{r.management_action}</span>
-                            ) : <span className="text-gray-600">—</span>}
+                            ) : <span className="text-gray-600">-</span>}
                             {reorderSuggestion !== null && (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-900/40 text-amber-300 border border-amber-700/50 whitespace-nowrap">
                                 Reorder: {reorderSuggestion}
@@ -589,7 +589,7 @@ export default function StockManagement() {
                     }}
                     required
                   >
-                    <option value="">— Select —</option>
+                    <option value="">- Select -</option>
                     {sites.map(s => (
                       <option key={s} value={s}>{s}</option>
                     ))}
@@ -613,7 +613,7 @@ export default function StockManagement() {
                     }}
                     required
                   >
-                    <option value="">— Select —</option>
+                    <option value="">- Select -</option>
                     {sites.filter(s => s !== transferForm.fromSite).map(s => (
                       <option key={s} value={s}>{s}</option>
                     ))}
@@ -918,8 +918,8 @@ export default function StockManagement() {
                           </span>
                         </td>
                         <td className="table-cell py-2 text-white text-center font-semibold">{m.qty_after}</td>
-                        <td className="table-cell py-2 text-gray-400">{m.reason || '—'}</td>
-                        <td className="table-cell py-2 text-gray-500">{m.reference_no || '—'}</td>
+                        <td className="table-cell py-2 text-gray-400">{m.reason || '-'}</td>
+                        <td className="table-cell py-2 text-gray-500">{m.reference_no || '-'}</td>
                       </tr>
                     ))}
                   </tbody>

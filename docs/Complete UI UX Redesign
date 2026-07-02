@@ -1,0 +1,534 @@
+# Tyre Pulse – Complete UI UX Redesign, Tyre Man PWA Architecture Review & Onboarding Experience
+
+You are no longer acting as a software developer only.
+
+You are acting as:
+
+* Principal Product Designer
+* Senior UX Researcher
+* Enterprise SaaS Architect
+* Fleet Management Domain Expert
+* Mobile UX Specialist
+* PWA Specialist
+* React & Vite Technical Lead
+* Design System Architect
+* Accessibility Expert (WCAG 2.2 AA)
+* Frontend Performance Engineer
+
+This is **not** a cosmetic redesign.
+
+Your task is to audit the entire Tyre Pulse project from a real user's perspective and redesign the experience so it feels like a premium enterprise fleet management platform.
+
+Do not assume anything.
+
+First understand the entire project before changing anything.
+
+---
+
+# STEP 1 – Read Everything First
+
+Before writing code or making UI changes:
+
+Read and understand every existing project document, including but not limited to:
+
+* Tyre Man documentation
+* Mobile application documentation
+* PRDs
+* UI documents
+* Database documentation
+* User role documentation
+* Workflow documentation
+* Business logic
+* Fleet workflow
+* Inspection workflow
+* Dashboard workflow
+* Permissions
+* Country settings
+* Multi-tenant logic
+* Existing design system
+* Existing mobile screens
+* Existing React components
+
+If documentation is incomplete, inspect the codebase and derive the correct workflow.
+
+Do NOT redesign blindly.
+
+Understand how users actually work.
+
+---
+
+# STEP 2 – Understand Every User
+
+Study every user role.
+
+Understand:
+
+* what they do
+* what they see
+* what they never need
+* what slows them down
+* what information they require most often
+
+Examples include:
+
+* Tyre Man
+* Workshop Staff
+* Fleet Supervisor
+* Fleet Manager
+* PMV Manager
+* Operations Manager
+* Store Keeper
+* Administrator
+
+Every interface should only expose the features that role needs.
+
+No unnecessary screens.
+
+No unnecessary buttons.
+
+No unnecessary menus.
+
+---
+
+# STEP 3 – Build the Tyre Man PWA
+
+The Android application is still under preparation for Google Play.
+
+Meanwhile build a dedicated Tyre Man PWA using the existing React/Vite application.
+
+Do NOT create a generic web app.
+
+The PWA should feel like a native Android application.
+
+Reuse existing mobile screens wherever possible.
+
+Reuse:
+
+* components
+* authentication
+* APIs
+* Supabase
+* business logic
+* permissions
+* inspection flows
+
+Do not duplicate code unnecessarily.
+
+The Tyre Man PWA should include only field operations.
+
+No management dashboards.
+
+No analytics.
+
+No administration.
+
+No unnecessary complexity.
+
+---
+
+# STEP 4 – Match Existing Mobile Application
+
+The Tyre Man PWA should look and behave almost exactly like the existing mobile application.
+
+Reuse:
+
+* layouts
+* navigation
+* icons
+* spacing
+* forms
+* buttons
+* typography
+* interaction patterns
+
+The experience should remain consistent across:
+
+Web
+
+PWA
+
+Native Android
+
+Future iOS
+
+The user should immediately understand every version.
+
+---
+
+# STEP 5 – Country Selection
+
+Review how country selection currently works.
+
+Improve it.
+
+Requirements:
+
+* first launch asks for country
+* remember selected country
+* allow changing later
+* automatically adjust
+
+  * language
+  * date format
+  * measurement units
+  * currency
+  * timezone
+  * business rules
+  * phone formatting
+  * regional settings
+
+Support future expansion.
+
+Current target markets include GCC countries but architecture must support global deployment.
+
+---
+
+# STEP 6 – Professional Onboarding Wizard
+
+Create a complete onboarding wizard.
+
+First-time users should never feel lost.
+
+The onboarding must explain:
+
+What Tyre Pulse is.
+
+How inspections work.
+
+How syncing works.
+
+Offline mode.
+
+Photo capture.
+
+Drafts.
+
+Inspection submission.
+
+Pending sync.
+
+Completed inspections.
+
+Navigation.
+
+Notifications.
+
+Safety reminders.
+
+Role-specific responsibilities.
+
+The onboarding should adapt to user role.
+
+Example:
+
+Tyre Man sees Tyre Man onboarding.
+
+Fleet Manager sees Fleet Manager onboarding.
+
+Workshop Staff sees Workshop onboarding.
+
+The onboarding should be skippable and replayable later.
+
+Include:
+
+illustrations
+
+animations
+
+progress indicator
+
+tips
+
+checklists
+
+interactive walkthroughs
+
+---
+
+# STEP 7 – Complete UX Audit
+
+Audit every screen.
+
+Identify:
+
+confusing layouts
+
+slow workflows
+
+too many clicks
+
+hidden buttons
+
+poor spacing
+
+small touch targets
+
+poor typography
+
+inconsistent components
+
+duplicate actions
+
+missing feedback
+
+missing confirmations
+
+confusing icons
+
+broken hierarchy
+
+navigation problems
+
+long forms
+
+poor mobile experience
+
+blank states
+
+loading states
+
+error states
+
+empty states
+
+Everything should be improved.
+
+---
+
+# STEP 8 – Design System
+
+Create one professional design language.
+
+Requirements:
+
+consistent spacing
+
+consistent typography
+
+consistent icon sizes
+
+consistent corner radius
+
+consistent shadows
+
+consistent cards
+
+consistent buttons
+
+consistent forms
+
+consistent colors
+
+consistent navigation
+
+consistent animations
+
+consistent elevation
+
+No random styling anywhere.
+
+Every component must follow the design system.
+
+---
+
+# STEP 9 – Eliminate Empty Space
+
+This is a critical requirement.
+
+Inspect every page.
+
+Find:
+
+unused whitespace
+
+empty containers
+
+oversized margins
+
+oversized padding
+
+misaligned layouts
+
+floating components
+
+large blank areas
+
+imbalanced cards
+
+poor grid usage
+
+Fix all of them.
+
+The interface should feel balanced and responsive without looking crowded.
+
+Use responsive layouts that intelligently adapt to screen size.
+
+---
+
+# STEP 10 – Light & Dark Theme
+
+Current themes have visibility issues.
+
+Completely audit:
+
+text
+
+icons
+
+buttons
+
+badges
+
+cards
+
+tables
+
+forms
+
+alerts
+
+charts
+
+dropdowns
+
+modals
+
+tooltips
+
+menus
+
+navigation
+
+Create proper design tokens.
+
+Meet WCAG AA contrast requirements.
+
+No invisible elements.
+
+No washed-out colours.
+
+No inconsistent backgrounds.
+
+No unreadable buttons.
+
+---
+
+# STEP 11 – Mobile UX
+
+Design for field workers.
+
+Requirements:
+
+large touch targets
+
+one-hand operation
+
+fast inspection flow
+
+minimal typing
+
+camera-first workflow
+
+quick save
+
+offline indicator
+
+sync indicator
+
+battery-friendly
+
+works in sunlight
+
+works with gloves where possible
+
+works with poor internet
+
+---
+
+# STEP 12 – Performance
+
+Do not sacrifice performance.
+
+Audit:
+
+bundle size
+
+lazy loading
+
+unused dependencies
+
+unused CSS
+
+unused icons
+
+re-rendering
+
+memory leaks
+
+image optimisation
+
+font loading
+
+animation performance
+
+loading speed
+
+PWA performance
+
+Target Lighthouse scores above 95 for:
+
+Performance
+
+Accessibility
+
+Best Practices
+
+SEO (where applicable)
+
+PWA
+
+---
+
+# STEP 13 – Deliverables
+
+Produce:
+
+1. UX Audit Report
+
+2. UI Audit Report
+
+3. Information Architecture
+
+4. User Journey Maps
+
+5. Wireframe Improvements
+
+6. Updated Design System
+
+7. Responsive Strategy
+
+8. PWA Architecture
+
+9. Country Selection Architecture
+
+10. Onboarding Flow
+
+11. Component Improvements
+
+12. Mobile Optimisations
+
+13. Accessibility Improvements
+
+14. Performance Improvements
+
+15. Production Implementation Plan
+
+16. List every file changed and explain why.
+
+Do not stop after identifying issues.
+
+Implement the improvements and validate them.
+
+The final product should look and feel comparable to enterprise platforms such as ServiceNow, Monday.com, Linear, Atlassian Jira, and leading fleet management software, while remaining simple and efficient for field users.
+
+Success is not measured by visual appearance alone. It is measured by how quickly a new tyre technician can complete an inspection with minimal training, how efficiently a fleet manager can monitor operations, and how consistently the interface performs across web, PWA, and future native mobile applications.

@@ -110,6 +110,13 @@ export default function FleetMaster() {
   const [deleteError, setDeleteError]         = useState('')
   const [form, setForm]                       = useState(() => EMPTY_FORM())
 
+  // ── multi-select bulk delete (Admin only) ─────────────────────────────────────
+  const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
+  const [selectedIds, setSelectedIds]         = useState(() => new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen]   = useState(false)
+  const [bulkError, setBulkError]             = useState('')
+  const [bulkBusy, setBulkBusy]               = useState(false)
+
   // ── tab ──────────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState(0)
 
@@ -254,6 +261,53 @@ export default function FleetMaster() {
       setDeleteError(e.message || 'Delete failed. Please try again.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // ── multi-select helpers ──────────────────────────────────────────────────────
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  const pageIds = records.map(r => r.id)
+  const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id))
+  function toggleSelectPage() {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (allPageSelected) pageIds.forEach(id => next.delete(id))
+      else pageIds.forEach(id => next.add(id))
+      return next
+    })
+  }
+
+  async function confirmBulkDelete() {
+    if (selectedIds.size === 0) return
+    setBulkBusy(true)
+    setBulkError('')
+    try {
+      const ids = [...selectedIds]
+      let deleted = 0
+      for (let i = 0; i < ids.length; i += 100) {
+        const chunk = ids.slice(i, i + 100)
+        const { data, error } = await supabase
+          .from('vehicle_fleet').delete().in('id', chunk).select('id')
+        if (error) throw error
+        deleted += data?.length ?? 0
+      }
+      if (deleted === 0) {
+        throw new Error('No rows were deleted — you may not have permission (Admin only) or they were already removed.')
+      }
+      setBulkDeleteOpen(false)
+      setSelectedIds(new Set())
+      loadRecords()
+      loadSites()
+    } catch (e) {
+      setBulkError(e.message || 'Bulk delete failed. Please try again.')
+    } finally {
+      setBulkBusy(false)
     }
   }
 
@@ -461,12 +515,33 @@ export default function FleetMaster() {
             </div>
           </div>
 
+          {/* Bulk selection bar (Admin only) */}
+          {isAdmin && selectedIds.size > 0 && (
+            <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
+              <span className="text-sm text-blue-200">{selectedIds.size} selected</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-white px-2 py-1">Clear</button>
+                <button onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
+                  <Trash2 size={14} /> Delete {selectedIds.size}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Table */}
           <div className="card p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr>
+                    {isAdmin && (
+                      <th className="table-header w-10">
+                        <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
+                          title="Select all on this page"
+                          className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                      </th>
+                    )}
                     {['Asset No', 'Fleet No', 'Make / Model', 'Type', 'Year', 'Site', 'Operator', 'Status', 'Policy', ''].map(h => (
                       <th key={h} className="table-header">{h}</th>
                     ))}
@@ -474,11 +549,17 @@ export default function FleetMaster() {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={10} className="text-center py-12 text-gray-500">Loading...</td></tr>
+                    <tr><td colSpan={isAdmin ? 11 : 10} className="text-center py-12 text-gray-500">Loading...</td></tr>
                   ) : records.length === 0 ? (
-                    <tr><td colSpan={10} className="text-center py-12 text-gray-500">No vehicles found</td></tr>
+                    <tr><td colSpan={isAdmin ? 11 : 10} className="text-center py-12 text-gray-500">No vehicles found</td></tr>
                   ) : records.map(r => (
-                    <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
+                    <tr key={r.id} className={`hover:bg-gray-800/30 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-950/20' : ''}`}>
+                      {isAdmin && (
+                        <td className="table-cell">
+                          <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)}
+                            className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                        </td>
+                      )}
                       <td className="table-cell font-medium text-white font-mono text-xs">{r.asset_no ?? '-'}</td>
                       <td className="table-cell text-gray-400">{r.fleet_number ?? '-'}</td>
                       <td className="table-cell">
@@ -797,6 +878,28 @@ export default function FleetMaster() {
               <Trash2 size={15} /> {saving ? 'Deleting...' : 'Delete Vehicle'}
             </button>
             <button onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }} className="btn-secondary">Cancel</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Bulk Delete Confirmation (Admin only) ─────────────────────────── */}
+      {bulkDeleteOpen && (
+        <Modal title="Delete Vehicles" onClose={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }}>
+          <div className="flex gap-3 mb-4">
+            <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-white font-medium">Delete {selectedIds.size} selected vehicle{selectedIds.size !== 1 ? 's' : ''}?</p>
+              <p className="text-gray-400 text-sm mt-1">This removes the fleet records permanently. Tyre history records for these assets are not affected.</p>
+            </div>
+          </div>
+          {bulkError && (
+            <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{bulkError}</p>
+          )}
+          <div className="flex gap-3">
+            <button onClick={confirmBulkDelete} disabled={bulkBusy} className="btn-danger flex items-center gap-2 disabled:opacity-50">
+              <Trash2 size={15} /> {bulkBusy ? 'Deleting...' : `Delete ${selectedIds.size}`}
+            </button>
+            <button onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary">Cancel</button>
           </div>
         </Modal>
       )}

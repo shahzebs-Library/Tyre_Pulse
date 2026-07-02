@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown } from 'lucide-react'
+import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import { supabase } from '../lib/supabase'
 import AccidentDetailModal from '../components/AccidentDetailModal'
 import * as accidentsApi from '../lib/api/accidents'
 import { useAuth } from '../contexts/AuthContext'
@@ -182,6 +183,13 @@ export default function Accidents() {
   const [statusFunnel, setStatusFunnel]        = useState('')
   const [onlyPendingClosure, setOnlyPendingClosure] = useState(false)
   const [detailId, setDetailId]                = useState(null)
+
+  // Multi-select bulk delete (Admin only)
+  const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
+  const [selectedIds, setSelectedIds]          = useState(() => new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen]    = useState(false)
+  const [bulkError, setBulkError]              = useState('')
+  const [bulkBusy, setBulkBusy]                = useState(false)
 
   // Asset search combobox
   const [fleetAssets, setFleetAssets]          = useState([])
@@ -659,6 +667,52 @@ export default function Accidents() {
     loadRecords()
   }
 
+  // ── Multi-select helpers (Admin only) ─────────────────────────────────────
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  const pageIds = filtered.map(r => r.id)
+  const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id))
+  function toggleSelectPage() {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (allPageSelected) pageIds.forEach(id => next.delete(id))
+      else pageIds.forEach(id => next.add(id))
+      return next
+    })
+  }
+
+  async function confirmBulkDelete() {
+    if (selectedIds.size === 0) return
+    setBulkBusy(true)
+    setBulkError('')
+    try {
+      const ids = [...selectedIds]
+      let deleted = 0
+      for (let i = 0; i < ids.length; i += 100) {
+        const chunk = ids.slice(i, i + 100)
+        const { data, error: err } = await supabase
+          .from('accidents').delete().in('id', chunk).select('id')
+        if (err) throw err
+        deleted += data?.length ?? 0
+      }
+      if (deleted === 0) {
+        throw new Error('No rows were deleted — you may not have permission (Admin only) or they were already removed.')
+      }
+      setBulkDeleteOpen(false)
+      setSelectedIds(new Set())
+      loadRecords()
+    } catch (e) {
+      setBulkError(e.message || 'Bulk delete failed. Please try again.')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
   function raiseAction(row) {
     navigate('/actions', {
       state: {
@@ -917,6 +971,20 @@ export default function Accidents() {
             )}
           </div>
 
+          {/* Bulk selection bar (Admin only) */}
+          {isAdmin && selectedIds.size > 0 && (
+            <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
+              <span className="text-sm text-blue-200">{selectedIds.size} selected</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-white px-2 py-1">Clear</button>
+                <button onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
+                  <Trash2 size={14} /> Delete {selectedIds.size}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Table */}
           {loading ? (
             <div className="text-center py-12 text-gray-500">Loading...</div>
@@ -927,6 +995,13 @@ export default function Accidents() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
+                    {isAdmin && (
+                      <th className="table-header w-10">
+                        <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
+                          title="Select all shown"
+                          className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                      </th>
+                    )}
                     <th className="table-header">Date</th>
                     <th className="table-header">Asset</th>
                     <th className="table-header">Site</th>
@@ -939,7 +1014,13 @@ export default function Accidents() {
                 </thead>
                 <tbody>
                   {filtered.map(row => (
-                    <tr key={row.id} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
+                    <tr key={row.id} className={`border-t border-gray-800 hover:bg-gray-800/30 transition-colors ${selectedIds.has(row.id) ? 'bg-blue-950/20' : ''}`}>
+                      {isAdmin && (
+                        <td className="table-cell">
+                          <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)}
+                            className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                        </td>
+                      )}
                       <td className="table-cell whitespace-nowrap">
                         {row.incident_date ? formatDate(row.incident_date, activeCountry) : '-'}
                       </td>
@@ -1327,6 +1408,32 @@ export default function Accidents() {
           onClose={() => setDetailId(null)}
           onChanged={loadRecords}
         />
+      )}
+
+      {/* ── Bulk Delete Confirmation (Admin only) ───────────────────────────── */}
+      {bulkDeleteOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }}>
+          <div className="bg-gray-900 border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex gap-3 mb-4">
+              <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-white font-semibold">Delete {selectedIds.size} incident{selectedIds.size !== 1 ? 's' : ''}?</p>
+                <p className="text-gray-400 text-sm mt-1">This permanently removes the selected incident records and their claim data. This cannot be undone.</p>
+              </div>
+            </div>
+            {bulkError && (
+              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{bulkError}</p>
+            )}
+            <div className="flex gap-3">
+              <button onClick={confirmBulkDelete} disabled={bulkBusy}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
+                <Trash2 size={14} /> {bulkBusy ? 'Deleting...' : `Delete ${selectedIds.size}`}
+              </button>
+              <button onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Bulk Upload Modal ───────────────────────────────────────────────── */}

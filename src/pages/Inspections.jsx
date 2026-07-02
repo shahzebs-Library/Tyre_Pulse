@@ -8,7 +8,7 @@ import * as correctiveActions from '../lib/api/correctiveActions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
-import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Upload } from 'lucide-react'
+import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Upload, Trash2, AlertTriangle } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import { motion } from 'framer-motion'
@@ -225,7 +225,13 @@ export default function Inspections() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const isTyreMan = profile?.role === 'Tyre Man'
+  const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
   const [rows, setRows]         = useState([])
+  // Multi-select bulk delete (Admin only)
+  const [selectedIds, setSelectedIds]     = useState(() => new Set())
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false)
+  const [bulkError, setBulkError]         = useState('')
+  const [bulkBusy, setBulkBusy]           = useState(false)
   const [loading, setLoading]   = useState(true)
   const [form, setForm]         = useState(null)
   const [saving, setSaving]     = useState(false)
@@ -505,6 +511,52 @@ export default function Inspections() {
     } catch { /* mirror prior fire-and-forget: proceed to reload regardless */ }
     setDeleteId(null)
     await load()
+  }
+
+  // ── Multi-select bulk delete (Admin only) ─────────────────────────────────────
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+  const pageIds = filtered.map(r => r.id)
+  const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id))
+  function toggleSelectPage() {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (allPageSelected) pageIds.forEach(id => next.delete(id))
+      else pageIds.forEach(id => next.add(id))
+      return next
+    })
+  }
+
+  async function confirmBulkDelete() {
+    if (selectedIds.size === 0) return
+    setBulkBusy(true)
+    setBulkError('')
+    try {
+      const ids = [...selectedIds]
+      let deleted = 0
+      for (let i = 0; i < ids.length; i += 100) {
+        const chunk = ids.slice(i, i + 100)
+        const { data, error } = await supabase
+          .from('inspections').delete().in('id', chunk).select('id')
+        if (error) throw error
+        deleted += data?.length ?? 0
+      }
+      if (deleted === 0) {
+        throw new Error('No rows were deleted — you may not have permission (Admin only) or they were already removed.')
+      }
+      setBulkDeleteOpen(false)
+      setSelectedIds(new Set())
+      await load()
+    } catch (e) {
+      setBulkError(e.message || 'Bulk delete failed. Please try again.')
+    } finally {
+      setBulkBusy(false)
+    }
   }
 
   async function raiseAction(row, actionTitle) {
@@ -880,7 +932,7 @@ export default function Inspections() {
   // Shared grid style for virtual inspection rows
   const inspGridStyle = {
     display: 'grid',
-    gridTemplateColumns: INSP_COL_WIDTHS.map(w => `${w}px`).join(' '),
+    gridTemplateColumns: (isAdmin ? '44px ' : '') + INSP_COL_WIDTHS.map(w => `${w}px`).join(' '),
     alignItems: 'center',
   }
 
@@ -1759,6 +1811,20 @@ export default function Inspections() {
         </select>
       </div>
 
+      {/* Bulk selection bar (Admin only) */}
+      {isAdmin && selectedIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
+          <span className="text-sm text-blue-200">{selectedIds.size} selected</span>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-white px-2 py-1">Clear</button>
+            <button onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
+              <Trash2 size={14} /> Delete {selectedIds.size}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Virtualised Table */}
       <div className="card overflow-x-auto p-0">
         {/* Sticky header */}
@@ -1767,6 +1833,12 @@ export default function Inspections() {
           style={{ minWidth: `${INSP_COL_WIDTHS.reduce((a, b) => a + b, 0)}px` }}
         >
           <div style={inspGridStyle} className="px-0">
+            {isAdmin && (
+              <div className="pb-2 pt-3 px-3 flex items-center">
+                <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage} title="Select all shown"
+                  className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+              </div>
+            )}
             <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Type</div>
             <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Title</div>
             <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Site</div>
@@ -1811,8 +1883,14 @@ export default function Inspections() {
                       height: `${virtualRow.size}px`,
                       ...inspGridStyle,
                     }}
-                    className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors"
+                    className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-950/20' : ''}`}
                   >
+                    {isAdmin && (
+                      <div className="px-3">
+                        <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)}
+                          className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                      </div>
+                    )}
                     {/* Type */}
                     <div className="px-3 overflow-hidden">
                       <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${
@@ -2139,6 +2217,29 @@ export default function Inspections() {
           <div className="flex gap-3">
             <button onClick={() => setDeleteId(null)} className="btn-secondary flex-1">Cancel</button>
             <button onClick={confirmDelete} className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700">Delete</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Bulk delete confirm (Admin only) */}
+      {bulkDeleteOpen && (
+        <Modal onClose={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }}>
+          <div className="flex gap-3 mb-4">
+            <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-white font-semibold">Delete {selectedIds.size} record{selectedIds.size !== 1 ? 's' : ''}?</p>
+              <p className="text-gray-400 text-sm mt-1">This permanently removes the selected inspection records. This cannot be undone.</p>
+            </div>
+          </div>
+          {bulkError && (
+            <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{bulkError}</p>
+          )}
+          <div className="flex gap-3">
+            <button onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary flex-1">Cancel</button>
+            <button onClick={confirmBulkDelete} disabled={bulkBusy}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50">
+              <Trash2 size={14} /> {bulkBusy ? 'Deleting...' : `Delete ${selectedIds.size}`}
+            </button>
           </div>
         </Modal>
       )}

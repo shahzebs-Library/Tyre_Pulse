@@ -215,13 +215,23 @@ export default function AuditTrail() {
     setDeleting(true)
     setDeleteError('')
     try {
-      const { data, error } = await supabase
+      // 1) Delete the tyre records this batch produced (may be 0 — a batch can be
+      //    orphaned metadata whose rows were never committed or already cleared).
+      const { data: delRows, error: recErr } = await supabase
         .from('tyre_records').delete().eq('upload_batch_id', deleteTarget.batchId).select('id')
-      if (error) throw error
-      if ((data?.length ?? 0) === 0) {
-        throw new Error('No records were deleted. Only an Admin can delete tyre records - check your role and retry.')
+      if (recErr) throw recErr
+      const removed = delRows?.length ?? 0
+
+      // 2) Always remove the Upload History entry itself so the batch disappears
+      //    from the list — this is what "Delete Batch" means to the user.
+      const { data: histRows, error: histErr } = await supabase
+        .from('upload_history').delete().eq('batch_id', deleteTarget.batchId).select('id')
+      if (histErr) throw histErr
+      if ((histRows?.length ?? 0) === 0 && removed === 0) {
+        throw new Error('Nothing to delete — this batch has no records and no history entry (it may already be removed).')
       }
-      await logAuditEvent({ action: 'batch_delete', table_name: 'tyre_records', record_count: data.length, details: { batch_id: deleteTarget.batchId } })
+
+      await logAuditEvent({ action: 'batch_delete', table_name: 'tyre_records', record_count: removed, details: { batch_id: deleteTarget.batchId } })
       setDeleteTarget(null)
       setDeleteConfirm('')
       loadUploadHistory()

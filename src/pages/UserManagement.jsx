@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import AccessControlMatrix from '../components/AccessControlMatrix'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -722,7 +723,7 @@ export default function UserManagement() {
       <div className="flex gap-1 border-b border-gray-700/60">
         {[
           { id: 'users',    label: 'Users',        icon: Users    },
-          { id: 'matrix',   label: 'Access Matrix', icon: LayoutGrid  },
+          { id: 'matrix',   label: 'Access Control', icon: LayoutGrid  },
           { id: 'activity', label: 'Activity',      icon: Activity },
         ].map(({ id, label, icon: Icon }) => (
           <button
@@ -989,6 +990,10 @@ export default function UserManagement() {
 
       {/* ── ACCESS MATRIX TAB ────────────────────────────────────────────────── */}
       {activeTab === 'matrix' && (
+        <AccessControlMatrix canEdit={isAdmin} />
+      )}
+
+      {activeTab === '__legacy_matrix__' && (
         <div className="card p-0 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-700/60">
             <h2 className="text-base font-semibold text-white">Feature Permission Matrix</h2>

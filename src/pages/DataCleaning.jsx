@@ -739,17 +739,24 @@ export default function DataCleaning() {
   }
 
   async function undoClassification(record) {
-    await supabase.from('tyre_records').update({
-      category: null,
-      risk_level: null,
-      remarks_cleaned: null,
-      cleaned: false,
-    }).eq('id', record.id)
+    try {
+      const { error: upErr } = await supabase.from('tyre_records').update({
+        category: null,
+        risk_level: null,
+        remarks_cleaned: null,
+        cleaned: false,
+      }).eq('id', record.id)
+      if (upErr) throw upErr
 
-    await supabase.from('cleaning_log').delete().eq('tyre_record_id', record.id)
+      const { error: delErr } = await supabase.from('cleaning_log').delete().eq('tyre_record_id', record.id)
+      if (delErr) throw delErr
 
-    await loadCleaned()
-    setSaveCount(c => c + 1)
+      await loadCleaned()
+      setSaveCount(c => c + 1)
+      setToast({ message: 'Classification reverted', type: 'success' })
+    } catch (e) {
+      setToast({ message: `Could not revert: ${e.message}`, type: 'error' })
+    }
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────────

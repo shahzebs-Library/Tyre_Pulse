@@ -75,6 +75,7 @@ export default function AuditTrail() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   // ── Load summary stats ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -212,12 +213,23 @@ export default function AuditTrail() {
   async function handleDeleteBatch() {
     if (deleteConfirm !== 'DELETE') return
     setDeleting(true)
-    await supabase.from('tyre_records').delete().eq('upload_batch_id', deleteTarget.batchId)
-    await logAuditEvent({ action: 'batch_delete', table_name: 'tyre_records', record_count: deleteTarget.count, details: { batch_id: deleteTarget.batchId } })
-    setDeleteTarget(null)
-    setDeleteConfirm('')
-    setDeleting(false)
-    loadUploadHistory()
+    setDeleteError('')
+    try {
+      const { data, error } = await supabase
+        .from('tyre_records').delete().eq('upload_batch_id', deleteTarget.batchId).select('id')
+      if (error) throw error
+      if ((data?.length ?? 0) === 0) {
+        throw new Error('No records were deleted. Only an Admin can delete tyre records — check your role and retry.')
+      }
+      await logAuditEvent({ action: 'batch_delete', table_name: 'tyre_records', record_count: data.length, details: { batch_id: deleteTarget.batchId } })
+      setDeleteTarget(null)
+      setDeleteConfirm('')
+      loadUploadHistory()
+    } catch (e) {
+      setDeleteError(e.message || 'Delete failed. Please try again.')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   const auditPages  = Math.ceil(auditTotal  / PAGE_SIZE)
@@ -490,7 +502,7 @@ export default function AuditTrail() {
 
       {/* ── Batch delete confirmation modal ───────────────────────────────── */}
       {deleteTarget && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setDeleteTarget(null); setDeleteConfirm('') }}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => { setDeleteTarget(null); setDeleteConfirm(''); setDeleteError('') }}>
           <div className="bg-gray-900 border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-white mb-3">Delete Upload Batch</h2>
             <p className="text-gray-400 text-sm mb-4">
@@ -498,12 +510,15 @@ export default function AuditTrail() {
             </p>
             <p className="text-sm text-gray-400 mb-2">Type <span className="font-mono text-red-400">DELETE</span> to confirm:</p>
             <input className="input mb-4" placeholder="DELETE" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} />
+            {deleteError && (
+              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
+            )}
             <div className="flex gap-3">
               <button onClick={handleDeleteBatch} disabled={deleteConfirm !== 'DELETE' || deleting}
                 className="btn-primary bg-red-700 hover:bg-red-600 disabled:opacity-40 flex-1">
                 {deleting ? 'Deleting…' : 'Delete Permanently'}
               </button>
-              <button onClick={() => { setDeleteTarget(null); setDeleteConfirm('') }} className="btn-secondary">Cancel</button>
+              <button onClick={() => { setDeleteTarget(null); setDeleteConfirm(''); setDeleteError('') }} className="btn-secondary">Cancel</button>
             </div>
           </div>
         </div>

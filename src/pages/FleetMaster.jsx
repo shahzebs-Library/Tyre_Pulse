@@ -107,6 +107,7 @@ export default function FleetMaster() {
   const [deleteTarget, setDeleteTarget]       = useState(null)
   const [saving, setSaving]                   = useState(false)
   const [formError, setFormError]             = useState('')
+  const [deleteError, setDeleteError]         = useState('')
   const [form, setForm]                       = useState(() => EMPTY_FORM())
 
   // ── tab ──────────────────────────────────────────────────────────────────────
@@ -237,12 +238,23 @@ export default function FleetMaster() {
   async function deleteRecord() {
     if (!deleteTarget) return
     setSaving(true)
-    await supabase.from('vehicle_fleet').delete().eq('id', deleteTarget.id)
-    setShowDeleteConfirm(false)
-    setDeleteTarget(null)
-    loadRecords()
-    loadSites()
-    setSaving(false)
+    setDeleteError('')
+    try {
+      const { data, error } = await supabase
+        .from('vehicle_fleet').delete().eq('id', deleteTarget.id).select('id')
+      if (error) throw error
+      if ((data?.length ?? 0) === 0) {
+        throw new Error('The vehicle could not be deleted — you may not have permission, or it was already removed.')
+      }
+      setShowDeleteConfirm(false)
+      setDeleteTarget(null)
+      loadRecords()
+      loadSites()
+    } catch (e) {
+      setDeleteError(e.message || 'Delete failed. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   // ── export ────────────────────────────────────────────────────────────────────
@@ -763,7 +775,7 @@ export default function FleetMaster() {
 
       {/* ── Delete Confirmation ───────────────────────────────────────────── */}
       {showDeleteConfirm && deleteTarget && (
-        <Modal title="Delete Vehicle" onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null) }}>
+        <Modal title="Delete Vehicle" onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }}>
           <div className="flex gap-3 mb-4">
             <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
             <div>
@@ -771,11 +783,14 @@ export default function FleetMaster() {
               <p className="text-gray-400 text-sm mt-1">This removes the fleet record permanently. Tyre history records for this asset are not affected.</p>
             </div>
           </div>
+          {deleteError && (
+            <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
+          )}
           <div className="flex gap-3">
             <button onClick={deleteRecord} disabled={saving} className="btn-danger flex items-center gap-2 disabled:opacity-50">
               <Trash2 size={15} /> {saving ? 'Deleting…' : 'Delete Vehicle'}
             </button>
-            <button onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null) }} className="btn-secondary">Cancel</button>
+            <button onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }} className="btn-secondary">Cancel</button>
           </div>
         </Modal>
       )}

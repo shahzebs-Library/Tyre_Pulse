@@ -951,15 +951,24 @@ export default function UploadData() {
         return
       }
       const CHUNK = 500
-      let added = 0
+      let added = 0, stockSkipped = 0
+      const stockSkipLog = []
       for (let i = 0; i < stockRows.length; i += CHUNK) {
         const chunk = stockRows.slice(i, i + CHUNK)
         const { error: err } = await supabase.from('stock_records').insert(chunk)
-        if (!err) added += chunk.length
+        if (!err) { added += chunk.length }
+        else {
+          // Retry row-by-row so one bad row never silently drops the whole chunk.
+          for (let j = 0; j < chunk.length; j++) {
+            const { error: rowErr } = await supabase.from('stock_records').insert(chunk[j])
+            if (rowErr) { stockSkipped += 1; stockSkipLog.push({ row: i + j + 1, description: chunk[j].description ?? null, error: rowErr.message }) }
+            else added += 1
+          }
+        }
         setProgress({ done: Math.min(i + CHUNK, stockRows.length), total: stockRows.length })
       }
       await logAuditEvent({ action: 'upload_stock', table_name: 'stock_records', record_count: added, details: { file: fileName, batch_id: batchId } })
-      setResult({ added, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipLog: [] })
+      setResult({ added, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipped: stockSkipped, skipLog: stockSkipLog })
       setStep('done')
       return
     }
@@ -1039,8 +1048,19 @@ export default function UploadData() {
     for (let i = 0; i < records.length; i += BATCH) {
       const batch = records.slice(i, i + BATCH)
       const { data, error: err } = await supabase.from('tyre_records').insert(batch).select('id')
-      if (err) { skipped += batch.length; skipLog.push({ batch: Math.floor(i / BATCH) + 1, error: err.message }) }
-      else { added += (data ?? []).length; insertedIds.push(...(data ?? []).map(r => r.id)) }
+      if (!err) {
+        added += (data ?? []).length; insertedIds.push(...(data ?? []).map(r => r.id))
+      } else {
+        // A bulk insert fails entirely if ONE row violates a constraint (bad
+        // date, out-of-range number, etc.). Retry the batch row-by-row so the
+        // good rows still land and only the genuinely-invalid rows are skipped
+        // and logged with their exact reason — no more "whole batch failed".
+        for (let j = 0; j < batch.length; j++) {
+          const { data: one, error: rowErr } = await supabase.from('tyre_records').insert(batch[j]).select('id')
+          if (rowErr) { skipped += 1; skipLog.push({ row: i + j + 1, serial_no: batch[j].serial_no ?? null, error: rowErr.message }) }
+          else { added += 1; insertedIds.push(...(one ?? []).map(r => r.id)) }
+        }
+      }
       setProgress({ done: Math.min(i + BATCH, records.length), total: records.length })
     }
 
@@ -1724,7 +1744,7 @@ export default function UploadData() {
             )}
             {result.skipLog?.length > 0 && (
               <details className="text-sm text-gray-400 mb-4">
-                <summary className="cursor-pointer text-yellow-400">View error log ({result.skipLog.length} batches failed)</summary>
+                <summary className="cursor-pointer text-yellow-400">View error log ({result.skipLog.length} row(s) skipped — see reason per row)</summary>
                 <pre className="mt-2 bg-gray-800 rounded p-3 text-xs overflow-auto">{JSON.stringify(result.skipLog, null, 2)}</pre>
               </details>
             )}

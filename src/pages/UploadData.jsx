@@ -88,12 +88,15 @@ function normalise(s) {
  * Compute a match score 0–100 between a file header and a set of synonym strings.
  * Returns { score, matchedGuess }
  */
-function scoreHeader(header, guesses) {
+export function scoreHeader(header, guesses) {
   const h = normalise(header)
   let best = 0, matchedGuess = null
 
   for (const raw of guesses) {
     const g = normalise(raw)
+    // Guesses that normalise to nothing (e.g. "#") would substring-match every
+    // header and let a low-value field steal a critical column — skip them.
+    if (!g || !h) continue
     // 1. Exact match
     if (h === g) return { score: 100, matchedGuess: raw }
     // 2. Substring — header contains guess, or guess contains header
@@ -139,7 +142,7 @@ function confidenceBand(score) {
  *  - required: true = shown with * in UI
  *  - guesses: extensive synonym list including Arabic transliterations
  */
-const TYRE_FIELDS = [
+export const TYRE_FIELDS = [
   {
     key: 'sr',
     label: 'Row / SR No.',
@@ -318,7 +321,7 @@ const STOCK_FIELDS = [
  * Uses a greedy best-match assignment — each source column can only be used once.
  * synonyms: [{ custom_name, maps_to }] — user-defined permanent mappings (score 100).
  */
-function smartMapping(headers, fields, synonyms = []) {
+export function smartMapping(headers, fields, synonyms = []) {
   // Build synonym lookup: normalised custom_name → maps_to
   const synLookup = {}
   synonyms.forEach(s => { synLookup[normalise(s.custom_name)] = s.maps_to })
@@ -334,22 +337,29 @@ function smartMapping(headers, fields, synonyms = []) {
     }
   })
 
+  // Global greedy assignment by descending score, so a strong match is never
+  // stolen by a weaker one that merely appears earlier in the field list
+  // (e.g. optional "sr" grabbing "Serial No" at 70 before the required
+  // serial_no field could claim its exact 100 match). Ties break in favour of
+  // required fields, then field-definition order.
+  const fieldOrder = Object.fromEntries(fields.map((f, i) => [f.key, i]))
+  const required   = Object.fromEntries(fields.map(f => [f.key, !!f.required]))
+  const candidates = []
+  fields.forEach(f => scores[f.key].forEach(m => { if (m.score >= 35) candidates.push({ key: f.key, h: m.h, score: m.score }) }))
+  candidates.sort((a, b) =>
+    b.score - a.score
+    || (required[b.key] ? 1 : 0) - (required[a.key] ? 1 : 0)
+    || fieldOrder[a.key] - fieldOrder[b.key]
+  )
+
   const assigned = new Set()
   const result   = {}
-
-  // First pass: assign only high-confidence matches (≥65 or synonym)
-  fields.forEach(f => {
-    const best = scores[f.key].find(m => m.score >= 65 && !assigned.has(m.h))
-    if (best) { result[f.key] = { header: best.h, score: best.score, band: confidenceBand(best.score) }; assigned.add(best.h) }
+  candidates.forEach(c => {
+    if (result[c.key] || assigned.has(c.h)) return
+    result[c.key] = { header: c.h, score: c.score, band: confidenceBand(c.score) }
+    assigned.add(c.h)
   })
-
-  // Second pass: fill remaining with medium confidence
-  fields.forEach(f => {
-    if (result[f.key]) return
-    const best = scores[f.key].find(m => m.score >= 35 && !assigned.has(m.h))
-    if (best) { result[f.key] = { header: best.h, score: best.score, band: confidenceBand(best.score) }; assigned.add(best.h) }
-    else       result[f.key] = { header: null, score: 0, band: 'none' }
-  })
+  fields.forEach(f => { if (!result[f.key]) result[f.key] = { header: null, score: 0, band: 'none' } })
 
   return result
 }
@@ -360,17 +370,32 @@ function fingerprintHeaders(headers) {
   return [...headers].sort().join('|').toLowerCase()
 }
 
-function parseDate(val) {
+// Reject "dates" parsed from junk like job-card codes ("JC-770" → year 0770).
+const plausibleYear = (iso) => {
+  const y = Number(String(iso).slice(0, 4))
+  return y >= 1980 && y <= 2100
+}
+
+export function parseDate(val) {
   if (!val) return null
-  if (val instanceof Date) return val.toISOString().split('T')[0]
+  if (val instanceof Date) {
+    const iso = val.toISOString().split('T')[0]
+    return plausibleYear(iso) ? iso : null
+  }
   const s = String(val).trim()
   if (!s) return null
   const d = new Date(s)
-  if (!isNaN(d)) return d.toISOString().split('T')[0]
+  if (!isNaN(d)) {
+    const iso = d.toISOString().split('T')[0]
+    if (plausibleYear(iso)) return iso
+  }
   const parts = s.split(/[\/\-]/)
   if (parts.length === 3) {
     const [a, b, c] = parts
-    if (c.length === 4) return `${c}-${String(b).padStart(2,'0')}-${String(a).padStart(2,'0')}`
+    if (c.length === 4) {
+      const iso = `${c}-${String(b).padStart(2,'0')}-${String(a).padStart(2,'0')}`
+      return plausibleYear(iso) ? iso : null
+    }
   }
   return null
 }

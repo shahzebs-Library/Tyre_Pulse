@@ -8,7 +8,7 @@ import {
   LayoutDashboard, CircleDot, Package, DollarSign,
   ClipboardList, Search, Upload, Settings, LogOut,
   Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
-  Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, Sparkles,
+  Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, User, Sparkles,
   Sun, Moon, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare, QrCode,
   ChevronDown, ChevronRight,
   Cpu, MapPin, Activity, GitMerge, CalendarClock, Trophy, BarChartBig, Microscope, Bot,
@@ -27,6 +27,7 @@ import InstallPwaPrompt from './InstallPwaPrompt'
 import NotificationCenter from './NotificationCenter'
 import GlobalSearch from './GlobalSearch'
 import MobileBottomNav from './MobileBottomNav'
+import OnboardingWizard from './OnboardingWizard'
 import CommandPalette from './CommandPalette'
 import { useCommandPalette } from '../contexts/CommandPaletteContext'
 
@@ -189,11 +190,15 @@ function roleBadgeClass(role) {
   }
 }
 
+// Mirrors the mobile app's tyre_man tab bar (Inspect · Records · Work Orders ·
+// Scan · Profile). Alerts moves to a header bell so the bottom bar stays at the
+// five primary field actions, matching the native inspector experience.
 const TYRE_MAN_TABS = [
-  { to: '/inspections', label: 'Checklist', icon: ClipboardCheck },
+  { to: '/inspections', label: 'Inspect',   icon: ClipboardCheck, end: false },
+  { to: '/tyres',       label: 'Records',   icon: Layers },
+  { to: '/work-orders', label: 'Work',      icon: Wrench },
   { to: '/scan',        label: 'Scan',      icon: ScanLine },
-  { to: '/alerts',      label: 'Alerts',    icon: Bell },
-  { to: '/settings',    label: 'Settings',  icon: Settings },
+  { to: '/settings',    label: 'Profile',   icon: User },
 ]
 
 function TyreManShell({ children, alertCount }) {
@@ -283,7 +288,23 @@ function TyreManShell({ children, alertCount }) {
               ⏳ {pendingCount}
             </span>
           )}
-          <span className="text-xs max-w-[100px] truncate" style={{ color: '#6b7280' }}>
+          <NavLink
+            to="/alerts"
+            className="relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+            style={{ color: '#6b7280' }}
+            aria-label={`Alerts${alertCount > 0 ? ` (${alertCount})` : ''}`}
+          >
+            <Bell size={15} />
+            {alertCount > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center text-[8px] font-bold bg-red-500 text-white rounded-full px-0.5"
+                style={{ boxShadow: '0 0 5px rgba(239,68,68,0.5)' }}
+              >
+                {alertCount > 9 ? '9+' : alertCount}
+              </span>
+            )}
+          </NavLink>
+          <span className="text-xs max-w-[84px] truncate" style={{ color: '#6b7280' }}>
             {profile?.full_name}
           </span>
           <button
@@ -296,6 +317,9 @@ function TyreManShell({ children, alertCount }) {
           </button>
         </div>
       </header>
+
+      {/* Role-based first-run onboarding (field light theme) */}
+      <OnboardingWizard />
 
       {/* Scrollable content */}
       <main
@@ -980,6 +1004,9 @@ export default function Layout({ children }) {
 
       {/* Command palette - Ctrl/Cmd+K */}
       <CommandPalette />
+
+      {/* Role-based first-run onboarding */}
+      <OnboardingWizard />
 
       {/* ── Search palette ───────────────────────────────────────────────────── */}
       <AnimatePresence>

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
-import { Save, User, Settings2, Bell, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle } from 'lucide-react'
+import { Save, User, Settings2, Bell, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { sendReportEmail } from '../lib/emailService'
@@ -696,6 +696,18 @@ export default function Settings() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Guided tour */}
+          <div>
+            <label className="label">Guided Tour</label>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event('tp:onboarding:replay'))}
+              className="btn-secondary w-full mt-1 justify-center"
+            >
+              <Sparkles size={15} /> Replay onboarding tour
+            </button>
           </div>
 
           <form onSubmit={saveAppSettings} className="space-y-3">

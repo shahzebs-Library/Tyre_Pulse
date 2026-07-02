@@ -1,34 +1,39 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, ClipboardCheck, Bell, Upload, BarChart2, Menu,
+  LayoutDashboard, ClipboardCheck, Bell, Layers, Wrench, BarChart2,
+  FileText, ScanLine, Menu,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
+/**
+ * Mobile bottom navigation for the web PWA.
+ *
+ * Role-based tab sets mirror the native mobile app's tab bar
+ * (`mobile/lib/permissions.ts → TAB_BAR`) so the two experiences stay in
+ * lockstep. Each role sees its most-used destinations; everything else is one
+ * tap away behind the Menu button (opens the full sidebar).
+ */
+
+const T = {
+  home:      { to: '/',            label: 'Home',    icon: LayoutDashboard, end: true },
+  inspect:   { to: '/inspections', label: 'Inspect', icon: ClipboardCheck },
+  records:   { to: '/tyres',       label: 'Records', icon: Layers },
+  work:      { to: '/work-orders', label: 'Work',    icon: Wrench },
+  alerts:    { to: '/alerts',      label: 'Alerts',  icon: Bell },
+  scan:      { to: '/scan',        label: 'Scan',    icon: ScanLine },
+  analytics: { to: '/analytics',   label: 'Reports', icon: BarChart2 },
+  reports:   { to: '/reports',     label: 'Reports', icon: FileText },
+}
+
+// Primary tabs per role (max 4; the 5th slot is always the Menu button).
 const ROLE_TABS = {
-  Admin: [
-    { to: '/',            label: 'Home',    icon: LayoutDashboard, end: true },
-    { to: '/inspections', label: 'Inspect', icon: ClipboardCheck },
-    { to: '/alerts',      label: 'Alerts',  icon: Bell },
-    { to: '/analytics',   label: 'Reports', icon: BarChart2 },
-  ],
-  Manager: [
-    { to: '/',            label: 'Home',    icon: LayoutDashboard, end: true },
-    { to: '/inspections', label: 'Inspect', icon: ClipboardCheck },
-    { to: '/alerts',      label: 'Alerts',  icon: Bell },
-    { to: '/analytics',   label: 'Reports', icon: BarChart2 },
-  ],
-  Director: [
-    { to: '/',            label: 'Home',    icon: LayoutDashboard, end: true },
-    { to: '/inspections', label: 'Inspect', icon: ClipboardCheck },
-    { to: '/alerts',      label: 'Alerts',  icon: Bell },
-    { to: '/analytics',   label: 'Reports', icon: BarChart2 },
-  ],
-  Inspector: [
-    { to: '/',            label: 'Home',    icon: LayoutDashboard, end: true },
-    { to: '/inspections', label: 'Inspect', icon: ClipboardCheck },
-    { to: '/alerts',      label: 'Alerts',  icon: Bell },
-    { to: '/upload',      label: 'Upload',  icon: Upload },
-  ],
+  Admin:      [T.home, T.inspect, T.work, T.analytics],
+  Manager:    [T.home, T.inspect, T.work, T.analytics],
+  Director:   [T.home, T.analytics, T.alerts, T.reports],
+  Inspector:  [T.home, T.inspect, T.records, T.alerts],
+  'Tyre Man': [T.inspect, T.records, T.work, T.scan],
+  Reporter:   [T.home, T.reports, T.analytics, T.records],
+  Driver:     [T.home, T.inspect, T.alerts],
 }
 
 export default function MobileBottomNav({ alertCount, onMenuOpen }) {
@@ -41,11 +46,11 @@ export default function MobileBottomNav({ alertCount, onMenuOpen }) {
       className="fixed bottom-0 left-0 right-0 z-30 md:hidden"
       style={{
         background: 'var(--panel-deep)',
-        borderTop: '1px solid rgba(22,163,74,0.14)',
+        borderTop: '1px solid var(--border-brand)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         paddingBottom: 'env(safe-area-inset-bottom)',
-        boxShadow: '0 -4px 30px rgba(0,0,0,0.6)',
+        boxShadow: '0 -4px 30px rgba(0,0,0,0.35)',
       }}
     >
       <div className="flex items-stretch h-[54px]">
@@ -54,10 +59,8 @@ export default function MobileBottomNav({ alertCount, onMenuOpen }) {
             key={to}
             to={to}
             end={end}
-            className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:opacity-70
-               ${isActive ? 'text-green-400' : 'text-gray-600'}`
-            }
+            style={({ isActive }) => ({ color: isActive ? 'var(--brand-bright)' : 'var(--text-muted)' })}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:opacity-70"
           >
             {({ isActive }) => (
               <>
@@ -80,7 +83,8 @@ export default function MobileBottomNav({ alertCount, onMenuOpen }) {
 
         <button
           onClick={onMenuOpen}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-gray-600 active:text-green-400 transition-colors"
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors active:opacity-70"
+          style={{ color: 'var(--text-muted)' }}
           aria-label="Open menu"
         >
           <Menu size={20} strokeWidth={1.7} />

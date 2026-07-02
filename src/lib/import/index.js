@@ -10,9 +10,11 @@ export {
   parseWorkbook,
   sha256OfArrayBuffer,
   rowFingerprint,
+  headerFingerprint,
   detectHeaderRow,
   sniffDelimiter,
   parseDelimitedText,
+  stripFooterRows,
 } from './parseWorkbook'
 
 export {
@@ -41,6 +43,8 @@ export {
 } from './granularity'
 
 export { buildAliasMap, applyAliases, applyAliasesToRow } from './aliases'
+
+export { aggregateStagedRows } from './aggregate'
 
 export {
   extractZip,

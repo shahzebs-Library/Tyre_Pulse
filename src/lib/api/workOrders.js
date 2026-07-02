@@ -3,7 +3,7 @@
  * (no SELECT *); null-safe country scoping. Additive only — mirrors
  * assets.js / tyres.js.
  */
-import { supabase, unwrap, applyCountry } from './_client'
+import { supabase, unwrap, applyCountry, ServiceError } from './_client'
 
 const COLS =
   'id,work_order_no,asset_no,tyre_serial,tyre_position,status,priority,work_type,description,technician_name,workshop_name,site,country,opened_at,started_at,completed_at,target_completion,labour_hours,labour_rate,labour_cost,parts_cost,total_cost,created_at'
@@ -79,4 +79,17 @@ export async function updateWorkOrderById(id, patch) {
 /** Generate the next sequential work-order number via the DB RPC. */
 export async function generateWorkOrderNo() {
   return unwrap(await supabase.rpc('generate_work_order_no'))
+}
+
+/**
+ * Delete a work order. RLS restricts this to the Admin role
+ * (work_orders_delete_admin); the count-verify surfaces a silent policy block
+ * as a real error instead of a button that appears to do nothing.
+ */
+export async function deleteWorkOrder(id) {
+  const { data, error } = await supabase.from('work_orders').delete().eq('id', id).select('id')
+  if (error) throw new ServiceError(error.message, error.code, error)
+  if ((data?.length ?? 0) === 0) {
+    throw new ServiceError('The work order was not deleted — only an Admin can delete work orders.', '42501')
+  }
 }

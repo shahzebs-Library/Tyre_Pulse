@@ -546,6 +546,24 @@ export async function saveProfile(profile, rules = []) {
   return data.id
 }
 
+/**
+ * Exact-format recognition: find the active mapping profile whose header
+ * fingerprint matches this upload. When found the wizard applies it
+ * automatically — the user's known report formats map with zero clicks.
+ */
+export async function findProfileByFingerprint({ module, fingerprint }) {
+  if (!fingerprint) return null
+  let q = supabase.from('import_mapping_profiles')
+    .select('id,name,module,country,unit_settings')
+    .eq('active', true).eq('header_fingerprint', fingerprint)
+    .order('last_used_at', { ascending: false, nullsFirst: false }).limit(1)
+  if (module) q = q.eq('module', module)
+  const { data, error } = await q.maybeSingle()
+  if (error || !data) return null
+  const rules = await getProfileRules(data.id).catch(() => [])
+  return { ...data, rules }
+}
+
 /** Mapping rules for a saved profile (source_header → target_field). */
 export async function getProfileRules(profileId) {
   return unwrap(

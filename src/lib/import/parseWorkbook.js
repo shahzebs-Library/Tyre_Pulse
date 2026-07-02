@@ -41,6 +41,15 @@ import * as XLSX from 'xlsx'
 
 const TEXT_EXT_HINT = /\.(csv|tsv|txt|psv)$/i
 
+// ERP/report exports ("XML Spreadsheet 2003", HTML grids saved as .xls) are
+// text files that must go to SheetJS's string reader, never the CSV splitter.
+const MARKUP_START_RE = /^﻿?\s*(<\?xml|<html|<!doctype html|<table|<xml)/i
+const SPREADSHEETML_RE = /<(?:\w+:)?Workbook[\s>]/i
+
+// Report footers/decoration that must never become data rows: totals lines,
+// "Printed By/Date" stamps, employee codes, BI "Applied filters" trailers.
+const FOOTER_CELL_RE = /^\s*(grand\s*total|sub\s*total|total)\s*:?\s*$|printed\s*(by|date|on)|applied\s*filters?\s*:|^\s*page\s+\d+\s+of\s+\d+\s*$|^\s*report\s+(date|generated)/i
+
 /* ── Low-level coercion helpers ─────────────────────────────────────────────── */
 
 const NUMERIC_RE = /^-?[\d,]+(\.\d+)?$/
@@ -81,9 +90,13 @@ export function detectHeaderRow(aoa) {
     const avgLen = cells.filter(Boolean).reduce((a, c) => a + c.length, 0) / nonEmpty
 
     let below = 0
+    // Wide ERP grids often fill only a fraction of their columns per data row —
+    // cap the "populated data row" bar at 8 cells so a 48-column header with
+    // 14-cell data rows still qualifies.
+    const belowBar = Math.max(2, Math.min(Math.ceil(nonEmpty * 0.5), 8))
     for (let k = r + 1; k < Math.min(aoa.length, r + 8); k++) {
       const fc = (aoa[k] || []).filter((c) => c != null && String(c).trim() !== '').length
-      if (fc >= Math.max(2, nonEmpty * 0.5)) below++
+      if (fc >= belowBar) below++
     }
     if (below === 0) continue
 
@@ -182,6 +195,34 @@ export function parseDelimitedText(text) {
 /* ── Sheet extraction ───────────────────────────────────────────────────────── */
 
 /**
+ * Remove report decoration that is not data:
+ *  - any row containing a footer marker cell (GRAND TOTAL, Printed By/Date,
+ *    Applied filters:, Page N of M, …) — these appear at the bottom of ERP
+ *    grid exports and must never be uploaded as records;
+ *  - TRAILING rows that are nearly empty (≤2 populated cells on a wide sheet),
+ *    e.g. printed-date/employee-code stubs and free-text notes after the data.
+ * Sparse rows in the middle of the data are kept — only the tail is pruned.
+ *
+ * @param {Array<Record<string,*>>} rows
+ * @param {string[]} headers
+ * @returns {Array<Record<string,*>>}
+ */
+export function stripFooterRows(rows, headers) {
+  const isFooterMarker = (row) =>
+    Object.values(row).some((v) => typeof v === 'string' && v !== '' && FOOTER_CELL_RE.test(v))
+  const filled = (row) => Object.values(row).filter((v) => v !== '' && v != null).length
+
+  let out = rows.filter((r) => !isFooterMarker(r))
+  // prune the sparse tail (wide sheets only — a 2-column sheet is legitimately sparse)
+  if (headers.length >= 5) {
+    let end = out.length
+    while (end > 0 && filled(out[end - 1]) <= 2) end--
+    out = out.slice(0, end)
+  }
+  return out
+}
+
+/**
  * Build a normalised sheet from an array-of-arrays.
  *
  * @param {Array<Array<*>>} aoa
@@ -206,11 +247,13 @@ export function sheetFromAoa(aoa, name, sheetOrder, forcedHeaderRow = null) {
         const obj = {}
         headers.forEach((h, ci) => {
           const v = r ? r[ci] : undefined
-          obj[h] = v === undefined ? '' : v
+          // ERP grids pad cells to fixed width — trim string values so "TM556   "
+          // matches "TM556" everywhere (mapping, dedupe, live keys).
+          obj[h] = v === undefined ? '' : typeof v === 'string' ? v.trim() : v
         })
         return obj
       })
-    return { headers, dataRows }
+    return { headers, dataRows: stripFooterRows(dataRows, headers) }
   }
 
   let { headers, dataRows } = build(headerRow)
@@ -248,7 +291,10 @@ export function sheetFromAoa(aoa, name, sheetOrder, forcedHeaderRow = null) {
  */
 async function toArrayBuffer(input) {
   if (input == null) throw new Error('parseWorkbook: empty input')
-  if (input instanceof ArrayBuffer) return input
+  // Tag check instead of instanceof — buffers created in another realm
+  // (Node fs in tests, iframes, workers) are still real ArrayBuffers.
+  const tag = Object.prototype.toString.call(input)
+  if (tag === '[object ArrayBuffer]' || tag === '[object SharedArrayBuffer]') return input
   if (typeof input === 'string') return new TextEncoder().encode(input).buffer
   if (ArrayBuffer.isView(input)) {
     return input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength)
@@ -292,10 +338,34 @@ export async function parseWorkbook(arrayBufferOrFile, opts = {}) {
   const extHintsText = TEXT_EXT_HINT.test(fileName)
   const preferText = extHintsText || (!fileName && looksLikeText(bytes))
 
+  /** Parse markup text (XML Spreadsheet 2003 / HTML grid) via SheetJS. */
+  const asMarkup = (text) => {
+    // Some ERP exports (e.g. Ramco) wrap SpreadsheetML in an HTML <xml> island —
+    // hand SheetJS just the <Workbook>…</Workbook> so detection can't miss.
+    let payload = text
+    if (SPREADSHEETML_RE.test(text) && !/^\s*<\?xml/i.test(text)) {
+      const m = text.match(/<(?:\w+:)?Workbook[\s\S]*<\/(?:\w+:)?Workbook>/i)
+      if (m) payload = `<?xml version="1.0"?>\n${m[0]}`
+    }
+    const wb = XLSX.read(payload, { type: 'string', cellDates: true, raw: false })
+    if (!wb.SheetNames || wb.SheetNames.length === 0) throw new Error('workbook has no sheets')
+    const sheets = wb.SheetNames.map((name, sheetOrder) => {
+      const ws = wb.Sheets[name]
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, blankrows: true })
+      return sheetFromAoa(aoa, name, sheetOrder)
+    })
+    return { sheets }
+  }
+
   /** Parse as delimited text → single-sheet workbook. */
   const asText = () => {
     const text = new TextDecoder('utf-8').decode(bytes).replace(/^﻿/, '')
     if (!text.trim()) throw new Error('no text content')
+    // "XML Spreadsheet 2003" and HTML-table .xls exports are text, but they are
+    // workbooks — route them to SheetJS instead of the CSV splitter.
+    if (MARKUP_START_RE.test(text.slice(0, 512)) || SPREADSHEETML_RE.test(text.slice(0, 4096))) {
+      return asMarkup(text)
+    }
     const aoa = parseDelimitedText(text)
     return { sheets: [sheetFromAoa(aoa, 'Sheet1', 0)] }
   }
@@ -393,6 +463,24 @@ function normaliseValueForHash(v) {
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? '' : v.toISOString().slice(0, 10)
   if (typeof v === 'number') return Number.isFinite(v) ? String(v) : ''
   return String(v).trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/**
+ * Stable fingerprint of a sheet's header set: normalised (trimmed, lowercased,
+ * whitespace-collapsed), sorted, joined and hashed. Two exports of the same
+ * report format collide even when column order or padding differs — used to
+ * auto-apply the right saved mapping profile.
+ *
+ * @param {Array<string|{header:string}>} headers
+ * @returns {string} 16-char hex digest
+ */
+export function headerFingerprint(headers) {
+  const names = (headers || [])
+    .map((h) => (typeof h === 'string' ? h : h?.header ?? ''))
+    .map((h) => String(h).trim().toLowerCase().replace(/\s+/g, ' '))
+    .filter(Boolean)
+    .sort()
+  return fnv1a64Hex(new TextEncoder().encode(names.join('|')))
 }
 
 /**

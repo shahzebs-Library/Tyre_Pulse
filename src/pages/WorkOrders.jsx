@@ -16,7 +16,7 @@ import {
   ChevronDown, ChevronUp, X, Edit2, Eye, Printer,
   Package, DollarSign, Calendar, User, Building2,
   AlertOctagon, Loader2, RefreshCw, TrendingUp,
-  FileSpreadsheet, Upload,
+  FileSpreadsheet, Upload, Trash2,
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -114,8 +114,12 @@ function daysOpen(wo) {
 export default function WorkOrders() {
   const { activeCountry, activeCurrency } = useSettings()
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency)
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
+  // Deleting a work order is an Admin-only action (matches the RLS policy).
+  const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteError, setDeleteError] = useState('')
 
   const [orders, setOrders]       = useState([])
   const [loading, setLoading]     = useState(true)
@@ -251,6 +255,22 @@ export default function WorkOrders() {
     setPartRow({ part_name: '', quantity: 1, unit_cost: '' })
     setShowForm(true)
   }
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setSaving(true)
+    setDeleteError('')
+    try {
+      await workOrders.deleteWorkOrder(deleteTarget.id)
+      setDeleteTarget(null)
+      if (viewOrder?.id === deleteTarget.id) setViewOrder(null)
+      await load()
+    } catch (e) {
+      setDeleteError(e.message || 'Delete failed. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   function openEdit(order) {
     setEditOrder(order)
     setFormData({
@@ -664,6 +684,10 @@ export default function WorkOrders() {
                       <div className="flex items-center gap-1">
                         <button onClick={() => setViewOrder(order)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"><Eye size={14} /></button>
                         <button onClick={() => openEdit(order)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"><Edit2 size={14} /></button>
+                        {isAdmin && (
+                          <button onClick={() => { setDeleteTarget(order); setDeleteError('') }} title="Delete work order (Admin only)"
+                            className="p-1.5 rounded text-gray-400 hover:text-red-400 hover:bg-gray-700 transition-colors"><Trash2 size={14} /></button>
+                        )}
                         <button onClick={() => exportJobCard(order)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"><FileText size={14} /></button>
                       </div>
                     </td>
@@ -865,6 +889,33 @@ export default function WorkOrders() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Delete confirmation (Admin only) ─────────────────────────────────── */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => { setDeleteTarget(null); setDeleteError('') }}>
+          <div className="bg-gray-900 border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex gap-3 mb-4">
+              <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-white font-semibold">Delete work order <span className="font-mono text-blue-400">{deleteTarget.work_order_no}</span>?</p>
+                <p className="text-gray-400 text-sm mt-1">This permanently removes the work order and its cost records. This cannot be undone.</p>
+              </div>
+            </div>
+            {deleteError && (
+              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
+            )}
+            <div className="flex gap-3">
+              <button onClick={confirmDelete} disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                {saving ? 'Deleting…' : 'Delete Work Order'}
+              </button>
+              <button onClick={() => { setDeleteTarget(null); setDeleteError('') }} className="btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Detail Drawer ────────────────────────────────────────────────────── */}
       <AnimatePresence>

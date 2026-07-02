@@ -13,6 +13,7 @@ import {
   wrongModuleWarning, WRONG_MODULE_THRESHOLD,
   buildAliasMap, applyAliasesToRow,
   extractZip, matchAttachment, buildMatchRows,
+  headerFingerprint, aggregateStagedRows,
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
 
@@ -55,6 +56,7 @@ export default function DataIntakeCenter() {
   const [module, setModule] = useState(initialModule)
   const [file, setFile] = useState(null)
   const [fileQueue, setFileQueue] = useState([])   // extra files picked in one go, imported one-by-one
+  const [appliedProfile, setAppliedProfile] = useState(null) // fingerprint-matched saved mapping
   const [parsed, setParsed] = useState(null)
   const [sheetIdx, setSheetIdx] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -143,7 +145,7 @@ export default function DataIntakeCenter() {
   }
 
   function reset() {
-    setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null)
+    setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null); setAppliedProfile(null)
     setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setAliasMaps(null); setFxRatesMap(null)
     setAttachItems([]); setAttachWarnings([]); setAttachDone(false); setAttachBusy(false)
   }
@@ -195,13 +197,30 @@ export default function DataIntakeCenter() {
       // A 'review' action (confidence < SUGGEST_THRESHOLD) keeps its guess only
       // as a hint; the selected target defaults to null ("preserve as custom")
       // so a weak guess (e.g. Store Code → Country) is never silently applied.
-      setMapping(
-        suggestMapping({ columns: sheet.columns, module, sampleRows: sheet.rows.slice(0, 20) }).map((m) =>
-          m.action === 'review'
-            ? { ...m, target: null, suggestedTarget: m.target, suggestedConfidence: m.confidence }
-            : m,
-        ),
+      const suggestions = suggestMapping({ columns: sheet.columns, module, sampleRows: sheet.rows.slice(0, 20) }).map((m) =>
+        m.action === 'review'
+          ? { ...m, target: null, suggestedTarget: m.target, suggestedConfidence: m.confidence }
+          : m,
       )
+      // Exact-format recognition: if a saved profile's header fingerprint matches
+      // this upload, apply its remembered mapping automatically (zero clicks for
+      // known report formats). Fingerprint mismatch → normal suggestions.
+      setAppliedProfile(null)
+      let applied = false
+      try {
+        const fp = headerFingerprint(sheet.columns)
+        const prof = await imports.findProfileByFingerprint({ module, fingerprint: fp })
+        if (prof?.rules?.length) {
+          const byHeader = new Map(prof.rules.map((r) => [r.source_header, r.target_field]))
+          setMapping(suggestions.map((m) => byHeader.has(m.sourceHeader)
+            ? { ...m, target: byHeader.get(m.sourceHeader) || null, action: byHeader.get(m.sourceHeader) ? 'mapped' : 'preserve_custom', confidence: 100, reason: 'profile' }
+            : { ...m, target: null, action: 'preserve_custom' }))
+          setAppliedProfile(prof)
+          imports.touchProfile(prof.id).catch(() => {})
+          applied = true
+        }
+      } catch { /* fall back to suggestions */ }
+      if (!applied) setMapping(suggestions)
       // offer reusable mapping profiles for this module/country (non-blocking)
       imports.listProfiles({ module, country: activeCountry }).then(setProfiles).catch(() => setProfiles([]))
       // load master-data aliases once so the validate pass can normalise spellings
@@ -252,7 +271,10 @@ export default function DataIntakeCenter() {
       const rules = mapping
         .filter((m) => m.target)
         .map((m) => ({ sourceHeader: m.sourceHeader, target: m.target, confidence: m.confidence ?? 100 }))
-      await imports.saveProfile({ name: name.trim(), module, country: activeCountry }, rules)
+      await imports.saveProfile({
+        name: name.trim(), module, country: activeCountry,
+        headerFingerprint: sheet ? headerFingerprint(sheet.columns) : null,
+      }, rules)
       const next = await imports.listProfiles({ module, country: activeCountry })
       setProfiles(next)
     } catch (err) {
@@ -262,7 +284,7 @@ export default function DataIntakeCenter() {
 
   // ── Step 3: validate + classify (in-batch + live-table dedup) ────────────────
   async function runValidation() {
-    const rows = sheet.rows.map((raw, i) => {
+    let rows = sheet.rows.map((raw, i) => {
       const { mapped, transformed: t0, custom } = transformRow(raw, mapping, { module, baseCurrency: activeCurrency, fxRates: fxRatesMap })
       // Normalise master-data spellings via saved aliases (site/supplier/brand).
       let transformed = t0
@@ -290,6 +312,13 @@ export default function DataIntakeCenter() {
         fingerprint: rowFingerprint(raw),
       }
     })
+
+    // Line-item aggregation: a profile can declare that this format carries
+    // several rows per business record (e.g. store-issue lines per work order).
+    // Collapse them here — costs summed, every source line preserved in
+    // custom_data.line_items — so the commit produces ONE record per key.
+    const aggCfg = appliedProfile?.unit_settings?.aggregate
+    if (aggCfg?.by) rows = aggregateStagedRows(rows, aggCfg)
 
     // Country-scope guard (directive rule #1: never mix countries). A row whose
     // own country value disagrees with the selected import country is flagged for
@@ -535,6 +564,12 @@ export default function DataIntakeCenter() {
       {/* STEP 2 */}
       {step === 1 && sheet && (
         <div className="space-y-4">
+          {appliedProfile && (
+            <div className="bg-sky-900/20 border border-sky-700/50 rounded-xl p-3 text-sky-300 text-sm flex items-center gap-2">
+              <Bookmark size={15} className="shrink-0" />
+              <span>Recognised format — mapping profile <span className="font-semibold text-white">“{appliedProfile.name}”</span> applied automatically{appliedProfile.unit_settings?.aggregate?.by ? ' (line items will be combined per record)' : ''}. Review below and adjust if needed.</span>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-gray-400 flex items-center gap-2"><Wand2 size={15} /> Review the suggested mapping. Unknown columns are kept (never dropped).</p>
             <div className="flex items-center gap-2">

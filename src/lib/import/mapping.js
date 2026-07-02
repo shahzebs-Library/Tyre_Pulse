@@ -227,6 +227,20 @@ const NUMERIC_FIELD_TYPES = new Set(['number', 'integer', 'currency', 'pressure'
  * @param {string} fieldType
  * @returns {number}
  */
+/**
+ * Hard guard: a header that literally says "…date" must never map to a
+ * non-date field ("Driver Issue Date" → operator_name was a real miss on a
+ * fleet export). Caps such scores to review-level so they are never
+ * auto-applied; explicit profile/alias matches (score 100) are unaffected.
+ */
+const DATE_HEADER_RE = /\bdate\b|\bdatetime\b|تاريخ/i
+
+function dateHeaderGuard(score, header, fieldType) {
+  if (score >= 100) return score
+  if (fieldType !== 'date' && DATE_HEADER_RE.test(header)) return Math.min(score, 30)
+  return score
+}
+
 function applyTypeSignal(score, sampleType, fieldType) {
   if (score >= 95 || sampleType === 'empty') return score
   const expectNumeric = NUMERIC_FIELD_TYPES.has(fieldType)
@@ -322,7 +336,7 @@ export function suggestMapping({ columns, module, sampleRows = [], savedProfileR
         sampleValues,
       })
       if (score <= 0) continue
-      const adj = applyTypeSignal(score, sampleType, field.type)
+      const adj = dateHeaderGuard(applyTypeSignal(score, sampleType, field.type), h, field.type)
       candidates.push({ header: h, target: field.key, score: adj, reason: 'fuzzy' })
     }
   }

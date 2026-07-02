@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { supabase } from '../lib/supabase'
 import TpLogo from '../assets/logo.svg'
@@ -169,23 +170,24 @@ function FeatureChip({ icon: Icon, label, delay = 0 }) {
 }
 
 const ID_MODES = [
-  { value: 'email',    label: 'Email',      icon: Mail,   placeholder: 'you@company.com', type: 'email' },
-  { value: 'username', label: 'Username',   icon: AtSign, placeholder: 'your_username',   type: 'text' },
-  { value: 'empid',    label: 'Employee ID',icon: Hash,   placeholder: 'EMP-1042',         type: 'text' },
+  { value: 'email',    labelKey: 'auth.login.idModeEmail',      icon: Mail,   placeholder: 'you@company.com', type: 'email' },
+  { value: 'username', labelKey: 'auth.login.idModeUsername',   icon: AtSign, placeholder: 'your_username',   type: 'text' },
+  { value: 'empid',    labelKey: 'auth.login.idModeEmployeeId', icon: Hash,   placeholder: 'EMP-1042',         type: 'text' },
 ]
 
 const FEATURES = [
-  { icon: BarChart3,  label: 'AI-Powered Fleet Analytics' },
-  { icon: Brain,      label: 'Predictive Maintenance' },
-  { icon: Bell,       label: 'Real-Time Alerts' },
-  { icon: Shield,     label: 'Full RCA Engine' },
-  { icon: TrendingUp, label: 'Cost Per KM Tracking' },
-  { icon: Smartphone, label: 'Offline-Ready Mobile' },
+  { icon: BarChart3,  labelKey: 'auth.login.features.analytics' },
+  { icon: Brain,      labelKey: 'auth.login.features.predictive' },
+  { icon: Bell,       labelKey: 'auth.login.features.alerts' },
+  { icon: Shield,     labelKey: 'auth.login.features.rca' },
+  { icon: TrendingUp, labelKey: 'auth.login.features.cpk' },
+  { icon: Smartphone, labelKey: 'auth.login.features.mobile' },
 ]
 
 export default function Login() {
   const { signIn, user, loading: authLoading } = useAuth()
   const { isDark, toggleTheme } = useTheme()
+  const { t }               = useLanguage()
   const navigate            = useNavigate()
 
   // Navigate to dashboard once auth state resolves - avoids race with async fetchProfile
@@ -238,11 +240,11 @@ export default function Login() {
 
   async function handleLogin(e) {
     e.preventDefault()
-    if (!isOnline) { setError('No internet connection. Please check your network.'); return }
+    if (!isOnline) { setError(t('auth.login.errNoInternet')); return }
     const now = Date.now()
     if (cooldownUntil > now) {
       const secs = Math.ceil((cooldownUntil - now) / 1000)
-      setError(`Too many attempts. Please wait ${secs} second${secs !== 1 ? 's' : ''}.`)
+      setError(t('auth.login.errTooManyAttempts', { secs }))
       return
     }
     setError(''); setLoading(true)
@@ -253,7 +255,7 @@ export default function Login() {
       if (factor) {
         setMfaState({ factorId: factor.id })
       } else {
-        setError('MFA is required but no authenticator factor found.')
+        setError(t('auth.login.errNoMfaFactor'))
       }
       setLoading(false)
       return
@@ -265,7 +267,7 @@ export default function Login() {
       if (next >= 7)      setCooldownUntil(Date.now() + 60_000)
       else if (next >= 5) setCooldownUntil(Date.now() + 15_000)
       else if (next >= 3) setCooldownUntil(Date.now() +  5_000)
-      setError(result.message || 'Login failed')
+      setError(result.message || t('auth.login.errLoginFailed'))
       setLoading(false)
       return
     }
@@ -277,9 +279,9 @@ export default function Login() {
 
   async function handleSignup(e) {
     e.preventDefault(); setError('')
-    if (password !== confirm)   { setError('Passwords do not match'); return }
-    if (password.length < 6)    { setError('Password must be at least 6 characters'); return }
-    if (!signupUsername.trim()) { setError('Username is required'); return }
+    if (password !== confirm)   { setError(t('auth.login.errPasswordMismatch')); return }
+    if (password.length < 6)    { setError(t('auth.login.errPasswordShort')); return }
+    if (!signupUsername.trim()) { setError(t('auth.login.errUsernameRequired')); return }
     setLoading(true)
     const { data, error: authErr } = await supabase.auth.signUp({ email: signupEmail, password })
     if (authErr) { setError(authErr.message); setLoading(false); return }
@@ -359,7 +361,7 @@ export default function Login() {
         {/* ── Theme toggle ────────────────────────────────────────────────── */}
         <button
           onClick={toggleTheme}
-          title={isDark ? 'Light mode' : 'Dark mode'}
+          title={isDark ? t('auth.login.lightMode') : t('auth.login.darkMode')}
           style={{
             position:'fixed', top:16, right:16, zIndex:100,
             width:40, height:40, borderRadius:12,
@@ -383,8 +385,8 @@ export default function Login() {
           transition:'all 0.4s',
         }}>
           {isOnline
-            ? <><Wifi size={11} color="#4ade80"/><span style={{fontSize:10, fontWeight:700, color:'#4ade80', letterSpacing:'0.06em'}}>CONNECTED</span></>
-            : <><WifiOff size={11} color="#f87171"/><span style={{fontSize:10, fontWeight:700, color:'#f87171', letterSpacing:'0.06em'}}>OFFLINE</span></>
+            ? <><Wifi size={11} color="#4ade80"/><span style={{fontSize:10, fontWeight:700, color:'#4ade80', letterSpacing:'0.06em'}}>{t('auth.login.connected')}</span></>
+            : <><WifiOff size={11} color="#f87171"/><span style={{fontSize:10, fontWeight:700, color:'#f87171', letterSpacing:'0.06em'}}>{t('auth.login.offline')}</span></>
           }
         </div>
 
@@ -417,34 +419,34 @@ export default function Login() {
               </div>
               <div>
                 <div style={{fontSize:26, fontWeight:800, color:'#fff', letterSpacing:'-0.03em', lineHeight:1}}>TyrePulse</div>
-                <div style={{fontSize:11, color:'rgba(74,222,128,0.7)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:2}}>Fleet Intelligence</div>
+                <div style={{fontSize:11, color:'rgba(74,222,128,0.7)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:2}}>{t('auth.login.brandTagline')}</div>
               </div>
             </div>
 
             <h2 style={{ fontSize:36, fontWeight:800, color:'#fff', lineHeight:1.2, letterSpacing:'-0.03em', margin:'0 0 12px' }}>
-              Smarter Fleet.<br/>
+              {t('auth.login.heroLine1')}<br/>
               <span style={{ background:'linear-gradient(135deg, #4ade80, #22c55e)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>
-                Lower Costs.
+                {t('auth.login.heroLine2')}
               </span>
             </h2>
             <p style={{ fontSize:14, color:'rgba(255,255,255,0.45)', lineHeight:1.6, margin:0, maxWidth:340 }}>
-              Enterprise-grade tyre lifecycle management, AI-powered analytics, and real-time fleet intelligence - all in one platform.
+              {t('auth.login.heroDesc')}
             </p>
           </div>
 
           {/* Features grid */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, maxWidth:380 }}>
             {FEATURES.map((f, i) => (
-              <FeatureChip key={f.label} icon={f.icon} label={f.label} delay={i * 0.08}/>
+              <FeatureChip key={f.labelKey} icon={f.icon} label={t(f.labelKey)} delay={i * 0.08}/>
             ))}
           </div>
 
           {/* Stats row */}
           <div style={{ display:'flex', gap:32, marginTop:40 }}>
-            {[['10K+','Tyres Tracked'],['99.9%','Uptime SLA'],['3s','Avg Alert Time']].map(([val, lbl]) => (
-              <div key={lbl}>
+            {[['10K+','auth.login.stats.tyresTracked'],['99.9%','auth.login.stats.uptime'],['3s','auth.login.stats.alertTime']].map(([val, lblKey]) => (
+              <div key={lblKey}>
                 <div style={{fontSize:22, fontWeight:800, color:'#4ade80', letterSpacing:'-0.02em'}}>{val}</div>
-                <div style={{fontSize:11, color:'rgba(255,255,255,0.35)', fontWeight:500, marginTop:2}}>{lbl}</div>
+                <div style={{fontSize:11, color:'rgba(255,255,255,0.35)', fontWeight:500, marginTop:2}}>{t(lblKey)}</div>
               </div>
             ))}
           </div>
@@ -473,7 +475,7 @@ export default function Login() {
               </div>
             </div>
             <div style={{fontSize:24, fontWeight:800, color:'#fff', letterSpacing:'-0.03em'}}>TyrePulse</div>
-            <div style={{fontSize:11, color:'rgba(74,222,128,0.65)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:3}}>Fleet Intelligence Platform</div>
+            <div style={{fontSize:11, color:'rgba(74,222,128,0.65)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600, marginTop:3}}>{t('auth.login.brandTaglinePlatform')}</div>
             <div style={{ display:'flex', justifyContent:'center', marginTop:14 }}>
               <LanguageSwitcher />
             </div>
@@ -496,7 +498,7 @@ export default function Login() {
                 }}
               >
                 <AlertCircle size={14} style={{flexShrink:0}}/>
-                Session expired after inactivity. Please sign in again.
+                {t('auth.login.sessionExpiredBanner')}
               </motion.div>
             )}
           </AnimatePresence>

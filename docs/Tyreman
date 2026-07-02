@@ -1,0 +1,112 @@
+I have an existing React + Vite Tyre Pulse application connected to Supabase.
+
+My Google Play Android app is not ready yet, so I want to create a temporary but professional Tyre Man PWA from the existing mobile app screens.
+
+Important: Do not rebuild the full system. Create a lightweight field-user PWA only for tyre men.
+
+The PWA should use the same design, same Supabase backend, same authentication, and same data structure where possible.
+
+Create a separate Tyre Man PWA experience with these routes: just follow how it has everthing make sure the country selected peoprl takes their data absed on their approvals.
+
+/tyreman/login
+/tyreman/jobs
+/tyreman/inspection/:vehicleId
+/tyreman/drafts
+/tyreman/sync
+/tyreman/profile
+
+The PWA must include:
+
+1. Installable Android home screen app
+2. Proper manifest
+3. App name: Tyre Pulse Tyre Man
+4. Short name: Tyre Man
+5. Theme color matching existing Tyre Pulse branding
+6. Splash screen support
+7. Icons in all required sizes
+8. Offline app shell
+9. Save inspection draft offline
+10. Queue photo uploads
+11. Sync pending inspections when internet returns
+12. Show clear sync status:
+
+* Synced
+* Pending
+* Failed
+* Retrying
+
+13. Prevent duplicate submissions
+14. Compress images before upload
+15. Allow tyre man to continue work even if internet is weak
+16. Hide admin, reports, analytics, settings, and management modules from this PWA
+17. Keep only field inspection screens
+
+Technical requirements:
+
+* Use vite-plugin-pwa
+* Use Workbox caching
+* Cache only static app shell files
+* Do not cache sensitive Supabase API responses blindly
+* Use IndexedDB for offline inspection drafts
+* Use localForage or Dexie for offline storage
+* Store photos locally until synced
+* Add a sync queue table in local storage
+* Add retry logic for failed uploads
+* Add version update prompt when a new PWA version is deployed
+* Add network status detection
+* Add “Clear local drafts” admin/debug option only for authorized users
+
+Security requirements:
+
+* Do not store Supabase service role key in frontend
+* Use only anon key
+* Respect Supabase RLS policies
+* Store tokens safely as currently implemented
+* Do not cache private inspection API responses in service worker
+* Do not expose admin routes in the Tyre Man PWA
+
+Performance requirements:
+
+* Fast startup on low-end Android phones
+* Lazy load routes
+* Compress images before upload
+* Avoid loading dashboard libraries in Tyre Man PWA
+* Remove charts, reports, and heavy admin packages from this PWA bundle
+* Test using Lighthouse PWA audit
+* Test on Chrome Android
+
+Deliverables:
+
+1. Audit my existing React/Vite structure
+2. Recommend whether to create:
+
+   * separate /tyreman route inside same app, or
+   * separate apps/tyreman-pwa package
+3. Add PWA configuration
+4. Add manifest
+5. Add service worker
+6. Add offline storage layer
+7. Add inspection draft save flow
+8. Add sync queue
+9. Add image compression before upload
+10. Add install prompt button
+11. Add update available prompt
+12. Add deployment checklist
+13. Add testing checklist
+
+Important decision rule:
+
+If the current app has too much admin/dashboard code, create a separate Tyre Man PWA package to keep it lightweight.
+
+If the current code is already modular, create a /tyreman route but make sure heavy dashboard code is lazy-loaded and not included in the tyre man bundle.
+
+Final output needed:
+
+* Exact file changes
+* Exact npm packages
+* Exact code
+* Folder structure
+* Testing steps
+* Deployment steps
+* Known limitations
+* What should remain only in the native Android app later

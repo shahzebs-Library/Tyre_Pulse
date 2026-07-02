@@ -1,0 +1,55 @@
+{
+  "header": {
+    "title": "Alerts",
+    "subtitle": "Real-time fleet monitoring - vehicle health, CPK anomalies, data quality",
+    "badge": "{count} active"
+  },
+  "severity": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "info": "Info"
+  },
+  "card": {
+    "filtered": "filtered"
+  },
+  "toolbar": {
+    "searchPlaceholder": "Search alerts...",
+    "filters": "Filters",
+    "scanTooltip": "Scan fleet",
+    "lastScanned": "Last scanned: {time}",
+    "scanning": "Scanning...",
+    "refresh": "Refresh",
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "filters": {
+    "type": "Type:",
+    "all": "All ({count})",
+    "sort": "Sort:",
+    "sortSeverity": "By severity",
+    "sortType": "By type"
+  },
+  "list": {
+    "count": "{count} alerts",
+    "scannedAt": "Scanned {time}",
+    "dismissAllVisible": "Dismiss all visible",
+    "scanning": "Scanning fleet for alerts..."
+  },
+  "states": {
+    "noMatch": "No alerts match the current filters",
+    "allClear": "All clear",
+    "noMatchDesc": "Try clearing filters or search",
+    "allClearDesc": "No active alerts detected for your fleet",
+    "clearFilters": "Clear all filters"
+  },
+  "item": {
+    "view": "View",
+    "dismiss": "Dismiss"
+  },
+  "dismissed": {
+    "count": "{count} dismissed alerts",
+    "restoreAll": "Restore all",
+    "restore": "Restore"
+  }
+}

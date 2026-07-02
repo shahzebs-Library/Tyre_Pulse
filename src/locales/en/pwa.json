@@ -1,0 +1,21 @@
+{
+  "notifications": "App notifications",
+  "dismiss": "Dismiss",
+  "offlineReadyTitle": "Ready for offline use",
+  "offlineReadyBody": "TyrePulse has been cached and works without internet.",
+  "updateTitle": "Update available",
+  "updateBody": "A new version of TyrePulse is ready.",
+  "reloadUpdate": "Reload & update",
+  "later": "Later",
+  "installTitle": "Install TyrePulse",
+  "installSubtitle": "Add to your Home Screen",
+  "installClose": "Close",
+  "iosStep1": "Tap Share in the Safari toolbar",
+  "iosStep2": "Scroll and tap Add to Home Screen",
+  "iosStep3": "Tap Add to install",
+  "install": "Install",
+  "installAria": "Install TyrePulse",
+  "installBody": "Add to home screen for fast access and offline support.",
+  "notNow": "Not now",
+  "iosAria": "Install TyrePulse on iPhone"
+}

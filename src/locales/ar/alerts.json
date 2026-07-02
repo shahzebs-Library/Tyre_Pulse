@@ -1,0 +1,55 @@
+{
+  "header": {
+    "title": "التنبيهات",
+    "subtitle": "مراقبة الأسطول في الوقت الفعلي - صحة المركبات، حالات CPK الشاذة، جودة البيانات",
+    "badge": "{count} نشط"
+  },
+  "severity": {
+    "critical": "حرج",
+    "high": "عالٍ",
+    "medium": "متوسط",
+    "info": "معلومة"
+  },
+  "card": {
+    "filtered": "مُصفّى"
+  },
+  "toolbar": {
+    "searchPlaceholder": "ابحث في التنبيهات...",
+    "filters": "عوامل التصفية",
+    "scanTooltip": "فحص الأسطول",
+    "lastScanned": "آخر فحص: {time}",
+    "scanning": "جارٍ الفحص...",
+    "refresh": "تحديث",
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "filters": {
+    "type": "النوع:",
+    "all": "الكل ({count})",
+    "sort": "الترتيب:",
+    "sortSeverity": "حسب الخطورة",
+    "sortType": "حسب النوع"
+  },
+  "list": {
+    "count": "{count} تنبيه",
+    "scannedAt": "تم الفحص {time}",
+    "dismissAllVisible": "تجاهل كل المعروض",
+    "scanning": "جارٍ فحص الأسطول بحثًا عن تنبيهات..."
+  },
+  "states": {
+    "noMatch": "لا توجد تنبيهات مطابقة لعوامل التصفية الحالية",
+    "allClear": "كل شيء على ما يرام",
+    "noMatchDesc": "جرّب مسح عوامل التصفية أو البحث",
+    "allClearDesc": "لم يتم اكتشاف تنبيهات نشطة لأسطولك",
+    "clearFilters": "مسح كل عوامل التصفية"
+  },
+  "item": {
+    "view": "عرض",
+    "dismiss": "تجاهل"
+  },
+  "dismissed": {
+    "count": "{count} تنبيه متجاهَل",
+    "restoreAll": "استعادة الكل",
+    "restore": "استعادة"
+  }
+}

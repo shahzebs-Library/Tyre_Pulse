@@ -1,5 +1,6 @@
 import { Search, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * FilterBar - glassmorphic filter row with search + selects + optional extra controls.
@@ -14,11 +15,13 @@ import { cn } from '../../lib/cn'
 export default function FilterBar({
   search = '',
   onSearch,
-  placeholder = 'Search...',
+  placeholder,
   selects = [],
   children,
   className,
 }) {
+  const { t } = useLanguage()
+  const searchPlaceholder = placeholder ?? t('ui.filterBar.searchPlaceholder')
   return (
     <div className={cn(
       'flex flex-wrap items-center gap-2 p-3 rounded-2xl',
@@ -34,7 +37,7 @@ export default function FilterBar({
             type="text"
             value={search}
             onChange={e => onSearch(e.target.value)}
-            placeholder={placeholder}
+            placeholder={searchPlaceholder}
             className={cn(
               'w-full pl-8 pr-8 py-2 rounded-xl text-sm',
               'bg-surface-2 border border-[var(--border-dim)] text-white placeholder-muted',
@@ -67,7 +70,7 @@ export default function FilterBar({
             !s.value && 'text-muted'
           )}
         >
-          <option value="">{s.placeholder || 'All'}</option>
+          <option value="">{s.placeholder || t('common.all')}</option>
           {s.options.map(opt => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}

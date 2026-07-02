@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { applyCountry } from '../lib/countryFilter'
 import StatCard from '../components/StatCard'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
@@ -53,12 +54,13 @@ function isHigh(t) { return t.risk_level === 'Critical' || t.risk_level === 'Hig
 
 /* ── Health Ring ─────────────────────────────────────────────────────────── */
 function HealthRing({ score }) {
+  const { t } = useLanguage()
   const r = 38
   const circ = 2 * Math.PI * r
   const pct  = Math.min(Math.max(score, 0), 100)
   const dash = (pct / 100) * circ
   const color = pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'
-  const label = pct >= 70 ? 'Good' : pct >= 40 ? 'Moderate' : 'At Risk'
+  const label = pct >= 70 ? t('dashboard.health.good') : pct >= 40 ? t('dashboard.health.moderate') : t('dashboard.health.atRisk')
 
   return (
     <div className="flex flex-col items-center justify-center gap-1">
@@ -82,7 +84,7 @@ function HealthRing({ score }) {
         </div>
       </div>
       <span className="text-xs font-semibold" style={{ color }}>{label}</span>
-      <span className="text-[10px] text-gray-600">Fleet Health</span>
+      <span className="text-[10px] text-gray-600">{t('dashboard.health.fleetHealth')}</span>
     </div>
   )
 }
@@ -138,6 +140,7 @@ function ActionTile({ to, icon: Icon, label, color, bg, border }) {
 
 /* ── Risk Badge ──────────────────────────────────────────────────────────── */
 function RiskBadge({ level }) {
+  const { t } = useLanguage()
   const styles = {
     Critical: 'bg-red-500/15 text-red-300 border-red-500/25',
     High:     'bg-orange-500/15 text-orange-300 border-orange-500/25',
@@ -146,7 +149,7 @@ function RiskBadge({ level }) {
   }
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${styles[level] ?? 'bg-gray-800/60 text-gray-400 border-gray-700/40'}`}>
-      {level ?? 'Unknown'}
+      {level ?? t('dashboard.risk.unknown')}
     </span>
   )
 }
@@ -155,6 +158,7 @@ function RiskBadge({ level }) {
 export default function Dashboard() {
   const { profile } = useAuth()
   const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const { t } = useLanguage()
 
   const [rawTyres, setRawTyres]       = useState([])
   const [summary, setSummary]         = useState(null)
@@ -227,7 +231,7 @@ export default function Dashboard() {
       setRecentRecords(recentRes.data ?? [])
       setOpenActions(openActRes.data ?? [])
     } catch (e) {
-      setError(e.message || 'Failed to load dashboard data.')
+      setError(e.message || t('dashboard.states.errorDefault'))
     } finally {
       setLoading(false)
     }
@@ -269,14 +273,14 @@ export default function Dashboard() {
   const seasonalBarData = useMemo(() => ({
     labels: seasonalTrends.map(d => d.month),
     datasets: [{
-      label: 'Tyre Issues', data: seasonalTrends.map(d => d.count),
+      label: t('dashboard.legend.tyreIssues'), data: seasonalTrends.map(d => d.count),
       backgroundColor: seasonalTrends.map(d =>
         d.highRiskRate > 0.3 ? 'rgba(239,68,68,0.65)' :
         d.highRiskRate > 0.15 ? 'rgba(245,158,11,0.65)' : 'rgba(59,130,246,0.6)'
       ),
       borderRadius: 5,
     }],
-  }), [seasonalTrends])
+  }), [seasonalTrends, t])
 
   const riskTrend = useMemo(() => {
     const now = new Date()
@@ -295,8 +299,8 @@ export default function Dashboard() {
       return {
         labels: days.map(d => { const [, m, dy] = d.split('-'); return `${dy}/${m}` }),
         datasets: [
-          { label: 'All',       data: days.map(day => tyres.filter(t => t.issue_date?.slice(0,10) === day).length), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4 },
-          { label: 'High Risk', data: days.map(day => tyres.filter(t => t.issue_date?.slice(0,10) === day && isHigh(t)).length), backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 4 },
+          { label: t('dashboard.legend.all'),       data: days.map(day => tyres.filter(t => t.issue_date?.slice(0,10) === day).length), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4 },
+          { label: t('dashboard.legend.highRisk'), data: days.map(day => tyres.filter(t => t.issue_date?.slice(0,10) === day && isHigh(t)).length), backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 4 },
         ],
       }
     }
@@ -311,8 +315,8 @@ export default function Dashboard() {
       return {
         labels: weeks.map(w => w.key),
         datasets: [
-          { label: 'All', data: weeks.map(({ key }) => { let n=0; tyres.forEach(t => { if (!t.issue_date) return; const d=new Date(t.issue_date); const wn=Math.ceil((((d-new Date(d.getFullYear(),0,1))/86400000)+1)/7); if(`W${wn} ${d.getFullYear()}`===key) n++ }); return n }), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4 },
-          { label: 'High Risk', data: weeks.map(({ key }) => { let n=0; tyres.forEach(t => { if (!t.issue_date||!isHigh(t)) return; const d=new Date(t.issue_date); const wn=Math.ceil((((d-new Date(d.getFullYear(),0,1))/86400000)+1)/7); if(`W${wn} ${d.getFullYear()}`===key) n++ }); return n }), backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 4 },
+          { label: t('dashboard.legend.all'), data: weeks.map(({ key }) => { let n=0; tyres.forEach(t => { if (!t.issue_date) return; const d=new Date(t.issue_date); const wn=Math.ceil((((d-new Date(d.getFullYear(),0,1))/86400000)+1)/7); if(`W${wn} ${d.getFullYear()}`===key) n++ }); return n }), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4 },
+          { label: t('dashboard.legend.highRisk'), data: weeks.map(({ key }) => { let n=0; tyres.forEach(t => { if (!t.issue_date||!isHigh(t)) return; const d=new Date(t.issue_date); const wn=Math.ceil((((d-new Date(d.getFullYear(),0,1))/86400000)+1)/7); if(`W${wn} ${d.getFullYear()}`===key) n++ }); return n }), backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 4 },
         ],
       }
     }
@@ -321,8 +325,8 @@ export default function Dashboard() {
       return {
         labels: years.map(String),
         datasets: [
-          { label: 'All',       data: years.map(y => tyres.filter(t => t.issue_date?.slice(0,4) === String(y)).length), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4 },
-          { label: 'High Risk', data: years.map(y => tyres.filter(t => t.issue_date?.slice(0,4) === String(y) && isHigh(t)).length), backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 4 },
+          { label: t('dashboard.legend.all'),       data: years.map(y => tyres.filter(t => t.issue_date?.slice(0,4) === String(y)).length), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4 },
+          { label: t('dashboard.legend.highRisk'), data: years.map(y => tyres.filter(t => t.issue_date?.slice(0,4) === String(y) && isHigh(t)).length), backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 4 },
         ],
       }
     }
@@ -330,11 +334,11 @@ export default function Dashboard() {
     return {
       labels: months.map(m => m.label),
       datasets: [
-        { label: 'All',       data: months.map(({ y, m }) => tyres.filter(t => inMonth(t, y, m)).length), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4 },
-        { label: 'High Risk', data: months.map(({ y, m }) => tyres.filter(t => inMonth(t, y, m) && isHigh(t)).length), backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 4 },
+        { label: t('dashboard.legend.all'),       data: months.map(({ y, m }) => tyres.filter(t => inMonth(t, y, m)).length), backgroundColor: 'rgba(59,130,246,0.7)', borderRadius: 4 },
+        { label: t('dashboard.legend.highRisk'), data: months.map(({ y, m }) => tyres.filter(t => inMonth(t, y, m) && isHigh(t)).length), backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 4 },
       ],
     }
-  }, [tyres, granularity])
+  }, [tyres, granularity, t])
 
   const monthlyCostData = useMemo(() => {
     const now = new Date()
@@ -342,7 +346,7 @@ export default function Dashboard() {
     return {
       labels: months.map(m => m.label),
       datasets: [{
-        label: `Cost (${activeCurrency})`,
+        label: t('dashboard.legend.cost', { currency: activeCurrency }),
         data: months.map(({ y, m }) => Math.round(tyres.filter(t => inMonth(t, y, m)).reduce((s, t) => s + recordCost(t), 0))),
         borderColor: '#22c55e',
         backgroundColor: 'rgba(22,163,74,0.08)',
@@ -353,7 +357,7 @@ export default function Dashboard() {
         borderWidth: 2,
       }],
     }
-  }, [tyres, activeCurrency])
+  }, [tyres, activeCurrency, t])
 
   const brandData = useMemo(() => {
     const m = {}; tyres.forEach(t => { if (t.brand) m[t.brand] = (m[t.brand] ?? 0) + 1 })
@@ -387,8 +391,8 @@ export default function Dashboard() {
     const m = {}; tyres.forEach(t => { if (t.site) m[t.site] = (m[t.site] ?? 0) + recordCost(t) })
     const top = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 8)
     if (!top.length) return null
-    return { labels: top.map(([s]) => s), datasets: [{ label: `Cost (${activeCurrency})`, data: top.map(([, c]) => Math.round(c)), backgroundColor: 'rgba(6,182,212,0.75)', borderRadius: 5, borderSkipped: false }] }
-  }, [tyres, activeCurrency])
+    return { labels: top.map(([s]) => s), datasets: [{ label: t('dashboard.legend.cost', { currency: activeCurrency }), data: top.map(([, c]) => Math.round(c)), backgroundColor: 'rgba(6,182,212,0.75)', borderRadius: 5, borderSkipped: false }] }
+  }, [tyres, activeCurrency, t])
 
   const forecastData = useMemo(() => {
     const now = new Date()
@@ -401,11 +405,11 @@ export default function Dashboard() {
     else if (nonZeroMonths >= 1) { confidence = 'Medium' }
     return {
       forecastThisMonth: Math.round(avg), forecastNextMonth: Math.round(avg), confidence, nonZeroMonths,
-      chartLabels: [...months.slice(3).map(m => m.label), 'This Month', 'Next Month'],
+      chartLabels: [...months.slice(3).map(m => m.label), t('dashboard.forecast.thisMonth'), t('dashboard.forecast.nextMonth')],
       actualData: [...last3, null, null],
       projectedData: [null, null, null, Math.round(avg), Math.round(avg)],
     }
-  }, [rawTyres])
+  }, [rawTyres, t])
 
   function handleExcelExport() {
     exportToExcel(tyres.map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre||0, total_cost: recordCost(t) })),
@@ -539,21 +543,21 @@ export default function Dashboard() {
 
   const TrendIcon = riskTrend?.delta > 0 ? TrendingUp : riskTrend?.delta < 0 ? TrendingDown : Minus
   const trendCol  = riskTrend?.delta > 0 ? '#ef4444' : riskTrend?.delta < 0 ? '#22c55e' : '#6b7280'
-  const periodChartTitle = { daily:'Daily Changes', weekly:'Weekly Changes', monthly:'Monthly Changes', yearly:'Yearly Changes' }[granularity]
+  const periodChartTitle = { daily:t('dashboard.charts.periodDaily'), weekly:t('dashboard.charts.periodWeekly'), monthly:t('dashboard.charts.periodMonthly'), yearly:t('dashboard.charts.periodYearly') }[granularity]
 
   const hourNow = new Date().getHours()
-  const greeting = hourNow < 12 ? 'Good morning' : hourNow < 17 ? 'Good afternoon' : 'Good evening'
+  const greeting = hourNow < 12 ? t('dashboard.greeting.morning') : hourNow < 17 ? t('dashboard.greeting.afternoon') : t('dashboard.greeting.evening')
   const firstName = (profile?.full_name ?? profile?.username ?? 'there').split(' ')[0]
 
-  if (loading) return <LoadingState message="Loading dashboard..." />
+  if (loading) return <LoadingState message={t('dashboard.states.loading')} />
 
   if (error) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center px-6">
       <AlertTriangle size={44} className="text-red-400" />
-      <p className="text-red-300 font-semibold text-lg">Could not load dashboard</p>
+      <p className="text-red-300 font-semibold text-lg">{t('dashboard.states.errorTitle')}</p>
       <p className="text-gray-500 text-sm max-w-md">{error}</p>
       <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
-        <RefreshCw size={16} /> Retry
+        <RefreshCw size={16} /> {t('dashboard.states.retry')}
       </button>
     </div>
   )
@@ -589,7 +593,7 @@ export default function Dashboard() {
               {firstName}
             </h1>
             <p className="text-gray-500 text-sm mt-1.5">
-              Fleet Intelligence Dashboard ·&nbsp;
+              {t('dashboard.hero.subtitle')} ·&nbsp;
               <span className="text-gray-400">{formatDate(new Date(), activeCountry, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
             </p>
 
@@ -605,8 +609,10 @@ export default function Dashboard() {
                 }}>
                 <TrendIcon size={11} />
                 {riskTrend.delta === 0
-                  ? 'High-risk records unchanged vs last month'
-                  : `High-risk ${riskTrend.delta > 0 ? 'up' : 'down'} ${Math.abs(riskTrend.delta)} vs last month`}
+                  ? t('dashboard.hero.riskUnchanged')
+                  : riskTrend.delta > 0
+                    ? t('dashboard.hero.riskUp', { count: Math.abs(riskTrend.delta) })
+                    : t('dashboard.hero.riskDown', { count: Math.abs(riskTrend.delta) })}
               </motion.div>
             )}
           </div>
@@ -617,17 +623,17 @@ export default function Dashboard() {
 
             <div className="hidden sm:flex flex-col gap-1.5">
               <button onClick={handleExcelExport} className="btn-secondary text-xs gap-1.5 py-1.5 px-3">
-                <FileSpreadsheet size={12} className="text-green-400" /> Excel
+                <FileSpreadsheet size={12} className="text-green-400" /> {t('dashboard.export.excel')}
               </button>
               <button onClick={handlePdfExport} className="btn-secondary text-xs gap-1.5 py-1.5 px-3">
-                <FileText size={12} className="text-red-400" /> PDF
+                <FileText size={12} className="text-red-400" /> {t('dashboard.export.pdf')}
               </button>
               <button onClick={handlePptxExport} className="btn-secondary text-xs gap-1.5 py-1.5 px-3">
-                <Presentation size={12} className="text-orange-400" /> PPTX
+                <Presentation size={12} className="text-orange-400" /> {t('dashboard.export.pptx')}
               </button>
               <button onClick={handleDailyReportExport} className="btn-secondary text-xs gap-1.5 py-1.5 px-3"
                 style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.25)' }}>
-                <FileText size={12} className="text-green-400" /> Daily PDF
+                <FileText size={12} className="text-green-400" /> {t('dashboard.export.dailyPdf')}
               </button>
             </div>
           </div>
@@ -637,11 +643,11 @@ export default function Dashboard() {
       {/* ── KPI METRICS ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
         {[
-          { to:'/tyres',    label:'Tyre Records', value:stats.tyres,   icon:CircleDot,     color:'blue'   },
-          { to:'/stock',    label:'Stock Sites',  value:stats.stock,   icon:Package,       color:'green'  },
-          { to:'/actions',  label:'Open Actions', value:stats.actions, icon:ClipboardList, color:'yellow' },
-          { to:'/anomalies',label:'High Risk',    value:`${stats.critical} (${stats.tyres?((stats.critical/stats.tyres)*100).toFixed(1):0}%)`, icon:AlertTriangle, color:'red' },
-          { to:'/analytics',label:'Total Cost',   value:`${activeCurrency} ${(stats.cost/1000).toFixed(0)}K`, icon:DollarSign, color:'purple' },
+          { to:'/tyres',    label:t('dashboard.kpi.tyreRecords'), value:stats.tyres,   icon:CircleDot,     color:'blue'   },
+          { to:'/stock',    label:t('dashboard.kpi.stockSites'),  value:stats.stock,   icon:Package,       color:'green'  },
+          { to:'/actions',  label:t('dashboard.kpi.openActions'), value:stats.actions, icon:ClipboardList, color:'yellow' },
+          { to:'/anomalies',label:t('dashboard.kpi.highRisk'),    value:`${stats.critical} (${stats.tyres?((stats.critical/stats.tyres)*100).toFixed(1):0}%)`, icon:AlertTriangle, color:'red' },
+          { to:'/analytics',label:t('dashboard.kpi.totalCost'),   value:`${activeCurrency} ${(stats.cost/1000).toFixed(0)}K`, icon:DollarSign, color:'purple' },
         ].map(({ to, label, value, icon, color }, i) => (
           <motion.div key={to} initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }} transition={{ delay: i * 0.06, duration: 0.4, ease:[0.22,1,0.36,1] }}>
             <Link to={to} className="block">
@@ -657,7 +663,7 @@ export default function Dashboard() {
           {/* Search */}
           <div className="relative flex-1 min-w-52">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
-            <input className="input pl-8 w-full" placeholder="Search asset, brand, site..." value={search} onChange={e => setSearch(e.target.value)} />
+            <input className="input pl-8 w-full" placeholder={t('dashboard.filters.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
                 <X size={12} />
@@ -667,7 +673,7 @@ export default function Dashboard() {
 
           {/* Granularity segmented */}
           <div className="flex gap-0.5 p-0.5 rounded-xl" style={{ background:'rgba(22,163,74,0.05)', border:'1px solid rgba(22,163,74,0.1)' }}>
-            {[['daily','Day'],['weekly','Week'],['monthly','Month'],['yearly','Year']].map(([val, lbl]) => (
+            {[['daily',t('dashboard.granularity.day')],['weekly',t('dashboard.granularity.week')],['monthly',t('dashboard.granularity.month')],['yearly',t('dashboard.granularity.year')]].map(([val, lbl]) => (
               <button key={val} onClick={() => setGranularity(val)}
                 className="px-3 py-1 rounded-lg text-[11px] font-semibold transition-all duration-200"
                 style={granularity === val
@@ -693,14 +699,14 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
-          {search && <span className="text-[10px] text-green-600 ml-auto font-medium">{tyres.length.toLocaleString()} of {rawTyres.length.toLocaleString()} records</span>}
+          {search && <span className="text-[10px] text-green-600 ml-auto font-medium">{t('dashboard.filters.recordsOfTotal', { count: tyres.length.toLocaleString(), total: rawTyres.length.toLocaleString() })}</span>}
         </div>
 
         <AnimatePresence>
           {showCustom && (
             <motion.div className="flex gap-2 items-center" initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }}>
               <input type="date" className="input flex-1" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-              <span className="text-gray-600 text-xs">to</span>
+              <span className="text-gray-600 text-xs">{t('dashboard.filters.to')}</span>
               <input type="date" className="input flex-1" value={dateTo} onChange={e => setDateTo(e.target.value)} />
             </motion.div>
           )}
@@ -709,11 +715,11 @@ export default function Dashboard() {
 
       {/* ── QUICK ACTIONS ────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
-        <ActionTile to="/anomalies" icon={AlertTriangle} label="Run Anomaly Scan" color="#fca5a5" bg="rgba(239,68,68,0.08)" border="rgba(239,68,68,0.2)" />
-        <ActionTile to="/alerts"    icon={Bell}          label="View Alerts"      color="#fde68a" bg="rgba(245,158,11,0.08)" border="rgba(245,158,11,0.2)" />
-        <ActionTile to="/upload"    icon={Upload}        label="Upload Data"      color="#93c5fd" bg="rgba(59,130,246,0.08)"  border="rgba(59,130,246,0.2)" />
-        <ActionTile to="/inspections" icon={ClipboardCheck} label="Inspections"   color="#86efac" bg="rgba(22,163,74,0.08)"  border="rgba(22,163,74,0.2)" />
-        <ActionTile to="/ai-command-center" icon={Cpu}   label="AI Command"       color="#d8b4fe" bg="rgba(139,92,246,0.08)" border="rgba(139,92,246,0.2)" />
+        <ActionTile to="/anomalies" icon={AlertTriangle} label={t('dashboard.quickActions.anomalyScan')} color="#fca5a5" bg="rgba(239,68,68,0.08)" border="rgba(239,68,68,0.2)" />
+        <ActionTile to="/alerts"    icon={Bell}          label={t('dashboard.quickActions.viewAlerts')}      color="#fde68a" bg="rgba(245,158,11,0.08)" border="rgba(245,158,11,0.2)" />
+        <ActionTile to="/upload"    icon={Upload}        label={t('dashboard.quickActions.uploadData')}      color="#93c5fd" bg="rgba(59,130,246,0.08)"  border="rgba(59,130,246,0.2)" />
+        <ActionTile to="/inspections" icon={ClipboardCheck} label={t('dashboard.quickActions.inspections')}   color="#86efac" bg="rgba(22,163,74,0.08)"  border="rgba(22,163,74,0.2)" />
+        <ActionTile to="/ai-command-center" icon={Cpu}   label={t('dashboard.quickActions.aiCommand')}       color="#d8b4fe" bg="rgba(139,92,246,0.08)" border="rgba(139,92,246,0.2)" />
       </div>
 
       {/* ── INTEL ROW - Avg Life + Seasonal ──────────────────────────────── */}
@@ -724,16 +730,16 @@ export default function Dashboard() {
             style={{ background:'rgba(59,130,246,0.1)', border:'1px solid rgba(59,130,246,0.25)' }}>
             <Clock size={16} className="text-blue-400" />
           </div>
-          <p className="text-label">Avg Tyre Life</p>
+          <p className="text-label">{t('dashboard.intel.avgTyreLife')}</p>
           <p className="text-3xl font-extrabold text-blue-400 leading-none mt-1">
             {tyreLife?.avgLifeDays != null ? tyreLife.avgLifeDays : '-'}
           </p>
-          <p className="text-xs text-gray-600">days</p>
-          {tyreLife?.avgLifeKm != null && <p className="text-[10px] text-gray-700 mt-0.5">{tyreLife.avgLifeKm.toLocaleString()} km avg</p>}
+          <p className="text-xs text-gray-600">{t('dashboard.intel.days')}</p>
+          {tyreLife?.avgLifeKm != null && <p className="text-[10px] text-gray-700 mt-0.5">{t('dashboard.intel.kmAvg', { km: tyreLife.avgLifeKm.toLocaleString() })}</p>}
         </div>
 
         {/* Seasonal chart */}
-        <ChartPanel title="Seasonal Pattern" subtitle="Monthly issue distribution" icon={BarChart2} className="lg:col-span-2">
+        <ChartPanel title={t('dashboard.charts.seasonalPattern')} subtitle={t('dashboard.charts.seasonalSubtitle')} icon={BarChart2} className="lg:col-span-2">
           <div className="h-28">
             <Bar data={seasonalBarData} options={{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:{ color:'#4b5563', font:{ size:9 } }, grid:{ display:false } }, y:{ ticks:{ color:'#4b5563', font:{ size:9 } }, grid: GRID } } }} />
           </div>
@@ -742,22 +748,22 @@ export default function Dashboard() {
 
       {/* ── MAIN CHART + BRAND ────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <ChartPanel title={periodChartTitle} subtitle={`${dateShortcut} · ${tyres.length.toLocaleString()} records`} icon={TrendingUp} onExpand={() => setExpandedChart('main')} className="lg:col-span-2">
+        <ChartPanel title={periodChartTitle} subtitle={t('dashboard.charts.periodSubtitle', { period: dateShortcut, count: tyres.length.toLocaleString() })} icon={TrendingUp} onExpand={() => setExpandedChart('main')} className="lg:col-span-2">
           <div className="h-60">
             <Bar data={periodChartData} options={{ ...BASE_OPTS, plugins: { legend: LEGEND } }} />
           </div>
         </ChartPanel>
-        <ChartPanel title="Brand Breakdown" subtitle="By tyre count" icon={Shield}>
+        <ChartPanel title={t('dashboard.charts.brandBreakdown')} subtitle={t('dashboard.charts.brandSubtitle')} icon={Shield}>
           <div className="h-60 flex items-center justify-center">
             {brandData
               ? <Doughnut data={brandData} options={NO_SCALE} />
-              : <EmptyState compact icon="database" title="No brand data" description="Upload records to see breakdown." />}
+              : <EmptyState compact icon="database" title={t('dashboard.charts.noBrandData')} description={t('dashboard.charts.noBrandDataDesc')} />}
           </div>
         </ChartPanel>
       </div>
 
       {/* ── COST TREND ───────────────────────────────────────────────────── */}
-      <ChartPanel title={`Monthly Cost Trend · ${activeCurrency}`} subtitle="12-month rolling" icon={DollarSign} onExpand={() => setExpandedChart('cost')}>
+      <ChartPanel title={t('dashboard.charts.monthlyCostTrend', { currency: activeCurrency })} subtitle={t('dashboard.charts.costSubtitle')} icon={DollarSign} onExpand={() => setExpandedChart('cost')}>
         <div className="h-52">
           <Line data={monthlyCostData} options={{ ...BASE_OPTS, plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:TICK, grid:GRID }, y:{ ticks:{ ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid:GRID } } }} />
         </div>
@@ -771,15 +777,15 @@ export default function Dashboard() {
               <Zap size={14} className="text-blue-400" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white">Tyre Forecast</h3>
-              <p className="text-[11px] text-gray-500">3-month rolling average · Confidence: <span className="text-blue-400">{forecastData.confidence}</span></p>
+              <h3 className="text-sm font-semibold text-white">{t('dashboard.forecast.title')}</h3>
+              <p className="text-[11px] text-gray-500">{t('dashboard.forecast.subtitle')} <span className="text-blue-400">{forecastData.confidence}</span></p>
             </div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3 mb-4">
           {[
-            { label:'This month', value:`~${forecastData.forecastThisMonth}`, color:'text-blue-400' },
-            { label:'Next month', value:`~${forecastData.forecastNextMonth}`, color:'text-blue-300' },
+            { label:t('dashboard.forecast.thisMonth'), value:`~${forecastData.forecastThisMonth}`, color:'text-blue-400' },
+            { label:t('dashboard.forecast.nextMonth'), value:`~${forecastData.forecastNextMonth}`, color:'text-blue-300' },
           ].map(({ label, value, color }) => (
             <div key={label} className="rounded-xl p-3 text-center" style={{ background:'rgba(59,130,246,0.06)', border:'1px solid rgba(59,130,246,0.14)' }}>
               <p className={`text-2xl font-extrabold ${color} leading-none`}>{value}</p>
@@ -788,40 +794,40 @@ export default function Dashboard() {
           ))}
         </div>
         <div className="h-44">
-          <Bar data={{ labels: forecastData.chartLabels, datasets: [{ label:'Actual', data:forecastData.actualData, backgroundColor:'rgba(22,163,74,0.75)', borderRadius:5 }, { label:'Forecast', data:forecastData.projectedData, backgroundColor:'rgba(59,130,246,0.55)', borderRadius:5 }] }} options={{ ...BASE_OPTS, plugins:{ legend:LEGEND } }} />
+          <Bar data={{ labels: forecastData.chartLabels, datasets: [{ label:t('dashboard.forecast.actual'), data:forecastData.actualData, backgroundColor:'rgba(22,163,74,0.75)', borderRadius:5 }, { label:t('dashboard.forecast.forecast'), data:forecastData.projectedData, backgroundColor:'rgba(59,130,246,0.55)', borderRadius:5 }] }} options={{ ...BASE_OPTS, plugins:{ legend:LEGEND } }} />
         </div>
       </div>
 
       {/* ── RISK + CATEGORY ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <ChartPanel title="Risk Level Distribution" icon={AlertTriangle}>
+        <ChartPanel title={t('dashboard.charts.riskDistribution')} icon={AlertTriangle}>
           <div className="h-52">
             <Bar data={riskDistData} options={{ ...H_BAR, scales:{ x:{ ticks:TICK, grid:GRID }, y:{ ticks:{ color:'#9ca3af' }, grid:GRID } } }} />
           </div>
         </ChartPanel>
-        <ChartPanel title="Failure Category Mix" icon={Activity}>
+        <ChartPanel title={t('dashboard.charts.failureCategoryMix')} icon={Activity}>
           <div className="h-52 flex items-center justify-center">
             {categoryData
               ? <Doughnut data={categoryData} options={NO_SCALE} />
-              : <EmptyState compact icon="filter" title="No categories" description="Run Data Cleaning to populate categories." />}
+              : <EmptyState compact icon="filter" title={t('dashboard.charts.noCategories')} description={t('dashboard.charts.noCategoriesDesc')} />}
           </div>
         </ChartPanel>
       </div>
 
       {/* ── TOP ASSETS + SITES ───────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <ChartPanel title={`Top Assets by Spend · ${activeCurrency}`} subtitle="Highest cost vehicles" icon={Cpu}>
+        <ChartPanel title={t('dashboard.charts.topAssets', { currency: activeCurrency })} subtitle={t('dashboard.charts.topAssetsSubtitle')} icon={Cpu}>
           <div className="h-64">
             {topAssetsData
               ? <Bar data={topAssetsData} options={{ ...H_BAR, scales:{ x:{ ticks:{ ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid:GRID }, y:{ ticks:{ color:'#9ca3af', font:{ size:10 } }, grid:GRID } } }} />
-              : <EmptyState compact icon="database" title="No asset data" />}
+              : <EmptyState compact icon="database" title={t('dashboard.charts.noAssetData')} />}
           </div>
         </ChartPanel>
-        <ChartPanel title={`Top Sites by Spend · ${activeCurrency}`} subtitle="Highest cost locations" icon={BarChart2}>
+        <ChartPanel title={t('dashboard.charts.topSites', { currency: activeCurrency })} subtitle={t('dashboard.charts.topSitesSubtitle')} icon={BarChart2}>
           <div className="h-64">
             {siteCostData
               ? <Bar data={siteCostData} options={{ ...H_BAR, scales:{ x:{ ticks:{ ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid:GRID }, y:{ ticks:{ color:'#9ca3af' }, grid:GRID } } }} />
-              : <EmptyState compact icon="database" title="No site data" />}
+              : <EmptyState compact icon="database" title={t('dashboard.charts.noSiteData')} />}
           </div>
         </ChartPanel>
       </div>
@@ -835,14 +841,14 @@ export default function Dashboard() {
               <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background:'rgba(22,163,74,0.1)', border:'1px solid rgba(22,163,74,0.2)' }}>
                 <CircleDot size={13} className="text-green-400" />
               </div>
-              <h3 className="text-sm font-semibold text-white">Recent Tyre Records</h3>
+              <h3 className="text-sm font-semibold text-white">{t('dashboard.activity.recentTyreRecords')}</h3>
             </div>
             <Link to="/tyres" className="text-[11px] text-green-600 hover:text-green-400 font-medium flex items-center gap-1 transition-colors">
-              View all <ChevronRight size={11} />
+              {t('dashboard.activity.viewAll')} <ChevronRight size={11} />
             </Link>
           </div>
           {recentRecords.length === 0
-            ? <EmptyState compact icon="database" title="No records yet" description="Upload tyre data to see recent activity." />
+            ? <EmptyState compact icon="database" title={t('dashboard.activity.noRecords')} description={t('dashboard.activity.noRecordsDesc')} />
             : (
               <div className="space-y-1.5">
                 {recentRecords.map((r, i) => (
@@ -877,14 +883,14 @@ export default function Dashboard() {
               <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background:'rgba(245,158,11,0.1)', border:'1px solid rgba(245,158,11,0.2)' }}>
                 <ClipboardList size={13} className="text-yellow-400" />
               </div>
-              <h3 className="text-sm font-semibold text-white">Open Corrective Actions</h3>
+              <h3 className="text-sm font-semibold text-white">{t('dashboard.activity.openActions')}</h3>
             </div>
             <Link to="/actions" className="text-[11px] text-yellow-600 hover:text-yellow-400 font-medium flex items-center gap-1 transition-colors">
-              View all <ChevronRight size={11} />
+              {t('dashboard.activity.viewAll')} <ChevronRight size={11} />
             </Link>
           </div>
           {openActions.length === 0
-            ? <EmptyState compact icon="search" title="No open actions" description="All corrective actions are resolved." />
+            ? <EmptyState compact icon="search" title={t('dashboard.activity.noActions')} description={t('dashboard.activity.noActionsDesc')} />
             : (
               <div className="space-y-1.5">
                 {openActions.map((a, i) => {
@@ -921,7 +927,7 @@ export default function Dashboard() {
         </ChartModal>
       )}
       {expandedChart === 'cost' && (
-        <ChartModal title={`Monthly Cost Trend · ${activeCurrency}`} onClose={() => setExpandedChart(null)}>
+        <ChartModal title={t('dashboard.charts.monthlyCostTrend', { currency: activeCurrency })} onClose={() => setExpandedChart(null)}>
           <Line data={monthlyCostData} options={{ ...BASE_OPTS, plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:TICK, grid:GRID }, y:{ ticks:{ ...TICK, callback: v => `${activeCurrency} ${(v/1000).toFixed(0)}K` }, grid:GRID } } }} />
         </ChartModal>
       )}

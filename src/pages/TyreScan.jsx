@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ScanLine, History, Clock, Trash2, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react'
 import TyreScanCamera from '../components/TyreScanCamera'
 import { useNavigate } from 'react-router-dom'
+import { useLanguage } from '../contexts/LanguageContext'
 
 const HISTORY_KEY = 'tp_scan_history'
 const MAX_HISTORY = 25
@@ -26,17 +27,18 @@ function saveHistory(entry, existing) {
   return updated
 }
 
-function relativeTime(iso) {
+function relativeTime(iso, t) {
   const diff = Date.now() - new Date(iso).getTime()
   const m = Math.floor(diff / 60000)
-  if (m < 1)  return 'just now'
-  if (m < 60) return `${m}m ago`
+  if (m < 1)  return t('scan.time.justNow')
+  if (m < 60) return t('scan.time.minutes', { m })
   const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
+  if (h < 24) return t('scan.time.hours', { h })
+  return t('scan.time.days', { d: Math.floor(h / 24) })
 }
 
 export default function TyreScan() {
+  const { t }                 = useLanguage()
   const navigate              = useNavigate()
   const [scanOpen, setScanOpen] = useState(false)
   const [history, setHistory] = useState(loadHistory)
@@ -75,8 +77,8 @@ export default function TyreScan() {
         {/* Page header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-extrabold text-white leading-tight">Tyre Scanner</h1>
-            <p className="text-xs text-gray-500 mt-0.5">Scan barcodes, QR codes, or enter manually</p>
+            <h1 className="text-xl font-extrabold text-white leading-tight">{t('scan.title')}</h1>
+            <p className="text-xs text-gray-500 mt-0.5">{t('scan.subtitle')}</p>
           </div>
           <div
             className="w-11 h-11 rounded-2xl flex items-center justify-center"
@@ -113,14 +115,14 @@ export default function TyreScan() {
             <ScanLine className="w-9 h-9 text-white" />
           </motion.div>
           <div className="text-center">
-            <p className="text-base font-bold text-white">Tap to Scan</p>
-            <p className="text-xs text-gray-500 mt-1">Barcode · QR Code · Manual entry</p>
+            <p className="text-base font-bold text-white">{t('scan.tapToScan')}</p>
+            <p className="text-xs text-gray-500 mt-1">{t('scan.modes')}</p>
           </div>
         </motion.button>
 
         {/* Feature chips */}
         <div className="flex gap-2">
-          {['Auto-detect barcode', 'QR Code', 'Manual fallback'].map(f => (
+          {[t('scan.chips.autoDetect'), t('scan.chips.qr'), t('scan.chips.manual')].map(f => (
             <span
               key={f}
               className="flex-1 text-center text-[9.5px] font-semibold py-1.5 rounded-lg"
@@ -138,13 +140,13 @@ export default function TyreScan() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <History className="w-3.5 h-3.5 text-gray-500" />
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Recent Scans</span>
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('scan.recentScans')}</span>
             </div>
             <button
               onClick={clearHistory}
               className="flex items-center gap-1 text-[10px] text-gray-700 hover:text-red-400 transition-colors py-1 px-2 rounded-lg hover:bg-red-500/10"
             >
-              <Trash2 className="w-3 h-3" /> Clear all
+              <Trash2 className="w-3 h-3" /> {t('scan.clearAll')}
             </button>
           </div>
 
@@ -173,7 +175,7 @@ export default function TyreScan() {
                     <p className="text-[10px] text-gray-500 truncate mt-0.5">
                       {entry.found
                         ? [entry.brand, entry.asset, entry.site].filter(v => v && v !== '-').join(' · ')
-                        : 'Not found in database'}
+                        : t('scan.notFound')}
                     </p>
                   </div>
 
@@ -188,7 +190,7 @@ export default function TyreScan() {
                     )}
                     <div className="flex items-center gap-0.5">
                       <Clock className="w-2.5 h-2.5 text-gray-700" />
-                      <span className="text-[9px] text-gray-700">{relativeTime(entry.scannedAt)}</span>
+                      <span className="text-[9px] text-gray-700">{relativeTime(entry.scannedAt, t)}</span>
                     </div>
                   </div>
                 </motion.div>
@@ -202,7 +204,7 @@ export default function TyreScan() {
             className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-semibold text-gray-500 hover:text-gray-300 transition-colors"
             style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
           >
-            View all tyre records <ChevronRight className="w-3.5 h-3.5" />
+            {t('scan.viewAll')} <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
@@ -216,8 +218,8 @@ export default function TyreScan() {
           >
             <History className="w-7 h-7 text-gray-400" />
           </div>
-          <p className="text-sm font-semibold text-gray-600">No scans yet</p>
-          <p className="text-xs text-gray-700">Scanned serials will appear here</p>
+          <p className="text-sm font-semibold text-gray-600">{t('scan.empty.title')}</p>
+          <p className="text-xs text-gray-700">{t('scan.empty.subtitle')}</p>
         </div>
       )}
 

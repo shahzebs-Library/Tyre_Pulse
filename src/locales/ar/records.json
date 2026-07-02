@@ -1,0 +1,110 @@
+{
+  "title": "سجلات الإطارات",
+  "subtitle": "{count} إجمالي السجلات",
+  "actions": {
+    "excel": "إكسل",
+    "pdf": "PDF",
+    "newRecord": "سجل جديد"
+  },
+  "searchPlaceholder": "ابحث بالأصل أو الرقم التسلسلي أو MIS أو بطاقة العمل...",
+  "filters": {
+    "allSites": "جميع المواقع",
+    "allBrands": "جميع العلامات التجارية",
+    "allRiskLevels": "جميع مستويات الخطورة"
+  },
+  "columns": {
+    "date": "التاريخ",
+    "assetNo": "رقم الأصل",
+    "serialNo": "الرقم التسلسلي",
+    "brand": "العلامة التجارية",
+    "site": "الموقع",
+    "misNo": "رقم MIS",
+    "jobCard": "بطاقة العمل",
+    "risk": "الخطورة",
+    "cost": "التكلفة",
+    "cpk": "التكلفة/كم"
+  },
+  "states": {
+    "noRecords": "لا توجد سجلات",
+    "cpkNa": "غير متاح"
+  },
+  "pagination": {
+    "summary": "{from}-{to} من {total} سجل"
+  },
+  "bulk": {
+    "entityLabel": "سجل",
+    "bulkEdit": "تعديل جماعي",
+    "exportSelected": "تصدير المحدد",
+    "markScrapped": "وضع علامة كخردة",
+    "delete": "حذف",
+    "scrapConfirm": "وضع علامة على {count} سجل إطار كخردة؟ لا يمكن التراجع عن هذا الإجراء."
+  },
+  "detail": {
+    "title": "تفاصيل السجل",
+    "assetNo": "رقم الأصل",
+    "serialNo": "الرقم التسلسلي",
+    "brand": "العلامة التجارية",
+    "site": "الموقع",
+    "issueDate": "تاريخ الإصدار",
+    "misNumber": "رقم MIS",
+    "jobCard": "بطاقة العمل",
+    "qty": "الكمية",
+    "riskLevel": "مستوى الخطورة",
+    "category": "الفئة",
+    "cost": "التكلفة",
+    "description": "الوصف",
+    "remarks": "ملاحظات",
+    "customFields": "حقول إضافية مستوردة",
+    "editRecord": "تعديل السجل"
+  },
+  "form": {
+    "editTitle": "تعديل السجل",
+    "newTitle": "سجل إطار جديد",
+    "issueDate": "تاريخ الإصدار",
+    "srRefNo": "الرقم المرجعي",
+    "site": "الموقع",
+    "brand": "العلامة التجارية",
+    "description": "الوصف",
+    "assetNo": "رقم الأصل",
+    "serialNo": "الرقم التسلسلي",
+    "qty": "الكمية",
+    "misNumber": "رقم MIS",
+    "jobCard": "بطاقة العمل",
+    "remarks": "ملاحظات",
+    "country": "الدولة",
+    "kmAtFitment": "الكيلومترات عند التركيب",
+    "kmAtRemoval": "الكيلومترات عند الإزالة",
+    "cost": "التكلفة",
+    "riskLevel": "مستوى الخطورة",
+    "category": "الفئة",
+    "selectOrType": "اختر أو اكتب...",
+    "optional": "اختياري",
+    "none": "- بدون -",
+    "save": "حفظ السجل",
+    "saving": "جارٍ الحفظ...",
+    "cancel": "إلغاء"
+  },
+  "bulkEdit": {
+    "title": "تعديل جماعي · {count} سجل",
+    "hint": "اترك الحقل فارغًا للإبقاء على القيم الحالية دون تغيير.",
+    "changeSite": "تغيير الموقع",
+    "changeBrand": "تغيير العلامة التجارية",
+    "cost": "التكلفة",
+    "riskLevel": "مستوى الخطورة",
+    "category": "الفئة",
+    "keepExisting": "- الإبقاء على الحالي -",
+    "leaveBlankToKeep": "اتركه فارغًا للإبقاء",
+    "update": "تحديث {count} سجل",
+    "updating": "جارٍ التحديث..."
+  },
+  "delete": {
+    "title": "تأكيد الحذف",
+    "question": "حذف {count} سجل؟",
+    "warning": "هذا الإجراء دائم ولا يمكن التراجع عنه.",
+    "confirm": "حذف {count} سجل",
+    "deleting": "جارٍ الحذف...",
+    "errNoneDeleted": "لم يتم حذف أي سجلات. ربما تمت إزالتها بالفعل - قم بالتحديث وأعد المحاولة.",
+    "errNoPermission": "ليس لديك صلاحية لحذف سجلات الإطارات. يمكن للمسؤول فقط الحذف.",
+    "errFailed": "فشل الحذف. يرجى المحاولة مرة أخرى."
+  }
+}

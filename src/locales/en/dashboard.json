@@ -1,0 +1,112 @@
+{
+  "health": {
+    "good": "Good",
+    "moderate": "Moderate",
+    "atRisk": "At Risk",
+    "fleetHealth": "Fleet Health"
+  },
+  "risk": {
+    "unknown": "Unknown"
+  },
+  "greeting": {
+    "morning": "Good morning",
+    "afternoon": "Good afternoon",
+    "evening": "Good evening"
+  },
+  "hero": {
+    "subtitle": "Fleet Intelligence Dashboard",
+    "riskUnchanged": "High-risk records unchanged vs last month",
+    "riskUp": "High-risk up {count} vs last month",
+    "riskDown": "High-risk down {count} vs last month"
+  },
+  "export": {
+    "excel": "Excel",
+    "pdf": "PDF",
+    "pptx": "PPTX",
+    "dailyPdf": "Daily PDF"
+  },
+  "kpi": {
+    "tyreRecords": "Tyre Records",
+    "stockSites": "Stock Sites",
+    "openActions": "Open Actions",
+    "highRisk": "High Risk",
+    "totalCost": "Total Cost"
+  },
+  "filters": {
+    "searchPlaceholder": "Search asset, brand, site...",
+    "recordsOfTotal": "{count} of {total} records",
+    "to": "to"
+  },
+  "granularity": {
+    "day": "Day",
+    "week": "Week",
+    "month": "Month",
+    "year": "Year"
+  },
+  "quickActions": {
+    "anomalyScan": "Run Anomaly Scan",
+    "viewAlerts": "View Alerts",
+    "uploadData": "Upload Data",
+    "inspections": "Inspections",
+    "aiCommand": "AI Command"
+  },
+  "intel": {
+    "avgTyreLife": "Avg Tyre Life",
+    "days": "days",
+    "kmAvg": "{km} km avg"
+  },
+  "charts": {
+    "seasonalPattern": "Seasonal Pattern",
+    "seasonalSubtitle": "Monthly issue distribution",
+    "periodDaily": "Daily Changes",
+    "periodWeekly": "Weekly Changes",
+    "periodMonthly": "Monthly Changes",
+    "periodYearly": "Yearly Changes",
+    "periodSubtitle": "{period} · {count} records",
+    "brandBreakdown": "Brand Breakdown",
+    "brandSubtitle": "By tyre count",
+    "noBrandData": "No brand data",
+    "noBrandDataDesc": "Upload records to see breakdown.",
+    "monthlyCostTrend": "Monthly Cost Trend · {currency}",
+    "costSubtitle": "12-month rolling",
+    "riskDistribution": "Risk Level Distribution",
+    "failureCategoryMix": "Failure Category Mix",
+    "noCategories": "No categories",
+    "noCategoriesDesc": "Run Data Cleaning to populate categories.",
+    "topAssets": "Top Assets by Spend · {currency}",
+    "topAssetsSubtitle": "Highest cost vehicles",
+    "noAssetData": "No asset data",
+    "topSites": "Top Sites by Spend · {currency}",
+    "topSitesSubtitle": "Highest cost locations",
+    "noSiteData": "No site data"
+  },
+  "legend": {
+    "all": "All",
+    "highRisk": "High Risk",
+    "tyreIssues": "Tyre Issues",
+    "cost": "Cost ({currency})"
+  },
+  "forecast": {
+    "title": "Tyre Forecast",
+    "subtitle": "3-month rolling average · Confidence:",
+    "thisMonth": "This month",
+    "nextMonth": "Next month",
+    "actual": "Actual",
+    "forecast": "Forecast"
+  },
+  "activity": {
+    "recentTyreRecords": "Recent Tyre Records",
+    "viewAll": "View all",
+    "noRecords": "No records yet",
+    "noRecordsDesc": "Upload tyre data to see recent activity.",
+    "openActions": "Open Corrective Actions",
+    "noActions": "No open actions",
+    "noActionsDesc": "All corrective actions are resolved."
+  },
+  "states": {
+    "loading": "Loading dashboard...",
+    "errorTitle": "Could not load dashboard",
+    "errorDefault": "Failed to load dashboard data.",
+    "retry": "Retry"
+  }
+}

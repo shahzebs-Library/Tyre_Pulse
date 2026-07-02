@@ -1,0 +1,110 @@
+{
+  "title": "Tyre Records",
+  "subtitle": "{count} total records",
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF",
+    "newRecord": "New Record"
+  },
+  "searchPlaceholder": "Search asset, serial, MIS, job card...",
+  "filters": {
+    "allSites": "All Sites",
+    "allBrands": "All Brands",
+    "allRiskLevels": "All Risk Levels"
+  },
+  "columns": {
+    "date": "Date",
+    "assetNo": "Asset No",
+    "serialNo": "Serial No",
+    "brand": "Brand",
+    "site": "Site",
+    "misNo": "MIS No",
+    "jobCard": "Job Card",
+    "risk": "Risk",
+    "cost": "Cost",
+    "cpk": "CPK"
+  },
+  "states": {
+    "noRecords": "No records found",
+    "cpkNa": "N/A"
+  },
+  "pagination": {
+    "summary": "{from}-{to} of {total} records"
+  },
+  "bulk": {
+    "entityLabel": "record",
+    "bulkEdit": "Bulk Edit",
+    "exportSelected": "Export Selected",
+    "markScrapped": "Mark as Scrapped",
+    "delete": "Delete",
+    "scrapConfirm": "Mark {count} tyre record(s) as Scrapped? This cannot be undone."
+  },
+  "detail": {
+    "title": "Record Detail",
+    "assetNo": "Asset No",
+    "serialNo": "Serial No",
+    "brand": "Brand",
+    "site": "Site",
+    "issueDate": "Issue Date",
+    "misNumber": "MIS Number",
+    "jobCard": "Job Card",
+    "qty": "Qty",
+    "riskLevel": "Risk Level",
+    "category": "Category",
+    "cost": "Cost",
+    "description": "Description",
+    "remarks": "Remarks",
+    "customFields": "Additional imported fields",
+    "editRecord": "Edit Record"
+  },
+  "form": {
+    "editTitle": "Edit Record",
+    "newTitle": "New Tyre Record",
+    "issueDate": "Issue Date",
+    "srRefNo": "SR / Ref No",
+    "site": "Site",
+    "brand": "Brand",
+    "description": "Description",
+    "assetNo": "Asset No",
+    "serialNo": "Serial No",
+    "qty": "Qty",
+    "misNumber": "MIS Number",
+    "jobCard": "Job Card",
+    "remarks": "Remarks",
+    "country": "Country",
+    "kmAtFitment": "KM at Fitment",
+    "kmAtRemoval": "KM at Removal",
+    "cost": "Cost",
+    "riskLevel": "Risk Level",
+    "category": "Category",
+    "selectOrType": "Select or type...",
+    "optional": "Optional",
+    "none": "- None -",
+    "save": "Save Record",
+    "saving": "Saving...",
+    "cancel": "Cancel"
+  },
+  "bulkEdit": {
+    "title": "Bulk Edit · {count} records",
+    "hint": "Leave blank to keep existing values unchanged.",
+    "changeSite": "Change Site",
+    "changeBrand": "Change Brand",
+    "cost": "Cost",
+    "riskLevel": "Risk Level",
+    "category": "Category",
+    "keepExisting": "- Keep existing -",
+    "leaveBlankToKeep": "Leave blank to keep",
+    "update": "Update {count} Records",
+    "updating": "Updating..."
+  },
+  "delete": {
+    "title": "Confirm Delete",
+    "question": "Delete {count} record(s)?",
+    "warning": "This action is permanent and cannot be undone.",
+    "confirm": "Delete {count} Records",
+    "deleting": "Deleting...",
+    "errNoneDeleted": "No records were deleted. They may already be gone - refresh and retry.",
+    "errNoPermission": "You do not have permission to delete tyre records. Only an Admin can delete.",
+    "errFailed": "Delete failed. Please try again."
+  }
+}

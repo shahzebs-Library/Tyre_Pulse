@@ -43,6 +43,7 @@ import {
   Tag,
 } from 'lucide-react'
 import { useCommandPalette } from '../contexts/CommandPaletteContext'
+import { useLanguage } from '../contexts/LanguageContext'
 
 // ── Icon lookup map ───────────────────────────────────────────────────────────
 const ICON_MAP = {
@@ -226,6 +227,8 @@ function GroupHeader({ label }) {
 export default function CommandPalette() {
   const { open, setOpen } = useCommandPalette()
   const navigate = useNavigate()
+  const { t } = useLanguage()
+  const groupLabel = (label) => t(`ui.command.groups.${label.toLowerCase()}`)
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef(null)
@@ -356,7 +359,7 @@ export default function CommandPalette() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={`Search pages, actions... (${isMac ? '⌘' : 'Ctrl'}K)`}
+              placeholder={t('ui.command.placeholder', { key: isMac ? '⌘' : 'Ctrl' })}
               className="flex-1 bg-transparent text-white text-lg py-4 outline-none placeholder:text-gray-500"
               autoComplete="off"
               spellCheck={false}
@@ -381,7 +384,7 @@ export default function CommandPalette() {
                 let globalIndex = 0
                 return groups.map((group) => (
                   <div key={group.label}>
-                    <GroupHeader label={group.label} />
+                    <GroupHeader label={groupLabel(group.label)} />
                     {group.items.map((item) => {
                       const idx = globalIndex++
                       return (
@@ -401,7 +404,7 @@ export default function CommandPalette() {
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-gray-500 text-sm">
                 <Search size={32} className="mb-3 text-gray-700" />
-                No results for &ldquo;{query}&rdquo;
+                {t('ui.search.noResultsFor')} &ldquo;{query}&rdquo;
               </div>
             )}
           </div>
@@ -411,15 +414,15 @@ export default function CommandPalette() {
             <span className="flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 font-mono">↑</kbd>
               <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 font-mono">↓</kbd>
-              navigate
+              {t('ui.hints.navigate')}
             </span>
             <span className="flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 font-mono">↵</kbd>
-              open
+              {t('ui.hints.open')}
             </span>
             <span className="flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 font-mono">esc</kbd>
-              close
+              {t('ui.hints.close')}
             </span>
           </div>
         </div>

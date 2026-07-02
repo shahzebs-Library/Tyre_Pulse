@@ -1,7 +1,10 @@
 import { motion } from 'framer-motion'
 import { cn } from '../lib/cn'
+import { useLanguage } from '../contexts/LanguageContext'
 
-export default function LoadingState({ message = 'Loading...', fullPage = false }) {
+export default function LoadingState({ message, fullPage = false }) {
+  const { t } = useLanguage()
+  const text = message ?? t('common.loading')
   return (
     <div className={cn('flex flex-col items-center justify-center gap-4', fullPage ? 'h-screen' : 'py-20')}>
       {/* Animated ring */}
@@ -27,7 +30,7 @@ export default function LoadingState({ message = 'Loading...', fullPage = false 
         transition={{ duration: 1.8, repeat: Infinity }}
         className="text-sm text-muted"
       >
-        {message}
+        {text}
       </motion.p>
     </div>
   )

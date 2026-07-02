@@ -701,7 +701,7 @@ export default function Layout({ children }) {
                     className="w-full flex items-center justify-between px-2.5 pt-3 pb-1.5 group/sec cursor-pointer"
                   >
                     <span className="text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700 group-hover/sec:text-gray-500 transition-colors">
-                      {label}
+                      {t(`nav.groups.${label}`)}
                     </span>
                     <motion.div
                       animate={{ rotate: isCollapsed ? -90 : 0 }}
@@ -722,12 +722,14 @@ export default function Layout({ children }) {
                       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                       style={{ overflow: 'hidden' }}
                     >
-                      {visibleItems.map(({ to, label: lbl, icon: Icon, end }) => (
+                      {visibleItems.map(({ to, label: lbl, icon: Icon, end }) => {
+                        const navLabel = t(`nav.items.${to}`)
+                        return (
                         <NavLink
                           key={to}
                           to={to}
                           end={end}
-                          title={!sidebarOpen ? lbl : undefined}
+                          title={!sidebarOpen ? navLabel : undefined}
                           onMouseEnter={() => setHoveredItem(to)}
                           onMouseLeave={() => setHoveredItem(null)}
                           className={({ isActive }) =>
@@ -770,7 +772,7 @@ export default function Layout({ children }) {
                               />
 
                               {sidebarOpen && (
-                                <span className="truncate leading-none">{lbl}</span>
+                                <span className="truncate leading-none">{navLabel}</span>
                               )}
 
                               {to === '/alerts' && alertCount > 0 && (
@@ -784,7 +786,8 @@ export default function Layout({ children }) {
                             </>
                           )}
                         </NavLink>
-                      ))}
+                        )
+                      })}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -803,7 +806,7 @@ export default function Layout({ children }) {
                     className="w-full flex items-center justify-between px-2.5 pt-3 pb-1.5 group/sec cursor-pointer"
                   >
                     <span className="text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700 group-hover/sec:text-gray-500 transition-colors">
-                      Admin
+                      {t('nav.groups.Admin')}
                     </span>
                     <motion.div animate={{ rotate: adminCollapsed ? -90 : 0 }} transition={{ duration: 0.18 }}>
                       <ChevronDown size={9} className="text-gray-700 group-hover/sec:text-gray-500 transition-colors" />
@@ -822,7 +825,7 @@ export default function Layout({ children }) {
                     >
                       <NavLink
                         to="/users"
-                        title={!sidebarOpen ? 'User Management' : undefined}
+                        title={!sidebarOpen ? t('nav.items./users') : undefined}
                         className={({ isActive }) =>
                           `relative flex items-center gap-2.5 px-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                            transition-all duration-150 mb-px group
@@ -843,7 +846,7 @@ export default function Layout({ children }) {
                             )}
                             <Users size={13.5} strokeWidth={isActive ? 2.2 : 1.8}
                               className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-600 group-hover:text-gray-300'}`} />
-                            {sidebarOpen && <span className="truncate">User Management</span>}
+                            {sidebarOpen && <span className="truncate">{t('nav.items./users')}</span>}
                           </>
                         )}
                       </NavLink>
@@ -886,7 +889,7 @@ export default function Layout({ children }) {
                     </p>
                     {profile?.role && (
                       <span className={`flex-shrink-0 leading-none ${roleBadgeClass(profile.role)}`}>
-                        {profile.role}
+                        {t(`roles.${profile.role}`)}
                       </span>
                     )}
                   </div>
@@ -933,7 +936,7 @@ export default function Layout({ children }) {
             onClick={() => setSidebarOpen(true)}
             className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 transition-colors flex-shrink-0"
             style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.12)' }}
-            aria-label="Open menu"
+            aria-label={t('shell.openMenu')}
           >
             <Menu size={16} />
           </button>

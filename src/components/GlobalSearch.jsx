@@ -8,6 +8,7 @@ import {
   BarChart2, ChevronRight, Clock, Hash,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useLanguage } from '../contexts/LanguageContext'
 
 const CATEGORY_CONFIG = {
   tyres:       { label: 'Tyre Records',   icon: CircleDot,     color: 'text-green-400',  route: '/tyres' },
@@ -149,6 +150,7 @@ async function searchAll(query) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function GlobalSearch({ isOpen, onClose }) {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState({})
   const [searching, setSearching] = useState(false)
@@ -243,7 +245,7 @@ export default function GlobalSearch({ isOpen, onClose }) {
                 ref={inputRef}
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="Search tyres, vehicles, work orders, reports..."
+                placeholder={t('ui.search.placeholder')}
                 className="flex-1 bg-transparent text-white text-base placeholder-gray-500 focus:outline-none"
               />
               {query && (
@@ -264,7 +266,7 @@ export default function GlobalSearch({ isOpen, onClose }) {
                   <div className="flex items-center gap-2 px-2 mb-2">
                     {!query.trim() ? <Clock size={13} className="text-gray-600" /> : <Hash size={13} className="text-gray-600" />}
                     <span className="text-gray-500 text-xs uppercase tracking-wider font-medium">
-                      {!query.trim() ? 'Quick Navigation' : 'Pages'}
+                      {!query.trim() ? t('ui.search.quickNavigation') : t('ui.search.pages')}
                     </span>
                   </div>
                   {navMatches.map((n, idx) => {
@@ -294,7 +296,7 @@ export default function GlobalSearch({ isOpen, onClose }) {
                         <div className="flex items-center gap-2 px-2 mb-2">
                           <Icon size={13} className={cfg?.color || 'text-gray-400'} />
                           <span className="text-gray-500 text-xs uppercase tracking-wider font-medium">{cfg?.label || cat}</span>
-                          <span className="text-gray-600 text-xs ml-auto">{rows.length} result{rows.length !== 1 ? 's' : ''}</span>
+                          <span className="text-gray-600 text-xs ml-auto">{t('ui.search.results', { count: rows.length })}</span>
                         </div>
                         {rows.map(r => {
                           const itemIdx = flatItems.findIndex(f => f.type === 'result' && f.data.id === r.id && f.cat === cat)
@@ -319,7 +321,7 @@ export default function GlobalSearch({ isOpen, onClose }) {
                     <div>
                       <div className="flex items-center gap-2 px-2 mb-2">
                         <Hash size={13} className="text-gray-600" />
-                        <span className="text-gray-500 text-xs uppercase tracking-wider font-medium">Pages</span>
+                        <span className="text-gray-500 text-xs uppercase tracking-wider font-medium">{t('ui.search.pages')}</span>
                       </div>
                       {navMatches.map(n => {
                         const Icon = n.icon
@@ -342,8 +344,8 @@ export default function GlobalSearch({ isOpen, onClose }) {
               {!searching && query.length >= 2 && !hasResults && navMatches.length === 0 && (
                 <div className="py-16 text-center">
                   <Search size={36} className="mx-auto text-gray-700 mb-3" />
-                  <p className="text-gray-400 text-sm">No results for <strong className="text-white">"{query}"</strong></p>
-                  <p className="text-gray-600 text-xs mt-1">Try searching for an asset number, serial, or brand</p>
+                  <p className="text-gray-400 text-sm">{t('ui.search.noResultsFor')} <strong className="text-white">"{query}"</strong></p>
+                  <p className="text-gray-600 text-xs mt-1">{t('ui.search.noResultsHint')}</p>
                 </div>
               )}
 
@@ -351,7 +353,7 @@ export default function GlobalSearch({ isOpen, onClose }) {
               {!query.trim() && navMatches.length === 0 && (
                 <div className="py-12 text-center">
                   <Search size={36} className="mx-auto text-gray-700 mb-3" />
-                  <p className="text-gray-500 text-sm">Type to search across all TyrePulse data</p>
+                  <p className="text-gray-500 text-sm">{t('ui.search.emptyPrompt')}</p>
                 </div>
               )}
             </div>
@@ -359,12 +361,12 @@ export default function GlobalSearch({ isOpen, onClose }) {
             {/* Footer */}
             <div className="flex items-center justify-between px-5 py-3 border-t border-gray-800 bg-gray-950">
               <div className="flex items-center gap-4 text-gray-600 text-xs">
-                <span className="flex items-center gap-1"><kbd className="px-1 bg-gray-800 border border-gray-700 rounded text-xs">↑↓</kbd> navigate</span>
-                <span className="flex items-center gap-1"><kbd className="px-1.5 bg-gray-800 border border-gray-700 rounded text-xs">↵</kbd> select</span>
-                <span className="flex items-center gap-1"><kbd className="px-1 bg-gray-800 border border-gray-700 rounded text-xs">esc</kbd> close</span>
+                <span className="flex items-center gap-1"><kbd className="px-1 bg-gray-800 border border-gray-700 rounded text-xs">↑↓</kbd> {t('ui.hints.navigate')}</span>
+                <span className="flex items-center gap-1"><kbd className="px-1.5 bg-gray-800 border border-gray-700 rounded text-xs">↵</kbd> {t('ui.hints.select')}</span>
+                <span className="flex items-center gap-1"><kbd className="px-1 bg-gray-800 border border-gray-700 rounded text-xs">esc</kbd> {t('ui.hints.close')}</span>
               </div>
               <span className="text-gray-600 text-xs">
-                {hasResults ? `${Object.values(results).flat().length} records found` : 'TyrePulse Search'}
+                {hasResults ? t('ui.search.recordsFound', { count: Object.values(results).flat().length }) : t('ui.search.brand')}
               </span>
             </div>
           </motion.div>

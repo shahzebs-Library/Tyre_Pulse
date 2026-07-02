@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { applyCountry } from '../lib/countryFilter'
 import { ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
@@ -46,6 +47,7 @@ const COL_WIDTHS = [40, 96, 110, 130, 96, 100, 100, 100, 88, 88, 72, 80]
 export default function TyreRecords() {
   const { profile } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
+  const { t } = useLanguage()
   const invalidate = useInvalidate()
 
   const [records, setRecords]         = useState([])
@@ -222,8 +224,8 @@ export default function TyreRecords() {
         // (only Admin may delete tyre records).
         throw new Error(
           (profile?.role || '').toLowerCase() === 'admin'
-            ? 'No records were deleted. They may already be gone - refresh and retry.'
-            : 'You do not have permission to delete tyre records. Only an Admin can delete.',
+            ? t('records.delete.errNoneDeleted')
+            : t('records.delete.errNoPermission'),
         )
       }
       setShowDeleteConfirm(false)
@@ -231,7 +233,7 @@ export default function TyreRecords() {
       loadRecords()
       loadFilters()
     } catch (e) {
-      setDeleteError(e.message || 'Delete failed. Please try again.')
+      setDeleteError(e.message || t('records.delete.errFailed'))
     } finally {
       setSaving(false)
     }
@@ -266,7 +268,7 @@ export default function TyreRecords() {
   }
 
   async function handleBulkScrap(rows) {
-    if (!window.confirm(`Mark ${rows.length} tyre record${rows.length !== 1 ? 's' : ''} as Scrapped? This cannot be undone.`)) return
+    if (!window.confirm(t('records.bulk.scrapConfirm', { count: rows.length }))) return
     const ids = rows.map(r => r.id)
     const BATCH = 200
     for (let i = 0; i < ids.length; i += BATCH) {
@@ -314,8 +316,8 @@ export default function TyreRecords() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Tyre Records"
-        subtitle={`${total.toLocaleString()} total records`}
+        title={t('records.title')}
+        subtitle={t('records.subtitle', { count: total.toLocaleString() })}
         icon={CircleDot}
         actions={
           <div className="flex gap-2">
@@ -323,16 +325,16 @@ export default function TyreRecords() {
               onClick={async () => exportToExcel(await fetchAll(), EXPORT_COLS.map(c => c.key), EXPORT_COLS.map(c => c.header), `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`, 'Tyre Records')}
               className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5"
             >
-              <FileSpreadsheet size={14} className="text-green-400" /> Excel
+              <FileSpreadsheet size={14} className="text-green-400" /> {t('records.actions.excel')}
             </button>
             <button
               onClick={async () => exportToPdf(await fetchAll(), EXPORT_COLS, `Tyre Records · ${total.toLocaleString()} records`, `TyrePulse_Records_${new Date().toISOString().slice(0,10)}`)}
               className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5"
             >
-              <FileText size={14} className="text-red-400" /> PDF
+              <FileText size={14} className="text-red-400" /> {t('records.actions.pdf')}
             </button>
             <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm px-4">
-              <Plus size={15} /> New Record
+              <Plus size={15} /> {t('records.actions.newRecord')}
             </button>
           </div>
         }
@@ -341,11 +343,11 @@ export default function TyreRecords() {
       <FilterBar
         search={search}
         onSearch={v => { setSearch(v); setPage(0) }}
-        placeholder="Search asset, serial, MIS, job card..."
+        placeholder={t('records.searchPlaceholder')}
         selects={[
-          { value: siteFilter,  onChange: v => { setSiteFilter(v); setPage(0) },  placeholder: 'All Sites',       options: sites.map(s  => ({ value: s, label: s })) },
-          { value: brandFilter, onChange: v => { setBrandFilter(v); setPage(0) }, placeholder: 'All Brands',      options: brands.map(b => ({ value: b, label: b })) },
-          { value: riskFilter,  onChange: v => { setRiskFilter(v); setPage(0) },  placeholder: 'All Risk Levels', options: ['Critical','High','Medium','Low'].map(r => ({ value: r, label: r })) },
+          { value: siteFilter,  onChange: v => { setSiteFilter(v); setPage(0) },  placeholder: t('records.filters.allSites'),       options: sites.map(s  => ({ value: s, label: s })) },
+          { value: brandFilter, onChange: v => { setBrandFilter(v); setPage(0) }, placeholder: t('records.filters.allBrands'),      options: brands.map(b => ({ value: b, label: b })) },
+          { value: riskFilter,  onChange: v => { setRiskFilter(v); setPage(0) },  placeholder: t('records.filters.allRiskLevels'), options: ['Critical','High','Medium','Low'].map(r => ({ value: r, label: r })) },
         ]}
       />
 
@@ -369,8 +371,8 @@ export default function TyreRecords() {
                   {isSomeSelected && !isAllSelected && <div className="w-2 h-0.5 bg-orange-400 rounded-full" />}
                 </div>
               </div>
-              {['Date','Asset No','Serial No','Brand','Site','MIS No','Job Card','Risk','Cost','CPK',''].map(h => (
-                <div key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider whitespace-nowrap">{h}</div>
+              {[t('records.columns.date'),t('records.columns.assetNo'),t('records.columns.serialNo'),t('records.columns.brand'),t('records.columns.site'),t('records.columns.misNo'),t('records.columns.jobCard'),t('records.columns.risk'),t('records.columns.cost'),t('records.columns.cpk'),''].map((h, i) => (
+                <div key={i} className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider whitespace-nowrap">{h}</div>
               ))}
             </div>
           </div>
@@ -408,7 +410,7 @@ export default function TyreRecords() {
             ) : records.length === 0 ? (
               <div className="flex flex-col items-center gap-3 text-muted py-16">
                 <CircleDot className="w-8 h-8 opacity-20" />
-                <span className="text-sm">No records found</span>
+                <span className="text-sm">{t('records.states.noRecords')}</span>
               </div>
             ) : (
               <div
@@ -488,7 +490,7 @@ export default function TyreRecords() {
                       <div className="px-4 text-xs tabular-nums">
                         {cpk
                           ? <span className="text-brand-bright">{cpk}</span>
-                          : <span className="text-muted">N/A</span>}
+                          : <span className="text-muted">{t('records.states.cpkNa')}</span>}
                       </div>
 
                       {/* Actions */}
@@ -520,7 +522,7 @@ export default function TyreRecords() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 bg-surface-1 border-t border-[var(--border-dim)]">
             <p className="text-xs text-muted">
-              {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()} records
+              {t('records.pagination.summary', { from: page * PAGE_SIZE + 1, to: Math.min((page + 1) * PAGE_SIZE, total), total: total.toLocaleString() })}
             </p>
             <div className="flex items-center gap-1">
               <button
@@ -547,26 +549,26 @@ export default function TyreRecords() {
       <BulkActionBar
         count={bulkCount}
         onClear={clear}
-        entityLabel="record"
+        entityLabel={t('records.bulk.entityLabel')}
         actions={[
           {
-            label: 'Bulk Edit',
+            label: t('records.bulk.bulkEdit'),
             icon: Edit2,
             onClick: () => { setBulkForm(EMPTY_BULK); setShowBulkEdit(true) },
           },
           {
-            label: 'Export Selected',
+            label: t('records.bulk.exportSelected'),
             icon: Download,
             onClick: () => handleBulkExport(selectedRows),
           },
           {
-            label: 'Mark as Scrapped',
+            label: t('records.bulk.markScrapped'),
             icon: Trash2,
             variant: 'danger',
             onClick: () => handleBulkScrap(selectedRows),
           },
           {
-            label: 'Delete',
+            label: t('records.bulk.delete'),
             icon: Trash2,
             variant: 'danger',
             onClick: () => setShowDeleteConfirm(true),
@@ -576,29 +578,29 @@ export default function TyreRecords() {
 
       {/* Detail modal */}
       {detailRecord && (
-        <Modal title="Record Detail" onClose={() => setDetailRecord(null)}>
+        <Modal title={t('records.detail.title')} onClose={() => setDetailRecord(null)}>
           <dl className="grid grid-cols-2 gap-3 text-sm">
             {[
-              ['Asset No', detailRecord.asset_no], ['Serial No', detailRecord.serial_no],
-              ['Brand', detailRecord.brand], ['Site', detailRecord.site],
-              ['Issue Date', detailRecord.issue_date], ['MIS Number', detailRecord.mis_number],
-              ['Job Card', detailRecord.job_card], ['Qty', detailRecord.qty],
-              ['Risk Level', detailRecord.risk_level], ['Category', detailRecord.category],
-              ['Cost', detailRecord.cost_per_tyre ? formatCurrencyCompact(detailRecord.cost_per_tyre, activeCurrency) : null],
-              ['Description', detailRecord.description], ['Remarks', detailRecord.remarks],
-            ].filter(([, v]) => v).map(([k, v]) => (
-              <div key={k} className={k === 'Description' || k === 'Remarks' ? 'col-span-2' : ''}>
+              [t('records.detail.assetNo'), detailRecord.asset_no], [t('records.detail.serialNo'), detailRecord.serial_no],
+              [t('records.detail.brand'), detailRecord.brand], [t('records.detail.site'), detailRecord.site],
+              [t('records.detail.issueDate'), detailRecord.issue_date], [t('records.detail.misNumber'), detailRecord.mis_number],
+              [t('records.detail.jobCard'), detailRecord.job_card], [t('records.detail.qty'), detailRecord.qty],
+              [t('records.detail.riskLevel'), detailRecord.risk_level], [t('records.detail.category'), detailRecord.category],
+              [t('records.detail.cost'), detailRecord.cost_per_tyre ? formatCurrencyCompact(detailRecord.cost_per_tyre, activeCurrency) : null],
+              [t('records.detail.description'), detailRecord.description, true], [t('records.detail.remarks'), detailRecord.remarks, true],
+            ].filter(([, v]) => v).map(([k, v, wide]) => (
+              <div key={k} className={wide ? 'col-span-2' : ''}>
                 <dt className="text-muted text-xs mb-0.5">{k}</dt>
                 <dd className="text-white font-medium">{v}</dd>
               </div>
             ))}
           </dl>
           <div className="mt-4">
-            <CustomFieldsPanel data={detailRecord.extra_fields} title="Additional imported fields" />
+            <CustomFieldsPanel data={detailRecord.extra_fields} title={t('records.detail.customFields')} />
           </div>
           <div className="flex gap-2 mt-4 pt-4 border-t border-[var(--border-dim)]">
             <button onClick={() => { openEdit(detailRecord); setDetailRecord(null) }} className="btn-secondary flex items-center gap-2 text-sm">
-              <Edit2 size={14} /> Edit Record
+              <Edit2 size={14} /> {t('records.detail.editRecord')}
             </button>
           </div>
         </Modal>
@@ -606,7 +608,7 @@ export default function TyreRecords() {
 
       {/* Add / Edit modal */}
       {editRecord !== null && (
-        <Modal title={editRecord.id ? 'Edit Record' : 'New Tyre Record'} onClose={() => setEditRecord(null)} wide>
+        <Modal title={editRecord.id ? t('records.form.editTitle') : t('records.form.newTitle')} onClose={() => setEditRecord(null)} wide>
           {formError && (
             <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/25 text-red-300 rounded-xl px-4 py-2.5 mb-4 text-sm">
               <AlertTriangle size={14} className="shrink-0" /> {formError}
@@ -614,57 +616,57 @@ export default function TyreRecords() {
           )}
           <form onSubmit={saveRecord} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="label">Issue Date</label><input type="date" className="input" value={form.issue_date} onChange={F('issue_date')} /></div>
-              <div><label className="label">SR / Ref No</label><input className="input" value={form.sr} onChange={F('sr')} /></div>
+              <div><label className="label">{t('records.form.issueDate')}</label><input type="date" className="input" value={form.issue_date} onChange={F('issue_date')} /></div>
+              <div><label className="label">{t('records.form.srRefNo')}</label><input className="input" value={form.sr} onChange={F('sr')} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Site</label>
-                <input className="input" list="site-list" value={form.site} onChange={F('site')} placeholder="Select or type..." />
+                <label className="label">{t('records.form.site')}</label>
+                <input className="input" list="site-list" value={form.site} onChange={F('site')} placeholder={t('records.form.selectOrType')} />
                 <datalist id="site-list">{sites.map(s => <option key={s} value={s} />)}</datalist>
               </div>
               <div>
-                <label className="label">Brand</label>
-                <input className="input" list="brand-list" value={form.brand} onChange={F('brand')} placeholder="Select or type..." />
+                <label className="label">{t('records.form.brand')}</label>
+                <input className="input" list="brand-list" value={form.brand} onChange={F('brand')} placeholder={t('records.form.selectOrType')} />
                 <datalist id="brand-list">{brands.map(b => <option key={b} value={b} />)}</datalist>
               </div>
             </div>
-            <div><label className="label">Description</label><input className="input" value={form.description} onChange={F('description')} /></div>
+            <div><label className="label">{t('records.form.description')}</label><input className="input" value={form.description} onChange={F('description')} /></div>
             <div className="grid grid-cols-3 gap-3">
-              <div><label className="label">Asset No</label><input className="input" value={form.asset_no} onChange={F('asset_no')} /></div>
-              <div><label className="label">Serial No</label><input className="input" value={form.serial_no} onChange={F('serial_no')} /></div>
-              <div><label className="label">Qty</label><input type="number" className="input" value={form.qty} onChange={F('qty')} min={1} /></div>
+              <div><label className="label">{t('records.form.assetNo')}</label><input className="input" value={form.asset_no} onChange={F('asset_no')} /></div>
+              <div><label className="label">{t('records.form.serialNo')}</label><input className="input" value={form.serial_no} onChange={F('serial_no')} /></div>
+              <div><label className="label">{t('records.form.qty')}</label><input type="number" className="input" value={form.qty} onChange={F('qty')} min={1} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="label">MIS Number</label><input className="input" value={form.mis_number} onChange={F('mis_number')} /></div>
-              <div><label className="label">Job Card</label><input className="input" value={form.job_card} onChange={F('job_card')} /></div>
+              <div><label className="label">{t('records.form.misNumber')}</label><input className="input" value={form.mis_number} onChange={F('mis_number')} /></div>
+              <div><label className="label">{t('records.form.jobCard')}</label><input className="input" value={form.job_card} onChange={F('job_card')} /></div>
             </div>
-            <div><label className="label">Remarks</label><textarea className="input" rows={2} value={form.remarks} onChange={F('remarks')} /></div>
+            <div><label className="label">{t('records.form.remarks')}</label><textarea className="input" rows={2} value={form.remarks} onChange={F('remarks')} /></div>
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="label">Country</label>
+                <label className="label">{t('records.form.country')}</label>
                 <select className="input" value={form.country} onChange={F('country')}>
                   <option value="KSA">KSA</option>
                   <option value="UAE">UAE</option>
                   <option value="Egypt">Egypt</option>
                 </select>
               </div>
-              <div><label className="label">KM at Fitment</label><input type="number" className="input" value={form.km_at_fitment} onChange={F('km_at_fitment')} placeholder="Optional" min={0} /></div>
-              <div><label className="label">KM at Removal</label><input type="number" className="input" value={form.km_at_removal} onChange={F('km_at_removal')} placeholder="Optional" min={0} /></div>
+              <div><label className="label">{t('records.form.kmAtFitment')}</label><input type="number" className="input" value={form.km_at_fitment} onChange={F('km_at_fitment')} placeholder={t('records.form.optional')} min={0} /></div>
+              <div><label className="label">{t('records.form.kmAtRemoval')}</label><input type="number" className="input" value={form.km_at_removal} onChange={F('km_at_removal')} placeholder={t('records.form.optional')} min={0} /></div>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><label className="label">Cost</label><input type="number" className="input" value={form.cost_per_tyre} onChange={F('cost_per_tyre')} min={0} step={100} /></div>
+              <div><label className="label">{t('records.form.cost')}</label><input type="number" className="input" value={form.cost_per_tyre} onChange={F('cost_per_tyre')} min={0} step={100} /></div>
               <div>
-                <label className="label">Risk Level</label>
+                <label className="label">{t('records.form.riskLevel')}</label>
                 <select className="input" value={form.risk_level} onChange={F('risk_level')}>
-                  <option value="">- None -</option>
+                  <option value="">{t('records.form.none')}</option>
                   {['Critical', 'High', 'Medium', 'Low'].map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
-                <label className="label">Category</label>
+                <label className="label">{t('records.form.category')}</label>
                 <select className="input" value={form.category} onChange={F('category')}>
-                  <option value="">- None -</option>
+                  <option value="">{t('records.form.none')}</option>
                   {ALL_CATEGORY_LABELS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
@@ -672,9 +674,9 @@ export default function TyreRecords() {
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {saving ? 'Saving...' : 'Save Record'}
+                {saving ? t('records.form.saving') : t('records.form.save')}
               </button>
-              <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">Cancel</button>
+              <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">{t('records.form.cancel')}</button>
             </div>
           </form>
         </Modal>
@@ -682,32 +684,32 @@ export default function TyreRecords() {
 
       {/* Bulk edit modal */}
       {showBulkEdit && (
-        <Modal title={`Bulk Edit · ${bulkCount} records`} onClose={() => setShowBulkEdit(false)}>
-          <p className="text-sm text-muted mb-4">Leave blank to keep existing values unchanged.</p>
+        <Modal title={t('records.bulkEdit.title', { count: bulkCount })} onClose={() => setShowBulkEdit(false)}>
+          <p className="text-sm text-muted mb-4">{t('records.bulkEdit.hint')}</p>
           <form onSubmit={saveBulkEdit} className="space-y-3">
             <div>
-              <label className="label">Change Site</label>
-              <input className="input" list="site-list-bulk" value={bulkForm.site} onChange={e => setBulkForm(f => ({ ...f, site: e.target.value }))} placeholder="Leave blank to keep" />
+              <label className="label">{t('records.bulkEdit.changeSite')}</label>
+              <input className="input" list="site-list-bulk" value={bulkForm.site} onChange={e => setBulkForm(f => ({ ...f, site: e.target.value }))} placeholder={t('records.bulkEdit.leaveBlankToKeep')} />
               <datalist id="site-list-bulk">{sites.map(s => <option key={s} value={s} />)}</datalist>
             </div>
             <div>
-              <label className="label">Change Brand</label>
-              <input className="input" list="brand-list-bulk" value={bulkForm.brand} onChange={e => setBulkForm(f => ({ ...f, brand: e.target.value }))} placeholder="Leave blank to keep" />
+              <label className="label">{t('records.bulkEdit.changeBrand')}</label>
+              <input className="input" list="brand-list-bulk" value={bulkForm.brand} onChange={e => setBulkForm(f => ({ ...f, brand: e.target.value }))} placeholder={t('records.bulkEdit.leaveBlankToKeep')} />
               <datalist id="brand-list-bulk">{brands.map(b => <option key={b} value={b} />)}</datalist>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><label className="label">Cost</label><input type="number" className="input" value={bulkForm.cost_per_tyre} onChange={e => setBulkForm(f => ({ ...f, cost_per_tyre: e.target.value }))} placeholder="-" min={0} /></div>
+              <div><label className="label">{t('records.bulkEdit.cost')}</label><input type="number" className="input" value={bulkForm.cost_per_tyre} onChange={e => setBulkForm(f => ({ ...f, cost_per_tyre: e.target.value }))} placeholder="-" min={0} /></div>
               <div>
-                <label className="label">Risk Level</label>
+                <label className="label">{t('records.bulkEdit.riskLevel')}</label>
                 <select className="input" value={bulkForm.risk_level} onChange={e => setBulkForm(f => ({ ...f, risk_level: e.target.value }))}>
-                  <option value="">- Keep existing -</option>
+                  <option value="">{t('records.bulkEdit.keepExisting')}</option>
                   {['Critical', 'High', 'Medium', 'Low'].map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
-                <label className="label">Category</label>
+                <label className="label">{t('records.bulkEdit.category')}</label>
                 <select className="input" value={bulkForm.category} onChange={e => setBulkForm(f => ({ ...f, category: e.target.value }))}>
-                  <option value="">- Keep existing -</option>
+                  <option value="">{t('records.bulkEdit.keepExisting')}</option>
                   {ALL_CATEGORY_LABELS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
@@ -715,9 +717,9 @@ export default function TyreRecords() {
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {saving ? 'Updating...' : `Update ${bulkCount} Records`}
+                {saving ? t('records.bulkEdit.updating') : t('records.bulkEdit.update', { count: bulkCount })}
               </button>
-              <button type="button" onClick={() => setShowBulkEdit(false)} className="btn-secondary">Cancel</button>
+              <button type="button" onClick={() => setShowBulkEdit(false)} className="btn-secondary">{t('records.form.cancel')}</button>
             </div>
           </form>
         </Modal>
@@ -725,12 +727,12 @@ export default function TyreRecords() {
 
       {/* Delete confirmation */}
       {showDeleteConfirm && (
-        <Modal title="Confirm Delete" onClose={() => { setShowDeleteConfirm(false); setDeleteError('') }}>
+        <Modal title={t('records.delete.title')} onClose={() => { setShowDeleteConfirm(false); setDeleteError('') }}>
           <div className="flex gap-3 mb-5 p-4 rounded-xl bg-red-500/8 border border-red-500/20">
             <AlertTriangle size={18} className="text-red-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-white font-semibold">Delete {bulkCount} record{bulkCount !== 1 ? 's' : ''}?</p>
-              <p className="text-muted text-sm mt-1">This action is permanent and cannot be undone.</p>
+              <p className="text-white font-semibold">{t('records.delete.question', { count: bulkCount })}</p>
+              <p className="text-muted text-sm mt-1">{t('records.delete.warning')}</p>
             </div>
           </div>
           {deleteError && (
@@ -742,9 +744,9 @@ export default function TyreRecords() {
           <div className="flex gap-3">
             <button onClick={deleteSelected} disabled={saving} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              {saving ? 'Deleting...' : `Delete ${bulkCount} Records`}
+              {saving ? t('records.delete.deleting') : t('records.delete.confirm', { count: bulkCount })}
             </button>
-            <button onClick={() => setShowDeleteConfirm(false)} className="btn-secondary">Cancel</button>
+            <button onClick={() => setShowDeleteConfirm(false)} className="btn-secondary">{t('records.form.cancel')}</button>
           </div>
         </Modal>
       )}

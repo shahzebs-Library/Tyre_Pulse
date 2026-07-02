@@ -1,0 +1,46 @@
+{
+  "emptyState": {
+    "title": "لا توجد بيانات",
+    "description": "لا توجد سجلات مطابقة لعوامل التصفية الحالية."
+  },
+  "search": {
+    "placeholder": "ابحث في الإطارات والمركبات وأوامر العمل والتقارير...",
+    "quickNavigation": "تنقل سريع",
+    "pages": "الصفحات",
+    "results": "{count} نتيجة",
+    "noResultsFor": "لا توجد نتائج لـ",
+    "noResultsHint": "جرّب البحث برقم الأصل أو الرقم التسلسلي أو العلامة التجارية",
+    "emptyPrompt": "اكتب للبحث في جميع بيانات TyrePulse",
+    "recordsFound": "تم العثور على {count} سجل",
+    "brand": "بحث TyrePulse"
+  },
+  "command": {
+    "placeholder": "ابحث في الصفحات والإجراءات... ({key}K)",
+    "groups": {
+      "recent": "الأخيرة",
+      "actions": "الإجراءات",
+      "navigation": "التنقل"
+    }
+  },
+  "hints": {
+    "navigate": "تنقّل",
+    "select": "تحديد",
+    "open": "فتح",
+    "close": "إغلاق"
+  },
+  "filters": {
+    "clearAll": "مسح الكل",
+    "removeAria": "إزالة عامل التصفية {label}"
+  },
+  "bulk": {
+    "selected": "تم تحديد {count} {label}",
+    "deselectAll": "إلغاء تحديد الكل"
+  },
+  "table": {
+    "noRecords": "لا توجد سجلات",
+    "pageOf": "صفحة {page} من {total}"
+  },
+  "filterBar": {
+    "searchPlaceholder": "بحث..."
+  }
+}

@@ -255,8 +255,20 @@ export default function DataIntakeCenter() {
         }
       }
       const v = validateRow(transformed, module)
+      // An out-of-domain enum value would be rejected by the DB CHECK and fail
+      // the whole commit. Preserve the original in custom_data and drop the
+      // column so the row still commits (the DB default applies) — the warning
+      // from validateRow keeps it visible for review.
+      const cleanCustom = { ...custom }
+      for (const iss of v.issues || []) {
+        if (iss.code === 'ENUM_INVALID' && transformed[iss.field] != null) {
+          cleanCustom[`${iss.field}__unmapped`] = transformed[iss.field]
+          delete transformed[iss.field]
+          delete mapped[iss.field]
+        }
+      }
       return {
-        sourceRowNo: i + 1, raw, mapped, transformed, custom,
+        sourceRowNo: i + 1, raw, mapped, transformed, custom: cleanCustom,
         validationStatus: v.status, issues: v.issues || [],
         fingerprint: rowFingerprint(raw),
       }

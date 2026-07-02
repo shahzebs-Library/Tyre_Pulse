@@ -116,10 +116,13 @@ export function validateRow(transformed, module) {
   }
 
   // Controlled-vocabulary (CHECK constraint) domains: a non-blank value outside
-  // the target column's allowed set is a hard error — surfaced per-row with the
-  // allowed values, instead of the whole batch failing with an opaque 400 at
-  // commit. transformRow has already canonicalised casing/separators, so only
-  // genuinely out-of-domain values reach here.
+  // the target column's allowed set is a WARNING, not a hard error — the import
+  // must not be blocked because one mapped column carries a foreign vocabulary
+  // (e.g. a "Tracking Category" of "Active" mapped onto work_orders.status). The
+  // pipeline preserves the original in custom_data and drops the column before
+  // commit (so the DB CHECK can't reject the batch); the warning surfaces the
+  // allowed values for review. transformRow has already canonicalised
+  // casing/separators, so only genuinely out-of-domain values reach here.
   const enumFields = ENUM_DOMAINS[module]
   if (enumFields) {
     const fieldByKey = new Map(fields.map((f) => [f.key, f]))
@@ -129,9 +132,9 @@ export function validateRow(transformed, module) {
       const label = fieldByKey.get(key)?.label || key
       issues.push({
         field: key,
-        severity: 'error',
+        severity: 'warning',
         code: 'ENUM_INVALID',
-        message: `${label} "${val}" is not an accepted value. Allowed: ${allowed.join(', ')}.`,
+        message: `${label} "${val}" is not an accepted value (preserved, not imported to that column). Allowed: ${allowed.join(', ')}.`,
       })
     }
   }

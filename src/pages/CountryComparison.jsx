@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import * as analytics from '../lib/api/analyticsReads'
 import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
-import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText, Award } from 'lucide-react'
+import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText, Award, RefreshCw } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
@@ -67,27 +67,33 @@ export default function CountryComparison() {
   const [actions, setActions]   = useState([])
   const [trends, setTrends]     = useState([])   // [{country, month, cnt, cost}]
   const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState(null)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo]     = useState('')
   const [trendMetric, setTrendMetric] = useState('cnt') // 'cnt' | 'cost'
   const [selectedCountries, setSelectedCountries] = useState(new Set(COUNTRIES))
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
+  const load = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
       // Server-side per-country aggregates (accurate over the full dataset, fast).
       const [mRes, aRes, tRes] = await Promise.all([
         analytics.reportCountryMetrics({ from: dateFrom, to: dateTo }),
         analytics.listCorrectiveActionsBrief(),
         analytics.reportCountryTrends({ from: dateFrom, to: dateTo }),
       ])
+      for (const r of [mRes, aRes, tRes]) if (r?.error) throw new Error(r.error.message || r.error)
       setCountryMetrics(mRes.data ?? [])
       setActions(aRes.data ?? [])
       setTrends(tRes.data ?? [])
+    } catch (e) {
+      setError(e.message || 'Failed to load country comparison data.')
+    } finally {
       setLoading(false)
     }
-    load()
   }, [dateFrom, dateTo])
+
+  useEffect(() => { load() }, [load])
 
   // Dynamic color map based on available countries
   const countryColorMap = useMemo(() => {
@@ -233,6 +239,20 @@ export default function CountryComparison() {
         {[...Array(3)].map((_, i) => <div key={i} className="card animate-pulse h-52 bg-gray-800/40" />)}
       </div>
       <div className="card animate-pulse h-48 bg-gray-800/40" />
+    </div>
+  )
+
+  if (error && !hasAnyData) return (
+    <div className="space-y-5">
+      <PageHeader title="Country Comparison" subtitle="Could not load data" icon={Globe} />
+      <div className="card py-16 flex flex-col items-center gap-3">
+        <AlertTriangle size={40} className="text-red-400" />
+        <p className="text-red-300 font-medium">Could not load country comparison</p>
+        <p className="text-gray-500 text-sm">{error}</p>
+        <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+          <RefreshCw size={16} /> Retry
+        </button>
+      </div>
     </div>
   )
 

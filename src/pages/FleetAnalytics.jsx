@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import * as analytics from '../lib/api/analyticsReads'
 import { useSettings } from '../contexts/SettingsContext'
 import { bucketByMonth, linearRegression, recordCost } from '../lib/analyticsEngine'
-import { BarChart2, Download, FileText } from 'lucide-react'
+import { BarChart2, Download, FileText, AlertTriangle, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -29,6 +29,7 @@ export default function FleetAnalytics() {
   const [totalRecords, setTotalRecords] = useState(0)
   const [selectedRecords, setSelectedRecords] = useState([])
   const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState(null)
   const [search, setSearch]     = useState('')
   const [selected, setSelected] = useState(null)
   const [sortBy, setSortBy]     = useState('count')
@@ -36,16 +37,22 @@ export default function FleetAnalytics() {
   const [dateTo, setDateTo]     = useState('')
   const [siteFilter, setSiteFilter] = useState('')
 
-  useEffect(() => {
-    setLoading(true)
-    analytics.reportAssetMetrics({ country: activeCountry })
-      .then(({ data }) => {
-        const m = data || []
-        setAssetMetrics(m)
-        setTotalRecords(m.reduce((s, a) => s + (a.count || 0), 0))
-        setLoading(false)
-      })
+  const load = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const { data, error: e } = await analytics.reportAssetMetrics({ country: activeCountry })
+      if (e) throw new Error(e.message || e)
+      const m = data || []
+      setAssetMetrics(m)
+      setTotalRecords(m.reduce((s, a) => s + (a.count || 0), 0))
+    } catch (e) {
+      setError(e.message || 'Failed to load fleet data.')
+    } finally {
+      setLoading(false)
+    }
   }, [activeCountry])
+
+  useEffect(() => { load() }, [load])
 
   // Lazy-load the selected asset's raw rows for the detail view.
   useEffect(() => {
@@ -89,6 +96,20 @@ export default function FleetAnalytics() {
     </div>
   )
 
+  if (error && !assetMetrics.length) return (
+    <div className="space-y-5">
+      <PageHeader title="Fleet Analytics" subtitle="Per-asset history, cost, failure frequency" icon={BarChart2} />
+      <div className="card p-8 text-center">
+        <AlertTriangle size={40} className="mx-auto text-red-400 mb-3" />
+        <p className="text-red-300 font-medium mb-1">Could not load fleet data</p>
+        <p className="text-gray-400 text-sm mb-4">{error}</p>
+        <button onClick={load} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+          <RefreshCw size={16} /> Retry
+        </button>
+      </div>
+    </div>
+  )
+
   const selectedAsset = selected
     ? { ...assetMetrics.find(a => a.assetNo === selected), records: selectedRecords }
     : null
@@ -101,6 +122,13 @@ export default function FleetAnalytics() {
         subtitle="Per-asset history, cost, failure frequency and tyre lifecycle"
         icon={BarChart2}
       />
+
+      {error && (
+        <div className="flex items-center justify-between gap-3 bg-red-900/30 border border-red-700 rounded-xl p-3 text-red-300 text-sm">
+          <span className="flex items-center gap-2"><AlertTriangle size={16} /> {error}</span>
+          <button onClick={load} className="flex items-center gap-1 text-red-200 hover:text-white"><RefreshCw size={14} /> Retry</button>
+        </div>
+      )}
 
       {/* Summary row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

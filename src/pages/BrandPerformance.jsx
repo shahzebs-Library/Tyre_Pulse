@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeBrandMetrics, linearRegression, bucketByMonth, recordCost } from '../lib/analyticsEngine'
@@ -7,7 +7,7 @@ import {
   PointElement, Title, Tooltip, Legend,
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
-import { Maximize2, X, BarChart2, Download, FileText, Search, Award, TrendingUp, TrendingDown } from 'lucide-react'
+import { Maximize2, X, BarChart2, Download, FileText, Search, Award, TrendingUp, TrendingDown, AlertTriangle, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { ChartModal } from '../components/ChartModal'
@@ -33,6 +33,7 @@ export default function BrandPerformance() {
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
   const [selected, setSelected]   = useState(null)
   const [tableSearch, setTableSearch] = useState('')
 
@@ -46,16 +47,28 @@ export default function BrandPerformance() {
   const [modalOpen, setModalOpen] = useState(false)
   const chartRef = useRef(null)
 
-  useEffect(() => {
-    fetchAllPages((from, to) => {
-      let q = supabase
-        .from('tyre_records')
-        .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty,description,remarks')
-        .order('issue_date')
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      return q.range(from, to)
-    }).then(({ data }) => { setRecords(data || []); setLoading(false) })
+  const load = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const { data, error: e } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty,description,remarks')
+          .order('issue_date')
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q.range(from, to)
+      })
+      if (e) throw new Error(e.message || e)
+      setRecords(data || [])
+    } catch (err) {
+      setError(err.message || 'Failed to load brand data.')
+      setRecords([])
+    } finally {
+      setLoading(false)
+    }
   }, [activeCountry])
+
+  useEffect(() => { load() }, [load])
 
   const uniqueSites = useMemo(() => {
     const s = new Set(records.map(r => r.site).filter(Boolean))
@@ -106,6 +119,20 @@ export default function BrandPerformance() {
       </div>
       <div className="grid grid-cols-2 gap-6">
         {[...Array(2)].map((_, i) => <div key={i} className="card animate-pulse h-64 bg-gray-800/40" />)}
+      </div>
+    </div>
+  )
+
+  if (error && metrics.length === 0) return (
+    <div className="space-y-5">
+      <PageHeader title="Brand Performance" subtitle="Could not load data" icon={BarChart2} />
+      <div className="card py-16 flex flex-col items-center gap-3">
+        <AlertTriangle size={40} className="text-red-400" />
+        <p className="text-red-300 font-medium">Could not load brand performance</p>
+        <p className="text-gray-500 text-sm">{error}</p>
+        <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+          <RefreshCw size={16} /> Retry
+        </button>
       </div>
     </div>
   )

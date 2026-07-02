@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeSiteMetrics, buildSiteRadar, bucketByMonth } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
-import { Download, FileText, Maximize2, GitMerge } from 'lucide-react'
+import { Download, FileText, Maximize2, GitMerge, AlertTriangle, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import {
@@ -108,6 +108,7 @@ export default function SiteComparison() {
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
   const [selectedSites, setSelectedSites] = useState([])
 
   const [dateFrom, setDateFrom]       = useState('')
@@ -117,25 +118,33 @@ export default function SiteComparison() {
   const [modalOpen, setModalOpen] = useState(false)
   const trendChartRef = useRef(null)
 
-  useEffect(() => {
-    fetchAllPages((from, to) => {
-      let q = supabase
-        .from('tyre_records')
-        .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty')
-        .order('issue_date')
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      return q.range(from, to)
-    }).then(({ data }) => {
+  const load = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const { data, error: e } = await fetchAllPages((from, to) => {
+        let q = supabase
+          .from('tyre_records')
+          .select('id,issue_date,brand,site,category,risk_level,cost_per_tyre,qty')
+          .order('issue_date')
+        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+        return q.range(from, to)
+      })
+      if (e) throw new Error(e.message || e)
       const recs = data || []
       setRecords(recs)
-      setSelectedSites([])
       const byCount = {}
       recs.forEach(r => { if (r.site) byCount[r.site] = (byCount[r.site] || 0) + 1 })
       const top4 = Object.entries(byCount).sort(([, a], [, b]) => b - a).slice(0, 4).map(([s]) => s)
       setSelectedSites(top4)
+    } catch (err) {
+      setError(err.message || 'Failed to load site data.')
+      setRecords([])
+    } finally {
       setLoading(false)
-    })
+    }
   }, [activeCountry])
+
+  useEffect(() => { load() }, [load])
 
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
@@ -250,6 +259,15 @@ export default function SiteComparison() {
             <ChartCardSkeleton />
           </div>
         </>
+      ) : error ? (
+        <div className="card flex flex-col items-center justify-center py-16 text-center">
+          <AlertTriangle size={40} className="text-red-400 mb-4" />
+          <p className="text-red-300 font-medium text-lg">Could not load site data</p>
+          <p className="text-gray-500 text-sm mt-1">{error}</p>
+          <button onClick={load} className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+            <RefreshCw size={16} /> Retry
+          </button>
+        </div>
       ) : allSites.length === 0 ? (
         <>
           <div className="card space-y-4">

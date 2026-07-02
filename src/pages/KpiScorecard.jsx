@@ -7,7 +7,7 @@ import {
   computeMonthlyKpiActuals, sum,
 } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { Download, FileText, AlertTriangle, ToggleLeft, ToggleRight, Target } from 'lucide-react'
+import { Download, FileText, AlertTriangle, ToggleLeft, ToggleRight, Target, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import {
@@ -44,6 +44,7 @@ export default function KpiScorecard() {
   const [editing, setEditing]         = useState(false)
   const [draftTargets, setDraftTargets] = useState(DEFAULT_TARGETS)
   const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState(null)
   const [saving, setSaving]           = useState(false)
   const [yearFilter, setYearFilter]   = useState(new Date().getFullYear())
   const [countryChip, setCountryChip] = useState('All')
@@ -52,14 +53,15 @@ export default function KpiScorecard() {
   const [yoyLoading, setYoyLoading]   = useState(false)
   const [activeMainTab, setActiveMainTab] = useState('overview')
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
+  const load = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
       const [r, a, t] = await Promise.all([
         kpiTargets.listKpiTyreRecords({ country: activeCountry }),
         kpiTargets.listOpenCorrectiveActions({ country: activeCountry }),
         kpiTargets.listKpiTargets({ year: yearFilter }),
       ])
+      for (const res of [r, a, t]) if (res?.error) throw new Error(res.error.message || res.error)
       setRecords(r.data || [])
       setActions(a.data || [])
 
@@ -70,10 +72,14 @@ export default function KpiScorecard() {
       setTargets(merged)
       setDraftTargets(merged)
       setDbTargets(t.data || [])
+    } catch (e) {
+      setError(e.message || 'Failed to load KPI data.')
+    } finally {
       setLoading(false)
     }
-    load()
   }, [activeCountry, yearFilter])
+
+  useEffect(() => { load() }, [load])
 
   // Build last 12 months axis
   const months = useMemo(() => {
@@ -290,6 +296,20 @@ export default function KpiScorecard() {
   }, [filteredRecords, filteredActions, currentMonthStr])
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading KPI data…</div>
+
+  if (error && !records.length) return (
+    <div className="space-y-5">
+      <PageHeader title="KPI Scorecard" subtitle="Could not load data" icon={Target} />
+      <div className="card py-16 flex flex-col items-center gap-3">
+        <AlertTriangle size={40} className="text-red-400" />
+        <p className="text-red-300 font-medium">Could not load KPI data</p>
+        <p className="text-gray-500 text-sm">{error}</p>
+        <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+          <RefreshCw size={16} /> Retry
+        </button>
+      </div>
+    </div>
+  )
 
   const KPI_COLS = [
     { key: 'month', header: 'Month' },

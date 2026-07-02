@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
@@ -13,7 +13,7 @@ import {
   PointElement, ArcElement, Title, Tooltip, Legend, Filler,
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
-import { Maximize2, X, BarChart2 } from 'lucide-react'
+import { Maximize2, X, BarChart2, AlertTriangle, RefreshCw } from 'lucide-react'
 import { ChartModal } from '../components/ChartModal'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -47,6 +47,7 @@ export default function Analytics() {
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState(null)
   const [activeTab, setActiveTab] = useState(0)
 
   // Filter state
@@ -61,10 +62,10 @@ export default function Analytics() {
   const [modalChart, setModalChart] = useState(null)
   const chartRef = useRef(null)
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      const { data } = await fetchAllPages((from, to) => {
+  const load = useCallback(async () => {
+    setLoading(true); setError(null)
+    try {
+      const { data, error: e } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
           .select('id,issue_date,brand,site,asset_no,category,risk_level,cost_per_tyre,qty,created_at')
@@ -72,11 +73,17 @@ export default function Analytics() {
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
       })
+      if (e) throw new Error(e.message || e)
       setRecords(data || [])
+    } catch (err) {
+      setError(err.message || 'Failed to load analytics data.')
+      setRecords([])
+    } finally {
       setLoading(false)
     }
-    load()
   }, [activeCountry])
+
+  useEffect(() => { load() }, [load])
 
   const years = useMemo(() => {
     const ys = new Set(records.map(r => r.issue_date ? new Date(r.issue_date).getFullYear() : null).filter(Boolean))
@@ -174,6 +181,22 @@ export default function Analytics() {
         </div>
         {/* Chart card skeleton */}
         <div className="bg-gray-800/40 h-80 rounded-xl animate-pulse" />
+      </div>
+    )
+  }
+
+  if (error && !records.length) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Analytics" subtitle="Could not load data" icon={BarChart2} />
+        <div className="card py-16 flex flex-col items-center gap-3">
+          <AlertTriangle size={40} className="text-red-400" />
+          <p className="text-red-300 font-medium">Could not load analytics</p>
+          <p className="text-gray-500 text-sm">{error}</p>
+          <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+            <RefreshCw size={16} /> Retry
+          </button>
+        </div>
       </div>
     )
   }

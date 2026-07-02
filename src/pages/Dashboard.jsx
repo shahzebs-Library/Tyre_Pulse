@@ -20,7 +20,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, Presentation, Minus,
   FileSpreadsheet, FileText, Search, X, Calendar, Activity, Clock,
   Bell, Upload, ClipboardCheck, Maximize2, Zap, ChevronRight,
-  BarChart2, Shield, Cpu, ArrowUpRight,
+  BarChart2, Shield, Cpu, ArrowUpRight, RefreshCw,
 } from 'lucide-react'
 import { ChartModal } from '../components/ChartModal'
 import EmptyState from '../components/EmptyState'
@@ -163,6 +163,7 @@ export default function Dashboard() {
   const [dateTo, setDateTo]           = useState('')
   const [search, setSearch]           = useState('')
   const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState(null)
   const [dateShortcut, setDateShortcut] = useState('This Month')
   const [showCustom, setShowCustom]   = useState(false)
   const [granularity, setGranularity] = useState('monthly')
@@ -195,31 +196,40 @@ export default function Dashboard() {
   // own when switching tabs. Use the manual Refresh button to re-pull on demand.
 
   async function load() {
-    setLoading(true)
-    // Null-safe country filter: never silently drop uncategorised rows.
-    const flt = q => applyCountry(q, activeCountry)
-    let tyreQ = applyCountry(
-      supabase.from('tyre_records').select('id,cost_per_tyre,brand,issue_date,risk_level,site,category,asset_no'),
-      activeCountry,
-    )
-    if (dateFrom) tyreQ = tyreQ.gte('issue_date', dateFrom)
-    if (dateTo)   tyreQ = tyreQ.lte('issue_date', dateTo)
-    const [tyreRes, stockRes, actionRes, recentRes, openActRes, summaryRes] = await Promise.all([
-      tyreQ,
-      flt(supabase.from('stock_records').select('id', { count: 'exact' })),
-      flt(supabase.from('corrective_actions').select('id,status', { count: 'exact' })),
-      flt(supabase.from('tyre_records').select('id,issue_date,brand,asset_no,site,risk_level').order('created_at', { ascending: false }).limit(8)),
-      flt(supabase.from('corrective_actions').select('id,title,priority,site,status').eq('status','Open').order('created_at', { ascending: false }).limit(8)),
-      // Full-fleet aggregates (server-side) — accurate beyond the 1000-row page cap.
-      supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: dateFrom || null, p_to: dateTo || null }),
-    ])
-    setRawTyres(tyreRes.data ?? [])
-    setSummary(summaryRes?.data ?? null)
-    setRawStock(stockRes.data ?? [])
-    setRawActions(actionRes.data ?? [])
-    setRecentRecords(recentRes.data ?? [])
-    setOpenActions(openActRes.data ?? [])
-    setLoading(false)
+    setLoading(true); setError(null)
+    try {
+      // Null-safe country filter: never silently drop uncategorised rows.
+      const flt = q => applyCountry(q, activeCountry)
+      let tyreQ = applyCountry(
+        supabase.from('tyre_records').select('id,cost_per_tyre,brand,issue_date,risk_level,site,category,asset_no'),
+        activeCountry,
+      )
+      if (dateFrom) tyreQ = tyreQ.gte('issue_date', dateFrom)
+      if (dateTo)   tyreQ = tyreQ.lte('issue_date', dateTo)
+      const [tyreRes, stockRes, actionRes, recentRes, openActRes, summaryRes] = await Promise.all([
+        tyreQ,
+        flt(supabase.from('stock_records').select('id', { count: 'exact' })),
+        flt(supabase.from('corrective_actions').select('id,status', { count: 'exact' })),
+        flt(supabase.from('tyre_records').select('id,issue_date,brand,asset_no,site,risk_level').order('created_at', { ascending: false }).limit(8)),
+        flt(supabase.from('corrective_actions').select('id,title,priority,site,status').eq('status','Open').order('created_at', { ascending: false }).limit(8)),
+        // Full-fleet aggregates (server-side) — accurate beyond the 1000-row page cap.
+        supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: dateFrom || null, p_to: dateTo || null }),
+      ])
+      // Surface a hard failure (offline / RLS-denied) instead of rendering an
+      // empty dashboard that looks identical to "no data".
+      const firstErr = [tyreRes, stockRes, actionRes, recentRes, openActRes, summaryRes].find(r => r?.error)?.error
+      if (firstErr) throw new Error(firstErr.message || firstErr)
+      setRawTyres(tyreRes.data ?? [])
+      setSummary(summaryRes?.data ?? null)
+      setRawStock(stockRes.data ?? [])
+      setRawActions(actionRes.data ?? [])
+      setRecentRecords(recentRes.data ?? [])
+      setOpenActions(openActRes.data ?? [])
+    } catch (e) {
+      setError(e.message || 'Failed to load dashboard data.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const tyres = useMemo(() => {
@@ -535,6 +545,17 @@ export default function Dashboard() {
   const firstName = (profile?.full_name ?? profile?.username ?? 'there').split(' ')[0]
 
   if (loading) return <LoadingState message="Loading dashboard…" />
+
+  if (error) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center px-6">
+      <AlertTriangle size={44} className="text-red-400" />
+      <p className="text-red-300 font-semibold text-lg">Could not load dashboard</p>
+      <p className="text-gray-500 text-sm max-w-md">{error}</p>
+      <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+        <RefreshCw size={16} /> Retry
+      </button>
+    </div>
+  )
 
   /* ─── RENDER ──────────────────────────────────────────────────────────── */
   return (

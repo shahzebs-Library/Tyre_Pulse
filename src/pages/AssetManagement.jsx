@@ -29,7 +29,6 @@ ChartJS.register(
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 25
-const LS_KEY = 'tp_fleet_assets'
 
 const RISK_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3 }
 const RISK_COLOR = {
@@ -410,24 +409,18 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
         country: form.country || null,
         active: form.active,
       }
-      // Try fleet_master first
       const { error: supaErr } = isEdit
         ? await supabase.from('fleet_master').update(payload).eq('id', asset.id)
         : await supabase.from('fleet_master').insert([payload])
 
+      // Never mask a failed save behind a localStorage write that reports
+      // success — the record would exist only in this browser, invisible to
+      // everyone else and lost on cache clear. Surface the real error instead.
       if (supaErr) {
-        // Fallback to localStorage
-        const existing = JSON.parse(localStorage.getItem(LS_KEY) || '[]')
-        if (isEdit) {
-          const idx = existing.findIndex(a => a.asset_no === asset.asset_no)
-          if (idx >= 0) existing[idx] = { ...existing[idx], ...payload }
-          else existing.push({ ...payload, id: Date.now().toString() })
-        } else {
-          const dup = existing.find(a => a.asset_no === payload.asset_no)
-          if (dup) { setError('Asset No already exists.'); setSaving(false); return }
-          existing.push({ ...payload, id: Date.now().toString() })
-        }
-        localStorage.setItem(LS_KEY, JSON.stringify(existing))
+        const dup = /duplicate key|unique constraint/i.test(supaErr.message || '')
+        setError(dup ? 'Asset No already exists.' : (supaErr.message || 'Save failed. Please retry.'))
+        setSaving(false)
+        return
       }
       onSave()
     } catch (e) {
@@ -576,6 +569,7 @@ export default function AssetManagement() {
   const [drawerTyres, setDrawerTyres] = useState([])
   const [workOrders, setWorkOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
 
   // ── filter state ─────────────────────────────────────────────────────────────
@@ -607,6 +601,7 @@ export default function AssetManagement() {
 
   async function loadAll() {
     setLoading(true)
+    setLoadError('')
     try {
       const [assetsRes, ovRes, woRes] = await Promise.allSettled([
         supabase.from('fleet_master').select('*').order('asset_no'),
@@ -614,18 +609,16 @@ export default function AssetManagement() {
         supabase.from('work_orders').select('id,asset_no,status,total_cost,created_at,work_type'),
       ])
 
+      // Surface a hard load failure (offline / RLS-denied) rather than showing an
+      // empty fleet that looks identical to "no assets".
+      const assetErr = assetsRes.status === 'rejected'
+        ? assetsRes.reason
+        : assetsRes.value.error
+      if (assetErr) throw new Error(assetErr.message || String(assetErr))
+
       let rawAssets = assetsRes.status === 'fulfilled' ? (assetsRes.value.data ?? []) : []
       const ov     = ovRes.status === 'fulfilled' ? (ovRes.value.data ?? []) : []
       const rawWOs = woRes.status === 'fulfilled' ? (woRes.value.data ?? []) : []
-
-      // Merge localStorage fallback
-      const lsAssets = JSON.parse(localStorage.getItem(LS_KEY) || '[]')
-      if (rawAssets.length === 0 && lsAssets.length > 0) {
-        rawAssets = lsAssets
-      } else if (lsAssets.length > 0) {
-        const existing = new Set(rawAssets.map(a => a.asset_no))
-        lsAssets.forEach(a => { if (!existing.has(a.asset_no)) rawAssets.push(a) })
-      }
 
       // If fleet_master is empty, synthesize from the per-asset overview
       if (rawAssets.length === 0 && ov.length > 0) {
@@ -644,6 +637,9 @@ export default function AssetManagement() {
       setAssets(filtered)
       setOverview(ov)
       setWorkOrders(rawWOs)
+    } catch (e) {
+      setLoadError(e.message || 'Failed to load fleet assets.')
+      setAssets([])
     } finally {
       setLoading(false)
     }
@@ -975,6 +971,15 @@ export default function AssetManagement() {
                 {loading ? (
                   <div className="flex items-center justify-center py-20 text-gray-500">
                     <RefreshCw className="w-6 h-6 animate-spin mr-3" /> Loading assets…
+                  </div>
+                ) : loadError ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+                    <AlertTriangle className="w-12 h-12 mb-3 text-red-400" />
+                    <p className="text-red-300 font-medium">Could not load fleet assets</p>
+                    <p className="text-gray-500 text-sm mt-1 max-w-md">{loadError}</p>
+                    <button onClick={() => setRefreshKey(k => k + 1)} className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+                      <RefreshCw size={16} /> Retry
+                    </button>
                   </div>
                 ) : pageAssets.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-gray-600">

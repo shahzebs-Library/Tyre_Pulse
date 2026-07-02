@@ -2179,8 +2179,8 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
   }
 
   const nextLabel = isLast
-    ? allFilled ? '✓ All Done' : `Fill ${unfilledCount} More →`
-    : 'Next →'
+    ? allFilled ? t('inspections.position.allDone') : t('inspections.position.fillMore', { count: unfilledCount })
+    : t('inspections.position.next')
   const nextBg = isLast && allFilled ? '#166534' : '#16a34a'
 
   return (
@@ -2215,7 +2215,7 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
               </span>
               <span className="text-sm font-medium" style={{ color: '#9ca3af' }}>
                 {posIdx + 1} / {total}
-                {unfilledCount > 0 && <span className="ml-2 text-xs" style={{ color: '#d97706' }}>· {unfilledCount} unfilled</span>}
+                {unfilledCount > 0 && <span className="ml-2 text-xs" style={{ color: '#d97706' }}>{t('inspections.position.unfilled', { count: unfilledCount })}</span>}
               </span>
             </div>
             <button
@@ -2231,7 +2231,7 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
           {showPunctureAlert && (
             <div className="mb-3 px-3 py-2.5 rounded-xl flex items-center gap-2 text-sm font-semibold"
               style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#991b1b' }}>
-              🔴 Puncture detected - immediate action required
+              {t('inspections.position.punctureAlert')}
             </div>
           )}
 
@@ -2304,7 +2304,7 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
                 className="flex-1 py-3 rounded-2xl text-sm font-bold"
                 style={{ background: '#f3f4f6', color: '#374151', border: '1.5px solid #e5e7eb' }}
               >
-                ← Prev
+                {t('inspections.position.prev')}
               </button>
             )}
             <button
@@ -2322,26 +2322,27 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
 }
 
 function RaiseActionModal({ row, onConfirm, onClose }) {
+  const { t } = useLanguage()
   const [title, setTitle] = useState(`Action: ${row.title}`)
   return (
     <Modal onClose={onClose}>
-      <h3 className="text-lg font-bold text-white mb-4">Raise Corrective Action</h3>
+      <h3 className="text-lg font-bold text-white mb-4">{t('inspections.raiseModal.title')}</h3>
       <p className="text-gray-400 text-sm mb-4">
-        This will create a new corrective action linked to this observation.
+        {t('inspections.raiseModal.desc')}
       </p>
       <div className="mb-4">
-        <label className="label">Action Title</label>
+        <label className="label">{t('inspections.raiseModal.actionTitle')}</label>
         <input className="input" value={title} onChange={e => setTitle(e.target.value)} />
       </div>
       <div className="bg-gray-800 rounded-lg p-3 text-xs text-gray-400 mb-4 space-y-1">
-        <p><span className="text-gray-500">Site:</span> {row.site}</p>
-        <p><span className="text-gray-500">Asset:</span> {row.asset_no || '-'}</p>
-        <p><span className="text-gray-500">Priority:</span> {row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium'}</p>
-        {row.findings && <p><span className="text-gray-500">Findings:</span> {row.findings.slice(0, 100)}{row.findings.length > 100 ? '...' : ''}</p>}
+        <p><span className="text-gray-500">{t('inspections.raiseModal.site')}</span> {row.site}</p>
+        <p><span className="text-gray-500">{t('inspections.raiseModal.asset')}</span> {row.asset_no || '-'}</p>
+        <p><span className="text-gray-500">{t('inspections.raiseModal.priority')}</span> {row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium'}</p>
+        {row.findings && <p><span className="text-gray-500">{t('inspections.raiseModal.findings')}</span> {row.findings.slice(0, 100)}{row.findings.length > 100 ? '...' : ''}</p>}
       </div>
       <div className="flex gap-3">
-        <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-        <button onClick={() => onConfirm(title)} className="btn-primary flex-1">Raise Action</button>
+        <button onClick={onClose} className="btn-secondary flex-1">{t('common.cancel')}</button>
+        <button onClick={() => onConfirm(title)} className="btn-primary flex-1">{t('inspections.raiseModal.raiseAction')}</button>
       </div>
     </Modal>
   )

@@ -149,6 +149,7 @@
     "severity": "Severity",
     "tyreSerial": "Tyre Serial",
     "serialPlaceholder": "Serial number",
+    "pressurePlaceholder": "Pressure (PSI)",
     "vehicleType": "Vehicle Type",
     "selectVehicleType": "- select to show tyre diagram -",
     "clickTyre": "Click a tyre to set its condition.",

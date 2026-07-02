@@ -149,6 +149,7 @@
     "severity": "الخطورة",
     "tyreSerial": "الرقم التسلسلي للإطار",
     "serialPlaceholder": "الرقم التسلسلي",
+    "pressurePlaceholder": "الضغط (PSI)",
     "vehicleType": "نوع المركبة",
     "selectVehicleType": "- اختر لعرض مخطط الإطارات -",
     "clickTyre": "انقر على إطار لتحديد حالته.",

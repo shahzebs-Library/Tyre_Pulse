@@ -48,12 +48,12 @@ function applyDatePreset(days) {
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
 }
 
-function fmtCpk(v, currency = 'SAR') {
+function fmtCpk(v, currency) {
   if (v == null || !isFinite(v) || v <= 0) return 'N/A'
   return `${currency} ${v.toFixed(4)}`
 }
 
-function fmtCurrency(v, currency = 'SAR') {
+function fmtCurrency(v, currency) {
   if (v == null || !isFinite(v)) return `${currency} 0`
   return `${currency} ${Math.round(v).toLocaleString()}`
 }

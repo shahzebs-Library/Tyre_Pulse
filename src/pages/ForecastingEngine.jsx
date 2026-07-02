@@ -118,7 +118,7 @@ function fmtNum(n, decimals = 0) {
   })
 }
 
-function fmtCurrency(n, currency = 'SAR', compact = false) {
+function fmtCurrency(n, currency, compact = false) {
   if (n == null || isNaN(n)) return '—'
   if (compact && Math.abs(n) >= 1_000_000)
     return `${currency} ${(n / 1_000_000).toFixed(1)}M`

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
+import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { AXLE_GROUPS, GROUP_ICONS, normalizePosition } from '../lib/tyrePositions'
 import PageHeader from '../components/ui/PageHeader'
@@ -80,7 +81,7 @@ function fmtNum(n, decimals = 1) {
 
 function fmtCurrency(n, currency) {
   if (n == null || !Number.isFinite(n)) return 'N/A'
-  return `${currency} ${n.toLocaleString('en', { maximumFractionDigits: 0 })}`
+  return _fmtCurrencyBase(n, currency, 0)
 }
 
 function statusBadge(failureRate) {

@@ -17,6 +17,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
+import { formatDate, formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -67,7 +68,7 @@ function fmt(n, dec = 0) {
   return n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
 
-function fmtCur(n, currency = 'SAR') {
+function fmtCur(n, currency) {
   if (n == null || !isFinite(n)) return `${currency} 0`
   if (Math.abs(n) >= 1_000_000) return `${currency} ${(n / 1_000_000).toFixed(2)}M`
   if (Math.abs(n) >= 1_000) return `${currency} ${(n / 1_000).toFixed(1)}K`
@@ -352,7 +353,7 @@ export default function FuelEfficiency() {
       const d = new Date()
       d.setMonth(d.getMonth() - i)
       months.push({
-        label: d.toLocaleString('default', { month: 'short', year: '2-digit' }),
+        label: formatMonthYear(d),
         year: d.getFullYear(),
         month: d.getMonth(),
       })
@@ -468,7 +469,7 @@ export default function FuelEfficiency() {
     doc.text('TYREPULSE · Fuel Efficiency Impact Report', 14, 10)
     doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} | Fleet: ${fleetSize} vehicles`, 14, 17)
+    doc.text(`Generated: ${formatDate(new Date())} | Fleet: ${fleetSize} vehicles`, 14, 17)
 
     if (kpis) {
       doc.setTextColor(30, 30, 30)

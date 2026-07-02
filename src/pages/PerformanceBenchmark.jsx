@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import * as analytics from '../lib/api/analyticsReads'
 import { useSettings } from '../contexts/SettingsContext'
+import { formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 import { computeAllKpis, computeCpkByBrand } from '../lib/kpiEngine'
 
@@ -51,7 +52,7 @@ const BENCHMARKS = {
     average: 1.80,
     poor: 2.50,
     description: 'Amount spent per kilometre on tyre costs. Lower is better.',
-    format: (v, cur = 'SAR') => typeof v === 'number' && isFinite(v) ? `${cur} ${v.toFixed(2)}/km` : 'N/A',
+    format: (v, cur) => typeof v === 'number' && isFinite(v) ? `${cur} ${v.toFixed(2)}/km` : 'N/A',
   },
   tyre_life: {
     label: 'Average Tyre Life',
@@ -136,7 +137,7 @@ function DeltaIcon({ better }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function PerformanceBenchmark() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords]      = useState([])
   const [inspections, setInspections] = useState([])
   const [loading, setLoading]      = useState(true)
@@ -222,9 +223,9 @@ export default function PerformanceBenchmark() {
       const delta = b.higherIsBetter
         ? ((value - benchmarkTarget) / Math.max(0.001, benchmarkTarget)) * 100
         : ((benchmarkTarget - value) / Math.max(0.001, benchmarkTarget)) * 100
-      return { key, ...b, value, rating, better, delta }
+      return { key, ...b, format: (v) => b.format(v, activeCurrency), value, rating, better, delta }
     })
-  }, [fleetKpis])
+  }, [fleetKpis, activeCurrency])
 
   // Overall score (weighted average of benchmark scores)
   const overallScore = useMemo(() => {
@@ -340,7 +341,7 @@ export default function PerformanceBenchmark() {
     doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('TyrePulse', 14, 13)
     doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.text('Fleet Performance Benchmarking Report', 14, 22)
     doc.setFontSize(8); doc.setTextColor(156, 163, 175)
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}`, 14, 29)
+    doc.text(`Generated: ${formatDate(new Date())}`, 14, 29)
     doc.text(`Overall Score: ${overallScore.toFixed(0)}/100`, 200, 29)
 
     autoTable(doc, {
@@ -599,7 +600,7 @@ export default function PerformanceBenchmark() {
                           <td className="px-4 py-2.5 text-white font-medium">{b.brand}</td>
                           <td className="px-4 py-2.5 text-gray-400">{b.count}</td>
                           <td className={`px-4 py-2.5 font-medium ${b.rating.color}`}>
-                            {BENCHMARKS.cpk.format(b.avgCpk)}
+                            {BENCHMARKS.cpk.format(b.avgCpk, activeCurrency)}
                           </td>
                           <td className="px-4 py-2.5">
                             <span className={`text-xs font-medium ${b.rating.color}`}>{b.rating.rating}</span>

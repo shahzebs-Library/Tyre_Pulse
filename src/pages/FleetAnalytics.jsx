@@ -316,7 +316,7 @@ export default function FleetAnalytics() {
   )
 }
 
-function AssetDrillDown({ asset, currency = 'SAR' }) {
+function AssetDrillDown({ asset, currency }) {
   const monthly = useMemo(() =>
     bucketByMonth(asset.records, r => r.issue_date, r => recordCost(r)),
     [asset]

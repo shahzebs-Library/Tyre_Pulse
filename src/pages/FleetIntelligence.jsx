@@ -27,6 +27,7 @@ import {
 } from '../lib/kpiEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { useSettings } from '../contexts/SettingsContext'
+import { formatDate, formatMonthYear } from '../lib/formatters'
 
 // ── Chart.js global registration ─────────────────────────────────────────────
 ChartJS.register(
@@ -65,7 +66,7 @@ function fmt(n, dec = 0) {
   })
 }
 
-function fmtCurrency(n, currency = 'SAR') {
+function fmtCurrency(n, currency) {
   if (n == null || isNaN(n)) return '—'
   if (n >= 1_000_000) return `${currency} ${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${currency} ${(n / 1_000).toFixed(0)}K`
@@ -73,10 +74,7 @@ function fmtCurrency(n, currency = 'SAR') {
 }
 
 function fmtDate(d) {
-  if (!d) return '—'
-  const date = typeof d === 'string' ? new Date(d) : d
-  if (isNaN(date.getTime())) return '—'
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDate(d)
 }
 
 function fmtCpk(n, dec = 4) {
@@ -94,8 +92,7 @@ function monthKey(date) {
 function monthLabel(key) {
   if (!key) return ''
   const [y, m] = key.split('-')
-  const d = new Date(Number(y), Number(m) - 1, 1)
-  return d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+  return formatMonthYear(new Date(Number(y), Number(m) - 1, 1))
 }
 
 function getLast12MonthKeys() {
@@ -681,10 +678,7 @@ export default function FleetIntelligence() {
     const { slope, intercept } = linearRegression(points)
     const forecastCost = Math.max(0, intercept + slope * dataPoints.length)
 
-    const forecastLabel = (() => {
-      const d = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-      return d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
-    })()
+    const forecastLabel = formatMonthYear(new Date(now.getFullYear(), now.getMonth() + 1, 1))
 
     const regressionLine = dataPoints.map((_, i) => Math.max(0, intercept + slope * i))
 

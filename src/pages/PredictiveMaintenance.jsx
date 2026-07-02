@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
+import { formatDate, formatMonthYear } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
   Chart as ChartJS,
@@ -54,7 +55,7 @@ function monthKey(date) {
 }
 
 function monthLabel(date) {
-  return date.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+  return formatMonthYear(date)
 }
 
 function daysBetween(a, b) {
@@ -69,14 +70,13 @@ function fmt(n, dec = 0) {
   })
 }
 
-function fmtCurrency(n, currency = 'SAR') {
+function fmtCurrency(n, currency) {
   if (n == null || isNaN(n)) return '—'
   return `${currency} ${fmt(n, 0)}`
 }
 
 function fmtDate(date) {
-  if (!date) return '—'
-  return new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDate(date)
 }
 
 function urgencyFromTreadAndDays(treadDepth, daysAway) {

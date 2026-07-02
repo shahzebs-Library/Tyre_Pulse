@@ -7,6 +7,7 @@ import {
   computeMonthlyKpiActuals, sum,
 } from '../lib/analyticsEngine'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import { Download, FileText, AlertTriangle, ToggleLeft, ToggleRight, Target, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -27,16 +28,17 @@ const DEFAULT_TARGETS = {
 }
 
 const KPI_LABELS = {
-  max_monthly_cost:   { label: 'Max Monthly Cost (SAR)', unit: 'SAR', invert: true },
-  max_high_risk_pct:  { label: 'Max High-Risk %',        unit: '%',   invert: true },
-  min_records_month:  { label: 'Min Records / Month',    unit: '',    invert: false },
-  max_overdue_actions:{ label: 'Max Overdue Actions',    unit: '',    invert: true },
-  max_avg_cost_tyre:  { label: 'Max Avg Cost / Tyre',   unit: 'SAR', invert: true },
+  max_monthly_cost:   { label: 'Max Monthly Cost',       unit: 'currency', invert: true },
+  max_high_risk_pct:  { label: 'Max High-Risk %',        unit: '%',        invert: true },
+  min_records_month:  { label: 'Min Records / Month',    unit: '',         invert: false },
+  max_overdue_actions:{ label: 'Max Overdue Actions',    unit: '',         invert: true },
+  max_avg_cost_tyre:  { label: 'Max Avg Cost / Tyre',   unit: 'currency',  invert: true },
 }
 
 export default function KpiScorecard() {
   const { profile } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
+  const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency, 0)
   const [records, setRecords]         = useState([])
   const [actions, setActions]         = useState([])
   const [targets, setTargets]         = useState(DEFAULT_TARGETS)
@@ -259,7 +261,7 @@ export default function KpiScorecard() {
         alerts.push({ key, label, overage, actual, target, fmt })
       }
     }
-    const fmtCost  = v => `${activeCurrency} ${v.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`
+    const fmtCost  = fmtCurrency
     const fmtPct   = v => `${v.toFixed(1)}%`
     const fmtNum   = v => v.toString()
 
@@ -460,7 +462,7 @@ export default function KpiScorecard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {Object.entries(KPI_LABELS).map(([key, { label, unit }]) => (
               <div key={key}>
-                <label className="label text-xs">{label} {unit && `(${unit})`}</label>
+                <label className="label text-xs">{label} {unit && `(${unit === 'currency' ? activeCurrency : unit})`}</label>
                 <input
                   type="number"
                   className="input"
@@ -483,11 +485,11 @@ export default function KpiScorecard() {
                 label="Monthly Cost"
                 actual={currentMonth.totalCost}
                 target={targets.max_monthly_cost}
-                format={v => `${activeCurrency} ${v.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`}
+                format={fmtCurrency}
                 invert higherIsBad
                 prev={prevMonth?.totalCost}
                 yoyValue={showYoY ? yoyActualsMap[currentMonthStr]?.totalCost : undefined}
-                yoyFormat={v => `${activeCurrency} ${v.toLocaleString('en-SA', { maximumFractionDigits: 0 })}`}
+                yoyFormat={fmtCurrency}
               />
               <KpiCard
                 label="High Risk %"
@@ -523,19 +525,19 @@ export default function KpiScorecard() {
                 label="Avg Cost / Tyre"
                 actual={currentMonth.count ? Math.round(currentMonth.totalCost / currentMonth.count) : 0}
                 target={targets.max_avg_cost_tyre}
-                format={v => `${activeCurrency} ${v.toLocaleString()}`}
+                format={fmtCurrency}
                 invert higherIsBad
                 prev={prevMonth && prevMonth.count ? Math.round(prevMonth.totalCost / prevMonth.count) : undefined}
                 yoyValue={showYoY && yoyActualsMap[currentMonthStr]?.count
                   ? Math.round(yoyActualsMap[currentMonthStr].totalCost / yoyActualsMap[currentMonthStr].count)
                   : undefined}
-                yoyFormat={v => `${activeCurrency} ${v.toLocaleString()}`}
+                yoyFormat={fmtCurrency}
               />
               {costTrend.reg && (
                 <div className="card">
                   <p className="text-xs text-gray-400 mb-1">Forecast (next month)</p>
                   <p className="text-xl font-bold text-yellow-400">
-                    {activeCurrency} {Math.max(0, Math.round(costTrend.reg.predict(months.length))).toLocaleString()}
+                    {fmtCurrency(Math.max(0, Math.round(costTrend.reg.predict(months.length))))}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     R² = {costTrend.reg.r2.toFixed(2)} · slope {costTrend.reg.slope > 0 ? '+' : ''}{Math.round(costTrend.reg.slope).toLocaleString()}/mo
@@ -589,7 +591,7 @@ export default function KpiScorecard() {
                       <td className="py-2 pr-4 text-gray-300 text-right">{a.count}</td>
                       <td className="py-2 pr-4 text-right">
                         <span className={overBudget ? 'text-red-400 font-medium' : 'text-gray-300'}>
-                          {activeCurrency} {a.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
+                          {fmtCurrency(a.totalCost)}
                         </span>
                       </td>
                       {showYoY && (
@@ -597,7 +599,7 @@ export default function KpiScorecard() {
                           {lyData
                             ? (
                               <span className="text-gray-500 text-xs">
-                                {activeCurrency} {lyData.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
+                                {fmtCurrency(lyData.totalCost)}
                                 {lyData.totalCost > 0 && a.totalCost > 0 && (
                                   <span className={`ml-1 ${a.totalCost > lyData.totalCost ? 'text-red-400' : 'text-green-400'}`}>
                                     {a.totalCost > lyData.totalCost ? '▲' : '▼'}
@@ -614,7 +616,7 @@ export default function KpiScorecard() {
                         {a.count === 0
                           ? <span className="text-gray-600">—</span>
                           : <span className={`text-xs px-2 py-0.5 rounded-full ${overBudget ? 'bg-red-900/40 text-red-400' : 'bg-green-900/40 text-green-400'}`}>
-                              {overBudget ? `+${activeCurrency} ${(a.totalCost - targets.max_monthly_cost).toLocaleString('en-SA', { maximumFractionDigits: 0 })}` : 'On target'}
+                              {overBudget ? `+${fmtCurrency(a.totalCost - targets.max_monthly_cost)}` : 'On target'}
                             </span>
                         }
                       </td>
@@ -678,7 +680,7 @@ export default function KpiScorecard() {
                       <td className="py-2.5 pr-4 text-gray-200 font-medium">{s.site}</td>
                       <td className="py-2.5 pr-4 text-right">
                         <span className={`text-xs px-2 py-1 rounded ${cellCls(costFail)}`}>
-                          {activeCurrency} {s.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
+                          {fmtCurrency(s.totalCost)}
                         </span>
                       </td>
                       <td className="py-2.5 pr-4 text-right">
@@ -699,7 +701,7 @@ export default function KpiScorecard() {
                       <td className="py-2.5 text-right">
                         <span className={`text-xs px-2 py-1 rounded ${s.count > 0 ? cellCls(avgFail) : 'text-gray-500'}`}>
                           {s.count > 0
-                            ? `${activeCurrency} ${Math.round(s.avgCostPerTyre).toLocaleString()}`
+                            ? fmtCurrency(Math.round(s.avgCostPerTyre))
                             : '—'
                           }
                         </span>
@@ -712,7 +714,7 @@ export default function KpiScorecard() {
                 <tr className="border-t border-gray-700 text-gray-400 text-xs">
                   <td className="pt-2 pr-4 font-medium">Total</td>
                   <td className="pt-2 pr-4 text-right font-medium text-gray-300">
-                    {activeCurrency} {siteBreakdown.reduce((s, r) => s + r.totalCost, 0).toLocaleString('en-SA', { maximumFractionDigits: 0 })}
+                    {fmtCurrency(siteBreakdown.reduce((s, r) => s + r.totalCost, 0))}
                   </td>
                   <td className="pt-2 pr-4 text-right">—</td>
                   <td className="pt-2 pr-4 text-right font-medium text-gray-300">

@@ -30,6 +30,7 @@ import {
 } from '../lib/kpiEngine'
 import { useSettings } from '../contexts/SettingsContext'
 import { applyCountry } from '../lib/countryFilter'
+import { formatDate } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import { recordCost } from '../lib/analyticsEngine'
 import PageHeader from '../components/ui/PageHeader'
@@ -192,7 +193,7 @@ function computeRootCauses(records) {
 }
 
 // ── Number formatters ────────────────────────────────────────────────────────
-function fmtCurrency(n, currency = 'SAR') {
+function fmtCurrency(n, currency) {
   if (!isFinite(n) || n === 0) return `${currency} 0`
   return `${currency} ${Math.round(n).toLocaleString()}`
 }
@@ -201,7 +202,7 @@ function fmtNum(n, decimals = 0) {
   return n.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 function fmtPct(n) { return `${fmtNum(n, 1)}%` }
-function fmtCpk(n, currency = 'SAR') {
+function fmtCpk(n, currency) {
   if (!isFinite(n) || n === 0) return `${currency} 0.00`
   return `${currency} ${n.toFixed(4)}`
 }
@@ -270,7 +271,7 @@ function SectionHeader({ icon: Icon, title, subtitle, badge }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ExecutiveReport() {
   const { appSettings, activeCurrency, activeCountry } = useSettings()
-  const currency = activeCurrency || 'SAR'
+  const currency = activeCurrency
   const companyName = appSettings?.company_name || 'TyrePulse Fleet'
 
   const [records,     setRecords]     = useState([])
@@ -765,7 +766,7 @@ export default function ExecutiveReport() {
       doc.setTextColor(167, 243, 208)
       doc.text(companyName, pw / 2, 115, { align: 'center' })
       doc.text(`Report Period: ${periodLabel}`, pw / 2, 125, { align: 'center' })
-      doc.text(`Generated: ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}`, pw / 2, 135, { align: 'center' })
+      doc.text(`Generated: ${formatDate(new Date(), 'All', { day: '2-digit', month: 'long', year: 'numeric' })}`, pw / 2, 135, { align: 'center' })
       doc.setFontSize(10)
       doc.setTextColor(110, 231, 183)
       doc.text('CONFIDENTIAL — FOR MANAGEMENT USE ONLY', pw / 2, 160, { align: 'center' })
@@ -942,7 +943,7 @@ export default function ExecutiveReport() {
     doc.setFont('helvetica', 'bold')
     doc.text(`${companyName} — Action Plan`, 14, 13)
     doc.setFontSize(9)
-    doc.text(`Generated ${new Date().toLocaleDateString('en-GB')} · Period: ${PERIODS.find(p => p.key === period)?.label}`, pw - 14, 13, { align: 'right' })
+    doc.text(`Generated ${formatDate(new Date())} · Period: ${PERIODS.find(p => p.key === period)?.label}`, pw - 14, 13, { align: 'right' })
 
     autoTable(doc, {
       startY: 26,
@@ -1107,7 +1108,7 @@ export default function ExecutiveReport() {
         <div className="max-w-screen-2xl mx-auto px-4 py-3">
           <PageHeader
             title="Executive Intelligence Report"
-            subtitle={`${companyName} · Generated ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}`}
+            subtitle={`${companyName} · Generated ${formatDate(new Date(), 'All', { day: '2-digit', month: 'long', year: 'numeric' })}`}
             icon={FileText}
             actions={<>
               <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1">
@@ -1805,7 +1806,7 @@ export default function ExecutiveReport() {
                 4 stakeholder groups engaged
               </span>
               <span className="ml-auto text-gray-700">
-                Report generated {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
+                Report generated {formatDate(new Date(), 'All', { day: '2-digit', month: 'long', year: 'numeric' })}
               </span>
             </div>
           </Card>

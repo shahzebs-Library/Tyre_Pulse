@@ -160,9 +160,9 @@ function HeadlineCard({ title, value, sub, status }) {
 }
 
 // ── Helpers for N/A display ───────────────────────────────────────────────────
-function fmtCpk(v, validCount) {
+function fmtCpk(v, validCount, currency) {
   if (!validCount || v === 0) return 'N/A (no km data)'
-  return `SAR ${v.toFixed(4)}/km`
+  return `${currency} ${v.toFixed(4)}/km`
 }
 
 function fmtKm(v, validCount) {
@@ -326,7 +326,7 @@ export default function EngineeringKpi() {
 
     const datasets = [
       {
-        label: 'Actual Cost (SAR)',
+        label: `Actual Cost (${activeCurrency})`,
         data: actuals,
         borderColor: 'rgba(59,130,246,1)',
         backgroundColor: 'rgba(59,130,246,0.08)',
@@ -485,7 +485,7 @@ export default function EngineeringKpi() {
       workshopPerformance,
     } = kpis
 
-    const currency = activeCurrency || 'SAR'
+    const currency = activeCurrency
 
     // KPI 1: CPK Fleet Avg
     const cpkStatus = cpk.validCount === 0 ? 'neutral'
@@ -1232,7 +1232,7 @@ export default function EngineeringKpi() {
 }
 
 // ── Export helper: build flat KPI summary rows ────────────────────────────────
-function buildKpiSummaryRows(kpis, currency = 'SAR') {
+function buildKpiSummaryRows(kpis, currency) {
   if (!kpis) return []
   const { cpk, avgTyreLife, removalRate, failureRate, replacementRate,
           pressureCompliance, inspectionCompliance, retreadPerformance,

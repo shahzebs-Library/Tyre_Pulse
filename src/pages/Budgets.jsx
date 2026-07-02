@@ -45,7 +45,7 @@ function KpiSkeletons() {
 
 export default function Budgets() {
   const { profile }   = useAuth()
-  const { appSettings, activeCountry } = useSettings()
+  const { activeCountry, activeCurrency } = useSettings()
   const [budgets, setBudgets]     = useState([])
   const [spending, setSpending]   = useState({})
   const [loading, setLoading]     = useState(true)
@@ -213,8 +213,8 @@ export default function Budgets() {
     if (viewMode === 'month') {
       const rows = budgets.map(b => ({
         Site:           b.site,
-        'Budget (SAR)': b.monthly_budget,
-        'Spent (SAR)':  getSpend(b.site, filterMonth),
+        [`Budget (${activeCurrency})`]: b.monthly_budget,
+        [`Spent (${activeCurrency})`]:  getSpend(b.site, filterMonth),
         Remaining:      b.monthly_budget - getSpend(b.site, filterMonth),
         'Util %':       b.monthly_budget > 0
           ? ((getSpend(b.site, filterMonth) / b.monthly_budget) * 100).toFixed(1) + '%' : '0%',
@@ -248,7 +248,7 @@ export default function Budgets() {
       `budget-${filterYear}-${filterMonth}`,
       'portrait',
       '',
-      { currency: appSettings?.currency || 'SAR' },
+      { currency: activeCurrency },
     )
   }
 
@@ -301,18 +301,18 @@ export default function Budgets() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="card">
                 <p className="text-gray-400 text-sm">Total Budget</p>
-                <p className="text-2xl font-bold text-white mt-1">{formatCurrencyCompact(totalBudget)}</p>
+                <p className="text-2xl font-bold text-white mt-1">{formatCurrencyCompact(totalBudget, activeCurrency)}</p>
               </div>
               <div className="card">
                 <p className="text-gray-400 text-sm">Total Spent</p>
                 <p className={`text-2xl font-bold mt-1 ${totalSpend > totalBudget ? 'text-red-400' : 'text-green-400'}`}>
-                  {formatCurrencyCompact(totalSpend)}
+                  {formatCurrencyCompact(totalSpend, activeCurrency)}
                 </p>
               </div>
               <div className="card">
                 <p className="text-gray-400 text-sm">Remaining</p>
                 <p className={`text-2xl font-bold mt-1 ${totalBudget - totalSpend < 0 ? 'text-red-400' : 'text-blue-400'}`}>
-                  {formatCurrencyCompact(totalBudget - totalSpend)}
+                  {formatCurrencyCompact(totalBudget - totalSpend, activeCurrency)}
                 </p>
               </div>
               <div className="card">
@@ -327,7 +327,7 @@ export default function Budgets() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    {['Site', 'Budget (SAR)', 'Spent (SAR)', 'Remaining', 'Progress', 'Status'].map(h => (
+                    {['Site', `Budget (${activeCurrency})`, `Spent (${activeCurrency})`, 'Remaining', 'Progress', 'Status'].map(h => (
                       <th key={h} className="table-header">{h}</th>
                     ))}
                   </tr>
@@ -482,7 +482,7 @@ export default function Budgets() {
                                 {spent > 0 && (
                                   <div
                                     className={`text-[9px] mt-0.5 ${overBudget ? 'text-red-400' : 'text-green-400'}`}
-                                    title={`Actual: ${formatCurrencyCompact(spent)}`}
+                                    title={`Actual: ${formatCurrencyCompact(spent, activeCurrency)}`}
                                   >
                                     ≈{Math.round(spent / 1000)}k
                                   </div>
@@ -492,7 +492,7 @@ export default function Budgets() {
                           )
                         })}
                         <td className="py-1.5 px-2 text-right text-gray-300 font-medium">
-                          {siteTotal > 0 ? formatCurrencyCompact(siteTotal) : '—'}
+                          {siteTotal > 0 ? formatCurrencyCompact(siteTotal, activeCurrency) : '—'}
                         </td>
                       </tr>
                     )
@@ -529,7 +529,7 @@ export default function Budgets() {
                   </select>
                 </div>
               </div>
-              <div><label className="label">Monthly Budget (SAR)</label><input type="number" className="input" value={form.monthly_budget} onChange={e => setForm(f => ({ ...f, monthly_budget: +e.target.value }))} min={0} step={500} required /></div>
+              <div><label className="label">Monthly Budget ({activeCurrency})</label><input type="number" className="input" value={form.monthly_budget} onChange={e => setForm(f => ({ ...f, monthly_budget: +e.target.value }))} min={0} step={500} required /></div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
                   <Save size={16} /> {saving ? 'Saving…' : 'Save'}

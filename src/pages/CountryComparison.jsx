@@ -14,7 +14,6 @@ import { formatCurrencyCompact } from '../lib/formatters'
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
 const COLOR_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#f97316']
-const COUNTRY_CURRENCY_MAP = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
 
 const BAR_OPTS = {
   responsive: true, maintainAspectRatio: false,
@@ -37,8 +36,8 @@ function fmtCost(n, currency) {
 // lowerIsBetter: true = green for minimum value, red for maximum
 const KPI_ROWS = [
   { key: 'count',          label: 'Fleet Records',   fmt: (v)     => v.toLocaleString(),                              icon: Truck,         lowerIsBetter: false },
-  { key: 'totalCost',      label: 'Total Cost',      fmt: (v, c)  => fmtCost(v, COUNTRY_CURRENCY_MAP[c] || 'SAR'),   icon: DollarSign,    lowerIsBetter: true  },
-  { key: 'avgCostPerTyre', label: 'Avg Cost / Tyre', fmt: (v, c)  => fmtCost(v, COUNTRY_CURRENCY_MAP[c] || 'SAR'),   icon: DollarSign,    lowerIsBetter: true  },
+  { key: 'totalCost',      label: 'Total Cost',      fmt: (v, c)  => fmtCost(v, COUNTRY_CURRENCY[c] || 'SAR'),   icon: DollarSign,    lowerIsBetter: true  },
+  { key: 'avgCostPerTyre', label: 'Avg Cost / Tyre', fmt: (v, c)  => fmtCost(v, COUNTRY_CURRENCY[c] || 'SAR'),   icon: DollarSign,    lowerIsBetter: true  },
   { key: 'avgCpk',         label: 'Avg CPK',         fmt: (v)     => cpk(v),                                         icon: Activity,      lowerIsBetter: true  },
   { key: 'highRiskPct',    label: 'High Risk %',     fmt: (v)     => pct(v),                                         icon: AlertTriangle, lowerIsBetter: true  },
   { key: 'openActions',    label: 'Open Actions',    fmt: (v)     => v.toLocaleString(),                              icon: TrendingUp,    lowerIsBetter: true  },
@@ -364,7 +363,7 @@ export default function CountryComparison() {
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4">
         {metrics.map(m => {
-          const currency = COUNTRY_CURRENCY_MAP[m.country] || 'SAR'
+          const currency = COUNTRY_CURRENCY[m.country] || 'SAR'
           const color    = countryColorMap[m.country] ?? '#6b7280'
           return (
             <div key={m.country} className="card" style={{ borderTop: `2px solid ${color}` }}>

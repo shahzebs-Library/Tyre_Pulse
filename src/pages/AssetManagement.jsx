@@ -19,6 +19,7 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatCurrencyCompact, formatDate, formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -85,18 +86,9 @@ function fmt(n, dec = 0) {
   if (n == null || isNaN(n)) return '—'
   return Number(n).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
-function fmtCurrency(n, cur = 'SAR') {
-  if (n == null || isNaN(n)) return '—'
-  if (n >= 1_000_000) return `${cur} ${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${cur} ${(n / 1_000).toFixed(0)}K`
-  return `${cur} ${fmt(n, 0)}`
-}
-function fmtDate(d) {
-  if (!d) return '—'
-  const dt = new Date(d)
-  if (isNaN(dt)) return '—'
-  return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-}
+// Shared formatters; currency is always supplied from activeCurrency at call sites.
+const fmtCurrency = (n, cur) => formatCurrencyCompact(n, cur)
+const fmtDate = (d) => formatDate(d)
 function daysSince(d) {
   if (!d) return null
   const ms = Date.now() - new Date(d).getTime()
@@ -177,7 +169,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
     const costs = []
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      labels.push(d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }))
+      labels.push(formatMonthYear(d))
       const mo = d.getMonth()
       const yr = d.getFullYear()
       const sum = tyres.filter(t => {

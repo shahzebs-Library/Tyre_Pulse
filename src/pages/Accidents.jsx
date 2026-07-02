@@ -8,6 +8,7 @@ import * as accidentsApi from '../lib/api/accidents'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear } from '../lib/formatters'
 import { resolveStorageUrl } from '../lib/storageRefs'
 import { Bar } from 'react-chartjs-2'
 import {
@@ -133,11 +134,6 @@ const CHART_OPTS_STACKED = {
   },
 }
 
-function _fmtCurrencyBase(val, currency = 'SAR') {
-  if (!val && val !== 0) return '-'
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(val)
-}
-
 function monthKey(dateStr) {
   if (!dateStr) return null
   const d = new Date(dateStr)
@@ -158,13 +154,13 @@ function last12MonthKeys() {
 function monthLabel(key) {
   const [year, month] = key.split('-')
   const d = new Date(Number(year), Number(month) - 1, 1)
-  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+  return formatMonthYear(d)
 }
 
 export default function Accidents() {
   const { profile } = useAuth()
   const { activeCountry, activeCurrency, appSettings } = useSettings()
-  const fmtCurrency = (val) => _fmtCurrencyBase(val, activeCurrency)
+  const fmtCurrency = (val) => _fmtCurrencyBase(val, activeCurrency, 0)
   const navigate = useNavigate()
 
   const [tab, setTab]                  = useState('incidents')
@@ -945,7 +941,7 @@ export default function Accidents() {
                   {filtered.map(row => (
                     <tr key={row.id} className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors">
                       <td className="table-cell whitespace-nowrap">
-                        {row.incident_date ? new Date(row.incident_date).toLocaleDateString() : '-'}
+                        {row.incident_date ? formatDate(row.incident_date, activeCountry) : '-'}
                       </td>
                       <td className="table-cell font-medium text-white">{row.asset_no || '-'}</td>
                       <td className="table-cell">{row.site || '-'}</td>

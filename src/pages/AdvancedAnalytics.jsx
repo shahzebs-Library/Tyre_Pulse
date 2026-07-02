@@ -21,6 +21,7 @@ import {
   computeAssetMetrics, computeSeasonalTrends, recordCost, recordCpk,
 } from '../lib/analyticsEngine'
 import { fetchAllPages } from '../lib/fetchAll'
+import { formatCurrencyCompact } from '../lib/formatters'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -97,11 +98,10 @@ function fmt(n, digits = 0) {
   return Number(n).toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits })
 }
 
-function fmtCur(n, currency = 'SAR') {
+// Delegates to the shared formatter; currency always supplied from activeCurrency.
+function fmtCur(n, currency) {
   if (n == null || isNaN(n)) return '—'
-  if (Math.abs(n) >= 1_000_000) return `${currency} ${(n / 1_000_000).toFixed(2)}M`
-  if (Math.abs(n) >= 1_000)     return `${currency} ${(n / 1_000).toFixed(1)}K`
-  return `${currency} ${Number(n).toFixed(0)}`
+  return formatCurrencyCompact(n, currency)
 }
 
 function fmtPct(n) {
@@ -109,7 +109,7 @@ function fmtPct(n) {
   return `${Number(n).toFixed(1)}%`
 }
 
-function fmtCpk(n, currency = 'SAR') {
+function fmtCpk(n, currency) {
   if (n == null || isNaN(n)) return '—'
   return `${currency} ${Number(n).toFixed(4)}/km`
 }

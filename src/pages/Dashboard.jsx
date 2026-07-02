@@ -7,6 +7,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { applyCountry } from '../lib/countryFilter'
 import StatCard from '../components/StatCard'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
+import { formatDate } from '../lib/formatters'
 import {
   recordCost, computeFleetHealthScore, computeSeasonalTrends, computeTyreLifeAnalysis,
 } from '../lib/analyticsEngine'
@@ -415,7 +416,7 @@ export default function Dashboard() {
   function handlePdfExport() {
     exportToPdf(tyres.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre||0 })),
       [{ key:'issue_date',header:'Date',width:24 },{ key:'asset_no',header:'Asset No',width:28 },{ key:'brand',header:'Brand',width:24 },{ key:'site',header:'Site',width:30 },{ key:'category',header:'Category',width:32 },{ key:'risk_level',header:'Risk',width:20 },{ key:'cost_per_tyre',header:`Cost (${activeCurrency})`,width:24 }],
-      `TyrePulse Dashboard Report · ${new Date().toLocaleDateString()}`,
+      `TyrePulse Dashboard Report · ${formatDate(new Date(), activeCountry)}`,
       `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'landscape')
   }
   async function handlePptxExport() {
@@ -426,7 +427,7 @@ export default function Dashboard() {
     ])
     const s = sum || {}
     const actions = actionRes.data ?? []
-    const cur = appSettings.currency || 'SAR'
+    const cur = activeCurrency
     const totalCost = Number(s.total_cost) || 0
     const highRisk  = Number(s.high_risk) || 0
     const critical  = Number(s.critical) || 0
@@ -497,10 +498,10 @@ export default function Dashboard() {
     const monthCost     = Number(sMonth?.total_cost) || 0
 
     exportDailyExecutivePdf({
-      date: now.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}),
+      date: formatDate(now, activeCountry, { day: '2-digit', month: 'long', year: 'numeric' }),
       company: appSettings.company_name || 'TyrePulse Fleet',
       reportPeriod: 'Daily',
-      currency: appSettings.currency || 'SAR',
+      currency: activeCurrency,
       generatedBy: profile?.full_name || profile?.username || 'Fleet Manager',
       site: activeCountry !== 'All' ? activeCountry : 'All Sites',
       totalVehicles: Number(s.distinct_assets) || 0,
@@ -525,7 +526,7 @@ export default function Dashboard() {
         `Fleet recorded ${totalTyres.toLocaleString()} tyre records with ${criticalTyres} critical cases.`,
         goodTyres > 0 && totalTyres > 0 ? `${Math.round((goodTyres/totalTyres)*100)}% of tyres are within safe operating parameters.` : 'Tyre risk distribution requires management review.',
         actions.length > 0 ? `${actions.length} corrective actions are pending resolution — prioritize ${actions.filter(a=>a.priority==='Critical'||a.priority==='High').length} high priority items.` : 'No open corrective actions.',
-        monthCost > 0 ? `Monthly tyre spend of ${(appSettings.currency||'SAR')} ${Math.round(monthCost).toLocaleString()} recorded this month.` : 'No tyre cost records for this month.',
+        monthCost > 0 ? `Monthly tyre spend of ${activeCurrency} ${Math.round(monthCost).toLocaleString()} recorded this month.` : 'No tyre cost records for this month.',
       ].filter(Boolean),
       recommendations: [
         criticalTyres > 0 ? { priority:'Critical', text:`${criticalTyres} tyres in critical condition — schedule immediate replacement before next vehicle deployment.` } : null,
@@ -589,7 +590,7 @@ export default function Dashboard() {
             </h1>
             <p className="text-gray-500 text-sm mt-1.5">
               Fleet Intelligence Dashboard ·&nbsp;
-              <span className="text-gray-400">{new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' })}</span>
+              <span className="text-gray-400">{formatDate(new Date(), activeCountry, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
             </p>
 
             {/* Risk trend callout */}

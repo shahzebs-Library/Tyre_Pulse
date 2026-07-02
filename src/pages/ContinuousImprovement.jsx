@@ -75,7 +75,7 @@ function fmt(n, decimals = 0) {
   return Number(n).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 }
 
-function fmtCur(n, currency = 'SAR', decimals = 0) {
+function fmtCur(n, currency, decimals = 0) {
   if (n == null || isNaN(n)) return '—'
   return `${currency} ${fmt(n, decimals)}`
 }
@@ -121,6 +121,7 @@ function scoreBg(score) {
 // ── Opportunity row component ─────────────────────────────────────────────────
 
 function OpportunityRow({ opp, onCreateAction, alreadyCreated, creating }) {
+  const { activeCurrency } = useSettings()
   const [expanded, setExpanded] = useState(false)
   const ImpactIcon = opp.saving > 0 ? ArrowDownRight : ArrowUpRight
 
@@ -142,7 +143,7 @@ function OpportunityRow({ opp, onCreateAction, alreadyCreated, creating }) {
         {opp.saving > 0 && (
           <span className="flex items-center gap-1 text-xs text-green-400 font-medium">
             <ImpactIcon size={12} />
-            Est. {fmtCur(opp.saving, opp.currency ?? 'SAR')} / yr
+            Est. {fmtCur(opp.saving, opp.currency ?? activeCurrency)} / yr
           </span>
         )}
         {opp.impactPct > 0 && (

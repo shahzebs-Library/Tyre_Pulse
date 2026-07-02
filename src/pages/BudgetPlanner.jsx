@@ -11,6 +11,7 @@ import {
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
 import { fetchAllPages } from '../lib/fetchAll'
+import { formatDate } from '../lib/formatters'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, CheckCircle,
   ChevronDown, ChevronUp, Download, RefreshCw, Loader2, FileSpreadsheet,
@@ -66,7 +67,7 @@ const CHART_BASE = {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmt = (v, cur = 'SAR') => {
+const fmt = (v, cur) => {
   if (v == null || !isFinite(v)) return `${cur} 0`
   const abs = Math.abs(v)
   const sign = v < 0 ? '-' : ''
@@ -598,7 +599,7 @@ export default function BudgetPlanner() {
         doc.text(title, 14, 17)
         doc.setTextColor(150, 150, 150)
         doc.setFontSize(8)
-        doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} | Year: ${selectedYear}`, W - 14, 17, { align: 'right' })
+        doc.text(`Generated: ${formatDate(new Date(), activeCountry)} | Year: ${selectedYear}`, W - 14, 17, { align: 'right' })
       }
 
       const addFooter = (pageNum) => {

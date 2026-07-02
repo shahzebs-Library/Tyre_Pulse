@@ -449,7 +449,7 @@ export default function Analytics() {
 }
 
 // ── Tab: Cost by Site ─────────────────────────────────────────────────────────
-function CostBySite({ siteMetrics, currency = 'SAR', onMaximize, chartRef }) {
+function CostBySite({ siteMetrics, currency, onMaximize, chartRef }) {
   const top = siteMetrics.slice(0, 15)
   const chartData = {
     labels: top.map(s => s.site),
@@ -507,7 +507,7 @@ function CostBySite({ siteMetrics, currency = 'SAR', onMaximize, chartRef }) {
 }
 
 // ── Tab: Cost by Brand ────────────────────────────────────────────────────────
-function CostByBrand({ brandMetrics, currency = 'SAR', onMaximize, chartRef }) {
+function CostByBrand({ brandMetrics, currency, onMaximize, chartRef }) {
   const top = brandMetrics.slice(0, 12)
   const chartData = {
     labels: top.map(b => b.brand),
@@ -565,7 +565,7 @@ function CostByBrand({ brandMetrics, currency = 'SAR', onMaximize, chartRef }) {
 }
 
 // ── Tab: Monthly Trend ────────────────────────────────────────────────────────
-function MonthlyTrend({ trendData, currency = 'SAR', onMaximize, chartRef }) {
+function MonthlyTrend({ trendData, currency, onMaximize, chartRef }) {
   const labels  = trendData.map(d => d.month)
   const forecast = trendData.map(d => d.isForecast ? (d.value ?? d.total) : null)
   const predicted = trendData.map(d => d.predicted ?? null)
@@ -623,7 +623,7 @@ function MonthlyTrend({ trendData, currency = 'SAR', onMaximize, chartRef }) {
 }
 
 // ── Tab: Asset Breakdown ──────────────────────────────────────────────────────
-function AssetBreakdown({ assetMetrics, currency = 'SAR', onMaximize, chartRef }) {
+function AssetBreakdown({ assetMetrics, currency, onMaximize, chartRef }) {
   const [search, setSearch] = useState('')
   const visible = assetMetrics
     .filter(a => !search || a.assetNo.toLowerCase().includes(search.toLowerCase()))

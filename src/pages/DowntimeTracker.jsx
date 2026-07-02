@@ -18,6 +18,7 @@ import {
 import StatCard from '../components/StatCard'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { formatDate } from '../lib/formatters'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -199,7 +200,7 @@ export default function DowntimeTracker() {
   const [sortDir, setSortDir]           = useState('desc')
   const [expandedModal, setExpandedModal] = useState(null)
 
-  const sym = activeCurrency || 'SAR'
+  const sym = activeCurrency
 
   // ── Data Load ───────────────────────────────────────────────────────────────
   const load = useCallback(async (isRefresh = false) => {
@@ -653,7 +654,7 @@ export default function DowntimeTracker() {
     doc.text('TYREPULSE · Fleet Downtime & Availability Report', 14, 10)
     doc.setFontSize(9)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} | Period: ${period} | ${usingActual ? 'Actual + Estimated' : 'Estimated'} Data`, 14, 17)
+    doc.text(`Generated: ${formatDate(new Date(), activeCountry)} | Period: ${period} | ${usingActual ? 'Actual + Estimated' : 'Estimated'} Data`, 14, 17)
 
     // KPI summary
     doc.setFontSize(11)

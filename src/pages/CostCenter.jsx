@@ -67,14 +67,14 @@ function calcCpk(cost, kmFit, kmRem) {
   return cost / km
 }
 
-function fmtCurrency(v, currency = 'SAR') {
+function fmtCurrency(v, currency) {
   if (v == null || !isFinite(v)) return `${currency} 0`
   if (Math.abs(v) >= 1_000_000) return `${currency} ${(v / 1_000_000).toFixed(2)}M`
   if (Math.abs(v) >= 1_000) return `${currency} ${(v / 1_000).toFixed(1)}K`
   return `${currency} ${Math.round(v).toLocaleString()}`
 }
 
-function fmtCpk(v, currency = 'SAR') {
+function fmtCpk(v, currency) {
   if (v == null || !isFinite(v)) return 'N/A'
   return `${currency} ${v.toFixed(4)}/km`
 }

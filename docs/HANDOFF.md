@@ -1,6 +1,6 @@
 # TyrePulse - Session Handoff
 
-_Last updated: 2026-07-03 · branch `main` (clean, fully pushed) · migrations V40→V68 live · Master Build Phases A/B/C/D + F(docs) DONE, E deferred (parallel i18n session) · 714 web tests green_
+_Last updated: 2026-07-03 · branch `main` (clean, fully pushed) · migrations V40→V68 live · Master Build Phases A–F ALL DONE · web-i18n merged · 729 web tests green_
 
 ## TL;DR
 The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.js/DB migration on this track). The **Multi-Country Data Intake Center** (+ its 4 follow-on gaps), most of the `Current issues fixing.md` program (Phases 0-3, plus Phase 5 KPI registry + nav regroup), **the P0/P1 fixes from `docs/PROJECT_AUDIT_2026-07.md`** (mobile accident/offline/sync/logout, web error states, security V57-V59), **per-row-resilient import commits (V60)** and **the 5 real company formats** (`docs/imports/` - auto-recognised profiles, cost-of-record rule, line-item aggregation) are built, **tested, and on `main`**. The Go backend and native Android app stay **off `main`** on their own branches (frozen, not abandoned).
@@ -69,11 +69,16 @@ Standards for an enterprise multi-tenant product. Phased plan (see the doc):
   tables / 458 columns, generated from the live schema) added; ARCHITECTURE /
   REPORTING / TESTING have existing equivalents (`ARCHITECTURE_CURRENT_STATE.md`,
   `EXPORT_GUIDE.md`, `TEST_AND_RELEASE_PLAN.md`).
-- **E. Design system** (tokens, tenant theme, light default, a11y, states) —
-  **DEFERRED**: a global CSS/theme refactor would collide with the parallel i18n
-  session actively editing pages/locales. Do this once that session lands.
-  Foundation already in place: TenantContext publishes `--brand-primary` /
-  `--brand-accent` CSS vars for a future token pass.
+- **E. Design system** — **DONE (pushed).** The light/dark token system +
+  ThemeContext + comprehensive `html.light` override layer already existed and is
+  mature; documented in `DESIGN_SYSTEM.md`. Added the **tenant-accent token
+  layer** (`--accent` / `--accent-ring` / `--accent-strong` + `.text-accent`/
+  `.bg-accent`/`.border-accent`/`.ring-accent` utilities); `TenantContext` tints
+  these from the org's V68 branding **only when the org sets a custom colour**
+  (≠ product green), so default orgs are byte-identical to before. The global
+  `:focus-visible` ring now follows the tenant accent. Hand-tuned green component
+  gradients intentionally untouched (brand identity is carried by reports + the
+  accent surfaces); extending accent to more chrome is a future opt-in.
 
 ### 2026-07-02 night - export work + P2 wave (see CHANGELOG_ENGINEERING.md)
 - **Export libs lazy-loaded:** xlsx/jspdf/pptxgenjs are async chunks loading on

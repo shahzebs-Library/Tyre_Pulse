@@ -51,12 +51,32 @@ export function TenantProvider({ children }) {
 
   useEffect(() => { refreshBranding() }, [refreshBranding, profile?.org_id])
 
-  // Publish brand colours as opt-in CSS variables (never overrides global theme).
+  // Publish brand colours + tint the semantic accent tokens. Only genuinely
+  // custom colours (≠ the product green default) override the accent surfaces,
+  // so a default/unbranded org keeps the exact original design. The tuned green
+  // component gradients are never touched.
   useEffect(() => {
-    if (!branding) return
     const root = document.documentElement
-    if (branding.primary_color) root.style.setProperty('--brand-primary', branding.primary_color)
-    if (branding.accent_color)  root.style.setProperty('--brand-accent', branding.accent_color)
+    const DEFAULT_GREEN = '#16a34a'
+    const norm = (c) => (typeof c === 'string' ? c.trim().toLowerCase() : '')
+    const primary = branding?.primary_color
+    const accent  = branding?.accent_color
+
+    if (primary) root.style.setProperty('--brand-primary', primary)
+    if (accent)  root.style.setProperty('--brand-accent', accent)
+
+    // Accent tokens: override only for a real custom brand colour; otherwise
+    // clear any prior override so the CSS green defaults apply (e.g. on logout
+    // or when switching back to a default-branded org).
+    if (primary && norm(primary) !== DEFAULT_GREEN) {
+      root.style.setProperty('--accent', primary)
+      root.style.setProperty('--accent-ring', primary)
+      root.style.setProperty('--accent-strong', accent || primary)
+    } else {
+      root.style.removeProperty('--accent')
+      root.style.removeProperty('--accent-ring')
+      root.style.removeProperty('--accent-strong')
+    }
   }, [branding])
 
   return (

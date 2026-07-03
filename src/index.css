@@ -39,6 +39,15 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
   --brand-subtle:   rgba(22,163,74,0.06);
   --brand-halo:     rgba(74,222,128,0.12);
 
+  /* Tenant accent — semantic token for per-organisation theming (Master Build E).
+     Hard-defaults to the product green (byte-identical to the previous design);
+     TenantContext overrides these ONLY when an org sets a custom brand colour
+     (≠ the default green), tinting the universal accent surfaces (focus rings,
+     the .*-accent utilities) without touching the tuned green component gradients. */
+  --accent:         #16a34a;
+  --accent-strong:  #22c55e;
+  --accent-ring:    rgba(22,163,74,0.6);
+
   /* Surface */
   --bg-base:        #020704;
   --surface-0:      #030906;
@@ -170,7 +179,7 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
 
   /* ─── Focus ring ───────────────────────────────────────────────────────── */
   :focus-visible {
-    outline: 2px solid rgba(22,163,74,0.6);
+    outline: 2px solid var(--accent-ring);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -1060,6 +1069,12 @@ html.light [class*="text-gray-500"] { color: #64748b !important; }
   .text-brand       { color: var(--brand); }
   .text-brand-bright { color: var(--brand-bright); }
   .border-brand     { border-color: var(--brand); }
+
+  /* Tenant-accent utilities (follow the org's branding colour; green by default) */
+  .text-accent      { color: var(--accent); }
+  .bg-accent        { background-color: var(--accent); }
+  .border-accent    { border-color: var(--accent); }
+  .ring-accent      { --tw-ring-color: var(--accent); }
 
   /* Text utilities */
   .text-muted       { color: var(--text-muted); }

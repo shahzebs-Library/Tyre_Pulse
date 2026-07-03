@@ -63,7 +63,7 @@ green** · web build green · mobile typecheck clean).
 |---|---|
 | Web i18n + RTL (Arabic) - **complete the coverage** | Foundation MERGED (context/locales/RTL shell). Remaining: translate the long tail of pages beyond auth/nav/dashboard/inspections/records/alerts. Owned by the i18n workstream. |
 | Chart drill-down | 0 of 54 chart pages click through to source records (stated directive requirement). |
-| Light theme via CSS vars (**Master Build E**) | ~80 pages use literal dark classes. Deferred: a global token/theme refactor collided with the active i18n session; do it once that lands (foundation ready - TenantContext already publishes `--brand-primary`/`--brand-accent`). |
+| ~~Light theme via CSS vars (Master Build E)~~ | ✅ RESOLVED — the light/dark token system + `html.light` override layer already covered the pages; tenant-accent token layer added + documented (`DESIGN_SYSTEM.md`). Optional future: extend the tenant accent from focus-ring/utilities to more chrome (currently green gradients kept for visual consistency). |
 | Dev/staging Supabase project | All builds point at production today (H6). |
 | GPS/Telematics + generic ERP import adapters | New intake modules. |
 | Go backend + native Android | Frozen on their own branches by decision - **not** merged to `main`. |
@@ -82,8 +82,8 @@ Enterprise multi-tenant polish. Phases (see HANDOFF.md for detail):
 | B. Branded PDF engine | tenant colours/logo/footer/disclaimer on the Daily Executive PDF. | ✅ DONE |
 | C. Branded PPTX + fix download | branded 12-slide deck; download fixed (missing caller try/catch, not generation). | ✅ DONE |
 | D. Report Center | on-demand branded generation + delivery history over report_send_log. | ✅ DONE |
-| E. Design system | tokens, tenant theme, light default, a11y, states. | ⏸ DEFERRED (i18n-session collision; see P4). |
-| F. Docs set | BRANDING_AND_REPORT_SETTINGS / PROJECT_OVERVIEW / INTEGRATIONS / DATA_DICTIONARY added; ARCHITECTURE/REPORTING/TESTING have equivalents. | ✅ DONE |
+| E. Design system | mature light/dark token system + ThemeContext already present; added tenant-accent token layer (`--accent*` + utilities, focus ring) tinted from V68 branding for custom orgs only; documented in `DESIGN_SYSTEM.md`. | ✅ DONE |
+| F. Docs set | BRANDING_AND_REPORT_SETTINGS / PROJECT_OVERVIEW / INTEGRATIONS / DATA_DICTIONARY / DESIGN_SYSTEM added; ARCHITECTURE/REPORTING/TESTING have equivalents. | ✅ DONE |
 Owner actions still pending: (1) fill each org's branding in User Management → Branding; (2) set `RESEND_API_KEY` for scheduled-email delivery.
 
 ## Scoreboard

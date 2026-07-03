@@ -179,3 +179,22 @@ mobile deps synced - typecheck now fully clean.
   the V68 branding model, RPCs, frontend wiring, branded export engine, Report
   Center, operator guide, and security notes.
 - Gate: 714 tests green, web build clean (Report Center lazy-split).
+
+## 2026-07-03 (later) — Merge web-i18n + Master Build Phase E (design system) (main, pushed)
+- **Merge**: 3-way merged the parallel i18n workstream (Arabic/RTL foundation,
+  onboarding wizard, theme-safe mobile nav) into `main` (`34eb1be`). Resolved two
+  conflicts keeping BOTH sides: Dashboard export buttons (my loading/toast logic
+  + their i18n labels; added `dashboard.export.exporting`/`building` keys en+ar),
+  and Inspections table header (my admin multi-delete checkbox + their i18n
+  headers). Fast-forwarded the feature branch to main. Gate: 729 tests, build,
+  mobile typecheck all green.
+- **Phase E (design system)**: the light/dark token system + ThemeContext + the
+  ~280-line `html.light` override layer already existed and is mature (most of
+  Phase E). Added the **tenant-accent token layer**: `--accent` / `--accent-ring`
+  / `--accent-strong` (hard-default to product green) + `.text-accent`/
+  `.bg-accent`/`.border-accent`/`.ring-accent` utilities; the global
+  `:focus-visible` ring now uses `--accent-ring`. `TenantContext` tints these
+  from the org's V68 branding **only when a custom colour is set** (≠ `#16a34a`),
+  so default/unbranded orgs render byte-identical to before. Hand-tuned green
+  component gradients left untouched by design. Documented in `DESIGN_SYSTEM.md`.
+- **Master Build program A–F now complete.** Gap analysis + handoff updated.

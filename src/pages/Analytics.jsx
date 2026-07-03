@@ -608,7 +608,7 @@ function MonthlyTrend({ trendData, currency, onMaximize, chartRef }) {
         </button>
         <Line ref={chartRef} data={chartData} options={LINE_OPTS} />
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {trendData.slice(-3).map(d => (
           <div key={d.month} className={`card ${d.isForecast ? 'border border-yellow-800/50' : ''}`}>
             <p className="text-xs text-gray-500">{d.isForecast ? 'Forecast' : 'Actual'} - {d.month}</p>

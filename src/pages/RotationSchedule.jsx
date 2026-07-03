@@ -1691,7 +1691,7 @@ export default function RotationSchedule() {
                         <div className="divide-y divide-gray-800/50">
                           {schedules.filter(s => s.status === 'Completed').map(s => (
                             <div key={s.id} className="flex items-center gap-4 px-5 py-3 opacity-60">
-                              <div className="flex-1 grid grid-cols-3 gap-3 text-sm">
+                              <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                                 <div className="flex items-center gap-1.5 text-gray-400">
                                   <Truck size={12} /> {s.asset}
                                 </div>

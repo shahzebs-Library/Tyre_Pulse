@@ -582,7 +582,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${s}</td><td>${c}</td></tr>`).join('')}
                 <Truck size={14} className="text-green-400" /> Fleet Status Snapshot
               </h2>
               <div className="card p-4 space-y-4">
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[
                     { label: 'Active Today', value: vehiclesActiveToday, color: 'text-green-400' },
                     { label: 'Critical Risk', value: vehiclesCritical, color: 'text-red-400' },

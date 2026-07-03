@@ -786,7 +786,7 @@ export default function WorkOrders() {
                   </div>
                 </div>
                 {/* Row 2 */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.tyreSerial')}</label>
                     <input value={formData.tyre_serial} onChange={e => setFormData(f => ({ ...f, tyre_serial: e.target.value }))}
@@ -806,7 +806,7 @@ export default function WorkOrders() {
                   </div>
                 </div>
                 {/* Row 3 */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.status')}</label>
                     <select value={formData.status} onChange={e => setFormData(f => ({ ...f, status: e.target.value }))}
@@ -861,7 +861,7 @@ export default function WorkOrders() {
                 {/* Labour */}
                 <div>
                   <label className="text-gray-400 text-xs mb-2 block">{t('workorders.form.labourCost')}</label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <input type="number" min="0" step="0.5" value={formData.labour_hours} onChange={e => setFormData(f => ({ ...f, labour_hours: e.target.value }))}
                         placeholder={t('workorders.form.placeholders.hours')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
@@ -892,7 +892,7 @@ export default function WorkOrders() {
                         <button onClick={() => removePart(i)} className="text-red-400 hover:text-red-300"><X size={14} /></button>
                       </div>
                     ))}
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <input value={partRow.part_name} onChange={e => setPartRow(r => ({ ...r, part_name: e.target.value }))}
                         placeholder={t('workorders.form.placeholders.partName')} className="col-span-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                       <input type="number" min="1" value={partRow.quantity} onChange={e => setPartRow(r => ({ ...r, quantity: e.target.value }))}

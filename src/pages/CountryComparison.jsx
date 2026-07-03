@@ -363,7 +363,7 @@ export default function CountryComparison() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {metrics.map(m => {
           const currency = COUNTRY_CURRENCY[m.country] || 'SAR'
           const color    = countryColorMap[m.country] ?? '#6b7280'

@@ -359,7 +359,7 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 text-xs">
         {[
           { l: 'Good', v: b.good, c: 'text-blue-400' },
           { l: 'Avg', v: b.average, c: 'text-yellow-400' },
@@ -475,7 +475,7 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
               },
             }} />
           </div>
-          <div className="mt-4 grid grid-cols-4 gap-3">
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { l: 'World Class', v: b.world_class, c: 'text-emerald-400' },
               { l: 'Good', v: b.good, c: 'text-blue-400' },
@@ -1042,7 +1042,7 @@ export default function KpiCommandCenter() {
               }} />
             )}
           </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
             {KPI_KEYS.slice(0, 3).map(key => {
               const curr = kpiValues[key]
               const prev = prevKpiValues[key]

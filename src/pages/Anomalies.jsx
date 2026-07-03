@@ -292,7 +292,7 @@ export default function Anomalies() {
 
       {/* Summary after scan */}
       {hasRun && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { label: 'High',   count: summary.bySeverity.high,   style: SEVERITY_STYLE.high },
             { label: 'Medium', count: summary.bySeverity.medium, style: SEVERITY_STYLE.medium },

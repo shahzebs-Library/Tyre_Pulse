@@ -592,7 +592,7 @@ export default function AlertThresholds() {
 
       {/* ── Stats ── */}
       {thresholds.length > 0 && (
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
           {[
             { label: 'Total Rules',     value: thresholds.length,  icon: Bell,         color: 'text-orange-400' },
             { label: 'Active',          value: activeCount,         icon: CheckCircle,  color: 'text-green-400'  },

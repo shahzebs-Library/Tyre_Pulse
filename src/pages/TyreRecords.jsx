@@ -632,7 +632,7 @@ export default function TyreRecords() {
               </div>
             </div>
             <div><label className="label">{t('records.form.description')}</label><input className="input" value={form.description} onChange={F('description')} /></div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div><label className="label">{t('records.form.assetNo')}</label><input className="input" value={form.asset_no} onChange={F('asset_no')} /></div>
               <div><label className="label">{t('records.form.serialNo')}</label><input className="input" value={form.serial_no} onChange={F('serial_no')} /></div>
               <div><label className="label">{t('records.form.qty')}</label><input type="number" className="input" value={form.qty} onChange={F('qty')} min={1} /></div>
@@ -642,7 +642,7 @@ export default function TyreRecords() {
               <div><label className="label">{t('records.form.jobCard')}</label><input className="input" value={form.job_card} onChange={F('job_card')} /></div>
             </div>
             <div><label className="label">{t('records.form.remarks')}</label><textarea className="input" rows={2} value={form.remarks} onChange={F('remarks')} /></div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="label">{t('records.form.country')}</label>
                 <select className="input" value={form.country} onChange={F('country')}>
@@ -654,7 +654,7 @@ export default function TyreRecords() {
               <div><label className="label">{t('records.form.kmAtFitment')}</label><input type="number" className="input" value={form.km_at_fitment} onChange={F('km_at_fitment')} placeholder={t('records.form.optional')} min={0} /></div>
               <div><label className="label">{t('records.form.kmAtRemoval')}</label><input type="number" className="input" value={form.km_at_removal} onChange={F('km_at_removal')} placeholder={t('records.form.optional')} min={0} /></div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div><label className="label">{t('records.form.cost')}</label><input type="number" className="input" value={form.cost_per_tyre} onChange={F('cost_per_tyre')} min={0} step={100} /></div>
               <div>
                 <label className="label">{t('records.form.riskLevel')}</label>
@@ -697,7 +697,7 @@ export default function TyreRecords() {
               <input className="input" list="brand-list-bulk" value={bulkForm.brand} onChange={e => setBulkForm(f => ({ ...f, brand: e.target.value }))} placeholder={t('records.bulkEdit.leaveBlankToKeep')} />
               <datalist id="brand-list-bulk">{brands.map(b => <option key={b} value={b} />)}</datalist>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div><label className="label">{t('records.bulkEdit.cost')}</label><input type="number" className="input" value={bulkForm.cost_per_tyre} onChange={e => setBulkForm(f => ({ ...f, cost_per_tyre: e.target.value }))} placeholder="-" min={0} /></div>
               <div>
                 <label className="label">{t('records.bulkEdit.riskLevel')}</label>

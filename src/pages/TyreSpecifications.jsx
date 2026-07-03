@@ -1238,7 +1238,7 @@ export default function TyreSpecifications() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-800">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-gray-800">
                         {spec.recommended_pressure ? (
                           <div className="text-center">
                             <p className="text-gray-500 text-xs">PSI</p>
@@ -1569,7 +1569,7 @@ export default function TyreSpecifications() {
                           {def.approved_brands.map(b => <span key={b} className="text-xs bg-purple-900/30 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full">{b}</span>)}
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-800">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-gray-800">
                         <div className="text-center">
                           <p className="text-gray-500 text-xs">PSI</p>
                           <p className="text-white text-sm font-semibold">{def.recommended_pressure}</p>

@@ -1424,7 +1424,7 @@ export default function ComplianceDashboard() {
                         <div className="h-56">
                           <Doughnut data={pressureDoughnutData} options={doughnutOpts} />
                         </div>
-                        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
                           {[
                             { label: 'Compliant', val: pressureStats.compliant, color: 'text-green-400' },
                             { label: 'Anomaly',   val: pressureStats.anomalies, color: 'text-red-400' },

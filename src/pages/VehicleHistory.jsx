@@ -1461,7 +1461,7 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-4 mb-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
               {[1, 2, 3].map(offset => {
                 const projectedDate = new Date()
                 projectedDate.setMonth(projectedDate.getMonth() + offset)

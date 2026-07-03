@@ -932,7 +932,7 @@ export default function Procurement() {
                 </div>
 
                 {/* Row 2: Expected Del + Status */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="text-gray-400 text-xs mb-1 block">Expected Delivery</label>
                     <input type="date" value={formData.expected_delivery} onChange={e => setFormData(f => ({ ...f, expected_delivery: e.target.value }))}
@@ -955,7 +955,7 @@ export default function Procurement() {
                 </div>
 
                 {/* Row 3: Site + Country + Budget Code */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="text-gray-400 text-xs mb-1 block">Site</label>
                     <input value={formData.site} onChange={e => setFormData(f => ({ ...f, site: e.target.value }))}
@@ -1024,7 +1024,7 @@ export default function Procurement() {
                   )}
 
                   {/* Add item row */}
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
                     <input value={itemRow.brand} onChange={e => setItemRow(r => ({ ...r, brand: e.target.value }))}
                       placeholder="Brand" className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                     <input value={itemRow.size} onChange={e => setItemRow(r => ({ ...r, size: e.target.value }))}

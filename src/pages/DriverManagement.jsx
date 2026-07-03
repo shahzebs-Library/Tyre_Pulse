@@ -400,7 +400,7 @@ function DriverDrawer({ driver, currency, onClose }) {
             </div>
 
             {/* Driver stats */}
-            <div className="grid grid-cols-4 gap-3 p-5 flex-shrink-0 border-b border-gray-800/40">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-5 flex-shrink-0 border-b border-gray-800/40">
               {[
                 { label: 'Total Tyres', value: driver.totalTyres },
                 { label: 'Avg CPK', value: fmtCpk(driver.avgCpk, currency) },

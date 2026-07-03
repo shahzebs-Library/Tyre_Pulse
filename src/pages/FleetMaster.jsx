@@ -764,7 +764,7 @@ export default function FleetMaster() {
                   <input className="input" value={form.model} onChange={F('model')} placeholder="e.g. Land Cruiser" />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3 mt-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                 <div>
                   <label className="label">Vehicle Type</label>
                   <input className="input" value={form.vehicle_type} onChange={F('vehicle_type')} placeholder="e.g. SUV, Truck" />
@@ -815,7 +815,7 @@ export default function FleetMaster() {
             {/* Section 3: Tyre Policy */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem' }}>
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">Tyre Policy</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="label">Expected KM / Tyre</label>
                   <input type="number" className="input" value={form.expected_km_per_tyre} onChange={F('expected_km_per_tyre')} placeholder="e.g. 50000" min={0} />
@@ -829,7 +829,7 @@ export default function FleetMaster() {
                   <input type="number" className="input" value={form.max_tyres_per_day} onChange={F('max_tyres_per_day')} placeholder="e.g. 2" min={1} />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3 mt-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                 <div>
                   <label className="label">Tyre Size</label>
                   <input className="input" value={form.tyre_size} onChange={F('tyre_size')} placeholder="e.g. 265/70R17" />

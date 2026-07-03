@@ -1056,7 +1056,7 @@ export default function CostCenter() {
               </div>
 
               {/* Output tiles */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-4 rounded-xl border border-gray-700 text-center">
                   <p className="text-xs text-gray-500 mb-1">Monthly Savings</p>
                   <p className="text-lg font-bold text-green-400">{fmtCurrency(roi.monthlySavings, activeCurrency)}</p>

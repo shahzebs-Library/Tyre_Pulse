@@ -554,7 +554,7 @@ export default function SafetyCompliance() {
           {/* Pressure Tab */}
           {activeTab === 'pressure' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                   <div className="text-gray-400 text-sm mb-1">Pressure Compliance</div>
                   <div className={`text-3xl font-bold ${scoreColor(compliance.pressureCompliance)}`}>{fmtPct(compliance.pressureCompliance)}</div>
@@ -589,7 +589,7 @@ export default function SafetyCompliance() {
           {/* Inspections Tab */}
           {activeTab === 'inspections' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                   <div className="text-gray-400 text-sm mb-1">Inspection Compliance</div>
                   <div className={`text-3xl font-bold ${scoreColor(compliance.inspectionCompliance)}`}>{fmtPct(compliance.inspectionCompliance)}</div>
@@ -701,7 +701,7 @@ export default function SafetyCompliance() {
               {compliance.accidents > 0 && (
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                   <h3 className="text-white font-semibold mb-4">Accident-Tyre Correlation</h3>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="bg-gray-800 rounded-xl p-4">
                       <div className="text-gray-400 text-sm">Total Accidents</div>
                       <div className="text-2xl font-bold text-yellow-400">{compliance.accidents}</div>

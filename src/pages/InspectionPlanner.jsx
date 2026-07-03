@@ -1470,7 +1470,7 @@ export default function InspectionPlanner() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 mb-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
                           <div className="bg-gray-800/60 rounded-lg p-2 text-center">
                             <p className="text-lg font-bold text-white">{ins.thisWeekCount}</p>
                             <p className="text-xs text-gray-500">This Week</p>

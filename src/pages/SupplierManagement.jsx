@@ -16,6 +16,7 @@ import {
   ArrowUpRight, ArrowDownRight, Users, Calendar, FileCheck, Loader2,
   SlidersHorizontal, Eye, Globe, MapPin, Hash, Upload,
 } from 'lucide-react'
+import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import { useNavigate } from 'react-router-dom'
 import {
   Chart as ChartJS,
@@ -1024,8 +1025,9 @@ export default function SupplierManagement() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <Loader2 size={32} className="animate-spin text-blue-500" />
+    <div className="space-y-4">
+      <SkeletonCards count={4} />
+      <SkeletonTable rows={8} cols={6} />
     </div>
   )
 

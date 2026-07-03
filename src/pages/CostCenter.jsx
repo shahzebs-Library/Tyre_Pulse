@@ -10,6 +10,7 @@ import {
   AlertTriangle, Award, ArrowUpRight, ArrowDownRight, Minus, Download,
   RefreshCw, Loader2, FileSpreadsheet, FileText, Zap,
 } from 'lucide-react'
+import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -614,11 +615,9 @@ export default function CostCenter() {
 
       {/* ── Loading skeleton ────────────────────────────────────────────────── */}
       {loading && (
-        <div className="flex items-center justify-center py-24">
-          <div className="flex items-center gap-3 text-gray-500">
-            <Loader2 size={20} className="animate-spin text-green-500" />
-            <span className="text-sm">Loading cost data...</span>
-          </div>
+        <div className="space-y-4">
+          <SkeletonCards count={4} />
+          <SkeletonTable rows={8} cols={5} />
         </div>
       )}
 

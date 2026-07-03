@@ -13,6 +13,7 @@ import {
   Calendar, User, Building2, Zap, BarChart2, PieChart, Activity,
   Package, Star, Award, Target, Maximize2, Loader2,
 } from 'lucide-react'
+import { SkeletonTable } from '../components/ui/Skeleton'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler,
@@ -874,14 +875,7 @@ export default function WorkshopManagement() {
         </div>
 
         {/* Loading */}
-        {loading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="flex items-center gap-3 text-gray-500">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-400" />
-              <span className="text-sm">Loading work orders...</span>
-            </div>
-          </div>
-        )}
+        {loading && <SkeletonTable rows={8} cols={6} />}
 
         {!loading && error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-5 text-red-400 text-sm flex items-center gap-3">

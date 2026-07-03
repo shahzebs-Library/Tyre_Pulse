@@ -15,6 +15,7 @@ import {
   Info, BarChart3, List, GitBranch, Star, XCircle,
   ArrowRight, Loader2, Flag, Hash, Layers,
 } from 'lucide-react'
+import { SkeletonTable } from '../components/ui/Skeleton'
 import * as recallsApi from '../lib/api/recalls'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -848,11 +849,7 @@ export default function RecallTracker() {
             </p>
           </div>
 
-          {loading && (
-            <div className="text-center py-12 text-gray-500">
-              <Loader2 className="inline animate-spin mr-2" size={18} /> Scanning fleet data...
-            </div>
-          )}
+          {loading && <SkeletonTable rows={8} cols={6} />}
 
           {!loading && batchAnalysis.length === 0 && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center">

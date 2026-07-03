@@ -14,6 +14,7 @@ import {
   ChevronDown, ChevronUp, Loader2, XCircle, ArrowRight,
   Recycle, AlertOctagon, ShieldAlert, Flame, Activity,
 } from 'lucide-react'
+import { SkeletonTable } from '../components/ui/Skeleton'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
@@ -765,12 +766,7 @@ export default function TyreScrapManagement() {
       </div>
 
       {/* ── Loading state ── */}
-      {loading && (
-        <div className="flex items-center justify-center py-20 text-gray-500">
-          <Loader2 className="animate-spin mr-3" size={22} />
-          <span>Loading scrap data...</span>
-        </div>
-      )}
+      {loading && <SkeletonTable rows={8} cols={6} />}
 
       {!loading && (
         <>

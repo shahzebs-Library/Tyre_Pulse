@@ -238,7 +238,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
 
         {/* Tyre Position Diagram */}
-        <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+        <div className="card">
           <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2"><Layers className="w-4 h-4 text-blue-400" /> Tyre Position Map</h3>
           <div className="flex gap-4 items-start">
             <div className="flex-1">
@@ -308,7 +308,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
         </div>
 
         {/* Monthly Cost Chart */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+        <div className="card">
           <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-blue-400" /> Tyre Cost - Last 12 Months
           </h3>
@@ -357,7 +357,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
         </div>
 
         {/* Recommendations */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
+        <div className="card">
           <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
             <Target className="w-4 h-4 text-purple-400" /> Recommendations
           </h3>
@@ -893,7 +893,7 @@ export default function AssetManagement() {
             <motion.div key="registry" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
 
               {/* Search & Filters */}
-              <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
+              <div className="card">
                 <div className="flex flex-col sm:flex-row gap-3">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -1105,7 +1105,7 @@ export default function AssetManagement() {
           {activeTab === 'charts' && (
             <motion.div key="charts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+                <div className="card">
                   <h3 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
                     <BarChart2 className="w-4 h-4 text-blue-400" /> Vehicle Type Distribution
                   </h3>
@@ -1118,7 +1118,7 @@ export default function AssetManagement() {
                   </div>
                 </div>
 
-                <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+                <div className="card">
                   <h3 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-green-400" /> Assets per Site by Risk Status
                   </h3>
@@ -1133,7 +1133,7 @@ export default function AssetManagement() {
               </div>
 
               {/* Summary stats */}
-              <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+              <div className="card">
                 <h3 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
                   <Award className="w-4 h-4 text-yellow-400" /> Fleet Summary by Type
                 </h3>
@@ -1183,7 +1183,7 @@ export default function AssetManagement() {
           {/* ── Health Matrix Tab ─────────────────────────────────────────────── */}
           {activeTab === 'health' && (
             <motion.div key="health" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-              <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+              <div className="card">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                   <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
                     <Shield className="w-4 h-4 text-purple-400" /> Asset Health Score Matrix

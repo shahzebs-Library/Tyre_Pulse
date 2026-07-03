@@ -845,7 +845,7 @@ export default function PressureIntelligence() {
       />
 
       {/* Filters */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="card">
         <div className="flex items-center gap-2 mb-3">
           <Filter size={13} className="text-gray-400" />
           <span className="text-xs font-medium text-gray-400">Filters</span>
@@ -962,7 +962,7 @@ export default function PressureIntelligence() {
               {/* Charts row 1 */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Histogram */}
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="card">
                   <div className="flex items-center gap-2 mb-3">
                     <BarChart3 size={14} className="text-blue-400" />
                     <h3 className="text-sm font-semibold text-white">Pressure Distribution</h3>
@@ -987,7 +987,7 @@ export default function PressureIntelligence() {
                 </div>
 
                 {/* Site compliance */}
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="card">
                   <div className="flex items-center gap-2 mb-3">
                     <Building2 size={14} className="text-purple-400" />
                     <h3 className="text-sm font-semibold text-white">Compliance by Site</h3>
@@ -1017,7 +1017,7 @@ export default function PressureIntelligence() {
               </div>
 
               {/* Position trend */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="card">
                 <div className="flex items-center gap-2 mb-3">
                   <TrendingUp size={14} className="text-green-400" />
                   <h3 className="text-sm font-semibold text-white">Pressure Trend by Position</h3>
@@ -1045,7 +1045,7 @@ export default function PressureIntelligence() {
               </div>
 
               {/* Seasonal analysis */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="card">
                 <div className="flex items-center gap-2 mb-3">
                   <Thermometer size={14} className="text-amber-400" />
                   <h3 className="text-sm font-semibold text-white">Seasonal Pressure Analysis</h3>
@@ -1066,7 +1066,7 @@ export default function PressureIntelligence() {
               </div>
 
               {/* Anomaly table */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="card">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
                   <div className="flex items-center gap-2">
                     <AlertTriangle size={14} className="text-red-400" />
@@ -1223,7 +1223,7 @@ export default function PressureIntelligence() {
               </AnimatePresence>
 
               {/* Inspector quality */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="card">
                 <div className="flex items-center gap-2 mb-4">
                   <Users size={14} className="text-indigo-400" />
                   <h3 className="text-sm font-semibold text-white">Inspector Quality Analysis</h3>
@@ -1278,7 +1278,7 @@ export default function PressureIntelligence() {
               </div>
 
               {/* Root cause panel */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="card">
                 <div className="flex items-center gap-2 mb-4">
                   <Info size={14} className="text-cyan-400" />
                   <h3 className="text-sm font-semibold text-white">Under-Inflation Root Cause Analysis</h3>
@@ -1301,7 +1301,7 @@ export default function PressureIntelligence() {
               </div>
 
               {/* Summary intelligence strip */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="card">
                 <div className="flex items-center gap-2 mb-3">
                   <Gauge size={14} className="text-blue-400" />
                   <h3 className="text-sm font-semibold text-white">Pressure Intelligence Summary</h3>

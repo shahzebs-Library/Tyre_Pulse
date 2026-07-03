@@ -197,7 +197,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', trend
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-1"
+      className="card flex flex-col gap-1"
     >
       <div className="flex items-center gap-2 mb-1">
         <div className={`p-1.5 rounded-lg bg-gray-800 ${color}`}>
@@ -435,7 +435,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {/* Radar + Stats */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="card">
             <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">Performance Radar</h4>
             <div className="h-48">
               <Radar key={radarKey} data={radarData} options={radarOpts} />
@@ -461,7 +461,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
         </div>
 
         {/* Monthly Spend Trend */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div className="card">
           <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">Monthly Spend (12 Months)</h4>
           <div className="h-40">
             <Bar data={spendChartData} options={{ ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } } }} />
@@ -470,7 +470,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
 
         {/* Size & Site Breakdown */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="card">
             <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">Size Distribution</h4>
             <div className="space-y-1.5 max-h-40 overflow-y-auto">
               {sizeBreakdown.length === 0 && <p className="text-xs text-gray-600">No size data</p>}
@@ -485,7 +485,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
               ))}
             </div>
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="card">
             <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">Site Usage</h4>
             <div className="space-y-1.5 max-h-40 overflow-y-auto">
               {siteBreakdown.length === 0 && <p className="text-xs text-gray-600">No site data</p>}
@@ -556,7 +556,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
 
         {/* Admin Rating Override */}
         {isAdmin && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="card">
             <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">Rating Override (Admin)</h4>
             <div className="flex flex-wrap gap-2">
               {RATINGS.map(r => (
@@ -572,7 +572,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
         )}
 
         {/* Notes */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div className="card">
           <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-2">Notes</h4>
           <textarea
             value={notes}
@@ -1152,7 +1152,7 @@ export default function SupplierManagement() {
                       initial={{ opacity: 0, y: 16 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: idx * 0.03 }}
-                      className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3 hover:border-gray-700 transition-colors"
+                      className="card flex flex-col gap-3 hover:border-gray-700 transition-colors"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2">
@@ -1223,7 +1223,7 @@ export default function SupplierManagement() {
         {/* Tab 1: Performance Comparison */}
         {activeTab === 1 && (
           <motion.div key="perf" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <div className="card">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-white text-sm">Select Suppliers to Compare (up to 4)</h3>
                 {compareList.length > 0 && (
@@ -1257,7 +1257,7 @@ export default function SupplierManagement() {
             ) : (
               <>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                  <div className="card">
                     <h4 className="text-sm font-semibold text-white mb-4">Performance Radar Comparison</h4>
                     <div className="h-72">
                       {compareData && (
@@ -1334,7 +1334,7 @@ export default function SupplierManagement() {
         {activeTab === 2 && (
           <motion.div key="spend" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <div className="card">
                 <h4 className="text-sm font-semibold text-white mb-4">Supplier Spend Share</h4>
                 <div className="h-64 flex items-center justify-center">
                   {spendAnalysis.doughnutData.datasets[0].data.some(v => v > 0) ? (
@@ -1355,7 +1355,7 @@ export default function SupplierManagement() {
                 </div>
               </div>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <div className="card">
                 <h4 className="text-sm font-semibold text-white mb-4">Monthly Spend by Supplier (12 Months)</h4>
                 <div className="h-64">
                   <Bar data={spendAnalysis.stackedData} options={{

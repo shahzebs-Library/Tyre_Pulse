@@ -465,7 +465,7 @@ export default function PerformanceBenchmark() {
       {fleetKpis && (
         <>
           {/* Overall Score */}
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+          <div className="card">
             <div className="flex flex-col lg:flex-row items-start lg:items-center gap-8">
               <div className="text-center min-w-40">
                 <div className={`text-5xl font-bold ${scoreColor(overallScore)}`}>
@@ -505,7 +505,7 @@ export default function PerformanceBenchmark() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {benchmarked.map(m => (
               <motion.div key={m.key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                className="card">
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="text-white font-semibold text-sm">{m.label}</h3>
@@ -548,7 +548,7 @@ export default function PerformanceBenchmark() {
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Radar */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div className="card">
               <h3 className="text-white font-semibold mb-4">Fleet vs Industry Benchmarks</h3>
               <div className="h-72">
                 {radarData && <Radar data={radarData} options={{
@@ -560,7 +560,7 @@ export default function PerformanceBenchmark() {
             </div>
 
             {/* CPK comparison */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div className="card">
               <h3 className="text-white font-semibold mb-4">CPK vs Benchmarks</h3>
               <div className="h-72">
                 {cpkBarData && <Bar data={cpkBarData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />}
@@ -571,7 +571,7 @@ export default function PerformanceBenchmark() {
           {/* Brand benchmarking */}
           {brandBench.length > 0 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <div className="card">
                 <h3 className="text-white font-semibold mb-4">Brand CPK vs Good Benchmark</h3>
                 <div className="h-64">
                   {brandCpkData && <Bar data={brandCpkData} options={{
@@ -619,7 +619,7 @@ export default function PerformanceBenchmark() {
           )}
 
           {/* Improvement Recommendations */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div className="card">
             <h3 className="text-white font-semibold mb-4">Performance Improvement Recommendations</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {benchmarked.filter(m => m.rating.score < 75).map(m => (

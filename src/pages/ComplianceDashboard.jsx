@@ -1014,7 +1014,7 @@ export default function ComplianceDashboard() {
       />
 
       {/* ── Filters ── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="card">
         <div className="flex items-center gap-2 mb-3">
           <Filter size={13} className="text-gray-400" />
           <span className="text-xs font-medium text-gray-400">Filters</span>
@@ -1161,7 +1161,7 @@ export default function ComplianceDashboard() {
           </div>
 
           {/* ── Compliance Trend Line ── */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="card">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp size={14} className="text-green-400" />
               <h3 className="text-sm font-semibold text-white">Compliance Trend</h3>

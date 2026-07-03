@@ -358,7 +358,7 @@ export default function KnowledgeBase() {
           { label: 'Indexed (AI-Ready)', value: stats.indexed, icon: CheckCircle, color: 'text-green-400', bg: 'bg-green-400/10' },
           { label: 'Pending Embedding', value: stats.pending, icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
         ].map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center gap-4">
+          <div key={label} className="card flex items-center gap-4">
             <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center flex-shrink-0`}>
               <Icon className={`w-5 h-5 ${color}`} />
             </div>

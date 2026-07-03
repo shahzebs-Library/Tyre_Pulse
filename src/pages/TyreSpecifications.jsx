@@ -260,7 +260,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', loadi
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start gap-4"
+      className="card flex items-start gap-4"
     >
       <div className={`p-2.5 rounded-lg bg-gray-800 ${color}`}>
         <Icon size={20} />
@@ -1158,7 +1158,7 @@ export default function TyreSpecifications() {
 
             {/* Spec Cards */}
             {loadingSpecs ? (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl py-16 text-center">
+              <div className="card py-16 text-center">
                 <RefreshCw size={28} className="animate-spin text-gray-600 mx-auto mb-3" />
                 <p className="text-gray-500 text-sm">Loading specifications...</p>
               </div>
@@ -1172,7 +1172,7 @@ export default function TyreSpecifications() {
                 </button>
               </div>
             ) : filteredSpecs.length === 0 ? (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl py-16 text-center">
+              <div className="card py-16 text-center">
                 <ClipboardList size={40} className="text-gray-700 mx-auto mb-3" />
                 <p className="text-gray-400 font-medium mb-1">No Specification Profiles</p>
                 <p className="text-gray-600 text-sm mb-4">
@@ -1192,7 +1192,7 @@ export default function TyreSpecifications() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.03 }}
-                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-colors"
+                    className="card hover:border-gray-700 transition-colors"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div>
@@ -1276,7 +1276,7 @@ export default function TyreSpecifications() {
 
             {/* Chart + Summary */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col">
+              <div className="card flex flex-col">
                 <p className="text-gray-400 text-sm font-medium mb-3 flex items-center gap-2"><BarChart3 size={14} /> Compliance Breakdown</p>
                 <div className="flex-1 min-h-[180px]">
                   {complianceData.length > 0 ? (
@@ -1515,7 +1515,7 @@ export default function TyreSpecifications() {
         {activeTab === 'defaults' && (
           <motion.div key="defaults" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
 
-            <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-start gap-3">
+            <div className="card flex items-start gap-3">
               <Info size={16} className="text-blue-400 mt-0.5 shrink-0" />
               <p className="text-gray-300 text-sm">
                 Industry-standard tyre specification defaults. Click <strong>Import</strong> to add any profile to your specification library. Already-imported specs are greyed out.

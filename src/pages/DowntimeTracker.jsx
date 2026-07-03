@@ -157,7 +157,7 @@ function heatColor(hours) {
 // ── Chart Modal ───────────────────────────────────────────────────────────────
 function ChartCard({ title, children, onExpand }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+    <div className="card">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-300">{title}</h3>
         {onExpand && (
@@ -875,7 +875,7 @@ export default function DowntimeTracker() {
       />
 
       {/* Filters */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+      <div className="card">
         <div className="flex flex-wrap gap-2 items-center">
           {/* Period */}
           <SegmentedControl
@@ -1052,7 +1052,7 @@ export default function DowntimeTracker() {
       </div>
 
       {/* Downtime Heatmap */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+      <div className="card">
         <h3 className="text-sm font-semibold text-gray-300 mb-4">Downtime Heatmap - Top 10 Vehicles × Last 12 Months</h3>
         {heatmap.rows.length === 0 ? (
           <div className="text-center text-gray-600 text-sm py-8">No vehicle data available</div>
@@ -1153,7 +1153,7 @@ export default function DowntimeTracker() {
       </div>
 
       {/* Recommendations */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+      <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <Zap size={15} className="text-yellow-400" />
           <h3 className="text-sm font-semibold text-gray-300">Improvement Recommendations</h3>

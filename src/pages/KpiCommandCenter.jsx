@@ -299,7 +299,7 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.01 }}
       onClick={onClick}
-      className="bg-gray-900 border border-gray-800 rounded-2xl p-5 cursor-pointer hover:border-gray-700 transition-all group"
+      className="card cursor-pointer hover:border-gray-700 transition-all group"
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -927,7 +927,7 @@ export default function KpiCommandCenter() {
       )}
 
       {/* Command Panel: Fleet Score + KPI Scores Strip */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+      <div className="card">
         <div className="flex flex-col lg:flex-row items-center gap-8">
           <div className="flex flex-col items-center gap-2">
             <FleetScoreGauge score={overallScore} />
@@ -993,7 +993,7 @@ export default function KpiCommandCenter() {
       {/* Radar + Period Comparison */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Radar Chart */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        <div className="card">
           <h3 className="text-white font-semibold mb-1 flex items-center gap-2">
             <Layers size={16} className="text-purple-400" />
             Fleet vs Benchmark
@@ -1021,7 +1021,7 @@ export default function KpiCommandCenter() {
         </div>
 
         {/* Period Comparison */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+        <div className="card">
           <h3 className="text-white font-semibold mb-1 flex items-center gap-2">
             <Calendar size={16} className="text-orange-400" />
             Period Comparison

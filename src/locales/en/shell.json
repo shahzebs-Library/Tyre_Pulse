@@ -1,0 +1,23 @@
+{
+  "search": "Search...",
+  "menu": "Menu",
+  "country": "Country",
+  "notifications": "Notifications",
+  "collapseSidebar": "Collapse sidebar",
+  "expandSidebar": "Expand sidebar",
+  "openMenu": "Open menu",
+  "fleetIntelligence": "Fleet Intelligence",
+  "alerts": "Alerts",
+  "offlineQueued": "{count} queued offline",
+  "tabs": {
+    "home": "Home",
+    "inspect": "Inspect",
+    "records": "Records",
+    "work": "Work",
+    "alerts": "Alerts",
+    "scan": "Scan",
+    "reports": "Reports",
+    "analytics": "Reports",
+    "profile": "Profile"
+  }
+}

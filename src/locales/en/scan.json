@@ -1,0 +1,25 @@
+{
+  "title": "Tyre Scanner",
+  "subtitle": "Scan barcodes, QR codes, or enter manually",
+  "tapToScan": "Tap to Scan",
+  "modes": "Barcode · QR Code · Manual entry",
+  "chips": {
+    "autoDetect": "Auto-detect barcode",
+    "qr": "QR Code",
+    "manual": "Manual fallback"
+  },
+  "recentScans": "Recent Scans",
+  "clearAll": "Clear all",
+  "notFound": "Not found in database",
+  "viewAll": "View all tyre records",
+  "empty": {
+    "title": "No scans yet",
+    "subtitle": "Scanned serials will appear here"
+  },
+  "time": {
+    "justNow": "just now",
+    "minutes": "{m}m ago",
+    "hours": "{h}h ago",
+    "days": "{d}d ago"
+  }
+}

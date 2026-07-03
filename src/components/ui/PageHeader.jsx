@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { RefreshCw } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * PageHeader - standard premium page header used across all pages.
@@ -21,6 +22,7 @@ export default function PageHeader({
   refreshing = false,
   className,
 }) {
+  const { t } = useLanguage()
   return (
     <motion.div
       initial={{ opacity: 0, y: -8 }}
@@ -59,7 +61,7 @@ export default function PageHeader({
             className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"
           >
             <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />
-            {refreshing ? 'Loading...' : 'Refresh'}
+            {refreshing ? t('common.loading') : t('common.refresh')}
           </button>
         )}
         {actions}

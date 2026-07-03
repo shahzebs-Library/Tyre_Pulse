@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import {
   detectAlerts, countAlertsBySeverity,
   SEVERITY_CONFIG, ALERT_TYPE_LABELS, ALERT_TYPES,
@@ -36,6 +37,8 @@ const SEV_SORT_ORDER = { critical: 0, high: 1, medium: 2, info: 3 }
 export default function Alerts() {
   const navigate = useNavigate()
   const { activeCountry } = useSettings()
+  const { t } = useLanguage()
+  const sevLabel = (key) => t(`alerts.severity.${key}`)
 
   const [alerts, setAlerts]     = useState([])
   const [loading, setLoading]   = useState(true)
@@ -159,10 +162,10 @@ export default function Alerts() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Alerts"
-        subtitle="Real-time fleet monitoring - vehicle health, CPK anomalies, data quality"
+        title={t('alerts.header.title')}
+        subtitle={t('alerts.header.subtitle')}
         icon={Bell}
-        badge={active.length > 0 ? `${active.length} active` : undefined}
+        badge={active.length > 0 ? t('alerts.header.badge', { count: active.length }) : undefined}
       />
 
       {/* Severity KPI cards */}
@@ -186,10 +189,10 @@ export default function Alerts() {
             >
               <div className="flex items-center justify-between mb-2">
                 <div className={cn('w-2 h-2 rounded-full', s.dot, count > 0 && 'animate-pulse')} />
-                {isActive && <span className="text-[10px] text-muted font-medium">filtered</span>}
+                {isActive && <span className="text-[10px] text-muted font-medium">{t('alerts.card.filtered')}</span>}
               </div>
               <p className={cn('text-2xl font-bold tabular-nums', s.text)}>{count}</p>
-              <p className="text-xs text-muted mt-1 font-medium">{s.label}</p>
+              <p className="text-xs text-muted mt-1 font-medium">{sevLabel(key)}</p>
               <div className={cn('w-full h-0.5 rounded-full mt-3 opacity-40', s.bar)} />
             </motion.button>
           )
@@ -204,7 +207,7 @@ export default function Alerts() {
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               className="input pl-8 text-sm"
-              placeholder="Search alerts..."
+              placeholder={t('alerts.toolbar.searchPlaceholder')}
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -218,7 +221,7 @@ export default function Alerts() {
               showFilters ? 'bg-blue-900/30 text-blue-300 border-blue-700/50' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white'
             )}
           >
-            <SlidersHorizontal size={13} /> Filters
+            <SlidersHorizontal size={13} /> {t('alerts.toolbar.filters')}
             {(sevFilter !== 'all' || typeFilter !== 'all') && (
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400 ml-0.5" />
             )}
@@ -230,18 +233,18 @@ export default function Alerts() {
               onClick={refresh}
               disabled={loading}
               className="flex items-center gap-1.5 btn-secondary text-sm px-3 py-1.5"
-              title={lastRefresh ? `Last scanned: ${lastRefresh.toLocaleTimeString()}` : 'Scan fleet'}
+              title={lastRefresh ? t('alerts.toolbar.lastScanned', { time: lastRefresh.toLocaleTimeString() }) : t('alerts.toolbar.scanTooltip')}
             >
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-              {loading ? 'Scanning...' : 'Refresh'}
+              {loading ? t('alerts.toolbar.scanning') : t('alerts.toolbar.refresh')}
             </button>
 
             {/* Exports */}
             <button onClick={doExcelExport} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
-              <Download size={13} /> Excel
+              <Download size={13} /> {t('alerts.toolbar.excel')}
             </button>
             <button onClick={doPdfExport} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
-              <FileText size={13} /> PDF
+              <FileText size={13} /> {t('alerts.toolbar.pdf')}
             </button>
           </div>
         </div>
@@ -257,13 +260,13 @@ export default function Alerts() {
             <div className="card py-3 px-4 flex flex-wrap gap-3 items-center">
               {/* Type pills */}
               <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-xs text-gray-500 font-medium">Type:</span>
+                <span className="text-xs text-gray-500 font-medium">{t('alerts.filters.type')}</span>
                 <button
                   onClick={() => setTypeFilter('all')}
                   className={cn('px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
                     typeFilter === 'all' ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white')}
                 >
-                  All ({active.length})
+                  {t('alerts.filters.all', { count: active.length })}
                 </button>
                 {Object.entries(typesPresent).map(([type, cnt]) => (
                   <button key={type}
@@ -278,10 +281,10 @@ export default function Alerts() {
 
               {/* Sort */}
               <div className="flex items-center gap-2 ml-auto">
-                <span className="text-xs text-gray-500">Sort:</span>
+                <span className="text-xs text-gray-500">{t('alerts.filters.sort')}</span>
                 <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="input text-xs py-1 w-32">
-                  <option value="severity">By severity</option>
-                  <option value="type">By type</option>
+                  <option value="severity">{t('alerts.filters.sortSeverity')}</option>
+                  <option value="type">{t('alerts.filters.sortType')}</option>
                 </select>
               </div>
             </div>
@@ -293,12 +296,12 @@ export default function Alerts() {
       {!loading && visible.length > 0 && (
         <div className="flex items-center justify-between text-xs">
           <p className="text-muted">
-            {visible.length} alert{visible.length !== 1 ? 's' : ''}
-            {lastRefresh && ` · Scanned ${lastRefresh.toLocaleTimeString()}`}
+            {t('alerts.list.count', { count: visible.length })}
+            {lastRefresh && ` · ${t('alerts.list.scannedAt', { time: lastRefresh.toLocaleTimeString() })}`}
           </p>
           {visible.length > 1 && (
             <button onClick={dismissFiltered} className="text-muted hover:text-white transition-colors flex items-center gap-1">
-              <EyeOff size={11} /> Dismiss all visible
+              <EyeOff size={11} /> {t('alerts.list.dismissAllVisible')}
             </button>
           )}
         </div>
@@ -308,7 +311,7 @@ export default function Alerts() {
       {loading && active.length === 0 ? (
         <div className="card py-16 flex flex-col items-center gap-3 text-muted">
           <Loader2 className="w-6 h-6 animate-spin text-brand" />
-          <span className="text-sm">Scanning fleet for alerts...</span>
+          <span className="text-sm">{t('alerts.list.scanning')}</span>
         </div>
       ) : visible.length === 0 ? (
         <motion.div
@@ -318,19 +321,19 @@ export default function Alerts() {
         >
           <CheckCircle2 className="w-10 h-10 text-brand-bright opacity-60" />
           <p className="text-white font-semibold">
-            {sevFilter !== 'all' || typeFilter !== 'all' || search ? 'No alerts match the current filters' : 'All clear'}
+            {sevFilter !== 'all' || typeFilter !== 'all' || search ? t('alerts.states.noMatch') : t('alerts.states.allClear')}
           </p>
           <p className="text-muted text-sm">
             {sevFilter !== 'all' || typeFilter !== 'all' || search
-              ? 'Try clearing filters or search'
-              : 'No active alerts detected for your fleet'}
+              ? t('alerts.states.noMatchDesc')
+              : t('alerts.states.allClearDesc')}
           </p>
           {(sevFilter !== 'all' || typeFilter !== 'all' || search) && (
             <button
               onClick={() => { setSevFilter('all'); setTypeFilter('all'); setSearch('') }}
               className="text-xs text-blue-400 hover:text-blue-300 transition-colors mt-1"
             >
-              Clear all filters
+              {t('alerts.states.clearFilters')}
             </button>
           )}
         </motion.div>
@@ -366,7 +369,7 @@ export default function Alerts() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={cn('text-sm font-semibold', sev.text)}>{alert.title}</span>
                       <span className={cn('text-xs px-2 py-0.5 rounded-full border font-medium', sev.pill)}>
-                        {sev.label}
+                        {sevLabel(alert.severity)}
                       </span>
                       <span className="text-xs bg-surface-3 text-muted px-2 py-0.5 rounded-full border border-[var(--border-dim)]">
                         {ALERT_TYPE_LABELS[alert.type] || alert.type}
@@ -382,14 +385,14 @@ export default function Alerts() {
                         onClick={() => navigate(alert.link)}
                         className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-surface-3 text-gray-300 hover:bg-brand hover:text-white border border-[var(--border-dim)] hover:border-brand-600 transition-all duration-150"
                       >
-                        View <ArrowRight className="w-3 h-3" />
+                        {t('alerts.item.view')} <ArrowRight className="w-3 h-3" />
                       </button>
                     )}
                     <button
                       onClick={() => dismiss(alert.id)}
                       className="flex items-center gap-1 text-xs text-muted hover:text-white transition-colors"
                     >
-                      <X className="w-3 h-3" /> Dismiss
+                      <X className="w-3 h-3" /> {t('alerts.item.dismiss')}
                     </button>
                   </div>
                 </motion.div>
@@ -408,9 +411,9 @@ export default function Alerts() {
           >
             {showDismissed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             <EyeOff size={13} />
-            {dismissedAlerts.length} dismissed alert{dismissedAlerts.length !== 1 ? 's' : ''}
+            {t('alerts.dismissed.count', { count: dismissedAlerts.length })}
             <span className="ml-auto text-xs text-gray-600 hover:text-red-400 transition-colors" onClick={e => { e.stopPropagation(); clearAllDismissed() }}>
-              Restore all
+              {t('alerts.dismissed.restoreAll')}
             </span>
           </button>
 
@@ -429,7 +432,7 @@ export default function Alerts() {
                       onClick={() => undismiss(alert.id)}
                       className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-400 transition-colors flex-shrink-0"
                     >
-                      <Eye size={11} /> Restore
+                      <Eye size={11} /> {t('alerts.dismissed.restore')}
                     </button>
                   </div>
                 )

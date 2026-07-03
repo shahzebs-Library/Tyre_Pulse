@@ -1,4 +1,5 @@
 import { X } from 'lucide-react'
+import { useLanguage } from '../contexts/LanguageContext'
 
 /**
  * ActiveFilterBadges - renders dismissible chips for active URL filters.
@@ -19,6 +20,7 @@ export default function ActiveFilterBadges({
   onRemove,
   onReset,
 }) {
+  const { t } = useLanguage()
   const active = Object.entries(filters).filter(
     ([key, val]) =>
       val !== '' &&
@@ -31,7 +33,7 @@ export default function ActiveFilterBadges({
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-[11px] text-gray-500 font-medium">Filters:</span>
+      <span className="text-[11px] text-gray-500 font-medium">{t('common.filters')}:</span>
 
       {active.map(([key, val]) => (
         <span
@@ -45,7 +47,7 @@ export default function ActiveFilterBadges({
             type="button"
             onClick={() => onRemove?.(key)}
             className="ml-0.5 text-orange-400 hover:text-orange-200 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-orange-400 rounded-full"
-            aria-label={`Remove ${labels[key] ?? key} filter`}
+            aria-label={t('ui.filters.removeAria', { label: labels[key] ?? key })}
           >
             <X size={10} aria-hidden="true" />
           </button>
@@ -58,7 +60,7 @@ export default function ActiveFilterBadges({
           onClick={onReset}
           className="text-[11px] text-gray-500 hover:text-gray-300 underline underline-offset-2 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-gray-400 rounded"
         >
-          Clear all
+          {t('ui.filters.clearAll')}
         </button>
       )}
     </div>

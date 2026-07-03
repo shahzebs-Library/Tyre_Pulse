@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { cn } from '../../lib/cn'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * DataTable - premium animated data table with loading/empty states and pagination.
@@ -24,7 +25,7 @@ export default function DataTable({
   columns = [],
   rows = [],
   loading = false,
-  emptyMsg = 'No records found',
+  emptyMsg,
   emptyIcon,
   page = 0,
   totalPages = 1,
@@ -37,6 +38,8 @@ export default function DataTable({
   selectable = false,
   className,
 }) {
+  const { t } = useLanguage()
+  const emptyText = emptyMsg ?? t('ui.table.noRecords')
   return (
     <div className={cn('flex flex-col gap-0 rounded-2xl border border-[var(--border-dim)] overflow-hidden', className)}>
       {/* Table */}
@@ -46,7 +49,7 @@ export default function DataTable({
             <tr className="border-b border-[var(--border-dim)] bg-surface-2">
               {selectable && (
                 <th className="w-10 px-4 py-3">
-                  <span className="sr-only">Select</span>
+                  <span className="sr-only">{t('common.select')}</span>
                 </th>
               )}
               {columns.map(col => (
@@ -77,7 +80,7 @@ export default function DataTable({
                   <td colSpan={columns.length + (selectable ? 1 : 0)} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-muted">
                       <Loader2 className="w-6 h-6 animate-spin text-brand" />
-                      <span className="text-sm">Loading...</span>
+                      <span className="text-sm">{t('common.loading')}</span>
                     </div>
                   </td>
                 </motion.tr>
@@ -91,7 +94,7 @@ export default function DataTable({
                   <td colSpan={columns.length + (selectable ? 1 : 0)} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-3 text-muted">
                       {emptyIcon || <div className="text-3xl opacity-30">◎</div>}
-                      <span className="text-sm">{emptyMsg}</span>
+                      <span className="text-sm">{emptyText}</span>
                     </div>
                   </td>
                 </motion.tr>
@@ -152,7 +155,7 @@ export default function DataTable({
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-4 py-3 bg-surface-1 border-t border-[var(--border-dim)]">
           <span className="text-xs text-muted">
-            {total != null ? `${total.toLocaleString()} records` : `Page ${page + 1} of ${totalPages}`}
+            {total != null ? `${total.toLocaleString()} ${t('common.records')}` : t('ui.table.pageOf', { page: page + 1, total: totalPages })}
           </span>
           <div className="flex items-center gap-1">
             <button

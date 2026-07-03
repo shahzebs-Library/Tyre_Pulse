@@ -1,0 +1,114 @@
+{
+  "health": {
+    "good": "جيد",
+    "moderate": "متوسط",
+    "atRisk": "معرض للخطر",
+    "fleetHealth": "صحة الأسطول"
+  },
+  "risk": {
+    "unknown": "غير معروف"
+  },
+  "greeting": {
+    "morning": "صباح الخير",
+    "afternoon": "طاب يومك",
+    "evening": "مساء الخير"
+  },
+  "hero": {
+    "subtitle": "لوحة معلومات ذكاء الأسطول",
+    "riskUnchanged": "سجلات الخطورة العالية دون تغيير مقارنة بالشهر الماضي",
+    "riskUp": "ارتفاع الخطورة العالية بمقدار {count} مقارنة بالشهر الماضي",
+    "riskDown": "انخفاض الخطورة العالية بمقدار {count} مقارنة بالشهر الماضي"
+  },
+  "export": {
+    "excel": "Excel",
+    "pdf": "PDF",
+    "pptx": "PPTX",
+    "dailyPdf": "تقرير يومي PDF",
+    "exporting": "جارٍ التصدير…",
+    "building": "جارٍ الإنشاء…"
+  },
+  "kpi": {
+    "tyreRecords": "سجلات الإطارات",
+    "stockSites": "مواقع المخزون",
+    "openActions": "الإجراءات المفتوحة",
+    "highRisk": "خطورة عالية",
+    "totalCost": "التكلفة الإجمالية"
+  },
+  "filters": {
+    "searchPlaceholder": "ابحث عن أصل أو علامة تجارية أو موقع...",
+    "recordsOfTotal": "{count} من {total} سجل",
+    "to": "إلى"
+  },
+  "granularity": {
+    "day": "يوم",
+    "week": "أسبوع",
+    "month": "شهر",
+    "year": "سنة"
+  },
+  "quickActions": {
+    "anomalyScan": "فحص الحالات الشاذة",
+    "viewAlerts": "عرض التنبيهات",
+    "uploadData": "رفع البيانات",
+    "inspections": "عمليات الفحص",
+    "aiCommand": "مركز الذكاء الاصطناعي"
+  },
+  "intel": {
+    "avgTyreLife": "متوسط عمر الإطار",
+    "days": "أيام",
+    "kmAvg": "متوسط {km} كم"
+  },
+  "charts": {
+    "seasonalPattern": "النمط الموسمي",
+    "seasonalSubtitle": "توزيع المشكلات الشهري",
+    "periodDaily": "التغييرات اليومية",
+    "periodWeekly": "التغييرات الأسبوعية",
+    "periodMonthly": "التغييرات الشهرية",
+    "periodYearly": "التغييرات السنوية",
+    "periodSubtitle": "{period} · {count} سجل",
+    "brandBreakdown": "توزيع العلامات التجارية",
+    "brandSubtitle": "حسب عدد الإطارات",
+    "noBrandData": "لا توجد بيانات علامات تجارية",
+    "noBrandDataDesc": "ارفع السجلات لعرض التوزيع.",
+    "monthlyCostTrend": "اتجاه التكلفة الشهري · {currency}",
+    "costSubtitle": "متجدد لمدة 12 شهرًا",
+    "riskDistribution": "توزيع مستوى الخطورة",
+    "failureCategoryMix": "مزيج فئات الأعطال",
+    "noCategories": "لا توجد فئات",
+    "noCategoriesDesc": "شغّل تنظيف البيانات لملء الفئات.",
+    "topAssets": "أعلى الأصول إنفاقًا · {currency}",
+    "topAssetsSubtitle": "المركبات الأعلى تكلفة",
+    "noAssetData": "لا توجد بيانات أصول",
+    "topSites": "أعلى المواقع إنفاقًا · {currency}",
+    "topSitesSubtitle": "المواقع الأعلى تكلفة",
+    "noSiteData": "لا توجد بيانات مواقع"
+  },
+  "legend": {
+    "all": "الكل",
+    "highRisk": "خطورة عالية",
+    "tyreIssues": "مشكلات الإطارات",
+    "cost": "التكلفة ({currency})"
+  },
+  "forecast": {
+    "title": "توقعات الإطارات",
+    "subtitle": "متوسط متحرك لثلاثة أشهر · الثقة:",
+    "thisMonth": "هذا الشهر",
+    "nextMonth": "الشهر القادم",
+    "actual": "فعلي",
+    "forecast": "متوقع"
+  },
+  "activity": {
+    "recentTyreRecords": "أحدث سجلات الإطارات",
+    "viewAll": "عرض الكل",
+    "noRecords": "لا توجد سجلات بعد",
+    "noRecordsDesc": "ارفع بيانات الإطارات لعرض النشاط الأخير.",
+    "openActions": "الإجراءات التصحيحية المفتوحة",
+    "noActions": "لا توجد إجراءات مفتوحة",
+    "noActionsDesc": "تم حل جميع الإجراءات التصحيحية."
+  },
+  "states": {
+    "loading": "جارٍ تحميل لوحة التحكم...",
+    "errorTitle": "تعذّر تحميل لوحة التحكم",
+    "errorDefault": "فشل تحميل بيانات لوحة التحكم.",
+    "retry": "إعادة المحاولة"
+  }
+}

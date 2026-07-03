@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
 import { AuthProvider } from './contexts/AuthContext'
+import { LanguageProvider } from './contexts/LanguageContext'
 import { SettingsProvider } from './contexts/SettingsContext'
 import { TenantProvider } from './contexts/TenantContext'
 import { CommandPaletteProvider } from './contexts/CommandPaletteContext'
@@ -257,6 +258,7 @@ function MainApp() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+    <LanguageProvider>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         {/* ── System Console - completely isolated from main app ── */}
@@ -287,6 +289,7 @@ export default function App() {
         <Route path="*" element={<MainApp />} />
       </Routes>
     </BrowserRouter>
+    </LanguageProvider>
     </QueryClientProvider>
   )
 }

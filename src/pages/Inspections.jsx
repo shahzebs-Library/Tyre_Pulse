@@ -7,6 +7,7 @@ import * as inspectionsApi from '../lib/api/inspections'
 import * as correctiveActions from '../lib/api/correctiveActions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Upload, Trash2, AlertTriangle } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
@@ -222,6 +223,7 @@ function buildApprovalEmailHtml({ assetNo, inspector, date, site, odometer, hour
 export default function Inspections() {
   const { profile, loading: authLoading } = useAuth()
   const { activeCountry } = useSettings()
+  const { t } = useLanguage()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const isTyreMan = profile?.role === 'Tyre Man'
@@ -915,14 +917,14 @@ export default function Inspections() {
     }
   }
 
-  if (loading || authLoading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>
+  if (loading || authLoading) return <div className="flex items-center justify-center h-64 text-gray-400">{t('common.loading')}</div>
 
   const tabConfig = [
-    { key: 'all',          label: 'All',          icon: null,            count: counts.all },
-    { key: 'inspections',  label: 'Inspections',  icon: ClipboardList,   count: counts.inspections },
-    { key: 'observations', label: 'Observations', icon: Eye,             count: counts.observations },
-    { key: 'training',     label: 'Training',     icon: GraduationCap,   count: counts.training },
-    { key: 'checklist',    label: 'Checklist',    icon: CheckSquare,     count: null },
+    { key: 'all',          label: t('inspections.tabs.all'),          icon: null,            count: counts.all },
+    { key: 'inspections',  label: t('inspections.tabs.inspections'),  icon: ClipboardList,   count: counts.inspections },
+    { key: 'observations', label: t('inspections.tabs.observations'), icon: Eye,             count: counts.observations },
+    { key: 'training',     label: t('inspections.tabs.training'),     icon: GraduationCap,   count: counts.training },
+    { key: 'checklist',    label: t('inspections.tabs.checklist'),    icon: CheckSquare,     count: null },
   ]
 
   const defaultType = activeTab === 'observations' ? 'Site Observation'
@@ -939,8 +941,8 @@ export default function Inspections() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isTyreMan ? 'Daily Tyre Checklist' : 'Inspections & Observations'}
-        subtitle={isTyreMan ? 'Record daily tyre inspections for your assigned vehicles' : 'Schedule inspections, record site observations and track training'}
+        title={isTyreMan ? t('inspections.titleTyreMan') : t('inspections.title')}
+        subtitle={isTyreMan ? t('inspections.subtitleTyreMan') : t('inspections.subtitle')}
         icon={ClipboardList}
         actions={isTyreMan ? null : (
           <div className="flex gap-2 flex-wrap">
@@ -953,7 +955,7 @@ export default function Inspections() {
               )}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
-              <Download size={14}/> Excel
+              <Download size={14}/> {t('inspections.actions.excel')}
             </button>
             <button
               onClick={() => exportToPdf(
@@ -974,19 +976,19 @@ export default function Inspections() {
               )}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
-              <FileText size={14}/> PDF
+              <FileText size={14}/> {t('inspections.actions.pdf')}
             </button>
             <button
               onClick={() => navigate('/data-intake?module=inspection')}
               className="btn-primary flex items-center gap-2 text-sm"
             >
-              <Upload size={15} /> Import via Data Intake Center
+              <Upload size={15} /> {t('inspections.actions.import')}
             </button>
             <button
               className="btn-primary text-sm"
               onClick={() => setForm({ ...EMPTY_FORM, inspection_type: defaultType })}
             >
-              + Add Record
+              {t('inspections.actions.addRecord')}
             </button>
           </div>
         )}
@@ -994,7 +996,7 @@ export default function Inspections() {
 
       {!isTyreMan && (
         <p className="text-xs text-gray-500 -mt-3">
-          Bulk-import inspections from Excel/CSV with Arabic/English header mapping, validation and duplicate detection via the Data Intake Center.
+          {t('inspections.importHint')}
         </p>
       )}
 
@@ -1034,42 +1036,42 @@ export default function Inspections() {
                   : <CheckSquare size={20} className="text-green-400" />
                 }
                 <h3 className="text-lg font-semibold" style={{ color: clOffline ? '#92400e' : undefined }}>
-                  {clOffline ? 'Saved Offline - Will Sync' : 'Checklist Saved'}
+                  {clOffline ? t('inspections.saved.savedOfflineTitle') : t('inspections.saved.savedTitle')}
                 </h3>
               </div>
               {clOffline && (
                 <p className="text-sm mb-3 rounded-lg px-3 py-2" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
-                  No connection detected. Inspection queued and will sync automatically when you're back online.
+                  {t('inspections.saved.offlineNote')}
                 </p>
               )}
               <p className="text-gray-400 text-sm mb-4">
-                Inspection for <span className="text-white font-mono">{clSaved.asset_no}</span> on {clSaved.scheduled_date}{clOffline ? ' is queued for upload.' : ' has been saved.'}
+                {t('inspections.saved.for')} <span className="text-white font-mono">{clSaved.asset_no}</span> {t('inspections.saved.on')} {clSaved.scheduled_date}{clOffline ? ` ${t('inspections.saved.queuedSuffix')}` : ` ${t('inspections.saved.doneSuffix')}`}
               </p>
               {/* Summary badges */}
               <div className="flex flex-wrap gap-2 mb-2">
                 {clPositions.filter(p => p.condition === 'Good').length > 0 && (
                   <span className="text-xs px-2 py-1 rounded-full bg-green-900/30 text-green-400 border border-green-700/40">
-                    ✓ {clPositions.filter(p => p.condition === 'Good').length} Good
+                    {t('inspections.saved.badgeGood', { count: clPositions.filter(p => p.condition === 'Good').length })}
                   </span>
                 )}
                 {clPositions.filter(p => p.condition === 'Wear').length > 0 && (
                   <span className="text-xs px-2 py-1 rounded-full bg-yellow-900/30 text-yellow-400 border border-yellow-700/40">
-                    ⚠ {clPositions.filter(p => p.condition === 'Wear').length} Wear
+                    {t('inspections.saved.badgeWear', { count: clPositions.filter(p => p.condition === 'Wear').length })}
                   </span>
                 )}
                 {clPositions.filter(p => p.condition === 'Damage' || p.condition === 'Puncture').length > 0 && (
                   <span className="text-xs px-2 py-1 rounded-full bg-red-900/30 text-red-400 border border-red-700/40">
-                    ✗ {clPositions.filter(p => p.condition === 'Damage' || p.condition === 'Puncture').length} Critical
+                    {t('inspections.saved.badgeCritical', { count: clPositions.filter(p => p.condition === 'Damage' || p.condition === 'Puncture').length })}
                   </span>
                 )}
                 {clSignature && (
                   <span className="text-xs px-2 py-1 rounded-full bg-blue-900/30 text-blue-400 border border-blue-700/40">
-                    ✍ Signed
+                    {t('inspections.saved.badgeSigned')}
                   </span>
                 )}
                 {clPhotos.length > 0 && (
                   <span className="text-xs px-2 py-1 rounded-full bg-purple-900/30 text-purple-400 border border-purple-700/40">
-                    📷 {clPhotos.length} photo{clPhotos.length !== 1 ? 's' : ''}
+                    {t('inspections.saved.badgePhotos', { count: clPhotos.length })}
                   </span>
                 )}
               </div>
@@ -1082,7 +1084,7 @@ export default function Inspections() {
                 )}
                 {!clOffline && (
                   <button onClick={() => exportChecklistPdf(true)} className="btn-secondary flex items-center gap-2 text-sm">
-                    <ExternalLink size={14} /> Preview PDF
+                    <ExternalLink size={14} /> {t('inspections.saved.previewPdf')}
                   </button>
                 )}
                 {!clOffline && navigator.share && (
@@ -1095,7 +1097,7 @@ export default function Inspections() {
                     }}
                     className="btn-secondary flex items-center gap-2 text-sm"
                   >
-                    <Share2 size={14} /> Share
+                    <Share2 size={14} /> {t('inspections.saved.share')}
                   </button>
                 )}
                 {!clOffline && (
@@ -1104,7 +1106,7 @@ export default function Inspections() {
                     className="btn-secondary flex items-center gap-2 text-sm"
                     style={{ borderColor: '#6366f1', color: '#818cf8' }}
                   >
-                    <Send size={14} /> Send for Approval
+                    <Send size={14} /> {t('inspections.saved.sendForApproval')}
                   </button>
                 )}
                 <button onClick={() => {
@@ -1116,7 +1118,7 @@ export default function Inspections() {
                   setShowPdfPreview(false)
                 }}
                   className="btn-primary text-sm">
-                  New Checklist
+                  {t('inspections.saved.newChecklist')}
                 </button>
               </div>
 
@@ -1124,22 +1126,22 @@ export default function Inspections() {
               {showApprovalForm && !clOffline && (
                 <div className="mt-3 p-4 rounded-xl" style={{ background: 'var(--panel-3)', border: '1px solid #4338ca' }}>
                   <h4 className="text-sm font-semibold text-indigo-300 mb-3 flex items-center gap-2">
-                    <Send size={14} /> Send for Manager Approval
+                    <Send size={14} /> {t('inspections.approval.title')}
                   </h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="label text-indigo-300">Approver Email</label>
+                      <label className="label text-indigo-300">{t('inspections.approval.approverEmail')}</label>
                       <input
                         type="email"
                         className="input"
-                        placeholder="manager@company.com"
+                        placeholder={t('inspections.approval.emailPlaceholder')}
                         value={clApproverEmail}
                         onChange={e => setClApproverEmail(e.target.value)}
                         style={{ background: '#312e81', borderColor: '#4338ca', color: '#e0e7ff' }}
                       />
                     </div>
                     <p className="text-xs text-indigo-300/70">
-                      The approver will receive a link to view this inspection and add their digital signature. Both signatures will appear in the final PDF.
+                      {t('inspections.approval.hint')}
                     </p>
                     <button
                       disabled={!clApproverEmail.trim() || clSendingEmail}
@@ -1183,8 +1185,8 @@ export default function Inspections() {
                       style={{ background: '#4338ca' }}
                     >
                       {clSendingEmail
-                        ? <><span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" /> Sending...</>
-                        : <><Send size={13} className="inline mr-1" /> Send Approval Request</>
+                        ? <><span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" /> {t('inspections.approval.sending')}</>
+                        : <><Send size={13} className="inline mr-1" /> {t('inspections.approval.send')}</>
                       }
                     </button>
                   </div>
@@ -1196,7 +1198,7 @@ export default function Inspections() {
                   style={{ background: 'var(--panel-3)', border: '1px solid #4338ca', color: '#a5b4fc' }}>
                   <Send size={14} />
                   <span>
-                    {clEmailSent ? '✓ Approval email sent to' : 'Awaiting approval from'}{' '}
+                    {clEmailSent ? t('inspections.approval.sentTo') : t('inspections.approval.awaiting')}{' '}
                     <strong>{clApproverEmail}</strong>
                   </span>
                 </div>
@@ -1213,7 +1215,7 @@ export default function Inspections() {
                   style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e' }}>
                   <WifiOff size={14} />
                   <span>
-                    {pendingCount} offline inspection{pendingCount !== 1 ? 's' : ''} queued - will sync when connected.
+                    {t('inspections.form.offlineQueued', { count: pendingCount })}
                   </span>
                 </div>
               )}
@@ -1250,7 +1252,7 @@ export default function Inspections() {
                         if (e.target.value) loadFleetInfo(e.target.value)
                       }}
                     >
-                      <option value="">Select asset...</option>
+                      <option value="">{t('inspections.form.selectAsset')}</option>
                       {masterAssets.map(a => (
                         <option key={a.asset_no} value={a.asset_no}>
                           {a.asset_no}{a.vehicle_type ? ` - ${a.vehicle_type}` : ''}{a.site ? ` (${a.site})` : ''}
@@ -1259,18 +1261,18 @@ export default function Inspections() {
                     </select>
                   ) : (
                     <div className="flex gap-2">
-                      <input className="input flex-1" placeholder="e.g. CM-0123" value={clAsset}
+                      <input className="input flex-1" placeholder={t('inspections.form.assetPlaceholder')} value={clAsset}
                         onChange={e => setClAsset(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && loadFleetInfo(clAsset)} />
                       <button onClick={() => loadFleetInfo(clAsset)} disabled={clLookingUp || !clAsset.trim()}
                         className="btn-secondary px-3 text-sm disabled:opacity-50">
-                        {clLookingUp ? '...' : 'Load'}
+                        {clLookingUp ? '...' : t('inspections.form.load')}
                       </button>
                     </div>
                   )}
                   {(clFleetInfo || (clAsset && inferVehicleTypeFromAsset(clAsset))) && (
                     <p className="text-xs text-green-400 mt-1">
-                      {clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset)} · {(TYRE_POSITIONS[normVT(clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset))] || DEFAULT_POSITIONS).length} tyres
+                      {clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset)} · {(TYRE_POSITIONS[normVT(clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset))] || DEFAULT_POSITIONS).length} {t('inspections.form.tyres')}
                     </p>
                   )}
                 </div>
@@ -1278,22 +1280,22 @@ export default function Inspections() {
                   <label className="label">{CHECKLIST_LABELS[lang].site}</label>
                   {masterSites.length > 0 ? (
                     <select className="input" value={clSite} onChange={e => setClSite(e.target.value)}>
-                      <option value="">Select site...</option>
+                      <option value="">{t('inspections.form.selectSite')}</option>
                       {masterSites.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   ) : (
-                    <input className="input" placeholder="Site name" value={clSite}
+                    <input className="input" placeholder={t('inspections.form.sitePlaceholder')} value={clSite}
                       onChange={e => setClSite(e.target.value)} list="cl-sites" />
                   )}
                   <datalist id="cl-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
                 </div>
                 <div>
                   <label className="label">{CHECKLIST_LABELS[lang].inspector}</label>
-                  <input className="input" placeholder="Inspector name" value={clInspector}
+                  <input className="input" placeholder={t('inspections.form.inspectorPlaceholder')} value={clInspector}
                     onChange={e => setClInspector(e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Date</label>
+                  <label className="label">{t('inspections.form.date')}</label>
                   <input type="date" className="input" value={clDate} onChange={e => setClDate(e.target.value)} />
                 </div>
               </div>
@@ -1312,7 +1314,7 @@ export default function Inspections() {
                       className="rounded-2xl flex flex-col items-center py-4 px-2"
                       style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
                     >
-                      <p className="text-xs font-medium mb-3" style={{ color: '#6b7280' }}>Tap a tyre to fill details</p>
+                      <p className="text-xs font-medium mb-3" style={{ color: '#6b7280' }}>{t('inspections.form.tapTyre')}</p>
                       <VehicleTyreDiagram
                         vehicleType={clFleetInfo?.vehicle_type || inferVehicleTypeFromAsset(clAsset) || 'Pickup'}
                         positions={clPositions.map(p => ({
@@ -1364,8 +1366,8 @@ export default function Inspections() {
                     </div>
                     <p className="text-xs px-0.5" style={{ color: allFilled ? '#16a34a' : '#9ca3af' }}>
                       {allFilled
-                        ? `✓ All ${clPositions.length} tyres filled - ready to save`
-                        : `${filledCount} of ${clPositions.length} filled · ${unfilledPositions.length} remaining`}
+                        ? t('inspections.form.allFilled', { count: clPositions.length })
+                        : t('inspections.form.fillProgress', { filled: filledCount, total: clPositions.length, remaining: unfilledPositions.length })}
                     </p>
 
                     {/* Bottom sheet for selected position */}
@@ -1410,20 +1412,20 @@ export default function Inspections() {
               {/* Odometer + Hour Meter */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label flex items-center gap-1.5"><Gauge size={12} className="text-gray-400" /> Odometer (km)</label>
-                  <input type="number" className="input" placeholder="e.g. 123456" min="0"
+                  <label className="label flex items-center gap-1.5"><Gauge size={12} className="text-gray-400" /> {t('inspections.form.odometer')}</label>
+                  <input type="number" className="input" placeholder={t('inspections.form.odometerPlaceholder')} min="0"
                     value={clOdometer} onChange={e => setClOdometer(e.target.value)} />
                 </div>
                 <div>
-                  <label className="label flex items-center gap-1.5"><Clock size={12} className="text-gray-400" /> Hour Meter (hrs)</label>
-                  <input type="number" className="input" placeholder="e.g. 4521" min="0"
+                  <label className="label flex items-center gap-1.5"><Clock size={12} className="text-gray-400" /> {t('inspections.form.hourMeter')}</label>
+                  <input type="number" className="input" placeholder={t('inspections.form.hourMeterPlaceholder')} min="0"
                     value={clHourMeter} onChange={e => setClHourMeter(e.target.value)} />
                 </div>
               </div>
 
               {/* Photo capture */}
               <div>
-                <label className="label flex items-center gap-1.5"><Camera size={12} className="text-gray-400" /> Photos</label>
+                <label className="label flex items-center gap-1.5"><Camera size={12} className="text-gray-400" /> {t('inspections.form.photos')}</label>
                 <div className="flex gap-2 flex-wrap mb-2">
                   {clPhotos.map((src, i) => (
                     <div key={i} className="relative">
@@ -1446,14 +1448,14 @@ export default function Inspections() {
                         className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
                         style={{ background: '#0c4a6e', border: '1.5px solid #0369a1', color: '#7dd3fc' }}
                       >
-                        <Camera size={13} /> Camera
+                        <Camera size={13} /> {t('inspections.form.camera')}
                       </button>
                       <button
                         onClick={() => galleryInputRef.current?.click()}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
                         style={{ background: 'var(--panel-3)', border: '1.5px solid #4338ca', color: '#a5b4fc' }}
                       >
-                        <ImageIcon size={13} /> Gallery
+                        <ImageIcon size={13} /> {t('inspections.form.gallery')}
                       </button>
                     </div>
                   )}
@@ -1507,16 +1509,16 @@ export default function Inspections() {
 
               {/* Inspector Signature */}
               <div>
-                <label className="label flex items-center gap-1.5"><PenLine size={12} className="text-gray-400" /> Inspector Signature</label>
+                <label className="label flex items-center gap-1.5"><PenLine size={12} className="text-gray-400" /> {t('inspections.form.inspectorSignature')}</label>
                 {clSignature ? (
                   <div className="flex items-center gap-3">
                     <img src={clSignature} alt="signature"
                       style={{ height: 56, maxWidth: 180, background: '#fff', borderRadius: 8, border: '1px solid var(--hairline)', padding: 4 }} />
                     <div>
-                      <p className="text-xs text-green-400 font-semibold">✓ Signed - {clInspector}</p>
+                      <p className="text-xs text-green-400 font-semibold">{t('inspections.form.signedAs', { name: clInspector })}</p>
                       <button onClick={() => setClSignature(null)}
                         className="text-xs text-gray-500 hover:text-red-400 transition-colors mt-0.5">
-                        Clear signature
+                        {t('inspections.form.clearSignature')}
                       </button>
                     </div>
                   </div>
@@ -1526,14 +1528,14 @@ export default function Inspections() {
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold w-full"
                     style={{ background: '#1a2e1a', border: '1.5px dashed #16a34a', color: '#4ade80' }}
                   >
-                    <PenLine size={15} /> Tap to Sign
+                    <PenLine size={15} /> {t('inspections.form.tapToSign')}
                   </button>
                 )}
               </div>
 
               <div>
                 <label className="label">{CHECKLIST_LABELS[lang].notes}</label>
-                <textarea className="input h-20 resize-none" placeholder="General observations..."
+                <textarea className="input h-20 resize-none" placeholder={t('inspections.form.notesPlaceholder')}
                   value={clNotes} onChange={e => setClNotes(e.target.value)} />
               </div>
 
@@ -1547,7 +1549,7 @@ export default function Inspections() {
                   style={{ background: '#fefce8', border: '1px solid #fde047', color: '#854d0e' }}>
                   <span>⚠️</span>
                   <span>
-                    {clPositions.filter(p => !p.pressure).length} tyre{clPositions.filter(p => !p.pressure).length !== 1 ? 's' : ''} still need PSI - tap them on the diagram to fill.
+                    {t('inspections.form.psiWarning', { count: clPositions.filter(p => !p.pressure).length })}
                   </span>
                 </div>
               )}
@@ -1556,7 +1558,7 @@ export default function Inspections() {
                 disabled={clSaving || !clAsset.trim() || clPositions.length === 0 || clPositions.some(p => !p.pressure)}
                 className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {clSaving ? 'Saving...' : CHECKLIST_LABELS[lang].save}
+                {clSaving ? t('common.saving') : CHECKLIST_LABELS[lang].save}
               </button>
             </div>
           )}
@@ -1566,7 +1568,7 @@ export default function Inspections() {
       {/* Signature Pad Modal */}
       {showSignaturePad && (
         <SignaturePad
-          label="Inspector Signature"
+          label={t('inspections.form.inspectorSignature')}
           inspectorName={clInspector}
           employeeId={profile?.employee_id || ''}
           onSave={dataUrl => { setClSignature(dataUrl); setShowSignaturePad(false) }}
@@ -1589,9 +1591,9 @@ export default function Inspections() {
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color:'var(--panel-ink)' }}>Approve Inspection</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color:'var(--panel-ink)' }}>{t('inspections.approve.title')}</div>
                 <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-                  Asset: <strong style={{ color: '#d1d5db' }}>{approveTarget.asset_no}</strong>
+                  {t('inspections.approve.asset')} <strong style={{ color: '#d1d5db' }}>{approveTarget.asset_no}</strong>
                   {approveTarget.site ? ` · ${approveTarget.site}` : ''}
                   {' · '}{approveTarget.inspection_date || approveTarget.scheduled_date}
                 </div>
@@ -1605,11 +1607,11 @@ export default function Inspections() {
             {/* Details */}
             <div style={{ background: 'var(--panel-2)', borderRadius: 12, padding: 16, marginBottom: 16, fontSize: 13 }}>
               {[
-                ['Inspector', approveTarget.inspector_name || approveTarget.inspector],
-                ['Type', approveTarget.inspection_type],
-                ['Odometer', approveTarget.odometer_km ? `${approveTarget.odometer_km} km` : null],
-                ['Hour Meter', approveTarget.hour_meter ? `${approveTarget.hour_meter} hrs` : null],
-                ['Notes', approveTarget.notes],
+                [t('inspections.approve.fields.inspector'), approveTarget.inspector_name || approveTarget.inspector],
+                [t('inspections.approve.fields.type'), approveTarget.inspection_type],
+                [t('inspections.approve.fields.odometer'), approveTarget.odometer_km ? `${approveTarget.odometer_km} km` : null],
+                [t('inspections.approve.fields.hourMeter'), approveTarget.hour_meter ? `${approveTarget.hour_meter} hrs` : null],
+                [t('inspections.approve.fields.notes'), approveTarget.notes],
               ].filter(([, v]) => v).map(([k, v]) => (
                 <div key={k} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                   <span style={{ color: '#6b7280', minWidth: 100 }}>{k}</span>
@@ -1620,13 +1622,13 @@ export default function Inspections() {
 
             {/* Additional imported fields */}
             <div style={{ marginBottom: 16 }}>
-              <CustomFieldsPanel data={approveTarget.custom_data} title="Additional imported fields" />
+              <CustomFieldsPanel data={approveTarget.custom_data} title={t('inspections.approve.additionalFields')} />
             </div>
 
             {/* Inspector signature preview */}
             {approveTarget.inspector_signature && (
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>Inspector Signature</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>{t('inspections.form.inspectorSignature')}</div>
                 <img src={approveTarget.inspector_signature} alt="Inspector signature"
                   style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
               </div>
@@ -1634,14 +1636,14 @@ export default function Inspections() {
 
             {/* Approver signature */}
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8 }}>Your Signature (Approver)</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8 }}>{t('inspections.approve.yourSignature')}</div>
               {approverSig ? (
                 <div>
                   <img src={approverSig} alt="Approver signature"
                     style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
                   <button onClick={() => setApproverSig(null)}
                     style={{ display: 'block', marginTop: 6, fontSize: 11, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer' }}>
-                    Clear &amp; re-sign
+                    {t('inspections.approve.clearResign')}
                   </button>
                 </div>
               ) : (
@@ -1654,7 +1656,7 @@ export default function Inspections() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   }}
                 >
-                  <span>✍</span> Tap to add your approval signature
+                  <span>✍</span> {t('inspections.approve.tapToSign')}
                 </button>
               )}
             </div>
@@ -1684,7 +1686,7 @@ export default function Inspections() {
                         approved_by: profile?.id,
                       })
                     } catch { /* mirror prior fire-and-forget: surface result regardless */ }
-                    setApproveMsg({ type: 'err', text: 'Inspection rejected.' })
+                    setApproveMsg({ type: 'err', text: t('inspections.approve.msgRejected') })
                     setApproveSubmitting(false)
                   }}
                   disabled={approveSubmitting}
@@ -1694,11 +1696,11 @@ export default function Inspections() {
                     color: '#f87171', fontSize: 13, fontWeight: 600, cursor: 'pointer',
                   }}
                 >
-                  Reject
+                  {t('inspections.approve.reject')}
                 </button>
                 <button
                   onClick={async () => {
-                    if (!approverSig) { setApproveMsg({ type: 'err', text: 'Please add your signature before approving.' }); return }
+                    if (!approverSig) { setApproveMsg({ type: 'err', text: t('inspections.approve.msgNeedSignature') }); return }
                     setApproveSubmitting(true)
                     try {
                       await inspectionsApi.patchInspection(approveTarget.id, {
@@ -1708,7 +1710,7 @@ export default function Inspections() {
                         approved_by: profile?.id,
                       })
                     } catch { /* mirror prior fire-and-forget: surface result regardless */ }
-                    setApproveMsg({ type: 'ok', text: '✓ Inspection approved and signed.' })
+                    setApproveMsg({ type: 'ok', text: t('inspections.approve.msgApproved') })
                     setApproveSubmitting(false)
                     setApproveTarget(prev => ({ ...prev, approval_status: 'approved', approver_signature: approverSig }))
                   }}
@@ -1719,13 +1721,13 @@ export default function Inspections() {
                     color:'var(--panel-ink)', fontSize: 13, fontWeight: 700, cursor: approverSig ? 'pointer' : 'not-allowed',
                   }}
                 >
-                  {approveSubmitting ? 'Saving...' : '✓ Approve & Sign'}
+                  {approveSubmitting ? t('common.saving') : t('inspections.approve.approveSign')}
                 </button>
               </div>
             )}
             {approveTarget.approval_status === 'approved' && (
               <div style={{ textAlign: 'center', padding: '12px', borderRadius: 10, background: 'rgba(22,163,74,0.15)', border: '1px solid #16a34a', color: '#4ade80', fontWeight: 600 }}>
-                ✓ This inspection has been approved
+                {t('inspections.approve.alreadyApproved')}
               </div>
             )}
           </div>
@@ -1735,7 +1737,7 @@ export default function Inspections() {
       {/* Approver Signature Pad */}
       {showApproverPad && (
         <SignaturePad
-          label="Approver Signature"
+          label={t('inspections.approve.approverSignature')}
           inspectorName={profile?.full_name || ''}
           employeeId={profile?.employee_id || ''}
           onSave={dataUrl => { setApproverSig(dataUrl); setShowApproverPad(false) }}
@@ -1756,7 +1758,7 @@ export default function Inspections() {
             background: 'var(--panel)', borderBottom: '1px solid var(--hairline)',
           }}>
             <span style={{ fontSize: 14, fontWeight: 700, color:'var(--panel-ink)' }}>
-              Inspection Report - {clSaved?.asset_no}
+              {t('inspections.pdfPreview.title')} - {clSaved?.asset_no}
             </span>
             <div className="flex gap-2">
               <a
@@ -1764,7 +1766,7 @@ export default function Inspections() {
                 download={`TyrePulse_Checklist_${clSaved?.asset_no || 'report'}.pdf`}
                 className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
               >
-                <Download size={13} /> Download
+                <Download size={13} /> {t('inspections.pdfPreview.download')}
               </a>
               <button
                 onClick={() => setShowPdfPreview(false)}
@@ -1785,11 +1787,11 @@ export default function Inspections() {
       {/* Status filter pills, search, and table - hidden in checklist mode */}
       {activeTab !== 'checklist' && <>
       <div className="flex flex-wrap gap-2">
-        {[['all', 'All', 'bg-gray-800 text-gray-300 border-gray-700'],
-          ['Overdue', 'Overdue', 'bg-red-900/30 text-red-400 border-red-700/50'],
-          ['Scheduled', 'Scheduled', 'bg-blue-900/30 text-blue-400 border-blue-700/50'],
-          ['In Progress', 'In Progress', 'bg-yellow-900/30 text-yellow-400 border-yellow-700/50'],
-          ['Done', 'Done', 'bg-green-900/30 text-green-400 border-green-700/50'],
+        {[['all', t('inspections.filters.status.all'), 'bg-gray-800 text-gray-300 border-gray-700'],
+          ['Overdue', t('inspections.filters.status.overdue'), 'bg-red-900/30 text-red-400 border-red-700/50'],
+          ['Scheduled', t('inspections.filters.status.scheduled'), 'bg-blue-900/30 text-blue-400 border-blue-700/50'],
+          ['In Progress', t('inspections.filters.status.inProgress'), 'bg-yellow-900/30 text-yellow-400 border-yellow-700/50'],
+          ['Done', t('inspections.filters.status.done'), 'bg-green-900/30 text-green-400 border-green-700/50'],
         ].map(([val, label, cls]) => (
           <button
             key={val}
@@ -1803,10 +1805,10 @@ export default function Inspections() {
 
       {/* Search + site filter */}
       <div className="flex flex-wrap gap-3">
-        <input className="input flex-1 min-w-48" placeholder="Search title, site, asset, inspector, attendees..."
+        <input className="input flex-1 min-w-48" placeholder={t('inspections.filters.searchPlaceholder')}
           value={search} onChange={e => setSearch(e.target.value)} />
         <select className="input w-44" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
-          <option value="all">All Sites</option>
+          <option value="all">{t('inspections.filters.allSites')}</option>
           {sites.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
@@ -1839,15 +1841,15 @@ export default function Inspections() {
                   className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
               </div>
             )}
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Type</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Title</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Site</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Asset</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Date</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Severity</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Status</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Inspector</div>
-            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">Actions</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.type')}</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.title')}</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.site')}</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.asset')}</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.date')}</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.severity')}</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.status')}</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.inspector')}</div>
+            <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.actions')}</div>
           </div>
         </div>
 
@@ -1861,7 +1863,7 @@ export default function Inspections() {
           }}
         >
           {filtered.length === 0 ? (
-            <div className="py-12 text-center text-gray-500 text-sm">No records found</div>
+            <div className="py-12 text-center text-gray-500 text-sm">{t('inspections.states.noRecords')}</div>
           ) : (
             <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
               {rowVirtualizer.getVirtualItems().map(virtualRow => {
@@ -1905,8 +1907,8 @@ export default function Inspections() {
                     {/* Title */}
                     <div className="px-3 text-white font-medium text-sm truncate" title={r.title}>
                       {r.title}
-                      {r.photo_data && <Camera className="inline w-3 h-3 ml-1 text-gray-500" title="Has photo" />}
-                      {r.linked_action_id && <ClipboardList className="inline w-3 h-3 ml-1 text-yellow-400" title="Action raised" />}
+                      {r.photo_data && <Camera className="inline w-3 h-3 ml-1 text-gray-500" title={t('inspections.row.titleHasPhoto')} />}
+                      {r.linked_action_id && <ClipboardList className="inline w-3 h-3 ml-1 text-yellow-400" title={t('inspections.row.titleActionRaised')} />}
                     </div>
 
                     {/* Site */}
@@ -1943,32 +1945,32 @@ export default function Inspections() {
                         {r.status !== 'Done' && r.status !== 'Cancelled' && (
                           <button onClick={() => markDone(r.id)}
                             className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-700/50 transition-colors whitespace-nowrap">
-                            ✓ Done
+                            {t('inspections.row.done')}
                           </button>
                         )}
                         {isObs && r.status === 'Done' && !r.linked_action_id && (
                           <button onClick={() => setRaisingAction(r)}
                             className="text-xs px-2 py-1 rounded bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 border border-yellow-700/40 transition-colors whitespace-nowrap">
-                            Raise Action
+                            {t('inspections.row.raiseAction')}
                           </button>
                         )}
                         {r.linked_action_id && (
                           <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-500 border border-gray-700 whitespace-nowrap">
-                            Action ✓
+                            {t('inspections.row.actionRaised')}
                           </span>
                         )}
                         <button onClick={() => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} })}
                           className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors">
-                          Edit
+                          {t('inspections.row.edit')}
                         </button>
                         <button onClick={() => exportInspectionDetailPdf(r)}
                           className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
-                          title="Export detailed PDF with tyre diagram">
+                          title={t('inspections.row.titleExportPdf')}>
                           <FileText size={11} className="inline" />
                         </button>
                         <button onClick={() => setDeleteId(r.id)}
                           className="text-xs px-2 py-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 border border-red-800/50 transition-colors">
-                          Del
+                          {t('inspections.row.del')}
                         </button>
                       </div>
                     </div>
@@ -1985,33 +1987,33 @@ export default function Inspections() {
       {form !== null && (
         <Modal onClose={() => setForm(null)}>
           <h3 className="text-lg font-bold text-white mb-5">
-            {form.id ? 'Edit Record' : 'Add Record'}
+            {form.id ? t('inspections.modal.editRecord') : t('inspections.modal.addRecord')}
           </h3>
           <div className="space-y-4">
             <div>
-              <label className="label">Title *</label>
+              <label className="label">{t('inspections.modal.titleField')}</label>
               <input className="input" value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="Descriptive title..." />
+                placeholder={t('inspections.modal.titlePlaceholder')} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Type</label>
+                <label className="label">{t('inspections.modal.type')}</label>
                 <select className="input" value={form.inspection_type}
                   onChange={e => setForm(f => ({ ...f, inspection_type: e.target.value }))}>
-                  <optgroup label="Inspections">
+                  <optgroup label={t('inspections.modal.groupInspections')}>
                     {INSPECTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </optgroup>
-                  <optgroup label="Observations">
+                  <optgroup label={t('inspections.modal.groupObservations')}>
                     {OBSERVATION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </optgroup>
-                  <optgroup label="Training">
+                  <optgroup label={t('inspections.modal.groupTraining')}>
                     {TRAINING_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </optgroup>
                 </select>
               </div>
               <div>
-                <label className="label">Status</label>
+                <label className="label">{t('inspections.modal.status')}</label>
                 <select className="input" value={form.status}
                   onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
                   {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -2020,28 +2022,28 @@ export default function Inspections() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Site *</label>
+                <label className="label">{t('inspections.modal.siteField')}</label>
                 <input className="input" value={form.site}
                   onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
-                  placeholder="Site name" list="insp-sites" />
+                  placeholder={t('inspections.form.sitePlaceholder')} list="insp-sites" />
                 <datalist id="insp-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
               </div>
               <div>
-                <label className="label">Date *</label>
+                <label className="label">{t('inspections.modal.dateField')}</label>
                 <input type="date" className="input" value={form.scheduled_date}
                   onChange={e => setForm(f => ({ ...f, scheduled_date: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Asset No</label>
+                <label className="label">{t('inspections.modal.assetNo')}</label>
                 <input className="input" value={form.asset_no}
                   onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))}
-                  placeholder="e.g. CM-0123" />
+                  placeholder={t('inspections.form.assetPlaceholder')} />
               </div>
               {!isTrainingType(form.inspection_type) && (
                 <div>
-                  <label className="label">Severity</label>
+                  <label className="label">{t('inspections.modal.severity')}</label>
                   <select className="input" value={form.severity || 'Medium'}
                     onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}>
                     {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -2050,10 +2052,10 @@ export default function Inspections() {
               )}
               {isTrainingType(form.inspection_type) && (
                 <div>
-                  <label className="label">Tyre Serial</label>
+                  <label className="label">{t('inspections.modal.tyreSerial')}</label>
                   <input className="input" value={form.tyre_serial}
                     onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))}
-                    placeholder="Serial number" />
+                    placeholder={t('inspections.modal.serialPlaceholder')} />
                 </div>
               )}
             </div>
@@ -2061,16 +2063,16 @@ export default function Inspections() {
             {/* Tyre diagram - inspections only */}
             {!isObservationType(form.inspection_type) && !isTrainingType(form.inspection_type) && (
               <div>
-                <label className="label">Vehicle Type</label>
+                <label className="label">{t('inspections.modal.vehicleType')}</label>
                 <select className="input mb-3" value={form.vehicle_type || ''}
                   onChange={e => { setForm(f => ({ ...f, vehicle_type: e.target.value, tyre_conditions: {} })); setSelectedTyre(null) }}>
-                  <option value="">- select to show tyre diagram -</option>
+                  <option value="">{t('inspections.modal.selectVehicleType')}</option>
                   {VEHICLE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
 
                 {form.vehicle_type && (
                   <div className="bg-gray-800/60 rounded-xl p-4 border border-gray-700/50">
-                    <p className="text-xs text-gray-400 mb-3">Click a tyre to set its condition.</p>
+                    <p className="text-xs text-gray-400 mb-3">{t('inspections.modal.clickTyre')}</p>
                     <VehicleTyreDiagram
                       vehicleType={form.vehicle_type}
                       tyreData={form.tyre_conditions || {}}
@@ -2080,7 +2082,7 @@ export default function Inspections() {
 
                     {selectedTyre && (
                       <div className="mt-4 p-3 bg-gray-900 rounded-lg border border-gray-700">
-                        <p className="text-xs font-semibold text-white mb-2">Tyre: {selectedTyre}</p>
+                        <p className="text-xs font-semibold text-white mb-2">{t('inspections.modal.tyreLabel', { id: selectedTyre })}</p>
                         <div className="flex gap-2 flex-wrap mb-2">
                           {RISK_LEVELS.map(r => (
                             <button
@@ -2102,14 +2104,14 @@ export default function Inspections() {
                                   : 'bg-gray-800 border-gray-600 text-gray-400 hover:text-white'
                               }`}
                             >
-                              {r === 'none' ? 'No data' : r}
+                              {r === 'none' ? t('inspections.modal.noData') : r}
                             </button>
                           ))}
                         </div>
                         <input
                           type="number"
                           className="input text-xs py-1"
-                          placeholder="Pressure (PSI)"
+                          placeholder={t('inspections.modal.pressurePlaceholder')}
                           value={form.tyre_conditions?.[selectedTyre]?.pressure ?? ''}
                           onChange={e => setForm(f => ({
                             ...f,
@@ -2128,45 +2130,45 @@ export default function Inspections() {
 
             {isTrainingType(form.inspection_type) ? (
               <div>
-                <label className="label">Attendees</label>
+                <label className="label">{t('inspections.modal.attendees')}</label>
                 <input className="input" value={form.attendees || ''}
                   onChange={e => setForm(f => ({ ...f, attendees: e.target.value }))}
-                  placeholder="Names or count of attendees" />
+                  placeholder={t('inspections.modal.attendeesPlaceholder')} />
               </div>
             ) : (
               <div>
-                <label className="label">Inspector / Observer</label>
+                <label className="label">{t('inspections.modal.inspectorObserver')}</label>
                 <input className="input" value={form.inspector}
                   onChange={e => setForm(f => ({ ...f, inspector: e.target.value }))}
-                  placeholder="Name" />
+                  placeholder={t('inspections.modal.namePlaceholder')} />
               </div>
             )}
 
             <div>
-              <label className="label">{isTrainingType(form.inspection_type) ? 'Training Content' : 'Findings'}</label>
+              <label className="label">{isTrainingType(form.inspection_type) ? t('inspections.modal.trainingContent') : t('inspections.modal.findings')}</label>
               <textarea className="input h-20 resize-none" value={form.findings}
                 onChange={e => setForm(f => ({ ...f, findings: e.target.value }))}
-                placeholder={isTrainingType(form.inspection_type) ? 'Topics covered...' : 'What was found...'} />
+                placeholder={isTrainingType(form.inspection_type) ? t('inspections.modal.topicsPlaceholder') : t('inspections.modal.findingsPlaceholder')} />
             </div>
             <div>
-              <label className="label">Notes</label>
+              <label className="label">{t('inspections.modal.notes')}</label>
               <textarea className="input h-16 resize-none" value={form.notes}
                 onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="Additional notes..." />
+                placeholder={t('inspections.modal.notesPlaceholder')} />
             </div>
 
             {/* Photo upload */}
             <div>
-              <label className="label">Photo</label>
+              <label className="label">{t('inspections.modal.photo')}</label>
               <div className="flex items-center gap-3">
                 <button type="button"
                   onClick={() => fileRef.current?.click()}
                   className="btn-secondary text-sm flex items-center gap-2 px-3 py-2">
-                  <Camera size={14} /> {form.photo_data ? 'Change Photo' : 'Upload Photo'}
+                  <Camera size={14} /> {form.photo_data ? t('inspections.modal.changePhoto') : t('inspections.modal.uploadPhoto')}
                 </button>
                 {form.photo_data && (
                   <button type="button" onClick={() => setForm(f => ({ ...f, photo_data: null }))}
-                    className="text-xs text-red-400 hover:text-red-300">Remove</button>
+                    className="text-xs text-red-400 hover:text-red-300">{t('inspections.modal.remove')}</button>
                 )}
                 <input ref={fileRef} type="file" accept="image/*" className="hidden"
                   onChange={handlePhotoChange} />
@@ -2178,7 +2180,7 @@ export default function Inspections() {
 
             {form.status === 'Done' && (
               <div>
-                <label className="label">Completed Date</label>
+                <label className="label">{t('inspections.modal.completedDate')}</label>
                 <input type="date" className="input" value={form.completed_date || ''}
                   onChange={e => setForm(f => ({ ...f, completed_date: e.target.value }))} />
               </div>
@@ -2190,11 +2192,11 @@ export default function Inspections() {
             </div>
           )}
           <div className="flex gap-3 mt-4">
-            <button onClick={() => { setForm(null); setSaveError(null) }} className="btn-secondary flex-1">Cancel</button>
+            <button onClick={() => { setForm(null); setSaveError(null) }} className="btn-secondary flex-1">{t('common.cancel')}</button>
             <button onClick={save}
               disabled={saving || !form.title?.trim() || !form.site?.trim() || !form.scheduled_date}
               className="btn-primary flex-1 disabled:opacity-50">
-              {saving ? 'Saving...' : form.id ? 'Save Changes' : 'Add'}
+              {saving ? t('common.saving') : form.id ? t('inspections.modal.saveChanges') : t('common.add')}
             </button>
           </div>
         </Modal>
@@ -2212,11 +2214,11 @@ export default function Inspections() {
       {/* Delete confirm */}
       {deleteId && (
         <Modal onClose={() => setDeleteId(null)}>
-          <p className="text-white font-semibold mb-2">Delete this record?</p>
-          <p className="text-gray-400 text-sm mb-5">This action cannot be undone.</p>
+          <p className="text-white font-semibold mb-2">{t('inspections.deleteModal.title')}</p>
+          <p className="text-gray-400 text-sm mb-5">{t('inspections.deleteModal.warning')}</p>
           <div className="flex gap-3">
-            <button onClick={() => setDeleteId(null)} className="btn-secondary flex-1">Cancel</button>
-            <button onClick={confirmDelete} className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700">Delete</button>
+            <button onClick={() => setDeleteId(null)} className="btn-secondary flex-1">{t('common.cancel')}</button>
+            <button onClick={confirmDelete} className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700">{t('common.delete')}</button>
           </div>
         </Modal>
       )}
@@ -2263,6 +2265,7 @@ export default function Inspections() {
 }
 
 function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, lang, onUpdate, onNext, onPrev, onClose }) {
+  const { t } = useLanguage()
   const L = CHECKLIST_LABELS[lang]
   const isPuncture = pos.condition === 'Puncture'
   const showPunctureAlert = isPuncture
@@ -2277,8 +2280,8 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
   }
 
   const nextLabel = isLast
-    ? allFilled ? '✓ All Done' : `Fill ${unfilledCount} More →`
-    : 'Next →'
+    ? allFilled ? t('inspections.position.allDone') : t('inspections.position.fillMore', { count: unfilledCount })
+    : t('inspections.position.next')
   const nextBg = isLast && allFilled ? '#166534' : '#16a34a'
 
   return (
@@ -2313,7 +2316,7 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
               </span>
               <span className="text-sm font-medium" style={{ color: '#9ca3af' }}>
                 {posIdx + 1} / {total}
-                {unfilledCount > 0 && <span className="ml-2 text-xs" style={{ color: '#d97706' }}>· {unfilledCount} unfilled</span>}
+                {unfilledCount > 0 && <span className="ml-2 text-xs" style={{ color: '#d97706' }}>{t('inspections.position.unfilled', { count: unfilledCount })}</span>}
               </span>
             </div>
             <button
@@ -2329,7 +2332,7 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
           {showPunctureAlert && (
             <div className="mb-3 px-3 py-2.5 rounded-xl flex items-center gap-2 text-sm font-semibold"
               style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#991b1b' }}>
-              🔴 Puncture detected - immediate action required
+              {t('inspections.position.punctureAlert')}
             </div>
           )}
 
@@ -2402,7 +2405,7 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
                 className="flex-1 py-3 rounded-2xl text-sm font-bold"
                 style={{ background: '#f3f4f6', color: '#374151', border: '1.5px solid #e5e7eb' }}
               >
-                ← Prev
+                {t('inspections.position.prev')}
               </button>
             )}
             <button
@@ -2420,26 +2423,27 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
 }
 
 function RaiseActionModal({ row, onConfirm, onClose }) {
+  const { t } = useLanguage()
   const [title, setTitle] = useState(`Action: ${row.title}`)
   return (
     <Modal onClose={onClose}>
-      <h3 className="text-lg font-bold text-white mb-4">Raise Corrective Action</h3>
+      <h3 className="text-lg font-bold text-white mb-4">{t('inspections.raiseModal.title')}</h3>
       <p className="text-gray-400 text-sm mb-4">
-        This will create a new corrective action linked to this observation.
+        {t('inspections.raiseModal.desc')}
       </p>
       <div className="mb-4">
-        <label className="label">Action Title</label>
+        <label className="label">{t('inspections.raiseModal.actionTitle')}</label>
         <input className="input" value={title} onChange={e => setTitle(e.target.value)} />
       </div>
       <div className="bg-gray-800 rounded-lg p-3 text-xs text-gray-400 mb-4 space-y-1">
-        <p><span className="text-gray-500">Site:</span> {row.site}</p>
-        <p><span className="text-gray-500">Asset:</span> {row.asset_no || '-'}</p>
-        <p><span className="text-gray-500">Priority:</span> {row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium'}</p>
-        {row.findings && <p><span className="text-gray-500">Findings:</span> {row.findings.slice(0, 100)}{row.findings.length > 100 ? '...' : ''}</p>}
+        <p><span className="text-gray-500">{t('inspections.raiseModal.site')}</span> {row.site}</p>
+        <p><span className="text-gray-500">{t('inspections.raiseModal.asset')}</span> {row.asset_no || '-'}</p>
+        <p><span className="text-gray-500">{t('inspections.raiseModal.priority')}</span> {row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium'}</p>
+        {row.findings && <p><span className="text-gray-500">{t('inspections.raiseModal.findings')}</span> {row.findings.slice(0, 100)}{row.findings.length > 100 ? '...' : ''}</p>}
       </div>
       <div className="flex gap-3">
-        <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
-        <button onClick={() => onConfirm(title)} className="btn-primary flex-1">Raise Action</button>
+        <button onClick={onClose} className="btn-secondary flex-1">{t('common.cancel')}</button>
+        <button onClick={() => onConfirm(title)} className="btn-primary flex-1">{t('inspections.raiseModal.raiseAction')}</button>
       </div>
     </Modal>
   )

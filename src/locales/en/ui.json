@@ -1,0 +1,46 @@
+{
+  "emptyState": {
+    "title": "No data found",
+    "description": "There are no records matching your current filters."
+  },
+  "search": {
+    "placeholder": "Search tyres, vehicles, work orders, reports...",
+    "quickNavigation": "Quick Navigation",
+    "pages": "Pages",
+    "results": "{count} results",
+    "noResultsFor": "No results for",
+    "noResultsHint": "Try searching for an asset number, serial, or brand",
+    "emptyPrompt": "Type to search across all TyrePulse data",
+    "recordsFound": "{count} records found",
+    "brand": "TyrePulse Search"
+  },
+  "command": {
+    "placeholder": "Search pages, actions... ({key}K)",
+    "groups": {
+      "recent": "Recent",
+      "actions": "Actions",
+      "navigation": "Navigation"
+    }
+  },
+  "hints": {
+    "navigate": "navigate",
+    "select": "select",
+    "open": "open",
+    "close": "close"
+  },
+  "filters": {
+    "clearAll": "Clear all",
+    "removeAria": "Remove {label} filter"
+  },
+  "bulk": {
+    "selected": "{count} {label} selected",
+    "deselectAll": "Deselect all"
+  },
+  "table": {
+    "noRecords": "No records found",
+    "pageOf": "Page {page} of {total}"
+  },
+  "filterBar": {
+    "searchPlaceholder": "Search..."
+  }
+}

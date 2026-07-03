@@ -8,7 +8,7 @@ import {
   LayoutDashboard, CircleDot, Package, DollarSign,
   ClipboardList, Search, Upload, Settings, LogOut,
   Menu, X, Wand2, BarChart2, Shield, ClipboardCheck,
-  Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, Sparkles,
+  Bell, GitBranch, Layers, AlertTriangle, Globe, Car, Users, User, Sparkles,
   Sun, Moon, Truck, AlertOctagon, FileText, ShieldCheck, ScanLine, GitCompare, QrCode,
   ChevronDown, ChevronRight,
   Cpu, MapPin, Activity, GitMerge, CalendarClock, Trophy, BarChartBig, Microscope, Bot,
@@ -27,6 +27,9 @@ import InstallPwaPrompt from './InstallPwaPrompt'
 import NotificationCenter from './NotificationCenter'
 import GlobalSearch from './GlobalSearch'
 import MobileBottomNav from './MobileBottomNav'
+import LanguageSwitcher from './LanguageSwitcher'
+import { useLanguage } from '../contexts/LanguageContext'
+import OnboardingWizard from './OnboardingWizard'
 import CommandPalette from './CommandPalette'
 import { useCommandPalette } from '../contexts/CommandPaletteContext'
 
@@ -190,15 +193,20 @@ function roleBadgeClass(role) {
   }
 }
 
+// Mirrors the mobile app's tyre_man tab bar (Inspect · Records · Work Orders ·
+// Scan · Profile). Alerts moves to a header bell so the bottom bar stays at the
+// five primary field actions, matching the native inspector experience.
 const TYRE_MAN_TABS = [
-  { to: '/inspections', label: 'Checklist', icon: ClipboardCheck },
-  { to: '/scan',        label: 'Scan',      icon: ScanLine },
-  { to: '/alerts',      label: 'Alerts',    icon: Bell },
-  { to: '/settings',    label: 'Settings',  icon: Settings },
+  { to: '/inspections', tk: 'inspect', label: 'Inspect',   icon: ClipboardCheck, end: false },
+  { to: '/tyres',       tk: 'records', label: 'Records',   icon: Layers },
+  { to: '/work-orders', tk: 'work',    label: 'Work',      icon: Wrench },
+  { to: '/scan',        tk: 'scan',    label: 'Scan',      icon: ScanLine },
+  { to: '/settings',    tk: 'profile', label: 'Profile',   icon: User },
 ]
 
 function TyreManShell({ children, alertCount }) {
   const { signOut, profile } = useAuth()
+  const { t } = useLanguage()
   const location = useLocation()
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
   const [pendingCount, setPendingCount] = useState(0)
@@ -284,7 +292,24 @@ function TyreManShell({ children, alertCount }) {
               ⏳ {pendingCount}
             </span>
           )}
-          <span className="text-xs max-w-[100px] truncate" style={{ color: '#6b7280' }}>
+          <LanguageSwitcher />
+          <NavLink
+            to="/alerts"
+            className="relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+            style={{ color: '#6b7280' }}
+            aria-label={`Alerts${alertCount > 0 ? ` (${alertCount})` : ''}`}
+          >
+            <Bell size={15} />
+            {alertCount > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center text-[8px] font-bold bg-red-500 text-white rounded-full px-0.5"
+                style={{ boxShadow: '0 0 5px rgba(239,68,68,0.5)' }}
+              >
+                {alertCount > 9 ? '9+' : alertCount}
+              </span>
+            )}
+          </NavLink>
+          <span className="text-xs max-w-[84px] truncate" style={{ color: '#6b7280' }}>
             {profile?.full_name}
           </span>
           <button
@@ -297,6 +322,9 @@ function TyreManShell({ children, alertCount }) {
           </button>
         </div>
       </header>
+
+      {/* Role-based first-run onboarding (field light theme) */}
+      <OnboardingWizard />
 
       {/* Scrollable content */}
       <main
@@ -323,7 +351,7 @@ function TyreManShell({ children, alertCount }) {
         }}
       >
         <div className="flex items-stretch h-[54px]">
-          {TYRE_MAN_TABS.map(({ to, label, icon: Icon, end }) => (
+          {TYRE_MAN_TABS.map(({ to, label, tk, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -346,7 +374,7 @@ function TyreManShell({ children, alertCount }) {
                       </span>
                     )}
                   </div>
-                  <span className="text-[9.5px] font-semibold tracking-wide">{label}</span>
+                  <span className="text-[9.5px] font-semibold tracking-wide">{tk ? t(`shell.tabs.${tk}`) : label}</span>
                 </>
               )}
             </NavLink>
@@ -371,6 +399,7 @@ export default function Layout({ children }) {
   useRealtimeSync()
 
   const { profile, signOut }                = useAuth()
+  const { t }                               = useLanguage()
   const { activeCountry, setActiveCountry } = useSettings()
   const { theme, toggleTheme }              = useTheme()
   const navigate     = useNavigate()
@@ -635,10 +664,10 @@ export default function Layout({ children }) {
               {/* Country selector */}
               {(profile?.role === 'Admin' || !profile?.country || profile.country.length === 0) && (
                 <div className="px-2.5 pb-1">
-                  <p className="nav-section px-0.5 pt-2 pb-1.5">Country</p>
+                  <p className="nav-section px-0.5 pt-2 pb-1.5">{t('shell.country')}</p>
                   <div className="flex gap-0.5 rounded-xl p-0.5"
                     style={{ background: 'rgba(22,163,74,0.04)', border: '1px solid rgba(22,163,74,0.09)' }}>
-                    <button className={pillClass('All')} style={pillStyle('All')} onClick={() => setActiveCountry('All')}>All</button>
+                    <button className={pillClass('All')} style={pillStyle('All')} onClick={() => setActiveCountry('All')}>{t('common.all')}</button>
                     {COUNTRIES.map(c => (
                       <button key={c} className={pillClass(c)} style={pillStyle(c)} onClick={() => setActiveCountry(c)}>
                         {COUNTRY_LABEL[c]}
@@ -647,6 +676,12 @@ export default function Layout({ children }) {
                   </div>
                 </div>
               )}
+
+              {/* Language selector */}
+              <div className="px-2.5 pb-2">
+                <p className="nav-section px-0.5 pt-2 pb-1.5">{t('common.language')}</p>
+                <LanguageSwitcher className="w-full justify-between" />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -667,7 +702,7 @@ export default function Layout({ children }) {
                     className="w-full flex items-center justify-between px-2.5 pt-3 pb-1.5 group/sec cursor-pointer"
                   >
                     <span className="text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700 group-hover/sec:text-gray-500 transition-colors">
-                      {label}
+                      {t(`nav.groups.${label}`)}
                     </span>
                     <motion.div
                       animate={{ rotate: isCollapsed ? -90 : 0 }}
@@ -688,12 +723,14 @@ export default function Layout({ children }) {
                       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                       style={{ overflow: 'hidden' }}
                     >
-                      {visibleItems.map(({ to, label: lbl, icon: Icon, end }) => (
+                      {visibleItems.map(({ to, label: lbl, icon: Icon, end }) => {
+                        const navLabel = t(`nav.items.${to}`)
+                        return (
                         <NavLink
                           key={to}
                           to={to}
                           end={end}
-                          title={!sidebarOpen ? lbl : undefined}
+                          title={!sidebarOpen ? navLabel : undefined}
                           onMouseEnter={() => setHoveredItem(to)}
                           onMouseLeave={() => setHoveredItem(null)}
                           className={({ isActive }) =>
@@ -736,7 +773,7 @@ export default function Layout({ children }) {
                               />
 
                               {sidebarOpen && (
-                                <span className="truncate leading-none">{lbl}</span>
+                                <span className="truncate leading-none">{navLabel}</span>
                               )}
 
                               {to === '/alerts' && alertCount > 0 && (
@@ -750,7 +787,8 @@ export default function Layout({ children }) {
                             </>
                           )}
                         </NavLink>
-                      ))}
+                        )
+                      })}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -769,7 +807,7 @@ export default function Layout({ children }) {
                     className="w-full flex items-center justify-between px-2.5 pt-3 pb-1.5 group/sec cursor-pointer"
                   >
                     <span className="text-[9.5px] font-bold uppercase tracking-[0.11em] text-gray-700 group-hover/sec:text-gray-500 transition-colors">
-                      Admin
+                      {t('nav.groups.Admin')}
                     </span>
                     <motion.div animate={{ rotate: adminCollapsed ? -90 : 0 }} transition={{ duration: 0.18 }}>
                       <ChevronDown size={9} className="text-gray-700 group-hover/sec:text-gray-500 transition-colors" />
@@ -788,7 +826,7 @@ export default function Layout({ children }) {
                     >
                       <NavLink
                         to="/users"
-                        title={!sidebarOpen ? 'User Management' : undefined}
+                        title={!sidebarOpen ? t('nav.items./users') : undefined}
                         className={({ isActive }) =>
                           `relative flex items-center gap-2.5 px-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                            transition-all duration-150 mb-px group
@@ -809,7 +847,7 @@ export default function Layout({ children }) {
                             )}
                             <Users size={13.5} strokeWidth={isActive ? 2.2 : 1.8}
                               className={`flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-600 group-hover:text-gray-300'}`} />
-                            {sidebarOpen && <span className="truncate">User Management</span>}
+                            {sidebarOpen && <span className="truncate">{t('nav.items./users')}</span>}
                           </>
                         )}
                       </NavLink>
@@ -852,7 +890,7 @@ export default function Layout({ children }) {
                     </p>
                     {profile?.role && (
                       <span className={`flex-shrink-0 leading-none ${roleBadgeClass(profile.role)}`}>
-                        {profile.role}
+                        {t(`roles.${profile.role}`)}
                       </span>
                     )}
                   </div>
@@ -899,7 +937,7 @@ export default function Layout({ children }) {
             onClick={() => setSidebarOpen(true)}
             className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-500 active:text-green-400 transition-colors flex-shrink-0"
             style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.12)' }}
-            aria-label="Open menu"
+            aria-label={t('shell.openMenu')}
           >
             <Menu size={16} />
           </button>
@@ -981,6 +1019,9 @@ export default function Layout({ children }) {
 
       {/* Command palette - Ctrl/Cmd+K */}
       <CommandPalette />
+
+      {/* Role-based first-run onboarding */}
+      <OnboardingWizard />
 
       {/* ── Search palette ───────────────────────────────────────────────────── */}
       <AnimatePresence>

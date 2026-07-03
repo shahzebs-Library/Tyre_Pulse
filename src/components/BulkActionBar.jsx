@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, CheckSquare } from 'lucide-react'
+import { useLanguage } from '../contexts/LanguageContext'
 
 /**
  * BulkActionBar - floats above the bottom of the screen when rows are selected.
@@ -11,6 +12,10 @@ import { X, CheckSquare } from 'lucide-react'
  *   entityLabel  - singular label e.g. "tyre" (shows "3 tyres selected")
  */
 export default function BulkActionBar({ count, onClear, actions = [], entityLabel = 'item' }) {
+  const { t, language } = useLanguage()
+  // English pluralises by appending "s"; Arabic (and other non-English) uses the
+  // supplied label as-is to avoid artefacts like "سجلs".
+  const label = (count === 1 || language !== 'en') ? entityLabel : `${entityLabel}s`
   return (
     <AnimatePresence>
       {count > 0 && (
@@ -28,7 +33,7 @@ export default function BulkActionBar({ count, onClear, actions = [], entityLabe
           <div className="flex items-center gap-2 pr-3 border-r border-gray-700">
             <CheckSquare size={15} className="text-orange-400" />
             <span className="text-sm font-semibold text-white tabular-nums">
-              {count} {count === 1 ? entityLabel : `${entityLabel}s`} selected
+              {t('ui.bulk.selected', { count, label })}
             </span>
           </div>
 
@@ -57,7 +62,7 @@ export default function BulkActionBar({ count, onClear, actions = [], entityLabe
           <button
             onClick={onClear}
             className="ml-1 p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
-            title="Deselect all"
+            title={t('ui.bulk.deselectAll')}
           >
             <X size={14} />
           </button>

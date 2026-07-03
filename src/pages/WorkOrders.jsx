@@ -23,6 +23,7 @@ import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '../lib/formatters'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
@@ -103,6 +104,7 @@ export default function WorkOrders() {
   const { activeCountry, activeCurrency } = useSettings()
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency)
   const { user, profile } = useAuth()
+  const { t } = useLanguage()
   const navigate = useNavigate()
   // Deleting a work order is an Admin-only action (matches the RLS policy).
   const isAdmin = (profile?.role || '').toLowerCase() === 'admin'
@@ -256,7 +258,7 @@ export default function WorkOrders() {
       if (viewOrder?.id === deleteTarget.id) setViewOrder(null)
       await load()
     } catch (e) {
-      setDeleteError(e.message || 'Delete failed. Please try again.')
+      setDeleteError(e.message || t('workorders.delete.failed'))
     } finally {
       setSaving(false)
     }
@@ -293,7 +295,7 @@ export default function WorkOrders() {
       await load()
       return n
     } catch (e) {
-      setDeleteError(e.message || 'Bulk delete failed. Please try again.')
+      setDeleteError(e.message || t('workorders.bulkDelete.failed'))
     } finally {
       setSaving(false)
     }
@@ -326,7 +328,7 @@ export default function WorkOrders() {
   // ── Save ──────────────────────────────────────────────────────────────────
   async function handleSave() {
     if (!formData.asset_no.trim() || !formData.work_type) {
-      alert('Asset No and Work Type are required.')
+      alert(t('workorders.form.validation'))
       return
     }
     setSaving(true)
@@ -369,7 +371,7 @@ export default function WorkOrders() {
       await load()
       setShowForm(false)
     } catch (e) {
-      alert('Save failed: ' + e.message)
+      alert(t('workorders.form.saveFailed', { msg: e.message }))
     } finally {
       setSaving(false)
     }
@@ -382,7 +384,7 @@ export default function WorkOrders() {
     if (newStatus === 'Completed') patch.completed_at = new Date().toISOString()
     try {
       await workOrders.updateWorkOrderById(order.id, patch)
-    } catch (err) { alert('Update failed: ' + err.message); return }
+    } catch (err) { alert(t('workorders.form.updateFailed', { msg: err.message })); return }
     await load()
     if (viewOrder?.id === order.id) setViewOrder(o => ({ ...o, ...patch }))
   }
@@ -511,7 +513,7 @@ export default function WorkOrders() {
       <div className="flex items-center justify-center min-h-screen bg-gray-950">
         <div className="text-center">
           <Loader2 className="animate-spin text-blue-400 mx-auto mb-3" size={40} />
-          <p className="text-gray-400">Loading work orders...</p>
+          <p className="text-gray-400">{t('workorders.loading')}</p>
         </div>
       </div>
     )
@@ -520,30 +522,30 @@ export default function WorkOrders() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Work Orders"
-        subtitle={`Workshop job card management - ${orders.length} total`}
+        title={t('workorders.title')}
+        subtitle={t('workorders.subtitle', { count: orders.length })}
         icon={Wrench}
         onRefresh={load}
         actions={
           <div className="flex items-center gap-2">
             <button onClick={exportExcel} className="btn-secondary flex items-center gap-2 text-xs px-3 py-1.5">
-              <FileSpreadsheet size={14} /> Excel
+              <FileSpreadsheet size={14} /> {t('workorders.actions.excel')}
             </button>
             <button
               onClick={() => navigate('/data-intake?module=workorder')}
               className="btn-primary flex items-center gap-2 text-sm px-4"
             >
-              <Upload size={15} /> Import via Data Intake Center
+              <Upload size={15} /> {t('workorders.actions.import')}
             </button>
             <button onClick={openNew} className="btn-primary flex items-center gap-2 text-sm px-4">
-              <Plus size={15} /> New Work Order
+              <Plus size={15} /> {t('workorders.actions.newWorkOrder')}
             </button>
           </div>
         }
       />
 
       <p className="text-xs text-gray-500 -mt-3">
-        Bulk-import work orders / job cards from Excel/CSV with Arabic/English header mapping, cost validation and duplicate detection via the Data Intake Center.
+        {t('workorders.importHint')}
       </p>
 
       {error && (
@@ -556,13 +558,13 @@ export default function WorkOrders() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
         {[
-          { label: 'Open', value: stats.open, color: 'blue', icon: Clock },
-          { label: 'In Progress', value: stats.inProgress, color: 'yellow', icon: Play },
-          { label: 'Awaiting Parts', value: stats.awaitParts, color: 'orange', icon: Package },
-          { label: 'Overdue', value: stats.overdue, color: 'red', icon: AlertOctagon },
-          { label: 'Completed Today', value: stats.completedToday, color: 'green', icon: CheckCircle },
-          { label: 'Avg Days Open', value: stats.avgDaysOpen, color: 'purple', icon: Calendar },
-          { label: 'Total Cost (All)', value: `${activeCurrency} ${(stats.totalCost / 1000).toFixed(1)}k`, color: 'teal', icon: DollarSign },
+          { label: t('workorders.kpi.open'), value: stats.open, color: 'blue', icon: Clock },
+          { label: t('workorders.kpi.inProgress'), value: stats.inProgress, color: 'yellow', icon: Play },
+          { label: t('workorders.kpi.awaitingParts'), value: stats.awaitParts, color: 'orange', icon: Package },
+          { label: t('workorders.kpi.overdue'), value: stats.overdue, color: 'red', icon: AlertOctagon },
+          { label: t('workorders.kpi.completedToday'), value: stats.completedToday, color: 'green', icon: CheckCircle },
+          { label: t('workorders.kpi.avgDaysOpen'), value: stats.avgDaysOpen, color: 'purple', icon: Calendar },
+          { label: t('workorders.kpi.totalCostAll'), value: `${activeCurrency} ${(stats.totalCost / 1000).toFixed(1)}k`, color: 'teal', icon: DollarSign },
         ].map(({ label, value, color, icon: Icon }) => (
           <div key={label} className={`bg-gray-900 border border-gray-800 rounded-xl p-4`}>
             <div className={`flex items-center gap-2 mb-2`}>
@@ -577,7 +579,7 @@ export default function WorkOrders() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">Work Orders by Type</h3>
+          <h3 className="text-white font-semibold mb-4">{t('workorders.charts.byType')}</h3>
           {typeChartData.labels.length > 0 ? (
             <div className="h-52">
               <Bar data={typeChartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
@@ -585,12 +587,12 @@ export default function WorkOrders() {
           ) : (
             <div className="h-52 flex flex-col items-center justify-center gap-2 text-gray-500">
               <Wrench size={28} className="opacity-30" />
-              <p className="text-sm">No work orders yet</p>
+              <p className="text-sm">{t('workorders.charts.noWorkOrders')}</p>
             </div>
           )}
         </div>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">Status Distribution</h3>
+          <h3 className="text-white font-semibold mb-4">{t('workorders.charts.statusDistribution')}</h3>
           {statusChartData.labels.length > 0 ? (
             <div className="h-52">
               <Doughnut data={statusChartData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />
@@ -598,7 +600,7 @@ export default function WorkOrders() {
           ) : (
             <div className="h-52 flex flex-col items-center justify-center gap-2 text-gray-500">
               <CheckCircle size={28} className="opacity-30" />
-              <p className="text-sm">No status data available</p>
+              <p className="text-sm">{t('workorders.charts.noStatusData')}</p>
             </div>
           )}
         </div>
@@ -612,7 +614,7 @@ export default function WorkOrders() {
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
-              placeholder="Search WO#, asset, serial, description..."
+              placeholder={t('workorders.filters.searchPlaceholder')}
               className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500"
             />
           </div>
@@ -637,22 +639,22 @@ export default function WorkOrders() {
           {(search || statusFilter !== 'All' || priorityFilter !== 'All' || typeFilter !== 'All' || dateFrom || dateTo) && (
             <button onClick={() => { setSearch(''); setStatus('All'); setPriority('All'); setType('All'); setDateFrom(''); setDateTo(''); setPage(1) }}
               className="px-3 py-2 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm hover:bg-red-900/50 transition-colors">
-              Clear
+              {t('workorders.filters.clear')}
             </button>
           )}
-          <span className="ml-auto self-center text-gray-400 text-sm">{filtered.length} results</span>
+          <span className="ml-auto self-center text-gray-400 text-sm">{t('workorders.filters.results', { count: filtered.length })}</span>
         </div>
       </div>
 
       {/* Table */}
       {isAdmin && selectedIds.size > 0 && (
         <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
-          <span className="text-sm text-blue-200">{selectedIds.size} work order{selectedIds.size !== 1 ? 's' : ''} selected</span>
+          <span className="text-sm text-blue-200">{t('workorders.bulk.selected', { count: selectedIds.size })}</span>
           <div className="flex items-center gap-2">
-            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-white px-2 py-1">Clear</button>
+            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-white px-2 py-1">{t('workorders.bulk.clear')}</button>
             <button onClick={() => { setDeleteError(''); setBulkDeleteOpen(true) }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
-              <Trash2 size={14} /> Delete {selectedIds.size}
+              <Trash2 size={14} /> {t('workorders.bulk.delete', { count: selectedIds.size })}
             </button>
           </div>
         </div>
@@ -666,21 +668,21 @@ export default function WorkOrders() {
                 {isAdmin && (
                   <th className="px-4 py-3 w-10">
                     <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
-                      title="Select all on this page"
+                      title={t('workorders.columns.selectAllTitle')}
                       className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
                   </th>
                 )}
                 {[
-                  { label: 'WO #',        field: 'work_order_no' },
-                  { label: 'Asset',       field: 'asset_no'      },
-                  { label: 'Type',        field: 'work_type'     },
-                  { label: 'Priority',    field: 'priority'      },
-                  { label: 'Status',      field: 'status'        },
-                  { label: 'Technician',  field: 'technician_name' },
-                  { label: 'Opened',      field: 'opened_at'     },
-                  { label: 'Target',      field: 'target_completion' },
-                  { label: 'Total Cost',  field: 'total_cost'    },
-                  { label: 'Actions',     field: null             },
+                  { label: t('workorders.columns.wo'),        field: 'work_order_no' },
+                  { label: t('workorders.columns.asset'),       field: 'asset_no'      },
+                  { label: t('workorders.columns.type'),        field: 'work_type'     },
+                  { label: t('workorders.columns.priority'),    field: 'priority'      },
+                  { label: t('workorders.columns.status'),      field: 'status'        },
+                  { label: t('workorders.columns.technician'),  field: 'technician_name' },
+                  { label: t('workorders.columns.opened'),      field: 'opened_at'     },
+                  { label: t('workorders.columns.target'),      field: 'target_completion' },
+                  { label: t('workorders.columns.totalCost'),  field: 'total_cost'    },
+                  { label: t('workorders.columns.actions'),     field: null             },
                 ].map(({ label, field }) => (
                   <th key={label}
                     className={`px-4 py-3 text-left text-gray-400 font-medium ${field ? 'cursor-pointer hover:text-white' : ''}`}
@@ -699,8 +701,8 @@ export default function WorkOrders() {
                 <tr>
                   <td colSpan={isAdmin ? 11 : 10} className="text-center py-16 text-gray-500">
                     <Wrench size={40} className="mx-auto mb-3 opacity-30" />
-                    <p>No work orders found</p>
-                    <button onClick={openNew} className="mt-3 text-blue-400 hover:text-blue-300 text-sm">Create first work order →</button>
+                    <p>{t('workorders.states.empty')}</p>
+                    <button onClick={openNew} className="mt-3 text-blue-400 hover:text-blue-300 text-sm">{t('workorders.states.createFirst')}</button>
                   </td>
                 </tr>
               )}
@@ -718,7 +720,7 @@ export default function WorkOrders() {
                     )}
                     <td className="px-4 py-3">
                       <span className="text-blue-400 font-mono text-xs">{order.work_order_no}</span>
-                      {overdue && <span className="ml-2 text-xs text-red-400 font-medium">OVERDUE</span>}
+                      {overdue && <span className="ml-2 text-xs text-red-400 font-medium">{t('workorders.states.overdue')}</span>}
                     </td>
                     <td className="px-4 py-3 text-white font-medium">{order.asset_no}</td>
                     <td className="px-4 py-3 text-gray-300">{order.work_type}</td>
@@ -758,12 +760,12 @@ export default function WorkOrders() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-            <span className="text-gray-400 text-sm">Page {page} of {totalPages} · {filtered.length} records</span>
+            <span className="text-gray-400 text-sm">{t('workorders.pagination.summary', { page, totalPages, count: filtered.length })}</span>
             <div className="flex gap-2">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">Prev</button>
+                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">{t('workorders.pagination.prev')}</button>
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">Next</button>
+                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">{t('workorders.pagination.next')}</button>
             </div>
           </div>
         )}
@@ -777,19 +779,19 @@ export default function WorkOrders() {
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
               className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl">
               <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between z-10">
-                <h2 className="text-white font-bold text-lg">{editOrder ? 'Edit Work Order' : 'New Work Order'}</h2>
+                <h2 className="text-white font-bold text-lg">{editOrder ? t('workorders.form.editTitle') : t('workorders.form.newTitle')}</h2>
                 <button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"><X size={18} /></button>
               </div>
               <div className="p-6 space-y-5">
                 {/* Row 1 */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Asset No *</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.assetNo')}</label>
                     <input value={formData.asset_no} onChange={e => setFormData(f => ({ ...f, asset_no: e.target.value }))}
-                      placeholder="e.g. TRK-001" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.assetNo')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Work Type *</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.workType')}</label>
                     <select value={formData.work_type} onChange={e => setFormData(f => ({ ...f, work_type: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500">
                       {WORK_TYPES.map(t => <option key={t}>{t}</option>)}
@@ -799,17 +801,17 @@ export default function WorkOrders() {
                 {/* Row 2 */}
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Tyre Serial</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.tyreSerial')}</label>
                     <input value={formData.tyre_serial} onChange={e => setFormData(f => ({ ...f, tyre_serial: e.target.value }))}
-                      placeholder="Serial number" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.tyreSerial')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Position</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.position')}</label>
                     <input value={formData.tyre_position} onChange={e => setFormData(f => ({ ...f, tyre_position: e.target.value }))}
-                      placeholder="e.g. Steer L" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.position')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Priority</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.priority')}</label>
                     <select value={formData.priority} onChange={e => setFormData(f => ({ ...f, priority: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500">
                       {['Critical','High','Medium','Low'].map(p => <option key={p}>{p}</option>)}
@@ -819,80 +821,80 @@ export default function WorkOrders() {
                 {/* Row 3 */}
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Status</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.status')}</label>
                     <select value={formData.status} onChange={e => setFormData(f => ({ ...f, status: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500">
                       {Object.keys(STATUS_CONFIG).map(s => <option key={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Technician</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.technician')}</label>
                     <input value={formData.technician_name} onChange={e => setFormData(f => ({ ...f, technician_name: e.target.value }))}
-                      placeholder="Name" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.technician')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Workshop</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.workshop')}</label>
                     <input value={formData.workshop_name} onChange={e => setFormData(f => ({ ...f, workshop_name: e.target.value }))}
-                      placeholder="Workshop name" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.workshop')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                 </div>
                 {/* Row 4 */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Site</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.site')}</label>
                     <input value={formData.site} onChange={e => setFormData(f => ({ ...f, site: e.target.value }))}
-                      placeholder="Site/branch" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.site')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Country</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.country')}</label>
                     <input value={formData.country} onChange={e => setFormData(f => ({ ...f, country: e.target.value }))}
-                      placeholder="Country" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.country')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                 </div>
                 {/* Row 5 */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Opened At</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.openedAt')}</label>
                     <input type="datetime-local" value={formData.opened_at} onChange={e => setFormData(f => ({ ...f, opened_at: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Target Completion</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.targetCompletion')}</label>
                     <input type="datetime-local" value={formData.target_completion} onChange={e => setFormData(f => ({ ...f, target_completion: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                 </div>
                 {/* Description */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">Description</label>
+                  <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.description')}</label>
                   <textarea value={formData.description} onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
-                    rows={3} placeholder="Work description, fault details, observations..."
+                    rows={3} placeholder={t('workorders.form.placeholders.description')}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
                 </div>
                 {/* Labour */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-2 block">Labour Cost</label>
+                  <label className="text-gray-400 text-xs mb-2 block">{t('workorders.form.labourCost')}</label>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <input type="number" min="0" step="0.5" value={formData.labour_hours} onChange={e => setFormData(f => ({ ...f, labour_hours: e.target.value }))}
-                        placeholder="Hours" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
-                      <span className="text-gray-500 text-xs mt-1 block">Labour Hours</span>
+                        placeholder={t('workorders.form.placeholders.hours')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      <span className="text-gray-500 text-xs mt-1 block">{t('workorders.form.labourHours')}</span>
                     </div>
                     <div>
                       <input type="number" min="0" step="0.01" value={formData.labour_rate} onChange={e => setFormData(f => ({ ...f, labour_rate: e.target.value }))}
-                        placeholder="Rate/hr" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
-                      <span className="text-gray-500 text-xs mt-1 block">Rate per Hour (R)</span>
+                        placeholder={t('workorders.form.placeholders.rate')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      <span className="text-gray-500 text-xs mt-1 block">{t('workorders.form.ratePerHour')}</span>
                     </div>
                     <div>
                       <input type="number" min="0" step="0.01" value={formData.labour_cost} onChange={e => setFormData(f => ({ ...f, labour_cost: e.target.value }))}
-                        placeholder="Override" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
-                      <span className="text-gray-500 text-xs mt-1 block">Labour Cost (Override)</span>
+                        placeholder={t('workorders.form.placeholders.override')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      <span className="text-gray-500 text-xs mt-1 block">{t('workorders.form.labourCostOverride')}</span>
                     </div>
                   </div>
                 </div>
                 {/* Parts */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-2 block">Parts / Materials Used</label>
+                  <label className="text-gray-400 text-xs mb-2 block">{t('workorders.form.partsUsed')}</label>
                   <div className="space-y-2">
                     {(formData.parts_used || []).map((p, i) => (
                       <div key={i} className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
@@ -905,40 +907,40 @@ export default function WorkOrders() {
                     ))}
                     <div className="grid grid-cols-4 gap-2">
                       <input value={partRow.part_name} onChange={e => setPartRow(r => ({ ...r, part_name: e.target.value }))}
-                        placeholder="Part name" className="col-span-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                        placeholder={t('workorders.form.placeholders.partName')} className="col-span-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                       <input type="number" min="1" value={partRow.quantity} onChange={e => setPartRow(r => ({ ...r, quantity: e.target.value }))}
-                        placeholder="Qty" className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                        placeholder={t('workorders.form.placeholders.qty')} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                       <div className="flex gap-1">
                         <input type="number" min="0" step="0.01" value={partRow.unit_cost} onChange={e => setPartRow(r => ({ ...r, unit_cost: e.target.value }))}
-                          placeholder="Unit R" className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                          placeholder={t('workorders.form.placeholders.unitCost')} className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
                         <button onClick={addPart} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"><Plus size={14} /></button>
                       </div>
                     </div>
                     {(formData.parts_used?.length > 0) && (
-                      <div className="text-right text-sm text-green-400 font-medium">Parts Total: {fmtCurrency(partsTotal(formData.parts_used))}</div>
+                      <div className="text-right text-sm text-green-400 font-medium">{t('workorders.form.partsTotal')}: {fmtCurrency(partsTotal(formData.parts_used))}</div>
                     )}
                   </div>
                 </div>
                 {/* Notes */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">Notes</label>
+                  <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.notes')}</label>
                   <textarea value={formData.notes} onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))}
-                    rows={2} placeholder="Additional notes, follow-up required..."
+                    rows={2} placeholder={t('workorders.form.placeholders.notes')}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
                 </div>
               </div>
               <div className="sticky bottom-0 bg-gray-900 border-t border-gray-800 px-6 py-4 flex items-center justify-between">
                 <div className="text-gray-400 text-sm">
-                  Total Cost: <span className="text-green-400 font-bold">
+                  {t('workorders.form.totalCost')}: <span className="text-green-400 font-bold">
                     {fmtCurrency((parseFloat(formData.labour_hours || 0) * parseFloat(formData.labour_rate || 0) || parseFloat(formData.labour_cost || 0)) + partsTotal(formData.parts_used))}
                   </span>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors">Cancel</button>
+                  <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors">{t('workorders.form.cancel')}</button>
                   <button onClick={handleSave} disabled={saving}
                     className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
                     {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                    {saving ? 'Saving...' : editOrder ? 'Save Changes' : 'Create Work Order'}
+                    {saving ? t('workorders.form.saving') : editOrder ? t('workorders.form.save') : t('workorders.form.create')}
                   </button>
                 </div>
               </div>
@@ -955,8 +957,8 @@ export default function WorkOrders() {
             <div className="flex gap-3 mb-4">
               <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-white font-semibold">Delete work order <span className="font-mono text-blue-400">{deleteTarget.work_order_no}</span>?</p>
-                <p className="text-gray-400 text-sm mt-1">This permanently removes the work order and its cost records. This cannot be undone.</p>
+                <p className="text-white font-semibold">{t('workorders.delete.title', { no: deleteTarget.work_order_no })}</p>
+                <p className="text-gray-400 text-sm mt-1">{t('workorders.delete.warning')}</p>
               </div>
             </div>
             {deleteError && (
@@ -966,9 +968,9 @@ export default function WorkOrders() {
               <button onClick={confirmDelete} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                {saving ? 'Deleting...' : 'Delete Work Order'}
+                {saving ? t('workorders.delete.deleting') : t('workorders.delete.confirm')}
               </button>
-              <button onClick={() => { setDeleteTarget(null); setDeleteError('') }} className="btn-secondary">Cancel</button>
+              <button onClick={() => { setDeleteTarget(null); setDeleteError('') }} className="btn-secondary">{t('workorders.delete.cancel')}</button>
             </div>
           </div>
         </div>
@@ -982,8 +984,8 @@ export default function WorkOrders() {
             <div className="flex gap-3 mb-4">
               <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-white font-semibold">Delete {selectedIds.size} work order{selectedIds.size !== 1 ? 's' : ''}?</p>
-                <p className="text-gray-400 text-sm mt-1">This permanently removes the selected work orders and their cost records. This cannot be undone.</p>
+                <p className="text-white font-semibold">{t('workorders.bulkDelete.question', { count: selectedIds.size })}</p>
+                <p className="text-gray-400 text-sm mt-1">{t('workorders.bulkDelete.warning')}</p>
               </div>
             </div>
             {deleteError && (
@@ -993,9 +995,9 @@ export default function WorkOrders() {
               <button onClick={confirmBulkDelete} disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                {saving ? 'Deleting...' : `Delete ${selectedIds.size}`}
+                {saving ? t('workorders.bulkDelete.deleting') : t('workorders.bulkDelete.confirm', { count: selectedIds.size })}
               </button>
-              <button onClick={() => { setBulkDeleteOpen(false); setDeleteError('') }} disabled={saving} className="btn-secondary">Cancel</button>
+              <button onClick={() => { setBulkDeleteOpen(false); setDeleteError('') }} disabled={saving} className="btn-secondary">{t('workorders.bulkDelete.cancel')}</button>
             </div>
           </div>
         </div>
@@ -1023,14 +1025,14 @@ export default function WorkOrders() {
                     return <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border ${sc.color} ${sc.bg} ${sc.border}`}><Icon size={14} />{viewOrder.status}</span>
                   })()}
                   {(() => { const pc = PRIORITY_CONFIG[viewOrder.priority] || PRIORITY_CONFIG.Medium
-                    return <span className={`flex items-center gap-1.5 text-sm ${pc.color}`}><span className={`w-2.5 h-2.5 rounded-full ${pc.dot}`} />{viewOrder.priority} Priority</span>
+                    return <span className={`flex items-center gap-1.5 text-sm ${pc.color}`}><span className={`w-2.5 h-2.5 rounded-full ${pc.dot}`} />{t('workorders.detail.priorityBadge', { priority: viewOrder.priority })}</span>
                   })()}
                 </div>
 
                 {/* Status transitions */}
                 {STATUS_FLOW[viewOrder.status]?.length > 0 && (
                   <div>
-                    <p className="text-gray-400 text-xs mb-2">Transition to:</p>
+                    <p className="text-gray-400 text-xs mb-2">{t('workorders.detail.transitionTo')}</p>
                     <div className="flex flex-wrap gap-2">
                       {STATUS_FLOW[viewOrder.status].map(ns => (
                         <button key={ns} onClick={() => transitionStatus(viewOrder, ns)}
@@ -1047,18 +1049,18 @@ export default function WorkOrders() {
                 {/* Details */}
                 <div className="space-y-3">
                   {[
-                    ['Asset No', viewOrder.asset_no],
-                    ['Tyre Serial', viewOrder.tyre_serial],
-                    ['Position', viewOrder.tyre_position],
-                    ['Technician', viewOrder.technician_name],
-                    ['Workshop', viewOrder.workshop_name],
-                    ['Site', viewOrder.site],
-                    ['Country', viewOrder.country],
-                    ['Opened', fmtDateTime(viewOrder.opened_at)],
-                    ['Started', fmtDateTime(viewOrder.started_at)],
-                    ['Completed', fmtDateTime(viewOrder.completed_at)],
-                    ['Target', fmtDateTime(viewOrder.target_completion)],
-                    ['Days Open', daysOpen(viewOrder)],
+                    [t('workorders.detail.assetNo'), viewOrder.asset_no],
+                    [t('workorders.detail.tyreSerial'), viewOrder.tyre_serial],
+                    [t('workorders.detail.position'), viewOrder.tyre_position],
+                    [t('workorders.detail.technician'), viewOrder.technician_name],
+                    [t('workorders.detail.workshop'), viewOrder.workshop_name],
+                    [t('workorders.detail.site'), viewOrder.site],
+                    [t('workorders.detail.country'), viewOrder.country],
+                    [t('workorders.detail.opened'), fmtDateTime(viewOrder.opened_at)],
+                    [t('workorders.detail.started'), fmtDateTime(viewOrder.started_at)],
+                    [t('workorders.detail.completed'), fmtDateTime(viewOrder.completed_at)],
+                    [t('workorders.detail.target'), fmtDateTime(viewOrder.target_completion)],
+                    [t('workorders.detail.daysOpen'), daysOpen(viewOrder)],
                   ].filter(([, v]) => v).map(([label, value]) => (
                     <div key={label} className="flex justify-between py-2 border-b border-gray-800">
                       <span className="text-gray-400 text-sm">{label}</span>
@@ -1069,7 +1071,7 @@ export default function WorkOrders() {
 
                 {viewOrder.description && (
                   <div className="bg-gray-800 rounded-xl p-4">
-                    <p className="text-gray-400 text-xs mb-2">Description</p>
+                    <p className="text-gray-400 text-xs mb-2">{t('workorders.detail.description')}</p>
                     <p className="text-white text-sm leading-relaxed">{viewOrder.description}</p>
                   </div>
                 )}
@@ -1077,7 +1079,7 @@ export default function WorkOrders() {
                 {/* Parts */}
                 {viewOrder.parts_used?.length > 0 && (
                   <div>
-                    <p className="text-gray-400 text-xs mb-2">Parts Used</p>
+                    <p className="text-gray-400 text-xs mb-2">{t('workorders.detail.partsUsed')}</p>
                     <div className="space-y-2">
                       {viewOrder.parts_used.map((p, i) => (
                         <div key={i} className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
@@ -1091,44 +1093,44 @@ export default function WorkOrders() {
 
                 {/* Costs */}
                 <div className="bg-gray-800 rounded-xl p-4 space-y-2">
-                  <p className="text-gray-400 text-xs mb-3">Cost Summary</p>
-                  <div className="flex justify-between"><span className="text-gray-400 text-sm">Labour</span><span className="text-white text-sm">{fmtCurrency(viewOrder.labour_cost)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-400 text-sm">Parts</span><span className="text-white text-sm">{fmtCurrency(viewOrder.parts_cost)}</span></div>
-                  {Number(viewOrder.lubricant_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Lubricants</span><span className="text-white text-sm">{fmtCurrency(viewOrder.lubricant_cost)}</span></div>}
-                  {Number(viewOrder.tyre_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Tyres</span><span className="text-white text-sm">{fmtCurrency(viewOrder.tyre_cost)}</span></div>}
-                  {Number(viewOrder.outside_repair_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Outside Repair</span><span className="text-white text-sm">{fmtCurrency(viewOrder.outside_repair_cost)}</span></div>}
-                  <div className="flex justify-between border-t border-gray-700 pt-2 mt-2"><span className="text-white font-semibold text-sm">Total</span><span className="text-green-400 font-bold text-lg">{fmtCurrency(viewOrder.total_cost)}</span></div>
+                  <p className="text-gray-400 text-xs mb-3">{t('workorders.detail.costSummary')}</p>
+                  <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.labour')}</span><span className="text-white text-sm">{fmtCurrency(viewOrder.labour_cost)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.parts')}</span><span className="text-white text-sm">{fmtCurrency(viewOrder.parts_cost)}</span></div>
+                  {Number(viewOrder.lubricant_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.lubricants')}</span><span className="text-white text-sm">{fmtCurrency(viewOrder.lubricant_cost)}</span></div>}
+                  {Number(viewOrder.tyre_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.tyres')}</span><span className="text-white text-sm">{fmtCurrency(viewOrder.tyre_cost)}</span></div>}
+                  {Number(viewOrder.outside_repair_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.outsideRepair')}</span><span className="text-white text-sm">{fmtCurrency(viewOrder.outside_repair_cost)}</span></div>}
+                  <div className="flex justify-between border-t border-gray-700 pt-2 mt-2"><span className="text-white font-semibold text-sm">{t('workorders.detail.total')}</span><span className="text-green-400 font-bold text-lg">{fmtCurrency(viewOrder.total_cost)}</span></div>
                 </div>
 
                 {/* Hours / meter */}
                 {(Number(viewOrder.labour_hours) > 0 || Number(viewOrder.standard_hours) > 0 || Number(viewOrder.breakdown_hours) > 0 || Number(viewOrder.odometer) > 0) && (
                   <div className="bg-gray-800 rounded-xl p-4 grid grid-cols-2 gap-x-4 gap-y-2">
-                    <p className="text-gray-400 text-xs mb-1 col-span-2">Hours &amp; Meter</p>
-                    {Number(viewOrder.labour_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Labour hrs</span><span className="text-white text-sm">{viewOrder.labour_hours}</span></div>}
-                    {Number(viewOrder.standard_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Std hrs</span><span className="text-white text-sm">{viewOrder.standard_hours}</span></div>}
-                    {Number(viewOrder.breakdown_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Breakdown hrs</span><span className="text-white text-sm">{viewOrder.breakdown_hours}</span></div>}
-                    {Number(viewOrder.odometer) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">Odometer</span><span className="text-white text-sm">{Number(viewOrder.odometer).toLocaleString()}</span></div>}
+                    <p className="text-gray-400 text-xs mb-1 col-span-2">{t('workorders.detail.hoursMeter')}</p>
+                    {Number(viewOrder.labour_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.labourHrs')}</span><span className="text-white text-sm">{viewOrder.labour_hours}</span></div>}
+                    {Number(viewOrder.standard_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.stdHrs')}</span><span className="text-white text-sm">{viewOrder.standard_hours}</span></div>}
+                    {Number(viewOrder.breakdown_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.breakdownHrs')}</span><span className="text-white text-sm">{viewOrder.breakdown_hours}</span></div>}
+                    {Number(viewOrder.odometer) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.odometer')}</span><span className="text-white text-sm">{Number(viewOrder.odometer).toLocaleString()}</span></div>}
                   </div>
                 )}
 
                 {viewOrder.notes && (
                   <div className="bg-gray-800 rounded-xl p-4">
-                    <p className="text-gray-400 text-xs mb-2">Notes</p>
+                    <p className="text-gray-400 text-xs mb-2">{t('workorders.detail.notes')}</p>
                     <p className="text-gray-300 text-sm leading-relaxed">{viewOrder.notes}</p>
                   </div>
                 )}
 
                 {/* Preserved fields from import — reference costs + per-line detail */}
-                <CustomFieldsPanel data={viewOrder.custom_data} title="Additional imported details" defaultOpen />
+                <CustomFieldsPanel data={viewOrder.custom_data} title={t('workorders.detail.customFields')} defaultOpen />
 
                 <div className="flex gap-3 pt-2">
                   <button onClick={() => { setViewOrder(null); openEdit(viewOrder) }}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors">
-                    <Edit2 size={15} />Edit
+                    <Edit2 size={15} />{t('workorders.detail.edit')}
                   </button>
                   <button onClick={() => exportJobCard(viewOrder)}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-xl transition-colors">
-                    <FileText size={15} />Job Card PDF
+                    <FileText size={15} />{t('workorders.detail.jobCardPdf')}
                   </button>
                 </div>
               </div>

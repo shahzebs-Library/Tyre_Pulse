@@ -21,7 +21,11 @@ export function SettingsProvider({ children }) {
     company_name: 'TyrePulse',
     currency: 'SAR',
   })
-  const [activeCountry, setActiveCountryInternal] = useState('All')
+  // Persist the admin's country choice so it survives a reload (bug 035 — the
+  // Upload page's country-gated actions were disabled after every hard refresh).
+  const [activeCountry, setActiveCountryInternal] = useState(
+    () => localStorage.getItem('tp_active_country') || 'All',
+  )
 
   // A user's country may be stored as a string ("KSA") or, for multi-country
   // users, an array. Resolve the primary country consistently.
@@ -34,6 +38,7 @@ export function SettingsProvider({ children }) {
     // Non-admins with an assigned country are locked to it.
     if (profile && profile.role !== 'Admin' && primaryCountry(profile)) return
     setActiveCountryInternal(c)
+    try { localStorage.setItem('tp_active_country', c) } catch { /* storage disabled */ }
   }
 
   useEffect(() => {

@@ -24,6 +24,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -1072,10 +1073,12 @@ export default function RotationSchedule() {
 
         {/* ── KPI Cards ───────────────────────────────────────────────────── */}
         {noData ? (
-          <div className="card p-12 text-center">
-            <RotateCcw size={40} className="text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-400 font-medium">No tyre records found</p>
-            <p className="text-gray-500 text-sm mt-1">Upload tyre data to begin tracking rotation compliance.</p>
+          <div className="card">
+            <EmptyState
+              icon={RotateCcw}
+              title="No tyre records found"
+              description="Upload tyre data to begin tracking rotation compliance."
+            />
           </div>
         ) : (
           <>

@@ -14,6 +14,7 @@ import {
   ClipboardCheck, Wrench, BookOpen,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 const uuidv4 = () => crypto.randomUUID()
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -1448,11 +1449,11 @@ export default function TyreSpecifications() {
                   <p className="text-gray-500 text-sm">Analysing fleet...</p>
                 </div>
               ) : nonConformanceByAsset.length === 0 ? (
-                <div className="py-16 text-center">
-                  <CheckCircle size={40} className="text-green-500 mx-auto mb-3" />
-                  <p className="text-white font-medium mb-1">Full Compliance</p>
-                  <p className="text-gray-500 text-sm">No non-conforming fitments detected across the fleet.</p>
-                </div>
+                <EmptyState
+                  icon={CheckCircle}
+                  title="Full Compliance"
+                  description="No non-conforming fitments detected across the fleet."
+                />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -1606,11 +1607,11 @@ export default function TyreSpecifications() {
               </div>
 
               {history.length === 0 ? (
-                <div className="py-16 text-center">
-                  <History size={40} className="text-gray-700 mx-auto mb-3" />
-                  <p className="text-gray-400 font-medium mb-1">No History Yet</p>
-                  <p className="text-gray-600 text-sm">Changes to specifications will be tracked here.</p>
-                </div>
+                <EmptyState
+                  icon={History}
+                  title="No history yet"
+                  description="Changes to specifications will be tracked here."
+                />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">

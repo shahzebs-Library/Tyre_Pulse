@@ -19,6 +19,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToPdf, exportToExcel, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -1562,10 +1563,11 @@ export default function TyreExchange() {
                 </div>
 
                 {siteFlowMatrix.sites.length === 0 ? (
-                  <div className="text-center py-16 text-gray-500">
-                    <Truck size={40} className="mx-auto mb-3 opacity-30" />
-                    <p>No inter-site transfers detected in the current data set.</p>
-                  </div>
+                  <EmptyState
+                    icon={Truck}
+                    title="No inter-site transfers"
+                    description="No inter-site transfers detected in the current data set."
+                  />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="text-xs border-collapse">

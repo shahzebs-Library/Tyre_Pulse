@@ -18,6 +18,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
 
@@ -1208,10 +1209,12 @@ export default function InspectionPlanner() {
                   <p className="text-sm text-gray-400">Loading overdue queue...</p>
                 </div>
               ) : filteredOverdue.length === 0 ? (
-                <div className="p-8 text-center">
-                  <CheckCircle2 size={32} className="text-green-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">No overdue inspections - all vehicles are on schedule.</p>
-                </div>
+                <EmptyState
+                  icon={CheckCircle2}
+                  title="No overdue inspections"
+                  description="All vehicles are on schedule."
+                  compact
+                />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -1441,9 +1444,13 @@ export default function InspectionPlanner() {
                   ))}
                 </div>
               ) : inspectorBoard.length === 0 ? (
-                <div className="card p-8 text-center">
-                  <Users size={32} className="text-gray-600 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">No inspector data available.</p>
+                <div className="card">
+                  <EmptyState
+                    icon={Users}
+                    title="No inspector data yet"
+                    description="No inspector activity is available for this period."
+                    compact
+                  />
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1640,10 +1647,12 @@ export default function InspectionPlanner() {
                   <p className="text-sm text-gray-400">Analysing inspection gaps...</p>
                 </div>
               ) : filteredGap.length === 0 ? (
-                <div className="p-8 text-center">
-                  <CheckCircle2 size={32} className="text-green-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">No records match the selected filter.</p>
-                </div>
+                <EmptyState
+                  icon={Search}
+                  title="No matching records"
+                  description="No records match the selected filter."
+                  compact
+                />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">

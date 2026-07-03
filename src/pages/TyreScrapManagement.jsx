@@ -23,6 +23,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import { formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -978,10 +979,12 @@ export default function TyreScrapManagement() {
 
               {/* Empty state for overview */}
               {scrapped.length === 0 && !loading && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-                  <CheckCircle className="mx-auto text-green-500 mb-3" size={44} />
-                  <p className="text-gray-300 font-semibold">No scrapped tyres found</p>
-                  <p className="text-gray-500 text-sm mt-1">Try adjusting the date range or filters above</p>
+                <div className="bg-gray-900 border border-gray-800 rounded-xl">
+                  <EmptyState
+                    icon={CheckCircle}
+                    title="No scrapped tyres found"
+                    description="Try adjusting the date range or filters above."
+                  />
                 </div>
               )}
             </div>
@@ -1059,9 +1062,12 @@ export default function TyreScrapManagement() {
                   <h2 className="font-semibold text-gray-200 text-sm">Brand Scrap Performance</h2>
                 </div>
                 {brandAnalysis.length === 0 ? (
-                  <div className="p-10 text-center text-gray-500">
-                    No brand data available for current filters
-                  </div>
+                  <EmptyState
+                    icon={Tag}
+                    title="No brand data"
+                    description="No brand data available for the current filters."
+                    compact
+                  />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -1173,7 +1179,12 @@ export default function TyreScrapManagement() {
                   <h2 className="font-semibold text-gray-200 text-sm">Site Scrap Analysis</h2>
                 </div>
                 {siteAnalysis.length === 0 ? (
-                  <div className="p-10 text-center text-gray-500">No site data for current filters</div>
+                  <EmptyState
+                    icon={Building2}
+                    title="No site data"
+                    description="No site data available for the current filters."
+                    compact
+                  />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">

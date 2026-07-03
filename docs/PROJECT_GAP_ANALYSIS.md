@@ -1,10 +1,10 @@
 # TyrePulse - Missing Features & Gap Analysis
 
-**Last Updated:** 2026-07-02 (evening - supersedes the morning draft)
+**Last Updated:** 2026-07-03 (Master Build A/B/C/D/F landed + web-i18n merged)
 **Repository:** shahzebs-Library/Tyre_Pulse · branch `main`
 **Verified against:** the live Supabase project (`jhssdmeruxtrlqnwfksc`), the
-current `main` code, and the test suite (709 web tests green · web build green ·
-mobile typecheck clean).
+current `main` code (merge `34eb1be`), and the test suite (**729 web tests
+green** · web build green · mobile typecheck clean).
 
 > ⚠️ The previous version of this document described the old PR-based plan
 > (PRs #17-#24) as pending. That work was **completed, merged to `main`, and
@@ -34,7 +34,11 @@ mobile typecheck clean).
 | **Access Control (editable role×module)** | ✅ DONE | V64 set_module_permissions RPC + AccessControlMatrix UI (was read-only fake). |
 | **Imported custom fields in UI** | ✅ DONE | V63 custom_data columns + CustomFieldsPanel in WorkOrders/Tyre/Accidents/Inspections/Fleet detail views (reference costs + line items). |
 | **Admin multi-delete** | ✅ DONE | WorkOrders, Accidents, Inspections, Fleet Master - select-all + verified chunked delete. |
-| **Scheduled report delivery** | ✅ DONE (needs 1 secret) | pg_cron → `send-scheduled-reports` edge fn every 15 min; live KPI digest email per schedule; `report_send_log` tracks every send/failure; verified end-to-end. **Owner must set `RESEND_API_KEY`** (Edge Function secret) for mail to actually leave. |
+| **Scheduled report delivery** | ✅ DONE (needs 1 secret) | pg_cron → `send-scheduled-reports` edge fn every 15 min; live KPI digest email per schedule; `report_send_log` tracks every send/failure (RLS: authenticated-only read - verified anon is blocked); verified end-to-end. **Owner must set `RESEND_API_KEY`** (Edge Function secret) for mail to actually leave. |
+| **Tenant branding + branded reports (Master Build A/B/C)** | ✅ DONE | **V68** get/set_org_branding RPCs (admin-gated, validated, audited, org-scoped, anon revoked); `branding.js` (+5 tests) + `TenantContext` + `OrgBrandingPanel` (User Management → Branding). Executive PPTX + Daily PDF carry tenant colours/logo/footer/disclaimer; export flow hardened (spinner + success/error toast, no silent dead button). |
+| **Report Center (Master Build D)** | ✅ DONE | New `/report-center`: on-demand branded PPTX/PDF/Excel with date+country filters, active-branding banner, scheduling shortcut, delivery-history table (report_send_log). |
+| **Docs set (Master Build F)** | ✅ DONE | `BRANDING_AND_REPORT_SETTINGS.md`, `PROJECT_OVERVIEW.md`, `INTEGRATIONS.md`, `DATA_DICTIONARY.md` (21 tables/458 cols from live schema). |
+| **Web i18n + RTL (Arabic) - foundation** | ✅ MERGED | Parallel session's Arabic/RTL foundation landed on `main` (i18n context + locales for auth/nav/dashboard/inspections/records/alerts/pwa/onboarding + RTL shell + role onboarding wizard). Remaining pages migrate page-by-page (see P4). |
 
 ## 🔴 Genuinely open gaps (the real backlog)
 
@@ -57,9 +61,9 @@ mobile typecheck clean).
 ### P4 - Bigger product investments
 | Gap | Notes |
 |---|---|
-| Web i18n + RTL (Arabic) | Mobile ships ar/ur; web is hardcoded English - the biggest UX gap for Gulf users. |
+| Web i18n + RTL (Arabic) - **complete the coverage** | Foundation MERGED (context/locales/RTL shell). Remaining: translate the long tail of pages beyond auth/nav/dashboard/inspections/records/alerts. Owned by the i18n workstream. |
 | Chart drill-down | 0 of 54 chart pages click through to source records (stated directive requirement). |
-| Light theme via CSS vars | ~80 pages use literal dark classes. |
+| Light theme via CSS vars (**Master Build E**) | ~80 pages use literal dark classes. Deferred: a global token/theme refactor collided with the active i18n session; do it once that lands (foundation ready - TenantContext already publishes `--brand-primary`/`--brand-accent`). |
 | Dev/staging Supabase project | All builds point at production today (H6). |
 | GPS/Telematics + generic ERP import adapters | New intake modules. |
 | Go backend + native Android | Frozen on their own branches by decision - **not** merged to `main`. |
@@ -72,22 +76,23 @@ mobile typecheck clean).
 
 ### P5 - Master Build program (owner directive 2026-07-02, docs/"Master Build...Instruction.md")
 Enterprise multi-tenant polish. Phases (see HANDOFF.md for detail):
-| Phase | Deliverable |
-|---|---|
-| A. Tenant Branding (next) | organisations.settings branding schema + set_org_branding RPC + TenantContext + Org Branding page; wired into app/dashboards/PDF/PPTX/email. |
-| B. Branded PDF engine | cover, repeating headers, landscape, page numbers, footer/disclaimer/signatures, filters+source line, print-readable charts. |
-| C. Branded PPTX engine + fix download | investigate MIME/blob/open; reusable 12-slide management deck. |
-| D. Report Center | saved templates, filters, preview, history, snapshots (on scheduled reports + report_send_log). |
-| E. Design system | tokens, tenant theme, light default, a11y, states. |
-| F. Docs set | PROJECT_OVERVIEW/ARCHITECTURE/DATA_DICTIONARY/REPORTING_GUIDE/BRANDING_AND_REPORT_SETTINGS/INTEGRATIONS/TESTING_AND_RELEASE + CLAUDE.md, maintained per phase. |
-Owner input before Phase A: per-org branding assets + light/dark report default; confirm Phase A vs C-first.
+| Phase | Deliverable | Status |
+|---|---|---|
+| A. Tenant Branding | organisations.settings branding (V68) + set_org_branding RPC + TenantContext + Branding page. | ✅ DONE |
+| B. Branded PDF engine | tenant colours/logo/footer/disclaimer on the Daily Executive PDF. | ✅ DONE |
+| C. Branded PPTX + fix download | branded 12-slide deck; download fixed (missing caller try/catch, not generation). | ✅ DONE |
+| D. Report Center | on-demand branded generation + delivery history over report_send_log. | ✅ DONE |
+| E. Design system | tokens, tenant theme, light default, a11y, states. | ⏸ DEFERRED (i18n-session collision; see P4). |
+| F. Docs set | BRANDING_AND_REPORT_SETTINGS / PROJECT_OVERVIEW / INTEGRATIONS / DATA_DICTIONARY added; ARCHITECTURE/REPORTING/TESTING have equivalents. | ✅ DONE |
+Owner actions still pending: (1) fill each org's branding in User Management → Branding; (2) set `RESEND_API_KEY` for scheduled-email delivery.
 
 ## Scoreboard
 
-- **Migrations applied & live-verified:** V40 → V67 (every one proven with a rolled-back self-asserting SQL test).
-- **Gate:** 709 web tests · build green · mobile typecheck clean (0 errors).
+- **Migrations applied & live-verified:** V40 → V68 (every one proven with a rolled-back self-asserting SQL test).
+- **Gate:** **729 web tests** · build green · mobile typecheck clean (0 errors).
 - **Security advisors:** 0 ERROR-level findings.
 - **Intake:** all 10 modules commit end-to-end; 5 company formats auto-recognised.
+- **Branches:** Master Build (branding/reports/docs) + web-i18n both merged to `main` (`34eb1be`); Go backend + native Android remain frozen off `main`.
 
 _Update this file whenever a gap closes - it is the tracking record the
 audit (`PROJECT_AUDIT_2026-07.md`) and handoff (`HANDOFF.md`) point to._

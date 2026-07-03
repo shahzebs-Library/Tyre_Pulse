@@ -296,13 +296,13 @@ export function useRealtimeAlerts() {
   }, [])
 
   const markAllRead = useCallback(() => {
-    setNotifications(prev => {
-      prev
-        .filter(n => !n.read && typeof n.id === 'string' && n.id.startsWith('db-'))
-        .forEach(n => supabase.rpc('mark_notification_read', { p_id: n.id.slice(3) }).then(() => {}, () => {}))
-      return prev.map(n => ({ ...n, read: true }))
-    })
-  }, [])
+    // Dispatch the persist RPCs OUTSIDE the state updater — updaters must be pure
+    // (React StrictMode double-invokes them, which would double-fire the RPCs).
+    notifications
+      .filter(n => !n.read && typeof n.id === 'string' && n.id.startsWith('db-'))
+      .forEach(n => supabase.rpc('mark_notification_read', { p_id: n.id.slice(3) }).then(() => {}, () => {}))
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+  }, [notifications])
 
   const clearAll = useCallback(() => {
     setNotifications([])

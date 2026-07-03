@@ -963,7 +963,7 @@ export default function MaintenanceCalendar() {
                   )}
                   <button
                     onClick={() => setSelectedEvent(null)}
-                    className="px-4 py-2.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-xl transition-colors"
+                    className="btn-secondary"
                   >
                     Close
                   </button>

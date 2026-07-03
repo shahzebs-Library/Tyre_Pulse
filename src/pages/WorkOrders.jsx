@@ -923,9 +923,9 @@ export default function WorkOrders() {
                   </span>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors">{t('workorders.form.cancel')}</button>
+                  <button onClick={() => setShowForm(false)} className="btn-secondary">{t('workorders.form.cancel')}</button>
                   <button onClick={handleSave} disabled={saving}
-                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
+                    className="btn-primary gap-2 disabled:opacity-50">
                     {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                     {saving ? t('workorders.form.saving') : editOrder ? t('workorders.form.save') : t('workorders.form.create')}
                   </button>

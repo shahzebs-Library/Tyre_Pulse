@@ -311,7 +311,7 @@ function ContractModal({ contract, onSave, onClose }) {
           )}
           <div className="col-span-2 flex gap-2 justify-end pt-1">
             <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-800 rounded-lg disabled:opacity-50">Cancel</button>
-            <button type="submit" disabled={saving} className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-500 rounded-lg font-medium flex items-center gap-1.5 disabled:opacity-50">
+            <button type="submit" disabled={saving} className="btn-primary gap-1.5 disabled:opacity-50">
               {saving && <Loader2 size={13} className="animate-spin" />}
               {saving ? 'Saving...' : 'Save Contract'}
             </button>
@@ -1051,7 +1051,7 @@ export default function SupplierManagement() {
         icon={Building2}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => navigate('/data-intake?module=supplier')} className="flex items-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg">
+            <button onClick={() => navigate('/data-intake?module=supplier')} className="btn-primary gap-1.5">
               <Upload size={13} /> Import via Data Intake Center
             </button>
             <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm rounded-lg">
@@ -1425,7 +1425,7 @@ export default function SupplierManagement() {
                   className="pl-7 pr-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 w-52" />
               </div>
               <button onClick={() => setContractModal({})}
-                className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg">
+                className="btn-primary gap-1.5">
                 <Plus size={13} /> Add Contract
               </button>
             </div>

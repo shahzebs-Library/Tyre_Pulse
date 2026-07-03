@@ -458,7 +458,7 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
               <button
                 type="submit"
                 disabled={saving}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm px-5 py-2 rounded-lg transition-colors"
+                className="btn-primary gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
                 {saving ? 'Saving...' : spec?.id ? 'Update Specification' : 'Save Specification'}
@@ -569,7 +569,7 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
               <CheckCircle size={40} className="text-green-400 mx-auto mb-3" />
               <p className="text-white font-medium mb-1">Work Order Raised</p>
               <p className="text-gray-400 text-sm">A high-priority work order has been created for {asset.asset_no}.</p>
-              <button onClick={onClose} className="mt-4 bg-gray-800 hover:bg-gray-700 text-white text-sm px-5 py-2 rounded-lg transition-colors">Close</button>
+              <button onClick={onClose} className="btn-secondary mt-4">Close</button>
             </div>
           ) : (
             <>
@@ -1050,7 +1050,7 @@ export default function TyreSpecifications() {
               onClick={() => { setEditingSpec(null); setShowSpecModal(true) }}
               disabled={!isAdmin}
               title={!isAdmin ? 'Admin access required' : ''}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-2 rounded-lg transition-colors"
+              className="btn-primary gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Plus size={15} /> Add Specification
             </button>

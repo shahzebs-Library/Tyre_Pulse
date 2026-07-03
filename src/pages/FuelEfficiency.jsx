@@ -572,14 +572,14 @@ export default function FuelEfficiency() {
           </button>
           <button
             onClick={exportPDF}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm transition-colors"
+            className="btn-secondary gap-1.5"
           >
             <FileText className="w-4 h-4" />
             PDF
           </button>
           <button
             onClick={exportExcel}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded-lg text-sm transition-colors"
+            className="btn-secondary gap-1.5"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Excel

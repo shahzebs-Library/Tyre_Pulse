@@ -728,7 +728,7 @@ export default function WarrantyTracker() {
           </button>
           <button
             onClick={() => openForm()}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-semibold text-white transition-colors"
+            className="btn-primary gap-1.5"
           >
             <Plus size={14} /> Add Claim
           </button>
@@ -815,7 +815,7 @@ export default function WarrantyTracker() {
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <ShieldCheck size={40} className="text-gray-600" />
                 <p className="text-gray-400">No warranty claims found.</p>
-                <button onClick={() => openForm()} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm text-white">
+                <button onClick={() => openForm()} className="btn-primary">
                   Add First Claim
                 </button>
               </div>
@@ -1338,11 +1338,11 @@ export default function WarrantyTracker() {
 
                 <div className="flex justify-end gap-3 pt-2">
                   <button onClick={() => { setShowAdd(false); setEditClaim(null) }}
-                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors">
+                    className="btn-secondary">
                     Cancel
                   </button>
                   <button onClick={handleSave} disabled={saving}
-                    className="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-semibold text-white transition-colors disabled:opacity-50 flex items-center gap-2">
+                    className="btn-primary gap-2 disabled:opacity-50">
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     {editClaim ? 'Update Claim' : 'Save Claim'}
                   </button>

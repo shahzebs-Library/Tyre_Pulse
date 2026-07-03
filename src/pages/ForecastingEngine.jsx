@@ -704,21 +704,21 @@ export default function ForecastingEngine() {
           </select>
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-1.5 transition-colors"
+            className="btn-secondary gap-1.5"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Excel
           </button>
           <button
             onClick={handleExportPdf}
-            className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-1.5 transition-colors"
+            className="btn-secondary gap-1.5"
           >
             <FileText className="w-4 h-4" />
             PDF
           </button>
           <button
             onClick={() => setEmailModalOpen(true)}
-            className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-1.5 transition-colors"
+            className="btn-secondary gap-1.5"
           >
             <Mail className="w-4 h-4" />
             Email Report

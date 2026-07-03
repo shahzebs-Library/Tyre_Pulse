@@ -308,7 +308,7 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
           <button
             onClick={handleSave}
             disabled={!form.asset_no || !form.inspection_date || !form.inspector_name || saving}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            className="btn-primary gap-2 disabled:opacity-50"
           >
             {saving ? <><RefreshCw size={13} className="animate-spin" />Saving...</> : <><Check size={13} />Save</>}
           </button>
@@ -1036,7 +1036,7 @@ export default function InspectionPlanner() {
           </button>
           <button
             onClick={() => { setPrefillAsset(null); setModal('schedule') }}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium text-white transition-colors"
+            className="btn-primary gap-2"
           >
             <Plus size={14} />Schedule
           </button>
@@ -1349,7 +1349,7 @@ export default function InspectionPlanner() {
                   <p className="text-sm text-gray-400">No inspections scheduled for this period.</p>
                   <button
                     onClick={() => setModal('schedule')}
-                    className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium text-white transition-colors"
+                    className="btn-primary mt-3"
                   >
                     Schedule an Inspection
                   </button>
@@ -1763,7 +1763,7 @@ export default function InspectionPlanner() {
                   </button>
                   <button
                     onClick={() => { setDeleteTarget(null); setDeleteError('') }}
-                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+                    className="btn-secondary"
                   >
                     Cancel
                   </button>

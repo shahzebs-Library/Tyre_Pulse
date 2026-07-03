@@ -1458,7 +1458,7 @@ export default function LiveFleetStatus() {
                       setDrawerOpen(false)
                       navigate(`/work-orders?asset=${drawerVehicle.asset_no}`)
                     }}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-sm font-medium transition-colors"
+                    className="btn-primary flex-1 gap-2"
                   >
                     <Wrench size={14} /> Create Work Order
                   </button>

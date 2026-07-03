@@ -659,7 +659,7 @@ export default function AdvancedAnalytics() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="text-white space-y-6">
       {/* Page Header */}
       <div className="px-6 pt-6 pb-4 border-b border-gray-800">
         <PageHeader

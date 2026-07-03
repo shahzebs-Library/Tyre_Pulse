@@ -606,7 +606,7 @@ export default function StockReplenishment() {
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 p-6 space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center gap-3">
           <Skeleton className="w-10 h-10 rounded-xl" />
           <div className="space-y-2">

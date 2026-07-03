@@ -71,7 +71,7 @@ export default function TyreScan() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)' }}>
+    <div className="flex flex-col space-y-6" style={{ background: 'var(--bg-base)' }}>
       <div className="p-4 flex flex-col gap-4">
 
         {/* Page header */}

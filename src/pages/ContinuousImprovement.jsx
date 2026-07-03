@@ -1128,7 +1128,7 @@ export default function ContinuousImprovement() {
   const totalOpps = Object.values(opportunities).reduce((s, arr) => s + arr.length, 0)
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 md:p-6 space-y-6">
+    <div className="text-gray-100 space-y-6">
 
       {/* ── Header ── */}
       <PageHeader

@@ -1000,7 +1000,7 @@ export default function FleetIntelligence() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-4 md:p-6 space-y-6">
+    <div className="text-gray-100 space-y-6">
 
       {/* ── 1. Header ──────────────────────────────────────────────────────── */}
       <PageHeader

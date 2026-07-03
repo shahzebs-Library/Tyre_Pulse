@@ -418,7 +418,7 @@ export default function PerformanceBenchmark() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 p-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <PageHeader
         title="Performance Benchmarking"

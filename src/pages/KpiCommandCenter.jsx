@@ -865,7 +865,7 @@ export default function KpiCommandCenter() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 p-4 md:p-6 space-y-5">
+    <div className="space-y-5">
 
       {/* Header */}
       <PageHeader

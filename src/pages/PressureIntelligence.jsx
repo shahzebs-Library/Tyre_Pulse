@@ -827,7 +827,7 @@ export default function PressureIntelligence() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 space-y-5">
+    <div className="text-gray-100 space-y-5">
       <PageHeader
         title="Pressure Intelligence"
         subtitle={`Deep pressure monitoring, anomaly detection & compliance tracking${enriched.length > 0 ? ` · ${enriched.length.toLocaleString()} readings` : ''}`}

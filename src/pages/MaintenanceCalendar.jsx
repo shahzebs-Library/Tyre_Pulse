@@ -391,7 +391,7 @@ export default function MaintenanceCalendar() {
 
   // ── RENDER ───────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-950 space-y-5 pb-10">
+    <div className="space-y-5 pb-10">
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <PageHeader

@@ -505,7 +505,7 @@ export default function DataIntakeCenter() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto text-gray-200">
+    <div className="p-6 max-w-[1800px] mx-auto text-gray-200">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Database size={22} /> Data Intake Center</h1>

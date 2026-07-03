@@ -831,8 +831,8 @@ export default function AssetManagement() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <div className="text-white space-y-6">
+      <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {/* Page Header */}
         <PageHeader

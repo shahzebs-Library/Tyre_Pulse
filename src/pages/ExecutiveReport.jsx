@@ -1021,7 +1021,7 @@ export default function ExecutiveReport() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white print:bg-white print:text-black">
+    <div className="text-white print:bg-white print:text-black space-y-6">
 
       {/* ── Print Styles ────────────────────────────────────────────────── */}
       <style>{`
@@ -1038,7 +1038,7 @@ export default function ExecutiveReport() {
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800 no-print">
-        <div className="max-w-screen-2xl mx-auto px-4 py-3">
+        <div className="max-w-[1800px] mx-auto px-4 py-3">
           <PageHeader
             title="Executive Intelligence Report"
             subtitle={`${companyName} · Generated ${formatDate(new Date(), 'All', { day: '2-digit', month: 'long', year: 'numeric' })}`}
@@ -1087,7 +1087,7 @@ export default function ExecutiveReport() {
         </div>
       </div>
 
-      <div className="max-w-screen-2xl mx-auto px-4 py-6 space-y-8">
+      <div className="max-w-[1800px] mx-auto px-4 py-6 space-y-8">
 
         {/* ═══════════════════════════════════════════════════════════════
             SECTION 1 - EXECUTIVE SUMMARY

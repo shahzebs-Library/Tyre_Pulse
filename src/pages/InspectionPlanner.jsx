@@ -1004,7 +1004,7 @@ export default function InspectionPlanner() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-4 md:p-6 space-y-6">
+    <div className="text-white space-y-6">
       {/* Header */}
       <PageHeader
         title="Inspection Planner & Scheduler"

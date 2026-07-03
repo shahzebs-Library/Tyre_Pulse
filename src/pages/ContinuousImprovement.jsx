@@ -17,6 +17,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import SegmentedControl from '../components/ui/SegmentedControl'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -1135,19 +1136,17 @@ export default function ContinuousImprovement() {
         subtitle="Systematic identification and tracking of cost reduction, reliability, and process improvement opportunities"
         icon={Zap}
         actions={<>
-          {['3mo','6mo','1yr'].map(p => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors
-                ${period === p
-                  ? 'bg-blue-600 border-blue-500 text-white'
-                  : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-600'
-                }`}
-            >
-              {p === '3mo' ? 'Last 3 Mo' : p === '6mo' ? 'Last 6 Mo' : 'Last 12 Mo'}
-            </button>
-          ))}
+          <SegmentedControl
+            ariaLabel="period"
+            size="sm"
+            value={period}
+            onChange={setPeriod}
+            options={[
+              { value: '3mo', label: 'Last 3 Mo' },
+              { value: '6mo', label: 'Last 6 Mo' },
+              { value: '1yr', label: 'Last 12 Mo' },
+            ]}
+          />
           <button
             onClick={handleExcelExport}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium transition-colors"

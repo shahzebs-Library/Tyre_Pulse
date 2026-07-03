@@ -14,6 +14,7 @@ import {
   ArrowUpRight, ArrowDownRight, BarChart2, RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import SegmentedControl from '../components/ui/SegmentedControl'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -316,26 +317,25 @@ export default function Comparison() {
       {/* Options + run */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* Metric */}
-        <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg">
-          {[['count','Replacements'],['cost',`Cost (${activeCurrency})`]].map(([val, lbl]) => (
-            <button key={val} onClick={() => setMetric(val)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                metric === val ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >{lbl}</button>
-          ))}
-        </div>
+        <SegmentedControl
+          ariaLabel="metric"
+          size="sm"
+          value={metric}
+          onChange={setMetric}
+          options={[
+            { value: 'count', label: 'Replacements' },
+            { value: 'cost', label: `Cost (${activeCurrency})` },
+          ]}
+        />
 
         {/* Dimension */}
-        <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg">
-          {DIMENSION_OPTS.map(({ value, label }) => (
-            <button key={value} onClick={() => setDimension(value)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                dimension === value ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >{label}</button>
-          ))}
-        </div>
+        <SegmentedControl
+          ariaLabel="dimension"
+          size="sm"
+          value={dimension}
+          onChange={setDimension}
+          options={DIMENSION_OPTS}
+        />
 
         <button
           onClick={runComparison}

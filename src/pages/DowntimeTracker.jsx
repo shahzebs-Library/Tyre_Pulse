@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import PageHeader from '../components/ui/PageHeader'
+import SegmentedControl from '../components/ui/SegmentedControl'
 import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
 
@@ -877,17 +878,13 @@ export default function DowntimeTracker() {
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
         <div className="flex flex-wrap gap-2 items-center">
           {/* Period */}
-          <div className="flex gap-1">
-            {PERIOD_PRESETS.map(p => (
-              <button
-                key={p.label}
-                onClick={() => setPeriod(p.label)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${period === p.label ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel="period"
+            size="sm"
+            value={period}
+            onChange={setPeriod}
+            options={PERIOD_PRESETS.map(p => ({ value: p.label, label: p.label }))}
+          />
           {/* Site */}
           <select
             value={siteFilter}

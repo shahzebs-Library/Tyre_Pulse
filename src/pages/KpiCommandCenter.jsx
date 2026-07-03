@@ -21,6 +21,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { formatDate, formatMonthYear } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import SegmentedControl from '../components/ui/SegmentedControl'
 import {
   computeCpkFleet, computeAvgTyreLife, computeFailureRate,
   computeScrapRate, computePressureCompliance, computeInspectionCompliance,
@@ -872,21 +873,13 @@ export default function KpiCommandCenter() {
         subtitle={`Real-time fleet performance intelligence - ${records.length.toLocaleString()} tyre records`}
         icon={Command}
         actions={<>
-          <div className="flex items-center bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-            {PERIOD_PRESETS.map(p => (
-              <button
-                key={p.value}
-                onClick={() => setPeriod(p.value)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-                  period === p.value
-                    ? 'bg-blue-700 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel="period"
+            size="sm"
+            value={period}
+            onChange={setPeriod}
+            options={PERIOD_PRESETS.map(p => ({ value: p.value, label: p.label }))}
+          />
 
           {period === 'custom' && (
             <div className="flex items-center gap-1">

@@ -36,6 +36,7 @@ import { recordCost } from '../lib/analyticsEngine'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
 import PageHeader from '../components/ui/PageHeader'
+import SegmentedControl from '../components/ui/SegmentedControl'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -1043,21 +1044,13 @@ export default function ExecutiveReport() {
             subtitle={`${companyName} · Generated ${formatDate(new Date(), 'All', { day: '2-digit', month: 'long', year: 'numeric' })}`}
             icon={FileText}
             actions={<>
-              <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1">
-                {PERIODS.map(p => (
-                  <button
-                    key={p.key}
-                    onClick={() => setPeriod(p.key)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                      period === p.key
-                        ? 'bg-emerald-600 text-white'
-                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl
+                ariaLabel="period"
+                size="sm"
+                value={period}
+                onChange={setPeriod}
+                options={PERIODS.map(p => ({ value: p.key, label: p.label }))}
+              />
               <button
                 onClick={exportExcel}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium transition-all border border-gray-700"

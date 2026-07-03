@@ -8,6 +8,7 @@ import { formatCurrencyCompact } from '../lib/formatters'
 import { Download, FileText, Maximize2, GitMerge, AlertTriangle, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import SegmentedControl from '../components/ui/SegmentedControl'
 import {
   Chart as ChartJS, RadialLinearScale, PointElement, LineElement,
   Filler, Tooltip, Legend, CategoryScale, LinearScale, BarElement,
@@ -303,21 +304,13 @@ export default function SiteComparison() {
               </div>
               <div className="flex flex-col gap-1">
                 <label className="label text-xs">Granularity</label>
-                <div className="flex gap-1">
-                  {GRANULARITIES.map(g => (
-                    <button
-                      key={g}
-                      onClick={() => setGranularity(g)}
-                      className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                        granularity === g
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
-                      }`}
-                    >
-                      {g}
-                    </button>
-                  ))}
-                </div>
+                <SegmentedControl
+                  ariaLabel="granularity"
+                  size="sm"
+                  value={granularity}
+                  onChange={setGranularity}
+                  options={GRANULARITIES.map(g => ({ value: g, label: g }))}
+                />
               </div>
             </div>
 
@@ -504,17 +497,13 @@ function TrendModal({ open, onClose, records, selectedSites, defaultCost, granul
     >
       <div className="flex items-center gap-2 mb-4">
         <span className="text-xs text-gray-500">Granularity:</span>
-        {GRANULARITIES.map(g => (
-          <button
-            key={g}
-            onClick={() => onGranularityChange(g)}
-            className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-              granularity === g ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
-            }`}
-          >
-            {g}
-          </button>
-        ))}
+        <SegmentedControl
+          ariaLabel="granularity"
+          size="sm"
+          value={granularity}
+          onChange={onGranularityChange}
+          options={GRANULARITIES.map(g => ({ value: g, label: g }))}
+        />
       </div>
       <div style={{ height: 420 }}>
         <Line ref={chartRef} data={chartData} options={opts} />

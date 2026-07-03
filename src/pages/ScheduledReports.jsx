@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import SegmentedControl from '../components/ui/SegmentedControl'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -247,22 +248,13 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
           {/* Frequency */}
           <div>
             <FieldLabel required>Frequency</FieldLabel>
-            <div className="grid grid-cols-3 gap-2">
-              {FREQUENCIES.map(fr => (
-                <button
-                  key={fr.value}
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, frequency: fr.value }))}
-                  className={`py-2.5 rounded-lg text-sm font-medium border transition-all ${
-                    form.frequency === fr.value
-                      ? 'bg-orange-500 border-orange-500 text-white'
-                      : 'bg-gray-700 border-gray-600 text-gray-300 hover:border-gray-500'
-                  }`}
-                >
-                  {fr.label}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              ariaLabel="frequency"
+              size="sm"
+              value={form.frequency}
+              onChange={(v) => setForm(f => ({ ...f, frequency: v }))}
+              options={FREQUENCIES.map(fr => ({ value: fr.value, label: fr.label }))}
+            />
           </div>
 
           {/* Day of week (weekly only) */}

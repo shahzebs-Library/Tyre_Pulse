@@ -229,26 +229,37 @@ async function svgToPngDataUrl(svgEl, scale = 2, bgColor = '#0A0F1E') {
 }
 
 // ── PDF layout helpers ─────────────────────────────────────────────────────────
-function _pageHeader(doc, title, subtitle, company = '') {
+// opts (all optional, backward-compatible): { accent:[r,g,b], logoData, footerText }
+function _pageHeader(doc, title, subtitle, company = '', opts = {}) {
   const pw = doc.internal.pageSize.width
+  const accent = opts.accent || P.indigo
+  const hasLogo = !!opts.logoData
+  const tx = hasLogo ? 30 : 14   // shift text right when a logo is present
+
   // Deep slate header
   doc.setFillColor(...P.slate)
   doc.rect(0, 0, pw, 20, 'F')
-  // Indigo accent stripe
-  doc.setFillColor(...P.indigo)
+  // Tenant accent stripe
+  doc.setFillColor(...accent)
   doc.rect(0, 20, pw, 2.5, 'F')
+
+  // Tenant logo (best-effort)
+  if (hasLogo) {
+    const fmt = /image\/jpe?g/i.test(opts.logoData) ? 'JPEG' : 'PNG'
+    try { doc.addImage(opts.logoData, fmt, 12, 3, 14, 14, undefined, 'FAST') } catch { /* ignore */ }
+  }
 
   // Company name - left
   doc.setFontSize(8)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(...P.gold)
-  doc.text((company || 'FLEET OPERATIONS').toUpperCase(), 14, 8)
+  doc.text((company || 'FLEET OPERATIONS').toUpperCase(), tx, 8)
 
   // Title - left
   doc.setFontSize(11)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(...P.white)
-  doc.text(title, 14, 15)
+  doc.text(title, tx, 15)
 
   // Subtitle + date - right
   if (subtitle) {
@@ -262,7 +273,7 @@ function _pageHeader(doc, title, subtitle, company = '') {
   doc.text(nowStr(), pw - 14, 16, { align: 'right' })
 }
 
-function _pageFooter(doc, page, total, company = '') {
+function _pageFooter(doc, page, total, company = '', opts = {}) {
   const pw = doc.internal.pageSize.width
   const ph = doc.internal.pageSize.height
   doc.setFillColor(...P.cloud)
@@ -273,8 +284,40 @@ function _pageFooter(doc, page, total, company = '') {
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...P.ghost)
-  doc.text(`${company || 'Fleet Operations Report'}  ·  Confidential & Internal`, 14, ph - 3)
+  const left = opts.footerText || `${company || 'Fleet Operations Report'}  ·  Confidential & Internal`
+  doc.text(left, 14, ph - 3)
   doc.text(`${page}${total ? ` / ${total}` : ''}`, pw - 14, ph - 3, { align: 'right' })
+}
+
+// Resolve a tenant-branding object into PDF drawing inputs (accent rgb + logo
+// data URI + footer text). Safe: returns defaults when branding is absent.
+async function _pdfBrand(branding) {
+  const b = branding || {}
+  return {
+    accent: hexToRgb(b.primary_color, P.indigo),
+    logoData: await fetchImageDataUri(b.logo_url),
+    footerText: b.footer_text || null,
+    disclaimer: b.disclaimer || null,
+  }
+}
+
+// A professional, centred "no data" panel so an empty dataset never renders as a
+// bare table. Draws within the current page under the header.
+function _emptyStatePanel(doc, message, sub) {
+  const pw = doc.internal.pageSize.width
+  const ph = doc.internal.pageSize.height
+  const cy = ph / 2 - 6
+  // Soft panel
+  doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
+  doc.roundedRect(pw / 2 - 70, cy - 16, 140, 34, 3, 3, 'FD')
+  // Icon dot
+  doc.setFillColor(...P.silver); doc.circle(pw / 2, cy - 6, 3, 'F')
+  doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.steel)
+  doc.text(message || 'No records for this period', pw / 2, cy + 3, { align: 'center' })
+  if (sub) {
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.ghost)
+    doc.text(sub, pw / 2, cy + 10, { align: 'center' })
+  }
 }
 
 function _sectionBar(doc, title, y, mx = 14) {
@@ -653,6 +696,19 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
   const PW  = doc.internal.pageSize.width
   rows = Array.isArray(rows) ? rows : []
   const currency = opts.currency || 'SAR'
+  const brand = await _pdfBrand(opts.branding)
+  const hdrOpts = { accent: brand.accent, logoData: brand.logoData }
+  const ftrOpts = { footerText: brand.footerText }
+
+  // ── EMPTY STATE: never emit a bare table ──
+  if (rows.length === 0) {
+    _pageHeader(doc, title, `0 records · ${nowStr()}`, company, hdrOpts)
+    _emptyStatePanel(doc, 'No records for the selected filters',
+      opts.emptyHint || 'Adjust the date range or country filter and export again.')
+    _pageFooter(doc, 1, 1, company, ftrOpts)
+    doc.save(`${filename}.pdf`)
+    return
+  }
 
   // ── Detect dataset structure ──
   const riskCol = columns.find(c => /risk/i.test(c.header || '') || /risk/i.test(c.key || ''))
@@ -670,7 +726,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
 
   // ── PAGE 1: ANALYTICAL SUMMARY ──
   if (showSummary) {
-    _pageHeader(doc, title, `${rows.length.toLocaleString()} records · ${nowStr()}`, company)
+    _pageHeader(doc, title, `${rows.length.toLocaleString()} records · ${nowStr()}`, company, hdrOpts)
     let y = 30
 
     // KPI cards
@@ -746,7 +802,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
     doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.steel)
     doc.text(narr, 20, ny + 6)
 
-    _pageFooter(doc, 1, null, company)
+    _pageFooter(doc, 1, null, company, ftrOpts)
     doc.addPage()
   }
 
@@ -785,8 +841,8 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
       else if (v === 'low') { data.cell.styles.fillColor = P.eCream; data.cell.styles.textColor = P.emerald }
     } : undefined,
     didDrawPage: () => {
-      _pageHeader(doc, title, `${rows.length.toLocaleString()} records · ${nowStr()}`, company)
-      _pageFooter(doc, doc.internal.getNumberOfPages(), null, company)
+      _pageHeader(doc, title, `${rows.length.toLocaleString()} records · ${nowStr()}`, company, hdrOpts)
+      _pageFooter(doc, doc.internal.getNumberOfPages(), null, company, ftrOpts)
     },
   })
 
@@ -1132,6 +1188,98 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
 
   const safe = (row.title || 'inspection').replace(/[^a-z0-9]/gi, '_').slice(0, 40)
   doc.save(`Inspection_${safe}.pdf`)
+}
+
+// Shared light autoTable theme for a professional, consistent look across every
+// tabular report. Accent-coloured header, alternating soft rows, subtle borders.
+function _tableTheme(accent = P.indigo) {
+  return {
+    theme: 'grid',
+    styles: { fontSize: 8, cellPadding: 2.4, overflow: 'linebreak', textColor: [30, 41, 59], lineColor: P.silver, lineWidth: 0.15 },
+    headStyles: { fillColor: accent, textColor: P.white, fontStyle: 'bold', fontSize: 8.5 },
+    alternateRowStyles: { fillColor: P.cloud },
+    margin: { left: 14, right: 14 },
+  }
+}
+
+/**
+ * Branded Daily Operations Briefing PDF (used by the Daily Ops screen).
+ * @param {Object} data  { date, kpis:{tyreChanges,inspections,workOrders,alerts,cost},
+ *                         priorityQueue:[{severity,type,asset,description}], siteActivity:[[site,count]] }
+ * @param {Object} opts  { company, branding, currency, filename }
+ */
+export async function exportDailyOpsBriefingPdf(data = {}, opts = {}) {
+  await ensurePdf()
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  const PW  = doc.internal.pageSize.width
+  const company  = opts.company || 'Fleet Operations'
+  const currency = opts.currency || 'SAR'
+  const brand    = await _pdfBrand(opts.branding)
+  const hdr = { accent: brand.accent, logoData: brand.logoData }
+  const ftr = { footerText: brand.footerText }
+  const k   = data.kpis || {}
+  const pq  = data.priorityQueue || []
+  const sa  = data.siteActivity || []
+  const theme = _tableTheme(brand.accent)
+
+  _pageHeader(doc, 'Daily Operations Briefing', data.date || nowStr(), company, hdr)
+
+  // KPI strip
+  let y = 30
+  const cards = [
+    { v: (k.tyreChanges ?? 0).toLocaleString(), l: 'Tyre Changes', rgb: P.indigo },
+    { v: (k.inspections ?? 0).toLocaleString(), l: 'Inspections',  rgb: P.emerald },
+    { v: (k.workOrders  ?? 0).toLocaleString(), l: 'Work Orders',  rgb: P.violet },
+    { v: (k.alerts      ?? 0).toLocaleString(), l: 'Alerts Raised', rgb: P.crimson },
+    { v: fmtCurr(k.cost ?? 0, currency),        l: "Today's Cost",  rgb: P.gold },
+  ]
+  const cw = (PW - 28 - (cards.length - 1) * 4) / cards.length
+  cards.forEach((c, i) => _kpiBox(doc, 14 + i * (cw + 4), y, cw, 26, c.v, c.l, null, c.rgb))
+  y += 34
+
+  const totalActivity = (k.tyreChanges || 0) + (k.inspections || 0) + (k.workOrders || 0) + (k.alerts || 0)
+  if (totalActivity === 0 && pq.length === 0 && sa.length === 0) {
+    _emptyStatePanel(doc, 'No operational activity recorded for this day',
+      'Tyre changes, inspections, work orders and alerts will appear here as they are logged.')
+    _pageFooter(doc, 1, 1, company, ftr)
+    doc.save(`${opts.filename || 'DailyOps'}.pdf`)
+    return
+  }
+
+  // Priority action queue
+  if (pq.length > 0) {
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...brand.accent)
+    doc.text('PRIORITY ACTION QUEUE', 14, y); y += 4
+    autoTable(doc, {
+      ...theme, startY: y,
+      head: [['Severity', 'Type', 'Asset', 'Description']],
+      body: pq.slice(0, 15).map(i => [i.severity || '-', i.type || '-', i.asset || '-', i.description || '-']),
+      columnStyles: { 0: { cellWidth: 24 }, 1: { cellWidth: 30 }, 2: { cellWidth: 30 } },
+      didParseCell: (d) => {
+        if (d.section !== 'body' || d.column.index !== 0) return
+        const v = String(d.cell.raw ?? '').toLowerCase()
+        if (v === 'critical') { d.cell.styles.textColor = P.crimson; d.cell.styles.fontStyle = 'bold' }
+        else if (v === 'high') { d.cell.styles.textColor = P.scarlet }
+      },
+    })
+    y = doc.lastAutoTable.finalY + 8
+  }
+
+  // Site activity
+  if (sa.length > 0) {
+    if (y > doc.internal.pageSize.height - 40) { doc.addPage(); _pageHeader(doc, 'Daily Operations Briefing', data.date || nowStr(), company, hdr); y = 30 }
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...brand.accent)
+    doc.text('SITE ACTIVITY', 14, y); y += 4
+    autoTable(doc, {
+      ...theme, startY: y, tableWidth: 100,
+      head: [['Site', 'Events']],
+      body: sa.map(([s, c]) => [s, String(c)]),
+    })
+  }
+
+  const totalPages = doc.internal.getNumberOfPages()
+  for (let p = 1; p <= totalPages; p++) { doc.setPage(p); _pageFooter(doc, p, totalPages, company, ftr) }
+  doc.save(`${opts.filename || 'DailyOps'}.pdf`)
 }
 
 function _buildRecommendations(riskCounts, totalT, row) {

@@ -261,10 +261,23 @@ describe('exportToPdf - PDF generation', () => {
       { key: 'name', header: 'Name' },
     ]
 
-    await exportToPdf([], columns, 'Test', 'test')
+    // A populated dataset renders the data table (empty datasets now render a
+    // branded empty-state panel instead of a bare table).
+    await exportToPdf([{ id: 1, name: 'A' }], columns, 'Test', 'test')
 
     const [, tableOptions] = autoTable.mock.calls[0]
     expect(tableOptions.head).toEqual([['ID', 'Name']])
+  })
+
+  it('renders a branded empty-state (no table) when there are no rows', async () => {
+    autoTable.mockClear()
+    await exportToPdf([], [{ key: 'id', header: 'ID' }], 'Empty Report', 'empty')
+
+    // No data table is drawn for an empty dataset…
+    expect(autoTable).not.toHaveBeenCalled()
+    // …but the file is still produced.
+    const instance = jsPDF.mock.results[jsPDF.mock.results.length - 1].value
+    expect(instance.save).toHaveBeenCalledWith('empty.pdf')
   })
 
   it('calls doc.save with filename + .pdf extension', async () => {

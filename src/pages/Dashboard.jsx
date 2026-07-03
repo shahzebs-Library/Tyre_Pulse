@@ -447,7 +447,8 @@ export default function Dashboard() {
       tyres.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre||0 })),
       [{ key:'issue_date',header:'Date',width:24 },{ key:'asset_no',header:'Asset No',width:28 },{ key:'brand',header:'Brand',width:24 },{ key:'site',header:'Site',width:30 },{ key:'category',header:'Category',width:32 },{ key:'risk_level',header:'Risk',width:20 },{ key:'cost_per_tyre',header:`Cost (${activeCurrency})`,width:24 }],
       `TyrePulse Dashboard Report · ${formatDate(new Date(), activeCountry)}`,
-      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'landscape', reportCompany))
+      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'landscape', reportCompany,
+      { branding, currency: activeCurrency }))
   }
   function handlePptxExport() {
     return runExport('pptx', pptxExportTask)

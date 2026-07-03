@@ -216,3 +216,22 @@ mobile deps synced - typecheck now fully clean.
   header/footer/table-theme + empty-states. Non-report layouts correctly left
   intact (QR label sheet, formal warranty-claim letter). Net −166 lines.
 - Gate: 730 web tests green · web build clean · mobile typecheck clean.
+
+## 2026-07-03 (later) — UI/UX audit round 1 (docs/"ui ux.md") (main, pushed)
+- **#1 (highest priority) empty space**: desktop content wrapper widened from
+  max-w-screen-2xl (1536px) → 1800px with responsive padding (px-4→2xl:px-10),
+  so the app fills large displays instead of floating centred.
+- **Design-system primitives**: StatCard inline SVG sparklines + custom trend
+  label (#5); PageHeader "Updated <relative>" chip (#3); new SegmentedControl
+  sliding toggle (#9); new Skeleton set — Skeleton/SkeletonCards/SkeletonTable/
+  SkeletonChart + shimmer-x keyframe (#15). Typography scale (#7) already existed.
+- **Dashboard reference**: granularity → SegmentedControl; full-page spinner →
+  skeleton cards + charts.
+- **SegmentedControl sweep (2 agents)**: 7 pages converted (Executive Report, KPI
+  Command Center, Downtime, Site Comparison ×2, Comparison ×2, Continuous
+  Improvement, Scheduled Reports). Dropdown/step-wizard pages correctly skipped.
+- Already present (no work): Command Palette ⌘K, Global Search, Notification
+  Center (#20); EmptyState + CTA (#14); tokens + light/dark (#6, #17).
+- Remaining review items (#2 sidebar, #4 cards, #10 table features, #11–13
+  layout/charts, #18 flows) are subjective per-page design work — to be done
+  deliberately, not a blind mass rewrite. Gate: 730 tests green, build clean.

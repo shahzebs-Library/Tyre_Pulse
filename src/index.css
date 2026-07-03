@@ -459,9 +459,16 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
     text-transform: uppercase;
     letter-spacing: 0.07em;
     color: var(--table-head-text);
-    background: var(--table-head-bg);
+    /* Opaque header (tint layered over a solid surface) so it can stay put on
+       scroll without table rows bleeding through. */
+    background: linear-gradient(var(--table-head-bg), var(--table-head-bg)), var(--surface-2);
     border-bottom: 1px solid var(--border-brand);
     white-space: nowrap;
+    /* Sticky header — keeps column labels visible while scrolling long tables.
+       Harmless where the table is short or in a non-scrolling container. */
+    position: sticky;
+    top: 0;
+    z-index: 5;
   }
   .table-cell {
     @apply px-3.5 py-2.5 text-sm;
@@ -895,7 +902,8 @@ html.light .btn-secondary:hover {
 }
 
 html.light .table-header {
-  background: rgba(22,163,74,0.03);
+  /* Opaque light header for the sticky behaviour (see base .table-header). */
+  background: linear-gradient(rgba(22,163,74,0.03), rgba(22,163,74,0.03)), #f8fafc;
   border-bottom-color: rgba(22,163,74,0.09);
   color: #64748b;
 }

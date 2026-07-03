@@ -27,7 +27,8 @@ import {
 } from 'lucide-react'
 import { ChartModal } from '../components/ChartModal'
 import EmptyState from '../components/EmptyState'
-import LoadingState from '../components/LoadingState'
+import SegmentedControl from '../components/ui/SegmentedControl'
+import Skeleton, { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
@@ -584,7 +585,16 @@ export default function Dashboard() {
   const greeting = hourNow < 12 ? t('dashboard.greeting.morning') : hourNow < 17 ? t('dashboard.greeting.afternoon') : t('dashboard.greeting.evening')
   const firstName = (profile?.full_name ?? profile?.username ?? 'there').split(' ')[0]
 
-  if (loading) return <LoadingState message={t('dashboard.states.loading')} />
+  if (loading) return (
+    <div className="space-y-6">
+      <Skeleton className="h-28 w-full rounded-2xl" />
+      <SkeletonCards count={5} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <SkeletonChart className="lg:col-span-2" />
+        <SkeletonChart />
+      </div>
+    </div>
+  )
 
   if (error) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center px-6">
@@ -736,17 +746,18 @@ export default function Dashboard() {
           </div>
 
           {/* Granularity segmented */}
-          <div className="flex gap-0.5 p-0.5 rounded-xl" style={{ background:'rgba(22,163,74,0.05)', border:'1px solid rgba(22,163,74,0.1)' }}>
-            {[['daily',t('dashboard.granularity.day')],['weekly',t('dashboard.granularity.week')],['monthly',t('dashboard.granularity.month')],['yearly',t('dashboard.granularity.year')]].map(([val, lbl]) => (
-              <button key={val} onClick={() => setGranularity(val)}
-                className="px-3 py-1 rounded-lg text-[11px] font-semibold transition-all duration-200"
-                style={granularity === val
-                  ? { background:'linear-gradient(135deg,#16a34a,#15803d)', color:'#fff', boxShadow:'0 0 12px rgba(22,163,74,0.35)' }
-                  : { color:'#6b7280' }}>
-                {lbl}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel="granularity"
+            size="sm"
+            value={granularity}
+            onChange={setGranularity}
+            options={[
+              { value:'daily',   label:t('dashboard.granularity.day') },
+              { value:'weekly',  label:t('dashboard.granularity.week') },
+              { value:'monthly', label:t('dashboard.granularity.month') },
+              { value:'yearly',  label:t('dashboard.granularity.year') },
+            ]}
+          />
         </div>
 
         {/* Date shortcuts */}

@@ -8,6 +8,7 @@ import {
   ShieldAlert, AlertTriangle, BarChart2, Gauge, ClipboardList, Truck,
   Activity, ChevronDown, ChevronUp, Edit2, Hash, Layers, CheckCircle2,
 } from 'lucide-react'
+import { SkeletonTable } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 
@@ -1013,7 +1014,7 @@ export default function DataCleaning() {
             </div>
           )}
 
-          {loading ? <div className="text-center py-12 text-gray-500">Loading...</div> : cleanedRecords.length === 0 ? (
+          {loading ? <SkeletonTable rows={8} cols={6} /> : cleanedRecords.length === 0 ? (
             <div className="text-center py-12 text-gray-500">No cleaned records yet</div>
           ) : (
             <div className="card p-0 overflow-hidden">

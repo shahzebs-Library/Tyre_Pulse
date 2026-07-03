@@ -8,6 +8,7 @@ import {
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
 import { Maximize2, X, BarChart2, Download, FileText, Search, Award, TrendingUp, TrendingDown, AlertTriangle, RefreshCw } from 'lucide-react'
+import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { ChartModal } from '../components/ChartModal'
@@ -114,11 +115,10 @@ export default function BrandPerformance() {
   if (loading) return (
     <div className="space-y-5">
       <PageHeader title="Brand Performance" subtitle="Loading brand data..." icon={BarChart2} />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => <div key={i} className="card animate-pulse h-24 bg-gray-800/40" />)}
-      </div>
-      <div className="grid grid-cols-2 gap-6">
-        {[...Array(2)].map((_, i) => <div key={i} className="card animate-pulse h-64 bg-gray-800/40" />)}
+      <SkeletonCards count={4} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SkeletonChart />
+        <SkeletonChart />
       </div>
     </div>
   )

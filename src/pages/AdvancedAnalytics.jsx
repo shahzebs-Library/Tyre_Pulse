@@ -6,6 +6,7 @@ import {
   Download, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown,
   Info, Award, Star
 } from 'lucide-react'
+import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend, Filler
@@ -176,11 +177,9 @@ function SectionTitle({ children }) {
 
 function LoadingOverlay() {
   return (
-    <div className="flex items-center justify-center h-64">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-gray-400 text-sm">Computing analytics...</span>
-      </div>
+    <div className="space-y-4">
+      <SkeletonCards count={4} />
+      <SkeletonChart />
     </div>
   )
 }

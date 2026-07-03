@@ -3,6 +3,7 @@ import * as analytics from '../lib/api/analyticsReads'
 import { useSettings } from '../contexts/SettingsContext'
 import { bucketByMonth, linearRegression, recordCost } from '../lib/analyticsEngine'
 import { BarChart2, Download, FileText, AlertTriangle, RefreshCw } from 'lucide-react'
+import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -89,10 +90,8 @@ export default function FleetAnalytics() {
   if (loading) return (
     <div className="space-y-5">
       <PageHeader title="Fleet Analytics" subtitle="Loading fleet data..." icon={BarChart2} />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => <div key={i} className="card animate-pulse h-24 bg-gray-800/40" />)}
-      </div>
-      <div className="card animate-pulse h-64 bg-gray-800/40" />
+      <SkeletonCards count={4} />
+      <SkeletonChart />
     </div>
   )
 

@@ -825,7 +825,7 @@ export default function BudgetPlanner() {
 
       {/* ── Status Bar ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }}
-        className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-3 flex flex-wrap items-center gap-4 text-sm">
+        className="card px-5 py-3 flex flex-wrap items-center gap-4 text-sm">
         <span className="text-gray-500 font-medium">FY {selectedYear}</span>
         <span className="text-gray-600">|</span>
         <span className="text-gray-400">Budget Set: <span className="text-blue-400 font-semibold">{fmt(annualBudget, activeCurrency)}</span></span>
@@ -938,7 +938,7 @@ export default function BudgetPlanner() {
 
       {/* ── Budget vs Actual Chart ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}
-        className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-white font-semibold flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-blue-400" />
@@ -964,7 +964,7 @@ export default function BudgetPlanner() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 + i * 0.05 }}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+              className="card"
             >
               <div className="flex items-center justify-between mb-3">
                 <span className="text-white font-semibold">{q.label}</span>
@@ -1145,7 +1145,7 @@ export default function BudgetPlanner() {
 
       {/* ── What-If Scenario Builder ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}
-        className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        className="card">
         <h2 className="text-white font-semibold mb-5 flex items-center gap-2">
           <Sliders className="w-5 h-5 text-purple-400" />
           What-If Scenario Builder
@@ -1237,7 +1237,7 @@ export default function BudgetPlanner() {
           </div>
 
           {/* Scenario output */}
-          <div className="bg-gray-800 rounded-xl p-5 flex flex-col justify-between border border-gray-700">
+          <div className="card flex flex-col justify-between">
             <div>
               <p className="text-gray-400 text-sm mb-4">Scenario Projection</p>
               <div className="space-y-4">
@@ -1268,7 +1268,7 @@ export default function BudgetPlanner() {
       {/* ── Brand Cost Impact ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
-          className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          className="card">
           <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
             <PieIcon className="w-5 h-5 text-amber-400" />
             Brand Spend Distribution - {selectedYear}
@@ -1332,7 +1332,7 @@ export default function BudgetPlanner() {
 
       {/* ── Budget Trend (last 3 years) ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}
-        className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-white font-semibold flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-blue-400" />

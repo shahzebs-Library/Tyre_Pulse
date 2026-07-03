@@ -1059,7 +1059,7 @@ export default function InspectionPlanner() {
       )}
 
       {/* Interval Config */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="card">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="flex items-center gap-2 text-sm text-gray-300 whitespace-nowrap">
             <Sliders size={14} className="text-blue-400" />
@@ -1433,7 +1433,7 @@ export default function InspectionPlanner() {
               {loading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[...Array(6)].map((_, i) => (
-                    <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4 animate-pulse">
+                    <div key={i} className="card animate-pulse">
                       <div className="h-4 bg-gray-700 rounded w-32 mb-3" />
                       <div className="h-3 bg-gray-800 rounded w-20 mb-2" />
                       <div className="h-2 bg-gray-800 rounded w-full" />
@@ -1441,7 +1441,7 @@ export default function InspectionPlanner() {
                   ))}
                 </div>
               ) : inspectorBoard.length === 0 ? (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+                <div className="card p-8 text-center">
                   <Users size={32} className="text-gray-600 mx-auto mb-2" />
                   <p className="text-sm text-gray-400">No inspector data available.</p>
                 </div>
@@ -1456,7 +1456,7 @@ export default function InspectionPlanner() {
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: idx * 0.05 }}
-                        className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-colors"
+                        className="card hover:border-gray-700 transition-colors"
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div>
@@ -1520,7 +1520,7 @@ export default function InspectionPlanner() {
 
           {/* ── Frequency by Site ── */}
           {tab === 'frequency' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div className="card">
               <div className="flex items-center gap-2 mb-5">
                 <BarChart2 size={16} className="text-blue-400" />
                 <h2 className="text-sm font-semibold text-white">Inspection Frequency by Site - Last 6 Months</h2>

@@ -733,7 +733,7 @@ export default function VendorIntelligence() {
       />
 
       {/* ─── Filters ─────────────────────────────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-wrap items-center gap-3">
+      <div className="card flex flex-wrap items-center gap-3">
         {/* Date presets */}
         <div className="flex items-center gap-1">
           {DATE_PRESETS.map(p => (
@@ -847,7 +847,7 @@ export default function VendorIntelligence() {
               </h2>
 
               {!hasVendorData ? (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center py-16 text-gray-600 text-sm">
+                <div className="card text-center py-16 text-gray-600 text-sm">
                   No brand records meet the minimum record threshold ({minRecords}).
                 </div>
               ) : (
@@ -997,7 +997,7 @@ export default function VendorIntelligence() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
                   {/* Radar chart */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <div className="card">
                     <p className="text-xs font-semibold text-gray-300 mb-1">Brand Comparison Radar - Top 5</p>
                     <p className="text-[10px] text-gray-600 mb-3">Normalized 0-100 across 5 performance dimensions</p>
                     {radarData ? (
@@ -1012,7 +1012,7 @@ export default function VendorIntelligence() {
                   </div>
 
                   {/* CPK bar chart */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <div className="card">
                     <p className="text-xs font-semibold text-gray-300 mb-1">CPK by Brand ({activeCurrency}/km)</p>
                     <p className="text-[10px] text-gray-600 mb-3">Green ≤1.0 · Amber 1-2 · Red ≥2 - sorted best to worst</p>
                     {cpkBarData.labels.length > 0 ? (
@@ -1045,7 +1045,7 @@ export default function VendorIntelligence() {
                   </div>
 
                   {/* Tyre Life bar chart */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <div className="card">
                     <p className="text-xs font-semibold text-gray-300 mb-1">Average Tyre Life by Brand</p>
                     <p className="text-[10px] text-gray-600 mb-3">Higher = longer-lasting tyre - sorted descending</p>
                     {lifeBarData.labels.length > 0 ? (
@@ -1092,7 +1092,7 @@ export default function VendorIntelligence() {
                   </div>
 
                   {/* Failure Rate bar chart */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <div className="card">
                     <p className="text-xs font-semibold text-gray-300 mb-1">Failure Rate by Brand (%)</p>
                     <p className="text-[10px] text-gray-600 mb-3">High + Critical risk as % of total records</p>
                     {failureBarData.labels.length > 0 ? (
@@ -1231,7 +1231,7 @@ export default function VendorIntelligence() {
               </h2>
 
               {!hasWorkshopData ? (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center py-16 text-gray-600 text-sm">
+                <div className="card text-center py-16 text-gray-600 text-sm">
                   No workshop data meets the minimum record threshold ({minRecords}).
                 </div>
               ) : (
@@ -1367,7 +1367,7 @@ export default function VendorIntelligence() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
                   {/* High Risk % by Site */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <div className="card">
                     <p className="text-xs font-semibold text-gray-300 mb-1">High Risk % by Site</p>
                     <p className="text-[10px] text-gray-600 mb-3">High + Critical risk records as % of site total</p>
                     <div style={{ height: 260 }}>
@@ -1396,7 +1396,7 @@ export default function VendorIntelligence() {
                   </div>
 
                   {/* Avg CPK by Site */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <div className="card">
                     <p className="text-xs font-semibold text-gray-300 mb-1">Avg CPK by Site ({activeCurrency}/km)</p>
                     <p className="text-[10px] text-gray-600 mb-3">Higher CPK = more expensive per km driven</p>
                     <div style={{ height: 260 }}>
@@ -1426,7 +1426,7 @@ export default function VendorIntelligence() {
                 </div>
 
                 {/* Action Close Rate */}
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="card">
                   <p className="text-xs font-semibold text-gray-300 mb-1">Corrective Action Close Rate by Site (%)</p>
                   <p className="text-[10px] text-gray-600 mb-3">% of corrective actions resolved - green ≥70% · amber 40-70% · red &lt;40%</p>
                   <div style={{ height: 220 }}>

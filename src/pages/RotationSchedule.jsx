@@ -396,7 +396,7 @@ function RotationDrawer({ vehicle, onClose }) {
 
           <div className="p-6 space-y-6">
             {/* Position tread depth visual */}
-            <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+            <div className="card">
               <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                 <Gauge size={15} className="text-blue-400" />
                 Tread Depth by Position
@@ -437,7 +437,7 @@ function RotationDrawer({ vehicle, onClose }) {
             </div>
 
             {/* Rotation events timeline */}
-            <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+            <div className="card">
               <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                 <RotateCcw size={15} className="text-green-400" />
                 Detected Rotation Events
@@ -482,7 +482,7 @@ function RotationDrawer({ vehicle, onClose }) {
             </div>
 
             {/* Active tyres table */}
-            <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
+            <div className="card">
               <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                 <Layers size={15} className="text-purple-400" />
                 Active Tyres ({vehicle.activeTyreCount})
@@ -1033,7 +1033,7 @@ export default function RotationSchedule() {
       />
 
         {/* ── Interval Config ──────────────────────────────────────────────── */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <div className="card">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-center gap-2 text-sm font-medium text-white min-w-max">
               <Settings2 size={15} className="text-blue-400" />
@@ -1072,7 +1072,7 @@ export default function RotationSchedule() {
 
         {/* ── KPI Cards ───────────────────────────────────────────────────── */}
         {noData ? (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
+          <div className="card p-12 text-center">
             <RotateCcw size={40} className="text-gray-600 mx-auto mb-3" />
             <p className="text-gray-400 font-medium">No tyre records found</p>
             <p className="text-gray-500 text-sm mt-1">Upload tyre data to begin tracking rotation compliance.</p>
@@ -1320,7 +1320,7 @@ export default function RotationSchedule() {
               <motion.div key="charts" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                   {/* Rotation Activity Trend */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                  <div className="card">
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="text-sm font-semibold text-white flex items-center gap-2">
                         <TrendingUp size={15} className="text-green-400" />
@@ -1347,7 +1347,7 @@ export default function RotationSchedule() {
                   </div>
 
                   {/* Site Compliance */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                  <div className="card">
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="text-sm font-semibold text-white flex items-center gap-2">
                         <Building2 size={15} className="text-blue-400" />
@@ -1376,7 +1376,7 @@ export default function RotationSchedule() {
                 </div>
 
                 {/* Status Distribution */}
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                <div className="card">
                   <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                     <Layers size={15} className="text-purple-400" />
                     Fleet Status Distribution
@@ -1408,7 +1408,7 @@ export default function RotationSchedule() {
               <motion.div key="impact" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-6">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                   {/* Life comparison chart */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                  <div className="card">
                     <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                       <BarChart3 size={15} className="text-green-400" />
                       Tyre Life: Rotated vs Non-Rotated
@@ -1433,7 +1433,7 @@ export default function RotationSchedule() {
                   </div>
 
                   {/* Impact metrics */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+                  <div className="card space-y-4">
                     <h2 className="text-sm font-semibold text-white flex items-center gap-2">
                       <DollarSign size={15} className="text-yellow-400" />
                       Rotation Impact Analysis
@@ -1496,7 +1496,7 @@ export default function RotationSchedule() {
                 </div>
 
                 {/* Position Wear Balance Analysis */}
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                <div className="card">
                   <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                     <Gauge size={15} className="text-orange-400" />
                     Position Wear Balance Analysis
@@ -1605,12 +1605,12 @@ export default function RotationSchedule() {
                     </button>
                   </div>
                 ) : schedLoading ? (
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
+                  <div className="card p-12 text-center">
                     <RotateCcw size={32} className="text-blue-400 animate-spin mx-auto mb-3" />
                     <p className="text-gray-400 text-sm">Loading scheduled rotations...</p>
                   </div>
                 ) : schedules.length === 0 ? (
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
+                  <div className="card p-12 text-center">
                     <Calendar size={40} className="text-gray-600 mx-auto mb-3" />
                     <p className="text-gray-400 font-medium">No rotations scheduled yet</p>
                     <p className="text-gray-500 text-sm mt-1">Click "Schedule" on overdue vehicles or use auto-schedule above.</p>

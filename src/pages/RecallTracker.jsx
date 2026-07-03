@@ -22,6 +22,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -946,7 +947,11 @@ export default function RecallTracker() {
             <GitBranch className="text-blue-400" size={16} /> Recall Timeline
           </h2>
           {timeline.length === 0 && (
-            <div className="text-center py-12 text-gray-500">No recalls logged yet</div>
+            <EmptyState
+              icon={GitBranch}
+              title="No recalls logged yet"
+              description="Recalls you add will appear here in chronological order."
+            />
           )}
           <div className="relative space-y-0">
             {timeline.map((r, i) => (
@@ -996,7 +1001,11 @@ export default function RecallTracker() {
             <h2 className="font-semibold text-gray-200">Brand Recall History &amp; Reliability Scores</h2>
           </div>
           {brandHistory.length === 0 && (
-            <div className="p-10 text-center text-gray-500">No brand data available</div>
+            <EmptyState
+              icon={Star}
+              title="No brand data available"
+              description="Brand reliability scores appear once recalls have been recorded."
+            />
           )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

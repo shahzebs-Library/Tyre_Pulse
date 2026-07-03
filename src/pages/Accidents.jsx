@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AlertOctagon, Plus, Search, X, Save, FileText, Download, BarChart2, Eye, Hourglass, Upload, CheckCircle2, AlertCircle, ChevronDown, Trash2, AlertTriangle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 import { supabase } from '../lib/supabase'
 import AccidentDetailModal from '../components/AccidentDetailModal'
 import * as accidentsApi from '../lib/api/accidents'
@@ -989,7 +990,11 @@ export default function Accidents() {
           {loading ? (
             <div className="text-center py-12 text-gray-500">Loading...</div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">No incidents found</div>
+            <EmptyState
+              icon={AlertOctagon}
+              title="No incidents found"
+              description="Adjust your filters or log a new incident to start tracking accidents and claims."
+            />
           ) : (
             <div className="card p-0 overflow-x-auto">
               <table className="w-full text-sm">

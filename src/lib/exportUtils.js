@@ -1190,6 +1190,29 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   doc.save(`Inspection_${safe}.pdf`)
 }
 
+/* ── Public branded-PDF helper API ───────────────────────────────────────────
+   Page-local jsPDF generators import these to get a consistent tenant-branded
+   header/footer, empty-state and table theme without duplicating design code.
+
+   Usage in a page:
+     import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme }
+       from '../lib/exportUtils'
+     const brand = await resolvePdfBrand(branding)     // branding from useTenant()
+     pdfHeader(doc, 'Report Title', subtitle, company, brand)
+     if (!rows.length) { pdfEmptyState(doc, 'No records'); pdfFooter(doc,1,1,company,brand); doc.save(...); return }
+     autoTable(doc, { ...pdfTableTheme(brand.accent), startY, head, body })
+     pdfFooter(doc, page, total, company, brand)
+*/
+export async function resolvePdfBrand(branding) { return _pdfBrand(branding) }
+export function pdfHeader(doc, title, subtitle = '', company = '', brand = {}) {
+  _pageHeader(doc, title, subtitle, company, { accent: brand.accent, logoData: brand.logoData })
+}
+export function pdfFooter(doc, page, total, company = '', brand = {}) {
+  _pageFooter(doc, page, total, company, { footerText: brand.footerText })
+}
+export function pdfEmptyState(doc, message, sub) { _emptyStatePanel(doc, message, sub) }
+export function pdfTableTheme(accent) { return _tableTheme(accent) }
+
 // Shared light autoTable theme for a professional, consistent look across every
 // tabular report. Accent-coloured header, alternating soft rows, subtle borders.
 function _tableTheme(accent = P.indigo) {

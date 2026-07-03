@@ -1,6 +1,6 @@
 # TyrePulse - Session Handoff
 
-_Last updated: 2026-07-03 · branch `main` (clean, fully pushed) · migrations V40→V68 live · Master Build Phase A (branding) + Phase C (export fix) DONE · 714 web tests green_
+_Last updated: 2026-07-03 · branch `main` (clean, fully pushed) · migrations V40→V68 live · Master Build Phases A/B/C/D + F(docs) DONE, E deferred (parallel i18n session) · 714 web tests green_
 
 ## TL;DR
 The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.js/DB migration on this track). The **Multi-Country Data Intake Center** (+ its 4 follow-on gaps), most of the `Current issues fixing.md` program (Phases 0-3, plus Phase 5 KPI registry + nav regroup), **the P0/P1 fixes from `docs/PROJECT_AUDIT_2026-07.md`** (mobile accident/offline/sync/logout, web error states, security V57-V59), **per-row-resilient import commits (V60)** and **the 5 real company formats** (`docs/imports/` - auto-recognised profiles, cost-of-record rule, line-item aggregation) are built, **tested, and on `main`**. The Go backend and native Android app stay **off `main`** on their own branches (frozen, not abandoned).
@@ -55,16 +55,25 @@ Standards for an enterprise multi-tenant product. Phased plan (see the doc):
   caller-side try/catch + no loading feedback (generation itself was verified
   sound). All Dashboard exports now run through a shared runExport() wrapper
   (spinner + success/error toast + concurrency lock).
-- **B. Branded PDF/PPTX engine** (NEXT): thread the stored branding
-  colours + logo into exportUtils generators (cover, accent bars, headers,
-  footer/disclaimer) so reports visually carry the tenant identity, not just the
-  name. Self-contained in `src/lib/exportUtils.js`.
-- **D. Report Center** (saved templates, filters, preview, history, snapshots -
-  builds on scheduled reports + report_send_log).
-- **E. Design system** (tokens, tenant theme, light default, a11y, states).
-- **F. Docs set** (PROJECT_OVERVIEW / ARCHITECTURE / DATA_DICTIONARY /
-  REPORTING_GUIDE / BRANDING_AND_REPORT_SETTINGS / INTEGRATIONS /
-  TESTING_AND_RELEASE / CHANGELOG + CLAUDE.md) - maintained each phase.
+- **B. Branded PDF/PPTX engine** — **DONE (pushed).** exportUtils generators use
+  branding colours + logo + footer/disclaimer on the Executive PPTX and Daily
+  PDF; safe helpers brandHex/hexToRgb/fetchImageDataUri; verified valid .pptx
+  with the tenant accent embedded.
+- **D. Report Center** — **DONE (pushed).** New `/report-center` page:
+  on-demand branded generation (Executive PPTX, Daily PDF, Tyre Excel/PDF) with
+  date/country filters + spinner/toast, active-branding banner, scheduling
+  shortcut, and Delivery History over `report_send_log`. New page — leaves the
+  i18n session's Reports.jsx untouched.
+- **F. Docs set** — mostly DONE: `BRANDING_AND_REPORT_SETTINGS.md`,
+  `PROJECT_OVERVIEW.md`, `INTEGRATIONS.md` added; ARCHITECTURE / REPORTING /
+  TESTING have existing equivalents (`ARCHITECTURE_CURRENT_STATE.md`,
+  `EXPORT_GUIDE.md`, `TEST_AND_RELEASE_PLAN.md`). Remaining: `DATA_DICTIONARY.md`
+  (best generated from live schema).
+- **E. Design system** (tokens, tenant theme, light default, a11y, states) —
+  **DEFERRED**: a global CSS/theme refactor would collide with the parallel i18n
+  session actively editing pages/locales. Do this once that session lands.
+  Foundation already in place: TenantContext publishes `--brand-primary` /
+  `--brand-accent` CSS vars for a future token pass.
 
 ### 2026-07-02 night - export work + P2 wave (see CHANGELOG_ENGINEERING.md)
 - **Export libs lazy-loaded:** xlsx/jspdf/pptxgenjs are async chunks loading on

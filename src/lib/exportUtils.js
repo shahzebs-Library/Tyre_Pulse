@@ -863,9 +863,12 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const ph      = doc.internal.pageSize.height
   const company = opts.company || ''
   const mx      = 14
+  const brand   = await _pdfBrand(opts.branding)
+  const hdr     = { accent: brand.accent, logoData: brand.logoData }
+  const ftr     = { footerText: brand.footerText }
 
   // ── PAGE 1 ─────────────────────────────────────────────────────────────────
-  _pageHeader(doc, 'Vehicle Inspection Report', `Asset: ${row.asset_no || '-'}`, company)
+  _pageHeader(doc, 'Vehicle Inspection Report', `Asset: ${row.asset_no || '-'}`, company, hdr)
   let y = 30
 
   // Title card with severity ribbon
@@ -1064,7 +1067,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // ── Tyre condition table ───────────────────────────────────────────────────
   const tyreEntries = Object.entries(normTc)
   if (tyreEntries.length > 0) {
-    if (y > ph - 70) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company); y = 30 }
+    if (y > ph - 70) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
     y = _sectionBar(doc, 'DETAILED TYRE ANALYSIS', y, mx) + 3
 
     autoTable(doc, {
@@ -1103,7 +1106,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
 
   // ── Risk progress bars ─────────────────────────────────────────────────────
   if (totalT > 0) {
-    if (y > ph - 50) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company); y = 30 }
+    if (y > ph - 50) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
     y = _sectionBar(doc, 'RISK DISTRIBUTION', y, mx) + 6
     Object.entries(RISK_RGB).forEach(([key, [r, g, b]]) => {
       const cnt = riskCounts[key] ?? 0
@@ -1126,7 +1129,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
 
   // ── Findings ───────────────────────────────────────────────────────────────
   if (row.findings) {
-    if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company); y = 30 }
+    if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
     y = _sectionBar(doc, 'FINDINGS & OBSERVATIONS', y, mx) + 4
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ink)
     const fl = doc.splitTextToSize(row.findings, pw - mx * 2)
@@ -1135,7 +1138,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
 
   // ── Notes ──────────────────────────────────────────────────────────────────
   if (row.notes) {
-    if (y > ph - 35) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company); y = 30 }
+    if (y > ph - 35) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
     y = _sectionBar(doc, 'ADDITIONAL NOTES', y, mx) + 4
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ink)
     const nl = doc.splitTextToSize(row.notes, pw - mx * 2)
@@ -1145,10 +1148,10 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // ── Auto-recommendations ────────────────────────────────────────────────────
   const recs = _buildRecommendations(riskCounts, totalT, row)
   if (recs.length > 0) {
-    if (y > ph - 60) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company); y = 30 }
+    if (y > ph - 60) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
     y = _sectionBar(doc, 'RECOMMENDED ACTIONS', y, mx) + 4
     recs.forEach(rec => {
-      if (y > ph - 16) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company); y = 30 }
+      if (y > ph - 16) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
       const [r, g, b] = rec.urgent ? P.crimson : P.indigo
       doc.setFillColor(r, g, b)
       doc.circle(mx + 3, y + 2.5, 2, 'F')
@@ -1162,7 +1165,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   }
 
   // ── Signature block ─────────────────────────────────────────────────────────
-  if (y + 34 > ph - 12) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company); y = 30 }
+  if (y + 34 > ph - 12) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
   y += 5
   doc.setFillColor(...P.offWhite)
   doc.setDrawColor(...P.silver)
@@ -1183,7 +1186,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const totalPages = doc.internal.getNumberOfPages()
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p)
-    _pageFooter(doc, p, totalPages, company || 'Fleet Operations')
+    _pageFooter(doc, p, totalPages, company || 'Fleet Operations', ftr)
   }
 
   const safe = (row.title || 'inspection').replace(/[^a-z0-9]/gi, '_').slice(0, 40)

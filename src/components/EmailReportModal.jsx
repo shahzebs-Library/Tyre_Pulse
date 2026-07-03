@@ -4,6 +4,8 @@ import {
   CheckCircle, AlertCircle, Loader2, Users,
 } from 'lucide-react'
 import { sendReportEmail, generateReportPdf, buildFleetSummaryEmail } from '../lib/emailService'
+import { useTenant } from '../contexts/TenantContext'
+import { useSettings } from '../contexts/SettingsContext'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -29,6 +31,9 @@ export default function EmailReportModal({
   period,
 }) {
   const defaultPeriod = period ?? new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const { branding } = useTenant()
+  const { appSettings } = useSettings()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   const [recipients, setRecipients] = useState([''])
   const [subject, setSubject] = useState('')
@@ -90,7 +95,8 @@ export default function EmailReportModal({
           defaultPeriod,
           pdfColumns,
           pdfRows,
-          Object.entries(kpiSummary).map(([k, v]) => [k, String(v)])
+          Object.entries(kpiSummary).map(([k, v]) => [k, String(v)]),
+          { branding, company }
         )
       }
 

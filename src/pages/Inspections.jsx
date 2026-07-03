@@ -319,7 +319,7 @@ export default function Inspections() {
     let cancelled = false
     const t = setTimeout(async () => {
       const svgEl = pdfDiagramRef.current?.querySelector('svg')
-      try { await exportInspectionDetailPdf(pdfRow, { svgEl }) }
+      try { await exportInspectionDetailPdf(pdfRow, { svgEl, branding, company }) }
       finally { if (!cancelled) setPdfRow(null) }
     }, 80)
     return () => { cancelled = true; clearTimeout(t) }
@@ -1951,7 +1951,7 @@ export default function Inspections() {
                           className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors">
                           {t('inspections.row.edit')}
                         </button>
-                        <button onClick={() => exportInspectionDetailPdf(r)}
+                        <button onClick={() => exportInspectionDetailPdf(r, { branding, company })}
                           className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
                           title={t('inspections.row.titleExportPdf')}>
                           <FileText size={11} className="inline" />

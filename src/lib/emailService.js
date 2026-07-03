@@ -1,5 +1,6 @@
 // emailService.js - Report email generation and delivery
 import { supabase } from './supabase'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme, pdfEmptyState } from './exportUtils'
 
 // jspdf is heavy (~400 KB) - load it on first use, never with the page chunk.
 let jsPDF, autoTable
@@ -21,97 +22,52 @@ async function ensurePdf() {
  * @param {[string, string][]} summaryRows - Optional KPI summary rows [label, value]
  * @returns {string} Base64-encoded PDF (no data URI prefix)
  */
-export async function generateReportPdf(title, subtitle, columns, rows, summaryRows = []) {
+export async function generateReportPdf(title, subtitle, columns, rows, summaryRows = [], opts = {}) {
   await ensurePdf()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  const company = opts.company || 'TyrePulse'
+  const brand   = await resolvePdfBrand(opts.branding)
 
-  // ── Header band ──────────────────────────────────────────────────────────────
-  doc.setFillColor(15, 23, 42)        // slate-900
-  doc.rect(0, 0, 297, 32, 'F')
+  // ── Branded header (tenant logo + accent + company) ───────────────────────────
+  pdfHeader(doc, title, subtitle, company, brand)
+  const theme = pdfTableTheme(brand.accent)
 
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(16)
-  doc.setFont('helvetica', 'bold')
-  doc.text('TyrePulse', 14, 13)
+  const safeBody = (rows || []).map(row =>
+    Array.isArray(row) ? row.map(c => (c == null ? '' : String(c))) : row
+  )
 
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'normal')
-  doc.text(title, 14, 22)
-
-  doc.setFontSize(8)
-  doc.setTextColor(156, 163, 175)     // gray-400
-  doc.text(subtitle, 14, 29)
-  doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}`, 205, 29)
+  // Empty-state: never email a blank report.
+  if (safeBody.length === 0 && summaryRows.length === 0) {
+    pdfEmptyState(doc, 'No data available for this report')
+    pdfFooter(doc, 1, 1, company, brand)
+    return doc.output('datauristring').split(',')[1]
+  }
 
   // ── KPI summary table ────────────────────────────────────────────────────────
-  let startY = 40
+  let startY = 30
   if (summaryRows.length > 0) {
     autoTable(doc, {
+      ...theme,
       startY,
       head: [['Metric', 'Value']],
       body: summaryRows,
-      theme: 'striped',
-      styles: { fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [30, 58, 95], textColor: 255, fontStyle: 'bold' },
       columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
-      margin: { left: 14, right: 14 },
     })
     startY = (doc.lastAutoTable?.finalY ?? startY) + 10
   }
 
-  // ── Main data table ──────────────────────────────────────────────────────────
-  // Coerce every cell to a string so a stray number/undefined/object from a
-  // caller can never make jsPDF-autoTable throw and break the emailed report.
-  const safeBody = (rows || []).map(row =>
-    Array.isArray(row) ? row.map(c => (c == null ? '' : String(c))) : row
-  )
+  // ── Main data table ───────────────────────────────────────────────────────────
   autoTable(doc, {
+    ...theme,
     startY,
     head: [columns],
     body: safeBody,
-    theme: 'striped',
-    styles: {
-      fontSize: 8,
-      cellPadding: 2.5,
-      overflow: 'linebreak',
-      textColor: [30, 41, 59],        // slate-800
-    },
-    headStyles: {
-      fillColor: [30, 58, 95],
-      textColor: 255,
-      fontSize: 9,
-      fontStyle: 'bold',
-    },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    margin: { left: 14, right: 14 },
-    didDrawPage: (hookData) => {
-      // Repeat header band on continuation pages
-      if (hookData.pageNumber > 1) {
-        doc.setFillColor(15, 23, 42)
-        doc.rect(0, 0, 297, 14, 'F')
-        doc.setTextColor(255, 255, 255)
-        doc.setFontSize(9)
-        doc.setFont('helvetica', 'bold')
-        doc.text('TyrePulse', 14, 9)
-        doc.setFont('helvetica', 'normal')
-        doc.text(title, 50, 9)
-      }
-    },
+    didDrawPage: () => { pdfHeader(doc, title, subtitle, company, brand) },
   })
 
-  // ── Footer on every page ─────────────────────────────────────────────────────
+  // ── Branded footer on every page ──────────────────────────────────────────────
   const pageCount = doc.internal.getNumberOfPages()
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i)
-    doc.setFontSize(7)
-    doc.setTextColor(156, 163, 175)
-    doc.text(
-      `TyrePulse Fleet Intelligence - Confidential - Page ${i} of ${pageCount}`,
-      14,
-      202
-    )
-    doc.text('www.tyrepulse.app', 240, 202)
-  }
+  for (let i = 1; i <= pageCount; i++) { doc.setPage(i); pdfFooter(doc, i, pageCount, company, brand) }
 
   // Return base64 content only (no data URI prefix)
   return doc.output('datauristring').split(',')[1]

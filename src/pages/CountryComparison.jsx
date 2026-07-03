@@ -3,6 +3,7 @@ import * as analytics from '../lib/api/analyticsReads'
 import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText, Award, RefreshCw } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, Title, Tooltip, Legend,
@@ -234,10 +235,11 @@ export default function CountryComparison() {
   if (loading) return (
     <div className="space-y-5">
       <PageHeader title="Country Comparison" subtitle="Loading fleet data..." icon={Globe} />
-      <div className="grid grid-cols-3 gap-4">
-        {[...Array(3)].map((_, i) => <div key={i} className="card animate-pulse h-52 bg-gray-800/40" />)}
+      <SkeletonCards count={3} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <SkeletonChart />
+        <SkeletonChart />
       </div>
-      <div className="card animate-pulse h-48 bg-gray-800/40" />
     </div>
   )
 

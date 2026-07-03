@@ -8,6 +8,7 @@ import {
   TrendingUp, AlertTriangle, Timer, Filter, BarChart2, RefreshCw,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import { SkeletonTable } from '../components/ui/Skeleton'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import { RISK_BADGE_DARK } from '../lib/formatters'
@@ -805,13 +806,7 @@ function Chip({ label, onRemove }) {
 }
 
 function LoadingState() {
-  return (
-    <div className="space-y-2.5">
-      {[...Array(5)].map((_, i) => (
-        <div key={i} className="card animate-pulse h-20 bg-gray-800/40" />
-      ))}
-    </div>
-  )
+  return <SkeletonTable rows={8} cols={8} />
 }
 
 function EmptyState({ hasFilters, onAdd }) {

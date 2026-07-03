@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Clock, TrendingUp, AlertTriangle, Bell, ArrowRight, X, RefreshCw,
-  CheckCircle2, Loader2, Search, Download, FileText, SlidersHorizontal,
+  CheckCircle2, Search, Download, FileText, SlidersHorizontal,
   ChevronDown, ChevronUp, Eye, EyeOff,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -14,6 +14,7 @@ import {
   SEVERITY_CONFIG, ALERT_TYPE_LABELS, ALERT_TYPES,
 } from '../lib/alertEngine'
 import PageHeader from '../components/ui/PageHeader'
+import Skeleton from '../components/ui/Skeleton'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { cn } from '../lib/cn'
 
@@ -309,9 +310,10 @@ export default function Alerts() {
 
       {/* Alert list */}
       {loading && active.length === 0 ? (
-        <div className="card py-16 flex flex-col items-center gap-3 text-muted">
-          <Loader2 className="w-6 h-6 animate-spin text-brand" />
-          <span className="text-sm">{t('alerts.list.scanning')}</span>
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-[76px] w-full rounded-2xl" />
+          ))}
         </div>
       ) : visible.length === 0 ? (
         <motion.div

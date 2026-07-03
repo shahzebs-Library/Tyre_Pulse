@@ -64,11 +64,11 @@ Standards for an enterprise multi-tenant product. Phased plan (see the doc):
   date/country filters + spinner/toast, active-branding banner, scheduling
   shortcut, and Delivery History over `report_send_log`. New page — leaves the
   i18n session's Reports.jsx untouched.
-- **F. Docs set** — mostly DONE: `BRANDING_AND_REPORT_SETTINGS.md`,
-  `PROJECT_OVERVIEW.md`, `INTEGRATIONS.md` added; ARCHITECTURE / REPORTING /
-  TESTING have existing equivalents (`ARCHITECTURE_CURRENT_STATE.md`,
-  `EXPORT_GUIDE.md`, `TEST_AND_RELEASE_PLAN.md`). Remaining: `DATA_DICTIONARY.md`
-  (best generated from live schema).
+- **F. Docs set** — **DONE**: `BRANDING_AND_REPORT_SETTINGS.md`,
+  `PROJECT_OVERVIEW.md`, `INTEGRATIONS.md`, and `DATA_DICTIONARY.md` (21 core
+  tables / 458 columns, generated from the live schema) added; ARCHITECTURE /
+  REPORTING / TESTING have existing equivalents (`ARCHITECTURE_CURRENT_STATE.md`,
+  `EXPORT_GUIDE.md`, `TEST_AND_RELEASE_PLAN.md`).
 - **E. Design system** (tokens, tenant theme, light default, a11y, states) —
   **DEFERRED**: a global CSS/theme refactor would collide with the parallel i18n
   session actively editing pages/locales. Do this once that session lands.

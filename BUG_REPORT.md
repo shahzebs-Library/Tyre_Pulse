@@ -47,14 +47,14 @@ No **error-level** issues remain. Remaining items are cosmetic/UX or need a manu
 | 025 | Map pins overlap | ◑ N/A | no live map feature / needs lat-lng seeding |
 | 026 | QR print layout | ◑ Cosmetic | add `@media print` grid rules |
 | 027 | Compliance ÷0 | ✅ Resolved | `length > 0 ? ... : 0` guards |
-| 028 | Radar all-zeros first load | ◑ Cosmetic | add loading skeleton |
-| 029 | Date locale inconsistency | ◑ Cosmetic | standardise on shared `formatDate()` |
-| 030 | Generic empty states | ◑ Cosmetic | per-page messages |
+| 028 | Radar all-zeros first load | ✅ Resolved | shared Skeleton loaders (SkeletonCards/Chart) added across ~18 pages (2026-07-03) |
+| 029 | Date locale inconsistency | ✅ Resolved | 26 ad-hoc `new Date().toLocaleDateString()` calls across 16 pages routed through shared `formatDate()` — null-safe + consistent (2026-07-03) |
+| 030 | Generic empty states | ✅ Resolved | 23 plain "no data" blocks across 12 pages converted to the shared `EmptyState` (icon+title+description) (2026-07-03) |
 | 031 | Sidebar active route | ✅ Resolved | `NavLink` `isActive` (prefix match) |
 | 032 | Mobile table overflow | ⚠️ Re-verify | audit `overflow-x-auto` on remaining tables |
 | 033 | Favicon / title | ✅ Resolved | `index.html` has TyrePulse title + favicon set |
 | 034 | Upload column mapper corrupted data | ✅ Resolved | Optional "SR No." field was stealing the Date/Serial columns, so issue dates landed on junk values like `0770-01-01`. Mapper now assigns the strongest match first and rejects impossible dates (UploadData.jsx). 8 regression tests added. |
-| 035 | Country resets to "All" on upload page reload | ◑ Partial | Admin's country choice is not persisted, so the Upload button starts disabled after any hard reload until they re-pick a country. Persist the selection (localStorage or profile). |
+| 035 | Country resets to "All" on upload page reload | ✅ Resolved | Admin's country choice now persisted to localStorage (`tp_active_country`) in SettingsContext; survives hard reload (2026-07-03). |
 
 ## Remaining work (prioritised)
 

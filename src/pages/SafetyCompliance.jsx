@@ -20,6 +20,8 @@ import {
 import * as analytics from '../lib/api/analyticsReads'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -64,7 +66,9 @@ function fmtDate(d) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function SafetyCompliance() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, appSettings } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const [tyreRecords, setTyreRecords] = useState([])
   const [inspections, setInspections]  = useState([])
   const [accidents, setAccidents]      = useState([])
@@ -252,16 +256,12 @@ export default function SafetyCompliance() {
     const { default: autoTable } = await import('jspdf-autotable')
     if (!compliance) return
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    doc.setFillColor(15, 23, 42); doc.rect(0, 0, 297, 32, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('TyrePulse', 14, 13)
-    doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.text('Safety & Compliance Report', 14, 22)
-    doc.setFontSize(8); doc.setTextColor(156, 163, 175)
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}`, 14, 29)
-    doc.text(`Overall Score: ${compliance.overallScore.toFixed(1)}%`, 180, 29)
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'Safety & Compliance Report', `Overall Score: ${compliance.overallScore.toFixed(1)}%`, company, brand)
 
     autoTable(doc, {
-      startY: 40,
+      ...pdfTableTheme(brand.accent),
+      startY: 28,
       head: [['Metric', 'Score', 'Status']],
       body: [
         ['Tread Depth Compliance', fmtPct(compliance.treadCompliance), compliance.treadCompliance >= 90 ? 'PASS' : compliance.treadCompliance >= 75 ? 'WARNING' : 'FAIL'],
@@ -271,33 +271,23 @@ export default function SafetyCompliance() {
         ['Accident-Tyre Correlation', fmtPct(compliance.accidentCorrelation), compliance.accidents === 0 ? 'N/A' : compliance.accidentCorrelation < 30 ? 'LOW' : 'REVIEW'],
         ['Overall Score', fmtPct(compliance.overallScore), compliance.overallScore >= 90 ? 'EXCELLENT' : compliance.overallScore >= 75 ? 'GOOD' : 'NEEDS ATTENTION'],
       ],
-      theme: 'striped',
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [30, 58, 95], textColor: 255 },
-      margin: { left: 14, right: 14 },
     })
 
     if (compliance.siteTread.length > 0) {
       const y = (doc.lastAutoTable?.finalY || 80) + 8
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: y,
         head: [['Site', 'Tread Compliance %', 'Total Tyres', 'Failures', 'Status']],
         body: compliance.siteTread.map(s => [
           s.site, fmtPct(s.compliance), s.total, s.fails,
           s.compliance >= 90 ? 'COMPLIANT' : s.compliance >= 75 ? 'WARNING' : 'NON-COMPLIANT',
         ]),
-        theme: 'striped',
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [30, 58, 95], textColor: 255 },
-        margin: { left: 14, right: 14 },
       })
     }
 
     const pgCount = doc.internal.getNumberOfPages()
-    for (let i = 1; i <= pgCount; i++) {
-      doc.setPage(i); doc.setFontSize(7); doc.setTextColor(156, 163, 175)
-      doc.text(`TyrePulse Safety & Compliance - Page ${i} of ${pgCount}`, 14, 202)
-    }
+    for (let i = 1; i <= pgCount; i++) { doc.setPage(i); pdfFooter(doc, i, pgCount, company, brand) }
     doc.save(`safety-compliance-${new Date().toISOString().slice(0,10)}.pdf`)
   }
 

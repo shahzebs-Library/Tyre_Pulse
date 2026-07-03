@@ -8,7 +8,8 @@ import * as correctiveActions from '../lib/api/correctiveActions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { exportToExcel, exportToPdf, exportInspectionDetailPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, exportInspectionDetailPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
+import { useTenant } from '../contexts/TenantContext'
 import { Download, FileText, Camera, ClipboardList, Eye, GraduationCap, CheckSquare, X, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Upload, Trash2, AlertTriangle } from 'lucide-react'
 import SignaturePad from '../components/SignaturePad'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
@@ -222,7 +223,9 @@ function buildApprovalEmailHtml({ assetNo, inspector, date, site, odometer, hour
 
 export default function Inspections() {
   const { profile, loading: authLoading } = useAuth()
-  const { activeCountry } = useSettings()
+  const { activeCountry, appSettings } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const { t } = useLanguage()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -671,20 +674,17 @@ export default function Inspections() {
     const ph     = doc.internal.pageSize.height
     const mx     = 14
 
-    // ── Header band ────────────────────────────────────────────────────────────
-    doc.setFillColor(21, 128, 61)
-    doc.rect(0, 0, pw, 20, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(13)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE', mx, 9)
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.text('Daily Tyre Inspection Report', mx, 16)
-    doc.text(
-      `Generated: ${new Date().toLocaleDateString('en-GB')}`,
-      pw - mx, 16, { align: 'right' }
-    )
+    // ── Branded header ─────────────────────────────────────────────────────────
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'Daily Tyre Inspection Report', `Asset: ${clAsset || clSaved.asset_no || 'n/a'}`, company, brand)
+
+    // ── Empty state: checklist has no tyre positions ──
+    if (!tyreData.length) {
+      pdfEmptyState(doc, 'No tyre positions recorded for this checklist')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save(`TyrePulse_Checklist_${clAsset || clSaved.asset_no || 'report'}.pdf`)
+      return
+    }
 
     // ── Asset info grid ─────────────────────────────────────────────────────────
     let y = 28
@@ -774,6 +774,7 @@ export default function Inspections() {
 
     // ── Tyre data table ─────────────────────────────────────────────────────────
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: y,
       head: [['Position', 'Pressure (PSI)', 'Condition', 'Tread Depth (mm)']],
       body: tyreData.map(row => [
@@ -783,10 +784,6 @@ export default function Inspections() {
         row.treadDepth ? `${row.treadDepth} mm` : 'n/a',
       ]),
       margin:      { left: mx, right: mx },
-      theme:       'grid',
-      styles:      { fontSize: 8, cellPadding: 2.5 },
-      headStyles:  { fillColor: [21, 128, 61], textColor: [255, 255, 255], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
       didParseCell(data) {
         if (data.section !== 'body' || data.column.index !== 2) return
         const cond = String(data.cell.raw)
@@ -890,20 +887,11 @@ export default function Inspections() {
 
     finalY += sigH + 10
 
-    // ── Footer on every page ────────────────────────────────────────────────────
+    // ── Branded footer on every page ────────────────────────────────────────────
     const totalPages = doc.internal.getNumberOfPages()
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i)
-      doc.setFillColor(249, 250, 251)
-      doc.rect(0, ph - 10, pw, 10, 'F')
-      doc.setTextColor(156, 163, 175)
-      doc.setFontSize(7)
-      doc.setFont('helvetica', 'normal')
-      doc.text(
-        `Confidential · For Internal Use Only  |  ${clDate || clSaved.scheduled_date || 'n/a'}  |  Inspector: ${clInspector || 'n/a'}  |  Asset: ${clAsset || clSaved.asset_no || 'n/a'}`,
-        pw / 2, ph - 4, { align: 'center' }
-      )
-      doc.text(`${i} / ${totalPages}`, pw - mx, ph - 4, { align: 'right' })
+      pdfFooter(doc, i, totalPages, company, brand)
     }
 
     if (preview) {

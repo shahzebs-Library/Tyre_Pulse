@@ -19,6 +19,8 @@ import { runTyreEngineerAgent } from '../lib/agents/tyreEngineerAgent'
 import { runQaDataAgent } from '../lib/agents/qaDataAgent'
 import { runPlannerAgent } from '../lib/agents/plannerAgent'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState } from '../lib/exportUtils'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -392,7 +394,9 @@ function TypingIndicator({ agentType }) {
 // ── Main Page Component ───────────────────────────────────────────────────────
 
 export default function AiCommandCenter() {
-  const { site: contextSite } = useSettings()
+  const { site: contextSite, appSettings } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   const [messages, setMessages]           = useState([])
   const [query, setQuery]                 = useState('')
@@ -602,16 +606,19 @@ export default function AiCommandCenter() {
     const pageWidth = doc.internal.pageSize.getWidth()
     const margin = 15
     const maxWidth = pageWidth - margin * 2
-    let y = 20
+    const brand = await resolvePdfBrand(branding)
 
-    doc.setFontSize(16)
-    doc.setTextColor(30, 30, 30)
-    doc.text('TyrePulse AI Command Center - Chat Export', margin, y)
-    y += 6
-    doc.setFontSize(9)
-    doc.setTextColor(120, 120, 120)
-    doc.text(`Exported: ${new Date().toLocaleString()} | Records loaded: ${records.length}`, margin, y)
-    y += 10
+    pdfHeader(doc, 'AI Command Center - Chat Export', `${records.length} records loaded`, company, brand)
+
+    // ── Empty state: nothing to export ──
+    if (messages.length === 0) {
+      pdfEmptyState(doc, 'No conversation to export')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save(`tyre-pulse-ai-chat-${new Date().toISOString().slice(0, 10)}.pdf`)
+      return
+    }
+
+    let y = 30
 
     messages.forEach(msg => {
       if (y > 260) { doc.addPage(); y = 20 }
@@ -633,6 +640,9 @@ export default function AiCommandCenter() {
       })
       y += 4
     })
+
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
 
     doc.save(`tyre-pulse-ai-chat-${new Date().toISOString().slice(0, 10)}.pdf`)
   }

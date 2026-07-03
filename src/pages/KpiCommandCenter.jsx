@@ -17,7 +17,9 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
 import { formatDate, formatMonthYear } from '../lib/formatters'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import {
   computeCpkFleet, computeAvgTyreLife, computeFailureRate,
@@ -494,6 +496,8 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function KpiCommandCenter() {
   const { activeCountry, activeCurrency, appSettings } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   // Currency-aware benchmark set - shadows nothing; all display formatting below uses this.
   const BENCHMARKS = useMemo(() => makeBenchmarks(activeCurrency), [activeCurrency])
   const [period, setPeriod] = useState('90d')
@@ -767,19 +771,11 @@ export default function KpiCommandCenter() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    doc.setFillColor(15, 23, 42)
-    doc.rect(0, 0, 297, 210, 'F')
-    doc.setFillColor(30, 58, 138)
-    doc.rect(0, 0, 297, 24, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(16)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE · KPI Command Center', 14, 11)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Period: ${from} to ${to}  |  Overall Fleet Score: ${overallScore.toFixed(0)}/100  |  Generated: ${formatDate(new Date())}`, 14, 19)
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'KPI Command Center', `Period: ${from} to ${to}  ·  Overall Fleet Score: ${overallScore.toFixed(0)}/100  ·  ${formatDate(new Date())}`, company, brand)
 
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: 30,
       head: [['KPI', 'Current Value', 'Score', 'Rating', 'vs Good', 'World Class', 'Good', 'Average', 'Poor']],
       body: KPI_KEYS.map(k => {
@@ -794,16 +790,13 @@ export default function KpiCommandCenter() {
           : '-'
         return [b.label, b.format(val), `${score.toFixed(0)}/100`, rating.label, delta, b.format(b.world_class), b.format(b.good), b.format(b.average), b.format(b.poor)]
       }),
-      theme: 'striped',
-      styles: { fontSize: 9, textColor: [255, 255, 255], fillColor: [17, 24, 39] },
-      headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [31, 41, 55] },
       margin: { left: 14, right: 14 },
     })
 
     if (siteKpiData.length) {
       const finalY = doc.lastAutoTable.finalY + 8
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: finalY,
         head: [['Site', 'Overall', ...KPI_KEYS.map(k => BENCHMARKS[k].label.replace(' Compliance', '').replace('Avg ', '').slice(0, 12))]],
         body: siteKpiData.map(sd => [
@@ -811,14 +804,12 @@ export default function KpiCommandCenter() {
           `${sd.overall.toFixed(0)}/100`,
           ...KPI_KEYS.map(k => BENCHMARKS[k].format(sd.vals[k])),
         ]),
-        theme: 'striped',
-        styles: { fontSize: 8, textColor: [255, 255, 255], fillColor: [17, 24, 39] },
-        headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [31, 41, 55] },
         margin: { left: 14, right: 14 },
       })
     }
 
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
     doc.save(`kpi-command-center-${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 

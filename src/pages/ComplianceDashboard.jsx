@@ -17,6 +17,8 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -235,7 +237,9 @@ function TabBtn({ active, onClick, icon: Icon, label, count, countColor }) {
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function ComplianceDashboard() {
   const { profile } = useAuth()
-  const { activeCurrency, activeCountry } = useSettings()
+  const { activeCurrency, activeCountry, appSettings } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   // Data
   const [tyreRecords, setTyreRecords]   = useState([])
@@ -732,22 +736,15 @@ export default function ComplianceDashboard() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    const W = doc.internal.pageSize.width
+    const brand = await resolvePdfBrand(branding)
 
-    doc.setFillColor(22, 101, 52)
-    doc.rect(0, 0, W, 22, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE · Tread Depth Compliance Report', 14, 10)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} | Fleet Min: ${FLEET_MIN_TREAD}mm | Legal Min: ${LEGAL_MIN_TREAD}mm`, 14, 17)
+    pdfHeader(doc, 'Tread Depth Compliance Report', `Fleet Min: ${FLEET_MIN_TREAD}mm · Legal Min: ${LEGAL_MIN_TREAD}mm`, company, brand)
 
     doc.setFontSize(11)
     doc.setTextColor(40, 40, 40)
     doc.text('Compliance Summary', 14, 30)
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: 33,
       head: [['Metric', 'Value']],
       body: [
@@ -759,21 +756,14 @@ export default function ComplianceDashboard() {
         ['Below Legal Min (<1.6mm)', String(treadStats.legalFail.length)],
         ['No Tread Data', String(treadStats.noData)],
       ],
-      theme: 'grid',
-      headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { fontSize: 8 },
       columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 50 } },
     })
 
     doc.addPage()
-    doc.setFillColor(22, 101, 52)
-    doc.rect(0, 0, W, 16, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(12)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Non-Compliant Tyre List', 14, 10)
+    pdfHeader(doc, 'Non-Compliant Tyre List', `Fleet Min: ${FLEET_MIN_TREAD}mm · Legal Min: ${LEGAL_MIN_TREAD}mm`, company, brand)
     autoTable(doc, {
-      startY: 20,
+      ...pdfTableTheme(brand.accent),
+      startY: 28,
       head: [['Asset', 'Serial', 'Brand', 'Position', 'Tread (mm)', 'Site', 'Days In Service', 'Risk', 'Status']],
       body: nonCompliantTyres.slice(0, 200).map(r => [
         r.asset_no || '-',
@@ -786,9 +776,6 @@ export default function ComplianceDashboard() {
         r.risk_level || '-',
         r.tread_depth != null && Number(r.tread_depth) < LEGAL_MIN_TREAD ? 'LEGAL FAILURE' : 'Below Fleet Min',
       ]),
-      theme: 'striped',
-      headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-      bodyStyles: { fontSize: 7 },
       didParseCell: data => {
         if (data.section === 'body' && data.column.index === 8) {
           if ((data.cell.raw || '').includes('LEGAL')) {
@@ -799,6 +786,8 @@ export default function ComplianceDashboard() {
       },
     })
 
+    const pgCount = doc.internal.getNumberOfPages()
+    for (let i = 1; i <= pgCount; i++) { doc.setPage(i); pdfFooter(doc, i, pgCount, company, brand) }
     doc.save(`tread_compliance_${new Date().toISOString().slice(0, 10)}.pdf`)
   }
 
@@ -807,25 +796,14 @@ export default function ComplianceDashboard() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+    const brand = await resolvePdfBrand(branding)
     const W = doc.internal.pageSize.width
     const H = doc.internal.pageSize.height
     const now = new Date()
     const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
 
     // Cover header
-    doc.setFillColor(22, 101, 52)
-    doc.rect(0, 0, W, 35, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(18)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE', 14, 13)
-    doc.setFontSize(12)
-    doc.setFont('helvetica', 'normal')
-    doc.text('Fleet Tyre Compliance Certificate', 14, 21)
-    doc.setFontSize(9)
-    doc.text(`Issued: ${dateStr}`, 14, 29)
-    doc.setFontSize(9)
-    doc.text(`Reference: TPC-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`, W - 14, 29, { align: 'right' })
+    pdfHeader(doc, 'Fleet Tyre Compliance Certificate', `Issued: ${dateStr} · Reference: TPC-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`, company, brand)
 
     // Score block
     const scoreCol = scoreColor(overallScore)
@@ -844,6 +822,7 @@ export default function ComplianceDashboard() {
     doc.setTextColor(40, 40, 40)
     doc.text('Compliance Area Summary', 14, 82)
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: 85,
       head: [['Area', 'Score', 'Status', 'Details']],
       body: [
@@ -860,9 +839,6 @@ export default function ComplianceDashboard() {
           criticalCount === 0 ? 'PASS' : 'FAIL',
           criticalCount === 0 ? 'No critical risk tyres on fleet' : `${criticalCount} critical risk tyres require immediate action`],
       ],
-      theme: 'grid',
-      headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { fontSize: 8 },
       didParseCell: data => {
         if (data.section === 'body' && data.column.index === 2) {
           if ((data.cell.raw || '').includes('NON-COMPLIANT') || (data.cell.raw || '').includes('FAIL')) {
@@ -887,6 +863,7 @@ export default function ComplianceDashboard() {
       doc.setFont('helvetica', 'bold')
       doc.text(`LEGAL COMPLIANCE FAILURES - ${legalFailures.length} Tyre(s) Below ${LEGAL_MIN_TREAD}mm`, 14, 10)
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: 20,
         head: [['Asset', 'Serial', 'Brand', 'Position', 'Tread (mm)', 'Site', 'Risk Level']],
         body: legalFailures.slice(0, 100).map(r => [
@@ -898,7 +875,6 @@ export default function ComplianceDashboard() {
           r.site || '-',
           r.risk_level || '-',
         ]),
-        theme: 'striped',
         headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 9 },
         bodyStyles: { fontSize: 8, textColor: [220, 38, 38] },
       })
@@ -940,6 +916,8 @@ export default function ComplianceDashboard() {
     doc.text(`Generated: ${now.toLocaleString('en-GB')}`, 14, H - 18)
     doc.text(`Report ID: TPC-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.floor(Math.random() * 9000 + 1000)}`, W - 14, H - 18, { align: 'right' })
 
+    const pgCount = doc.internal.getNumberOfPages()
+    for (let i = 1; i <= pgCount; i++) { doc.setPage(i); pdfFooter(doc, i, pgCount, company, brand) }
     doc.save(`compliance_certificate_${now.toISOString().slice(0, 10)}.pdf`)
   }
 

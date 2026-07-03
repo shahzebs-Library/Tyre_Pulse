@@ -19,7 +19,9 @@ import {
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
-import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear, formatMonth, formatDateTime } from '../lib/formatters'
+import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear, formatMonth } from '../lib/formatters'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import { useTenant } from '../contexts/TenantContext'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -99,8 +101,10 @@ function StatusBadge({ status }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function Procurement() {
-  const { activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency, appSettings } = useSettings()
   const { user, profile } = useAuth()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const fmtCur = (v) => _fmtCurrencyBase(v, activeCurrency)
 
   const [orders, setOrders]         = useState([])
@@ -470,19 +474,12 @@ export default function Procurement() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    doc.setFillColor(15, 23, 42)
-    doc.rect(0, 0, 210, 40, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(20); doc.setFont('helvetica', 'bold')
-    doc.text('TyrePulse', 14, 16)
-    doc.setFontSize(11); doc.setFont('helvetica', 'normal')
-    doc.text('PURCHASE ORDER', 14, 25)
-    doc.setFontSize(8); doc.setTextColor(156, 163, 175)
-    doc.text(`${po.po_number}  ·  ${po.status}  ·  Priority: ${po.priority}`, 14, 33)
-    doc.text(`Generated: ${formatDateTime(new Date())}`, 140, 33)
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'Purchase Order', `${po.po_number}  ·  ${po.status}  ·  Priority: ${po.priority}`, company, brand)
 
     autoTable(doc, {
-      startY: 48,
+      ...pdfTableTheme(brand.accent),
+      startY: 30,
       head: [['Field', 'Value', 'Field', 'Value']],
       body: [
         ['PO Number',        po.po_number,                  'Vendor',        po.vendor_name],
@@ -491,9 +488,6 @@ export default function Procurement() {
         ['Requested By',     po.requested_by || '-',         'Approved By',   po.approved_by || '-'],
         ['Site',             po.site || '-',                 'Budget Code',   po.budget_code || '-'],
       ],
-      theme: 'striped',
-      styles: { fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [30, 58, 95], textColor: 255 },
       columnStyles: { 0: { fontStyle: 'bold', cellWidth: 38 }, 2: { fontStyle: 'bold', cellWidth: 38 } },
       margin: { left: 14, right: 14 },
     })
@@ -501,6 +495,7 @@ export default function Procurement() {
     let y = (doc.lastAutoTable?.finalY || 80) + 8
     if ((po.items || []).length > 0) {
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: y,
         head: [['Brand', 'Size', 'Qty', 'Unit Price', 'Line Total', 'Received']],
         body: (po.items || []).map(it => [
@@ -515,9 +510,6 @@ export default function Procurement() {
           ['', '', '', `Tax (${Math.round(po.tax_amount / Math.max(po.subtotal, 0.01) * 100)}%)`, fmtCur(po.tax_amount), ''],
           ['', '', '', 'TOTAL', fmtCur(po.total_amount), ''],
         ],
-        theme: 'striped',
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [30, 58, 95], textColor: 255 },
         footStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold' },
         margin: { left: 14, right: 14 },
       })
@@ -532,11 +524,8 @@ export default function Procurement() {
       doc.text(lines, 14, y + 10)
     }
 
-    const pgCount = doc.internal.getNumberOfPages()
-    for (let i = 1; i <= pgCount; i++) {
-      doc.setPage(i); doc.setFontSize(7); doc.setTextColor(156, 163, 175)
-      doc.text(`TyrePulse Fleet Intelligence - Purchase Order - ${po.po_number} - Page ${i} of ${pgCount}`, 14, 290)
-    }
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
     doc.save(`${po.po_number}.pdf`)
   }
 

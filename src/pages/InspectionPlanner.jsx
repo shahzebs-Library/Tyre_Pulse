@@ -15,6 +15,8 @@ import { Bar } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend)
@@ -453,7 +455,9 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function InspectionPlanner() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, appSettings } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const { profile } = useAuth()
 
   // Raw data
@@ -891,15 +895,8 @@ export default function InspectionPlanner() {
     const { default: autoTable } = await import('jspdf-autotable')
     setExportLoading(true)
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    doc.setFillColor(22, 101, 52)
-    doc.rect(0, 0, 210, 20, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(12)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE - Inspection Schedule', 14, 13)
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')}`, 150, 13)
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'Inspection Schedule', new Date().toLocaleDateString('en-GB'), company, brand)
 
     const rows = schedule.filter(s => s.status !== 'Cancelled').map(s => [
       s.asset_no || '',
@@ -912,15 +909,23 @@ export default function InspectionPlanner() {
       s.notes || '',
     ])
 
+    if (rows.length === 0) {
+      pdfEmptyState(doc, 'No scheduled inspections for the selected period')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save('inspection_schedule.pdf')
+      setExportLoading(false)
+      return
+    }
+
     autoTable(doc, {
-      startY: 26,
+      ...pdfTableTheme(brand.accent),
+      startY: 28,
       head: [['Asset', 'Date', 'Time', 'Inspector', 'Site', 'Type', 'Status', 'Notes']],
       body: rows,
-      theme: 'grid',
-      headStyles: { fillColor: [22, 101, 52], textColor: 255, fontSize: 8 },
-      bodyStyles: { fontSize: 7 },
-      alternateRowStyles: { fillColor: [245, 248, 245] },
     })
+
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
 
     doc.save('inspection_schedule.pdf')
     setExportLoading(false)

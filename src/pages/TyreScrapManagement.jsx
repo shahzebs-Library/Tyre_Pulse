@@ -18,7 +18,9 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { formatDate, formatMonthYear } from '../lib/formatters'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
+import { formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -98,10 +100,6 @@ function fmtCurrency(n, currency) {
   return `${currency} ${fmt(n, 0)}`
 }
 
-function nowStr() {
-  return formatDate(new Date())
-}
-
 function subDays(d, days) {
   const dt = new Date(d)
   dt.setDate(dt.getDate() - days)
@@ -165,6 +163,8 @@ function Badge({ label, cfg }) {
 export default function TyreScrapManagement() {
   const { profile } = useAuth()
   const { appSettings, activeCurrency, activeCountry } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   // ── State ───────────────────────────────────────────────────────────────────
   const [allTyres,   setAllTyres]   = useState([])
@@ -594,27 +594,22 @@ export default function TyreScrapManagement() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    const pw = doc.internal.pageSize.width
+    const brand = await resolvePdfBrand(branding)
+    const filename = `TyrePulse_Scrap_Disposal_Manifest_${new Date().toISOString().slice(0, 10)}.pdf`
+    const title = 'Tyre Scrap Disposal Manifest'
 
-    doc.setFillColor(127, 29, 29)
-    doc.rect(0, 0, pw, 22, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(13)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE · Tyre Scrap Disposal Manifest', 14, 10)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.text(
-      `Generated: ${nowStr()}  |  ${disposalLog.length} records  |  ${activeCurrency}`,
-      pw - 14, 17, { align: 'right' }
-    )
-
-    doc.setFontSize(10)
-    doc.setTextColor(200, 200, 200)
-    doc.text('Scrap Disposal Log', 14, 30)
+    if (disposalLog.length === 0) {
+      pdfHeader(doc, title, `0 records · ${activeCurrency}`, company, brand)
+      pdfEmptyState(doc, 'No scrap disposals for the selected period', 'Adjust the filters and export again.')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save(filename)
+      return
+    }
 
     autoTable(doc, {
-      startY: 34,
+      ...pdfTableTheme(brand.accent),
+      startY: 30,
+      margin: { left: 10, right: 10, top: 28 },
       head: [['Serial No', 'Brand', 'Size', 'Position', 'Asset', 'Site', 'Date Removed', 'km Life', 'Cost', 'Removal Reason', 'Disposal Status']],
       body: disposalLog.map(t => [
         t.serial_number ?? '-',
@@ -629,13 +624,13 @@ export default function TyreScrapManagement() {
         t.removal_reason ?? '-',
         disposals[t.id] ?? 'Pending',
       ]),
-      styles: { fontSize: 7, cellPadding: 1.8 },
-      headStyles: { fillColor: [127, 29, 29], textColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      margin: { left: 10, right: 10 },
+      didDrawPage: () => pdfHeader(doc, title, `${disposalLog.length} records · ${activeCurrency}`, company, brand),
     })
 
-    doc.save(`TyrePulse_Scrap_Disposal_Manifest_${new Date().toISOString().slice(0, 10)}.pdf`)
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
+
+    doc.save(filename)
   }
 
   async function exportDisposalExcel() {

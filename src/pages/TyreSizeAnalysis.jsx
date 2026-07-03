@@ -4,8 +4,8 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { formatDate } from '../lib/formatters'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import {
   Layers, Download, FileText, AlertTriangle, CheckCircle,
   TrendingUp, TrendingDown, RefreshCw, Target, BarChart3,
@@ -151,7 +151,8 @@ function last12Months() {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function TyreSizeAnalysis() {
-  const { activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency, appSettings } = useSettings()
+  const { branding } = useTenant()
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
@@ -579,20 +580,28 @@ export default function TyreSizeAnalysis() {
     setExporting(true)
     try {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-      const pw = doc.internal.pageSize.width
-      doc.setFillColor(22, 101, 52)
-      doc.rect(0, 0, pw, 22, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(14); doc.setFont('helvetica', 'bold')
-      doc.text('TYREPULSE · Tyre Size & Specification Optimizer', 14, 10)
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal')
-      doc.text(`Generated: ${formatDate(new Date())} | Fleet: ${kpis.total} tyres | Unique Sizes: ${kpis.uniqueSz}`, 14, 17)
+      const brand = await resolvePdfBrand(branding)
+      const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
+      const filename = `TyreSizeAnalysis_${new Date().toISOString().slice(0, 10)}.pdf`
+
+      pdfHeader(doc, 'Tyre Size & Specification Optimizer',
+        `Fleet: ${kpis.total} tyres · ${kpis.uniqueSz} unique sizes`, company, brand)
+
+      // Empty state - no size metrics for the current filters
+      if (sortedSizeMetrics.length === 0) {
+        pdfEmptyState(doc, 'No tyre size records for the selected filters',
+          'Adjust the date range, country or brand filter and export again.')
+        pdfFooter(doc, 1, 1, company, brand)
+        doc.save(filename)
+        return
+      }
 
       let y = 28
       doc.setFontSize(11); doc.setTextColor(22, 163, 74); doc.setFont('helvetica', 'bold')
       doc.text('Size Distribution Analysis', 14, y); y += 4
 
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: y,
         head: [['Size', 'Count', '% Fleet', 'Avg CPK', 'Avg Life', 'Fail Rate', 'Brands', 'Flag']],
         body: sortedSizeMetrics.map(m => [
@@ -601,9 +610,6 @@ export default function TyreSizeAnalysis() {
           fmtKm(m.avgLife), fmtPct(m.failRate),
           m.brands.slice(0, 3).join(', '), m.flag,
         ]),
-        styles: { fontSize: 8, fillColor: [17, 24, 39], textColor: [156, 163, 175] },
-        headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [31, 41, 55] },
         margin: { left: 14, right: 14 },
       })
 
@@ -614,6 +620,7 @@ export default function TyreSizeAnalysis() {
       doc.text('Consolidation Recommendations', 14, y); y += 4
 
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: y,
         head: [['Size', 'Type', 'Recommendation', 'Impact', 'Est. Annual Savings']],
         body: consolidationOps.map(op => [
@@ -622,13 +629,12 @@ export default function TyreSizeAnalysis() {
           op.impact,
           op.savings != null ? `${activeCurrency} ${Math.round(op.savings).toLocaleString()}` : 'N/A',
         ]),
-        styles: { fontSize: 7, fillColor: [17, 24, 39], textColor: [156, 163, 175] },
-        headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [31, 41, 55] },
         margin: { left: 14, right: 14 },
       })
 
-      doc.save(`TyreSizeAnalysis_${new Date().toISOString().slice(0, 10)}.pdf`)
+      const totalPages = doc.internal.getNumberOfPages()
+      for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
+      doc.save(filename)
     } finally {
       setExporting(false)
     }

@@ -17,8 +17,9 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { formatDate, formatMonthYear } from '../lib/formatters'
+import { useTenant } from '../contexts/TenantContext'
+import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import { formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -78,10 +79,6 @@ const EXPORT_HEADERS = [
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-
-function nowStr() {
-  return formatDate(new Date())
-}
 
 function kmLife(t) {
   const km = (t.km_at_removal ?? 0) - (t.km_at_fitment ?? 0)
@@ -202,7 +199,9 @@ function EmptyState({ icon: Icon = Package, title, sub }) {
 
 export default function RetreadManagement() {
   const { profile } = useAuth()
-  const { activeCurrency, activeCountry } = useSettings()
+  const { appSettings, activeCurrency, activeCountry } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const isAdmin = profile?.role === 'Admin'
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -560,23 +559,16 @@ export default function RetreadManagement() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    const pw = doc.internal.pageSize.width
-
-    doc.setFillColor(22, 101, 52)
-    doc.rect(0, 0, pw, 22, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE · Retread ROI Analysis', 14, 10)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${nowStr()}`, pw - 14, 17, { align: 'right' })
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'Retread ROI Analysis', `Fleet size: ${roi.fleetSize} tyres`, company, brand)
 
     doc.setFontSize(12)
-    doc.setTextColor(220, 220, 220)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(30, 41, 59)
     doc.text('Input Parameters', 14, 32)
 
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: 36,
       head: [['Parameter', 'Value']],
       body: [
@@ -586,18 +578,17 @@ export default function RetreadManagement() {
         ['Expected Retread Life', `${Number(roi.retreadLifeKm).toLocaleString()} km`],
         ['Fleet Size', `${roi.fleetSize} tyres`],
       ],
-      styles: { fontSize: 10, cellPadding: 3 },
-      headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
       margin: { left: 14, right: 14 },
     })
 
     const y1 = doc.lastAutoTable.finalY + 10
     doc.setFontSize(12)
-    doc.setTextColor(220, 220, 220)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(30, 41, 59)
     doc.text('ROI Results', 14, y1)
 
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: y1 + 4,
       head: [['Metric', 'Value']],
       body: [
@@ -608,20 +599,14 @@ export default function RetreadManagement() {
         ['Break-even at', `${Math.round(roiCalc.breakEvenKm).toLocaleString()} km`],
         ['Projected Annual Fleet Savings', fmtCurrency(roiCalc.annualSavings, activeCurrency)],
       ],
-      styles: { fontSize: 10, cellPadding: 3 },
-      headStyles: { fillColor: [124, 58, 237], textColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
       margin: { left: 14, right: 14 },
     })
 
-    const pageH = doc.internal.pageSize.height
-    doc.setFontSize(7)
-    doc.setTextColor(107, 114, 128)
-    doc.text('Confidential · Internal Use Only | TyrePulse', 14, pageH - 8)
-    doc.text('Page 1', pw - 14, pageH - 8, { align: 'right' })
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
 
     doc.save(`TyrePulse_ROI_Analysis_${new Date().toISOString().slice(0, 10)}.pdf`)
-  }, [roi, roiCalc, activeCurrency])
+  }, [roi, roiCalc, activeCurrency, branding, company])
 
   // ── Risk badge helper ──────────────────────────────────────────────────────
   function riskBadge(level) {

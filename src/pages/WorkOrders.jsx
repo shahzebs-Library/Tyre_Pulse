@@ -23,6 +23,8 @@ import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatDateTime } from '../lib/formatters'
 
@@ -101,7 +103,9 @@ function daysOpen(wo) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function WorkOrders() {
-  const { activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency, appSettings } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency)
   const { user, profile } = useAuth()
   const { t } = useLanguage()
@@ -394,16 +398,8 @@ export default function WorkOrders() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    doc.setFillColor(15, 23, 42)
-    doc.rect(0, 0, 210, 35, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(18); doc.setFont('helvetica', 'bold')
-    doc.text('TyrePulse', 14, 14)
-    doc.setFontSize(12); doc.setFont('helvetica', 'normal')
-    doc.text('Workshop Job Card', 14, 23)
-    doc.setFontSize(9); doc.setTextColor(156, 163, 175)
-    doc.text(`${order.work_order_no}  ·  ${order.work_type}  ·  Priority: ${order.priority}`, 14, 30)
-    doc.text(`Printed: ${formatDateTime(new Date())}`, 140, 30)
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'Workshop Job Card', `${order.work_order_no} · ${order.work_type} · Priority: ${order.priority}`, company, brand)
 
     const details = [
       ['Asset No', order.asset_no, 'Status', order.status],
@@ -414,14 +410,11 @@ export default function WorkOrders() {
       ['Started', fmtDateTime(order.started_at), 'Completed', fmtDateTime(order.completed_at)],
     ]
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: 42,
       head: [['Field', 'Value', 'Field', 'Value']],
       body: details,
-      theme: 'striped',
-      styles: { fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [30, 58, 95], textColor: 255 },
       columnStyles: { 0: { fontStyle: 'bold', cellWidth: 35 }, 2: { fontStyle: 'bold', cellWidth: 35 } },
-      margin: { left: 14, right: 14 },
     })
 
     let y = (doc.lastAutoTable?.finalY || 80) + 8
@@ -435,6 +428,7 @@ export default function WorkOrders() {
 
     if (order.parts_used?.length) {
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: y,
         head: [['Part / Material', 'Qty', 'Unit Cost', 'Line Total']],
         body: order.parts_used.map(p => [
@@ -443,11 +437,7 @@ export default function WorkOrders() {
           fmtCurrency(p.unit_cost * p.quantity),
         ]),
         foot: [['', '', 'Parts Total', fmtCurrency(partsTotal(order.parts_used))]],
-        theme: 'striped',
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [30, 58, 95], textColor: 255 },
         footStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold' },
-        margin: { left: 14, right: 14 },
       })
       y = (doc.lastAutoTable?.finalY || y) + 8
     }
@@ -466,10 +456,7 @@ export default function WorkOrders() {
     })
 
     const pgCount = doc.internal.getNumberOfPages()
-    for (let i = 1; i <= pgCount; i++) {
-      doc.setPage(i); doc.setFontSize(7); doc.setTextColor(156, 163, 175)
-      doc.text(`TyrePulse Fleet Intelligence - Job Card - ${order.work_order_no} - Page ${i} of ${pgCount}`, 14, 290)
-    }
+    for (let i = 1; i <= pgCount; i++) { doc.setPage(i); pdfFooter(doc, i, pgCount, company, brand) }
     doc.save(`${order.work_order_no}-job-card.pdf`)
   }
 

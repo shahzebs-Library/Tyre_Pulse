@@ -20,6 +20,8 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -608,7 +610,9 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
 
 export default function TyreSpecifications() {
   const { profile, user } = useAuth()
-  const { activeCountry } = useSettings()
+  const { appSettings, activeCountry } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const isAdmin = profile?.role === 'Admin'
   const country = activeCountry && activeCountry !== 'All' ? activeCountry : null
 
@@ -976,18 +980,17 @@ export default function TyreSpecifications() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    doc.setFillColor(22, 101, 52)
-    doc.rect(0, 0, doc.internal.pageSize.width, 22, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE · Fleet Compliance Report', 14, 10)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Tyre Specification Compliance · Generated: ${new Date().toLocaleDateString('en-GB')}`, 14, 17)
-    doc.setTextColor(150, 150, 150)
-    doc.setFontSize(8)
-    doc.text(`${filteredCompliance.length} fitments analysed`, doc.internal.pageSize.width - 14, 17, { align: 'right' })
+    const brand = await resolvePdfBrand(branding)
+    const title = 'Fleet Compliance Report'
+    const subtitle = `${filteredCompliance.length} fitments analysed`
+
+    if (filteredCompliance.length === 0) {
+      pdfHeader(doc, title, '0 fitments analysed', company, brand)
+      pdfEmptyState(doc, 'No fitments match the selected filters', 'Adjust the filters and export again.')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save('TyrePulse_Compliance_Report.pdf')
+      return
+    }
 
     const statusColors = {
       Approved: [20, 83, 45],
@@ -998,30 +1001,26 @@ export default function TyreSpecifications() {
     }
 
     autoTable(doc, {
-      startY: 26,
+      ...pdfTableTheme(brand.accent),
+      startY: 30,
+      margin: { left: 14, right: 14, top: 28 },
       head: [['Asset No', 'Vehicle Type', 'Position', 'Fitted Size', 'Fitted Brand', 'Site', 'Spec Status']],
       body: filteredCompliance.slice(0, 500).map(r => [
         r.asset_no || '', r.vehicleType || 'Unknown', normalizePosition(r.position), r.size || '', r.brand || '', r.site || '', r.specStatus,
       ]),
-      styles: { fontSize: 8, cellPadding: 2.5, textColor: [30, 30, 30] },
-      headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: { 0: { cellWidth: 28 }, 1: { cellWidth: 32 }, 2: { cellWidth: 24 }, 3: { cellWidth: 32 }, 4: { cellWidth: 28 }, 5: { cellWidth: 28 }, 6: { cellWidth: 38 } },
-      margin: { left: 14, right: 14 },
       didParseCell: (data) => {
         if (data.section === 'body' && data.column.index === 6) {
           const color = statusColors[data.cell.raw]
           if (color) { data.cell.styles.fillColor = color; data.cell.styles.textColor = [255, 255, 255] }
         }
       },
-      didDrawPage: (data) => {
-        const pageH = doc.internal.pageSize.height
-        doc.setFontSize(7)
-        doc.setTextColor(107, 114, 128)
-        doc.text('Confidential · Internal Use Only | TyrePulse', 14, pageH - 6)
-        doc.text(`Page ${data.pageNumber}`, doc.internal.pageSize.width - 14, pageH - 6, { align: 'right' })
-      },
+      didDrawPage: () => pdfHeader(doc, title, subtitle, company, brand),
     })
+
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
+
     doc.save('TyrePulse_Compliance_Report.pdf')
   }
 

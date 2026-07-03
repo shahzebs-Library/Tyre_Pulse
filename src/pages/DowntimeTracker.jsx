@@ -17,8 +17,8 @@ import {
 } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import PageHeader from '../components/ui/PageHeader'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { formatDate } from '../lib/formatters'
+import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
+import { useTenant } from '../contexts/TenantContext'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -173,6 +173,8 @@ function ChartCard({ title, children, onExpand }) {
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function DowntimeTracker() {
   const { activeCurrency, activeCountry, appSettings } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   // Cost/hour assumption - overridable via the `downtime_rate` setting key.
   const downtimeRate = useMemo(() => {
@@ -646,15 +648,16 @@ export default function DowntimeTracker() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    doc.setFillColor(15, 23, 42)
-    doc.rect(0, 0, 297, 22, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE · Fleet Downtime & Availability Report', 14, 10)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${formatDate(new Date(), activeCountry)} | Period: ${period} | ${usingActual ? 'Actual + Estimated' : 'Estimated'} Data`, 14, 17)
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'Fleet Downtime & Availability Report', `Period: ${period} · ${usingActual ? 'Actual + Estimated' : 'Estimated'} Data`, company, brand)
+
+    // ── Empty state: no vehicle downtime data for the selected period ──
+    if (vehicleTable.length === 0) {
+      pdfEmptyState(doc, 'No vehicle downtime data for the selected period')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save(`downtime-report-${new Date().toISOString().slice(0, 10)}.pdf`)
+      return
+    }
 
     // KPI summary
     doc.setFontSize(11)
@@ -681,6 +684,7 @@ export default function DowntimeTracker() {
 
     // Vehicle table
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: 55,
       head: [['Asset', 'Site', 'Events', 'Total Hours', 'Total Cost', 'Avg Between Events', 'Risk Score']],
       body: vehicleTable.map(v => [
@@ -692,10 +696,6 @@ export default function DowntimeTracker() {
         v.avgBetween ? `${v.avgBetween.toFixed(0)} days` : 'N/A',
         v.riskScore,
       ]),
-      styles: { fontSize: 8, textColor: [200, 200, 200], fillColor: [17, 24, 39] },
-      headStyles: { fillColor: [22, 101, 52], textColor: [255, 255, 255], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [31, 41, 55] },
-      theme: 'plain',
     })
 
     // Recommendations
@@ -717,6 +717,9 @@ export default function DowntimeTracker() {
       doc.text(`   → ${r.action}`, 14, y + 5)
       doc.setTextColor(200, 200, 200)
     })
+
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
 
     doc.save(`downtime-report-${new Date().toISOString().slice(0, 10)}.pdf`)
   }

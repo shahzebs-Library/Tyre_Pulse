@@ -21,6 +21,8 @@ import { supabase } from '../lib/supabase'
 import * as rotations from '../lib/api/rotations'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -77,9 +79,6 @@ function fmt(n, dec = 0) {
 function fmtDate(d) {
   if (!d) return '-'
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-function nowStr() {
-  return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 function safeKm(v) {
   const n = parseFloat(v)
@@ -654,6 +653,8 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function RotationSchedule() {
   const { appSettings, activeCurrency, activeCountry } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   const [records,  setRecords]  = useState([])
   const [loading,  setLoading]  = useState(true)
@@ -904,19 +905,20 @@ export default function RotationSchedule() {
     const { default: autoTable } = await import('jspdf-autotable')
     if (!analytics) return
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    const pw = doc.internal.pageSize.width
+    const brand = await resolvePdfBrand(branding)
+    const filename = `Rotation_Schedule_${new Date().toISOString().slice(0, 10)}.pdf`
+    const title = 'Tyre Rotation Compliance Report'
+    const subtitle = `Interval: ${fmt(interval)} km · Fleet: ${analytics.total} vehicles`
 
-    doc.setFillColor(22, 101, 52)
-    doc.rect(0, 0, pw, 22, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE · Tyre Rotation Compliance Report', 14, 10)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${nowStr()}  |  Interval: ${fmt(interval)} km  |  Fleet: ${analytics.total} vehicles`, 14, 17)
+    if (filteredVehicles.length === 0) {
+      pdfHeader(doc, title, subtitle, company, brand)
+      pdfEmptyState(doc, 'No vehicles match the selected filters', 'Adjust the site or status filter and export again.')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save(filename)
+      return
+    }
 
-    // KPI summary
+    // KPI summary (page 1)
     doc.setTextColor(55, 65, 81)
     doc.setFontSize(8)
     const kpis = [
@@ -931,7 +933,9 @@ export default function RotationSchedule() {
     })
 
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: 42,
+      margin: { left: 14, right: 14, top: 28 },
       head: [['Asset', 'Site', 'Active Tyres', 'Last Rotation', 'Since Last (km)', 'Due In (km)', 'Status', 'Rotations']],
       body: filteredVehicles.map(v => [
         v.asset, v.site, v.activeTyreCount,
@@ -940,10 +944,6 @@ export default function RotationSchedule() {
         v.dueInKm != null ? fmt(v.dueInKm) : '-',
         v.status, v.totalRotations,
       ]),
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [31, 41, 55], textColor: [156, 163, 175] },
-      alternateRowStyles: { fillColor: [17, 24, 39] },
-      bodyStyles: { textColor: [209, 213, 219] },
       didParseCell: data => {
         if (data.section === 'body' && data.column.index === 6) {
           const s = data.cell.raw
@@ -952,28 +952,26 @@ export default function RotationSchedule() {
           if (s === 'On Schedule') { data.cell.styles.textColor = [16, 185, 129] }
         }
       },
+      didDrawPage: () => pdfHeader(doc, title, subtitle, company, brand),
     })
 
     // Schedule page
     if (schedules.length) {
       doc.addPage()
-      doc.setFillColor(22, 101, 52)
-      doc.rect(0, 0, pw, 22, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(13)
-      doc.setFont('helvetica', 'bold')
-      doc.text('TYREPULSE · Upcoming Rotation Schedule', 14, 13)
-
       autoTable(doc, {
-        startY: 28,
+        ...pdfTableTheme(brand.accent),
+        startY: 30,
+        margin: { left: 14, right: 14, top: 28 },
         head: [['Asset', 'Site', 'Scheduled Date', 'Priority', 'Status', 'Notes']],
         body: schedules.map(s => [s.asset, s.site, s.scheduledDate, s.priority, s.status, s.notes || '']),
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [31, 41, 55], textColor: [156, 163, 175] },
+        didDrawPage: () => pdfHeader(doc, 'Upcoming Rotation Schedule', `${schedules.length} scheduled`, company, brand),
       })
     }
 
-    doc.save(`Rotation_Schedule_${new Date().toISOString().slice(0, 10)}.pdf`)
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
+
+    doc.save(filename)
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────

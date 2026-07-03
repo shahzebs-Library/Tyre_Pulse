@@ -17,7 +17,9 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
-import { formatDate, formatMonthYear } from '../lib/formatters'
+import { useTenant } from '../contexts/TenantContext'
+import { formatMonthYear } from '../lib/formatters'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -108,7 +110,9 @@ function deriveMonthlyKm(records) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function FuelEfficiency() {
-  const { activeCurrency, activeCountry } = useSettings()
+  const { activeCurrency, activeCountry, appSettings } = useSettings()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   // ── Config state ──────────────────────────────────────────────────────────
   const [configOpen, setConfigOpen] = useState(true)
@@ -461,15 +465,16 @@ export default function FuelEfficiency() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    doc.setFillColor(22, 101, 52)
-    doc.rect(0, 0, 297, 22, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE · Fuel Efficiency Impact Report', 14, 10)
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${formatDate(new Date())} | Fleet: ${fleetSize} vehicles`, 14, 17)
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'Fuel Efficiency Impact Report', `Fleet: ${fleetSize} vehicles`, company, brand)
+
+    // ── Empty state: no site fuel-impact data ──
+    if (siteMetrics.length === 0) {
+      pdfEmptyState(doc, 'No site fuel-impact data for the current fleet')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save('TyrePulse_Fuel_Efficiency_Report.pdf')
+      return
+    }
 
     if (kpis) {
       doc.setTextColor(30, 30, 30)
@@ -490,6 +495,7 @@ export default function FuelEfficiency() {
     }
 
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: 85,
       head: [['Site', 'Vehicles', 'Compliance %', 'Avg Tread (mm)', 'Extra Fuel/Month (L)', 'Extra Cost/Month', 'Annual Impact']],
       body: siteMetrics.map(s => [
@@ -501,14 +507,13 @@ export default function FuelEfficiency() {
         `${activeCurrency} ${fmt(s.totalExtraCostMonth, 2)}`,
         `${activeCurrency} ${fmt(s.annualExtraCost)}`,
       ]),
-      styles: { fontSize: 8, cellPadding: 2.5, textColor: [30, 30, 30] },
-      headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      margin: { left: 14, right: 14 },
     })
 
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
+
     doc.save('TyrePulse_Fuel_Efficiency_Report.pdf')
-  }, [kpis, siteMetrics, fleetSize, activeCurrency])
+  }, [kpis, siteMetrics, fleetSize, activeCurrency, branding, company])
 
   // ── Export Excel ──────────────────────────────────────────────────────────
   const exportExcel = useCallback(async () => {

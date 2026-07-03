@@ -15,8 +15,9 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
 import { useAuth } from '../contexts/AuthContext'
-import { exportToPdf, exportToExcel } from '../lib/exportUtils'
+import { exportToPdf, exportToExcel, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
@@ -74,10 +75,6 @@ function daysDiff(dateStr) {
   const d = new Date(dateStr)
   const now = new Date()
   return Math.floor((now - d) / (1000 * 60 * 60 * 24))
-}
-
-function nowStr() {
-  return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 // Derive transfer events from tyre_records grouped by serial_number
@@ -204,8 +201,10 @@ function derivePendingReturns(records) {
 }
 
 export default function TyreExchange() {
-  const { activeCountry, activeCurrency } = useSettings()
+  const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const { branding } = useTenant()
   const { profile } = useAuth()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   const [records, setRecords] = useState([])
   const [stockMovements, setStockMovements] = useState([])
@@ -562,24 +561,17 @@ export default function TyreExchange() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    doc.setFillColor(22, 101, 52)
-    doc.rect(0, 0, 210, 28, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(16)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE · Tyre Transfer Certificate', 14, 12)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${nowStr()}`, 14, 20)
-    doc.text('CONFIDENTIAL', 196, 20, { align: 'right' })
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'Tyre Transfer Certificate', `Serial: ${tx.serial}`, company, brand)
 
-    doc.setTextColor(30, 30, 30)
+    doc.setTextColor(30, 41, 59)
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
-    doc.text('Transfer Details', 14, 40)
+    doc.text('Transfer Details', 14, 34)
 
     autoTable(doc, {
-      startY: 44,
+      ...pdfTableTheme(brand.accent),
+      startY: 40,
       body: [
         ['Serial Number', tx.serial],
         ['Brand / Size', `${tx.brand} / ${tx.size}`],
@@ -593,7 +585,6 @@ export default function TyreExchange() {
         ['Tread at Transfer', tx.treadAtTransfer != null ? `${tx.treadAtTransfer} mm` : '-'],
         ['Category', tx.category],
       ],
-      styles: { fontSize: 10, cellPadding: 3 },
       columnStyles: {
         0: { fontStyle: 'bold', fillColor: [243, 244, 246], cellWidth: 60 },
         1: { cellWidth: 120 },
@@ -609,8 +600,8 @@ export default function TyreExchange() {
     doc.text('Signature: ___________________________', 14, finalY + 12)
     doc.text('Stamp:', 140, finalY + 12)
 
-    doc.setFontSize(7)
-    doc.text('TyrePulse Tyre Intelligence Platform · Confidential Internal Document', 14, 285)
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
 
     doc.save(`TyrePulse_Transfer_Certificate_${tx.serial}.pdf`)
   }

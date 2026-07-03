@@ -19,7 +19,9 @@ import {
 import * as warranty from '../lib/api/warranty'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useTenant } from '../contexts/TenantContext'
 import { formatDate } from '../lib/formatters'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -154,8 +156,10 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', warn 
 
 export default function WarrantyTracker() {
   const navigate = useNavigate()
-  const { activeCurrency } = useSettings()
+  const { activeCurrency, appSettings } = useSettings()
   const { profile } = useAuth()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   const [claims, setClaims]     = useState([])
   const [tyreRecords, setTyreRecords] = useState([])
@@ -472,15 +476,20 @@ export default function WarrantyTracker() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape' })
-    doc.setFillColor(17, 24, 39)
-    doc.rect(0, 0, 297, 210, 'F')
-    doc.setTextColor(249, 250, 251)
-    doc.setFontSize(16)
-    doc.text('Tyre Pulse - Warranty Claims Report', 14, 16)
-    doc.setFontSize(10)
-    doc.setTextColor(156, 163, 175)
-    doc.text(`Generated: ${formatDate(new Date())}  |  Total Claims: ${claims.length}`, 14, 23)
+    const brand = await resolvePdfBrand(branding)
+
+    // ── EMPTY STATE ──
+    if (filtered.length === 0) {
+      pdfHeader(doc, 'Warranty Claims Report', `0 claims · ${formatDate(new Date())}`, company, brand)
+      pdfEmptyState(doc, 'No warranty claims for the selected filters')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save(`warranty-claims-${new Date().toISOString().split('T')[0]}.pdf`)
+      return
+    }
+
+    pdfHeader(doc, 'Warranty Claims Report', `${filtered.length} claims · ${formatDate(new Date())}`, company, brand)
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: 30,
       head: [['Claim No', 'Serial', 'Brand', 'Size', 'Asset', 'Site', 'Failure Type', 'Status', 'km Run', 'Exp km', '% Life', 'Credit', 'Date']],
       body: filtered.map(c => [
@@ -492,32 +501,25 @@ export default function WarrantyTracker() {
         c.credit_amount ? `${cur} ${Number(c.credit_amount).toLocaleString()}` : '-',
         fmtDate(c.created_at),
       ]),
-      styles: { fillColor: [31, 41, 55], textColor: [209, 213, 219], fontSize: 8 },
-      headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [17, 24, 39] },
     })
     if (brandPerf.length > 0) {
       doc.addPage()
-      doc.setFillColor(17, 24, 39)
-      doc.rect(0, 0, 297, 210, 'F')
-      doc.setTextColor(249, 250, 251)
-      doc.setFontSize(14)
-      doc.text('Brand Warranty Performance', 14, 16)
+      pdfHeader(doc, 'Warranty Claims Report', `Brand Warranty Performance · ${formatDate(new Date())}`, company, brand)
       autoTable(doc, {
-        startY: 24,
+        ...pdfTableTheme(brand.accent),
+        startY: 30,
         head: [['Brand', 'Total Claims', 'Approval Rate', 'Avg Credit', 'Avg km at Failure']],
         body: brandPerf.map(b => [
           b.brand, b.total, `${b.approvalRate.toFixed(1)}%`,
           b.avgCredit > 0 ? `${cur} ${Math.round(b.avgCredit).toLocaleString()}` : '-',
           b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() : '-',
         ]),
-        styles: { fillColor: [31, 41, 55], textColor: [209, 213, 219], fontSize: 9 },
-        headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: [17, 24, 39] },
       })
     }
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
     doc.save(`warranty-claims-${new Date().toISOString().split('T')[0]}.pdf`)
-  }, [claims, filtered, brandPerf, cur])
+  }, [claims, filtered, brandPerf, cur, branding, company])
 
   const exportExcel = useCallback(async () => {
     const XLSX = await import('xlsx')

@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { stock } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
 import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package, Upload } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
-import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 } from 'chart.js'
@@ -45,6 +46,7 @@ export default function StockManagement() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { appSettings, activeCountry } = useSettings()
+  const { branding } = useTenant()
   const [records, setRecords]       = useState([])
   const [loading, setLoading]       = useState(true)
   const [showForm, setShowForm]     = useState(false)
@@ -309,18 +311,13 @@ export default function StockManagement() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    doc.setFillColor(30, 30, 40)
-    doc.rect(0, 0, 210, 297, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(18)
-    doc.text('REORDER REQUEST', 14, 20)
-    doc.setFontSize(11)
-    doc.setTextColor(160, 160, 180)
-    doc.text(`${appSettings.company_name || 'TyrePulse'} · Stock Report`, 14, 28)
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')}`, 14, 34)
+    const brand = await resolvePdfBrand(branding)
+    const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
+    pdfHeader(doc, 'Reorder Request', `${rec.site} · Stock Report`, company, brand)
 
     autoTable(doc, {
-      startY: 42,
+      ...pdfTableTheme(brand.accent),
+      startY: 30,
       head: [['Field', 'Value']],
       body: [
         ['Site',            rec.site],
@@ -333,9 +330,10 @@ export default function StockManagement() {
         ['Requested By',    profile?.full_name || profile?.username || '-'],
         ['Date',            new Date().toLocaleDateString('en-GB')],
       ],
-      styles: { fillColor: [30, 40, 60], textColor: [220, 220, 240], fontSize: 11 },
-      headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255] },
     })
+
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
 
     doc.save(`reorder-${rec.site.replace(/\s+/g, '-')}-${Date.now()}.pdf`)
   }

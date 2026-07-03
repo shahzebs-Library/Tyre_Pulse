@@ -33,6 +33,8 @@ import { applyCountry } from '../lib/countryFilter'
 import { formatDate } from '../lib/formatters'
 import { fetchAllPages } from '../lib/fetchAll'
 import { recordCost } from '../lib/analyticsEngine'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import { useTenant } from '../contexts/TenantContext'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -271,8 +273,10 @@ function SectionHeader({ icon: Icon, title, subtitle, badge }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ExecutiveReport() {
   const { appSettings, activeCurrency, activeCountry } = useSettings()
+  const { branding } = useTenant()
   const currency = activeCurrency
   const companyName = appSettings?.company_name || 'TyrePulse Fleet'
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   const [records,     setRecords]     = useState([])
   const [inspections, setInspections] = useState([])
@@ -747,43 +751,13 @@ export default function ExecutiveReport() {
     setExporting(true)
     try {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-      const pw = doc.internal.pageSize.width
-      const ph = doc.internal.pageSize.height
+      const brand = await resolvePdfBrand(branding)
       const periodLabel = PERIODS.find(p => p.key === period)?.label || 'Quarter'
 
-      // Cover Page
-      doc.setFillColor(6, 78, 59)
-      doc.rect(0, 0, pw, ph, 'F')
-      doc.setFillColor(16, 185, 129)
-      doc.rect(0, 0, pw, 4, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(28)
-      doc.setFont('helvetica', 'bold')
-      doc.text('EXECUTIVE INTELLIGENCE', pw / 2, 80, { align: 'center' })
-      doc.text('REPORT', pw / 2, 95, { align: 'center' })
-      doc.setFontSize(14)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(167, 243, 208)
-      doc.text(companyName, pw / 2, 115, { align: 'center' })
-      doc.text(`Report Period: ${periodLabel}`, pw / 2, 125, { align: 'center' })
-      doc.text(`Generated: ${formatDate(new Date(), 'All', { day: '2-digit', month: 'long', year: 'numeric' })}`, pw / 2, 135, { align: 'center' })
-      doc.setFontSize(10)
-      doc.setTextColor(110, 231, 183)
-      doc.text('CONFIDENTIAL - FOR MANAGEMENT USE ONLY', pw / 2, 160, { align: 'center' })
-      doc.setFontSize(9)
-      doc.text('TyrePulse Fleet Intelligence Platform', pw / 2, ph - 15, { align: 'center' })
-
-      doc.addPage()
-
-      // Section 1 - KPI Summary Table
-      doc.setFillColor(17, 24, 39)
-      doc.rect(0, 0, pw, ph, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(14)
-      doc.setFont('helvetica', 'bold')
-      doc.text('Section 2 - KPI Dashboard', 14, 20)
-
+      // KPI Dashboard
+      pdfHeader(doc, 'Executive Intelligence Report', `KPI Dashboard · ${periodLabel}`, company, brand)
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: 28,
         head: [['KPI', 'Value', 'Status', 'Target']],
         body: [
@@ -800,23 +774,12 @@ export default function ExecutiveReport() {
           ['Projected Annual Spend', fmtCurrency(projectedAnnual, currency), '-', '-'],
           ['Cost Trend', costTrend.trend.charAt(0).toUpperCase() + costTrend.trend.slice(1), costTrend.trend === 'improving' ? 'Good' : costTrend.trend === 'stable' ? 'Neutral' : 'Warning', 'Improving'],
         ],
-        styles: { fillColor: [17, 24, 39], textColor: [209, 213, 219], fontSize: 9, cellPadding: 3 },
-        headStyles: { fillColor: [6, 78, 59], textColor: [255, 255, 255], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [31, 41, 55] },
-        margin: { left: 14, right: 14 },
       })
 
       doc.addPage()
-
-      // Section 3 - Root Cause Table
-      doc.setFillColor(17, 24, 39)
-      doc.rect(0, 0, pw, ph, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(14)
-      doc.setFont('helvetica', 'bold')
-      doc.text('Section 3 - Root Cause Analysis', 14, 20)
-
+      pdfHeader(doc, 'Root Cause Analysis', periodLabel, company, brand)
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: 28,
         head: [['Root Cause', 'Count', '% of Total', 'Est. Cost Impact', 'Prevention Summary']],
         body: rootCauses.map(c => [
@@ -824,55 +787,32 @@ export default function ExecutiveReport() {
           fmtCurrency(c.cost, currency),
           c.prevention.slice(0, 80) + '...',
         ]),
-        styles: { fillColor: [17, 24, 39], textColor: [209, 213, 219], fontSize: 8, cellPadding: 3 },
-        headStyles: { fillColor: [6, 78, 59], textColor: [255, 255, 255], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [31, 41, 55] },
         columnStyles: { 4: { cellWidth: 70 } },
-        margin: { left: 14, right: 14 },
       })
 
       doc.addPage()
-
-      // Section 5 - Risk Assessment
-      doc.setFillColor(17, 24, 39)
-      doc.rect(0, 0, pw, ph, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(14)
-      doc.setFont('helvetica', 'bold')
-      doc.text('Section 5 - Risk Assessment', 14, 20)
-
+      pdfHeader(doc, 'Risk Assessment', periodLabel, company, brand)
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: 28,
         head: [['Site', 'Critical', 'High', 'Medium', 'Low', 'Total', 'Risk Score']],
         body: riskMatrix.map(r => [
           r.site, r.Critical, r.High, r.Medium, r.Low, r.total, r.score.toFixed(2),
         ]),
-        styles: { fillColor: [17, 24, 39], textColor: [209, 213, 219], fontSize: 9, cellPadding: 3 },
-        headStyles: { fillColor: [6, 78, 59], textColor: [255, 255, 255], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [31, 41, 55] },
-        margin: { left: 14, right: 14 },
       })
 
       doc.addPage()
-
-      // Section 7 - Action Plan
-      doc.setFillColor(17, 24, 39)
-      doc.rect(0, 0, pw, ph, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(14)
-      doc.setFont('helvetica', 'bold')
-      doc.text('Section 7 - Action Plan', 14, 20)
-
+      pdfHeader(doc, 'Action Plan', periodLabel, company, brand)
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: 28,
         head: [['Action', 'Priority', 'Timeline', 'Owner', 'Est. Saving', 'Status']],
         body: actionPlan.map(a => [a.action.slice(0, 70), a.priority, a.timeline, a.owner, a.saving, a.status]),
-        styles: { fillColor: [17, 24, 39], textColor: [209, 213, 219], fontSize: 8, cellPadding: 3 },
-        headStyles: { fillColor: [6, 78, 59], textColor: [255, 255, 255], fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: [31, 41, 55] },
         columnStyles: { 0: { cellWidth: 75 } },
-        margin: { left: 14, right: 14 },
       })
+
+      const totalPages = doc.internal.getNumberOfPages()
+      for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
 
       doc.save(`TyrePulse_Executive_Report_${period}_${new Date().toISOString().slice(0, 10)}.pdf`)
     } catch (e) {
@@ -880,7 +820,7 @@ export default function ExecutiveReport() {
     } finally {
       setExporting(false)
     }
-  }, [period, kpis, rootCauses, riskMatrix, actionPlan, totalSpend, projectedAnnual, costTrend, currency, companyName, savingsOpportunity])
+  }, [period, kpis, rootCauses, riskMatrix, actionPlan, totalSpend, projectedAnnual, costTrend, currency, company, branding, savingsOpportunity])
 
   // ── Excel Export ──────────────────────────────────────────────────────────
   const exportExcel = useCallback(async () => {
@@ -935,28 +875,20 @@ export default function ExecutiveReport() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    const pw = doc.internal.pageSize.width
-    doc.setFillColor(6, 78, 59)
-    doc.rect(0, 0, pw, 20, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.text(`${companyName} - Action Plan`, 14, 13)
-    doc.setFontSize(9)
-    doc.text(`Generated ${formatDate(new Date())} · Period: ${PERIODS.find(p => p.key === period)?.label}`, pw - 14, 13, { align: 'right' })
+    const brand = await resolvePdfBrand(branding)
+    pdfHeader(doc, 'Action Plan', `Period: ${PERIODS.find(p => p.key === period)?.label}`, company, brand)
 
     autoTable(doc, {
-      startY: 26,
+      ...pdfTableTheme(brand.accent),
+      startY: 28,
       head: [['#', 'Action', 'Priority', 'Timeline', 'Owner', 'Est. Saving', 'Status']],
       body: actionPlan.map((a, i) => [i + 1, a.action, a.priority, a.timeline, a.owner, a.saving, a.status]),
-      styles: { fontSize: 9, cellPadding: 4 },
-      headStyles: { fillColor: [6, 78, 59], textColor: [255, 255, 255], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [249, 250, 251] },
       columnStyles: { 1: { cellWidth: 100 } },
-      margin: { left: 14, right: 14 },
     })
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
     doc.save(`TyrePulse_ActionPlan_${new Date().toISOString().slice(0, 10)}.pdf`)
-  }, [actionPlan, companyName, period])
+  }, [actionPlan, company, branding, period])
 
   // ── Loading / Error states ────────────────────────────────────────────────
   if (loading) {

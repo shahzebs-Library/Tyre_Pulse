@@ -15,6 +15,8 @@ import PageHeader from '../components/ui/PageHeader'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -173,7 +175,8 @@ function stdev(arr) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function PressureIntelligence() {
-  const { activeCountry } = useSettings()
+  const { activeCountry, appSettings } = useSettings()
+  const { branding } = useTenant()
 
   // Data
   const [inspections, setInspections]   = useState([])
@@ -742,23 +745,28 @@ export default function PressureIntelligence() {
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    const W = doc.internal.pageSize.width
+    const brand = await resolvePdfBrand(branding)
+    const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
+    const filename = `pressure_intelligence_${new Date().toISOString().slice(0,10)}.pdf`
 
-    doc.setFillColor(22, 101, 52)
-    doc.rect(0, 0, W, 22, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(14)
-    doc.setFont('helvetica', 'bold')
-    doc.text('TYREPULSE · Pressure Intelligence Report', 14, 10)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} | Total Readings: ${kpis.total} | Compliance: ${kpis.compliance}%`, 14, 17)
+    pdfHeader(doc, 'Pressure Intelligence Report',
+      `${kpis.total} readings · ${kpis.compliance}% compliance`, company, brand)
+
+    // Empty state - no readings for the current filters
+    if (enriched.length === 0) {
+      pdfEmptyState(doc, 'No pressure readings for the selected filters',
+        'Adjust the site, position or date filters and export again.')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save(filename)
+      return
+    }
 
     // KPI table
     doc.setFontSize(11)
     doc.setTextColor(60, 60, 60)
     doc.text('Pressure KPI Summary', 14, 30)
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: 33,
       head: [['Metric', 'Value']],
       body: [
@@ -769,9 +777,6 @@ export default function PressureIntelligence() {
         ['Average Deviation %', `${kpis.avgDev}%`],
         ['Total Readings', String(kpis.total)],
       ],
-      theme: 'grid',
-      headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { fontSize: 8 },
       columnStyles: { 0: { cellWidth: 70 }, 1: { cellWidth: 40 } },
     })
 
@@ -779,6 +784,7 @@ export default function PressureIntelligence() {
     const yAfterKpi = doc.lastAutoTable.finalY + 8
     doc.text('Compliance by Site', 14, yAfterKpi)
     autoTable(doc, {
+      ...pdfTableTheme(brand.accent),
       startY: yAfterKpi + 3,
       head: [['Site', 'Compliance %', 'Total Readings', 'Status']],
       body: siteCompliance.map(s => [
@@ -787,21 +793,14 @@ export default function PressureIntelligence() {
         String(s.total),
         Number(s.pct) >= 95 ? 'Good' : Number(s.pct) >= 85 ? 'Warning' : 'Poor',
       ]),
-      theme: 'grid',
-      headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { fontSize: 8 },
     })
 
     // Anomaly table (first 50)
     doc.addPage()
-    doc.setFillColor(22, 101, 52)
-    doc.rect(0, 0, W, 16, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(12)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Pressure Anomaly Report', 14, 10)
+    pdfHeader(doc, 'Pressure Anomaly Report', `Top ${Math.min(50, anomalies.length)} of ${anomalies.length} anomalies`, company, brand)
     autoTable(doc, {
-      startY: 20,
+      ...pdfTableTheme(brand.accent),
+      startY: 28,
       head: [['Asset', 'Position', 'Serial', 'Reading', 'Spec', 'Dev %', 'Status', 'Inspector', 'Date', 'Site']],
       body: anomalies.slice(0, 50).map(r => [
         r.asset_no || '', r.position || '', r.serial || '',
@@ -809,9 +808,6 @@ export default function PressureIntelligence() {
         r.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
         r.inspector || '', r.date || '', r.site || '',
       ]),
-      theme: 'striped',
-      headStyles: { fillColor: [22, 101, 52], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-      bodyStyles: { fontSize: 7 },
       didParseCell: (data) => {
         if (data.section === 'body' && data.column.index === 6) {
           const val = data.cell.raw || ''
@@ -822,7 +818,9 @@ export default function PressureIntelligence() {
       },
     })
 
-    doc.save(`pressure_intelligence_${new Date().toISOString().slice(0,10)}.pdf`)
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
+    doc.save(filename)
   }
 
   const hasActiveFilter = siteFilter || countryFilter || positionFilter || dateFrom || dateTo || inspectorFilter

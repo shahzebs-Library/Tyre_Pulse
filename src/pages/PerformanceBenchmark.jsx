@@ -18,7 +18,8 @@ import {
 } from 'lucide-react'
 import * as analytics from '../lib/api/analyticsReads'
 import { useSettings } from '../contexts/SettingsContext'
-import { formatDate } from '../lib/formatters'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import { computeAllKpis, computeCpkByBrand } from '../lib/kpiEngine'
 
@@ -137,7 +138,8 @@ function DeltaIcon({ better }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function PerformanceBenchmark() {
-  const { activeCountry, activeCurrency } = useSettings()
+  const { activeCountry, activeCurrency, appSettings } = useSettings()
+  const { branding } = useTenant()
   const [records, setRecords]      = useState([])
   const [inspections, setInspections] = useState([])
   const [loading, setLoading]      = useState(true)
@@ -332,20 +334,28 @@ export default function PerformanceBenchmark() {
 
   // ── Export ────────────────────────────────────────────────────────────────
   async function exportPdf() {
-    if (!benchmarked.length) return
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    doc.setFillColor(15, 23, 42); doc.rect(0, 0, 297, 32, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('TyrePulse', 14, 13)
-    doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.text('Fleet Performance Benchmarking Report', 14, 22)
-    doc.setFontSize(8); doc.setTextColor(156, 163, 175)
-    doc.text(`Generated: ${formatDate(new Date())}`, 14, 29)
-    doc.text(`Overall Score: ${overallScore.toFixed(0)}/100`, 200, 29)
+    const brand = await resolvePdfBrand(branding)
+    const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
+    const filename = `performance-benchmark-${new Date().toISOString().slice(0, 10)}.pdf`
+
+    pdfHeader(doc, 'Fleet Performance Benchmarking Report',
+      `Overall Score: ${overallScore.toFixed(0)}/100`, company, brand)
+
+    // Empty state - no benchmarked KPIs for the selected period
+    if (!benchmarked.length) {
+      pdfEmptyState(doc, 'No benchmark data for the selected period',
+        'Widen the period or change the site filter and export again.')
+      pdfFooter(doc, 1, 1, company, brand)
+      doc.save(filename)
+      return
+    }
 
     autoTable(doc, {
-      startY: 42,
+      ...pdfTableTheme(brand.accent),
+      startY: 30,
       head: [['KPI', 'Your Fleet', 'World Class', 'Good', 'Average', 'Rating']],
       body: benchmarked.map(m => [
         m.label,
@@ -355,18 +365,12 @@ export default function PerformanceBenchmark() {
         m.format(m.average),
         m.rating.rating,
       ]),
-      theme: 'striped',
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [30, 58, 95], textColor: 255 },
       margin: { left: 14, right: 14 },
     })
 
-    const pgCount = doc.internal.getNumberOfPages()
-    for (let i = 1; i <= pgCount; i++) {
-      doc.setPage(i); doc.setFontSize(7); doc.setTextColor(156, 163, 175)
-      doc.text(`TyrePulse Fleet Benchmarking - Page ${i} of ${pgCount}`, 14, 202)
-    }
-    doc.save(`performance-benchmark-${new Date().toISOString().slice(0, 10)}.pdf`)
+    const totalPages = doc.internal.getNumberOfPages()
+    for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
+    doc.save(filename)
   }
 
   async function exportExcel() {

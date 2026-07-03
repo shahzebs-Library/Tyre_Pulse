@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useTenant } from '../contexts/TenantContext'
+import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -11,7 +13,6 @@ import {
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
 import { fetchAllPages } from '../lib/fetchAll'
-import { formatDate } from '../lib/formatters'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, CheckCircle,
   ChevronDown, ChevronUp, Download, RefreshCw, Loader2, FileSpreadsheet,
@@ -93,8 +94,10 @@ function getQuarter(month) { return Math.floor(month / 3) }
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function BudgetPlanner() {
-  const { activeCurrency, activeCountry } = useSettings()
+  const { activeCurrency, activeCountry, appSettings } = useSettings()
   const { profile } = useAuth()
+  const { branding } = useTenant()
+  const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const isAdmin = profile?.role === 'Admin'
 
   const currentYear = new Date().getFullYear()
@@ -584,29 +587,17 @@ export default function BudgetPlanner() {
     setExporting(true)
     try {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-      const W = doc.internal.pageSize.width
-      const H = doc.internal.pageSize.height
+      const brand = await resolvePdfBrand(branding)
 
-      const addHeader = (title) => {
-        doc.setFillColor(22, 101, 52)
-        doc.rect(0, 0, W, 22, 'F')
-        doc.setTextColor(255, 255, 255)
-        doc.setFontSize(14)
-        doc.setFont('helvetica', 'bold')
-        doc.text('TYREPULSE · Annual Budget Planner', 14, 10)
-        doc.setFontSize(10)
-        doc.setFont('helvetica', 'normal')
-        doc.text(title, 14, 17)
-        doc.setTextColor(150, 150, 150)
-        doc.setFontSize(8)
-        doc.text(`Generated: ${formatDate(new Date(), activeCountry)} | Year: ${selectedYear}`, W - 14, 17, { align: 'right' })
-      }
+      const addHeader = (title) => pdfHeader(doc, 'Annual Budget Planner', `${title} · ${selectedYear}`, company, brand)
 
-      const addFooter = (pageNum) => {
-        doc.setFontSize(7)
-        doc.setTextColor(107, 114, 128)
-        doc.text('Confidential · Internal Use Only | TyrePulse', 14, H - 6)
-        doc.text(`Page ${pageNum}`, W - 14, H - 6, { align: 'right' })
+      // ── EMPTY STATE ──
+      if (!siteData.length && !brandData.length) {
+        addHeader('Budget Summary')
+        pdfEmptyState(doc, 'No budget data for the selected year')
+        pdfFooter(doc, 1, 1, company, brand)
+        doc.save(`TyrePulse_BudgetPlanner_${selectedYear}.pdf`)
+        return
       }
 
       // Page 1: KPIs + Status
@@ -619,19 +610,18 @@ export default function BudgetPlanner() {
         ['Projected Year-End', fmt(projectedYearEnd, activeCurrency)],
       ]
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: 28,
         head: [['KPI', 'Value']],
         body: kpiRows,
-        styles: { fontSize: 10 },
-        headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255] },
         margin: { left: 14, right: 14 },
       })
-      addFooter(1)
 
       // Page 2: Site Allocation
       doc.addPage()
       addHeader('Site Budget Allocation')
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: 28,
         head: [['Site', 'Annual Budget', 'YTD Actual', 'Variance', '% Used', 'Projection', 'Status']],
         body: siteData.map(s => [
@@ -643,9 +633,6 @@ export default function BudgetPlanner() {
           fmt(s.projection, activeCurrency),
           s.status,
         ]),
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { left: 14, right: 14 },
         didParseCell: (data) => {
           if (data.section === 'body' && data.column.index === 6) {
@@ -656,12 +643,12 @@ export default function BudgetPlanner() {
           }
         },
       })
-      addFooter(2)
 
       // Page 3: Brand analysis
       doc.addPage()
       addHeader('Brand Cost Analysis')
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: 28,
         head: [['Brand', 'This Year', 'Last Year', 'Change %', 'CPK (curr)', 'CPK Change']],
         body: brandData.map(b => [
@@ -672,27 +659,23 @@ export default function BudgetPlanner() {
           fmtCpk(b.cpk, activeCurrency),
           b.cpkChange != null ? fmtPct(b.cpkChange) : 'N/A',
         ]),
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { left: 14, right: 14 },
       })
-      addFooter(3)
 
       // Page 4: Recommendations
       doc.addPage()
       addHeader('AI Recommendations')
       autoTable(doc, {
+        ...pdfTableTheme(brand.accent),
         startY: 28,
         head: [['#', 'Recommendation']],
         body: recommendations.map((r, i) => [i + 1, r]),
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255] },
         columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 250 } },
         margin: { left: 14, right: 14 },
       })
-      addFooter(4)
 
+      const totalPages = doc.internal.getNumberOfPages()
+      for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
       doc.save(`TyrePulse_BudgetPlanner_${selectedYear}.pdf`)
     } finally { setExporting(false) }
   }

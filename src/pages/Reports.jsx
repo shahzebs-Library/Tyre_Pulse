@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { FileText, ChevronRight, Download, ArrowLeft, Printer, Mail } from 'lucide-react'
+import { SkeletonTable } from '../components/ui/Skeleton'
 import PageHeader from '../components/ui/PageHeader'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
@@ -531,7 +532,7 @@ export default function Reports() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center h-40 text-gray-400">Running report...</div>
+            <SkeletonTable rows={8} cols={6} />
           ) : (
             <>
               <div className="flex items-center gap-3 flex-wrap">

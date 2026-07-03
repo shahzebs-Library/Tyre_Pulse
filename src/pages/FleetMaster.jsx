@@ -8,6 +8,7 @@ import {
   Search, Plus, Edit2, Trash2, Save, X, AlertTriangle,
   FileSpreadsheet, Download, Upload, Truck, ChevronLeft, ChevronRight
 } from 'lucide-react'
+import Skeleton from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
@@ -549,7 +550,9 @@ export default function FleetMaster() {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={isAdmin ? 11 : 10} className="text-center py-12 text-gray-500">Loading...</td></tr>
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i}><td colSpan={isAdmin ? 11 : 10} className="px-3.5 py-3"><Skeleton className="h-4 w-full" /></td></tr>
+                    ))
                   ) : records.length === 0 ? (
                     <tr><td colSpan={isAdmin ? 11 : 10} className="text-center py-12 text-gray-500">No vehicles found</td></tr>
                   ) : records.map(r => (

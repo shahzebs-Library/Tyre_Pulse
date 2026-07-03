@@ -16,6 +16,7 @@ import {
   Building2, Hash, Percent, CreditCard, Activity, Info,
   ArrowUpRight, Layers, Zap, Target, List, PieChart, Upload,
 } from 'lucide-react'
+import { SkeletonTable } from '../components/ui/Skeleton'
 import * as warranty from '../lib/api/warranty'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -800,9 +801,7 @@ export default function WarrantyTracker() {
 
           <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
             {loading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 size={28} className="animate-spin text-blue-400" />
-              </div>
+              <SkeletonTable rows={8} cols={6} />
             ) : claimsError ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <AlertTriangle size={40} className="text-red-500" />

@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { Plus, Save, X, History, FileText, Download, ArrowLeftRight, Package, Upload } from 'lucide-react'
+import Skeleton from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
@@ -454,7 +455,9 @@ export default function StockManagement() {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={11} className="text-center py-12 text-gray-500">Loading...</td></tr>
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i}><td colSpan={11} className="px-3.5 py-3"><Skeleton className="h-4 w-full" /></td></tr>
+                    ))
                   ) : records.length === 0 ? (
                     <tr><td colSpan={11} className="text-center py-12 text-gray-500">No stock records yet</td></tr>
                   ) : records.map(r => {

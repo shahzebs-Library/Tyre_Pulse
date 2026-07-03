@@ -15,6 +15,7 @@ import {
   ToggleLeft, ToggleRight, MapPin, Globe, Calendar, Zap, Target,
   Award, Layers, Info,
 } from 'lucide-react'
+import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -965,8 +966,9 @@ export default function AssetManagement() {
                 </div>
 
                 {loading ? (
-                  <div className="flex items-center justify-center py-20 text-gray-500">
-                    <RefreshCw className="w-6 h-6 animate-spin mr-3" /> Loading assets...
+                  <div className="space-y-4">
+                    <SkeletonCards count={4} />
+                    <SkeletonTable rows={8} cols={6} />
                   </div>
                 ) : loadError ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center px-6">

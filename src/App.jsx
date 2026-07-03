@@ -106,6 +106,7 @@ const TyreScan               = lazy(() => import('./pages/TyreScan'))
 const QrLabels               = lazy(() => import('./pages/QrLabels'))
 const CustomData             = lazy(() => import('./pages/CustomData'))
 const ScheduledReports       = lazy(() => import('./pages/ScheduledReports'))
+const ReportCenter           = lazy(() => import('./pages/ReportCenter'))
 const KnowledgeBase          = lazy(() => import('./pages/KnowledgeBase'))
 const AiCostMonitor          = lazy(() => import('./pages/AiCostMonitor'))
 
@@ -172,6 +173,7 @@ function MainApp() {
                       <Route path="/alerts"      element={<Safe><Alerts /></Safe>} />
                       <Route path="/fleet-master"         element={<Safe><FleetMaster /></Safe>} />
                       <Route path="/reports"              element={<Safe><Reports /></Safe>} />
+                      <Route path="/report-center"       element={<Safe><ReportCenter /></Safe>} />
                       <Route path="/scheduled-reports"   element={<Safe><ScheduledReports /></Safe>} />
                       <Route path="/knowledge-base"       element={<Safe><KnowledgeBase /></Safe>} />
                       <Route path="/ai-cost-monitor"      element={<Safe><AiCostMonitor /></Safe>} />

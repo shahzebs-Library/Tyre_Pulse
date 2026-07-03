@@ -165,3 +165,17 @@ mobile deps synced - typecheck now fully clean.
 - Proven: Node harness generates a valid 324 KB .pptx with the tenant accent
   `0F766E` embedded 4× in the cover slide XML; zip structure intact. Gate: 714
   tests green, build clean.
+
+## 2026-07-03 (later) — Master Build Phase D (Report Center) + Phase F doc (main, pushed)
+- **Report Center** — new page `src/pages/ReportCenter.jsx` at `/report-center`
+  (nav: Reports & Executive → Report Center). On-demand branded generation of the
+  Executive PowerPoint, Daily Executive PDF, and Tyre Records Excel/PDF (date
+  filters + global country scope + tenant branding via TenantContext), each with
+  spinner + success/error toast. Branding banner (shortcut to the editor),
+  scheduling shortcut, and a Delivery History table over `report_send_log`
+  (loading/error/empty states). New page — does NOT touch the i18n session's
+  Reports.jsx. Route + lazy import in App.jsx; nav entry in Layout.jsx.
+- **Docs (Phase F)** — `docs/BRANDING_AND_REPORT_SETTINGS.md`: full reference for
+  the V68 branding model, RPCs, frontend wiring, branded export engine, Report
+  Center, operator guide, and security notes.
+- Gate: 714 tests green, web build clean (Report Center lazy-split).

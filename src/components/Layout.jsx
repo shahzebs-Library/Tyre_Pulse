@@ -15,7 +15,7 @@ import {
   TrendingUp, BookOpen, Zap, Database, Wrench, Calendar,
   Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
-  Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart,
+  Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -142,6 +142,7 @@ const NAV_GROUPS = [
     label: 'Reports & Executive',
     items: [
       { to: '/reports',           label: 'Reports',           icon: FileText },
+      { to: '/report-center',     label: 'Report Center',     icon: Download },
       { to: '/scheduled-reports', label: 'Scheduled Reports', icon: CalendarCheck2 },
       { to: '/executive-report',  label: 'Executive Report',  icon: BookOpen, adminOnly: A },
       { to: '/ai-command-center', label: 'AI Command Center', icon: Bot, adminOnly: A },

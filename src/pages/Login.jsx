@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Eye, EyeOff, ArrowRight, Mail, AlertCircle, CheckCircle2,
-  Loader2, AtSign, Hash, Zap, Sun, Moon, Wifi, WifiOff,
+  Loader2, User, Zap, Sun, Moon, Wifi, WifiOff,
   BarChart3, Shield, Smartphone, Brain, TrendingUp, Bell,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -169,12 +169,6 @@ function FeatureChip({ icon: Icon, label, delay = 0 }) {
   )
 }
 
-const ID_MODES = [
-  { value: 'email',    labelKey: 'auth.login.idModeEmail',      icon: Mail,   placeholder: 'you@company.com', type: 'email' },
-  { value: 'username', labelKey: 'auth.login.idModeUsername',   icon: AtSign, placeholder: 'your_username',   type: 'text' },
-  { value: 'empid',    labelKey: 'auth.login.idModeEmployeeId', icon: Hash,   placeholder: 'EMP-1042',         type: 'text' },
-]
-
 const FEATURES = [
   { icon: BarChart3,  labelKey: 'auth.login.features.analytics' },
   { icon: Brain,      labelKey: 'auth.login.features.predictive' },
@@ -196,7 +190,6 @@ export default function Login() {
   }, [user, authLoading, navigate])
 
   const [tab, setTab]                 = useState('login')
-  const [idMode, setIdMode]           = useState('email')
   const [identifier, setIdentifier]   = useState('')
   const [password, setPassword]       = useState('')
   const [confirm, setConfirm]         = useState('')
@@ -235,8 +228,6 @@ export default function Login() {
     if (sessionExpired) localStorage.removeItem('tp_session_expired')
     if (accessRevoked)  localStorage.removeItem('tp_access_revoked')
   }, [])
-
-  const currentMode = ID_MODES.find(m => m.value === idMode)
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -307,7 +298,6 @@ export default function Login() {
   }
 
   function switchTab(val) { setTab(val); setError(''); setSignupDone(false); setForgotMode(false); setForgotSent(false) }
-  function switchIdMode(val) { setIdMode(val); setIdentifier(''); setError('') }
 
   const inputStyle = (field) => ({
     width: '100%',
@@ -595,65 +585,36 @@ export default function Login() {
                   onSubmit={handleLogin}
                   style={{ display:'flex', flexDirection:'column', gap:18 }}
                 >
-                  {/* ID mode selector */}
+                  {/* Unified identifier input - accepts email, username, or employee ID */}
                   <div>
-                    <div style={labelStyle}>Sign in with</div>
-                    <div style={{
-                      display:'flex', gap:4, padding:4,
-                      background:'rgba(255,255,255,0.03)',
-                      border:'1.5px solid rgba(255,255,255,0.07)',
-                      borderRadius:12,
-                    }}>
-                      {ID_MODES.map(({ value, label, icon: Icon }) => (
-                        <button key={value} type="button" onClick={() => switchIdMode(value)} style={{
-                          flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:5,
-                          padding:'7px 0', borderRadius:9, fontSize:11, fontWeight:700,
-                          border: idMode===value ? '1.5px solid rgba(22,163,74,0.42)' : '1.5px solid transparent',
-                          background: idMode===value ? 'rgba(22,163,74,0.16)' : 'transparent',
-                          color: idMode===value ? '#4ade80' : 'rgba(255,255,255,0.3)',
-                          cursor:'pointer', transition:'all 0.18s',
-                        }}>
-                          <Icon size={11}/>{label}
-                        </button>
-                      ))}
+                    <div style={labelStyle}>{t('auth.login.idAnyLabel')}</div>
+                    <div style={{ position:'relative' }}>
+                      <div style={{
+                        position:'absolute', left:13, top:'50%', transform:'translateY(-50%)',
+                        color: focusedField==='id' ? '#4ade80' : 'rgba(255,255,255,0.28)',
+                        transition:'color 0.2s', pointerEvents:'none',
+                      }}>
+                        <User size={15}/>
+                      </div>
+                      <input
+                        type="text"
+                        style={{ ...inputStyle('id'), paddingLeft:40 }}
+                        placeholder={t('auth.login.idAnyPlaceholder')}
+                        value={identifier}
+                        onChange={e => setIdentifier(e.target.value)}
+                        onFocus={() => setFocusedField('id')}
+                        onBlur={() => setFocusedField(null)}
+                        required autoFocus autoComplete="username"
+                      />
                     </div>
                   </div>
-
-                  {/* Identifier input */}
-                  <AnimatePresence mode="wait">
-                    <motion.div key={idMode}
-                      initial={{ opacity:0, x:8 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-8 }}
-                      transition={{ duration:0.15 }}
-                    >
-                      <div style={labelStyle}>{currentMode.label}</div>
-                      <div style={{ position:'relative' }}>
-                        <div style={{
-                          position:'absolute', left:13, top:'50%', transform:'translateY(-50%)',
-                          color: focusedField==='id' ? '#4ade80' : 'rgba(255,255,255,0.28)',
-                          transition:'color 0.2s', pointerEvents:'none',
-                        }}>
-                          <currentMode.icon size={15}/>
-                        </div>
-                        <input
-                          type={currentMode.type}
-                          style={{ ...inputStyle('id'), paddingLeft:40 }}
-                          placeholder={currentMode.placeholder}
-                          value={identifier}
-                          onChange={e => setIdentifier(e.target.value)}
-                          onFocus={() => setFocusedField('id')}
-                          onBlur={() => setFocusedField(null)}
-                          required autoFocus autoComplete="username"
-                        />
-                      </div>
-                    </motion.div>
-                  </AnimatePresence>
 
                   {/* Password */}
                   <div>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:7 }}>
                       <span style={labelStyle}>Password</span>
                       <button type="button"
-                        onClick={() => { setForgotMode(true); setForgotEmail(idMode==='email' ? identifier : ''); setError('') }}
+                        onClick={() => { setForgotMode(true); setForgotEmail(identifier.includes('@') ? identifier : ''); setError('') }}
                         style={{ fontSize:11, color:'rgba(74,222,128,0.6)', background:'none', border:'none', cursor:'pointer', padding:0, fontWeight:600, transition:'color 0.2s', letterSpacing:'0.02em' }}
                         onMouseEnter={e => e.target.style.color='#4ade80'}
                         onMouseLeave={e => e.target.style.color='rgba(74,222,128,0.6)'}

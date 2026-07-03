@@ -933,6 +933,12 @@ html.light .text-gray-400    { color: #64748b !important; }
 html.light .text-gray-500    { color: #64748b !important; }
 html.light .text-gray-600    { color: #94a3b8 !important; }
 html.light .text-gray-700    { color: #cbd5e1 !important; }
+
+/* Dark-mode legibility lift: Tailwind's text-gray-600 (#4b5563) is too dim to
+   read on the near-black base. These UNLAYERED rules beat Tailwind's layered
+   utility in dark mode; the html.light !important rules above keep light mode. */
+.text-gray-600 { color: #808e86; }
+.text-gray-700 { color: #6b776f; }
 html.light .text-slate-300   { color: #334155 !important; }
 html.light .text-slate-400   { color: #64748b !important; }
 html.light .text-slate-500   { color: #94a3b8 !important; }

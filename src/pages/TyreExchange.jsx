@@ -20,6 +20,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { exportToPdf, exportToExcel, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import { formatDate } from '../lib/formatters'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -68,7 +69,7 @@ const TABS = [
 
 function fmtDate(d) {
   if (!d) return '-'
-  return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function daysDiff(dateStr) {

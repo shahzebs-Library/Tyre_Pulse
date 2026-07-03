@@ -9,6 +9,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { applyCountry } from '../lib/countryFilter'
 import { fetchAllPages } from '../lib/fetchAll'
 import EmailReportModal from '../components/EmailReportModal'
+import { formatDate } from '../lib/formatters'
 
 const REPORT_TYPES = [
   { id: 'Vehicle History',       desc: 'All tyre changes per vehicle, grouped by asset',  table: 'tyre_records' },
@@ -289,7 +290,7 @@ export default function Reports() {
       `<style>body{font-family:sans-serif;margin:16px}h2{margin-bottom:12px;font-size:14px}` +
       `table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 8px;font-size:12px}` +
       `th{background:#f0f0f0;font-weight:600;text-align:left}</style></head>` +
-      `<body><h2>TyrePulse · ${reportType} · ${new Date().toLocaleDateString()}</h2>` +
+      `<body><h2>TyrePulse · ${reportType} · ${formatDate(new Date())}</h2>` +
       `${printContent.outerHTML}</body></html>`
     )
     win.document.close()

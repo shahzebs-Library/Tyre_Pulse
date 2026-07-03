@@ -13,7 +13,7 @@ import { supabase } from '../lib/supabase'
 import * as customData from '../lib/api/customData'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
-import { formatCurrencyCompact } from '../lib/formatters'
+import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import {
   Database, Search, Plus, Trash2, Check, X, ArrowRight,
   ChevronRight, Download, RefreshCw, Eye, EyeOff, Filter,
@@ -584,7 +584,7 @@ export default function CustomData() {
                         </td>
                         <td className="table-cell text-gray-400">{s.use_count.toLocaleString()}</td>
                         <td className="table-cell text-gray-500 text-xs">
-                          {s.last_used_at ? new Date(s.last_used_at).toLocaleDateString() : '-'}
+                          {s.last_used_at ? formatDate(s.last_used_at) : '-'}
                         </td>
                         <td className="table-cell">
                           <button onClick={() => confirmDeleteSynonym(s)} className="p-1.5 rounded hover:bg-red-900/30 text-gray-600 hover:text-red-400 transition-colors">

@@ -13,6 +13,7 @@ import {
 } from 'chart.js'
 import { Bar } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
+import { formatDate } from '../lib/formatters'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
@@ -57,7 +58,7 @@ function weekLabel(dateStr) {
 
 function fmtDisplay(ds) {
   if (!ds) return '-'
-  return new Date(ds + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDate(ds + 'T00:00:00', 'All', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 // Map a DB `inspection_schedules` row to the app-wide schedule item shape.
@@ -897,7 +898,7 @@ export default function InspectionPlanner() {
     setExportLoading(true)
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
-    pdfHeader(doc, 'Inspection Schedule', new Date().toLocaleDateString('en-GB'), company, brand)
+    pdfHeader(doc, 'Inspection Schedule', formatDate(new Date()), company, brand)
 
     const rows = schedule.filter(s => s.status !== 'Cancelled').map(s => [
       s.asset_no || '',
@@ -1371,7 +1372,7 @@ export default function InspectionPlanner() {
                           >
                             <div className="flex items-center gap-3 min-w-0">
                               <div className="text-center min-w-[48px]">
-                                <p className="text-xs text-gray-500">{new Date(item.inspection_date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short' })}</p>
+                                <p className="text-xs text-gray-500">{formatDate(item.inspection_date + 'T00:00:00', 'All', { weekday: 'short' })}</p>
                                 <p className="text-sm font-semibold text-white">{new Date(item.inspection_date + 'T00:00:00').getDate()}</p>
                               </div>
                               <div className="min-w-0">

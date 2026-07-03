@@ -9,6 +9,7 @@ import * as knowledgeDocuments from '../lib/api/knowledgeDocuments'
 import { useAuth } from '../contexts/AuthContext'
 import { generateEmbedding, reindexMissingEmbeddings } from '../lib/embeddingService'
 import PageHeader from '../components/ui/PageHeader'
+import { formatDate } from '../lib/formatters'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -499,7 +500,7 @@ export default function KnowledgeBase() {
                   </td>
                   <td className="px-4 py-3.5"><EmbedStatusBadge hasEmbedding={!!doc.embedding} /></td>
                   <td className="px-4 py-3.5 text-gray-500 text-xs hidden md:table-cell">
-                    {new Date(doc.created_at).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {formatDate(doc.created_at, 'All', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </td>
                   {canWrite && (
                     <td className="px-4 py-3.5">

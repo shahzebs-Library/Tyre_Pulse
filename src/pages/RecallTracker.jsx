@@ -23,6 +23,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import { formatDate } from '../lib/formatters'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -73,7 +74,7 @@ function daysBetween(a, b) {
 }
 
 function nowStr() {
-  return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDate(new Date(), 'All', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function Badge({ label, cfg, small }) {

@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import * as imports from '../lib/api/imports'
 import { reconcileBatch } from '../lib/import/reconcile'
+import { formatDate } from '../lib/formatters'
 
 const ELEVATED = ['admin', 'manager', 'director']
 const TABS = [
@@ -309,7 +310,7 @@ export default function DataIntakeHistory() {
                       <td className="px-3 py-2 text-gray-400">{p.source_system || '-'}</td>
                       <td className="px-3 py-2 text-gray-400">{p.country || 'any'}</td>
                       <td className="px-3 py-2 text-gray-500">{p.version}</td>
-                      <td className="px-3 py-2 text-gray-500 text-xs">{p.last_used_at ? new Date(p.last_used_at).toLocaleDateString('en-GB') : '-'}</td>
+                      <td className="px-3 py-2 text-gray-500 text-xs">{p.last_used_at ? formatDate(p.last_used_at) : '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -375,7 +376,7 @@ export default function DataIntakeHistory() {
                         <td className="px-3 py-2 text-gray-600"><ChevronRight size={14} /></td>
                         <td className="px-3 py-2 font-medium text-white">{a.canonical_value}</td>
                         <td className="px-3 py-2 text-gray-400">{a.country || 'any'}</td>
-                        <td className="px-3 py-2 text-gray-500 text-xs">{a.created_at ? new Date(a.created_at).toLocaleDateString('en-GB') : '-'}</td>
+                        <td className="px-3 py-2 text-gray-500 text-xs">{a.created_at ? formatDate(a.created_at) : '-'}</td>
                       </tr>
                     ))}
                   </tbody>

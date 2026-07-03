@@ -11,6 +11,7 @@ import {
 import { SkeletonTable } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import { formatDate } from '../lib/formatters'
 
 const PAGE_SIZE = 50
 
@@ -1128,7 +1129,7 @@ export default function DataCleaning() {
                       <span className={`text-xs font-semibold ${qualityScore > prevScore.score ? 'text-green-400' : qualityScore < prevScore.score ? 'text-red-400' : 'text-gray-400'}`}>
                         {qualityScore > prevScore.score ? `+${qualityScore - prevScore.score}` : qualityScore < prevScore.score ? `${qualityScore - prevScore.score}` : '0'} pts
                       </span>
-                      <span className="text-xs text-gray-600">({new Date(prevScore.ts).toLocaleDateString()})</span>
+                      <span className="text-xs text-gray-600">({formatDate(prevScore.ts)})</span>
                     </div>
                   )}
                 </div>

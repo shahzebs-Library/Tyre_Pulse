@@ -9,6 +9,7 @@ import Skeleton from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import { formatDate } from '../lib/formatters'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 } from 'chart.js'
@@ -329,7 +330,7 @@ export default function StockManagement() {
         ['Reorder Qty',     String(Math.max(0, (rec.min_level || 5) * 3 - rec.stock_qty))],
         ['Status',          deriveStatus(rec)],
         ['Requested By',    profile?.full_name || profile?.username || '-'],
-        ['Date',            new Date().toLocaleDateString('en-GB')],
+        ['Date',            formatDate(new Date())],
       ],
     })
 
@@ -902,7 +903,7 @@ export default function StockManagement() {
                   <tbody>
                     {movements.map(m => (
                       <tr key={m.id} className="border-b border-gray-800/50">
-                        <td className="table-cell py-2 text-gray-400">{new Date(m.created_at).toLocaleDateString()}</td>
+                        <td className="table-cell py-2 text-gray-400">{formatDate(m.created_at)}</td>
                         <td className="table-cell py-2">
                           <span className={`px-1.5 py-0.5 rounded text-xs ${
                             ADD_TYPES.has(String(m.movement_type).toLowerCase()) ? 'bg-green-900/30 text-green-400' :

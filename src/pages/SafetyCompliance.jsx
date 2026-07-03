@@ -23,6 +23,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import { formatDate } from '../lib/formatters'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -61,7 +62,7 @@ function getPosition(pos) {
 function fmtPct(n) { return isNaN(n) ? '-' : n.toFixed(1) + '%' }
 function fmtDate(d) {
   if (!d) return '-'
-  return new Date(d).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

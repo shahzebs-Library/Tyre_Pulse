@@ -25,6 +25,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import { formatDate } from '../lib/formatters'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -79,7 +80,7 @@ function fmt(n, dec = 0) {
 }
 function fmtDate(d) {
   if (!d) return '-'
-  return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 function safeKm(v) {
   const n = parseFloat(v)

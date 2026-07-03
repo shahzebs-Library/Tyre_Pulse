@@ -51,7 +51,7 @@ export default function GatePass() {
   const autoRefreshRef = useRef(null)
 
   const today = new Date().toISOString().split('T')[0]
-  const todayDisplay = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const todayDisplay = formatDate(new Date(), 'All', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
   useEffect(() => {
     loadPasses()
@@ -245,7 +245,7 @@ export default function GatePass() {
   const activeDateLabel = logTab === 'today' ? today : historyDate
   const activeDateDisplay = logTab === 'today'
     ? todayDisplay
-    : new Date(historyDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    : formatDate(historyDate + 'T00:00:00', 'All', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
   const filteredPassList = useMemo(() => {
     if (!logSearch) return activePassList

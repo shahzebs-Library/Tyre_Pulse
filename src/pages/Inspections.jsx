@@ -19,6 +19,7 @@ import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
 import { legacyPositionCode } from '../lib/tyrePositions'
 import { useWakeLock, vibrate, shareOrCopy } from '../hooks/useWakeLock'
 import { enqueueInspection, syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
+import { formatDate } from '../lib/formatters'
 
 const STATUS_CONFIG = {
   Scheduled:    { color: 'text-blue-400',   bg: 'bg-blue-900/30',   border: 'border-blue-700/50' },
@@ -860,7 +861,7 @@ export default function Inspections() {
       doc.setTextColor(107, 114, 128)
       doc.setFont('helvetica', 'normal')
       doc.text(`Inspector: ${clInspector || clSaved.inspector || ''}`, mx, finalY + sigH + 4)
-      doc.text(new Date().toLocaleDateString('en-GB'), mx + sigW - 1, finalY + sigH + 4, { align: 'right' })
+      doc.text(formatDate(new Date()), mx + sigW - 1, finalY + sigH + 4, { align: 'right' })
     } else {
       // Blank line fallback
       doc.setDrawColor(156, 163, 175)

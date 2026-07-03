@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
+import { formatDate } from '../lib/formatters'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -452,7 +453,7 @@ export default function FleetHealthBoard() {
 
   function fmtDate(d) {
     if (!d) return '-'
-    return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -980,7 +981,7 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
 
   function fmtDate(d) {
     if (!d) return '-'
-    return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
   return (
@@ -1029,7 +1030,7 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
         {!worst && (
           <span className="text-gray-600 text-xs">No data</span>
         )}
-        <span className="text-gray-600 text-xs">{lastDate ? new Date(lastDate).toLocaleDateString('en-GB', { day:'2-digit', month:'short' }) : '-'}</span>
+        <span className="text-gray-600 text-xs">{lastDate ? formatDate(lastDate, 'All', { day:'2-digit', month:'short' }) : '-'}</span>
       </div>
 
       {/* Drill-in hint */}

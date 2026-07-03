@@ -19,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
+import { formatDate } from '../lib/formatters'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -1665,7 +1666,7 @@ export default function ComplianceDashboard() {
                                     <td className="py-2 pr-3 text-gray-400">{r.site}</td>
                                     <td className="py-2 pr-3 text-gray-400 whitespace-nowrap">
                                       {r.last_inspection
-                                        ? new Date(r.last_inspection).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        ? formatDate(r.last_inspection, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
                                         : <span className="text-gray-600">Never</span>}
                                     </td>
                                     <td className={`py-2 pr-3 font-medium ${
@@ -1678,7 +1679,7 @@ export default function ComplianceDashboard() {
                                     </td>
                                     <td className="py-2 pr-3 text-gray-400 whitespace-nowrap">
                                       {r.next_due
-                                        ? new Date(r.next_due).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        ? formatDate(r.next_due, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
                                         : '-'}
                                     </td>
                                     <td className="py-2 pr-3">

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
+import { formatDate } from '../lib/formatters'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -108,12 +109,12 @@ function daysAgo(dateStr) {
 
 function fmtDate(d) {
   if (!d) return '-'
-  return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatDate(d, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function fmtShortDate(d) {
   if (!d) return '-'
-  return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+  return formatDate(d, 'All', { day: '2-digit', month: 'short' })
 }
 
 function startOfWeek() {
@@ -787,7 +788,7 @@ export default function LiveFleetStatus() {
         <KpiCard
           label="Active Alerts"
           value={kpis.activeAlerts}
-          sub={`as of ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short' })}`}
+          sub={`as of ${formatDate(new Date(), 'All', { day:'2-digit', month:'short' })}`}
           icon={Bell}
           color={kpis.activeAlerts > 0 ? 'red' : 'green'}
           pulse={kpis.activeAlerts > 0}

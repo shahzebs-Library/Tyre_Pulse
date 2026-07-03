@@ -56,11 +56,11 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
   --surface-3:      #0e1c12;
   --surface-raised: rgba(10,22,13,0.95);
 
-  /* Text */
-  --text-primary:   #eef2ef;
-  --text-secondary: #9ba8a0;
-  --text-muted:     #5a6862;
-  --text-dim:       #3a4840;
+  /* Text — tuned for legibility on the near-black base (AA-friendly contrast) */
+  --text-primary:   #f1f5f2;
+  --text-secondary: #aab6ae;
+  --text-muted:     #7e8c84;
+  --text-dim:       #5c6a62;
 
   /* Borders */
   --border-brand:   rgba(22,163,74,0.16);

@@ -150,3 +150,18 @@ mobile deps synced - typecheck now fully clean.
   brand name for the report `company` field (Excel/PDF/PPTX/Daily).
 - Gate: 714 tests green (709 + 5 branding), web build clean, advisors clean
   (only the pre-existing generic SECURITY DEFINER / graphql-exposure warnings).
+
+## 2026-07-03 (later) — Master Build Phase B: branded report engine (main, pushed)
+- `exportUtils.js` now consumes the tenant branding object on the executive
+  reports: **PowerPoint deck** and **Daily Executive PDF** derive their primary/
+  secondary accent from `branding.primary_color`/`accent_color`, stamp the tenant
+  **logo** on the cover (best-effort — a missing/blocked/oversized image silently
+  falls back, never breaks the file), and use `branding.footer_text` /
+  `branding.disclaimer` in the footer and cover.
+- New safe helpers: `brandHex` (→ 6-hex), `hexToRgb` (→ jsPDF RGB),
+  `fetchImageDataUri` (URL → base64 data URI, ≤2 MB, CORS/format guarded, null on
+  any failure). Dashboard threads `branding` (from TenantContext) into the PPTX
+  and Daily-PDF data objects.
+- Proven: Node harness generates a valid 324 KB .pptx with the tenant accent
+  `0F766E` embedded 4× in the cover slide XML; zip structure intact. Gate: 714
+  tests green, build clean.

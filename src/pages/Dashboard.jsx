@@ -488,6 +488,7 @@ export default function Dashboard() {
       period: now.toLocaleString('default',{month:'long',year:'numeric'}),
       generatedBy: profile?.full_name || profile?.username || 'Fleet Manager',
       company: reportCompany,
+      branding,
     }, `TyrePulse_Report_${now.toISOString().slice(0,10)}`)
   }
 
@@ -532,6 +533,7 @@ export default function Dashboard() {
     exportDailyExecutivePdf({
       date: formatDate(now, activeCountry, { day: '2-digit', month: 'long', year: 'numeric' }),
       company: reportCompany,
+      branding,
       reportPeriod: 'Daily',
       currency: activeCurrency,
       generatedBy: profile?.full_name || profile?.username || 'Fleet Manager',

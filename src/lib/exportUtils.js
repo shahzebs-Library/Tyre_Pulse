@@ -66,6 +66,50 @@ const nowStr  = () => formatDate(new Date(), 'All')
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 
+// ── Tenant branding helpers ──────────────────────────────────────────────────
+// Reports accept an optional `branding` object (from TenantContext / V68):
+// { primary_color, secondary_color, accent_color, logo_url, footer_text,
+//   disclaimer, report_theme }. These helpers normalise it safely so a missing
+// or malformed value always falls back to the default design — branding can
+// never break report generation.
+
+/** Normalise a #RRGGBB brand colour to a bare 6-hex string (for pptx/jsPDF). */
+function brandHex(hex, fallback) {
+  if (typeof hex === 'string' && /^#?[0-9A-Fa-f]{6}$/.test(hex.trim())) {
+    return hex.trim().replace(/^#/, '').toUpperCase()
+  }
+  return fallback
+}
+
+/** Hex → [r,g,b] for jsPDF setFillColor/setTextColor; falls back to a palette. */
+function hexToRgb(hex, fallback = [79, 70, 229]) {
+  const h = brandHex(hex, null)
+  if (!h) return fallback
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+}
+
+/**
+ * Fetch an image URL to a base64 data URI. Returns null on any failure (network,
+ * CORS, non-image, oversized) so a missing/blocked tenant logo never aborts a
+ * report. Guarded to ≤2 MB.
+ */
+async function fetchImageDataUri(url) {
+  if (!url || typeof url !== 'string') return null
+  if (typeof fetch !== 'function' || typeof FileReader === 'undefined') return null
+  try {
+    const res = await fetch(url, { mode: 'cors' })
+    if (!res.ok) return null
+    const blob = await res.blob()
+    if (!blob.type.startsWith('image/') || blob.size > 2_000_000) return null
+    return await new Promise((resolve) => {
+      const fr = new FileReader()
+      fr.onload = () => resolve(typeof fr.result === 'string' ? fr.result : null)
+      fr.onerror = () => resolve(null)
+      fr.readAsDataURL(blob)
+    })
+  } catch { return null }
+}
+
 // ── Executive intelligence derivation (business meaning, not raw data) ───────────
 // These convert the report data object into narrative, business insights, and a
 // forward-looking outlook so every report leads with decisions, not tables.
@@ -1126,8 +1170,15 @@ export async function exportDailyExecutivePdf(data, filename) {
   const period    = data.reportPeriod || 'Daily'
   const siteLabel = data.site      || 'All Sites'
 
+  // Tenant branding (V68): primary colour drives the accent; logo + footer/
+  // disclaimer are applied where present. All fall back to the base design.
+  const brand    = data.branding || {}
+  const ACCENT   = hexToRgb(brand.primary_color, P.indigo)
+  const logoData = await fetchImageDataUri(brand.logo_url)
+  const footerLeft = brand.footer_text || `${company}  ·  Fleet Operations Report  ·  Confidential`
+
   // landscape header/footer helpers
-  function lsHeader(title, accentRgb = P.indigo) {
+  function lsHeader(title, accentRgb = ACCENT) {
     doc.setFillColor(...P.slate)
     doc.rect(0, 0, PW, 22, 'F')
     doc.setFillColor(...accentRgb)
@@ -1145,7 +1196,7 @@ export async function exportDailyExecutivePdf(data, filename) {
     doc.setDrawColor(...P.silver); doc.setLineWidth(0.2)
     doc.line(0, PH - 8, PW, PH - 8)
     doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ghost)
-    doc.text(`${company}  ·  Fleet Operations Report  ·  Confidential`, 14, PH - 3)
+    doc.text(footerLeft, 14, PH - 3)
     doc.text(date, PW / 2, PH - 3, { align: 'center' })
     doc.text(`${page} / ${total}`, PW - 14, PH - 3, { align: 'right' })
   }
@@ -1160,11 +1211,17 @@ export async function exportDailyExecutivePdf(data, filename) {
     for (let x = 12; x < PW - 12; x += 16)
       for (let y = 12; y < PH - 12; y += 16)
         doc.circle(x, y, 0.3, 'F')
-    // Accent diagonal shapes
-    doc.setFillColor(...P.indigo)
+    // Accent diagonal shapes (tenant primary colour)
+    doc.setFillColor(...ACCENT)
     doc.triangle(0, PH * 0.52, 0, PH * 0.64, PW * 0.38, PH * 0.52, 'F')
-    doc.setFillColor(79 * 0.5, 70 * 0.5, 229 * 0.5)
+    doc.setFillColor(Math.round(ACCENT[0] * 0.5), Math.round(ACCENT[1] * 0.5), Math.round(ACCENT[2] * 0.5))
     doc.triangle(0, PH * 0.58, 0, PH * 0.72, PW * 0.30, PH * 0.58, 'F')
+
+    // Tenant logo (best-effort; format detected from the data URI)
+    if (logoData) {
+      const fmt = /image\/jpe?g/i.test(logoData) ? 'JPEG' : 'PNG'
+      try { doc.addImage(logoData, fmt, 28, 18, 18, 18, undefined, 'FAST') } catch { /* ignore unsupported image */ }
+    }
 
     // Company + title
     doc.setFontSize(9); doc.setFont('helvetica','bold')
@@ -1558,9 +1615,12 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
   const MUTED  = '94A3B8'   // tertiary text
   const SHADOW = { type: 'outer', color: 'C7D0DE', blur: 7, offset: 2, angle: 90, opacity: 0.45 }
 
-  // Brand accents (saturated, AA-contrast on white)
-  const INDIGO = '4F46E5'
-  const VIOLET = '7C3AED'
+  // Brand accents (saturated, AA-contrast on white). The primary + secondary
+  // accents follow the tenant branding when supplied (V68); GOLD stays fixed as
+  // the semantic KPI-highlight colour for readability.
+  const brand  = data.branding || {}
+  const INDIGO = brandHex(brand.primary_color, '4F46E5')
+  const VIOLET = brandHex(brand.accent_color, '7C3AED')
   const GOLD   = 'D97706'
   const EMER   = '059669'
   const CRIM   = 'DC2626'
@@ -1585,8 +1645,9 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
     if (subtitle) slide.addText(subtitle, { x: 10.0, y: 0.2, w: 2.9, h: 0.3, fontSize: 8.5, color: MUTED, align: 'right' })
     slide.addText(`${period}  ·  ${nowStr()}`, { x: 10.0, y: 0.5, w: 2.9, h: 0.4, fontSize: 8.5, color: MUTED, align: 'right' })
   }
+  const footerText = brand.footer_text || `${company}  ·  Fleet Operations Report  ·  Confidential`
   function footer(slide, idx) {
-    slide.addText(`${company}  ·  Fleet Operations Report  ·  Confidential`, { x: 0.4, y: 7.15, w: 9, h: 0.3, fontSize: 7.5, color: MUTED })
+    slide.addText(footerText, { x: 0.4, y: 7.15, w: 11.8, h: 0.3, fontSize: 7.5, color: MUTED })
     slide.addText(String(idx), { x: 12.4, y: 7.15, w: 0.6, h: 0.3, fontSize: 7.5, color: MUTED, align: 'right' })
   }
   function kpiTile(slide, x, y, w, label, value, color, sub) {
@@ -1658,18 +1719,23 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
   const trendDir = trendDelta > 0 ? 'rising' : trendDelta < 0 ? 'easing' : 'flat'
   let slideNo = 0
 
+  // Tenant logo (best-effort; null if missing/blocked — never breaks the deck).
+  const logoData = await fetchImageDataUri(brand.logo_url)
+
   // ── Slide 1: Cover ─────────────────────────────────────────────────────────
   const s1 = pptx.addSlide()
   s1.background = { color: CARD }
   s1.addShape(rect, { x: 0, y: 0, w: 4.55, h: 7.5, fill: { color: 'F1F4FB' } })
   s1.addShape(rect, { x: 0, y: 0, w: 0.18, h: 7.5, fill: { color: INDIGO } })
   s1.addShape(rect, { x: 4.55, y: 0, w: 0.03, h: 7.5, fill: { color: BORDER } })
+  if (logoData) s1.addImage({ data: logoData, x: 0.6, y: 0.5, w: 1.05, h: 1.05, sizing: { type: 'contain', w: 1.05, h: 1.05 } })
   s1.addText(company.toUpperCase(), { x: 0.6, y: 1.5, w: 8, h: 0.5, fontSize: 12, bold: true, color: INDIGO, charSpacing: 2 })
   s1.addText('Fleet Operations Report', { x: 0.58, y: 2.1, w: 9, h: 1.6, fontSize: 42, bold: true, color: INK })
   s1.addText(period, { x: 0.6, y: 3.75, w: 8.5, h: 0.6, fontSize: 18, color: SLATE })
   s1.addShape(rect, { x: 0.62, y: 4.5, w: 1.6, h: 0.06, fill: { color: GOLD } })
   s1.addText(`Generated ${nowStr()}${data.generatedBy ? `   ·   Prepared by ${data.generatedBy}` : ''}`, { x: 0.6, y: 4.7, w: 8.5, h: 0.4, fontSize: 11, color: MUTED })
-  s1.addText('CONFIDENTIAL - FOR MANAGEMENT REVIEW', { x: 0.6, y: 6.8, w: 8, h: 0.4, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
+  s1.addText('CONFIDENTIAL - FOR MANAGEMENT REVIEW', { x: 0.6, y: 6.7, w: 8, h: 0.3, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
+  if (brand.disclaimer) s1.addText(String(brand.disclaimer).slice(0, 220), { x: 0.6, y: 7.0, w: 3.7, h: 0.45, fontSize: 6.5, color: MUTED, italic: true })
   const coverKpis = [
     { l: 'Vehicles', v: (data.totalVehicles ?? 0).toLocaleString(), c: INDIGO },
     { l: 'Tyres',    v: totalT.toLocaleString(),                     c: EMER },

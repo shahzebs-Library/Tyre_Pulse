@@ -1,6 +1,6 @@
 # TyrePulse - Session Handoff
 
-_Last updated: 2026-07-02 (late) · branch `main` (clean, fully pushed) · migrations V40→V67 live · P2 CLOSED · multi-org onboarding LIVE_
+_Last updated: 2026-07-03 · branch `main` (clean, fully pushed) · migrations V40→V68 live · Master Build Phase A (branding) + Phase C (export fix) DONE · 714 web tests green_
 
 ## TL;DR
 The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.js/DB migration on this track). The **Multi-Country Data Intake Center** (+ its 4 follow-on gaps), most of the `Current issues fixing.md` program (Phases 0-3, plus Phase 5 KPI registry + nav regroup), **the P0/P1 fixes from `docs/PROJECT_AUDIT_2026-07.md`** (mobile accident/offline/sync/logout, web error states, security V57-V59), **per-row-resilient import commits (V60)** and **the 5 real company formats** (`docs/imports/` - auto-recognised profiles, cost-of-record rule, line-item aggregation) are built, **tested, and on `main`**. The Go backend and native Android app stay **off `main`** on their own branches (frozen, not abandoned).
@@ -16,7 +16,7 @@ The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.j
 - **Verify columns/constraints against the live schema** before writing any query/RPC (generated columns, CHECK constraints, status enums are easy to get wrong). Every applied migration here was proven by a self-asserting `BEGIN...ROLLBACK` SQL test first.
 - Backward-compatible only; no table drops without migration + reconciliation + rollback.
 - **No fabricated values** - actual data only; missing cost/metric → 0 or "-", never a settings default.
-- Gate after every change: `npm run test:run` · `npx vite build` · `cd mobile && npm run typecheck`. Currently **709 web tests green**; build green; **mobile typecheck fully clean** (expo-notifications/expo-device now installed). CI runs this gate on every push (`.github/workflows/ci.yml`).
+- Gate after every change: `npm run test:run` · `npx vite build` · `cd mobile && npm run typecheck`. Currently **714 web tests green**; build green; **mobile typecheck fully clean** (expo-notifications/expo-device now installed). CI runs this gate on every push (`.github/workflows/ci.yml`).
 - Country isolation is sacred; files stay private (signed URLs); no service-role/AI/storage keys in web or mobile.
 - Push `git push -u origin main`. No PR unless asked.
 
@@ -42,23 +42,29 @@ The Expo/Vite/Supabase stack is being **hardened in place** (no Go/Kotlin/Next.j
 
 ### Master Build program (owner directive - docs/"Master Build...Instruction.md")
 Standards for an enterprise multi-tenant product. Phased plan (see the doc):
-- **A. Tenant Branding** (next): typed branding in organisations.settings (logo,
-  colours, currency, date/units/timezone, header/footer/disclaimer, signatures,
-  default filters) + set_org_branding RPC + TenantContext + Org Branding admin
-  page; wired into app accent, dashboards, PDF, PPTX, email.
-- **B. Branded PDF engine** (cover, repeating headers, landscape, page numbers,
-  footer/disclaimer/signatures, data-source/filters line, print-readable charts).
-- **C. Branded PowerPoint engine + fix the download** (investigate MIME/blob/open,
-  reusable 12-slide management deck).
+- **A. Tenant Branding** — **DONE (V68, pushed).** get_org_branding /
+  set_org_branding RPCs storing branding in organisations.settings->'branding'
+  (legal/brand name, primary/secondary/accent colours, logo, report theme,
+  footer, disclaimer, contact block); admin-gated + server-validated + audited;
+  read-scoped to own org for non-admins. `src/lib/api/branding.js` (+5 tests),
+  `TenantContext` (app-wide + --brand-primary/--brand-accent CSS vars),
+  `OrgBrandingPanel` → **Branding tab in User Management**. Dashboard reports
+  use the tenant legal/brand name. **Owner action: open User Management →
+  Branding and fill each org's logo/colours/legal name/footer/disclaimer.**
+- **C. PowerPoint download fix** — **DONE (pushed).** Root cause was the missing
+  caller-side try/catch + no loading feedback (generation itself was verified
+  sound). All Dashboard exports now run through a shared runExport() wrapper
+  (spinner + success/error toast + concurrency lock).
+- **B. Branded PDF/PPTX engine** (NEXT): thread the stored branding
+  colours + logo into exportUtils generators (cover, accent bars, headers,
+  footer/disclaimer) so reports visually carry the tenant identity, not just the
+  name. Self-contained in `src/lib/exportUtils.js`.
 - **D. Report Center** (saved templates, filters, preview, history, snapshots -
   builds on scheduled reports + report_send_log).
 - **E. Design system** (tokens, tenant theme, light default, a11y, states).
 - **F. Docs set** (PROJECT_OVERVIEW / ARCHITECTURE / DATA_DICTIONARY /
   REPORTING_GUIDE / BRANDING_AND_REPORT_SETTINGS / INTEGRATIONS /
   TESTING_AND_RELEASE / CHANGELOG + CLAUDE.md) - maintained each phase.
-Owner input needed before Phase A: per-org branding assets (logo/colours/legal
-name/footer/disclaimer) and light-vs-dark report default; and confirm start at
-Phase A (branding) vs Phase C first (PowerPoint download is flagged broken).
 
 ### 2026-07-02 night - export work + P2 wave (see CHANGELOG_ENGINEERING.md)
 - **Export libs lazy-loaded:** xlsx/jspdf/pptxgenjs are async chunks loading on

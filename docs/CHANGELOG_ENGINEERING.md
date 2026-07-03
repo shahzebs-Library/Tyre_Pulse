@@ -235,3 +235,20 @@ mobile deps synced - typecheck now fully clean.
 - Remaining review items (#2 sidebar, #4 cards, #10 table features, #11–13
   layout/charts, #18 flows) are subjective per-page design work — to be done
   deliberately, not a blind mass rewrite. Gate: 730 tests green, build clean.
+
+## 2026-07-03 (later) — UI/UX audit round 2: fit, contrast, responsiveness (main, pushed)
+- **Fit (#1)**: Scheduled Reports + 14 pages wrapped their own content in a
+  redundant `min-h-screen bg-gray-950 p-6` root and/or an inner
+  `max-w-screen-2xl/6xl` cap narrower than the app shell — so they floated
+  centred with big margins. Removed the self-wrappers; raised inner caps to the
+  global 1800px. Centered loading/error wrappers left intact.
+- **Contrast / legibility (dark bg, light fonts)**: lifted the muted/dim text
+  tokens (`--text-dim` was `#3a4840` ≈ 1.8:1 — invisible) and Tailwind
+  `text-gray-600/700` in dark mode (unlayered rules beat Tailwind's layered
+  utility; `html.light !important` keeps light mode). Also lifts the sidebar's
+  dim inactive labels (#2).
+- **Responsive grids (#16)**: 40 fixed `grid-cols-3/4/5` across 24 pages had no
+  mobile base → cramped/clipped on phones. Added `grid-cols-1/2` base with the
+  count preserved from `sm:` up — **desktop byte-identical**, only <640px reflows.
+- Repo auto-deploys to Vercel on push to `main`, so these land live. Gate: 730
+  tests green, web build clean throughout.

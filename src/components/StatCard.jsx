@@ -53,6 +53,32 @@ const ACCENTS = {
   },
 }
 
+// Lightweight inline sparkline (pure SVG, no chart lib). `data` = number[].
+function Sparkline({ data, stroke = '#4ade80', width = 96, height = 26 }) {
+  const nums = (data || []).map(n => Number(n)).filter(n => Number.isFinite(n))
+  if (nums.length < 2) return null
+  const min = Math.min(...nums), max = Math.max(...nums)
+  const span = max - min || 1
+  const stepX = width / (nums.length - 1)
+  const pts = nums.map((n, i) => [i * stepX, height - ((n - min) / span) * (height - 3) - 1.5])
+  const line = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  const area = `${line} L${width},${height} L0,${height} Z`
+  const gid = `sg-${stroke.replace('#', '')}`
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="mt-2.5 overflow-visible" aria-hidden="true">
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gid})`} />
+      <path d={line} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="2" fill={stroke} />
+    </svg>
+  )
+}
+
 function useCountUp(target, duration = 900) {
   const [val, setVal] = useState(0)
   const raf  = useRef(null)
@@ -82,9 +108,12 @@ function useCountUp(target, duration = 900) {
   return val
 }
 
+// Bar gradient start colour per accent → used as the sparkline stroke.
+const SPARK_STROKE = { green: '#4ade80', blue: '#60a5fa', yellow: '#fbbf24', red: '#f87171', purple: '#c084fc', orange: '#fb923c' }
+
 export default function StatCard({
   label, value, sub, icon: Icon,
-  color = 'green', trend, href, onClick,
+  color = 'green', trend, trendLabel = 'vs last period', spark, href, onClick,
 }) {
   const c = ACCENTS[color] ?? ACCENTS.green
 
@@ -157,8 +186,13 @@ export default function StatCard({
               ? <TrendingDown size={11} strokeWidth={2.5} />
               : <Minus size={11} strokeWidth={2.5} />
           }
-          <span>{Math.abs(trend)}% vs last period</span>
+          <span>{Math.abs(trend)}%{trendLabel ? ` ${trendLabel}` : ''}</span>
         </div>
+      )}
+
+      {/* sparkline */}
+      {Array.isArray(spark) && spark.length > 1 && (
+        <Sparkline data={spark} stroke={SPARK_STROKE[color] ?? SPARK_STROKE.green} />
       )}
 
       {/* bottom prismatic bar */}

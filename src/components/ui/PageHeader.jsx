@@ -1,7 +1,19 @@
 import { motion } from 'framer-motion'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Clock } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { useLanguage } from '../../contexts/LanguageContext'
+
+// "Updated 2 minutes ago" style relative time (compact, dependency-free).
+function relativeTime(ts) {
+  if (!ts) return null
+  const d = ts instanceof Date ? ts : new Date(ts)
+  if (Number.isNaN(d.getTime())) return null
+  const s = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000))
+  if (s < 45) return 'just now'
+  const m = Math.round(s / 60); if (m < 60) return `${m} min ago`
+  const h = Math.round(m / 60); if (h < 24) return `${h} h ago`
+  const dd = Math.round(h / 24); return `${dd} d ago`
+}
 
 /**
  * PageHeader - standard premium page header used across all pages.
@@ -20,9 +32,11 @@ export default function PageHeader({
   actions,
   onRefresh,
   refreshing = false,
+  updatedAt,
   className,
 }) {
   const { t } = useLanguage()
+  const rel = relativeTime(updatedAt)
   return (
     <motion.div
       initial={{ opacity: 0, y: -8 }}
@@ -54,6 +68,11 @@ export default function PageHeader({
 
       {/* Right */}
       <div className="flex items-center gap-2 flex-wrap">
+        {rel && (
+          <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-muted px-2.5 py-1 rounded-lg bg-gray-800/40 border border-white/5">
+            <Clock className="w-3 h-3 opacity-70" /> Updated {rel}
+          </span>
+        )}
         {onRefresh && (
           <button
             onClick={onRefresh}

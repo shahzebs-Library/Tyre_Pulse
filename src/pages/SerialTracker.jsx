@@ -4,6 +4,7 @@ import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import { ScanLine, Search, Download, FileText, Upload } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 
 function SearchSkeleton() {
   return (
@@ -329,10 +330,12 @@ export default function SerialTracker() {
           {loading && <SearchSkeleton />}
 
           {!loading && searched && records.length === 0 && (
-            <div className="card text-center py-12">
-              <ScanLine size={32} className="text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400">No records found for serial number <span className="text-white font-mono">"{lastQuery}"</span></p>
-              <p className="text-gray-600 text-sm mt-1">Check spelling and capitalisation</p>
+            <div className="card">
+              <EmptyState
+                icon={ScanLine}
+                title="No records found"
+                description={`No tyre records match serial "${lastQuery}". Check spelling and capitalisation.`}
+              />
             </div>
           )}
 
@@ -527,9 +530,12 @@ export default function SerialTracker() {
               )}
 
               {bulkResults.length === 0 ? (
-                <div className="card text-center py-10">
-                  <p className="text-gray-400">No serial numbers could be extracted from the file.</p>
-                  <p className="text-gray-600 text-sm mt-1">Check that the file has a recognised column header.</p>
+                <div className="card">
+                  <EmptyState
+                    icon={FileText}
+                    title="No serials found"
+                    description="No serial numbers could be extracted from the file. Check that it has a recognised column header."
+                  />
                 </div>
               ) : filteredBulkResults.length === 0 ? (
                 <div className="card text-center py-10">

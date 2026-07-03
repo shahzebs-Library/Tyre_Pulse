@@ -10,6 +10,7 @@ import {
   Download, Search, RefreshCw, Activity, Upload,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 import { gatePasses } from '../lib/api'
 
 const STATUS_CONFIG = {
@@ -473,12 +474,12 @@ export default function GatePass() {
         {logTab === 'history' && historyLoading ? (
           <div className="text-center py-8 text-gray-500">Loading...</div>
         ) : filteredPassList.length === 0 ? (
-          <div className="text-center py-8">
-            <ShieldCheck size={28} className="text-gray-700 mx-auto mb-2" />
-            <p className="text-gray-500 text-sm">
-              {logSearch ? 'No passes match the search' : logTab === 'today' ? 'No gate passes recorded today yet' : `No gate passes found for ${activeDateLabel}`}
-            </p>
-          </div>
+          <EmptyState
+            icon={ShieldCheck}
+            title="No gate passes"
+            description={logSearch ? 'No passes match the search' : logTab === 'today' ? 'No gate passes recorded today yet' : `No gate passes found for ${activeDateLabel}`}
+            compact
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

@@ -8,6 +8,7 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
 import { formatDate } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 import {
   Building2, Star, TrendingUp, TrendingDown, Minus, Award, AlertTriangle,
   CheckCircle, Clock, Search, Filter, Download, FileText, FileSpreadsheet,
@@ -1136,11 +1137,11 @@ export default function SupplierManagement() {
         {activeTab === 0 && (
           <motion.div key="dir" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             {filteredSuppliers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-600">
-                <Building2 size={40} className="mb-3 opacity-30" />
-                <p className="font-medium">No suppliers found</p>
-                <p className="text-sm mt-1">Adjust your filters or upload tyre records</p>
-              </div>
+              <EmptyState
+                icon={Building2}
+                title="No suppliers found"
+                description="Adjust your filters or upload tyre records to see suppliers here."
+              />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filteredSuppliers.map((supplier, idx) => {
@@ -1249,11 +1250,11 @@ export default function SupplierManagement() {
             </div>
 
             {compareList.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-600">
-                <BarChart3 size={40} className="mb-3 opacity-30" />
-                <p className="font-medium">Select suppliers to compare</p>
-                <p className="text-sm mt-1">Choose up to 4 suppliers from the list above</p>
-              </div>
+              <EmptyState
+                icon={BarChart3}
+                title="Select suppliers to compare"
+                description="Choose up to 4 suppliers from the list above to see a side-by-side comparison."
+              />
             ) : (
               <>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -1441,11 +1442,11 @@ export default function SupplierManagement() {
                 <button onClick={fetchContracts} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">Retry</button>
               </div>
             ) : filteredContracts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-600">
-                <FileCheck size={40} className="mb-3 opacity-30" />
-                <p className="font-medium">No contracts found</p>
-                <p className="text-sm mt-1">Add supplier contracts to track expiry and terms</p>
-              </div>
+              <EmptyState
+                icon={FileCheck}
+                title="No contracts found"
+                description="Add supplier contracts to track expiry and terms."
+              />
             ) : (
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
@@ -1522,11 +1523,11 @@ export default function SupplierManagement() {
               <span className="text-xs text-gray-600 ml-auto">Based on {records.length} tyre records</span>
             </div>
             {recommendations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-600">
-                <Zap size={40} className="mb-3 opacity-30" />
-                <p className="font-medium">No recommendations yet</p>
-                <p className="text-sm mt-1">Upload more tyre records to generate procurement intelligence</p>
-              </div>
+              <EmptyState
+                icon={Zap}
+                title="No recommendations yet"
+                description="Upload more tyre records to generate procurement intelligence."
+              />
             ) : (
               <div className="space-y-3">
                 {recommendations.map((rec, i) => {

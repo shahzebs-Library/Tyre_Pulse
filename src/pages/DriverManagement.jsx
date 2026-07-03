@@ -5,6 +5,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 import {
   User, Users, TrendingUp, TrendingDown, Award, AlertTriangle,
   BarChart2, Download, FileText, FileSpreadsheet, Search, Filter,
@@ -1059,10 +1060,11 @@ export default function DriverManagement() {
         </div>
 
         {visibleDrivers.length === 0 ? (
-          <div className="py-16 flex flex-col items-center gap-3 text-gray-600">
-            <User size={32} className="opacity-40" />
-            <p className="text-sm">No drivers found matching current filters</p>
-          </div>
+          <EmptyState
+            icon={User}
+            title="No drivers found"
+            description="No drivers match the current filters. Try adjusting your search or date range."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

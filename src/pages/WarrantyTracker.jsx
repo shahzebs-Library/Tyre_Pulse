@@ -24,6 +24,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { formatDate } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import EmptyState from '../components/EmptyState'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -991,7 +992,12 @@ export default function WarrantyTracker() {
               </tbody>
             </table>
             {brandPerf.length === 0 && (
-              <div className="flex items-center justify-center py-12 text-gray-500 text-sm">No brand data yet.</div>
+              <EmptyState
+                icon={BarChart3}
+                title="No brand data yet"
+                description="Brand warranty performance will appear once claims are recorded."
+                compact
+              />
             )}
           </div>
         </div>
@@ -1044,7 +1050,12 @@ export default function WarrantyTracker() {
                 )
               })}
               {failureCounts.every(f => f.count === 0) && (
-                <div className="text-gray-500 text-sm text-center py-8">No failure data yet.</div>
+                <EmptyState
+                  icon={Activity}
+                  title="No failure data yet"
+                  description="Average km at failure will appear once claims are recorded."
+                  compact
+                />
               )}
             </div>
           </div>

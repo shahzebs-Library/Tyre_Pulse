@@ -997,7 +997,7 @@ export default function Layout({ children }) {
           initial={{ opacity: 1, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-          className="p-5 max-w-screen-2xl mx-auto"
+          className="px-4 py-5 sm:px-6 xl:px-8 2xl:px-10 max-w-[1800px] mx-auto"
         >
           {children}
         </motion.div>

@@ -198,3 +198,21 @@ mobile deps synced - typecheck now fully clean.
   so default/unbranded orgs render byte-identical to before. Hand-tuned green
   component gradients left untouched by design. Documented in `DESIGN_SYSTEM.md`.
 - **Master Build program A–F now complete.** Gap analysis + handoff updated.
+
+## 2026-07-03 (later) — Report quality: brand + empty-states on every PDF (main, pushed)
+- **User cleanup**: removed the 3 non-admin accounts (kept only the super-admin);
+  cleared their NO-ACTION audit refs first so the cascade delete was clean.
+- **V69**: unified login by email / username / employee code (case-insensitive
+  resolver + unique indexes) with a single login field.
+- **Shared branded-PDF engine**: `exportToPdf` (backs ~40 pages) now brands with
+  the tenant logo + accent + footer and renders a professional empty-state panel
+  instead of a bare table when there are no rows. New `_pdfBrand`/`_emptyStatePanel`/
+  `_tableTheme` internals + exported API (`resolvePdfBrand`/`pdfHeader`/`pdfFooter`/
+  `pdfEmptyState`/`pdfTableTheme`). New centralized `exportDailyOpsBriefingPdf`.
+- **Page-local sweep (5 parallel agents)**: all 24 bespoke jsPDF document
+  generators (Executive Report, Work-Order job card, Purchase Order, compliance
+  certificate, budget/KPI/recall/warranty/retread/rotation/scrap/transfer/
+  pressure/downtime/fuel/benchmark reports, etc.) migrated to the shared branded
+  header/footer/table-theme + empty-states. Non-report layouts correctly left
+  intact (QR label sheet, formal warranty-claim letter). Net −166 lines.
+- Gate: 730 web tests green · web build clean · mobile typecheck clean.

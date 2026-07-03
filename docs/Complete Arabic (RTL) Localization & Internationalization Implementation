@@ -1,0 +1,371 @@
+## Complete Arabic (RTL) Localization & Internationalization Implementation
+
+Implement a complete production-grade Arabic localization system for the entire Tyre Pulse application. This is not just text translation. The application must behave like a native Arabic enterprise application used across Saudi Arabia, UAE, Qatar, Kuwait, Bahrain, Oman, and other Arabic-speaking countries.
+
+### Internationalization (i18n)
+
+* Audit every page, component, dialog, modal, form, table, chart, notification, email template, PDF report, and exported document.
+* Remove all hardcoded English text.
+* Store every visible string in localization files.
+* Support dynamic language switching without requiring users to log out.
+* Remember the user's preferred language.
+* Default language should be selected based on the user's country or browser language on first login.
+
+### Right-to-Left (RTL) Layout
+
+Implement full RTL support across the entire application.
+
+When Arabic is selected:
+
+* Entire application switches to RTL.
+* Sidebar moves to the right.
+* Navigation drawers open from the right.
+* Menus align correctly.
+* Dialogs respect RTL.
+* Cards align naturally.
+* Forms mirror correctly.
+* Tables support RTL reading.
+* Charts keep numeric values readable while respecting RTL layouts.
+* Timeline components reverse direction where appropriate.
+* Breadcrumbs reverse correctly.
+* Stepper components flow right-to-left.
+* Icons that indicate direction (back, next, expand, collapse, arrows) automatically mirror where appropriate.
+* Pagination controls reverse correctly.
+* Carousels and onboarding slides work naturally in RTL.
+
+### Typography
+
+Use fonts optimized for Arabic.
+
+Examples:
+
+* IBM Plex Sans Arabic
+* Cairo
+* Tajawal
+* Noto Sans Arabic
+
+Define typography separately for Arabic and English.
+
+Adjust:
+
+* Font size
+* Line height
+* Letter spacing
+* Font weights
+
+Ensure Arabic text never overlaps UI elements.
+
+### Layout Rules
+
+Every page must be audited.
+
+Verify:
+
+* Margins
+* Padding
+* Grid layouts
+* Flex layouts
+* Alignment
+* Button groups
+* Input groups
+* Toolbars
+* Search bars
+* Filter panels
+* Tabs
+* Cards
+* Charts
+* Reports
+* Tables
+
+Replace all left/right CSS with logical properties such as:
+
+* margin-inline-start
+* margin-inline-end
+* padding-inline-start
+* padding-inline-end
+* inset-inline-start
+* inset-inline-end
+* text-align: start/end
+
+Avoid hardcoded left/right positioning.
+
+### Forms
+
+Mirror all forms correctly.
+
+Labels
+
+Inputs
+
+Dropdowns
+
+Checkboxes
+
+Radio buttons
+
+Switches
+
+Date pickers
+
+Time pickers
+
+Validation messages
+
+Required indicators
+
+Icons
+
+Prefix/suffix elements
+
+Password visibility buttons
+
+Phone number inputs
+
+Search fields
+
+Autocomplete
+
+### Tables
+
+Support RTL without breaking usability.
+
+Headers
+
+Sorting icons
+
+Filters
+
+Sticky columns
+
+Pagination
+
+Bulk actions
+
+Selection checkboxes
+
+Context menus
+
+Expandable rows
+
+Numeric columns should remain easy to read.
+
+### Dashboards
+
+Audit every dashboard.
+
+Charts should support:
+
+Arabic labels
+
+RTL legends
+
+RTL tooltips
+
+RTL filters
+
+RTL drill-down panels
+
+Numbers should remain readable while labels are Arabic.
+
+### Reports
+
+Executive Report
+
+Fleet Analytics
+
+Inspection Reports
+
+PDF Reports
+
+Excel Exports
+
+Emails
+
+Print Layouts
+
+Everything should support Arabic correctly.
+
+Page numbers
+
+Headers
+
+Footers
+
+Logos
+
+Tables
+
+Charts
+
+Recommendations
+
+Signatures
+
+### Icons
+
+Automatically mirror directional icons.
+
+Back
+
+Forward
+
+Expand
+
+Collapse
+
+Chevron
+
+Breadcrumb arrows
+
+Timeline arrows
+
+Do NOT mirror universal icons such as:
+
+Search
+
+Home
+
+Print
+
+Download
+
+Upload
+
+Settings
+
+Notifications
+
+### Numbers
+
+Support both:
+
+Western digits (123456)
+
+Arabic-Indic digits (١٢٣٤٥٦)
+
+Allow configuration based on customer preference.
+
+Support:
+
+Currency
+
+Percentages
+
+Kilometres
+
+Tyre sizes
+
+Pressure values
+
+Dates
+
+Times
+
+Measurements
+
+### Dates
+
+Support:
+
+Gregorian
+
+Hijri (optional future support)
+
+Arabic month names
+
+Arabic weekday names
+
+Regional formatting
+
+### Country-Specific Localization
+
+Support country-specific settings including:
+
+Saudi Arabia
+
+United Arab Emirates
+
+Qatar
+
+Kuwait
+
+Bahrain
+
+Oman
+
+Egypt
+
+Allow each country to configure:
+
+Currency
+
+Date format
+
+Timezone
+
+Measurement units
+
+Business rules
+
+Language defaults
+
+Phone number formats
+
+### Performance
+
+RTL support must not duplicate components.
+
+Use one shared component library that adapts automatically.
+
+Avoid maintaining separate English and Arabic versions of the same page.
+
+### Testing
+
+Audit every screen in:
+
+English LTR
+
+Arabic RTL
+
+Desktop
+
+Tablet
+
+Mobile
+
+PWA
+
+Dark Mode
+
+Light Mode
+
+Verify:
+
+No overflow
+
+No clipped text
+
+No broken layouts
+
+No overlapping buttons
+
+No reversed charts
+
+No incorrect icon directions
+
+No spacing issues
+
+### Deliverables
+
+* Complete RTL audit report
+* List of every component requiring changes
+* Updated localization architecture
+* Translation key structure
+* Theme updates
+* RTL implementation plan
+* Component fixes
+* Responsive validation
+* Accessibility validation
+* Testing checklist
+
+The final application should feel like it was originally designed for Arabic users, not translated afterwards. Every screen should provide a natural, professional, enterprise-quality experience in both English (LTR) and Arabic (RTL) using a single maintainable codebase.

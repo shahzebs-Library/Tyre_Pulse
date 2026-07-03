@@ -419,6 +419,24 @@ export default function Dashboard() {
     }
   }, [rawTyres, t])
 
+  // Real 6-month series for the KPI-card sparklines (never fabricated — derived
+  // straight from the loaded records). Only metrics with a genuine time series
+  // get a sparkline; stock/actions have none here and stay sparkline-free.
+  const sparkSeries = useMemo(() => {
+    const now = new Date()
+    const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1); return { y: d.getFullYear(), m: d.getMonth() + 1 } })
+    const inM = (t, y, m) => inMonth(t, y, m)
+    const tyresS = months.map(({ y, m }) => rawTyres.filter(t => inM(t, y, m)).length)
+    const costS  = months.map(({ y, m }) => Math.round(rawTyres.filter(t => inM(t, y, m)).reduce((s, t) => s + recordCost(t), 0)))
+    const riskS  = months.map(({ y, m }) => rawTyres.filter(t => inM(t, y, m) && ['Critical', 'High'].includes(t.risk_level)).length)
+    const hasSpread = arr => arr.some(v => v > 0) && new Set(arr).size > 1
+    return {
+      tyres: hasSpread(tyresS) ? tyresS : null,
+      cost:  hasSpread(costS)  ? costS  : null,
+      risk:  hasSpread(riskS)  ? riskS  : null,
+    }
+  }, [rawTyres])
+
   /* Centralised export runner: disables the button, shows progress, surfaces
      any error to the user (exports lazy-load heavy libs and can fail on slow
      networks, pop-up blockers, or empty data — never leave a silent dead button). */
@@ -717,15 +735,15 @@ export default function Dashboard() {
       {/* ── KPI METRICS ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
         {[
-          { to:'/tyres',    label:t('dashboard.kpi.tyreRecords'), value:stats.tyres,   icon:CircleDot,     color:'blue'   },
+          { to:'/tyres',    label:t('dashboard.kpi.tyreRecords'), value:stats.tyres,   icon:CircleDot,     color:'blue',   spark:sparkSeries.tyres },
           { to:'/stock',    label:t('dashboard.kpi.stockSites'),  value:stats.stock,   icon:Package,       color:'green'  },
           { to:'/actions',  label:t('dashboard.kpi.openActions'), value:stats.actions, icon:ClipboardList, color:'yellow' },
-          { to:'/anomalies',label:t('dashboard.kpi.highRisk'),    value:`${stats.critical} (${stats.tyres?((stats.critical/stats.tyres)*100).toFixed(1):0}%)`, icon:AlertTriangle, color:'red' },
-          { to:'/analytics',label:t('dashboard.kpi.totalCost'),   value:`${activeCurrency} ${(stats.cost/1000).toFixed(0)}K`, icon:DollarSign, color:'purple' },
-        ].map(({ to, label, value, icon, color }, i) => (
+          { to:'/anomalies',label:t('dashboard.kpi.highRisk'),    value:`${stats.critical} (${stats.tyres?((stats.critical/stats.tyres)*100).toFixed(1):0}%)`, icon:AlertTriangle, color:'red',    spark:sparkSeries.risk },
+          { to:'/analytics',label:t('dashboard.kpi.totalCost'),   value:`${activeCurrency} ${(stats.cost/1000).toFixed(0)}K`, icon:DollarSign, color:'purple', spark:sparkSeries.cost },
+        ].map(({ to, label, value, icon, color, spark }, i) => (
           <motion.div key={to} initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }} transition={{ delay: i * 0.06, duration: 0.4, ease:[0.22,1,0.36,1] }}>
             <Link to={to} className="block">
-              <StatCard label={label} value={value} icon={icon} color={color} />
+              <StatCard label={label} value={value} icon={icon} color={color} spark={spark} />
             </Link>
           </motion.div>
         ))}

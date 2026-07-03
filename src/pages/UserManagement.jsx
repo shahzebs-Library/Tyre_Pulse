@@ -5,11 +5,12 @@ import {
   Users, Search, Edit2, Trash2, CheckCircle, XCircle, Shield,
   Activity, LayoutGrid, ChevronDown, UserCheck, UserX,
   AlertTriangle, Globe, Calendar, Hash, X, Copy, Terminal, Info,
-  Phone, MapPin, FileText, Lock, Mail, LogIn, Clock
+  Phone, MapPin, FileText, Lock, Mail, LogIn, Clock, Palette
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import AccessControlMatrix from '../components/AccessControlMatrix'
+import OrgBrandingPanel from '../components/OrgBrandingPanel'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -745,6 +746,7 @@ export default function UserManagement() {
         {[
           { id: 'users',    label: 'Users',        icon: Users    },
           { id: 'matrix',   label: 'Access Control', icon: LayoutGrid  },
+          { id: 'branding', label: 'Branding',     icon: Palette  },
           { id: 'activity', label: 'Activity',      icon: Activity },
         ].map(({ id, label, icon: Icon }) => (
           <button
@@ -1035,6 +1037,13 @@ export default function UserManagement() {
       {/* ── ACCESS MATRIX TAB ────────────────────────────────────────────────── */}
       {activeTab === 'matrix' && (
         <AccessControlMatrix canEdit={isAdmin} />
+      )}
+
+      {/* ── BRANDING TAB ─────────────────────────────────────────────────────── */}
+      {activeTab === 'branding' && (
+        <div className="card">
+          <OrgBrandingPanel canEdit={isAdmin || !!currentProfile?.is_super_admin} />
+        </div>
       )}
 
       {activeTab === '__legacy_matrix__' && (

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTenant } from '../contexts/TenantContext'
 import { applyCountry } from '../lib/countryFilter'
 import StatCard from '../components/StatCard'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
@@ -155,6 +156,10 @@ function RiskBadge({ level }) {
 export default function Dashboard() {
   const { profile } = useAuth()
   const { appSettings, activeCountry, activeCurrency } = useSettings()
+  const { branding } = useTenant()
+  // Tenant identity for generated reports: legal/brand name falls back to the
+  // global company name, then a safe default. Never blocks export on absence.
+  const reportCompany = branding?.legal_name || branding?.display_name || appSettings.company_name || 'TyrePulse'
 
   const [rawTyres, setRawTyres]       = useState([])
   const [summary, setSummary]         = useState(null)
@@ -431,14 +436,14 @@ export default function Dashboard() {
       tyres.map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre||0, total_cost: recordCost(t) })),
       ['issue_date','asset_no','brand','site','category','risk_level','cost_per_tyre'],
       ['Date','Asset No','Brand','Site','Category','Risk Level',`Cost (${activeCurrency})`],
-      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'Dashboard'))
+      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'Dashboard', { company: reportCompany }))
   }
   function handlePdfExport() {
     return runExport('pdf', () => exportToPdf(
       tyres.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre||0 })),
       [{ key:'issue_date',header:'Date',width:24 },{ key:'asset_no',header:'Asset No',width:28 },{ key:'brand',header:'Brand',width:24 },{ key:'site',header:'Site',width:30 },{ key:'category',header:'Category',width:32 },{ key:'risk_level',header:'Risk',width:20 },{ key:'cost_per_tyre',header:`Cost (${activeCurrency})`,width:24 }],
       `TyrePulse Dashboard Report · ${formatDate(new Date(), activeCountry)}`,
-      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'landscape'))
+      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'landscape', reportCompany))
   }
   function handlePptxExport() {
     return runExport('pptx', pptxExportTask)
@@ -482,7 +487,7 @@ export default function Dashboard() {
       recentActions: actions, insights, recommendations,
       period: now.toLocaleString('default',{month:'long',year:'numeric'}),
       generatedBy: profile?.full_name || profile?.username || 'Fleet Manager',
-      company: appSettings.company_name||'TyrePulse',
+      company: reportCompany,
     }, `TyrePulse_Report_${now.toISOString().slice(0,10)}`)
   }
 
@@ -526,7 +531,7 @@ export default function Dashboard() {
 
     exportDailyExecutivePdf({
       date: formatDate(now, activeCountry, { day: '2-digit', month: 'long', year: 'numeric' }),
-      company: appSettings.company_name || 'TyrePulse Fleet',
+      company: reportCompany,
       reportPeriod: 'Daily',
       currency: activeCurrency,
       generatedBy: profile?.full_name || profile?.username || 'Fleet Manager',

@@ -122,3 +122,31 @@ mobile deps synced - typecheck now fully clean.
   12-arg overload dropped. All rolled-back-verified.
 - Read docs/"Master Build…Instruction.md" (owner directive: tenant branding,
   Report Center, PDF/PPTX quality, docs discipline) — folded into the backlog.
+
+## 2026-07-03 — Master Build Phase C + Phase A (main, pushed)
+**Phase C — resilient exports (fixes owner's "PowerPoint download not working"):**
+- Root cause: the Dashboard export handlers had no try/catch or loading feedback,
+  so a lazy-lib load, pop-up block, or empty dataset left a silent dead button.
+  PPTX generation itself was verified sound (valid .pptx produced for empty and
+  full datasets in a Node harness).
+- All four handlers (Excel/PDF/PPTX/Daily) now run through a shared `runExport()`
+  wrapper: disables the button, shows an in-flight spinner ("Exporting…"/
+  "Building…"), and surfaces success/error via a toast. Concurrent clicks blocked.
+
+**Phase A — tenant branding foundation (V68):**
+- **V68** RPCs `get_org_branding` / `set_org_branding` (+ `_is_hex_color` helper).
+  Branding lives in `organisations.settings->'branding'` (legal name, brand name,
+  primary/secondary/accent colours, logo URL, report theme, footer, disclaimer,
+  contact block). Writes gated to `app_is_org_admin()` (super OR Admin) via
+  SECURITY DEFINER with server-side hex/theme validation + audit event; reads
+  scoped so a non-admin only sees their own org (`IS DISTINCT FROM` guard closes
+  the null-org/anon hole). `anon` EXECUTE revoked explicitly. Rolled-back
+  self-asserting test proves store/merge/validation/whitelist.
+- Frontend: `src/lib/api/branding.js` (+5 unit tests), `contexts/TenantContext.jsx`
+  (app-wide branding, publishes `--brand-primary`/`--brand-accent` CSS vars,
+  never blocks on failure), `components/OrgBrandingPanel.jsx` (admin editor with
+  org selector, colour pickers, live report-cover preview) mounted as a new
+  **Branding** tab in User Management. Dashboard reports now use the tenant legal/
+  brand name for the report `company` field (Excel/PDF/PPTX/Daily).
+- Gate: 714 tests green (709 + 5 branding), web build clean, advisors clean
+  (only the pre-existing generic SECURITY DEFINER / graphql-exposure warnings).

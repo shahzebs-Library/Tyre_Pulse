@@ -4,6 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './lib/queryClient'
 import { AuthProvider } from './contexts/AuthContext'
 import { SettingsProvider } from './contexts/SettingsContext'
+import { TenantProvider } from './contexts/TenantContext'
 import { CommandPaletteProvider } from './contexts/CommandPaletteContext'
 import ProtectedRoute, { RoleRoute, ModuleRoute } from './components/ProtectedRoute'
 import { useAuth } from './contexts/AuthContext'
@@ -138,6 +139,7 @@ function MainApp() {
   return (
     <AuthProvider>
       <SettingsProvider>
+      <TenantProvider>
       <CommandPaletteProvider>
         <PwaUpdatePrompt />
         <Suspense fallback={<LoadingSpinner />}>
@@ -244,6 +246,7 @@ function MainApp() {
           </Routes>
         </Suspense>
       </CommandPaletteProvider>
+      </TenantProvider>
       </SettingsProvider>
     </AuthProvider>
   )

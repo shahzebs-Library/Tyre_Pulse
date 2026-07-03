@@ -1,0 +1,71 @@
+/**
+ * TenantContext — exposes the current user's organisation branding (logo,
+ * colours, legal name, report theme, footer, disclaimer, contact block) to the
+ * whole app. Branding is loaded once per session via the server-side
+ * `get_org_branding` RPC (V68), which returns only the caller's own org unless
+ * they are an org admin. Report/export code reads `branding` from here so every
+ * generated PDF/PPTX carries the tenant's identity.
+ *
+ * Non-destructive: the loaded primary/accent colours are published as
+ * `--brand-primary` / `--brand-accent` CSS variables for opt-in consumers; the
+ * existing global theme variables are left untouched.
+ */
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { useAuth } from './AuthContext'
+import { getOrgBranding, withBrandingDefaults } from '../lib/api/branding'
+
+const TenantContext = createContext({
+  branding: null,          // merged-with-defaults branding, or null before load
+  orgId: null,
+  orgName: null,
+  loading: true,
+  error: null,
+  refreshBranding: () => {},
+})
+
+export function TenantProvider({ children }) {
+  const { user, profile } = useAuth()
+  const [branding, setBranding] = useState(null)
+  const [orgId, setOrgId]       = useState(null)
+  const [orgName, setOrgName]   = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState(null)
+
+  const refreshBranding = useCallback(async () => {
+    if (!user) { setBranding(null); setLoading(false); return }
+    setLoading(true); setError(null)
+    try {
+      const raw = await getOrgBranding(null) // caller's own org
+      setOrgId(raw?.org_id ?? null)
+      setOrgName(raw?.name ?? null)
+      setBranding(withBrandingDefaults(raw))
+    } catch (err) {
+      // Branding is non-critical chrome — fall back to defaults, never block the app.
+      console.warn('[TenantContext] branding load failed:', err?.message || err)
+      setError(err?.message || 'Could not load branding')
+      setBranding(withBrandingDefaults(null))
+    } finally {
+      setLoading(false)
+    }
+  }, [user])
+
+  useEffect(() => { refreshBranding() }, [refreshBranding, profile?.org_id])
+
+  // Publish brand colours as opt-in CSS variables (never overrides global theme).
+  useEffect(() => {
+    if (!branding) return
+    const root = document.documentElement
+    if (branding.primary_color) root.style.setProperty('--brand-primary', branding.primary_color)
+    if (branding.accent_color)  root.style.setProperty('--brand-accent', branding.accent_color)
+  }, [branding])
+
+  return (
+    <TenantContext.Provider value={{ branding, orgId, orgName, loading, error, refreshBranding }}>
+      {children}
+    </TenantContext.Provider>
+  )
+}
+
+export function useTenant() {
+  return useContext(TenantContext)
+}

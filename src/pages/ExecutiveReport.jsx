@@ -1112,7 +1112,8 @@ export default function ExecutiveReport() {
               </div>
             </div>
 
-            <div className="bg-gray-950 border border-gray-800 rounded-xl p-5 space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+             <div className="lg:col-span-2 bg-gray-950 border border-gray-800 rounded-xl p-5 space-y-4">
               <div className="border-l-4 border-emerald-500 pl-4">
                 <p className="text-sm leading-relaxed text-gray-200">
                   During the <strong className="text-white">{PERIODS.find(p => p.key === period)?.label}</strong>,{' '}
@@ -1206,6 +1207,24 @@ export default function ExecutiveReport() {
                   Management attention is directed to the Recommendations and Action Plan sections for prioritised interventions.
                 </p>
               </div>
+             </div>
+
+             {/* Right: Key Highlights (saves vertical space — UI/UX #12) */}
+             <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col gap-2.5">
+               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Key Highlights</p>
+               {[
+                 { label: 'Fleet Availability',    value: fmtPct(kpis.fleetAvailability.availabilityPct),   good: kpis.fleetAvailability.availabilityPct >= 95 },
+                 { label: 'Inspection Compliance', value: fmtPct(kpis.inspectionCompliance.compliancePct),  good: kpis.inspectionCompliance.compliancePct >= 85 },
+                 { label: 'Failure Rate',          value: fmtPct(kpis.failureRate.failureRate * 100),        good: kpis.failureRate.failureRate <= 0.1 },
+                 { label: 'Avg Cost / km',         value: `${fmtCpk(kpis.cpk.fleetAvgCpk, currency)}`,       good: true, neutral: true },
+                 { label: 'Critical Alerts',       value: periodRecords.filter(r => r.risk_level === 'Critical').length.toLocaleString(), good: periodRecords.filter(r => r.risk_level === 'Critical').length === 0 },
+               ].map((h) => (
+                 <div key={h.label} className="bg-gray-900/60 border border-gray-800 rounded-lg px-3 py-2.5 flex items-center justify-between">
+                   <span className="text-xs text-gray-400">{h.label}</span>
+                   <span className={`text-base font-bold ${h.neutral ? 'text-white' : h.good ? 'text-emerald-400' : 'text-amber-400'}`}>{h.value}</span>
+                 </div>
+               ))}
+             </div>
             </div>
           </Card>
         </motion.div>

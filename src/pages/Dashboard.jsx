@@ -21,7 +21,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, Presentation, Minus,
   FileSpreadsheet, FileText, Search, X, Calendar, Activity, Clock,
   Bell, Upload, ClipboardCheck, Maximize2, Zap, ChevronRight,
-  BarChart2, Shield, Cpu, ArrowUpRight, RefreshCw,
+  BarChart2, Shield, Cpu, ArrowUpRight, RefreshCw, CheckCircle2,
 } from 'lucide-react'
 import { ChartModal } from '../components/ChartModal'
 import EmptyState from '../components/EmptyState'
@@ -171,6 +171,8 @@ export default function Dashboard() {
   const [recentRecords, setRecentRecords] = useState([])
   const [openActions, setOpenActions]     = useState([])
   const [expandedChart, setExpandedChart] = useState(null)
+  const [exporting, setExporting]         = useState(null) // 'excel' | 'pdf' | 'pptx' | 'daily' | null
+  const [exportMsg, setExportMsg]         = useState(null) // { text, type: 'ok' | 'err' }
 
   const pad = n => String(n).padStart(2, '0')
   const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
@@ -407,19 +409,41 @@ export default function Dashboard() {
     }
   }, [rawTyres])
 
+  /* Centralised export runner: disables the button, shows progress, surfaces
+     any error to the user (exports lazy-load heavy libs and can fail on slow
+     networks, pop-up blockers, or empty data — never leave a silent dead button). */
+  async function runExport(key, task) {
+    if (exporting) return
+    setExporting(key); setExportMsg(null)
+    try {
+      await task()
+      setExportMsg({ text: 'Report downloaded successfully.', type: 'ok' })
+    } catch (err) {
+      console.error(`[Dashboard] ${key} export failed:`, err)
+      setExportMsg({ text: `Export failed: ${err?.message || 'Could not generate the file. Please retry.'}`, type: 'err' })
+    } finally {
+      setExporting(null)
+    }
+  }
+
   function handleExcelExport() {
-    exportToExcel(tyres.map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre||0, total_cost: recordCost(t) })),
+    return runExport('excel', () => exportToExcel(
+      tyres.map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre||0, total_cost: recordCost(t) })),
       ['issue_date','asset_no','brand','site','category','risk_level','cost_per_tyre'],
       ['Date','Asset No','Brand','Site','Category','Risk Level',`Cost (${activeCurrency})`],
-      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'Dashboard')
+      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'Dashboard'))
   }
   function handlePdfExport() {
-    exportToPdf(tyres.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre||0 })),
+    return runExport('pdf', () => exportToPdf(
+      tyres.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre||0 })),
       [{ key:'issue_date',header:'Date',width:24 },{ key:'asset_no',header:'Asset No',width:28 },{ key:'brand',header:'Brand',width:24 },{ key:'site',header:'Site',width:30 },{ key:'category',header:'Category',width:32 },{ key:'risk_level',header:'Risk',width:20 },{ key:'cost_per_tyre',header:`Cost (${activeCurrency})`,width:24 }],
       `TyrePulse Dashboard Report · ${formatDate(new Date(), activeCountry)}`,
-      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'landscape')
+      `TyrePulse_Dashboard_${new Date().toISOString().slice(0,10)}`, 'landscape'))
   }
-  async function handlePptxExport() {
+  function handlePptxExport() {
+    return runExport('pptx', pptxExportTask)
+  }
+  async function pptxExportTask() {
     const now = new Date()
     const [{ data: sum }, actionRes] = await Promise.all([
       supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: dateFrom || null, p_to: dateTo || null }),
@@ -462,7 +486,10 @@ export default function Dashboard() {
     }, `TyrePulse_Report_${now.toISOString().slice(0,10)}`)
   }
 
-  async function handleDailyReportExport() {
+  function handleDailyReportExport() {
+    return runExport('daily', dailyReportTask)
+  }
+  async function dailyReportTask() {
     const now = new Date()
     const today      = now.toISOString().slice(0,10)
     const monthStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`
@@ -562,6 +589,27 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 animate-in">
 
+      {/* ── EXPORT TOAST ────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {exportMsg && (
+          <motion.div
+            key="export-toast"
+            initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
+            className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium shadow-lg"
+            style={{
+              background: exportMsg.type === 'ok' ? 'rgba(22,163,74,0.15)' : 'rgba(239,68,68,0.15)',
+              border: `1px solid ${exportMsg.type === 'ok' ? 'rgba(22,163,74,0.4)' : 'rgba(239,68,68,0.4)'}`,
+              color: exportMsg.type === 'ok' ? '#4ade80' : '#f87171',
+              backdropFilter: 'blur(8px)',
+            }}
+            onAnimationComplete={() => { if (exportMsg) setTimeout(() => setExportMsg(null), 3500) }}>
+            {exportMsg.type === 'ok' ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+            <span className="max-w-xs">{exportMsg.text}</span>
+            <button onClick={() => setExportMsg(null)} className="ml-1 opacity-70 hover:opacity-100"><X size={13} /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── HERO HEADER ─────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl p-6"
         style={{
@@ -616,18 +664,26 @@ export default function Dashboard() {
             <HealthRing score={fleetHealthScore} />
 
             <div className="hidden sm:flex flex-col gap-1.5">
-              <button onClick={handleExcelExport} className="btn-secondary text-xs gap-1.5 py-1.5 px-3">
-                <FileSpreadsheet size={12} className="text-green-400" /> Excel
+              <button onClick={handleExcelExport} disabled={!!exporting} className="btn-secondary text-xs gap-1.5 py-1.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed">
+                {exporting === 'excel'
+                  ? <><RefreshCw size={12} className="text-green-400 animate-spin" /> Exporting…</>
+                  : <><FileSpreadsheet size={12} className="text-green-400" /> Excel</>}
               </button>
-              <button onClick={handlePdfExport} className="btn-secondary text-xs gap-1.5 py-1.5 px-3">
-                <FileText size={12} className="text-red-400" /> PDF
+              <button onClick={handlePdfExport} disabled={!!exporting} className="btn-secondary text-xs gap-1.5 py-1.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed">
+                {exporting === 'pdf'
+                  ? <><RefreshCw size={12} className="text-red-400 animate-spin" /> Exporting…</>
+                  : <><FileText size={12} className="text-red-400" /> PDF</>}
               </button>
-              <button onClick={handlePptxExport} className="btn-secondary text-xs gap-1.5 py-1.5 px-3">
-                <Presentation size={12} className="text-orange-400" /> PPTX
+              <button onClick={handlePptxExport} disabled={!!exporting} className="btn-secondary text-xs gap-1.5 py-1.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed">
+                {exporting === 'pptx'
+                  ? <><RefreshCw size={12} className="text-orange-400 animate-spin" /> Building…</>
+                  : <><Presentation size={12} className="text-orange-400" /> PPTX</>}
               </button>
-              <button onClick={handleDailyReportExport} className="btn-secondary text-xs gap-1.5 py-1.5 px-3"
+              <button onClick={handleDailyReportExport} disabled={!!exporting} className="btn-secondary text-xs gap-1.5 py-1.5 px-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: 'rgba(22,163,74,0.12)', border: '1px solid rgba(22,163,74,0.25)' }}>
-                <FileText size={12} className="text-green-400" /> Daily PDF
+                {exporting === 'daily'
+                  ? <><RefreshCw size={12} className="text-green-400 animate-spin" /> Building…</>
+                  : <><FileText size={12} className="text-green-400" /> Daily PDF</>}
               </button>
             </div>
           </div>

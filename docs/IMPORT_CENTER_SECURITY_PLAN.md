@@ -65,15 +65,22 @@ not be treated as a duplicate without country + company context.
 | Country carried on the batch | `import_batches.country` is **NOT NULL**; `import_files.country`, `import_mapping_profiles.country`, `custom_field_catalog.country` all scoped | **DONE - V45** |
 | Country stamped at commit | `import_commit_batch()` enriches each live row with `country` from the batch (not from the file) | **DONE - V46** |
 | Country-aware natural keys | Duplicate detection uses org + country + (asset/serial/item) so the same asset in two countries is two records | **To build - Phase 2 adapters** (validation engine) |
-| **Caller-country gate** | The caller must be **assigned** the batch's country (`profiles.country` text[] contains it) before staging-write/commit | **GAP - to add to the commit RPC + staging-write policy (Phase 1/2)** |
+| **Caller-country gate (commit)** | The caller must be **assigned** the batch's country (`profiles.country` text[] contains it, or hold `'All'`, or be an org admin, or be unassigned) before **commit** | **DONE - V76** (`import_commit_batch` raises `Cross-country commit denied` via `import_user_can_commit_country()`) |
+| **Caller-country gate (read/staging RLS)** | Same predicate added to the `import_*` read/write policies | **GAP - Phase 2** (read isolation still org-only) |
 
-**The country gap is the most important open item.** Today RLS enforces *org*,
-not *country*. Two same-org users in different countries can currently see each
-other's import rows. Closing it requires either (a) a `country = ANY(profiles.country)`
-predicate added to the `import_*` write/read policies, or (b) a `country` check
-inside `import_commit_batch()` and the staging-write service. Plan: enforce in the
-RPC first (commit cannot happen cross-country), then tighten read policies. This
-is the control behind Test Case 7 (cross-country access denied) and 2 (same
+**The commit-path country gate is now closed (V76).** `import_commit_batch()`
+calls `import_user_can_commit_country(batch.country)` right after the cross-org
+check, so a same-org user cannot commit another country's batch to live tables.
+Rule: allow when the batch has no country, the caller is an org/super admin, the
+caller is unassigned (`country IS NULL` = all-country, preserves today's sole
+admin), or the batch country ∈ `profiles.country[]` (or `'All'`). Verified in a
+rolled-back probe (KSA→KSA allowed, KSA→UAE denied, NULL→any allowed).
+
+**Still open (Phase 2):** *read/staging* RLS on `import_*` is still org-only, so
+two same-org users in different countries can still *see* each other's staged
+rows (they cannot commit them). Closing that requires the same
+`country = ANY(profiles.country)` predicate on the `import_*` read policies —
+the control behind Test Case 7 (cross-country access denied) and 2 (same
 `asset_no`, different country).
 
 ---

@@ -293,3 +293,18 @@ mobile deps synced - typecheck now fully clean.
   backend), `claude/mobile-kotlin-app` (Kotlin app), plus the active dev branch
   `claude/mobile-app-ui-features-tdfxy0`.
 - Full record with recovery SHAs: `docs/BRANCH_CONSOLIDATION_2026-07-04.md`.
+
+## 2026-07-04 (later) — Import Center country-scope gate (V76) + full-tree merge (main)
+- **Merged the concurrent service-layer migration to main** (owner-authorised):
+  14 pages routed through `src/lib/api/*` modules (+14 api test suites), plus
+  V72 (cross-file merge RPC), V73 (inspection GPS), V74 (FK covering indexes +
+  drop duplicate index), V75 (RLS initplan wrapping — file). Gate: 875 tests +
+  build green. V72/V73/V74 confirmed applied live; V75 (perf-only,
+  behaviour-preserving, includes the V70 policy) left for the other session to
+  apply.
+- **V76 `import_commit_batch` country gate** — the commit RPC enforced org +
+  approval but not country, so a same-org user could commit another country's
+  batch to live tables. Added `import_user_can_commit_country()` and a
+  fail-closed gate after the cross-org check. Preserves today's admin
+  (unassigned country = all). The *read* RLS on `import_*` stays org-only
+  (Phase 2). Docs: `IMPORT_CENTER_SECURITY_PLAN.md` §3.

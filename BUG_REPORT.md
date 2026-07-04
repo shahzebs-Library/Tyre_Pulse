@@ -77,5 +77,14 @@ No **error-level** issues remain. Remaining items are cosmetic/UX or need a manu
 5. Add React Error Boundaries per page (a single crash shouldn't white-screen the app).
 6. **Theme**: still a mixed dark/light identity (Work Orders + Engineering KPI use dark cards; analytics pages light). Pick one (light-content SaaS recommended) and align.
 
-## Security posture (2026-06-14)
-Tracked in migrations V19-V24. Supabase advisor: **0 errors**; anon can read 0 sensitive rows; functions hardened (pinned search_path, anon EXECUTE revoked). Only outstanding toggle is **Leaked Password Protection** - Supabase **Pro-plan only**, so accepted as plan-limited on Free.
+## Security posture (2026-07-04)
+Tracked in migrations V19-V71. Supabase advisor: **0 errors**; anon can read 0 sensitive rows (re-verified 2026-07-04 by impersonating the `anon` role — vehicle_fleet/fleet_master/profiles/tyre_records/accidents/stock_records all return 0); functions hardened (pinned search_path, anon EXECUTE revoked). Only outstanding toggle is **Leaked Password Protection** - Supabase **Pro-plan only**, so accepted as plan-limited on Free.
+
+**2026-07-04 hardening pass (all live, gated):**
+- **V70 `profiles_org_isolation`** — closed cross-tenant PII exposure on `profiles` (the SELECT policy was `auth.role()='authenticated'`, exposing every org's profiles). Added a RESTRICTIVE gate (own row · org admin · same org); proven with a rolled-back two-tenant probe.
+- **V71 `report_org_tyre_spend`** + `send-scheduled-reports` scoping — the scheduled-report digest aggregated counts/spend across ALL organisations; now scoped to the schedule's `org_id`.
+- **Daily Ops print XSS** — DB fields in `printBriefing()` now HTML-escaped.
+- **`useRealtimeAlerts`** — `markAllRead` RPCs moved out of the state updater (StrictMode double-fire).
+- **StockManagement / FleetMaster** — fetch paths hardened (try/finally + debounced search + request-id race guard).
+
+**Deferred (need owner decision):** `get_email_by_identifier` login enumeration (inherent to email/username login UX); strict CSP header in `vercel.json`. **Owner action:** set the `RESEND_API_KEY` edge-function secret so digests send.

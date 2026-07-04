@@ -282,3 +282,14 @@ mobile deps synced - typecheck now fully clean.
   `report_tyre_summary` call for the spend tile. EXECUTE revoked from
   anon/authenticated, granted to service_role (matches V40 hardening).
   Edge function redeployed (v2, verify_jwt preserved).
+
+## 2026-07-04 (later) — Branch consolidation & cleanup (main)
+- Consolidated all feature/session branches onto `main` and removed 24 stale
+  remote branches. Verified each carried **no unmerged work**: 16 were already
+  merged into `main`; 5 merged as 0-change no-ops (superseded); 3 (old i18n /
+  animated-login / mobile EAS) were superseded and would have regressed
+  production, so deleted without merging (owner-approved).
+- **Kept** (never merged to main by policy): `claude/backend-step2-assets` (Go
+  backend), `claude/mobile-kotlin-app` (Kotlin app), plus the active dev branch
+  `claude/mobile-app-ui-features-tdfxy0`.
+- Full record with recovery SHAs: `docs/BRANCH_CONSOLIDATION_2026-07-04.md`.

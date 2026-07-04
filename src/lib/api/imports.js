@@ -424,6 +424,18 @@ export async function commitBatch(batchId) {
 }
 
 /**
+ * Cross-file enrichment (V79). For the batch's `action='update'` rows (rows whose
+ * natural key already exists live), fill ONLY the empty columns on the matching
+ * live record from this file — never overwriting existing values. Returns
+ * `{ enriched, skipped, no_match }`.
+ */
+export async function enrichBatch(batchId) {
+  const { data, error } = await supabase.rpc('import_enrich_batch', { p_batch_id: batchId })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
+}
+
+/**
  * Live-table duplicate detection (V47). Returns the set of natural-key strings
  * already present in the module's live table for the caller's organisation, so
  * the Data Intake Center can skip re-importing an existing record. The key is

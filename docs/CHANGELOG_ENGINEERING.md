@@ -376,3 +376,20 @@ untouched). Confirmed fixes landed:
   cross-file merge exists (V72, cost modules); enriching existing live records is a
   new `import_commit_batch` mode = the recommended next server-side build (migration
   + rolled-back test).
+
+## 2026-07-04 (later) — Intake: resilient staging, auto-remember, force-upload, cross-file enrichment
+- **"Failed to fetch" on Stage & continue (fixed)** — staging POSTed 500 rows (four
+  JSONB blobs each) in one request; large tyre/workorder files exceeded the gateway
+  body limit and were dropped, leaving batches staged with 0 rows. Now size-bounded
+  chunks (~1.2 MB / ≤100 rows) with retry+backoff.
+- **Auto-remember format** — staging a new file auto-saves its column mapping
+  (fingerprint-keyed), so the next file of that type maps itself.
+- **Saved Mappings manager** — browse every saved mapping, expand to its source→target
+  columns, rename / activate / delete.
+- **Force-include (elevated)** — commit validation-error rows anyway; per-row failures
+  stay isolated in the commit RPC.
+- **V79 cross-file enrichment** — "Enrich existing records" (elevated) fills the BLANK
+  fields of an already-existing record from a later file instead of skipping it.
+  `import_natural_key` (all modules) matches the live record; `import_enrich_batch`
+  fills only-empty columns via `jsonb_populate_record`, never overwrites, audited.
+  Sandbox-verified (fill model, preserve make/site). Off by default.

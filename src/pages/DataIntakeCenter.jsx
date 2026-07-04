@@ -77,6 +77,8 @@ export default function DataIntakeCenter() {
   const [countryAck, setCountryAck] = useState(false)
   // Elevated override: force validation-error rows through the commit anyway.
   const [forceFlagged, setForceFlagged] = useState(false)
+  // Cross-file enrichment: fill blanks on existing live records instead of skipping.
+  const [enrichExisting, setEnrichExisting] = useState(false)
   const [aliasMaps, setAliasMaps] = useState(null) // { site, supplier, brand } → Map
   const [fxRatesMap, setFxRatesMap] = useState(null) // { quoteCurrency: {rate,rate_date,source} }
 
@@ -151,7 +153,7 @@ export default function DataIntakeCenter() {
 
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null); setAppliedProfile(null)
-    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setForceFlagged(false); setAliasMaps(null); setFxRatesMap(null); autoSavedFp.current = null
+    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setForceFlagged(false); setEnrichExisting(false); setAliasMaps(null); setFxRatesMap(null); autoSavedFp.current = null
     setAttachItems([]); setAttachWarnings([]); setAttachDone(false); setAttachBusy(false)
   }
 
@@ -386,7 +388,9 @@ export default function DataIntakeCenter() {
         if (key && liveKeys.has(key)) {
           isLiveDup = true
           if (r.dupStatus !== 'conflict') r.dupStatus = 'duplicate'
-          action = 'skip'
+          // Enrichment mode: instead of skipping the existing record, mark it to
+          // fill its blank fields from this file (server-side, fill-only-empty).
+          action = (enrichExisting && isElevated) ? 'update' : 'skip'
         }
       }
       r.liveDuplicate = isLiveDup
@@ -427,17 +431,24 @@ export default function DataIntakeCenter() {
     setError(''); setBusy(true)
     try {
       await imports.stageRows(batchId, annotated.map((r) => {
-        // Elevated force-include: push validation-error rows through the commit.
-        // A genuinely-broken row still fails its own INSERT inside the commit RPC
-        // (per-row try/catch), so this can never corrupt the batch — it only lets
-        // rows the operator judges acceptable go live.
+        // Derive the row action from the CURRENT toggle state + row flags, so a
+        // toggle flipped after validation still takes effect:
+        //  · force-include: push a validation-error row through the commit (a
+        //    genuinely-broken row still fails its own INSERT per-row, so the
+        //    batch is never corrupted).
+        //  · enrich: fill blanks on the matching existing record instead of skip.
         const forced = forceFlagged && isElevated && r.validationStatus === 'error'
+        const enrich = enrichExisting && isElevated && r.liveDuplicate && r.validationStatus !== 'error'
+        let action
+        if (r.validationStatus === 'error') action = forced ? 'insert' : 'reject'
+        else if (r.liveDuplicate) action = enrich ? 'update' : 'skip'
+        else action = 'insert'
         return {
           sheetName: sheet.name, sourceRowNo: r.sourceRowNo, raw: r.raw, mapped: r.mapped,
           transformed: r.transformed, custom: r.custom,
           validationStatus: forced ? 'warning' : r.validationStatus,
           dupStatus: r.dupStatus,
-          action: forced ? 'insert' : (r.action ?? (r.validationStatus === 'error' ? 'reject' : 'insert')),
+          action,
           fingerprint: r.fingerprint,
         }
       }))
@@ -515,6 +526,13 @@ export default function DataIntakeCenter() {
       await imports.submitForApproval(batchId)
       if (isElevated) await imports.approveBatch(batchId)
       const res = await imports.commitBatch(batchId)
+      // Cross-file enrichment: fill blanks on existing records from this file.
+      if (enrichExisting && isElevated) {
+        try {
+          const enr = await imports.enrichBatch(batchId)
+          if (enr) res.enriched = enr.enriched ?? 0
+        } catch (e) { res.enrichError = e?.message || 'Enrichment failed' }
+      }
       setResult(res)
       // Value-producing automation (directive §20). Best-effort - must never
       // block or fail the commit the operator already succeeded at.
@@ -733,6 +751,16 @@ export default function DataIntakeCenter() {
               </label>
             </div>
           )}
+          {isElevated && counts?.liveDuplicate > 0 && (
+            <div className="bg-sky-900/15 border border-sky-700/40 rounded-xl p-4 space-y-2">
+              <p className="text-sm text-sky-300 flex items-center gap-2"><Database size={16} /> {counts.liveDuplicate} row(s) match records that already exist.</p>
+              <label className="flex items-center gap-2 text-sm text-sky-200 cursor-pointer">
+                <input type="checkbox" checked={enrichExisting} onChange={(e) => setEnrichExisting(e.target.checked)} className="accent-sky-500" />
+                Enrich existing records — fill their blank fields from this file (don't skip).
+              </label>
+              <p className="text-xs text-gray-400">Combines this file with data already on record: it only fills fields that are currently empty and <span className="text-gray-200">never overwrites</span> a value you already have. Great for stitching together assets/tyres/work orders from different source files. Every change is audited.</p>
+            </div>
+          )}
           {isElevated && counts?.error > 0 && (
             <div className="bg-red-900/15 border border-red-700/40 rounded-xl p-4 space-y-2">
               <p className="text-sm text-red-300 flex items-center gap-2"><AlertTriangle size={16} /> {counts.error} row(s) failed validation and will be skipped by default.</p>
@@ -836,7 +864,7 @@ export default function DataIntakeCenter() {
               : 'bg-green-900/20 border border-green-700/50 text-green-300'}`}>
               {result.status === 'failed' ? <AlertTriangle className="mb-2" /> : <CheckCircle2 className="mb-2" />}
               <p className="font-semibold">
-                {result.status === 'committed' && `Committed - ${result.inserted} row(s) inserted, ${result.skipped} skipped${result.failed ? `, ${result.failed} failed` : ''}.`}
+                {result.status === 'committed' && `Committed - ${result.inserted} row(s) inserted, ${result.skipped} skipped${result.failed ? `, ${result.failed} failed` : ''}${result.enriched ? `, ${result.enriched} existing record(s) enriched` : ''}.`}
                 {result.status === 'failed' && `No rows could be committed - ${result.failed} row(s) failed. The reasons are listed below.`}
                 {result.status !== 'committed' && result.status !== 'failed' && `Status: ${result.status}`}
               </p>

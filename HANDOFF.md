@@ -3,7 +3,7 @@
 **Branch:** dev `claude/mobile-app-ui-features-tdfxy0` (Session 8 work); `main` auto-deploys to Vercel
 **Web build status:** ✅ Clean - builds, **875/875 tests passing**, auto-deploys to Vercel
 **Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5**, auto-builds on push to `main`
-**DB migrations applied to live Supabase:** through **V78** (project `jhssdmeruxtrlqnwfksc`)
+**DB migrations applied to live Supabase:** through **V79** (project `jhssdmeruxtrlqnwfksc`)
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
 
@@ -25,7 +25,7 @@
   - **"Stage & continue → failed to fetch" FIXED** — `stageRows` POSTed 500 rows × 4 JSONB at once → oversized body dropped by the gateway (left 4 zero-row `staged` batches live). Now size-bounded chunks (≤100 rows / ≤~1.2 MB) + network retry + clear error.
   - **Auto-remember format** — staging a new file auto-saves its mapping profile (by header fingerprint) so the next upload of the same file auto-maps (recognition already existed; auto-save half was missing).
   - **Force-include** (elevated) — a Validate-step toggle to commit validation-error rows anyway; genuinely un-insertable rows still fail safely per-row.
-  - **Still open (owner asked, deeper):** *data-level cross-file enrichment* — completing an existing live record from a LATER file (upsert-merge by natural key). In-batch cross-file merge exists (V72, cost modules); enriching EXISTING live records is a new `import_commit_batch` mode (server-side migration + test) — the recommended next Import build.
+  - **Cross-file enrichment — DONE (V79).** "Enrich existing records" (elevated toggle on the Validate step) completes an existing live record from a LATER file: `import_natural_key` (all modules) matches the live record by natural key, `import_enrich_batch` fills ONLY its blank columns via `jsonb_populate_record` — never overwrites, org+country scoped, audited. Client sets `action='update'` on live-duplicate rows when enabled and calls `enrichBatch` after `commitBatch`; result shows "N existing record(s) enriched". Off by default. Sandbox-verified (fill model, preserve make/site).
 
 ### Mobile — offline-safe UPDATE commands (closes P3 mobile-offline gap; partial R3/R12)
 - Three screens issued **direct Supabase UPDATE writes** that were lost offline and could double-apply on retry: `stock.tsx` (quantity adjust), `work-orders.tsx` (WO status), `workorders/index.tsx` (corrective-action status).

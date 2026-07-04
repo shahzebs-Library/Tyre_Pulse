@@ -66,7 +66,7 @@ not be treated as a duplicate without country + company context.
 | Country stamped at commit | `import_commit_batch()` enriches each live row with `country` from the batch (not from the file) | **DONE - V46** |
 | Country-aware natural keys | Duplicate detection uses org + country + (asset/serial/item) so the same asset in two countries is two records | **To build - Phase 2 adapters** (validation engine) |
 | **Caller-country gate (commit)** | The caller must be **assigned** the batch's country (`profiles.country` text[] contains it, or hold `'All'`, or be an org admin, or be unassigned) before **commit** | **DONE - V76** (`import_commit_batch` raises `Cross-country commit denied` via `import_user_can_commit_country()`) |
-| **Caller-country gate (read/staging RLS)** | Same predicate added to the `import_*` read/write policies | **GAP - Phase 2** (read isolation still org-only) |
+| **Caller-country gate (read/staging RLS)** | Same predicate added to the `import_*` SELECT policies | **DONE - V77** (RESTRICTIVE country SELECT policies on `import_batches`/`import_files`/`import_rows` via `import_user_can_commit_country` + `import_batch_country`) |
 
 **The commit-path country gate is now closed (V76).** `import_commit_batch()`
 calls `import_user_can_commit_country(batch.country)` right after the cross-org
@@ -76,12 +76,15 @@ caller is unassigned (`country IS NULL` = all-country, preserves today's sole
 admin), or the batch country ∈ `profiles.country[]` (or `'All'`). Verified in a
 rolled-back probe (KSA→KSA allowed, KSA→UAE denied, NULL→any allowed).
 
-**Still open (Phase 2):** *read/staging* RLS on `import_*` is still org-only, so
-two same-org users in different countries can still *see* each other's staged
-rows (they cannot commit them). Closing that requires the same
-`country = ANY(profiles.country)` predicate on the `import_*` read policies —
-the control behind Test Case 7 (cross-country access denied) and 2 (same
-`asset_no`, different country).
+**Read-path country isolation is now closed (V77).** RESTRICTIVE country SELECT
+policies on `import_batches`, `import_files`, and `import_rows` AND on top of the
+org isolation, so a same-org user in another country can no longer *see* another
+country's batches/files/staged rows (verified: a same-org UAE user sees 0 KSA
+batches/rows; the NULL-country admin still sees all). This closes Test Case 7
+(cross-country access denied). `import_rows` resolves the parent country via the
+SECURITY DEFINER `import_batch_country(batch_id)` helper (no RLS recursion).
+Child metadata tables (`import_batch_sheets`, `import_row_issues`) remain
+org-scoped only — low sensitivity, no importable data.
 
 ---
 

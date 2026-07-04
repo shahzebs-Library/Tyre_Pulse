@@ -308,3 +308,13 @@ mobile deps synced - typecheck now fully clean.
   fail-closed gate after the cross-org check. Preserves today's admin
   (unassigned country = all). The *read* RLS on `import_*` stays org-only
   (Phase 2). Docs: `IMPORT_CENTER_SECURITY_PLAN.md` §3.
+
+## 2026-07-04 (later) — Import Center read-path country isolation (V77)
+- **V77** closes the Phase-2 read gap: RESTRICTIVE country SELECT policies on
+  `import_batches`/`import_files`/`import_rows` (via `import_user_can_commit_country`
+  + the SECURITY DEFINER `import_batch_country`), ANDing on the org isolation.
+  Same-org cross-country users can no longer see each other's staged
+  batches/files/rows. Verified: same-org UAE user sees 0 KSA batches/rows;
+  NULL-country admin still sees all (3 batches / 18 rows). `get_advisors`
+  (security): 0 ERROR-level findings. Import Center country isolation is now
+  closed on BOTH commit (V76) and read (V77).

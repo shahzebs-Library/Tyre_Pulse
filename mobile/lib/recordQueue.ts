@@ -289,24 +289,41 @@ export async function saveCommand(
     }
   }
 
+  // One stable client id shared by the immediate attempt AND any queued retry, so
+  // a lost response / crash can never create a duplicate (the retry upserts on the
+  // same client_uuid and is ignored).
+  const cuid = idempotencyKey ?? `rec_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
   try {
     // Upload any locally-captured photos first; keep the record queued (never
     // insert without them) if any can't be uploaded right now.
     const { payload: prepared, pending } = await resolveCommandPhotos(type, clean)
     if (pending) {
-      await enqueueCommand(type, prepared, idempotencyKey)
+      await enqueueCommand(type, prepared, cuid)
       return { ok: true, offline: true }
     }
-    const { error } = await supabase.from(COMMANDS[type].table).insert(prepared)
+    const { error } = await supabase.from(COMMANDS[type].table)
+      .upsert({ ...prepared, client_uuid: cuid }, { onConflict: 'client_uuid', ignoreDuplicates: true })
     if (error) throw error
     return { ok: true, offline: false }
   } catch (e: any) {
-    await enqueueCommand(type, clean, idempotencyKey)
+    await enqueueCommand(type, clean, cuid)
     return { ok: true, offline: true, error: e?.message }
   }
 }
 
+// Global in-flight guard: the queue is synced from a 10s poll, pull-to-refresh on
+// several screens, and a manual button. Without this, two overlapping runs would
+// each loop the same pending items and double-apply inserts. All callers await the
+// same run.
+let syncInFlight: Promise<{ synced: number; failed: number }> | null = null
+
 export async function syncRecordQueue(): Promise<{ synced: number; failed: number }> {
+  if (syncInFlight) return syncInFlight
+  syncInFlight = doSyncRecordQueue().finally(() => { syncInFlight = null })
+  return syncInFlight
+}
+
+async function doSyncRecordQueue(): Promise<{ synced: number; failed: number }> {
   const queue = await getRecordQueue()
   const now = Date.now()
   let synced = 0, failed = 0
@@ -339,7 +356,10 @@ export async function syncRecordQueue(): Promise<{ synced: number; failed: numbe
         const { payload: prepared, pending } = await resolveCommandPhotos(item.type, clean)
         item.payload = prepared
         if (pending) throw new Error('Photos pending upload - will retry')
-        const { error } = await supabase.from(COMMANDS[item.type].table).insert(prepared)
+        // Upsert on the stable client id: a replayed attempt (after a crash or a
+        // lost response) is ignored instead of inserting a second row.
+        const { error } = await supabase.from(COMMANDS[item.type].table)
+          .upsert({ ...prepared, client_uuid: item.idempotency_key }, { onConflict: 'client_uuid', ignoreDuplicates: true })
         if (error) throw error
       }
       item.sync_status = 'synced'
@@ -357,6 +377,9 @@ export async function syncRecordQueue(): Promise<{ synced: number; failed: numbe
       }
       failed++
     }
+    // Persist after EACH item so a crash mid-loop can't lose a 'synced' marking
+    // and replay an already-committed insert.
+    await save(queue)
   }
   await save(queue)
   // Prune synced entries - they are safely in the database, and keeping them

@@ -328,6 +328,9 @@ export default function NewInspectionScreen() {
     )
     const resolvedPayload = { ...payload, tyre_conditions: conditionsCopy }
 
+    // One stable client id for BOTH the online attempt and any queued retry, so a
+    // lost response after a committed insert can never create a duplicate.
+    const cuid = `local_${crypto.randomUUID()}`
     try {
       const hasLocalPhotos = Object.values(conditionsCopy).some(
         pos => pos.photo_uri && !pos.photo_url
@@ -335,16 +338,17 @@ export default function NewInspectionScreen() {
       if (hasLocalPhotos) {
         // Uploads each pending photo and sets photo_url; on failure photo_url
         // stays null - a file:// URI is never written into photo_url.
-        await uploadAllPositionPhotos(conditionsCopy, `online_${crypto.randomUUID()}`)
+        await uploadAllPositionPhotos(conditionsCopy, cuid)
       }
-      const { error } = await supabase.from('inspections').insert(resolvedPayload)
+      const { error } = await supabase.from('inspections')
+        .upsert({ ...resolvedPayload, client_uuid: cuid }, { onConflict: 'client_uuid', ignoreDuplicates: true })
       if (error) throw error
       setStep('submit')
     } catch {
-      // Queue the photo-resolved copy: already-uploaded photos keep their
-      // photo_url (no duplicate upload on sync); still-local URIs retain
-      // photo_uri so the offline sync retries the upload.
-      await enqueueInspection(resolvedPayload)
+      // Queue the photo-resolved copy under the SAME client id: already-uploaded
+      // photos keep their photo_url (no duplicate upload on sync); still-local
+      // URIs retain photo_uri so the offline sync retries the upload.
+      await enqueueInspection(resolvedPayload, cuid)
       setStep('submit')
     } finally {
       setSubmitting(false)

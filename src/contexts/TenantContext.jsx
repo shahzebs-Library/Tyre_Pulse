@@ -10,7 +10,7 @@
  * `--brand-primary` / `--brand-accent` CSS variables for opt-in consumers; the
  * existing global theme variables are left untouched.
  */
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext'
 import { getOrgBranding, withBrandingDefaults } from '../lib/api/branding'
 
@@ -79,8 +79,13 @@ export function TenantProvider({ children }) {
     }
   }, [branding])
 
+  const value = useMemo(
+    () => ({ branding, orgId, orgName, loading, error, refreshBranding }),
+    [branding, orgId, orgName, loading, error, refreshBranding],
+  )
+
   return (
-    <TenantContext.Provider value={{ branding, orgId, orgName, loading, error, refreshBranding }}>
+    <TenantContext.Provider value={value}>
       {children}
     </TenantContext.Provider>
   )

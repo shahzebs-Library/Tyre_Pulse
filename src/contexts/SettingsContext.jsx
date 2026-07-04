@@ -1,10 +1,18 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 
 export const COUNTRIES = ['KSA', 'UAE', 'Egypt']
 export const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
 export const COUNTRY_LABEL = { KSA: 'KSA', UAE: 'UAE', Egypt: 'EGY' }
+
+// A user's country may be stored as a string ("KSA") or, for multi-country
+// users, an array. Resolve the primary country consistently. Pure helper kept at
+// module scope so it is referentially stable for memoised callbacks/effects.
+const primaryCountry = (p) => {
+  const c = Array.isArray(p?.country) ? p.country[0] : p?.country
+  return c && String(c).trim() ? String(c).trim() : null
+}
 
 const SettingsContext = createContext({
   appSettings: { cost_per_tyre: 1200, company_name: 'TyrePulse', currency: 'SAR' },
@@ -27,19 +35,12 @@ export function SettingsProvider({ children }) {
     () => localStorage.getItem('tp_active_country') || 'All',
   )
 
-  // A user's country may be stored as a string ("KSA") or, for multi-country
-  // users, an array. Resolve the primary country consistently.
-  const primaryCountry = (p) => {
-    const c = Array.isArray(p?.country) ? p.country[0] : p?.country
-    return c && String(c).trim() ? String(c).trim() : null
-  }
-
-  function setActiveCountry(c) {
+  const setActiveCountry = useCallback((c) => {
     // Non-admins with an assigned country are locked to it.
     if (profile && profile.role !== 'Admin' && primaryCountry(profile)) return
     setActiveCountryInternal(c)
     try { localStorage.setItem('tp_active_country', c) } catch { /* storage disabled */ }
-  }
+  }, [profile])
 
   useEffect(() => {
     const c = primaryCountry(profile)
@@ -48,9 +49,12 @@ export function SettingsProvider({ children }) {
     }
   }, [profile])
 
-  const activeCurrency = activeCountry === 'All'
-    ? appSettings.currency
-    : (COUNTRY_CURRENCY[activeCountry] ?? appSettings.currency)
+  const activeCurrency = useMemo(
+    () => (activeCountry === 'All'
+      ? appSettings.currency
+      : (COUNTRY_CURRENCY[activeCountry] ?? appSettings.currency)),
+    [activeCountry, appSettings.currency],
+  )
 
   const refreshSettings = useCallback(async () => {
     const { data } = await supabase.from('settings').select('key, value')
@@ -66,12 +70,17 @@ export function SettingsProvider({ children }) {
     if (user) refreshSettings()
   }, [user, refreshSettings])
 
-  return (
-    <SettingsContext.Provider value={{
+  const value = useMemo(
+    () => ({
       appSettings, refreshSettings,
-      activeCountry, setActiveCountry: setActiveCountry,
+      activeCountry, setActiveCountry,
       activeCurrency,
-    }}>
+    }),
+    [appSettings, refreshSettings, activeCountry, setActiveCountry, activeCurrency],
+  )
+
+  return (
+    <SettingsContext.Provider value={value}>
       {children}
     </SettingsContext.Provider>
   )

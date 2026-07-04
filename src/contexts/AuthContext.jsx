@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { queryClient } from '../lib/queryClient'
 
@@ -166,7 +166,7 @@ export function AuthProvider({ children }) {
     return (ROLE_DEFAULTS[profile.role] ?? (() => false))(moduleKey)
   }, [profile, modulePerms])
 
-  async function signIn(identifier, password) {
+  const signIn = useCallback(async (identifier, password) => {
     let email = identifier.trim()
 
     if (!email.includes('@')) {
@@ -186,9 +186,9 @@ export function AuthProvider({ children }) {
       return { mfaRequired: true }
     }
     return null
-  }
+  }, [])
 
-  async function signOut() {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut()
     // Clear user-scoped client caches so a different account on this device
     // cannot see the previous user's data after switching (account-switch
@@ -207,10 +207,15 @@ export function AuthProvider({ children }) {
       }
     } catch { /* no-op */ }
     try { sessionStorage.clear() } catch { /* no-op */ }
-  }
+  }, [])
+
+  const value = useMemo(
+    () => ({ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled }),
+    [user, profile, loading, modulePerms, mfaEnabled, hasPermission, signIn, signOut, setMfaEnabled],
+  )
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, modulePerms, hasPermission, signIn, signOut, mfaEnabled, setMfaEnabled }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

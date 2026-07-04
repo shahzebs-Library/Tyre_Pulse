@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { supabase } from '../lib/supabase'
+import * as inspIntelApi from '../lib/api/inspectionIntelligence'
 import PageHeader from '../components/ui/PageHeader'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -207,11 +207,9 @@ export default function InspectionIntelligence() {
       setLoading(true)
       setError(null)
       try {
-        const countryFilter = q => activeCountry !== 'All' ? q.eq('country', activeCountry) : q
-
         const [{ data: inspData, error: e1 }, { data: fleetData, error: e2 }] = await Promise.all([
-          countryFilter(supabase.from('inspections').select('*')),
-          countryFilter(supabase.from('vehicle_fleet').select('asset_no, site, country')),
+          inspIntelApi.listInspectionIntelInspections({ country: activeCountry }),
+          inspIntelApi.listInspectionIntelFleet({ country: activeCountry }),
         ])
 
         if (e1) throw e1
@@ -564,7 +562,7 @@ export default function InspectionIntelligence() {
     if (alertRaised[vehicle.asset_no]) return
     setRaisingAlert(vehicle.asset_no)
     try {
-      await supabase.from('corrective_actions').insert({
+      await inspIntelApi.insertCorrectiveAction({
         asset_no: vehicle.asset_no,
         site: vehicle.site,
         country: activeCountry !== 'All' ? activeCountry : undefined,

@@ -16,7 +16,7 @@ import {
   Award, Layers, Info,
 } from 'lucide-react'
 import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
-import { supabase } from '../lib/supabase'
+import * as assetApi from '../lib/api/assetManagement'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -407,8 +407,8 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
         active: form.active,
       }
       const { error: supaErr } = isEdit
-        ? await supabase.from('fleet_master').update(payload).eq('id', asset.id)
-        : await supabase.from('fleet_master').insert([payload])
+        ? await assetApi.updateAsset(asset.id, payload)
+        : await assetApi.insertAsset(payload)
 
       // Never mask a failed save behind a localStorage write that reports
       // success - the record would exist only in this browser, invisible to
@@ -601,9 +601,9 @@ export default function AssetManagement() {
     setLoadError('')
     try {
       const [assetsRes, ovRes, woRes] = await Promise.allSettled([
-        supabase.from('fleet_master').select('*').order('asset_no'),
-        supabase.rpc('report_asset_overview', { p_country: activeCountry }),
-        supabase.from('work_orders').select('id,asset_no,status,total_cost,created_at,work_type'),
+        assetApi.listFleetMaster(),
+        assetApi.reportAssetOverview({ country: activeCountry }),
+        assetApi.listAssetWorkOrders(),
       ])
 
       // Surface a hard load failure (offline / RLS-denied) rather than showing an
@@ -645,9 +645,7 @@ export default function AssetManagement() {
   // Lazy-load the open asset's tyres for the detail drawer.
   useEffect(() => {
     if (!drawerAsset) { setDrawerTyres([]); return }
-    supabase.from('tyre_records')
-      .select('id,asset_no,serial_number,position,brand,size,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,tread_depth,site,country')
-      .eq('asset_no', drawerAsset.asset_no)
+    assetApi.listAssetTyres(drawerAsset.asset_no)
       .then(({ data }) => setDrawerTyres(data || []))
   }, [drawerAsset])
 

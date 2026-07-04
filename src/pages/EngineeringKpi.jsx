@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import * as engKpiApi from '../lib/api/engineeringKpi'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -213,36 +213,15 @@ export default function EngineeringKpi() {
     try {
       const country = countryChip !== 'All' ? countryChip : (activeCountry !== 'All' ? activeCountry : null)
 
-      const applyCountry = q => country ? q.eq('country', country) : q
-      const applyDateFilter = q => {
-        if (dateFrom) q = q.gte('issue_date', dateFrom)
-        if (dateTo)   q = q.lte('issue_date', dateTo)
-        return q
-      }
-
       const [recRes, insRes, actRes, fleetRes] = await Promise.all([
         fetchAllPages((from, to) =>
-          applyCountry(
-            applyDateFilter(
-              supabase.from('tyre_records').select(
-                'id,issue_date,asset_no,brand,site,country,cost_per_tyre,qty,risk_level,km_at_fitment,km_at_removal,position,category,remarks'
-              )
-            )
-          ).range(from, to)
+          engKpiApi.listKpiTyreRecords({ country, dateFrom, dateTo, from, to })
         , { max: 200000 }),
         fetchAllPages((from, to) =>
-          applyCountry(
-            supabase.from('inspections').select(
-              'id,asset_no,site,country,status,scheduled_date,completed_date,findings,inspection_type'
-            )
-          ).range(from, to)
+          engKpiApi.listKpiInspections({ country, from, to })
         , { max: 200000 }),
-        applyCountry(
-          supabase.from('corrective_actions').select(
-            'id,status,site,country,due_date,created_at'
-          )
-        ),
-        supabase.from('vehicle_fleet').select('id,asset_no'),
+        engKpiApi.listKpiCorrectiveActions({ country }),
+        engKpiApi.listKpiFleet(),
       ])
 
       if (recRes.error)  throw new Error(`Records: ${recRes.error.message}`)

@@ -13,7 +13,7 @@ import {
   TrendingUp, RotateCcw, Truck, Eye, CheckSquare, XCircle,
   Calendar, ChevronDown,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import * as exchangeApi from '../lib/api/tyreExchange'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -237,7 +237,7 @@ export default function TyreExchange() {
 
   useEffect(() => {
     let cancelled = false
-    supabase.from('tyre_status_marks').select('serial,mark_type').then(({ data }) => {
+    exchangeApi.listTyreStatusMarks().then(({ data }) => {
       if (cancelled || !data) return
       setReturnedSerials(data.filter((m) => m.mark_type === 'returned').map((m) => m.serial))
       setWrittenOffSerials(data.filter((m) => m.mark_type === 'written_off').map((m) => m.serial))
@@ -252,19 +252,10 @@ export default function TyreExchange() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      let q = supabase
-        .from('tyre_records')
-        .select('id,asset_no,serial_number,serial_no,position,brand,size,tread_depth,cost_per_tyre,issue_date,km_at_fitment,km_at_removal,risk_level,site,country,category')
-        .order('issue_date', { ascending: true })
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data: recData } = await q
+      const { data: recData } = await exchangeApi.listExchangeTyreRecords({ country: activeCountry })
 
       // Try loading stock_movements table (may not exist)
-      const { data: movData } = await supabase
-        .from('stock_movements')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500)
+      const { data: movData } = await exchangeApi.listStockMovements()
 
       setRecords(recData || [])
       setStockMovements(movData || [])
@@ -472,8 +463,7 @@ export default function TyreExchange() {
     setMarkError('')
     const prev = list
     setList([...list, serial])
-    const { error } = await supabase.from('tyre_status_marks')
-      .upsert({ serial, mark_type: markType }, { onConflict: 'serial,mark_type' })
+    const { error } = await exchangeApi.upsertTyreStatusMark(serial, markType)
     if (error) {
       setList(prev)
       setMarkError(`Could not save the ${markType.replace('_', '-')} mark for ${serial}: ${error.message}`)

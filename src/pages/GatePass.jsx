@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import * as gatePassPageApi from '../lib/api/gatePassPage'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
@@ -63,22 +63,18 @@ export default function GatePass() {
   }, [siteFilter, activeCountry])
 
   async function loadSites() {
-    const { data } = await supabase.from('vehicle_fleet').select('site').not('site', 'is', null)
+    const { data } = await gatePassPageApi.listGatePassSites()
     if (data) setSites([...new Set(data.map(r => r.site).filter(Boolean))].sort())
   }
 
   async function loadPasses() {
-    let q = supabase.from('gate_passes').select('*').eq('pass_date', today).order('created_at', { ascending: false })
-    if (siteFilter) q = q.eq('site', siteFilter)
-    const { data } = await q
+    const { data } = await gatePassPageApi.listGatePasses({ date: today, site: siteFilter })
     setPasses(data || [])
   }
 
   async function loadHistoryPasses(date) {
     setHistoryLoading(true)
-    let q = supabase.from('gate_passes').select('*').eq('pass_date', date).order('created_at', { ascending: false })
-    if (siteFilter) q = q.eq('site', siteFilter)
-    const { data } = await q
+    const { data } = await gatePassPageApi.listGatePasses({ date, site: siteFilter })
     setHistoryPasses(data || [])
     setHistoryLoading(false)
   }
@@ -106,15 +102,7 @@ export default function GatePass() {
     // Safety gate: surface open critical defects for this asset before release.
     gatePasses.listGatePassBlockers({ assetNo: assetSearch.trim(), country: activeCountry })
       .then(setBlockers).catch(() => setBlockers(null))
-    const { data } = await supabase
-      .from('inspections')
-      .select('id, inspection_type, scheduled_date, inspector, created_at, status, site')
-      .eq('asset_no', assetSearch.trim())
-      .gte('scheduled_date', today)
-      .lte('scheduled_date', today)
-      .in('status', ['Done', 'In Progress'])
-      .order('created_at', { ascending: false })
-      .limit(1)
+    const { data } = await gatePassPageApi.findAssetInspectionForClearance({ assetNo: assetSearch.trim(), date: today })
     if (data?.[0]) {
       setInspection(data[0])
       setCheckResult('found')
@@ -144,7 +132,7 @@ export default function GatePass() {
         const { blockers: b } = await gatePasses.createGatePass(values)
         if (b) setBlockers(b)
       } else {
-        await supabase.from('gate_passes').insert(values) // denials/other are never blocked
+        await gatePassPageApi.insertGatePass(values) // denials/other are never blocked
       }
     } catch (err) {
       if (err?.code === 'BLOCKED') {

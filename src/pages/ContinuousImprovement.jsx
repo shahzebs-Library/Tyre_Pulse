@@ -12,8 +12,7 @@ import {
   LineElement, PointElement, ArcElement, Title, Tooltip, Legend, Filler,
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as ciApi from '../lib/api/continuousImprovement'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
@@ -299,26 +298,11 @@ export default function ContinuousImprovement() {
     setLoading(true)
     setError('')
     try {
-      const applyCountry = (q) => activeCountry !== 'All' ? q.eq('country', activeCountry) : q
-
       const [recRes, actRes, insRes, tgtRes] = await Promise.all([
-        fetchAllPages((from, to) => applyCountry(
-          supabase.from('tyre_records')
-            .select('id,asset_no,site,brand,position,risk_level,category,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,country')
-            .order('issue_date', { ascending: false })
-        ).range(from, to)),
-        applyCountry(
-          supabase.from('corrective_actions')
-            .select('id,title,site,status,priority,created_at,resolved_at,description,country')
-            .order('created_at', { ascending: false })
-            .limit(2000)
-        ),
-        fetchAllPages((from, to) => applyCountry(
-          supabase.from('inspections')
-            .select('id,asset_no,site,status,scheduled_date,completed_date,country')
-            .order('scheduled_date', { ascending: false })
-        ).range(from, to)),
-        supabase.from('kpi_targets').select('metric,target_value,year,month,site').limit(500),
+        ciApi.listImprovementTyreRecords({ country: activeCountry }),
+        ciApi.listImprovementActions({ country: activeCountry }),
+        ciApi.listImprovementInspections({ country: activeCountry }),
+        ciApi.listImprovementKpiTargets(),
       ])
 
       setRecords(recRes.data ?? [])
@@ -823,7 +807,7 @@ export default function ContinuousImprovement() {
   const handleCreateAction = useCallback(async (opp) => {
     setCreatingKey(opp.key)
     try {
-      const { error: insErr } = await supabase.from('corrective_actions').insert({
+      const { error: insErr } = await ciApi.insertCorrectiveAction({
         title: opp.title,
         description: opp.description ?? '',
         site: opp.site ?? 'All',
@@ -834,10 +818,7 @@ export default function ContinuousImprovement() {
       if (insErr) throw insErr
       setToast({ message: 'Corrective action created successfully', type: 'success' })
       // Refresh actions
-      const { data } = await supabase.from('corrective_actions')
-        .select('id,title,site,status,priority,created_at,resolved_at,description')
-        .order('created_at', { ascending: false })
-        .limit(2000)
+      const { data } = await ciApi.listCorrectiveActionsRefresh()
       setActions(data ?? [])
     } catch (e) {
       setToast({ message: e.message ?? 'Failed to create action', type: 'error' })
@@ -848,10 +829,10 @@ export default function ContinuousImprovement() {
   const handleCloseAction = useCallback(async (id) => {
     setClosingId(id)
     try {
-      await supabase.from('corrective_actions').update({
+      await ciApi.closeCorrectiveAction(id, {
         status: 'Closed',
         resolved_at: new Date().toISOString(),
-      }).eq('id', id)
+      })
       setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'Closed', resolved_at: new Date().toISOString() } : a))
       setToast({ message: 'Action closed successfully', type: 'success' })
     } catch (e) {

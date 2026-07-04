@@ -15,7 +15,7 @@ import {
   Recycle, AlertOctagon, ShieldAlert, Flame, Activity,
 } from 'lucide-react'
 import { SkeletonTable } from '../components/ui/Skeleton'
-import { supabase } from '../lib/supabase'
+import * as scrapApi from '../lib/api/tyreScrap'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -194,7 +194,7 @@ export default function TyreScrapManagement() {
 
   useEffect(() => {
     let cancelled = false
-    supabase.from('tyre_disposals').select('tyre_record_id,status').then(({ data }) => {
+    scrapApi.listTyreDisposals().then(({ data }) => {
       if (cancelled || !data) return
       setDisposals(Object.fromEntries(data.map((d) => [d.tyre_record_id, d.status])))
     })
@@ -208,14 +208,8 @@ export default function TyreScrapManagement() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await fetchAllPages((from, to) => supabase
-        .from('tyre_records')
-        .select(
-          'id, asset_no, serial_number, brand, size, position, site, country, ' +
-          'risk_level, tread_depth, cost_per_tyre, km_at_fitment, km_at_removal, ' +
-          'issue_date, removal_date, qty, category, removal_reason'
-        )
-        .range(from, to))
+      const { data, error: err } = await fetchAllPages((from, to) =>
+        scrapApi.listScrapTyreRecords({ from, to }))
       if (err) throw err
       setAllTyres(data ?? [])
     } catch (e) {
@@ -536,8 +530,7 @@ export default function TyreScrapManagement() {
       prevStatus = prev[id]
       return { ...prev, [id]: status }
     })
-    supabase.from('tyre_disposals')
-      .upsert({ tyre_record_id: id, status }, { onConflict: 'tyre_record_id' })
+    scrapApi.upsertTyreDisposal(id, status)
       .then(({ error: err }) => {
         if (err) {
           setDisposals(prev => ({ ...prev, [id]: prevStatus ?? 'Pending' }))

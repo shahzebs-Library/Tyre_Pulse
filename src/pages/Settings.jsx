@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import * as settingsApi from '../lib/api/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
@@ -162,7 +162,7 @@ export default function Settings() {
   }, [profile])
 
   async function loadSettings() {
-    const { data } = await supabase.from('settings').select('key, value')
+    const { data } = await settingsApi.listSettings()
     if (data) {
       const map = {}
       data.forEach(({ key, value }) => { map[key] = typeof value === 'string' ? JSON.parse(value) : value })
@@ -171,19 +171,12 @@ export default function Settings() {
   }
 
   async function loadUploadHistory() {
-    const { data } = await supabase
-      .from('upload_history')
-      .select('id, file_names, records_added, records_skipped, uploaded_at')
-      .order('uploaded_at', { ascending: false })
-      .limit(3)
+    const { data } = await settingsApi.listUploadHistory()
     setUploadHistory(data ?? [])
   }
 
   async function loadKpiTargets() {
-    const { data } = await supabase
-      .from('kpi_targets')
-      .select('*')
-      .eq('year', currentYear)
+    const { data } = await settingsApi.listKpiTargetsByYear(currentYear)
     if (data && data.length > 0) {
       const mapped = { ...KPI_DEFAULTS }
       data.forEach(row => {
@@ -197,11 +190,7 @@ export default function Settings() {
   }
 
   async function loadAlertThresholds() {
-    const { data } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'alert_thresholds')
-      .single()
+    const { data } = await settingsApi.getAlertThresholds()
     if (data?.value) {
       try {
         const parsed = JSON.parse(data.value)
@@ -217,9 +206,9 @@ export default function Settings() {
     setSavingApp(true)
     setAppMsg('')
     await Promise.all([
-      supabase.from('settings').upsert({ key: 'cost_per_tyre', value: String(appSettings.cost_per_tyre), updated_by: profile?.id }, { onConflict: 'key' }),
-      supabase.from('settings').upsert({ key: 'company_name', value: JSON.stringify(appSettings.company_name), updated_by: profile?.id }, { onConflict: 'key' }),
-      supabase.from('settings').upsert({ key: 'currency', value: JSON.stringify(appSettings.currency), updated_by: profile?.id }, { onConflict: 'key' }),
+      settingsApi.upsertSetting({ key: 'cost_per_tyre', value: String(appSettings.cost_per_tyre), updated_by: profile?.id }),
+      settingsApi.upsertSetting({ key: 'company_name', value: JSON.stringify(appSettings.company_name), updated_by: profile?.id }),
+      settingsApi.upsertSetting({ key: 'currency', value: JSON.stringify(appSettings.currency), updated_by: profile?.id }),
     ])
     await refreshSettings()
     setAppMsg('Settings saved')
@@ -231,7 +220,7 @@ export default function Settings() {
     e.preventDefault()
     setSavingProfile(true)
     setProfileMsg('')
-    const { error } = await supabase.from('profiles').update(profileForm).eq('id', user?.id)
+    const { error } = await settingsApi.updateProfile(user?.id, profileForm)
     setProfileMsg(error ? error.message : 'Profile updated')
     setSavingProfile(false)
     setTimeout(() => setProfileMsg(''), 3000)
@@ -275,9 +264,8 @@ export default function Settings() {
     localStorage.setItem('thresh_lowTread', lowTreadMm)
 
     // Save new fields to app_settings
-    const { error } = await supabase.from('app_settings').upsert(
-      { key: 'alert_thresholds', value: JSON.stringify(alertThresholds), updated_by: profile?.id },
-      { onConflict: 'key' }
+    const { error } = await settingsApi.upsertAppSetting(
+      { key: 'alert_thresholds', value: JSON.stringify(alertThresholds), updated_by: profile?.id }
     )
 
     setThreshMsg(error ? 'Save failed: ' + error.message : 'Thresholds saved')
@@ -300,9 +288,7 @@ export default function Settings() {
       created_by: profile?.id,
     }))
 
-    const { error } = await supabase
-      .from('kpi_targets')
-      .upsert(upserts, { onConflict: 'metric,year,month,site' })
+    const { error } = await settingsApi.upsertKpiTargets(upserts)
 
     if (error) {
       setKpiMsg('Save failed: ' + error.message)
@@ -340,10 +326,7 @@ export default function Settings() {
   })
 
   async function loadSchedules() {
-    const { data, error } = await supabase
-      .from('report_schedules')
-      .select('id,name,report_type,frequency,day_of_week,day_of_month,time_of_day,recipients,active')
-      .order('created_at', { ascending: true })
+    const { data, error } = await settingsApi.listReportSchedules()
     if (error) { setScheduleError(error.message); return }
     setSchedules((data || []).map(rowToUi))
   }
@@ -351,7 +334,7 @@ export default function Settings() {
   async function addSchedule() {
     if (!newSchedule.recipients.trim()) return
     setScheduleError('')
-    const { error } = await supabase.from('report_schedules').insert({
+    const { error } = await settingsApi.insertReportSchedule({
       name: newSchedule.reportName,
       report_type: NAME_TO_TYPE[newSchedule.reportName] || 'executive',
       frequency: newSchedule.frequency.toLowerCase(),
@@ -370,7 +353,7 @@ export default function Settings() {
 
   async function deleteSchedule(id) {
     setScheduleError('')
-    const { data, error } = await supabase.from('report_schedules').delete().eq('id', id).select('id')
+    const { data, error } = await settingsApi.deleteReportSchedule(id)
     if (error || (data?.length ?? 0) === 0) {
       setScheduleError(error?.message || 'The schedule could not be deleted - check your permissions.')
       return
@@ -383,9 +366,7 @@ export default function Settings() {
     const target = schedules.find(s => s.id === id)
     if (!target) return
     setScheduleError('')
-    const { error } = await supabase.from('report_schedules')
-      .update({ active: !target.active, next_run_at: null }) // delivery fn recomputes
-      .eq('id', id)
+    const { error } = await settingsApi.updateReportSchedule(id, { active: !target.active, next_run_at: null }) // delivery fn recomputes
     if (error) { setScheduleError(`Could not update the schedule: ${error.message}`); return }
     await loadSchedules()
   }
@@ -423,7 +404,7 @@ export default function Settings() {
     if (pwNew !== pwConfirm)        { setPwMsg('Passwords do not match'); return }
     setSavingPw(true)
     setPwMsg('')
-    const { error } = await supabase.auth.updateUser({ password: pwNew })
+    const { error } = await settingsApi.updatePassword(pwNew)
     if (error) {
       setPwMsg(error.message)
     } else {
@@ -439,10 +420,10 @@ export default function Settings() {
     setRemovingMfa(true)
     setMfaMsg('')
     try {
-      const { data: factors } = await supabase.auth.mfa.listFactors()
+      const { data: factors } = await settingsApi.listMfaFactors()
       const factor = factors?.totp?.[0]
       if (!factor) throw new Error('No active TOTP factor found')
-      const { error } = await supabase.auth.mfa.unenroll({ factorId: factor.id })
+      const { error } = await settingsApi.unenrollMfaFactor(factor.id)
       if (error) throw error
       setMfaEnabled(false)
       setMfaMsg('Two-factor authentication removed')

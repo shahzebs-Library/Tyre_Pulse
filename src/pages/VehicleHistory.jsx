@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as vehicleHistoryApi from '../lib/api/vehicleHistory'
 import { useSettings } from '../contexts/SettingsContext'
 import { computeAssetMetrics, bucketByMonth, countBy, sum } from '../lib/analyticsEngine'
 import { detectAnomalies, ANOMALY_TYPES } from '../lib/anomalyEngine'
@@ -255,18 +254,14 @@ export default function VehicleHistory() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data } = await fetchAllPages((from, to) => {
-        let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: true })
-        if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-        return q.range(from, to)
-      }, { max: 200000 })
+      const { data } = await vehicleHistoryApi.listFleetTyreRecords({ country: activeCountry })
       const rows = data || []
       setAllRecords(rows)
       const uniqSites = [...new Set(rows.map(r => r.site).filter(Boolean))].sort()
       setSites(uniqSites)
 
       // Load fleet master data
-      const { data: fleetData } = await supabase.from('vehicle_fleet').select('*')
+      const { data: fleetData } = await vehicleHistoryApi.getVehicleFleet()
       const map = {}
       ;(fleetData || []).forEach(v => { map[v.asset_no] = v })
       setFleetMap(map)
@@ -352,22 +347,10 @@ export default function VehicleHistory() {
     }
     async function loadRelated() {
       const [actRes, rcaRes, insRes, tyreRes] = await Promise.all([
-        supabase.from('corrective_actions')
-          .select('id,title,status,priority,due_date,site,created_at')
-          .or(`asset_no.eq.${selected},description.ilike.%${selected}%`)
-          .limit(20),
-        supabase.from('rca_records')
-          .select('id,asset_no,root_cause,tyre_serial,brand,site,created_at')
-          .eq('asset_no', selected)
-          .limit(20),
-        supabase.from('inspections')
-          .select('id,asset_no,status,site,created_at')
-          .eq('asset_no', selected)
-          .limit(20),
-        supabase.from('tyre_records')
-          .select('position,risk_level,brand,serial_no,issue_date')
-          .eq('asset_no', selected)
-          .order('issue_date', { ascending: false }),
+        vehicleHistoryApi.listAssetActions(selected),
+        vehicleHistoryApi.listAssetRca(selected),
+        vehicleHistoryApi.listAssetInspections(selected),
+        vehicleHistoryApi.listAssetTyreRecords(selected),
       ])
       setRelatedActions(actRes.data || [])
       setRelatedRca(rcaRes.data || [])

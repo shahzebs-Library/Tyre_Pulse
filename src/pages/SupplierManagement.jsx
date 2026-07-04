@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '../lib/supabase'
+import * as supplierApi from '../lib/api/supplierManagementApi'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -182,14 +182,6 @@ function pick(obj, cols) {
   const out = {}
   cols.forEach(k => { if (obj[k] !== undefined) out[k] = obj[k] })
   return out
-}
-
-// Country-scoped select for the (brand,country) / (supplier,country) rows.
-function applyCountryFilter(query, activeCountry) {
-  if (activeCountry && activeCountry !== 'All') {
-    return query.or(`country.eq.${activeCountry},country.is.null`)
-  }
-  return query
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -636,11 +628,8 @@ export default function SupplierManagement() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
-    let q = supabase
-      .from('tyre_records')
-      .select('id, brand, supplier, qty, cost_per_tyre, issue_date, site, country, position, km_at_fitment, km_at_removal, risk_level, size, serial_number, asset_no')
-    q = applyCountryFilter(q, activeCountry)
-    const { data, error: err } = await fetchAllPages((from, to) => q.range(from, to))
+    const { data, error: err } = await fetchAllPages((from, to) =>
+      supplierApi.listSupplierTyres({ from, to, country: activeCountry }))
     if (err) { setError(err.message); setLoading(false); return }
     setRecords(data || [])
     setLoading(false)
@@ -649,9 +638,7 @@ export default function SupplierManagement() {
   // Load supplier ratings/notes
   const fetchRatings = useCallback(async () => {
     setRatingsError(null)
-    let q = supabase.from('supplier_ratings').select('id, brand, rating, notes, country')
-    q = applyCountryFilter(q, activeCountry)
-    const { data, error: err } = await q
+    const { data, error: err } = await supplierApi.listSupplierRatings({ country: activeCountry })
     if (err) { setRatingsError(err.message); return }
     const map = {}
     ;(data || []).forEach(row => {
@@ -664,11 +651,7 @@ export default function SupplierManagement() {
   const fetchContracts = useCallback(async () => {
     setContractsLoading(true)
     setContractsError(null)
-    let q = supabase.from('supplier_contracts')
-      .select('id, supplier_name, contract_start, contract_end, payment_terms, price_per_unit, min_order, notes, country')
-      .order('created_at', { ascending: false })
-    q = applyCountryFilter(q, activeCountry)
-    const { data, error: err } = await q
+    const { data, error: err } = await supplierApi.listSupplierContracts({ country: activeCountry })
     if (err) { setContractsError(err.message); setContractsLoading(false); return }
     setContracts(data || [])
     setContractsLoading(false)
@@ -676,11 +659,10 @@ export default function SupplierManagement() {
 
   // Load warranty claims + purchase orders for the supplier scorecard.
   const fetchScorecardSources = useCallback(async () => {
-    let wq = supabase.from('warranty_claims').select('id, supplier, brand, claim_status, credit_amount, country')
-    wq = applyCountryFilter(wq, activeCountry)
-    let pq = supabase.from('purchase_orders').select('id, supplier_name, vendor_name, expected_delivery, actual_delivery, country')
-    pq = applyCountryFilter(pq, activeCountry)
-    const [{ data: w }, { data: p }] = await Promise.all([wq, pq])
+    const [{ data: w }, { data: p }] = await Promise.all([
+      supplierApi.listScorecardWarrantyClaims({ country: activeCountry }),
+      supplierApi.listScorecardPurchaseOrders({ country: activeCountry }),
+    ])
     setScWarranty(w || [])
     setScPos(p || [])
   }, [activeCountry])
@@ -765,9 +747,7 @@ export default function SupplierManagement() {
       country: scopedCountry,
       created_by: user?.id || null,
     }, RATING_COLS)
-    const { error: err } = await supabase
-      .from('supplier_ratings')
-      .upsert(payload, { onConflict: 'brand,country' })
+    const { error: err } = await supplierApi.upsertSupplierRating(payload)
     if (err) return err.message
     await fetchRatings()
     return null
@@ -816,9 +796,9 @@ export default function SupplierManagement() {
 
     let err
     if (contract.id) {
-      ;({ error: err } = await supabase.from('supplier_contracts').update(payload).eq('id', contract.id))
+      ;({ error: err } = await supplierApi.updateSupplierContract(contract.id, payload))
     } else {
-      ;({ error: err } = await supabase.from('supplier_contracts').insert(payload))
+      ;({ error: err } = await supplierApi.insertSupplierContract(payload))
     }
     if (err) return err.message
     await fetchContracts()
@@ -830,8 +810,7 @@ export default function SupplierManagement() {
     if (!contractDeleteTarget) return
     setContractDeleting(true)
     setContractDeleteError(null)
-    const { data, error: err } = await supabase
-      .from('supplier_contracts').delete().eq('id', contractDeleteTarget.id).select('id')
+    const { data, error: err } = await supplierApi.deleteSupplierContract(contractDeleteTarget.id)
     if (err || (data?.length ?? 0) === 0) {
       setContractDeleteError(err?.message || 'The contract could not be deleted - you may not have permission, or it was already removed.')
       setContractDeleting(false)

@@ -16,7 +16,7 @@ import {
   Search, Filter, ChevronDown, ChevronUp,
   TrendingUp, BarChart2, Eye, Printer,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import * as procurementApi from '../lib/api/procurement'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear, formatMonth } from '../lib/formatters'
@@ -138,7 +138,7 @@ export default function Procurement() {
   const [budgetError, setBudgetError] = useState('')
 
   useEffect(() => {
-    supabase.from('settings').select('value').eq('key', BUDGET_KEY).maybeSingle().then(({ data }) => {
+    procurementApi.getSetting(BUDGET_KEY).then(({ data }) => {
       const v = parseFloat(typeof data?.value === 'string' ? JSON.parse(data.value) : data?.value)
       if (Number.isFinite(v)) setBudget(v)
     })
@@ -149,9 +149,7 @@ export default function Procurement() {
     setLoading(true)
     setError(null)
     try {
-      let q = supabase.from('purchase_orders').select('*').order('order_date', { ascending: false })
-      if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data, error: err } = await q
+      const { data, error: err } = await procurementApi.listPurchaseOrders({ country: activeCountry })
       if (err) throw err
       setOrders(data || [])
     } catch (e) {
@@ -381,7 +379,7 @@ export default function Procurement() {
     const po = orders.find(o => o.id === poId)
     if (!po) return
     const items = po.items.map((it, i) => i === itemIdx ? { ...it, received_qty: parseInt(qty) || 0 } : it)
-    supabase.from('purchase_orders').update({ items, updated_at: new Date().toISOString() }).eq('id', poId).then(({ error: err }) => {
+    procurementApi.updatePurchaseOrder(poId, { items, updated_at: new Date().toISOString() }).then(({ error: err }) => {
       if (err) { alert('Update failed: ' + err.message); return }
       load()
       setViewPO(v => v ? { ...v, items } : null)
@@ -422,13 +420,13 @@ export default function Procurement() {
       }
 
       if (editPO) {
-        const { error: err } = await supabase.from('purchase_orders').update(payload).eq('id', editPO.id)
+        const { error: err } = await procurementApi.updatePurchaseOrder(editPO.id, payload)
         if (err) throw err
       } else {
-        const { data: poNo, error: rpcErr } = await supabase.rpc('generate_po_number')
+        const { data: poNo, error: rpcErr } = await procurementApi.generatePoNumber()
         if (rpcErr) payload.po_number = `PO-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
         else payload.po_number = poNo
-        const { error: err } = await supabase.from('purchase_orders').insert(payload)
+        const { error: err } = await procurementApi.insertPurchaseOrder(payload)
         if (err) throw err
       }
 
@@ -445,7 +443,7 @@ export default function Procurement() {
   async function updateStatus(po, newStatus) {
     const patch = { status: newStatus }
     if (newStatus === 'Delivered') patch.actual_delivery = new Date().toISOString().slice(0, 10)
-    const { error: err } = await supabase.from('purchase_orders').update(patch).eq('id', po.id)
+    const { error: err } = await procurementApi.updatePurchaseOrder(po.id, patch)
     if (err) { alert('Update failed: ' + err.message); return }
     await load()
     if (viewPO?.id === po.id) setViewPO(v => ({ ...v, ...patch }))
@@ -458,8 +456,7 @@ export default function Procurement() {
       setBudgetError('')
       const prev = budget
       setBudget(val)
-      const { error: err } = await supabase.from('settings')
-        .upsert({ key: BUDGET_KEY, value: JSON.stringify(val) }, { onConflict: 'key' })
+      const { error: err } = await procurementApi.upsertSetting(BUDGET_KEY, JSON.stringify(val))
       if (err) {
         setBudget(prev)
         setBudgetError(`Could not save the budget: ${err.message}`)

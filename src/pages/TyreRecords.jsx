@@ -1,12 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { supabase } from '../lib/supabase'
+import * as tyreRecordsApi from '../lib/api/tyreRecords'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
-import { applyCountry } from '../lib/countryFilter'
 import { ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
 import { formatCurrencyCompact } from '../lib/formatters'
 import { useInvalidate } from '../hooks/useSupabaseQuery'
@@ -93,8 +92,8 @@ export default function TyreRecords() {
 
   async function loadFilters() {
     const [sRes, bRes] = await Promise.all([
-      supabase.from('tyre_records').select('site').not('site', 'is', null),
-      supabase.from('tyre_records').select('brand').not('brand', 'is', null),
+      tyreRecordsApi.listSiteOptions(),
+      tyreRecordsApi.listBrandOptions(),
     ])
     setSites([...new Set((sRes.data ?? []).map(r => r.site))].sort())
     setBrands([...new Set((bRes.data ?? []).map(r => r.brand))].sort())
@@ -102,19 +101,9 @@ export default function TyreRecords() {
 
   const loadRecords = useCallback(async () => {
     setLoading(true)
-    let q = supabase
-      .from('tyre_records')
-      .select('*', { count: 'exact' })
-      .order('issue_date', { ascending: false })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
-
-    if (search) q = q.or(`asset_no.ilike.%${search}%,serial_no.ilike.%${search}%,mis_number.ilike.%${search}%,job_card.ilike.%${search}%`)
-    if (siteFilter) q = q.eq('site', siteFilter)
-    if (brandFilter) q = q.eq('brand', brandFilter)
-    if (riskFilter) q = q.eq('risk_level', riskFilter)
-    q = applyCountry(q, activeCountry)
-
-    const { data, count } = await q
+    const { data, count } = await tyreRecordsApi.listRecords({
+      page, pageSize: PAGE_SIZE, search, siteFilter, brandFilter, riskFilter, country: activeCountry,
+    })
     setRecords(data ?? [])
     setTotal(count ?? 0)
     clear()
@@ -169,8 +158,8 @@ export default function TyreRecords() {
       uploaded_by: profile?.id,
     }
     const { error } = editRecord?.id
-      ? await supabase.from('tyre_records').update(payload).eq('id', editRecord.id)
-      : await supabase.from('tyre_records').insert(payload)
+      ? await tyreRecordsApi.updateRecord(editRecord.id, payload)
+      : await tyreRecordsApi.insertRecord(payload)
 
     if (error) { setFormError(error.message); setSaving(false); return }
     setEditRecord(null)
@@ -194,7 +183,7 @@ export default function TyreRecords() {
     const ids = [...selected]
     const BATCH = 200
     for (let i = 0; i < ids.length; i += BATCH) {
-      await supabase.from('tyre_records').update(patch).in('id', ids.slice(i, i + BATCH))
+      await tyreRecordsApi.updateRecordsByIds(ids.slice(i, i + BATCH), patch)
     }
     setShowBulkEdit(false)
     setBulkForm(EMPTY_BULK)
@@ -214,8 +203,7 @@ export default function TyreRecords() {
         const chunk = ids.slice(i, i + BATCH)
         // Count-verify each batch so a silent RLS/constraint failure surfaces
         // instead of the button appearing to do nothing.
-        const { data, error } = await supabase
-          .from('tyre_records').delete().in('id', chunk).select('id')
+        const { data, error } = await tyreRecordsApi.deleteRecordsByIds(chunk)
         if (error) throw error
         deleted += data?.length ?? 0
       }
@@ -272,7 +260,7 @@ export default function TyreRecords() {
     const ids = rows.map(r => r.id)
     const BATCH = 200
     for (let i = 0; i < ids.length; i += BATCH) {
-      await supabase.from('tyre_records').update({ status: 'Scrapped' }).in('id', ids.slice(i, i + BATCH))
+      await tyreRecordsApi.updateRecordsByIds(ids.slice(i, i + BATCH), { status: 'Scrapped' })
     }
     invalidate(['tyres'])
     loadRecords()
@@ -294,13 +282,9 @@ export default function TyreRecords() {
   ]
 
   async function fetchAll() {
-    let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: false })
-    if (search)      q = q.or(`asset_no.ilike.%${search}%,serial_no.ilike.%${search}%,mis_number.ilike.%${search}%,job_card.ilike.%${search}%`)
-    if (siteFilter)  q = q.eq('site', siteFilter)
-    if (brandFilter) q = q.eq('brand', brandFilter)
-    if (riskFilter)  q = q.eq('risk_level', riskFilter)
-    q = applyCountry(q, activeCountry)
-    const { data } = await q
+    const { data } = await tyreRecordsApi.listAllRecords({
+      search, siteFilter, brandFilter, riskFilter, country: activeCountry,
+    })
     return data ?? []
   }
 

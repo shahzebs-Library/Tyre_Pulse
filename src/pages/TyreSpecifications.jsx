@@ -16,8 +16,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 const uuidv4 = () => crypto.randomUUID()
-import { supabase } from '../lib/supabase'
-import { fetchAllPages } from '../lib/fetchAll'
+import * as tyreSpecsApi from '../lib/api/tyreSpecs'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -536,10 +535,10 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
       }
 
       // Server-side sequential WO number; fall back to year-based sequence.
-      const { data: woNo } = await supabase.rpc('generate_work_order_no')
+      const { data: woNo } = await tyreSpecsApi.generateWorkOrderNo()
       payload.work_order_no = woNo || `WO-${new Date().getFullYear()}-${Date.now()}`
 
-      const { error: insErr } = await supabase.from('work_orders').insert(payload)
+      const { error: insErr } = await tyreSpecsApi.insertWorkOrder(payload)
       if (insErr) throw insErr
       setDone(true)
     } catch (err) {
@@ -669,11 +668,7 @@ export default function TyreSpecifications() {
     setLoadingSpecs(true)
     setSpecsError('')
     try {
-      let q = supabase
-        .from('tyre_specifications')
-        .select('id, vehicle_type, position, approved_sizes, approved_brands, min_load_index, min_speed_index, recommended_pressure, min_tread_depth, notes, country, created_by, created_at, updated_at')
-      if (country) q = q.or(`country.eq.${country},country.is.null`)
-      const { data, error } = await q.order('vehicle_type', { ascending: true }).order('position', { ascending: true })
+      const { data, error } = await tyreSpecsApi.listSpecs({ country })
       if (error) throw error
       setSpecs((data ?? []).map(rowToSpec))
     } catch (e) {
@@ -695,14 +690,10 @@ export default function TyreSpecifications() {
   async function fetchLiveData() {
     setLoadingRecords(true)
     try {
-      const { data: tr } = await fetchAllPages((from, to) => {
-        let q = supabase.from('tyre_records').select('id, asset_no, serial_number, position, brand, size, site, country, issue_date, risk_level')
-        if (activeCountry && activeCountry !== 'All') q = q.eq('country', activeCountry)
-        return q.order('issue_date', { ascending: false }).range(from, to)
-      }, { max: 200000 })
+      const { data: tr } = await tyreSpecsApi.listComplianceTyreRecords({ country: activeCountry })
       setTyreRecords(tr ?? [])
 
-      const { data: fm } = await supabase.from('fleet_master').select('id, asset_no, vehicle_type, make, model, site, country').catch(() => ({ data: null }))
+      const { data: fm } = await tyreSpecsApi.getFleetMaster()
       setFleetMaster(fm ?? [])
     } catch {
       setTyreRecords([])
@@ -860,12 +851,12 @@ export default function TyreSpecifications() {
       const existing = editingSpec?.id ? specs.find(s => s.id === editingSpec.id) : null
       if (existing) {
         const row = { ...specToRow(form, { country }), updated_at: new Date().toISOString() }
-        const { error } = await supabase.from('tyre_specifications').update(row).eq('id', existing.id)
+        const { error } = await tyreSpecsApi.updateSpec(existing.id, row)
         if (error) throw error
         logHistory('Edit', form, 'Spec Update', JSON.stringify(existing), JSON.stringify(form))
       } else {
         const row = specToRow(form, { country, createdBy: user?.id })
-        const { error } = await supabase.from('tyre_specifications').insert(row)
+        const { error } = await tyreSpecsApi.insertSpec(row)
         if (error) throw error
         logHistory('Add', form)
       }
@@ -883,7 +874,7 @@ export default function TyreSpecifications() {
     const target = deletingSpec
     setSpecsError('')
     try {
-      const { error } = await supabase.from('tyre_specifications').delete().eq('id', target.id)
+      const { error } = await tyreSpecsApi.deleteSpec(target.id)
       if (error) throw error
       logHistory('Delete', target)
       await fetchSpecs()
@@ -900,7 +891,7 @@ export default function TyreSpecifications() {
     setSpecsError('')
     try {
       const row = specToRow(def, { country, createdBy: user?.id })
-      const { error } = await supabase.from('tyre_specifications').insert(row)
+      const { error } = await tyreSpecsApi.insertSpec(row)
       if (error) throw error
       logHistory('Quick Setup Import', def)
       await fetchSpecs()
@@ -942,7 +933,7 @@ export default function TyreSpecifications() {
           }, { country, createdBy: user?.id }))
         })
         if (imported.length === 0) { setImportError('No valid rows found. Check column headers.'); return }
-        const { error } = await supabase.from('tyre_specifications').insert(imported)
+        const { error } = await tyreSpecsApi.insertSpec(imported)
         if (error) throw error
         logHistory('Import', { vehicle_type: `${imported.length} specs`, position: 'Bulk Import' })
         await fetchSpecs()

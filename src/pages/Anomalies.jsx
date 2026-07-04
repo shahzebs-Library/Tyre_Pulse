@@ -127,15 +127,28 @@ export default function Anomalies() {
     catch { return new Set() }
   })
 
+  // Persist dismissals via an effect — never inside a setState updater
+  // (StrictMode double-invokes updaters, which would double-write).
   useEffect(() => {
+    try { localStorage.setItem('tp_dismissed_anomalies', JSON.stringify([...dismissed])) }
+    catch { /* storage disabled */ }
+  }, [dismissed])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
     fetchAllPages((from, to) => {
       let q = supabase
         .from('tyre_records')
         .select('id,issue_date,asset_no,serial_no,brand,site,risk_level,cost_per_tyre,qty,description')
         .order('issue_date', { ascending: true })
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
+      if (activeCountry !== 'All') q = q.or(`country.eq.${activeCountry},country.is.null`)
       return q.range(from, to)
-    }).then(({ data }) => { setRecords(data || []); setHasRun(false); setAnomalies([]); setLoading(false) })
+    })
+      .then(({ data }) => { if (cancelled) return; setRecords(data || []); setHasRun(false); setAnomalies([]) })
+      .catch(() => { if (!cancelled) setRecords([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [activeCountry])
 
   function runDetection() {
@@ -150,17 +163,11 @@ export default function Anomalies() {
   }
 
   function dismiss(id) {
-    setDismissed(prev => {
-      const next = new Set(prev)
-      next.add(id)
-      localStorage.setItem('tp_dismissed_anomalies', JSON.stringify([...next]))
-      return next
-    })
+    setDismissed(prev => new Set(prev).add(id))
   }
 
   function clearDismissed() {
     setDismissed(new Set())
-    localStorage.removeItem('tp_dismissed_anomalies')
   }
 
   const active = useMemo(() => anomalies.filter(a => !dismissed.has(a.id)), [anomalies, dismissed])

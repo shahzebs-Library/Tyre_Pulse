@@ -250,18 +250,22 @@ export default function TyreExchange() {
 
   // ── Data Loading ──────────────────────────────────────────────────────────────
   useEffect(() => {
+    let cancelled = false
     async function load() {
       setLoading(true)
-      const { data: recData } = await exchangeApi.listExchangeTyreRecords({ country: activeCountry })
-
-      // Try loading stock_movements table (may not exist)
-      const { data: movData } = await exchangeApi.listStockMovements()
-
-      setRecords(recData || [])
-      setStockMovements(movData || [])
-      setLoading(false)
+      try {
+        const { data: recData } = await exchangeApi.listExchangeTyreRecords({ country: activeCountry })
+        // Try loading stock_movements table (may not exist)
+        const { data: movData } = await exchangeApi.listStockMovements()
+        if (cancelled) return   // a newer country selection superseded this load
+        setRecords(recData || [])
+        setStockMovements(movData || [])
+      } finally {
+        if (!cancelled) setLoading(false)   // never leave the spinner stuck
+      }
     }
     load()
+    return () => { cancelled = true }
   }, [activeCountry])
 
   // ── Derived data ──────────────────────────────────────────────────────────────

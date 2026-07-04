@@ -68,37 +68,28 @@ export default function Alerts() {
 
   useEffect(() => { refresh() }, [refresh])
 
+  // Persist dismissals via an effect — never inside a setState updater (React
+  // StrictMode double-invokes updaters, which would double-write).
+  useEffect(() => {
+    try { localStorage.setItem('tp_dismissed_alerts', JSON.stringify([...dismissed])) }
+    catch { /* storage disabled */ }
+  }, [dismissed])
+
   // ── Dismiss helpers ───────────────────────────────────────────────────────────
   function dismiss(id) {
-    setDismissed(prev => {
-      const next = new Set(prev)
-      next.add(id)
-      localStorage.setItem('tp_dismissed_alerts', JSON.stringify([...next]))
-      return next
-    })
+    setDismissed(prev => new Set(prev).add(id))
   }
 
   function undismiss(id) {
-    setDismissed(prev => {
-      const next = new Set(prev)
-      next.delete(id)
-      localStorage.setItem('tp_dismissed_alerts', JSON.stringify([...next]))
-      return next
-    })
+    setDismissed(prev => { const next = new Set(prev); next.delete(id); return next })
   }
 
   function dismissFiltered() {
-    setDismissed(prev => {
-      const next = new Set(prev)
-      visible.forEach(a => next.add(a.id))
-      localStorage.setItem('tp_dismissed_alerts', JSON.stringify([...next]))
-      return next
-    })
+    setDismissed(prev => { const next = new Set(prev); visible.forEach(a => next.add(a.id)); return next })
   }
 
   function clearAllDismissed() {
     setDismissed(new Set())
-    localStorage.removeItem('tp_dismissed_alerts')
   }
 
   // ── Derived data ──────────────────────────────────────────────────────────────

@@ -86,6 +86,8 @@ export default function TyreRecords() {
 
   // Virtual scroll ref for the tbody scroll container
   const parentRef = useRef(null)
+  // Monotonic request id: only the newest loadRecords() response is applied.
+  const reqIdRef = useRef(0)
 
   useEffect(() => { loadFilters() }, [])
   useEffect(() => { loadRecords() }, [page, search, siteFilter, brandFilter, riskFilter, activeCountry])
@@ -100,14 +102,19 @@ export default function TyreRecords() {
   }
 
   const loadRecords = useCallback(async () => {
+    const myReq = ++reqIdRef.current
     setLoading(true)
-    const { data, count } = await tyreRecordsApi.listRecords({
-      page, pageSize: PAGE_SIZE, search, siteFilter, brandFilter, riskFilter, country: activeCountry,
-    })
-    setRecords(data ?? [])
-    setTotal(count ?? 0)
-    clear()
-    setLoading(false)
+    try {
+      const { data, count } = await tyreRecordsApi.listRecords({
+        page, pageSize: PAGE_SIZE, search, siteFilter, brandFilter, riskFilter, country: activeCountry,
+      })
+      if (myReq !== reqIdRef.current) return   // a newer filter/page superseded this
+      setRecords(data ?? [])
+      setTotal(count ?? 0)
+      clear()
+    } finally {
+      if (myReq === reqIdRef.current) setLoading(false)   // never leave the spinner stuck
+    }
   }, [page, search, siteFilter, brandFilter, riskFilter, activeCountry])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)

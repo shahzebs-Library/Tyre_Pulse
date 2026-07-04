@@ -1,10 +1,37 @@
 # TyrePulse - Developer Handoff
-**Last updated:** 1 July 2026
-**Branch:** `main` (all work merged)
-**Web build status:** ✅ Clean - builds, 507/507 tests passing, auto-deploys to Vercel
+**Last updated:** 4 July 2026
+**Branch:** `main` (all work merged; auto-deploys to Vercel)
+**Web build status:** ✅ Clean - builds, **730/730 tests passing**, auto-deploys to Vercel
 **Mobile build status:** ✅ EAS Android build green - Expo SDK 53, auto-builds on push to `main`
-**DB migrations applied to live Supabase:** through **V51** (project `jhssdmeruxtrlqnwfksc`)
+**DB migrations applied to live Supabase:** through **V71** (project `jhssdmeruxtrlqnwfksc`)
 **Live URL under test:** tyre-pulse-peach.vercel.app
+**Active branches:** `main` · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
+
+---
+
+## Session 7 (4 July 2026) — Security hardening, data-race fixes, branch consolidation
+
+**Theme:** an in-depth security/data/React audit → fix the confirmed-safe findings, then consolidate the branch clutter onto `main`.
+
+### Security (all live, gated: 730 tests + build green)
+- **V70 `profiles_org_isolation`** — the only SELECT policy on `profiles` was `auth.role()='authenticated'`, so any signed-in user could read **every** org's profiles (names, roles, org, emp codes). Added a RESTRICTIVE gate (`id=auth.uid()` OR `app_is_org_admin()` OR `org_id=app_current_org()`). Helpers are SECURITY DEFINER (no RLS recursion); `app_current_org()` reads `profiles.org_id` (verified). Proven with a rolled-back two-tenant probe (org-A user sees only self; no org-B/admin leak).
+- **V71 `report_org_tyre_spend` + `send-scheduled-reports` scoping** — the cron digest counted tyre_records/work_orders/corrective_actions/accidents and summed spend across **all** organisations with the service role → org A emailed org B's numbers. Now scoped by `schedule.org_id`; edge function redeployed **v2** (verify_jwt preserved).
+- **Daily Ops print XSS** — `printBriefing()` interpolated DB fields into `document.write` HTML → now HTML-escaped + severity class whitelisted.
+- **`useRealtimeAlerts.markAllRead`** — RPCs were fired inside the state updater (StrictMode double-fires) → moved outside.
+- **Verified safe:** impersonating `anon`, all sensitive tables return **0 rows** (RLS holds despite default table grants). `get_advisors(security)` → **0 errors**.
+
+### Data-race hardening
+- **`StockManagement.load()`** — a thrown fetch left the spinner stuck forever with no message → wrapped in try/catch/finally (surfaces via the existing error banner).
+- **`FleetMaster.loadRecords()`** — fired a query per search keystroke with no ordering guarantee → added a 300ms debounced search term + a monotonic request-id guard (only the newest response applies) + `setLoading` in finally.
+
+### Branch consolidation
+- Verified (dry-run merges + `--merged`) that **all** feature/session branches' work is already in `main`; documented in `docs/BRANCH_CONSOLIDATION_2026-07-04.md` with recovery SHAs. Local branches pruned to the 4 protected.
+- ⚠️ **Remote branch deletion is still pending** — this session's git credential returns **403** on `git push --delete` (can push commits, cannot delete refs; no GitHub MCP delete tool). **Next dev / owner:** delete the 24 listed branches via the GitHub UI (Branches page) or an authenticated terminal — command is in `docs/BRANCH_CONSOLIDATION_2026-07-04.md`.
+
+### Still open / needs the owner
+- Set the **`RESEND_API_KEY`** edge-function secret so scheduled digests actually send.
+- Fill each org's branding in **User Management → Branding**.
+- **Deferred (need a decision):** `get_email_by_identifier` login enumeration (inherent to email/username login UX); a strict **CSP header** in `vercel.json` (risky to add blind against the live app); ~30 low-value unmount cancellation guards (cosmetic warnings, not correctness bugs).
 
 ---
 

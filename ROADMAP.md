@@ -1,6 +1,6 @@
 # TyrePulse - Complete Product Roadmap
 **Readymix Concrete Company · Built by Shahzeb Rahman © 2026**
-**Version 6.1 · Updated June 2026**
+**Version 6.1 · Updated 4 July 2026 · Live DB through migration V71 · 730 web tests green**
 
 ---
 

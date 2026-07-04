@@ -16,6 +16,20 @@
   `tyre_records`.
 - **AI cost controls** - per-user rate limiting + response cache + `ai_usage_log`.
 
+### 2026-07-04 hardening pass (live, gated)
+- **Profiles org isolation (V70)** — `profiles` SELECT policy was
+  `auth.role()='authenticated'` (every signed-in user could read all orgs'
+  profiles). Added RESTRICTIVE `profiles_org_isolation` (own row · org admin ·
+  same org). Proven with a rolled-back two-tenant probe.
+- **Scheduled-report tenant scoping (V71)** — `send-scheduled-reports` digest
+  aggregated counts/spend across ALL orgs; now scoped to the schedule's
+  `org_id` via the new service-role-only `report_org_tyre_spend` RPC.
+- **Daily Ops print XSS** — DB fields in `printBriefing()` now HTML-escaped.
+- **`useRealtimeAlerts`** — mark-read RPCs moved out of the state updater.
+- **anon read re-verified** — impersonating `anon`, all sensitive tables return
+  0 rows (RLS holds despite default table grants).
+- **Advisor:** `get_advisors(security)` → 0 ERROR-level findings.
+
 ## Open risks
 
 | ID | Risk | Sev | Current state | Required action | Phase |

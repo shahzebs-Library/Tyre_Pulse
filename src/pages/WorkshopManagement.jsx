@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
+import { applyCountry } from '../lib/countryFilter'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
@@ -365,7 +366,7 @@ function JobDrawer({ job, onClose, currency }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function WorkshopManagement() {
-  const { activeCurrency } = useSettings()
+  const { activeCurrency, activeCountry } = useSettings()
   const { profile } = useAuth()
 
   const [orders, setOrders]       = useState([])
@@ -401,6 +402,7 @@ export default function WorkshopManagement() {
       if (priority) q = q.eq('priority', priority)
       if (dateFrom) q = q.gte('created_at', dateFrom)
       if (dateTo)   q = q.lte('created_at', dateTo + 'T23:59:59')
+      q = applyCountry(q, activeCountry)
 
       const { data, error: err } = await q
       if (err) {
@@ -419,7 +421,7 @@ export default function WorkshopManagement() {
     } finally {
       setLoading(false)
     }
-  }, [site, workType, status, priority, dateFrom, dateTo])
+  }, [site, workType, status, priority, dateFrom, dateTo, activeCountry])
 
   useEffect(() => { fetchData() }, [fetchData])
 

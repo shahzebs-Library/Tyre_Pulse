@@ -1,0 +1,12 @@
+-- V78: stop fabricating tyre cost.
+--
+-- tyre_records.cost_per_tyre carried DEFAULT 1200, so any imported/inserted row
+-- without an explicit cost silently became 1200 SAR — inflating every CPK / cost
+-- / scrap-cost KPI and violating the "no fabricated values; missing cost -> 0/—,
+-- never a default" rule. Drop the default so a missing cost is NULL; the compute
+-- layer already renders NULL/absent cost as 0.
+--
+-- Existing rows are unchanged (their historical value is retained); only future
+-- inserts stop being back-filled with 1200. Column is nullable, so inserts that
+-- omit cost succeed with NULL.
+ALTER TABLE public.tyre_records ALTER COLUMN cost_per_tyre DROP DEFAULT;

@@ -17,6 +17,7 @@ import {
 import EmailReportModal from '../components/EmailReportModal'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
+import { applyCountry } from '../lib/countryFilter'
 import PageHeader from '../components/ui/PageHeader'
 import {
   computeFleetAvailability,
@@ -353,7 +354,7 @@ function Pagination({ page, totalPages, onChange }) {
 // Main Component
 // ══════════════════════════════════════════════════════════════════════════════
 export default function FleetIntelligence() {
-  const { activeCurrency } = useSettings()
+  const { activeCurrency, activeCountry } = useSettings()
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [records, setRecords]         = useState([])
@@ -378,10 +379,10 @@ export default function FleetIntelligence() {
     setLoading(true)
     setError(null)
     try {
-      const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => supabase
+      const { data: tyreData, error: tyreErr } = await fetchAllPages((from, to) => applyCountry(supabase
         .from('tyre_records')
         .select('id,asset_no,site,brand,position,risk_level,category,km_at_fitment,km_at_removal,cost_per_tyre,issue_date,tread_depth')
-        .order('issue_date', { ascending: false })
+        .order('issue_date', { ascending: false }), activeCountry)
         .range(from, to))
 
       if (tyreErr) throw tyreErr
@@ -389,9 +390,9 @@ export default function FleetIntelligence() {
 
       // Fleet master - graceful
       try {
-        const { data: fleetData, error: fleetErr } = await supabase
+        const { data: fleetData, error: fleetErr } = await applyCountry(supabase
           .from('vehicle_fleet')
-          .select('asset_no,site,vehicle_type,current_km,expected_km_per_tyre,monthly_tyre_budget,registration_date')
+          .select('asset_no,site,vehicle_type,current_km,expected_km_per_tyre,monthly_tyre_budget,registration_date'), activeCountry)
         if (fleetErr) {
           setFleetMaster([])
           setFleetMasterAvail(false)
@@ -406,9 +407,9 @@ export default function FleetIntelligence() {
 
       // Inspections - graceful
       try {
-        const { data: inspData } = await fetchAllPages((from, to) => supabase
+        const { data: inspData } = await fetchAllPages((from, to) => applyCountry(supabase
           .from('inspections')
-          .select('asset_no,site,status,scheduled_date,completed_date')
+          .select('asset_no,site,status,scheduled_date,completed_date'), activeCountry)
           .range(from, to))
         setInspections(inspData || [])
       } catch {
@@ -419,7 +420,7 @@ export default function FleetIntelligence() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeCountry])
 
   useEffect(() => { loadData() }, [loadData])
 

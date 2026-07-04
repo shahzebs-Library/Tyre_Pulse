@@ -579,6 +579,47 @@ export async function touchProfile(profileId) {
     .update({ last_used_at: new Date().toISOString() }).eq('id', profileId)
 }
 
+/**
+ * Every saved mapping profile for the org (active AND inactive, all modules),
+ * newest-used first, with a column-rule count — powers the Saved Mappings
+ * manager so users can browse and manage their remembered formats without
+ * having to start an upload.
+ */
+export async function listAllProfiles() {
+  const rows = unwrap(
+    await supabase.from('import_mapping_profiles')
+      .select('id,name,module,source_system,country,active,version,last_used_at,created_at,import_mapping_rules(count)')
+      .order('last_used_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false }),
+  )
+  return (rows ?? []).map((p) => ({
+    ...p,
+    rule_count: Array.isArray(p.import_mapping_rules) ? (p.import_mapping_rules[0]?.count ?? 0) : 0,
+  }))
+}
+
+/** Rename a saved mapping profile. */
+export async function renameProfile(profileId, name) {
+  const { error } = await supabase.from('import_mapping_profiles')
+    .update({ name: String(name).trim() }).eq('id', profileId)
+  if (error) throw new ServiceError(error.message, error.code, error)
+}
+
+/** Activate / deactivate a saved mapping profile (inactive ones are not auto-suggested). */
+export async function setProfileActive(profileId, active) {
+  const { error } = await supabase.from('import_mapping_profiles')
+    .update({ active: !!active }).eq('id', profileId)
+  if (error) throw new ServiceError(error.message, error.code, error)
+}
+
+/** Delete a saved mapping profile and its column rules. */
+export async function deleteProfile(profileId) {
+  // Remove rules first in case the FK is not ON DELETE CASCADE.
+  await supabase.from('import_mapping_rules').delete().eq('profile_id', profileId)
+  const { error } = await supabase.from('import_mapping_profiles').delete().eq('id', profileId)
+  if (error) throw new ServiceError(error.message, error.code, error)
+}
+
 // ── Master-data aliases (directive §9) ───────────────────────────────────────
 /** Active raw→canonical aliases for an entity type, country-scoped. */
 export async function listAliases({ entityType, country } = {}) {

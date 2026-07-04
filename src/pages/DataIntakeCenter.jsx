@@ -16,6 +16,7 @@ import {
   headerFingerprint, aggregateStagedRows,
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
+import MappingProfilesManager from '../components/intake/MappingProfilesManager'
 
 const MODULES = [
   { key: 'fleet', label: 'Fleet / Assets' },
@@ -29,6 +30,7 @@ const MODULES = [
   { key: 'supplier', label: 'Suppliers' },
   { key: 'driver', label: 'Drivers' },
 ]
+const MODULE_LABELS = Object.fromEntries(MODULES.map((m) => [m.key, m.label]))
 const ELEVATED = ['admin', 'manager', 'director']
 const STEPS = ['Upload', 'Map columns', 'Validate', 'Approve & Commit']
 
@@ -72,6 +74,8 @@ export default function DataIntakeCenter() {
   const [recent, setRecent] = useState([])
   const [files, setFiles] = useState([])
   const [countryAck, setCountryAck] = useState(false)
+  // Elevated override: force validation-error rows through the commit anyway.
+  const [forceFlagged, setForceFlagged] = useState(false)
   const [aliasMaps, setAliasMaps] = useState(null) // { site, supplier, brand } → Map
   const [fxRatesMap, setFxRatesMap] = useState(null) // { quoteCurrency: {rate,rate_date,source} }
 
@@ -146,7 +150,7 @@ export default function DataIntakeCenter() {
 
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null); setAppliedProfile(null)
-    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setAliasMaps(null); setFxRatesMap(null)
+    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setForceFlagged(false); setAliasMaps(null); setFxRatesMap(null)
     setAttachItems([]); setAttachWarnings([]); setAttachDone(false); setAttachBusy(false)
   }
 
@@ -399,12 +403,21 @@ export default function DataIntakeCenter() {
     }
     setError(''); setBusy(true)
     try {
-      await imports.stageRows(batchId, annotated.map((r) => ({
-        sheetName: sheet.name, sourceRowNo: r.sourceRowNo, raw: r.raw, mapped: r.mapped,
-        transformed: r.transformed, custom: r.custom, validationStatus: r.validationStatus,
-        dupStatus: r.dupStatus, action: r.action ?? (r.validationStatus === 'error' ? 'reject' : 'insert'),
-        fingerprint: r.fingerprint,
-      })))
+      await imports.stageRows(batchId, annotated.map((r) => {
+        // Elevated force-include: push validation-error rows through the commit.
+        // A genuinely-broken row still fails its own INSERT inside the commit RPC
+        // (per-row try/catch), so this can never corrupt the batch — it only lets
+        // rows the operator judges acceptable go live.
+        const forced = forceFlagged && isElevated && r.validationStatus === 'error'
+        return {
+          sheetName: sheet.name, sourceRowNo: r.sourceRowNo, raw: r.raw, mapped: r.mapped,
+          transformed: r.transformed, custom: r.custom,
+          validationStatus: forced ? 'warning' : r.validationStatus,
+          dupStatus: r.dupStatus,
+          action: forced ? 'insert' : (r.action ?? (r.validationStatus === 'error' ? 'reject' : 'insert')),
+          fingerprint: r.fingerprint,
+        }
+      }))
       await imports.setBatchCounts(batchId, counts)
       setStep(3)
     } catch (err) {
@@ -558,6 +571,9 @@ export default function DataIntakeCenter() {
               <button onClick={startBatch} disabled={busy || !sheet} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />} Continue to mapping</button>
             </div>
           )}
+
+          {/* Browse & manage the reusable column mappings you've saved. */}
+          <MappingProfilesManager moduleLabels={MODULE_LABELS} />
         </div>
       )}
 
@@ -693,9 +709,19 @@ export default function DataIntakeCenter() {
               </label>
             </div>
           )}
+          {isElevated && counts?.error > 0 && (
+            <div className="bg-red-900/15 border border-red-700/40 rounded-xl p-4 space-y-2">
+              <p className="text-sm text-red-300 flex items-center gap-2"><AlertTriangle size={16} /> {counts.error} row(s) failed validation and will be skipped by default.</p>
+              <label className="flex items-center gap-2 text-sm text-red-200 cursor-pointer">
+                <input type="checkbox" checked={forceFlagged} onChange={(e) => setForceFlagged(e.target.checked)} className="accent-red-500" />
+                Force-include these {counts.error} flagged row(s) — commit them anyway.
+              </label>
+              <p className="text-xs text-gray-400">Use this to push through rows you know are acceptable despite a validation warning. Rows that are genuinely un-insertable (e.g. a missing required field) still fail safely at commit and are logged — the rest of the batch is unaffected.</p>
+            </div>
+          )}
           <div className="flex gap-2">
             <button onClick={() => setStep(1)} className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm flex items-center gap-2"><ArrowLeft size={15} /> Back</button>
-            <button onClick={stageAll} disabled={busy || (counts?.countryConflict > 0 && !countryAck)} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} Stage & continue</button>
+            <button onClick={stageAll} disabled={busy || (counts?.countryConflict > 0 && !countryAck)} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} Stage & continue{forceFlagged ? ' (forced)' : ''}</button>
           </div>
         </div>
       )}

@@ -196,7 +196,6 @@ export default function Login() {
   const [fullName, setFullName]       = useState('')
   const [signupUsername, setSignupUsername] = useState('')
   const [employeeId, setEmployeeId]   = useState('')
-  const [signupEmail, setSignupEmail] = useState('')
   const [error, setError]             = useState('')
   const [loading, setLoading]         = useState(false)
   const [signupDone, setSignupDone]   = useState(false)
@@ -270,20 +269,30 @@ export default function Login() {
 
   async function handleSignup(e) {
     e.preventDefault(); setError('')
+    const uname = signupUsername.trim()
+    const empId = employeeId.trim()
     if (password !== confirm)   { setError(t('auth.login.errPasswordMismatch')); return }
     if (password.length < 6)    { setError(t('auth.login.errPasswordShort')); return }
-    if (!signupUsername.trim()) { setError(t('auth.login.errUsernameRequired')); return }
+    if (uname.length < 3)       { setError(t('auth.login.errUsernameRequired')); return }
+    if (!/^[a-zA-Z0-9._-]+$/.test(uname)) { setError('Username may only contain letters, numbers, and . _ -'); return }
+    if (!empId)                 { setError('Employee ID is required.'); return }
     setLoading(true)
-    const { data, error: authErr } = await supabase.auth.signUp({ email: signupEmail, password })
-    if (authErr) { setError(authErr.message); setLoading(false); return }
-    if (data?.user) {
-      const { error: pErr } = await supabase.from('profiles').insert({
-        id: data.user.id, username: signupUsername.trim(),
-        full_name: fullName.trim() || null, employee_id: employeeId.trim() || null,
-        role: 'Reporter', region: 'KSA', approved: false,
-      })
-      if (pErr && pErr.code !== '42501' && pErr.code !== '23505')
-        console.warn('Profile insert warning:', pErr.message)
+    // Supabase Auth needs an email, but users sign up with just a username +
+    // Employee ID. We mint a synthetic, non-routable address from the username
+    // that the user never sees; a DB trigger (V82) auto-confirms it and creates
+    // the profile (username, employee_id, role, approved=false). Login by
+    // username / Employee ID resolves back to this address.
+    const slug = uname.toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/(^\.+|\.+$)/g, '') || 'user'
+    const syntheticEmail = `${slug}@users.tyrepulse.app`
+    const { error: authErr } = await supabase.auth.signUp({
+      email: syntheticEmail,
+      password,
+      options: { data: { username: uname, full_name: fullName.trim() || null, employee_id: empId, region: 'KSA' } },
+    })
+    if (authErr) {
+      const taken = /already registered|already been registered|duplicate|already exists|database error/i.test(authErr.message || '')
+      setError(taken ? 'That username or Employee ID is already taken. Please choose another.' : authErr.message)
+      setLoading(false); return
     }
     setSignupDone(true); setLoading(false)
   }
@@ -775,16 +784,10 @@ export default function Login() {
                     </div>
                   </div>
                   <div>
-                    <div style={labelStyle}>Employee ID</div>
-                    <input style={inputStyle('empid')} placeholder="EMP-1042 (optional)"
+                    <div style={labelStyle}>Employee ID *</div>
+                    <input style={inputStyle('empid')} placeholder="EMP-1042"
                       value={employeeId} onChange={e => setEmployeeId(e.target.value)}
-                      onFocus={() => setFocusedField('empid')} onBlur={() => setFocusedField(null)}/>
-                  </div>
-                  <div>
-                    <div style={labelStyle}>Email *</div>
-                    <input type="email" style={inputStyle('semail')} placeholder="you@company.com"
-                      value={signupEmail} onChange={e => setSignupEmail(e.target.value)}
-                      onFocus={() => setFocusedField('semail')} onBlur={() => setFocusedField(null)} required/>
+                      onFocus={() => setFocusedField('empid')} onBlur={() => setFocusedField(null)} required/>
                   </div>
                   {[
                     { field:'spw',  show:showSignupPw,  set:setShowSignupPw,  val:password,  setVal:setPassword,  label:'Password *' },

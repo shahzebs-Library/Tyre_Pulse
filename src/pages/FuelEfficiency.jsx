@@ -448,7 +448,7 @@ export default function FuelEfficiency() {
     const co2Month = kpis.co2Tonnes
     const treesNeeded = Math.ceil(co2Month * 12 * TREES_PER_TONNE_CO2_YEAR)
     const extraFuelMonth = kpis.totalExtraFuelMonth
-    const unnecessaryKm = (extraFuelMonth / fleetConsumption) * 100
+    const unnecessaryKm = fleetConsumption > 0 ? (extraFuelMonth / fleetConsumption) * 100 : 0
     return { co2Month, treesNeeded, unnecessaryKm: +unnecessaryKm.toFixed(0) }
   }, [kpis, fleetConsumption])
 
@@ -791,7 +791,7 @@ export default function FuelEfficiency() {
                     <div className="bg-gray-800 rounded-xl p-4">
                       <p className="text-gray-400 text-xs mb-1">Monthly Fuel Saving</p>
                       <p className="text-xl font-bold text-green-400">{fmtCur(sliderSavings.monthly, activeCurrency)}</p>
-                      <p className="text-xs text-gray-500 mt-1">{fmt(sliderSavings.monthly / fuelCostPerLiter, 0)} L saved</p>
+                      <p className="text-xs text-gray-500 mt-1">{fmt(fuelCostPerLiter > 0 ? sliderSavings.monthly / fuelCostPerLiter : 0, 0)} L saved</p>
                     </div>
                     <div className="bg-gray-800 rounded-xl p-4">
                       <p className="text-gray-400 text-xs mb-1">Annual Fuel Saving</p>

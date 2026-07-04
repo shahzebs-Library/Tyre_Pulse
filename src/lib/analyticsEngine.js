@@ -127,7 +127,9 @@ export function linearRegression(points) {
   const sumXY = points.reduce((s, [x, y]) => s + x * y, 0)
   const sumX2 = points.reduce((s, [x]) => s + x * x, 0)
 
-  const slope     = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX ** 2)
+  // Guard the zero denominator (all x equal) → flat line at the mean, no NaN/Infinity.
+  const denom     = n * sumX2 - sumX ** 2
+  const slope     = denom === 0 ? 0 : (n * sumXY - sumX * sumY) / denom
   const intercept = (sumY - slope * sumX) / n
 
   // R² coefficient of determination

@@ -318,3 +318,34 @@ mobile deps synced - typecheck now fully clean.
   NULL-country admin still sees all (3 batches / 18 rows). `get_advisors`
   (security): 0 ERROR-level findings. Import Center country isolation is now
   closed on BOTH commit (V76) and read (V77).
+
+## 2026-07-04 (later) — Multi-agent audit fixes (5 agents: security/data/react/service-layer/mobile)
+Ran 5 parallel read-only audit agents; every finding was verified against the live
+schema before acting (several "critical" column-existence findings were FALSE
+POSITIVES — budgets.country, tyre_records.serial_number/tyre_serial/supplier/
+findings/asset_number/driver_id, vehicle_fleet.country all exist — and were left
+untouched). Confirmed fixes landed:
+- **Search-filter injection (MED)** — `sanitizeSearchTerm` strips `,()*\` from user
+  search terms before PostgREST `.or()/.ilike()` interpolation (9 sites);
+  `applyCountry` strips the same from the country value.
+- **corrective_actions.source (HIGH)** — Inspection-Intelligence "Raise Alert" wrote a
+  non-existent column → every insert 400'd while reporting success. Dropped `source`,
+  added `title`, made the insert throw on error.
+- **V78 fabricated tyre cost** — dropped `tyre_records.cost_per_tyre` DEFAULT 1200.
+- **Country isolation** — FleetIntelligence / WorkshopManagement / VendorIntelligence
+  now scope by the active country (were reading all countries).
+- **Numeric guards** — analyticsEngine.linearRegression ÷0 guard; FuelEfficiency
+  Infinity guards on the fuel-consumption / fuel-cost divisions.
+
+### Tracked backlog (verified-real, medium/low — next wave)
+- Fetch-race cancellation guards on ~8 loaders (DowntimeTracker, FleetHealthBoard,
+  DriverManagement, EngineeringKpi, FleetAnalytics, FuelEfficiency, VehicleHistory ×2,
+  TyreRecords/TyreExchange loaders lack try/finally too).
+- Standardise `.eq('country')` → null-safe `applyCountry` on the remaining analytics reads.
+- kpi_targets: redundant `UNIQUE(metric)` vs `onConflict(metric,year,month,site)` breaks
+  save at year rollover.
+- React: memoize Auth/Settings/Tenant context values; move `localStorage.setItem` out of
+  the state updaters in Alerts (×3) and Anomalies (×1).
+- Mobile (EAS, lower urgency): arbitrary-table write in `admin/approvals.tsx`; offline-queue
+  idempotency (client_uuid + unique constraint + save-per-item + global sync lock);
+  history.tsx missing error state; alerts ack offline fallback.

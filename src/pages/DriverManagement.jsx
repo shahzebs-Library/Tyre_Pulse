@@ -520,8 +520,13 @@ export default function DriverManagement() {
   const [sortDir, setSortDir] = useState('asc')
   const [selectedDriver, setSelectedDriver] = useState(null)
 
+  // Guards against a slow earlier response overwriting a newer one after the
+  // active country changes (fetch-race cancellation).
+  const reqIdRef = useRef(0)
+
   // ── Data fetch ──────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
+    const myReq = ++reqIdRef.current
     setLoading(true)
     setError(null)
     try {
@@ -537,12 +542,13 @@ export default function DriverManagement() {
         }
         return q.range(from, to)
       })
+      if (myReq !== reqIdRef.current) return
       if (err) throw err
       setRecords(data || [])
     } catch (e) {
-      setError(e.message || 'Failed to load driver data')
+      if (myReq === reqIdRef.current) setError(e.message || 'Failed to load driver data')
     } finally {
-      setLoading(false)
+      if (myReq === reqIdRef.current) setLoading(false)
     }
   }, [activeCountry])
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import * as analytics from '../lib/api/analyticsReads'
 import { useSettings } from '../contexts/SettingsContext'
 import { bucketByMonth, linearRegression, recordCost } from '../lib/analyticsEngine'
@@ -38,18 +38,24 @@ export default function FleetAnalytics() {
   const [dateTo, setDateTo]     = useState('')
   const [siteFilter, setSiteFilter] = useState('')
 
+  // Guards against a slow earlier response overwriting a newer one after the
+  // active country changes (fetch-race cancellation).
+  const reqIdRef = useRef(0)
+
   const load = useCallback(async () => {
+    const myReq = ++reqIdRef.current
     setLoading(true); setError(null)
     try {
       const { data, error: e } = await analytics.reportAssetMetrics({ country: activeCountry })
+      if (myReq !== reqIdRef.current) return
       if (e) throw new Error(e.message || e)
       const m = data || []
       setAssetMetrics(m)
       setTotalRecords(m.reduce((s, a) => s + (a.count || 0), 0))
     } catch (e) {
-      setError(e.message || 'Failed to load fleet data.')
+      if (myReq === reqIdRef.current) setError(e.message || 'Failed to load fleet data.')
     } finally {
-      setLoading(false)
+      if (myReq === reqIdRef.current) setLoading(false)
     }
   }, [activeCountry])
 
@@ -58,8 +64,11 @@ export default function FleetAnalytics() {
   // Lazy-load the selected asset's raw rows for the detail view.
   useEffect(() => {
     if (!selected) { setSelectedRecords([]); return }
+    let cancelled = false
     analytics.listAssetTyreRecords({ assetNo: selected, country: activeCountry })
-      .then(({ data }) => setSelectedRecords(data || []))
+      .then(({ data }) => { if (!cancelled) setSelectedRecords(data || []) })
+      .catch(() => { if (!cancelled) setSelectedRecords([]) })
+    return () => { cancelled = true }
   }, [selected, activeCountry])
 
   const sorted = useMemo(() => {

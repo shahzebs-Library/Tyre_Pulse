@@ -216,8 +216,13 @@ export default function FleetHealthBoard() {
   const [trendData, setTrendData]   = useState([])
   const drawerRef = useRef(null)
 
+  // Guards against a slow earlier response overwriting a newer one after the
+  // active country changes (fetch-race cancellation).
+  const reqIdRef = useRef(0)
+
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const load = useCallback(async (silent = false) => {
+    const myReq = ++reqIdRef.current
     if (!silent) setLoading(true)
     else setRefreshing(true)
     setError(null)
@@ -231,6 +236,7 @@ export default function FleetHealthBoard() {
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
       })
+      if (myReq !== reqIdRef.current) return
       if (err) throw err
 
       setRawRecords(data ?? [])
@@ -243,12 +249,15 @@ export default function FleetHealthBoard() {
         .gte('issue_date', new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
       if (activeCountry !== 'All') trendQ.eq('country', activeCountry)
       const { data: trendRaw } = await trendQ
+      if (myReq !== reqIdRef.current) return
       setTrendData(trendRaw ?? [])
     } catch (e) {
-      setError(e.message ?? 'Failed to load fleet data')
+      if (myReq === reqIdRef.current) setError(e.message ?? 'Failed to load fleet data')
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (myReq === reqIdRef.current) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
   }, [activeCountry])
 

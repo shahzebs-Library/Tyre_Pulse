@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import * as engKpiApi from '../lib/api/engineeringKpi'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
@@ -206,8 +206,13 @@ export default function EngineeringKpi() {
     setDateTo(to)
   }
 
+  // Guards against a slow earlier response overwriting a newer one after the
+  // country/site/date filters change (fetch-race cancellation).
+  const reqIdRef = useRef(0)
+
   // Load data
   const loadData = useCallback(async () => {
+    const myReq = ++reqIdRef.current
     setLoading(true)
     setError(null)
     try {
@@ -224,6 +229,7 @@ export default function EngineeringKpi() {
         engKpiApi.listKpiFleet(),
       ])
 
+      if (myReq !== reqIdRef.current) return
       if (recRes.error)  throw new Error(`Records: ${recRes.error.message}`)
       if (insRes.error)  throw new Error(`Inspections: ${insRes.error.message}`)
       if (actRes.error)  throw new Error(`Actions: ${actRes.error.message}`)
@@ -237,9 +243,9 @@ export default function EngineeringKpi() {
       setActions(actRes.data || [])
       setFleetSize((fleetRes.data || []).length)
     } catch (err) {
-      setError(err.message)
+      if (myReq === reqIdRef.current) setError(err.message)
     } finally {
-      setLoading(false)
+      if (myReq === reqIdRef.current) setLoading(false)
     }
   }, [countryChip, activeCountry, siteFilter, dateFrom, dateTo])
 

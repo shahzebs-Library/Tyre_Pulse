@@ -205,8 +205,13 @@ export default function DowntimeTracker() {
 
   const sym = activeCurrency
 
+  // Guards against a slow earlier response overwriting a newer one after the
+  // active country changes (fetch-race cancellation).
+  const reqIdRef = useRef(0)
+
   // ── Data Load ───────────────────────────────────────────────────────────────
   const load = useCallback(async (isRefresh = false) => {
+    const myReq = ++reqIdRef.current
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
     setError(null)
@@ -219,6 +224,7 @@ export default function DowntimeTracker() {
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
       })
+      if (myReq !== reqIdRef.current) return
       if (tyreErr) throw tyreErr
       setTyreRecords(tyreData || [])
 
@@ -228,15 +234,18 @@ export default function DowntimeTracker() {
         .from('work_orders')
         .select('id,asset_no,work_type,created_at,opened_at,completed_at,status,priority,total_cost,site')
         .order('created_at', { ascending: false })
+      if (myReq !== reqIdRef.current) return
       if (!woErr && woData) {
         setWorkOrders(woData)
         setHasWorkOrders(woData.length > 0)
       }
     } catch (e) {
-      setError(e.message || 'Failed to load data')
+      if (myReq === reqIdRef.current) setError(e.message || 'Failed to load data')
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      if (myReq === reqIdRef.current) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
   }, [activeCountry])
 

@@ -252,23 +252,29 @@ export default function VehicleHistory() {
 
   // ── Load data ────────────────────────────────────────────────────────────────
   useEffect(() => {
+    let cancelled = false
     async function load() {
       setLoading(true)
-      const { data } = await vehicleHistoryApi.listFleetTyreRecords({ country: activeCountry })
-      const rows = data || []
-      setAllRecords(rows)
-      const uniqSites = [...new Set(rows.map(r => r.site).filter(Boolean))].sort()
-      setSites(uniqSites)
+      try {
+        const { data } = await vehicleHistoryApi.listFleetTyreRecords({ country: activeCountry })
+        if (cancelled) return
+        const rows = data || []
+        setAllRecords(rows)
+        const uniqSites = [...new Set(rows.map(r => r.site).filter(Boolean))].sort()
+        setSites(uniqSites)
 
-      // Load fleet master data
-      const { data: fleetData } = await vehicleHistoryApi.getVehicleFleet()
-      const map = {}
-      ;(fleetData || []).forEach(v => { map[v.asset_no] = v })
-      setFleetMap(map)
-
-      setLoading(false)
+        // Load fleet master data
+        const { data: fleetData } = await vehicleHistoryApi.getVehicleFleet()
+        if (cancelled) return
+        const map = {}
+        ;(fleetData || []).forEach(v => { map[v.asset_no] = v })
+        setFleetMap(map)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
     }
     load()
+    return () => { cancelled = true }
   }, [activeCountry])
 
   // ── Detect anomalies across full fleet ───────────────────────────────────────
@@ -345,6 +351,7 @@ export default function VehicleHistory() {
       setTyrePositions([])
       return
     }
+    let cancelled = false
     async function loadRelated() {
       const [actRes, rcaRes, insRes, tyreRes] = await Promise.all([
         vehicleHistoryApi.listAssetActions(selected),
@@ -352,6 +359,7 @@ export default function VehicleHistory() {
         vehicleHistoryApi.listAssetInspections(selected),
         vehicleHistoryApi.listAssetTyreRecords(selected),
       ])
+      if (cancelled) return
       setRelatedActions(actRes.data || [])
       setRelatedRca(rcaRes.data || [])
       setRelatedInspections(insRes.data || [])
@@ -366,6 +374,7 @@ export default function VehicleHistory() {
       setTyrePositions(latestPerPosition)
     }
     loadRelated()
+    return () => { cancelled = true }
   }, [selected])
 
   if (loading) {

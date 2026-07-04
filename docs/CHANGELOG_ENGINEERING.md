@@ -269,3 +269,16 @@ mobile deps synced - typecheck now fully clean.
 - **useRealtimeAlerts double-RPC**: `markAllRead` dispatched `mark_notification_read`
   RPCs inside the state updater (StrictMode double-invokes → double fire). Moved
   the RPC dispatch outside the pure updater.
+
+## 2026-07-04 (later) — Security: scheduled-report cross-tenant scoping (main, pushed)
+- **send-scheduled-reports digest was tenant-blind** (MEDIUM): `buildDigest()`
+  counted tyre_records / work_orders / corrective_actions / accidents and summed
+  spend across EVERY organisation with the service role, so a schedule owned by
+  org A emailed org B's numbers. `report_schedules` already stores `org_id`
+  (set from the creator's profile), so the digest now scopes every count by
+  `organisation_id = schedule.org_id` (null → unassigned rows only).
+- **V71 `report_org_tyre_spend(p_org, p_from)`**: new org-scoped spend aggregate
+  (SECURITY DEFINER, pinned search_path) replaces the country-only
+  `report_tyre_summary` call for the spend tile. EXECUTE revoked from
+  anon/authenticated, granted to service_role (matches V40 hardening).
+  Edge function redeployed (v2, verify_jwt preserved).

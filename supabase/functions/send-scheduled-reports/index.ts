@@ -27,6 +27,7 @@ type Schedule = {
   recipients: string[]
   last_sent_at: string | null
   next_run_at: string | null
+  org_id: string | null
 }
 
 function toRiyadh(d: Date): Date {
@@ -61,11 +62,18 @@ function computeNextRun(s: Schedule, now: Date): string {
 /* ── Digest data (live, service-role reads) ─────────────────────────────────── */
 
 // deno-lint-ignore no-explicit-any
-async function buildDigest(svc: any) {
+async function buildDigest(svc: any, orgId: string | null) {
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+
+  // Scope every metric to the schedule's owning organisation. Without this a
+  // schedule owned by org A would email counts/spend aggregated across ALL
+  // tenants (cross-tenant data leak). A null org scopes to unassigned rows only.
+  const scopeOrg = (q: any) =>
+    orgId ? q.eq('organisation_id', orgId) : q.is('organisation_id', null)
 
   const count = async (table: string, mod?: (q: unknown) => unknown) => {
     let q = svc.from(table).select('id', { count: 'exact', head: true })
+    q = scopeOrg(q)
     if (mod) q = mod(q)
     const { count: c, error } = await q
     return error ? null : (c ?? 0)
@@ -79,11 +87,11 @@ async function buildDigest(svc: any) {
     count('accidents', (q: any) => q.gte('incident_date', since)),
   ])
 
-  // Accurate 30-day spend via the server-side aggregate RPC.
+  // Accurate org-scoped 30-day spend via the server-side aggregate RPC (V71).
   let spend: number | null = null
   try {
-    const { data } = await svc.rpc('report_tyre_summary', { p_country: 'All', p_from: since, p_to: null })
-    if (data) spend = Number(data.total_cost ?? data.total_amount ?? null)
+    const { data } = await svc.rpc('report_org_tyre_spend', { p_org: orgId, p_from: since })
+    spend = Number(data)
     if (!Number.isFinite(spend)) spend = null
   } catch { /* keep null - never fabricate */ }
 
@@ -152,7 +160,7 @@ serve(async (req) => {
   const now = new Date()
   const { data: due, error: dueErr } = await svc
     .from('report_schedules')
-    .select('id,name,report_type,frequency,day_of_week,day_of_month,time_of_day,recipients,last_sent_at,next_run_at')
+    .select('id,name,report_type,frequency,day_of_week,day_of_month,time_of_day,recipients,last_sent_at,next_run_at,org_id')
     .eq('active', true)
     .or(`next_run_at.is.null,next_run_at.lte.${now.toISOString()}`)
     .limit(25)
@@ -173,7 +181,7 @@ serve(async (req) => {
       if (!recipients.length) throw new Error('No valid recipients on the schedule')
       if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured for edge functions')
 
-      const digest = await buildDigest(svc)
+      const digest = await buildDigest(svc, s.org_id)
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },

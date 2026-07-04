@@ -99,8 +99,14 @@ export default function FleetMaster() {
 
   // ── filters ──────────────────────────────────────────────────────────────────
   const [search, setSearch]         = useState('')
+  // Debounced copy that actually drives the query, so we don't fire a Supabase
+  // request on every keystroke (was one round-trip per character).
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [siteFilter, setSiteFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  // Monotonic request id: only the newest loadRecords() response is applied, so a
+  // slow earlier query can't overwrite a faster later one (out-of-order race).
+  const reqIdRef = useRef(0)
 
   // ── modal state ──────────────────────────────────────────────────────────────
   const [editRecord, setEditRecord]           = useState(null)
@@ -132,7 +138,12 @@ export default function FleetMaster() {
 
   // ── load ─────────────────────────────────────────────────────────────────────
   useEffect(() => { loadSites() }, [])
-  useEffect(() => { loadRecords() }, [page, search, siteFilter, statusFilter, activeCountry])
+  // Debounce the search box: reset to page 0 and reload 300ms after typing stops.
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(0) }, 300)
+    return () => clearTimeout(t)
+  }, [search])
+  useEffect(() => { loadRecords() }, [page, debouncedSearch, siteFilter, statusFilter, activeCountry])
 
   async function loadSites() {
     const { data } = await supabase.from('vehicle_fleet').select('site').not('site', 'is', null)
@@ -140,6 +151,7 @@ export default function FleetMaster() {
   }
 
   const loadRecords = useCallback(async () => {
+    const myReq = ++reqIdRef.current
     setLoading(true)
     let q = supabase
       .from('vehicle_fleet')
@@ -147,16 +159,20 @@ export default function FleetMaster() {
       .order('asset_no', { ascending: true })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
-    if (search)       q = q.or(`asset_no.ilike.%${search}%,fleet_number.ilike.%${search}%,make.ilike.%${search}%,model.ilike.%${search}%`)
+    if (debouncedSearch) q = q.or(`asset_no.ilike.%${debouncedSearch}%,fleet_number.ilike.%${debouncedSearch}%,make.ilike.%${debouncedSearch}%,model.ilike.%${debouncedSearch}%`)
     if (siteFilter)   q = q.eq('site', siteFilter)
     if (statusFilter) q = q.eq('status', statusFilter)
     if (activeCountry !== 'All') q = q.eq('country', activeCountry)
 
-    const { data, count } = await q
-    setRecords(data ?? [])
-    setTotal(count ?? 0)
-    setLoading(false)
-  }, [page, search, siteFilter, statusFilter, activeCountry])
+    try {
+      const { data, count } = await q
+      if (myReq !== reqIdRef.current) return   // a newer request superseded this one
+      setRecords(data ?? [])
+      setTotal(count ?? 0)
+    } finally {
+      if (myReq === reqIdRef.current) setLoading(false)
+    }
+  }, [page, debouncedSearch, siteFilter, statusFilter, activeCountry])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 

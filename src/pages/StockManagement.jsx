@@ -81,36 +81,42 @@ export default function StockManagement() {
 
   async function load() {
     setLoading(true)
-    const stockRecords = await stock.listStockRecords({ country: activeCountry }) ?? []
-    setRecords(stockRecords)
+    setError('')
+    try {
+      const stockRecords = await stock.listStockRecords({ country: activeCountry }) ?? []
+      setRecords(stockRecords)
 
-    // Load velocity data from tyre_records (last 3 months)
-    const threeMonthsAgo = new Date()
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
-    const velData = await stock.listTyreIssuesSince(threeMonthsAgo.toISOString().slice(0, 10))
+      // Load velocity data from tyre_records (last 3 months)
+      const threeMonthsAgo = new Date()
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+      const velData = await stock.listTyreIssuesSince(threeMonthsAgo.toISOString().slice(0, 10))
 
-    // Group by site and sum qty
-    const siteQtyMap = {}
-    ;(velData ?? []).forEach(row => {
-      const site = row.site
-      if (!site) return
-      if (!siteQtyMap[site]) siteQtyMap[site] = 0
-      siteQtyMap[site] += (row.qty ?? 1)
-    })
+      // Group by site and sum qty
+      const siteQtyMap = {}
+      ;(velData ?? []).forEach(row => {
+        const site = row.site
+        if (!site) return
+        if (!siteQtyMap[site]) siteQtyMap[site] = 0
+        siteQtyMap[site] += (row.qty ?? 1)
+      })
 
-    // Build velocityMap keyed by stock record id
-    const vMap = {}
-    stockRecords.forEach(r => {
-      const totalQty = siteQtyMap[r.site] ?? 0
-      const avgPerMonth = +(totalQty / 3).toFixed(2)
-      const daysRemaining = avgPerMonth > 0
-        ? Math.round((r.stock_qty / avgPerMonth) * 30)
-        : null
-      vMap[r.id] = { avgPerMonth, daysRemaining }
-    })
-    setVelocityMap(vMap)
-
-    setLoading(false)
+      // Build velocityMap keyed by stock record id
+      const vMap = {}
+      stockRecords.forEach(r => {
+        const totalQty = siteQtyMap[r.site] ?? 0
+        const avgPerMonth = +(totalQty / 3).toFixed(2)
+        const daysRemaining = avgPerMonth > 0
+          ? Math.round((r.stock_qty / avgPerMonth) * 30)
+          : null
+        vMap[r.id] = { avgPerMonth, daysRemaining }
+      })
+      setVelocityMap(vMap)
+    } catch (err) {
+      // A thrown fetch previously left the spinner stuck forever with no message.
+      setError(err?.message || 'Failed to load stock records.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   function deriveStatus(r) {

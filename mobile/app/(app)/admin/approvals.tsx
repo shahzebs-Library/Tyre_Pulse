@@ -37,6 +37,15 @@ const TYPE_META: Record<string, { label: string; icon: string; color: string }> 
   tyres: { label: 'Tyre Records', icon: 'document-text-outline', color: '#16a34a' },
   stock: { label: 'Stock',        icon: 'cube-outline',          color: '#0891b2' },
 }
+
+// Security: never write to a table name taken from the DB row. Approval inserts
+// are restricted to this hardcoded allow-list, keyed by the batch `upload_type`.
+// Mirrors the web upload flow (UploadData.jsx submitForApproval targets).
+const APPROVE_TABLE: Record<string, string> = {
+  tyres: 'tyre_records',
+  stock: 'stock_records',
+}
+
 const BATCH = 500
 
 export default function UploadApprovalsScreen() {
@@ -83,10 +92,18 @@ export default function UploadApprovalsScreen() {
         {
           text: 'Approve',
           onPress: async () => {
+            const targetTable = APPROVE_TABLE[p.upload_type]
+            if (!targetTable) {
+              Alert.alert(
+                'Cannot approve',
+                `Unsupported upload type "${p.upload_type}". This batch cannot be imported from mobile.`,
+              )
+              return
+            }
             setActing(p.id)
             const rows = Array.isArray(p.rows) ? p.rows : []
             for (let i = 0; i < rows.length; i += BATCH) {
-              const { error } = await supabase.from(p.target_table).insert(rows.slice(i, i + BATCH))
+              const { error } = await supabase.from(targetTable).insert(rows.slice(i, i + BATCH))
               if (error) { setActing(null); Alert.alert('Insert failed', error.message); return }
             }
             const { error: updErr } = await supabase.from('pending_uploads')

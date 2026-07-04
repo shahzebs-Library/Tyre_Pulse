@@ -39,6 +39,7 @@ export default function HistoryScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<FilterKey>('all')
+  const [error, setError] = useState<string | null>(null)
 
   const dateLocale = isRTL ? 'ar-SA' : 'en-GB'
   const textAlign = isRTL ? 'right' : 'left'
@@ -58,12 +59,19 @@ export default function HistoryScreen() {
 
     let syncedItems: HistoryItem[] = []
     if (profile?.id) {
-      const { data: dbItems } = await supabase
+      const { data: dbItems, error: dbErr } = await supabase
         .from('inspections')
         .select('id, title, site, asset_no, inspection_date, tyre_conditions, locked')
         .eq('created_by', profile.id)
         .order('created_at', { ascending: false })
         .limit(100)
+
+      if (dbErr) {
+        if (__DEV__) console.warn('[history] synced fetch failed:', dbErr.message)
+        setError('Could not load synced history. Pull down to retry.')
+      } else {
+        setError(null)
+      }
 
       syncedItems = (dbItems ?? []).map(i => ({
         id: i.id,
@@ -244,6 +252,17 @@ export default function HistoryScreen() {
         />
       </View>
 
+      {error && !loading && (
+        <View style={[styles.errorBanner, isRTL && styles.errorBannerRTL]}>
+          <Ionicons name="cloud-offline-outline" size={16} color="#dc2626" />
+          <Text style={[styles.errorText, { textAlign }]} numberOfLines={2}>{error}</Text>
+          <TouchableOpacity style={styles.errorRetry} onPress={onRefresh} disabled={refreshing}>
+            <Ionicons name="refresh" size={14} color="#fff" />
+            <Text style={styles.errorRetryText}>{t('common.retry')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.loader}>
           <ActivityIndicator size="large" color="#16a34a" />
@@ -332,6 +351,31 @@ const styles = StyleSheet.create({
   filterCountActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
   filterCountText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
   filterCountTextActive: { color: '#fff' },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239,68,68,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.25)',
+  },
+  errorBannerRTL: { flexDirection: 'row-reverse' },
+  errorText: { flex: 1, fontSize: 12, fontWeight: '600', color: '#dc2626' },
+  errorRetry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#dc2626',
+  },
+  errorRetryText: { fontSize: 12, fontWeight: '700', color: '#fff' },
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   list: { padding: 16, gap: 10, paddingBottom: 40, flexGrow: 1 },
   card: {

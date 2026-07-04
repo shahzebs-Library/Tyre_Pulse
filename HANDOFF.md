@@ -3,7 +3,7 @@
 **Branch:** dev `claude/mobile-app-ui-features-tdfxy0` (Session 8 work); `main` auto-deploys to Vercel
 **Web build status:** ✅ Clean - builds, **875/875 tests passing**, auto-deploys to Vercel
 **Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5**, auto-builds on push to `main`
-**DB migrations applied to live Supabase:** through **V83** (project `jhssdmeruxtrlqnwfksc`) — only **V75** (perf-only RLS initplan) remains a file not yet applied live
+**DB migrations applied to live Supabase:** through **V83**, plus **V75** now applied (project `jhssdmeruxtrlqnwfksc`) — `auth_rls_initplan` advisory cleared (83 policies, 166 refs → 0). No migration files remain unapplied.
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
 
@@ -47,7 +47,7 @@
 
 ### Web — service-layer migration of the top-3 inline-Supabase pages (P3 platform debt)
 - Pure refactor (no behavior change): `Dashboard.jsx` (14 inline calls), `DataCleaning.jsx` (22), `UploadData.jsx` (14) now go through new `src/lib/api/` modules `dashboard.js` / `dataCleaning.js` / `uploads.js`. Per-page country-scoping style preserved exactly (null-safe OR for Dashboard, strict `.eq` for DataCleaning). +46 api unit tests.
-- **Latent bug found, intentionally not fixed** (to keep the refactor pure): `DataCleaning.loadPending` reads `count` without requesting `{ count: 'exact' }`, so `totalPending` stays 0 and the pending-tab pager never shows. Tracked for a follow-up behavior fix.
+- **Latent bug found, intentionally not fixed** (to keep the refactor pure): `DataCleaning.loadPending` reads `count` without requesting `{ count: 'exact' }`, so `totalPending` stays 0 and the pending-tab pager never shows. Tracked for a follow-up behavior fix. **→ FIXED (Session 9):** `listPendingRecords` now selects with `{ count: 'exact' }`; `totalPending` populates and the pager renders. +2 unit tests (877 total).
 
 ### Import — cross-file merge library (cost file wins) — P3
 - New `src/lib/import/mergeCrossFile.js` (`mergeCrossFileRows`, `COST_FIELDS`), exported + **9 unit tests**: same natural key across files → one merged record; the cost-bearing row wins on conflict; blanks enriched from the other file; cost fields never back-filled; line-item aggregation preserved.

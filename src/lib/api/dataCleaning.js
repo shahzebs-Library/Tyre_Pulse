@@ -45,12 +45,14 @@ export function listUncleanedSites({ country } = {}) {
 /**
  * One page of pending (uncleaned) records, newest first, strict country-scoped
  * and optionally site-filtered. Mirrors the page's range window exactly.
+ * Requests an exact total `count` alongside the page so the pager can size
+ * itself (the page reads `.count` into `totalPending`).
  * @param {{country?:string, site?:string, from:number, to:number}} opts
  */
 export function listPendingRecords({ country, site, from, to } = {}) {
   let q = supabase
     .from('tyre_records')
-    .select('id, description, remarks, site, asset_no, brand, issue_date')
+    .select('id, description, remarks, site, asset_no, brand, issue_date', { count: 'exact' })
     .eq('cleaned', false)
     .order('created_at', { ascending: false })
     .range(from, to)

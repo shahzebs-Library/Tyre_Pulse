@@ -81,6 +81,17 @@ describe('service layer - dataCleaning', () => {
     expect(h.state.last._calls.range).toEqual([0, 49])
   })
 
+  it('listPendingRecords requests an exact total count so the pager can size itself', async () => {
+    await dc.listPendingRecords({ country: 'All', from: 0, to: 49 })
+    expect(h.state.last._calls.selectOpts).toEqual({ count: 'exact' })
+  })
+
+  it('listPendingRecords surfaces the raw count the page reads into totalPending', async () => {
+    h.state.result = { data: [], error: null, count: 137 }
+    const res = await dc.listPendingRecords({ country: 'All', from: 0, to: 49 })
+    expect(res.count).toBe(137)
+  })
+
   it('listPendingRecords omits site eq when not provided', async () => {
     await dc.listPendingRecords({ country: 'All', from: 50, to: 99 })
     expect(h.state.last._calls.eq.find(([c]) => c === 'site')).toBeUndefined()

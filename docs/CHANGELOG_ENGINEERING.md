@@ -393,3 +393,24 @@ untouched). Confirmed fixes landed:
   `import_natural_key` (all modules) matches the live record; `import_enrich_batch`
   fills only-empty columns via `jsonb_populate_record`, never overwrites, audited.
   Sandbox-verified (fill model, preserve make/site). Off by default.
+
+## 2026-07-04 (final) — audit-backlog completion, auth, CSP, mobile idempotency
+- **Audit backlog closed:** search-filter injection sanitizer (9 sites + country);
+  `corrective_actions.source` broken insert; ÷0/Infinity guards; **8 loader
+  fetch-race guards**; localStorage-in-updater → effects (Alerts/Anomalies);
+  country isolation on FleetIntelligence/WorkshopManagement/VendorIntelligence.
+- **V80** — dropped redundant `kpi_targets` UNIQUE(metric) (save broke at year rollover).
+- **React perf** — memoized Auth/Settings/Tenant context values + callbacks.
+- **V81 mobile idempotency** — `client_uuid` + UNIQUE index on the 5 offline-insert
+  tables; both queues upsert-on-conflict-ignore + save-per-item + global sync
+  mutex; online inspection path shares the client id. Kills duplicate records on
+  crash / lost response / overlapping sync.
+- **Mobile** — approvals arbitrary-table write → allow-list; history error state.
+- **V82 no-email signup** — username + Employee ID + password only. Synthetic
+  `<slug>@users.tyrepulse.app` + `auto_confirm_synthetic_email` trigger +
+  `handle_new_user` employee_id/email + unique indexes on username/employee_id.
+  `approved=false` retained. `Login.jsx` drops the email field.
+- **CSP** added to `vercel.json` (non-breaking; connect-src → self+supabase,
+  object-src none, frame-ancestors none). Other security headers already present.
+- Gate: 875 web tests · build · mobile typecheck 0 errors. Live DB → **V82**
+  (only V75 perf file unapplied).

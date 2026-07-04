@@ -28,7 +28,19 @@
 - **`useRealtimeAlerts`** — mark-read RPCs moved out of the state updater.
 - **anon read re-verified** — impersonating `anon`, all sensitive tables return
   0 rows (RLS holds despite default table grants).
+- **Search-filter injection** — `sanitizeSearchTerm` strips PostgREST `.or()`
+  metacharacters from user search terms (9 sites) + the country value.
+- **Import Center country isolation (V76/V77)** — commit + read gates.
+- **Mobile offline idempotency (V81)** — `client_uuid` + UNIQUE dedup so a
+  crash / lost response / overlapping sync can't double-insert.
+- **No-email signup (V82)** — username + Employee ID only; synthetic auto-confirmed
+  address; unique username/employee_id; `approved=false` admin gate retained.
+- **CSP header** added (`vercel.json`) — non-breaking; `connect-src` self+supabase,
+  `object-src none`, `frame-ancestors none`. Completes the secure-headers set
+  (HSTS/X-Frame-Options/nosniff/Referrer/Permissions were already present).
 - **Advisor:** `get_advisors(security)` → 0 ERROR-level findings.
+- **Deferred (owner decision):** `get_email_by_identifier` reveals account
+  existence (inherent to username/emp-code login); accepted as UX trade-off.
 
 ## Open risks
 

@@ -3,7 +3,7 @@
 **Branch:** dev `claude/mobile-app-ui-features-tdfxy0` (Session 8 work); `main` auto-deploys to Vercel
 **Web build status:** ✅ Clean - builds, **875/875 tests passing**, auto-deploys to Vercel
 **Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5**, auto-builds on push to `main`
-**DB migrations applied to live Supabase:** through **V79** (project `jhssdmeruxtrlqnwfksc`)
+**DB migrations applied to live Supabase:** through **V82** (project `jhssdmeruxtrlqnwfksc`) — only **V75** (perf-only RLS initplan) remains a file not yet applied live
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
 
@@ -26,6 +26,17 @@
   - **Auto-remember format** — staging a new file auto-saves its mapping profile (by header fingerprint) so the next upload of the same file auto-maps (recognition already existed; auto-save half was missing).
   - **Force-include** (elevated) — a Validate-step toggle to commit validation-error rows anyway; genuinely un-insertable rows still fail safely per-row.
   - **Cross-file enrichment — DONE (V79).** "Enrich existing records" (elevated toggle on the Validate step) completes an existing live record from a LATER file: `import_natural_key` (all modules) matches the live record by natural key, `import_enrich_batch` fills ONLY its blank columns via `jsonb_populate_record` — never overwrites, org+country scoped, audited. Client sets `action='update'` on live-duplicate rows when enabled and calls `enrichBatch` after `commitBatch`; result shows "N existing record(s) enriched". Off by default. Sandbox-verified (fill model, preserve make/site).
+  - **Intake "Stage & continue → failed to fetch" FIXED + auto-remember + Saved Mappings manager + force-include** — see the intake commits; large files now stage in size-bounded chunks with retry, new formats auto-save their mapping, and there's a Saved Mappings panel (browse/expand columns/rename/delete) on the Upload step.
+
+### Session 8 (final) — audit-backlog completion, auth, headers, mobile idempotency
+- **Multi-agent audit fixes (all schema-verified; false positives rejected):** search-filter injection sanitizer (`src/lib/searchFilter.js`, 9 `.or()` sites + country); `corrective_actions.source` broken insert fixed; ÷0/Infinity guards (analyticsEngine, FuelEfficiency); **8 loader fetch-race guards** (TyreRecords, TyreExchange, DowntimeTracker, FleetHealthBoard, DriverManagement, EngineeringKpi, FleetAnalytics, VehicleHistory) — try/finally + request-id/`cancelled` guards; **localStorage-in-updater** moved to effects (Alerts ×3, Anomalies ×1); country isolation on FleetIntelligence/WorkshopManagement/VendorIntelligence.
+- **V80** — dropped redundant `kpi_targets` UNIQUE(metric) (Settings KPI-target save would 23505 at year rollover).
+- **React perf** — memoized `Auth`/`Settings`/`Tenant` context values + callbacks (stops app-wide re-renders).
+- **Mobile idempotency (V81)** — `client_uuid` (text) + UNIQUE index on tyre_records/work_orders/rca_records/corrective_actions/inspections; both offline queues now upsert-on-conflict-ignore, save-per-item, and share a global sync mutex; the online inspection path shares the client id. No more duplicate records on crash/lost-response/overlapping sync.
+- **Mobile hardening** — `admin/approvals.tsx` arbitrary-table write replaced with an `upload_type→table` allow-list; `history.tsx` gained an error/retry state.
+- **No-email signup (V82)** — accounts are created with **username + Employee ID + password, no email**. Client mints a synthetic `<slug>@users.tyrepulse.app`; `auto_confirm_synthetic_email()` BEFORE-INSERT trigger confirms it; `handle_new_user()` now copies `employee_id`+`email` from metadata; unique indexes on `lower(username)`/`lower(employee_id)`. `approved=false` (admin approval unchanged). `get_email_by_identifier` resolves login. `src/pages/Login.jsx` drops the email field. (An earlier `supabase/functions/signup` edge-function approach was removed — deploy is approval-gated in headless; the trigger approach needs no deploy.)
+- **CSP header** added to `vercel.json` — non-breaking (inline preserved), `connect-src` locked to self + `*.supabase.co`, `object-src none`, `frame-ancestors none`. All other security headers (HSTS, X-Frame-Options DENY, nosniff, Referrer/Permissions-Policy) were already present. ⚠️ Verify the live site loads after deploy; revert the CSP line if anything breaks.
+- **Gate throughout:** 875 web tests · web build · mobile typecheck 0 errors. **Only V75 (perf RLS initplan) remains an unapplied migration file** (behaviour-preserving; safe to apply).
 
 ### Mobile — offline-safe UPDATE commands (closes P3 mobile-offline gap; partial R3/R12)
 - Three screens issued **direct Supabase UPDATE writes** that were lost offline and could double-apply on retry: `stock.tsx` (quantity adjust), `work-orders.tsx` (WO status), `workorders/index.tsx` (corrective-action status).

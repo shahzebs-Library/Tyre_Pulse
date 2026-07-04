@@ -78,7 +78,7 @@ No **error-level** issues remain. Remaining items are cosmetic/UX or need a manu
 6. **Theme**: still a mixed dark/light identity (Work Orders + Engineering KPI use dark cards; analytics pages light). Pick one (light-content SaaS recommended) and align.
 
 ## Security posture (2026-07-04)
-Tracked in migrations V19-V71. Supabase advisor: **0 errors**; anon can read 0 sensitive rows (re-verified 2026-07-04 by impersonating the `anon` role — vehicle_fleet/fleet_master/profiles/tyre_records/accidents/stock_records all return 0); functions hardened (pinned search_path, anon EXECUTE revoked). Only outstanding toggle is **Leaked Password Protection** - Supabase **Pro-plan only**, so accepted as plan-limited on Free.
+Tracked in migrations V19-V82. Supabase advisor: **0 errors**; anon can read 0 sensitive rows (re-verified 2026-07-04 by impersonating the `anon` role — vehicle_fleet/fleet_master/profiles/tyre_records/accidents/stock_records all return 0); functions hardened (pinned search_path, anon EXECUTE revoked). Search-filter injection sanitised; Import Center country-isolated (V76/V77); mobile offline-write idempotency (V81); no-email signup (V82); **CSP + full secure-header set** in `vercel.json`. Only outstanding toggle is **Leaked Password Protection** - Supabase **Pro-plan only**, so accepted as plan-limited on Free.
 
 **2026-07-04 hardening pass (all live, gated):**
 - **V70 `profiles_org_isolation`** — closed cross-tenant PII exposure on `profiles` (the SELECT policy was `auth.role()='authenticated'`, exposing every org's profiles). Added a RESTRICTIVE gate (own row · org admin · same org); proven with a rolled-back two-tenant probe.

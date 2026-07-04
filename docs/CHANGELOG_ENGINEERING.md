@@ -252,3 +252,20 @@ mobile deps synced - typecheck now fully clean.
   count preserved from `sm:` up — **desktop byte-identical**, only <640px reflows.
 - Repo auto-deploys to Vercel on push to `main`, so these land live. Gate: 730
   tests green, web build clean throughout.
+
+## 2026-07-04 — Security: profiles org isolation + Daily Ops XSS (main, pushed)
+- **V70 `profiles_org_isolation`** (HIGH, cross-tenant PII): the only SELECT
+  policy on `public.profiles` was `USING (auth.role() = 'authenticated')`, so any
+  signed-in user could read every profile in every organisation. Added a
+  RESTRICTIVE org-isolation gate (`id = auth.uid()` OR `app_is_org_admin()` OR
+  `org_id = app_current_org()`), mirroring the 23 business tables. Helpers are
+  SECURITY DEFINER (pinned `search_path`) → no RLS recursion; `app_current_org()`
+  reads `profiles.org_id`, so the column matches. Proven with a rolled-back
+  two-tenant probe (org-A user sees only self: 1 row, no org-B/admin leak).
+  `get_advisors(security)`: 0 ERROR-level findings.
+- **Daily Ops print XSS**: `printBriefing()` interpolated DB fields
+  (severity/type/asset/description/date) straight into `document.write` HTML.
+  All values now HTML-escaped; severity CSS class whitelisted.
+- **useRealtimeAlerts double-RPC**: `markAllRead` dispatched `mark_notification_read`
+  RPCs inside the state updater (StrictMode double-invokes → double fire). Moved
+  the RPC dispatch outside the pure updater.

@@ -103,12 +103,16 @@ export default function WorkOrdersScreen() {
     const next = NEXT_STATUS[cur]
     if (!next || !mayEdit || busyId) return
     setBusyId(wo.id)
-    const patch: any = { status: next }
+    const patch: Record<string, any> = { id: wo.id, status: next }
     if (next === 'In Progress') patch.started_at = new Date().toISOString()
     if (next === 'Completed') patch.completed_at = new Date().toISOString()
-    const { error } = await supabase.from('work_orders').update(patch).eq('id', wo.id)
+    // optimistic - keeps the new status visible even while queued offline
+    setRows(prev => prev.map(r => r.id === wo.id ? { ...r, status: next } : r))
+    // Typed offline queue: immediate when online, enqueued (idempotent replay by
+    // id) when offline so status changes are never lost.
+    const res = await saveCommand('WORK_ORDER_STATUS', patch)
     setBusyId(null)
-    if (error) { Alert.alert('Update failed', error.message); return }
+    if (res.offline) { Alert.alert(t('modules.common.offlineSaved')); return }
     load()
   }
 

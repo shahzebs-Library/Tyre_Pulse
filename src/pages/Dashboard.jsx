@@ -1,12 +1,11 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '../lib/supabase'
+import { dashboard } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import { applyCountry } from '../lib/countryFilter'
 import StatCard from '../components/StatCard'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
@@ -211,22 +210,15 @@ export default function Dashboard() {
   async function load() {
     setLoading(true); setError(null)
     try {
-      // Null-safe country filter: never silently drop uncategorised rows.
-      const flt = q => applyCountry(q, activeCountry)
-      let tyreQ = applyCountry(
-        supabase.from('tyre_records').select('id,cost_per_tyre,brand,issue_date,risk_level,site,category,asset_no'),
-        activeCountry,
-      )
-      if (dateFrom) tyreQ = tyreQ.gte('issue_date', dateFrom)
-      if (dateTo)   tyreQ = tyreQ.lte('issue_date', dateTo)
+      // Null-safe country filter (behind the service layer) never silently
+      // drops uncategorised rows; full-fleet aggregates come from the RPC.
       const [tyreRes, stockRes, actionRes, recentRes, openActRes, summaryRes] = await Promise.all([
-        tyreQ,
-        flt(supabase.from('stock_records').select('id', { count: 'exact' })),
-        flt(supabase.from('corrective_actions').select('id,status', { count: 'exact' })),
-        flt(supabase.from('tyre_records').select('id,issue_date,brand,asset_no,site,risk_level').order('created_at', { ascending: false }).limit(8)),
-        flt(supabase.from('corrective_actions').select('id,title,priority,site,status').eq('status','Open').order('created_at', { ascending: false }).limit(8)),
-        // Full-fleet aggregates (server-side) - accurate beyond the 1000-row page cap.
-        supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: dateFrom || null, p_to: dateTo || null }),
+        dashboard.listDashboardTyres({ country: activeCountry, from: dateFrom, to: dateTo }),
+        dashboard.listDashboardStock({ country: activeCountry }),
+        dashboard.listDashboardActions({ country: activeCountry }),
+        dashboard.listDashboardRecentTyres({ country: activeCountry }),
+        dashboard.listDashboardOpenActions({ country: activeCountry }),
+        dashboard.reportTyreSummary({ country: activeCountry, from: dateFrom, to: dateTo }),
       ])
       // Surface a hard failure (offline / RLS-denied) instead of rendering an
       // empty dashboard that looks identical to "no data".
@@ -475,8 +467,8 @@ export default function Dashboard() {
   async function pptxExportTask() {
     const now = new Date()
     const [{ data: sum }, actionRes] = await Promise.all([
-      supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: dateFrom || null, p_to: dateTo || null }),
-      supabase.from('corrective_actions').select('title,priority,site,status').eq('status','Open').order('created_at',{ascending:false}).limit(20),
+      dashboard.reportTyreSummary({ country: activeCountry, from: dateFrom, to: dateTo }),
+      dashboard.listOpenActionsForPptx(),
     ])
     const s = sum || {}
     const actions = actionRes.data ?? []
@@ -526,12 +518,12 @@ export default function Dashboard() {
     const yearStart  = `${now.getFullYear()}-01-01`
     // Accurate, full-fleet aggregates (server-side) + month/YTD cost slices.
     const [{ data: sAll }, { data: sMonth }, { data: sYtd }, actionRes, inspRes, critRes] = await Promise.all([
-      supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: null, p_to: null }),
-      supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: monthStart, p_to: null }),
-      supabase.rpc('report_tyre_summary', { p_country: activeCountry, p_from: yearStart, p_to: null }),
-      supabase.from('corrective_actions').select('id,title,priority,site,status,assigned_to').eq('status','Open').order('created_at',{ascending:false}).limit(20),
-      supabase.from('inspections').select('id,status,severity,scheduled_date,site,findings,inspector').order('scheduled_date',{ascending:false}).limit(50),
-      applyCountry(supabase.from('tyre_records').select('asset_no,site'), activeCountry).eq('risk_level','Critical').order('created_at',{ascending:false}).limit(10),
+      dashboard.reportTyreSummary({ country: activeCountry, from: null, to: null }),
+      dashboard.reportTyreSummary({ country: activeCountry, from: monthStart, to: null }),
+      dashboard.reportTyreSummary({ country: activeCountry, from: yearStart, to: null }),
+      dashboard.listOpenActionsForDaily(),
+      dashboard.listRecentInspectionsForDaily(),
+      dashboard.listCriticalTyresForDaily({ country: activeCountry }),
     ])
     const s       = sAll || {}
     const actions = actionRes.data ?? []

@@ -1,11 +1,17 @@
-# TyrePulse Mobile - Status Audit (June 2026)
+# TyrePulse Mobile - Status Audit (updated 4 July 2026 · Session 8)
+
+> **Note:** the "What Is Missing / Incomplete" and "Critical Code Issues"
+> sections below were the June-2026 audit. Most were resolved in Sessions 4–8
+> and are annotated inline — photo upload to Storage, push notifications,
+> auto-sync on reconnect, RBAC gating, typed `user`, and offline-safe update
+> commands are all done. The app is on **Expo SDK 54 / RN 0.81.5** now.
 
 ## Build Configuration
 
 | Item | Value |
 |------|-------|
-| Framework | React Native 0.79.6 + Expo SDK 53 |
-| Router | expo-router ~5.1.11 (file-based, typed routes) |
+| Framework | React Native 0.81.5 + Expo SDK 54 |
+| Router | expo-router ~6.0.24 (file-based, typed routes) |
 | EAS Project ID | 3ed4e62f-e91f-4c78-b1eb-9b7310c08255 |
 | Android target SDK | 35, minSDK 24 |
 | New Architecture | Disabled (stability) |
@@ -64,8 +70,12 @@
 
 | Gap | Impact |
 |-----|--------|
-| Photo upload to Supabase Storage | Photos saved as local URI only - lost on reinstall, never synced to server |
-| Offline photo queue | No base64/storage-ref queuing; photos cannot be deferred with inspection |
+| ~~Photo upload to Supabase Storage~~ | ✅ Done (Session 4) — FileSystem base64 → `tyre-photos` bucket |
+| ~~Offline photo queue~~ | ✅ Done — `photoUpload.ts` + record queue resolve refs on sync |
+| ~~Push notifications~~ | ✅ Done (Session 5) — `lib/notifications.ts`, channels, daily reminder |
+| ~~GPS on inspections~~ | ⬜ Still open (expo-location not added) — P2 |
+| ~~Auto-sync network listener~~ | ✅ Done — `hooks/useNetworkSync.ts` wired in `(app)/_layout.tsx` |
+| ~~Offline update commands (stock/WO/CA status)~~ | ✅ Done (Session 8) — typed UPDATE commands via `recordQueue` |
 | Accident module | 3 screens exist with no documented scope or working implementation |
 | Admin screens (ai-chat, users) | Exist but not integrated with backend or RBAC |
 | Push notifications | Not implemented (expo-notifications not in package.json) |

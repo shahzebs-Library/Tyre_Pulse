@@ -1,11 +1,35 @@
 # TyrePulse - Developer Handoff
-**Last updated:** 4 July 2026
-**Branch:** `main` (all work merged; auto-deploys to Vercel)
-**Web build status:** ✅ Clean - builds, **730/730 tests passing**, auto-deploys to Vercel
-**Mobile build status:** ✅ EAS Android build green - Expo SDK 53, auto-builds on push to `main`
+**Last updated:** 4 July 2026 (Session 8)
+**Branch:** dev `claude/mobile-app-ui-features-tdfxy0` (Session 8 work); `main` auto-deploys to Vercel
+**Web build status:** ✅ Clean - builds, **780/780 tests passing**, auto-deploys to Vercel
+**Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5**, auto-builds on push to `main`
 **DB migrations applied to live Supabase:** through **V71** (project `jhssdmeruxtrlqnwfksc`)
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
+
+---
+
+## Session 8 (4 July 2026) — Offline update commands, service-layer migration, cross-file merge
+
+**Theme:** work the genuine open backlog from the gap/security registers (owner-credential and frozen Go/Kotlin items excluded), keeping the gate green throughout. Multi-agent, disjoint directories, integrated + verified centrally.
+
+**Gate after this session:** web build ✅ · **780 web tests** (was 730; +50) ✅ · mobile typecheck 0 errors ✅.
+
+### Mobile — offline-safe UPDATE commands (closes P3 mobile-offline gap; partial R3/R12)
+- Three screens issued **direct Supabase UPDATE writes** that were lost offline and could double-apply on retry: `stock.tsx` (quantity adjust), `work-orders.tsx` (WO status), `workorders/index.tsx` (corrective-action status).
+- Extended the typed `recordQueue` (the only place a table name may appear on the client) to support **UPDATE-by-id** commands: `CommandSpec` gained `op: 'insert'|'update'` (default insert) + `matchField` (default `id`); the match column is used in `.eq()` and excluded from the SET so the PK is never rewritten. Added `STOCK_ADJUST`, `WORK_ORDER_STATUS`, `CORRECTIVE_ACTION_STATUS` with schema-verified field allow-lists.
+- All three screens now enqueue typed commands: immediate write when online, offline enqueue + auto-flush on reconnect (same `useNetworkSync`/`syncRecordQueue` path), optimistic local state so the change stays visible while queued. Idempotent by design — callers send **absolute** values (computed quantity / target status), so a replayed queued update yields the same result.
+
+### Web — service-layer migration of the top-3 inline-Supabase pages (P3 platform debt)
+- Pure refactor (no behavior change): `Dashboard.jsx` (14 inline calls), `DataCleaning.jsx` (22), `UploadData.jsx` (14) now go through new `src/lib/api/` modules `dashboard.js` / `dataCleaning.js` / `uploads.js`. Per-page country-scoping style preserved exactly (null-safe OR for Dashboard, strict `.eq` for DataCleaning). +46 api unit tests.
+- **Latent bug found, intentionally not fixed** (to keep the refactor pure): `DataCleaning.loadPending` reads `count` without requesting `{ count: 'exact' }`, so `totalPending` stays 0 and the pending-tab pager never shows. Tracked for a follow-up behavior fix.
+
+### Import — cross-file merge library (cost file wins) — P3
+- New `src/lib/import/mergeCrossFile.js` (`mergeCrossFileRows`, `COST_FIELDS`), exported + **9 unit tests**: same natural key across files → one merged record; the cost-bearing row wins on conflict; blanks enriched from the other file; cost fields never back-filled; line-item aggregation preserved.
+- **Deliberately NOT wired client-side.** Traced the batch model: `DataIntakeCenter.runValidation` processes **one sheet at a time**; cross-file rows accumulate server-side across separate `stageRows` passes. A client-side merge (a) would not see cross-file data and (b) would wrongly collapse same-key **lifecycle events** (e.g. a tyre serial re-appearing) that `classifyDuplicates` must preserve. Correct integration is server-side in `import_commit_batch` (a live-DB migration) — deferred rather than applied blind to the production database that emails real tenants. Library is the ready building block for that step.
+
+### Docs
+- Reconciled stale mobile version facts across the doc set (was SDK 53 / RN 0.79 → actually **SDK 54 / RN 0.81.5**) and refreshed `MOBILE_STATUS.md` (photo upload, push, auto-sync, RBAC, typed `user` were already done in prior sessions but still listed as missing).
 
 ---
 

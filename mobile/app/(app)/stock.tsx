@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
+import { saveCommand } from '../../lib/recordQueue'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useRealtime } from '../../hooks/useRealtime'
@@ -73,14 +74,18 @@ export default function StockScreen() {
     setBusyId(item.id)
     // optimistic
     setRows(prev => prev.map(r => r.id === item.id ? { ...r, stock_qty: next, stock_status: statusFor(next, r.min_level, r.critical_level) } : r))
-    const { error } = await supabase.from('stock_records').update({
+    // Route through the typed offline queue: applies immediately when online,
+    // enqueues (never lost) when offline. The absolute `next` value makes retries
+    // idempotent, so a queued adjust can never double-apply.
+    const res = await saveCommand('STOCK_ADJUST', {
+      id: item.id,
       stock_qty: next,
       stock_status: statusFor(next, item.min_level, item.critical_level),
       updated_by: profile?.id ?? null,
       updated_at: new Date().toISOString(),
-    }).eq('id', item.id)
+    })
     setBusyId(null)
-    if (error) { Alert.alert(t('modules.stock.updateFailed'), error.message); load() }
+    if (res.offline) Alert.alert(t('modules.common.offlineSaved'))
   }
 
   const shown = useMemo(() => {

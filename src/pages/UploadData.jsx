@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { uploads } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { batchClassify } from '../lib/tyreClassifier'
@@ -602,7 +602,7 @@ export default function UploadData() {
 
   // Load permanent synonyms once - injected into smart mapping for 100% confidence
   useEffect(() => {
-    supabase.from('field_synonyms').select('custom_name, maps_to').eq('table_target', 'tyre_records')
+    uploads.listFieldSynonyms()
       .then(({ data }) => { if (data) setSynonyms(data) })
   }, [])
 
@@ -625,7 +625,7 @@ export default function UploadData() {
 
     // Recall saved mapping fingerprint
     const fp     = fingerprintHeaders(hdrs)
-    const { data: saved } = await supabase.from('column_mappings').select('id, mapping').eq('fingerprint', fp).maybeSingle()
+    const { data: saved } = await uploads.getColumnMapping(fp)
 
     let finalMapping
     if (saved?.mapping) {
@@ -832,7 +832,7 @@ export default function UploadData() {
       const BATCH = 500
       const existing = []
       for (let i = 0; i < serials.length; i += BATCH) {
-        const { data } = await supabase.from('tyre_records').select('serial_no, asset_no, issue_date, id').in('serial_no', serials.slice(i, i + BATCH))
+        const { data } = await uploads.listExistingSerials(serials.slice(i, i + BATCH))
         existing.push(...(data ?? []))
       }
       const existingSet = new Set(existing.map(r => r.serial_no))
@@ -880,13 +880,11 @@ export default function UploadData() {
       })).filter(it => it.text)
       if (items.length === 0) continue
       try {
-        const { data, error } = await supabase.functions.invoke('chat-ai', {
-          body: {
-            system: 'You are a tyre maintenance data classifier. Reply with ONLY a JSON array, no prose.',
-            user: `For each record return {"i":<index>,"category":<short tyre issue category>,"risk_level":<one of Low|Medium|High|Critical>}. Records:\n${JSON.stringify(items)}`,
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 1024,
-          },
+        const { data, error } = await uploads.invokeChatAI({
+          system: 'You are a tyre maintenance data classifier. Reply with ONLY a JSON array, no prose.',
+          user: `For each record return {"i":<index>,"category":<short tyre issue category>,"risk_level":<one of Low|Medium|High|Critical>}. Records:\n${JSON.stringify(items)}`,
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
         })
         if (error || !data?.content) continue
         const m = String(data.content).match(/\[[\s\S]*\]/)
@@ -912,9 +910,9 @@ export default function UploadData() {
     const plain = {}
     Object.entries(mapping).forEach(([k, v]) => { if (v) plain[k] = v })
     if (savedMappingId) {
-      await supabase.from('column_mappings').update({ mapping: plain, last_used_at: new Date().toISOString() }).eq('id', savedMappingId)
+      await uploads.updateColumnMapping(savedMappingId, { mapping: plain, last_used_at: new Date().toISOString() })
     } else {
-      await supabase.from('column_mappings').upsert({ fingerprint: fp, mapping: plain, file_name: fileName, confirmed_by: profile?.id, use_count: 1, last_used_at: new Date().toISOString() }, { onConflict: 'fingerprint' })
+      await uploads.upsertColumnMapping({ fingerprint: fp, mapping: plain, file_name: fileName, confirmed_by: profile?.id, use_count: 1, last_used_at: new Date().toISOString() })
     }
   }
 
@@ -923,7 +921,7 @@ export default function UploadData() {
   // Non-admin uploads are staged for admin approval instead of going live.
   const isAdminUploader = profile?.role === 'Admin'
   async function submitForApproval({ batchId, country, uploadType, targetTable, rows: shapedRows }) {
-    return supabase.from('pending_uploads').insert({
+    return uploads.insertPendingUpload({
       batch_id:      batchId,
       uploaded_by:   profile?.id,
       uploader_name: profile?.full_name || profile?.username || null,
@@ -980,12 +978,12 @@ export default function UploadData() {
       const stockSkipLog = []
       for (let i = 0; i < stockRows.length; i += CHUNK) {
         const chunk = stockRows.slice(i, i + CHUNK)
-        const { error: err } = await supabase.from('stock_records').insert(chunk)
+        const { error: err } = await uploads.insertStockRecords(chunk)
         if (!err) { added += chunk.length }
         else {
           // Retry row-by-row so one bad row never silently drops the whole chunk.
           for (let j = 0; j < chunk.length; j++) {
-            const { error: rowErr } = await supabase.from('stock_records').insert(chunk[j])
+            const { error: rowErr } = await uploads.insertStockRecords(chunk[j])
             if (rowErr) { stockSkipped += 1; stockSkipLog.push({ row: i + j + 1, description: chunk[j].description ?? null, error: rowErr.message }) }
             else added += 1
           }
@@ -1072,7 +1070,7 @@ export default function UploadData() {
 
     for (let i = 0; i < records.length; i += BATCH) {
       const batch = records.slice(i, i + BATCH)
-      const { data, error: err } = await supabase.from('tyre_records').insert(batch).select('id')
+      const { data, error: err } = await uploads.insertTyreRecords(batch)
       if (!err) {
         added += (data ?? []).length; insertedIds.push(...(data ?? []).map(r => r.id))
       } else {
@@ -1081,7 +1079,7 @@ export default function UploadData() {
         // good rows still land and only the genuinely-invalid rows are skipped
         // and logged with their exact reason - no more "whole batch failed".
         for (let j = 0; j < batch.length; j++) {
-          const { data: one, error: rowErr } = await supabase.from('tyre_records').insert(batch[j]).select('id')
+          const { data: one, error: rowErr } = await uploads.insertTyreRecords(batch[j])
           if (rowErr) { skipped += 1; skipLog.push({ row: i + j + 1, serial_no: batch[j].serial_no ?? null, error: rowErr.message }) }
           else { added += 1; insertedIds.push(...(one ?? []).map(r => r.id)) }
         }
@@ -1089,9 +1087,9 @@ export default function UploadData() {
       setProgress({ done: Math.min(i + BATCH, records.length), total: records.length })
     }
 
-    if (classifyLog.length > 0) await supabase.from('cleaning_log').insert(classifyLog.map((entry, i) => ({ ...entry, tyre_record_id: insertedIds[i] ?? null })))
+    if (classifyLog.length > 0) await uploads.insertCleaningLog(classifyLog.map((entry, i) => ({ ...entry, tyre_record_id: insertedIds[i] ?? null })))
 
-    await supabase.from('upload_history').insert({ file_names: [fileName], records_added: added, records_skipped: skipped + (skipDupes ? dupes.length : 0), skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? uploadCountry, country: uploadCountry, uploaded_by: profile?.id, batch_id: batchId })
+    await uploads.insertUploadHistory({ file_names: [fileName], records_added: added, records_skipped: skipped + (skipDupes ? dupes.length : 0), skip_log: skipLog, mapping_used: mapping, region: profile?.region ?? uploadCountry, country: uploadCountry, uploaded_by: profile?.id, batch_id: batchId })
     await logAuditEvent({ action: 'UPLOAD', tableName: 'tyre_records', recordCount: added, details: { filename: fileName, rowCount: added, skippedCount: skipped + (skipDupes ? dupes.length : 0), country: activeCountry, batch_id: batchId } })
 
     // Bump use_count on any synonyms that were exercised in this upload
@@ -1099,8 +1097,7 @@ export default function UploadData() {
     const hitSynonyms = synonyms.filter(s => usedHeaders.has(normalise(s.custom_name)))
     if (hitSynonyms.length > 0) {
       await Promise.all(hitSynonyms.map(s =>
-        supabase.from('field_synonyms').update({ use_count: s.use_count + 1, last_used_at: new Date().toISOString() })
-          .eq('custom_name', s.custom_name).eq('table_target', 'tyre_records')
+        uploads.updateFieldSynonym(s.custom_name, { use_count: s.use_count + 1, last_used_at: new Date().toISOString() })
       ))
     }
 

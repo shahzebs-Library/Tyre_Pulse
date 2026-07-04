@@ -46,6 +46,8 @@ export { buildAliasMap, applyAliases, applyAliasesToRow } from './aliases'
 
 export { aggregateStagedRows } from './aggregate'
 
+export { mergeCrossFileRows, COST_FIELDS } from './mergeCrossFile'
+
 export {
   extractZip,
   matchAttachment,

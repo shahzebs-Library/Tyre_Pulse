@@ -53,10 +53,11 @@ green** · web build green · mobile typecheck clean).
 ### P3 - Platform debt
 | Gap | Where | Notes |
 |---|---|---|
-| Finish service-layer page migration | ~16 pages / ~120 inline calls (top: DataCleaning, UploadData, Dashboard) | Pattern established; migrate in batches. |
+| Finish service-layer page migration | ~13 pages remaining | **Session 8:** DataCleaning + Dashboard + UploadData migrated to `src/lib/api/` (dashboard/dataCleaning/uploads + 46 tests). Pattern established; migrate remaining in batches. |
 | RLS perf consolidation | live DB | 207 multiple-permissive-policy warnings, 82 initplan, 56 unindexed FKs - matters as data grows. |
-| Mobile offline update commands | stock adjust, WO/CA status updates | Direct writes today - lost when offline. |
-| Cross-file merge on import | intake | Same JC enriched from Complaints History + Work Order Details (today: duplicate-skip; cost file should win - see `docs/imports/README.md`). |
+| ~~Mobile offline update commands~~ | stock adjust, WO/CA status updates | ✅ **Session 8** — typed UPDATE commands (`STOCK_ADJUST`/`WORK_ORDER_STATUS`/`CORRECTIVE_ACTION_STATUS`) via `recordQueue`; offline-safe + idempotent. |
+| Cross-file merge on import | intake | **Session 8:** merge library `src/lib/import/mergeCrossFile.js` (cost-file-wins) built + 9 tests. Server-side wiring in `import_commit_batch` still pending (client staging is single-sheet; merging client-side would collapse legitimate lifecycle events). |
+| DataCleaning pending pager count | `src/pages/DataCleaning.jsx` `loadPending` | `count` read without `{ count: 'exact' }` → `totalPending` always 0. Latent bug (behavior fix, not a refactor). |
 
 ### P4 - Bigger product investments
 | Gap | Notes |

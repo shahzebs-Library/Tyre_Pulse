@@ -23,12 +23,30 @@ const BASE_BACKOFF_MS = 30_000 // 30s, doubled per attempt, capped
 export type QueueStatus = 'pending' | 'synced' | 'failed'
 
 /** Fixed set of write commands the mobile app is allowed to issue. */
-export type CommandType = 'TYRE_CHANGE' | 'WORK_ORDER' | 'RCA' | 'REPORT_ISSUE'
+export type CommandType =
+  | 'TYRE_CHANGE'
+  | 'WORK_ORDER'
+  | 'RCA'
+  | 'REPORT_ISSUE'
+  | 'STOCK_ADJUST'
+  | 'WORK_ORDER_STATUS'
+  | 'CORRECTIVE_ACTION_STATUS'
+
+/** How a command mutates its table. Defaults to 'insert' to preserve v1 behavior. */
+export type CommandOp = 'insert' | 'update'
 
 interface CommandSpec {
   table: string
   /** Only these payload keys survive; everything else is dropped. */
   fields: readonly string[]
+  /**
+   * Write mode. 'insert' (default) creates a new row. 'update' patches an
+   * existing row matched by `matchField`; the match column is used in the WHERE
+   * clause and excluded from the SET so the primary key is never rewritten.
+   */
+  op?: CommandOp
+  /** Column used to locate the row for an 'update' command. Defaults to 'id'. */
+  matchField?: string
 }
 
 /**
@@ -71,6 +89,25 @@ export const COMMANDS: Record<CommandType, CommandSpec> = {
       'country', 'due_date', 'photos',
     ],
   },
+  // ---- UPDATE-by-id commands (offline-safe status/quantity changes) ----
+  STOCK_ADJUST: {
+    table: 'stock_records',
+    op: 'update',
+    matchField: 'id',
+    fields: ['id', 'stock_qty', 'stock_status', 'updated_by', 'updated_at'],
+  },
+  WORK_ORDER_STATUS: {
+    table: 'work_orders',
+    op: 'update',
+    matchField: 'id',
+    fields: ['id', 'status', 'started_at', 'completed_at'],
+  },
+  CORRECTIVE_ACTION_STATUS: {
+    table: 'corrective_actions',
+    op: 'update',
+    matchField: 'id',
+    fields: ['id', 'status', 'closed_at'],
+  },
 }
 
 export interface QueuedRecord {
@@ -107,12 +144,39 @@ function backoffMs(retry: number): number {
   return Math.min(BASE_BACKOFF_MS * 2 ** retry, 30 * 60_000) // cap 30 min
 }
 
-/** Module slug used for photo storage paths, per command. */
+/** Module slug used for photo storage paths, per command. Update commands carry
+ * no photos, but every command type needs an entry for exhaustive typing. */
 const TYPE_TO_MODULE: Record<CommandType, string> = {
   TYRE_CHANGE: 'tyre-change',
   WORK_ORDER: 'work-order',
   RCA: 'rca',
   REPORT_ISSUE: 'report-issue',
+  STOCK_ADJUST: 'stock-adjust',
+  WORK_ORDER_STATUS: 'work-order-status',
+  CORRECTIVE_ACTION_STATUS: 'corrective-action-status',
+}
+
+/** True when a command patches an existing row rather than inserting a new one. */
+function isUpdateCommand(type: CommandType): boolean {
+  return (COMMANDS[type].op ?? 'insert') === 'update'
+}
+
+/**
+ * Split an allow-listed payload for an update command into the match key/value
+ * (WHERE clause) and the SET body. The match column is excluded from the SET so
+ * the primary key is never rewritten and RLS/triggers see a clean patch.
+ */
+function buildUpdateParts(
+  type: CommandType,
+  clean: Record<string, any>,
+): { matchField: string; matchValue: any; setPayload: Record<string, any> } {
+  const matchField = COMMANDS[type].matchField ?? 'id'
+  const matchValue = clean[matchField]
+  const setPayload: Record<string, any> = {}
+  for (const [k, v] of Object.entries(clean)) {
+    if (k !== matchField) setPayload[k] = v
+  }
+  return { matchField, matchValue, setPayload }
 }
 
 /**
@@ -203,6 +267,28 @@ export async function saveCommand(
     return { ok: false, offline: false, error: `Unknown command type: ${type}` }
   }
   const clean = sanitize(type, payload)
+
+  // UPDATE-by-id command: patch an existing row. Retries are naturally
+  // idempotent because callers send absolute values (e.g. the new quantity or
+  // status), so re-applying a queued update yields the same result.
+  if (isUpdateCommand(type)) {
+    const { matchField, matchValue, setPayload } = buildUpdateParts(type, clean)
+    if (matchValue === undefined || matchValue === null) {
+      return { ok: false, offline: false, error: `Missing "${matchField}" for update command ${type}` }
+    }
+    try {
+      const { error } = await supabase
+        .from(COMMANDS[type].table)
+        .update(setPayload)
+        .eq(matchField, matchValue)
+      if (error) throw error
+      return { ok: true, offline: false }
+    } catch (e: any) {
+      await enqueueCommand(type, clean, idempotencyKey)
+      return { ok: true, offline: true, error: e?.message }
+    }
+  }
+
   try {
     // Upload any locally-captured photos first; keep the record queued (never
     // insert without them) if any can't be uploaded right now.
@@ -236,13 +322,26 @@ export async function syncRecordQueue(): Promise<{ synced: number; failed: numbe
     if (item.next_attempt_at && Date.parse(item.next_attempt_at) > now) continue
     try {
       const clean = sanitize(item.type, item.payload)
-      // Upload any still-local photos and persist the resolved refs back onto
-      // the queued item so we never re-upload them on a subsequent attempt.
-      const { payload: prepared, pending } = await resolveCommandPhotos(item.type, clean)
-      item.payload = prepared
-      if (pending) throw new Error('Photos pending upload - will retry')
-      const { error } = await supabase.from(COMMANDS[item.type].table).insert(prepared)
-      if (error) throw error
+      if (isUpdateCommand(item.type)) {
+        // Patch-by-id: idempotent, so a replayed attempt is safe.
+        const { matchField, matchValue, setPayload } = buildUpdateParts(item.type, clean)
+        if (matchValue === undefined || matchValue === null) {
+          throw new Error(`Missing "${matchField}" for update command ${item.type}`)
+        }
+        const { error } = await supabase
+          .from(COMMANDS[item.type].table)
+          .update(setPayload)
+          .eq(matchField, matchValue)
+        if (error) throw error
+      } else {
+        // Upload any still-local photos and persist the resolved refs back onto
+        // the queued item so we never re-upload them on a subsequent attempt.
+        const { payload: prepared, pending } = await resolveCommandPhotos(item.type, clean)
+        item.payload = prepared
+        if (pending) throw new Error('Photos pending upload - will retry')
+        const { error } = await supabase.from(COMMANDS[item.type].table).insert(prepared)
+        if (error) throw error
+      }
       item.sync_status = 'synced'
       item.synced_at = new Date().toISOString()
       item.error = null

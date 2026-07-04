@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { supabase } from '../lib/supabase'
+import { dataCleaning } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { batchClassify, RISK_COLOUR, CONFIDENCE_COLOUR, ALL_CATEGORY_LABELS } from '../lib/tyreClassifier'
@@ -214,34 +214,26 @@ export default function DataCleaning() {
 
   // ── Existing loaders ─────────────────────────────────────────────────────────
   async function loadStats() {
-    const cf = activeCountry !== 'All' ? activeCountry : null
-    const base = (q) => cf ? q.eq('country', cf) : q
     const [p, c] = await Promise.all([
-      base(supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('cleaned', false)),
-      base(supabase.from('tyre_records').select('id', { count: 'exact', head: true }).eq('cleaned', true)),
+      dataCleaning.countTyreRecords({ country: activeCountry, cleaned: false }),
+      dataCleaning.countTyreRecords({ country: activeCountry, cleaned: true }),
     ])
     setStats({ pending: p.count ?? 0, cleaned: c.count ?? 0 })
   }
 
   async function loadSites() {
-    let q = supabase.from('tyre_records').select('site').not('site', 'is', null).eq('cleaned', false)
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    const { data } = await q
+    const { data } = await dataCleaning.listUncleanedSites({ country: activeCountry })
     setSites([...new Set((data ?? []).map(r => r.site))].sort())
   }
 
   const loadPending = useCallback(async () => {
     setLoading(true)
-    let q = supabase
-      .from('tyre_records')
-      .select('id, description, remarks, site, asset_no, brand, issue_date')
-      .eq('cleaned', false)
-      .order('created_at', { ascending: false })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
-    if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-    if (filterSite) q = q.eq('site', filterSite)
-
-    const { data, count } = await q
+    const { data, count } = await dataCleaning.listPendingRecords({
+      country: activeCountry,
+      site: filterSite || undefined,
+      from: page * PAGE_SIZE,
+      to: (page + 1) * PAGE_SIZE - 1,
+    })
     const records = data ?? []
     setRawRecords(records)
     setTotalPending(count ?? 0)
@@ -255,12 +247,7 @@ export default function DataCleaning() {
 
   async function loadCleaned() {
     setLoading(true)
-    const { data } = await supabase
-      .from('tyre_records')
-      .select('id, asset_no, brand, site, category, risk_level, remarks_cleaned, issue_date, description, remarks')
-      .eq('cleaned', true)
-      .order('created_at', { ascending: false })
-      .limit(500)
+    const { data } = await dataCleaning.listCleanedRecords()
     setCleanedRecords(data ?? [])
     setCleanedSelected(new Set())
     setReclassifyProposed(null)
@@ -273,9 +260,7 @@ export default function DataCleaning() {
     setCheckLoading({ serialIssues: true, duplicateSerial: true, invalidPressure: true, missingTread: true, missingInspect: true, odometer: true, unrealisticLife: true })
 
     // Get total record count
-    let countQ = supabase.from('tyre_records').select('id', { count: 'exact', head: true })
-    if (activeCountry !== 'All') countQ = countQ.eq('country', activeCountry)
-    const { count: total } = await countQ
+    const { count: total } = await dataCleaning.countTyreRecords({ country: activeCountry })
     setTotalRecords(total ?? 0)
 
     await Promise.all([
@@ -294,9 +279,7 @@ export default function DataCleaning() {
   async function checkSerialIssues() {
     setCheckLoading(p => ({ ...p, serialIssues: true }))
     try {
-      let q = supabase.from('tyre_records').select('id, tyre_serial, asset_no, site, issue_date')
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data } = await q
+      const { data } = await dataCleaning.listSerialRecords({ country: activeCountry })
 
       const issues = (data ?? []).filter(r => {
         const s = r.tyre_serial
@@ -335,9 +318,7 @@ export default function DataCleaning() {
   async function checkDuplicateSerials() {
     setCheckLoading(p => ({ ...p, duplicateSerial: true }))
     try {
-      let q = supabase.from('tyre_records').select('id, tyre_serial, asset_no, site, issue_date, km_at_removal').is('km_at_removal', null)
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data } = await q
+      const { data } = await dataCleaning.listActiveSerialRecords({ country: activeCountry })
 
       const groups = {}
       ;(data ?? []).forEach(r => {
@@ -369,9 +350,7 @@ export default function DataCleaning() {
     setCheckLoading(p => ({ ...p, invalidPressure: true }))
     try {
       // Try pressure_reading column; gracefully handle if it doesn't exist
-      let q = supabase.from('tyre_records').select('id, tyre_serial, asset_no, site, pressure_reading, issue_date').not('pressure_reading', 'is', null)
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data, error } = await q
+      const { data, error } = await dataCleaning.listPressureRecords({ country: activeCountry })
 
       if (error && error.message?.includes('column')) {
         setInvalidPressure({ count: 0, records: [], notApplicable: true })
@@ -394,9 +373,7 @@ export default function DataCleaning() {
     setCheckLoading(p => ({ ...p, missingTread: true }))
     try {
       // Records that look like inspections but lack tread depth
-      let q = supabase.from('tyre_records').select('id, tyre_serial, asset_no, site, tread_depth, issue_date')
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data, error } = await q
+      const { data, error } = await dataCleaning.listTreadRecords({ country: activeCountry })
 
       if (error && error.message?.includes('column')) {
         setMissingTread({ count: 0, pct: 0, bySite: [], notApplicable: true })
@@ -424,9 +401,7 @@ export default function DataCleaning() {
     setCheckLoading(p => ({ ...p, missingInspect: true }))
     try {
       // Get all distinct asset_nos from tyre_records
-      let q = supabase.from('tyre_records').select('asset_no').not('asset_no', 'is', null)
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data: tyreData } = await q
+      const { data: tyreData } = await dataCleaning.listAssetNumbers({ country: activeCountry })
       const allAssets = [...new Set((tyreData ?? []).map(r => r.asset_no))]
 
       // Try inspections table - graceful fallback
@@ -434,10 +409,7 @@ export default function DataCleaning() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
       const cutoff = thirtyDaysAgo.toISOString().split('T')[0]
 
-      const { data: inspData, error: inspError } = await supabase
-        .from('inspections')
-        .select('asset_no, inspection_date')
-        .gte('inspection_date', cutoff)
+      const { data: inspData, error: inspError } = await dataCleaning.listRecentInspections({ cutoff })
 
       if (inspError) {
         // inspections table may not exist
@@ -458,12 +430,7 @@ export default function DataCleaning() {
   async function checkOdometerIssues() {
     setCheckLoading(p => ({ ...p, odometer: true }))
     try {
-      let q = supabase.from('tyre_records')
-        .select('id, tyre_serial, asset_no, site, km_at_fitment, km_at_removal, issue_date')
-        .not('km_at_removal', 'is', null)
-        .not('km_at_fitment', 'is', null)
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data } = await q
+      const { data } = await dataCleaning.listOdometerRecords({ country: activeCountry })
 
       const issues = []
 
@@ -510,12 +477,7 @@ export default function DataCleaning() {
   async function checkUnrealisticLife() {
     setCheckLoading(p => ({ ...p, unrealisticLife: true }))
     try {
-      let q = supabase.from('tyre_records')
-        .select('id, tyre_serial, asset_no, site, km_at_fitment, km_at_removal, cost_per_tyre, issue_date')
-        .not('km_at_removal', 'is', null)
-        .not('km_at_fitment', 'is', null)
-      if (activeCountry !== 'All') q = q.eq('country', activeCountry)
-      const { data } = await q
+      const { data } = await dataCleaning.listLifeRecords({ country: activeCountry })
 
       const issues = [];
       ;(data ?? []).forEach(r => {
@@ -588,7 +550,7 @@ export default function DataCleaning() {
         tyre_serial: `${newSerial.trim()}-${String(i + 2).padStart(2, '0')}`,
       }))
       for (const rec of toUpdate) {
-        const { error } = await supabase.from('tyre_records').update({ tyre_serial: rec.tyre_serial }).eq('id', rec.id)
+        const { error } = await dataCleaning.updateTyreSerial(rec.id, rec.tyre_serial)
         if (error) throw error
       }
       setToast({ message: `Updated ${toUpdate.length} serial(s) successfully`, type: 'success' })
@@ -608,7 +570,7 @@ export default function DataCleaning() {
       if (edits.km_at_fitment !== undefined) updates.km_at_fitment = parseFloat(edits.km_at_fitment)
       if (edits.km_at_removal !== undefined) updates.km_at_removal = parseFloat(edits.km_at_removal)
       if (!Object.keys(updates).length) { setFixingOdom(false); return }
-      const { error } = await supabase.from('tyre_records').update(updates).eq('id', record.id)
+      const { error } = await dataCleaning.updateTyreOdometer(record.id, updates)
       if (error) throw error
       setToast({ message: 'Odometer values updated', type: 'success' })
       setOdomModal(null)
@@ -622,7 +584,7 @@ export default function DataCleaning() {
 
   async function markNeedsReview(record) {
     try {
-      const { error } = await supabase.from('tyre_records').update({ remarks: `[NEEDS REVIEW] ${record.remarks ?? ''}`.trim() }).eq('id', record.id)
+      const { error } = await dataCleaning.updateTyreRemarks(record.id, `[NEEDS REVIEW] ${record.remarks ?? ''}`.trim())
       if (error) throw error
       setToast({ message: `Record ${record.id} marked as Needs Review`, type: 'success' })
       await checkUnrealisticLife()
@@ -656,13 +618,13 @@ export default function DataCleaning() {
     const logEntries = []
     for (let i = 0; i < toSave.length; i += BATCH) {
       const batch = toSave.slice(i, i + BATCH)
-      await supabase.from('tyre_records').upsert(batch, { onConflict: 'id' })
+      await dataCleaning.upsertTyreRecords(batch)
       batch.forEach(saved => {
         const orig = rawRecords.find(r => r.id === saved.id)
         if (orig) logEntries.push({ original_text: [orig.description, orig.remarks].filter(Boolean).join(' | '), cleaned_text: saved.remarks_cleaned, category: saved.category, confidence: getResult(saved.id)?.confidence, tyre_record_id: saved.id, cleaned_by_model: 'rule-based-v1' })
       })
     }
-    if (logEntries.length) await supabase.from('cleaning_log').insert(logEntries)
+    if (logEntries.length) await dataCleaning.insertCleaningLog(logEntries)
     setSaveCount(c => c + 1)
     setOverrides({})
     setSaving(false)
@@ -676,9 +638,11 @@ export default function DataCleaning() {
     let offset = 0
     let allPending = []
     while (true) {
-      let q = supabase.from('tyre_records').select('id, description, remarks').eq('cleaned', false).range(offset, offset + FETCH_BATCH - 1)
-      if (filterSite) q = q.eq('site', filterSite)
-      const { data } = await q
+      const { data } = await dataCleaning.listPendingForApproveAll({
+        site: filterSite || undefined,
+        from: offset,
+        to: offset + FETCH_BATCH - 1,
+      })
       if (!data || data.length === 0) break
       allPending.push(...data)
       if (data.length < FETCH_BATCH) break
@@ -693,7 +657,7 @@ export default function DataCleaning() {
       const batch = allPending.slice(i, i + SAVE_BATCH)
       const results = batchClassify(batch)
       const toSave = results.map(r => ({ id: r.id, category: r.category, risk_level: r.risk_level, remarks_cleaned: r.remarks_cleaned, cleaned: true }))
-      await supabase.from('tyre_records').upsert(toSave, { onConflict: 'id' })
+      await dataCleaning.upsertTyreRecords(toSave)
 
       results.forEach(r => {
         const orig = batch.find(b => b.id === r.id)
@@ -706,7 +670,7 @@ export default function DataCleaning() {
     if (logEntries.length) {
       const LOG_BATCH = 500
       for (let i = 0; i < logEntries.length; i += LOG_BATCH) {
-        await supabase.from('cleaning_log').insert(logEntries.slice(i, i + LOG_BATCH))
+        await dataCleaning.insertCleaningLog(logEntries.slice(i, i + LOG_BATCH))
       }
     }
 
@@ -732,7 +696,7 @@ export default function DataCleaning() {
     const toSave = reclassifyProposed.map(r => ({ id: r.id, category: r.category, risk_level: r.risk_level, remarks_cleaned: r.remarks_cleaned, cleaned: true }))
     const BATCH = 200
     for (let i = 0; i < toSave.length; i += BATCH) {
-      await supabase.from('tyre_records').upsert(toSave.slice(i, i + BATCH), { onConflict: 'id' })
+      await dataCleaning.upsertTyreRecords(toSave.slice(i, i + BATCH))
     }
     setReclassifyProposed(null)
     setCleanedSelected(new Set())
@@ -742,15 +706,10 @@ export default function DataCleaning() {
 
   async function undoClassification(record) {
     try {
-      const { error: upErr } = await supabase.from('tyre_records').update({
-        category: null,
-        risk_level: null,
-        remarks_cleaned: null,
-        cleaned: false,
-      }).eq('id', record.id)
+      const { error: upErr } = await dataCleaning.resetTyreClassification(record.id)
       if (upErr) throw upErr
 
-      const { error: delErr } = await supabase.from('cleaning_log').delete().eq('tyre_record_id', record.id)
+      const { error: delErr } = await dataCleaning.deleteCleaningLog(record.id)
       if (delErr) throw delErr
 
       await loadCleaned()

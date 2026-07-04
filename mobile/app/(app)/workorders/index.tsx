@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../../../contexts/AuthContext'
 import { supabase } from '../../../lib/supabase'
+import { saveCommand } from '../../../lib/recordQueue'
 import { isAdminOrAbove } from '../../../lib/types'
 import { canUpdateWorkOrders } from '../../../lib/permissions'
 
@@ -92,12 +93,19 @@ export default function WorkOrdersScreen() {
   async function updateStatus(id: string, newStatus: WorkOrderStatus) {
     if (!canUpdate) return
     setUpdating(true)
-    const update: any = { status: newStatus }
-    if (newStatus === 'Closed') update.closed_at = new Date().toISOString()
-    const { error } = await supabase.from('corrective_actions').update(update).eq('id', id)
+    const closedAt = newStatus === 'Closed' ? new Date().toISOString() : null
+    const update: Record<string, any> = { id, status: newStatus }
+    if (closedAt) update.closed_at = closedAt
+    // Typed offline queue: applies immediately when online, enqueues (idempotent
+    // replay by id) when offline so corrective-action status changes survive.
+    const res = await saveCommand('CORRECTIVE_ACTION_STATUS', update)
     setUpdating(false)
-    if (error) { Alert.alert('Error', error.message); return }
+    // optimistic - keep the new status visible even while queued offline
+    setOrders(prev => prev.map(o => o.id === id
+      ? { ...o, status: newStatus, closed_at: closedAt ?? o.closed_at }
+      : o))
     setDetail(null)
+    if (res.offline) { Alert.alert('Saved offline', 'It will sync automatically'); return }
     load()
   }
 

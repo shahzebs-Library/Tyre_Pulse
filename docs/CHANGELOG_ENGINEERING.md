@@ -349,3 +349,30 @@ untouched). Confirmed fixes landed:
 - Mobile (EAS, lower urgency): arbitrary-table write in `admin/approvals.tsx`; offline-queue
   idempotency (client_uuid + unique constraint + save-per-item + global sync lock);
   history.tsx missing error state; alerts ack offline fallback.
+
+## 2026-07-04 (later) — Import Center: staging fix, Saved Mappings manager, auto-remember, force-upload
+- **"Stage & continue → failed to fetch" fixed** — `stageRows` POSTed 500 rows ×
+  4 JSONB blobs in one request; a wide/large file exceeded the gateway body limit
+  and the fetch was dropped, leaving the batch `staged` with 0 rows (4 such
+  zero-row batches were live). Now size-bounded chunks (≤100 rows AND ≤~1.2 MB
+  serialized) + retry on transient network failure + a clear "request too large /
+  connection dropped" message.
+- **Saved Mappings manager** (`components/intake/MappingProfilesManager.jsx`) —
+  on the Upload step: every saved column-mapping profile, grouped by module,
+  expandable to its source→target column rules, with Rename / Activate-Deactivate
+  / Delete / Apply. Closes the gap where saved mappings were only reachable as a
+  nameless mid-upload dropdown and their columns were never viewable. New
+  `imports.js`: `listAllProfiles` (with rule_count), `renameProfile`,
+  `setProfileActive`, `deleteProfile`.
+- **Auto-remember format** — staging a new file whose mapping did not come from a
+  saved profile auto-saves it (keyed by header fingerprint), so the next upload of
+  the same file auto-maps with zero clicks (fingerprint recognition already
+  existed). Best-effort; never blocks staging.
+- **Force-include** (elevated) — Validate-step toggle stages validation-error rows
+  as warning/insert so the operator can commit rows they judge acceptable;
+  genuinely un-insertable rows still fail safely per-row in the commit RPC.
+- **Open (owner-requested, deeper):** data-level cross-file enrichment — filling
+  an EXISTING live record from a later file (upsert-merge by natural key). In-batch
+  cross-file merge exists (V72, cost modules); enriching existing live records is a
+  new `import_commit_batch` mode = the recommended next server-side build (migration
+  + rolled-back test).

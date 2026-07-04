@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToExcel } from '../lib/exportUtils'
+import { sanitizeSearchTerm } from '../lib/searchFilter'
 import {
   Search, Plus, Edit2, Trash2, Save, X, AlertTriangle,
   FileSpreadsheet, Download, Upload, Truck, ChevronLeft, ChevronRight
@@ -159,7 +160,7 @@ export default function FleetMaster() {
       .order('asset_no', { ascending: true })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
-    if (debouncedSearch) q = q.or(`asset_no.ilike.%${debouncedSearch}%,fleet_number.ilike.%${debouncedSearch}%,make.ilike.%${debouncedSearch}%,model.ilike.%${debouncedSearch}%`)
+    if (debouncedSearch) { const s = sanitizeSearchTerm(debouncedSearch); q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`) }
     if (siteFilter)   q = q.eq('site', siteFilter)
     if (statusFilter) q = q.eq('status', statusFilter)
     if (activeCountry !== 'All') q = q.eq('country', activeCountry)
@@ -331,7 +332,7 @@ export default function FleetMaster() {
   // ── export ────────────────────────────────────────────────────────────────────
   async function fetchAll() {
     let q = supabase.from('vehicle_fleet').select('*').order('asset_no')
-    if (search)       q = q.or(`asset_no.ilike.%${search}%,fleet_number.ilike.%${search}%,make.ilike.%${search}%,model.ilike.%${search}%`)
+    if (search)       { const s = sanitizeSearchTerm(search); q = q.or(`asset_no.ilike.%${s}%,fleet_number.ilike.%${s}%,make.ilike.%${s}%,model.ilike.%${s}%`) }
     if (siteFilter)   q = q.eq('site', siteFilter)
     if (statusFilter) q = q.eq('status', statusFilter)
     if (activeCountry !== 'All') q = q.eq('country', activeCountry)

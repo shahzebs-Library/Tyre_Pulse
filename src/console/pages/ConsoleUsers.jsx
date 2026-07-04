@@ -5,6 +5,7 @@ import {
   Mail, Shield, Building2, Calendar, MoreVertical, UserCheck, UserX,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { sanitizeSearchTerm } from '../../lib/searchFilter'
 import { useConsoleAuth } from '../ConsoleAuthContext'
 
 const ROLES = ['Admin', 'Manager', 'Director', 'Inspector', 'Tyre Man', 'Reporter', 'Driver']
@@ -45,7 +46,7 @@ export default function ConsoleUsers() {
     if (filterStatus === 'pending')  q = q.eq('approved', false).eq('locked', false)
     if (filterStatus === 'locked')   q = q.eq('locked', true)
     if (filterStatus === 'approved') q = q.eq('approved', true).eq('locked', false)
-    if (search) q = q.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,site.ilike.%${search}%`)
+    if (search) { const s = sanitizeSearchTerm(search); q = q.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,site.ilike.%${s}%`) }
 
     const { data, count } = await q
     setUsers(data ?? [])

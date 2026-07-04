@@ -26,9 +26,11 @@ export function listInspectionIntelFleet({ country } = {}) {
 }
 
 /**
- * Raise a corrective action for an overdue-inspection vehicle. Pass-through: the
- * page fires this inside a best-effort try/catch and ignores the result.
+ * Raise a corrective action for an overdue-inspection vehicle. Throws on a failed
+ * insert so the caller's try/catch actually catches it (supabase-js resolves with
+ * {error} rather than rejecting).
  */
-export function insertCorrectiveAction(payload) {
-  return supabase.from('corrective_actions').insert(payload)
+export async function insertCorrectiveAction(payload) {
+  const { error } = await supabase.from('corrective_actions').insert(payload)
+  if (error) throw error
 }

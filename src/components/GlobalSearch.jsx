@@ -8,6 +8,7 @@ import {
   BarChart2, ChevronRight, Clock, Hash,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { sanitizeSearchTerm } from '../lib/searchFilter'
 import { useLanguage } from '../contexts/LanguageContext'
 
 const CATEGORY_CONFIG = {
@@ -62,7 +63,8 @@ function highlight(text, query) {
 // ── Search engine ─────────────────────────────────────────────────────────────
 async function searchAll(query) {
   if (!query || query.length < 2) return {}
-  const q = query.trim()
+  const q = sanitizeSearchTerm(query)
+  if (q.length < 2) return {}
   const results = {}
 
   const [tyres, vehicles, inspections, workOrders, stock] = await Promise.allSettled([

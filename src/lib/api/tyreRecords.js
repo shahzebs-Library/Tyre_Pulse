@@ -12,6 +12,7 @@
  * and the 200-row batch loops; these functions relocate only the queries.
  */
 import { supabase, applyCountry } from './_client'
+import { sanitizeSearchTerm } from '../searchFilter'
 
 /** Distinct non-null `site` values (raw rows) for the site filter dropdown. */
 export function listSiteOptions() {
@@ -35,7 +36,7 @@ export function listRecords({ page, pageSize, search, siteFilter, brandFilter, r
     .select('*', { count: 'exact' })
     .order('issue_date', { ascending: false })
     .range(page * pageSize, (page + 1) * pageSize - 1)
-  if (search) q = q.or(`asset_no.ilike.%${search}%,serial_no.ilike.%${search}%,mis_number.ilike.%${search}%,job_card.ilike.%${search}%`)
+  if (search) { const s = sanitizeSearchTerm(search); q = q.or(`asset_no.ilike.%${s}%,serial_no.ilike.%${s}%,mis_number.ilike.%${s}%,job_card.ilike.%${s}%`) }
   if (siteFilter) q = q.eq('site', siteFilter)
   if (brandFilter) q = q.eq('brand', brandFilter)
   if (riskFilter) q = q.eq('risk_level', riskFilter)
@@ -50,7 +51,7 @@ export function listRecords({ page, pageSize, search, siteFilter, brandFilter, r
  */
 export function listAllRecords({ search, siteFilter, brandFilter, riskFilter, country } = {}) {
   let q = supabase.from('tyre_records').select('*').order('issue_date', { ascending: false })
-  if (search) q = q.or(`asset_no.ilike.%${search}%,serial_no.ilike.%${search}%,mis_number.ilike.%${search}%,job_card.ilike.%${search}%`)
+  if (search) { const s = sanitizeSearchTerm(search); q = q.or(`asset_no.ilike.%${s}%,serial_no.ilike.%${s}%,mis_number.ilike.%${s}%,job_card.ilike.%${s}%`) }
   if (siteFilter) q = q.eq('site', siteFilter)
   if (brandFilter) q = q.eq('brand', brandFilter)
   if (riskFilter) q = q.eq('risk_level', riskFilter)

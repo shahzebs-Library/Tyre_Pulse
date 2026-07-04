@@ -13,6 +13,7 @@
  * column lists where the page used them.
  */
 import { supabase, fetchAllPages } from './_client'
+import { sanitizeSearchTerm } from '../searchFilter'
 
 /**
  * All tyre_records for the fleet, fully paged (200k ceiling), oldest issue_date
@@ -40,7 +41,7 @@ export function listAssetActions(assetNo) {
   return supabase
     .from('corrective_actions')
     .select('id,title,status,priority,due_date,site,created_at')
-    .or(`asset_no.eq.${assetNo},description.ilike.%${assetNo}%`)
+    .or(`asset_no.eq.${sanitizeSearchTerm(assetNo)},description.ilike.%${sanitizeSearchTerm(assetNo)}%`)
     .limit(20)
 }
 

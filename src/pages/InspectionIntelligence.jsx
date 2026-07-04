@@ -563,6 +563,7 @@ export default function InspectionIntelligence() {
     setRaisingAlert(vehicle.asset_no)
     try {
       await inspIntelApi.insertCorrectiveAction({
+        title: `Inspection overdue — ${vehicle.asset_no}`,
         asset_no: vehicle.asset_no,
         site: vehicle.site,
         country: activeCountry !== 'All' ? activeCountry : undefined,
@@ -570,7 +571,6 @@ export default function InspectionIntelligence() {
         priority: vehicle.severity === 'critical' ? 'Critical' : 'High',
         status: 'Open',
         due_date: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0],
-        source: 'Inspection Intelligence',
       })
       setAlertRaised(prev => ({ ...prev, [vehicle.asset_no]: true }))
     } catch (_) {

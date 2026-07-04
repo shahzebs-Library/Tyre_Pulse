@@ -7,8 +7,13 @@
  */
 export function applyCountry(query, country) {
   if (!country || country === 'All') return query
+  // Strip PostgREST filter metacharacters — country is normally a fixed enum
+  // (KSA/UAE/…) but it is persisted in localStorage, so treat it as untrusted
+  // before interpolating into the or() filter string.
+  const c = String(country).replace(/[,()\\*]/g, '').trim()
+  if (!c) return query
   // PostgREST or() - match the country, or rows with no country assigned.
-  return query.or(`country.eq.${country},country.is.null`)
+  return query.or(`country.eq.${c},country.is.null`)
 }
 
 /** Client-side equivalent for already-loaded arrays. */

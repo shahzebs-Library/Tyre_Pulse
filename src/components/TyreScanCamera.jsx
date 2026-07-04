@@ -6,6 +6,7 @@ import {
   RefreshCw, ClipboardCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { sanitizeSearchTerm } from '../lib/searchFilter'
 
 function barcodeDetectorSupported() {
   return typeof window !== 'undefined' && 'BarcodeDetector' in window
@@ -62,7 +63,7 @@ export default function TyreScanCamera({ onClose, onResult }) {
         const { data: fleetData } = await supabase
           .from('vehicle_fleet')
           .select('asset_no,vehicle_type,site,registration_no')
-          .or(`asset_no.ilike.${serial},registration_no.ilike.${serial}`)
+          .or(`asset_no.ilike.${sanitizeSearchTerm(serial)},registration_no.ilike.${sanitizeSearchTerm(serial)}`)
           .limit(1)
           .maybeSingle()
         setResult({ serial, tyre: null, fleet: fleetData ?? null })

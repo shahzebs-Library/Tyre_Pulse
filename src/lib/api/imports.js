@@ -221,24 +221,62 @@ export async function saveSheets(batchId, sheets) {
 }
 
 /** Bulk-insert staged rows (chunked to stay within request limits). */
+// Insert one chunk, retrying transient network failures. A big/​wide file used to
+// fail here with a bare "Failed to fetch" because a single 500-row POST body (four
+// JSONB blobs per row) exceeded the gateway's request-size limit, leaving the
+// batch staged with 0 rows.
+async function insertRowChunk(chunk, attempts = 4) {
+  for (let a = 1; a <= attempts; a++) {
+    try {
+      const { error } = await supabase.from('import_rows').insert(chunk)
+      if (error) throw new ServiceError(error.message, error.code, error)
+      return
+    } catch (e) {
+      const networkish = e?.name === 'TypeError' || /failed to fetch|network|load failed|timeout/i.test(e?.message || '')
+      if (!networkish || a === attempts) {
+        throw new ServiceError(
+          networkish
+            ? `Could not save the rows after ${attempts} attempts — the request may be too large or the connection dropped. Try a smaller file or a stronger connection.`
+            : (e?.message || 'Could not stage the rows.'),
+          e?.code, e,
+        )
+      }
+      await new Promise((res) => setTimeout(res, 400 * a * a)) // 0.4s, 1.6s, 3.6s backoff
+    }
+  }
+}
+
 export async function stageRows(batchId, rows) {
-  const CHUNK = 500
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = rows.slice(i, i + CHUNK).map((r) => ({
-      batch_id: batchId,
-      sheet_name: r.sheetName ?? null,
-      source_row_no: r.sourceRowNo ?? null,
-      raw_source_data: r.raw ?? {},
-      mapped_data: r.mapped ?? {},
-      transformed_data: r.transformed ?? {},
-      custom_data: r.custom ?? {},
-      validation_status: r.validationStatus ?? 'pending',
-      dup_status: r.dupStatus ?? 'none',
-      action: r.action ?? 'insert',
-      row_fingerprint: r.fingerprint ?? null,
-    }))
-    const { error } = await supabase.from('import_rows').insert(chunk)
-    if (error) throw new ServiceError(error.message, error.code, error)
+  const MAX_ROWS = 100          // hard cap per request
+  const MAX_BYTES = 1_200_000   // ~1.2 MB serialized budget per request
+  const payload = rows.map((r) => ({
+    batch_id: batchId,
+    sheet_name: r.sheetName ?? null,
+    source_row_no: r.sourceRowNo ?? null,
+    raw_source_data: r.raw ?? {},
+    mapped_data: r.mapped ?? {},
+    transformed_data: r.transformed ?? {},
+    custom_data: r.custom ?? {},
+    validation_status: r.validationStatus ?? 'pending',
+    dup_status: r.dupStatus ?? 'none',
+    action: r.action ?? 'insert',
+    row_fingerprint: r.fingerprint ?? null,
+  }))
+
+  // Size-bounded chunking: grow each chunk until it hits the row cap or the byte
+  // budget, so no single request body can get large enough to be dropped.
+  let i = 0
+  while (i < payload.length) {
+    let end = i
+    let bytes = 0
+    while (end < payload.length && (end - i) < MAX_ROWS) {
+      const sz = JSON.stringify(payload[end]).length
+      if (end > i && bytes + sz > MAX_BYTES) break
+      bytes += sz
+      end++
+    }
+    await insertRowChunk(payload.slice(i, end))
+    i = end
   }
 }
 

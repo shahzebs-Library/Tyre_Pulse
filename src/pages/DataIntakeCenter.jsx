@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   UploadCloud, FileSpreadsheet, Wand2, ShieldCheck, CheckCircle2, AlertTriangle,
@@ -59,6 +59,7 @@ export default function DataIntakeCenter() {
   const [file, setFile] = useState(null)
   const [fileQueue, setFileQueue] = useState([])   // extra files picked in one go, imported one-by-one
   const [appliedProfile, setAppliedProfile] = useState(null) // fingerprint-matched saved mapping
+  const autoSavedFp = useRef(null) // fingerprint we've already auto-remembered this session
   const [parsed, setParsed] = useState(null)
   const [sheetIdx, setSheetIdx] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -150,7 +151,7 @@ export default function DataIntakeCenter() {
 
   function reset() {
     setStep(0); setFile(null); setParsed(null); setSheetIdx(0); setBatchId(null); setAppliedProfile(null)
-    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setForceFlagged(false); setAliasMaps(null); setFxRatesMap(null)
+    setMapping([]); setAnnotated([]); setCounts(null); setResult(null); setAutomation(null); setError(''); setProfiles([]); setCountryAck(false); setForceFlagged(false); setAliasMaps(null); setFxRatesMap(null); autoSavedFp.current = null
     setAttachItems([]); setAttachWarnings([]); setAttachDone(false); setAttachBusy(false)
   }
 
@@ -281,9 +282,31 @@ export default function DataIntakeCenter() {
       }, rules)
       const next = await imports.listProfiles({ module, country: activeCountry })
       setProfiles(next)
+      autoSavedFp.current = sheet ? headerFingerprint(sheet.columns) : null
     } catch (err) {
       setError(err?.message || 'Could not save the profile.')
     } finally { setBusy(false) }
+  }
+
+  // Auto-remember a new file format: if this mapping did not come from a saved
+  // profile, silently save it (keyed by header fingerprint) so the NEXT upload of
+  // the same file auto-maps with zero clicks. Best-effort — never blocks staging.
+  async function autoSaveProfile() {
+    try {
+      if (appliedProfile) return                       // already a known format
+      if (!sheet) return
+      const fp = headerFingerprint(sheet.columns)
+      if (!fp || autoSavedFp.current === fp) return     // already remembered this session
+      const rules = mapping
+        .filter((m) => m.target)
+        .map((m) => ({ sourceHeader: m.sourceHeader, target: m.target, confidence: m.confidence ?? 100 }))
+      if (rules.length < 2) return                      // nothing worth remembering
+      const base = (file?.name || '').replace(/\.[^.]+$/, '').trim()
+      const name = `${MODULE_LABELS[module] || module}${base ? ` — ${base}` : ''} (auto)`
+      await imports.saveProfile({ name, module, country: activeCountry, headerFingerprint: fp }, rules)
+      autoSavedFp.current = fp
+      imports.listProfiles({ module, country: activeCountry }).then(setProfiles).catch(() => {})
+    } catch { /* auto-save is best-effort; never surface to the user */ }
   }
 
   // ── Step 3: validate + classify (in-batch + live-table dedup) ────────────────
@@ -419,6 +442,7 @@ export default function DataIntakeCenter() {
         }
       }))
       await imports.setBatchCounts(batchId, counts)
+      await autoSaveProfile() // remember this format for next time (best-effort)
       setStep(3)
     } catch (err) {
       setError(err?.message || 'Could not stage the rows.')

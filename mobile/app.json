@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.shahzebrahman.tyrepulseinspector"
+      "bundleIdentifier": "com.shahzebrahman.tyrepulseinspector",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "TyrePulse tags each inspection with your current location so fleet managers can see where tyre checks were performed."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -30,7 +33,9 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.SCHEDULE_EXACT_ALARM",
-        "android.permission.USE_EXACT_ALARM"
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ],
       "googleServicesFile": "./google-services.json"
     },
@@ -55,6 +60,14 @@
         "expo-image-picker",
         {
           "photosPermission": "TyrePulse needs photo access to attach images to tyre inspections."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "TyrePulse tags each inspection with your current location so fleet managers can see where tyre checks were performed.",
+          "locationWhenInUsePermission": "TyrePulse tags each inspection with your current location so fleet managers can see where tyre checks were performed.",
+          "isAndroidForegroundServiceEnabled": false
         }
       ],
       [

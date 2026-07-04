@@ -56,7 +56,7 @@ green** · web build green · mobile typecheck clean).
 | Finish service-layer page migration | ~13 pages remaining | **Session 8:** DataCleaning + Dashboard + UploadData migrated to `src/lib/api/` (dashboard/dataCleaning/uploads + 46 tests). Pattern established; migrate remaining in batches. |
 | RLS perf consolidation | live DB | 207 multiple-permissive-policy warnings, 82 initplan, 56 unindexed FKs - matters as data grows. |
 | ~~Mobile offline update commands~~ | stock adjust, WO/CA status updates | ✅ **Session 8** — typed UPDATE commands (`STOCK_ADJUST`/`WORK_ORDER_STATUS`/`CORRECTIVE_ACTION_STATUS`) via `recordQueue`; offline-safe + idempotent. |
-| Cross-file merge on import | intake | **Session 8:** merge library `src/lib/import/mergeCrossFile.js` (cost-file-wins) built + 9 tests. Server-side wiring in `import_commit_batch` still pending (client staging is single-sheet; merging client-side would collapse legitimate lifecycle events). |
+| ~~Cross-file merge on import~~ | intake | ✅ **Session 8** — client library `mergeCrossFile.js` (+9 tests) AND server-side merge in `import_commit_batch` (**V72, applied live**, gated to workorder/accident/warranty; cost-of-record wins; lifecycle modules untouched). |
 | DataCleaning pending pager count | `src/pages/DataCleaning.jsx` `loadPending` | `count` read without `{ count: 'exact' }` → `totalPending` always 0. Latent bug (behavior fix, not a refactor). |
 
 ### P4 - Bigger product investments
@@ -66,7 +66,7 @@ green** · web build green · mobile typecheck clean).
 | Chart drill-down | 0 of 54 chart pages click through to source records (stated directive requirement). |
 | ~~Light theme via CSS vars (Master Build E)~~ | ✅ RESOLVED — the light/dark token system + `html.light` override layer already covered the pages; tenant-accent token layer added + documented (`DESIGN_SYSTEM.md`). Optional future: extend the tenant accent from focus-ring/utilities to more chrome (currently green gradients kept for visual consistency). |
 | Dev/staging Supabase project | All builds point at production today (H6). |
-| GPS/Telematics + generic ERP import adapters | New intake modules. |
+| GPS/Telematics + generic ERP import adapters | New intake modules. **Session 8:** mobile inspection GPS geotagging shipped (V73 columns live + `expo-location` capture); telematics/ERP adapters still open. |
 | Go backend + native Android | Frozen on their own branches by decision - **not** merged to `main`. |
 
 ### One-click items awaiting the owner
@@ -89,8 +89,8 @@ Owner actions still pending: (1) fill each org's branding in User Management →
 
 ## Scoreboard
 
-- **Migrations applied & live-verified:** V40 → V68 (every one proven with a rolled-back self-asserting SQL test).
-- **Gate:** **729 web tests** · build green · mobile typecheck clean (0 errors).
+- **Migrations applied & live-verified:** V40 → V73 (every one proven with a rolled-back self-asserting SQL test; V72 commit-RPC rewrite validated rolled-back then applied with the prior definition captured for rollback).
+- **Gate:** **780 web tests** · build green · mobile typecheck clean (0 errors).
 - **Security advisors:** 0 ERROR-level findings.
 - **Intake:** all 10 modules commit end-to-end; 5 company formats auto-recognised.
 - **Branches:** Master Build (branding/reports/docs) + web-i18n both merged to `main` (`34eb1be`); Go backend + native Android remain frozen off `main`.

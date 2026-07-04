@@ -93,6 +93,10 @@
     "alertSelectSite": "Please select a site.",
     "alertSelectVehicle": "Please select a vehicle.",
     "tyres": "tyres",
+    "gpsCapturing": "Capturing location…",
+    "gpsCaptured": "Location captured",
+    "gpsUnavailable": "Location unavailable — inspection will submit without it",
+    "gpsRetry": "Retry",
     "step1": "1",
     "step2": "2"
   },

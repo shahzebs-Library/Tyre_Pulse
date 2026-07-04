@@ -77,6 +77,24 @@ export interface InspectionPayload {
   status: string
   /** Stamped from the creator's profile so records never mix across countries */
   country: string | null
+  /** GPS latitude of where the inspection was recorded (WGS84). Null when the
+   *  device fix was denied/unavailable — the inspection is never blocked on it. */
+  gps_lat?: number | null
+  /** GPS longitude of where the inspection was recorded (WGS84). */
+  gps_lng?: number | null
+  /** Horizontal accuracy of the fix in metres, as reported by the OS. */
+  gps_accuracy?: number | null
+  /** ISO-8601 timestamp of when the GPS fix was captured. */
+  gps_captured_at?: string | null
+}
+
+/** A resolved GPS fix folded into the inspection payload. Field names mirror the
+ *  `inspections` table columns 1:1 so it spreads directly into the insert. */
+export interface GpsFix {
+  gps_lat: number
+  gps_lng: number
+  gps_accuracy: number | null
+  gps_captured_at: string
 }
 
 export interface OfflineInspection {

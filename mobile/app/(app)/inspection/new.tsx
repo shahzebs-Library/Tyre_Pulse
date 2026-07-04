@@ -11,13 +11,14 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useLanguage } from '../../../contexts/LanguageContext'
 import { supabase } from '../../../lib/supabase'
 import { enqueueInspection } from '../../../lib/offlineQueue'
+import { captureInspectionLocation, LocationStatus } from '../../../lib/location'
 import { uploadAllPositionPhotos } from '../../../lib/photoUpload'
 import TyrePositionCard from '../../../components/TyrePositionCard'
 import TyreDetailModal from '../../../components/TyreDetailModal'
 import VehicleTyreDiagram from '../../../components/VehicleTyreDiagram'
 import { useRoleGuard } from '../../../hooks/useRoleGuard'
 import {
-  VehicleFleet, TyrePositionData, UserRole,
+  VehicleFleet, TyrePositionData, UserRole, GpsFix,
   getPositionsForVehicle, emptyTyrePosition,
 } from '../../../lib/types'
 
@@ -54,6 +55,13 @@ export default function NewInspectionScreen() {
   const [positions, setPositions] = useState<string[]>([])
   const [tyreData, setTyreData] = useState<Record<string, TyrePositionData>>({})
   const [submitting, setSubmitting] = useState(false)
+
+  // GPS location tagging: warmed up when the inspector reaches the tyre step so
+  // the review chip shows live status and the fix is ready by submit time.
+  const [gpsFix, setGpsFix] = useState<GpsFix | null>(null)
+  const [gpsStatus, setGpsStatus] = useState<LocationStatus>('idle')
+  // Guards the one-shot capture so re-renders on the tyre step don't re-fire it.
+  const gpsRequestedRef = useRef(false)
 
   const { width: screenWidth } = useWindowDimensions()
   // The position whose detail popup is open (also drives the diagram selection).
@@ -97,6 +105,24 @@ export default function NewInspectionScreen() {
   function closeTyre() {
     setActivePosition(null)
   }
+
+  // Attempt a single GPS fix. Never throws and never blocks: on any failure the
+  // status flips to 'unavailable' and submit proceeds without coordinates.
+  const captureLocation = useCallback(async () => {
+    setGpsStatus('capturing')
+    const { status, fix } = await captureInspectionLocation()
+    setGpsFix(fix)
+    setGpsStatus(status)
+  }, [])
+
+  // Warm up the location fix once the inspector reaches the tyre step - keeps the
+  // permission prompt inside the submit flow while giving the fix time to resolve.
+  useEffect(() => {
+    if (step === 'tyres' && !gpsRequestedRef.current) {
+      gpsRequestedRef.current = true
+      void captureLocation()
+    }
+  }, [step, captureLocation])
 
   useEffect(() => { loadSites() }, [])
 
@@ -254,6 +280,18 @@ export default function NewInspectionScreen() {
     const effectiveVehicle = getEffectiveVehicle()
     if (!effectiveVehicle) { setSubmitting(false); return }
 
+    // Resolve the GPS fix on the submit path. Usually already warmed from the
+    // tyre-step effect; if that hasn't resolved yet, make one bounded attempt.
+    // Never blocks the inspection - a null fix simply omits the coordinates.
+    let fix = gpsFix
+    if (!fix && (gpsStatus === 'idle' || gpsStatus === 'capturing')) {
+      setGpsStatus('capturing')
+      const result = await captureInspectionLocation()
+      fix = result.fix
+      setGpsFix(result.fix)
+      setGpsStatus(result.status)
+    }
+
     const inspectionDate = new Date().toISOString().split('T')[0]
     const odo = odometer.trim()
     const notes = [odo ? `Odometer: ${odo} km` : '', headerNotes.trim()]
@@ -273,6 +311,12 @@ export default function NewInspectionScreen() {
       notes,
       status: 'Done',
       country: profile?.country ?? null,
+      // GPS geotag - folded identically into the online insert and the offline
+      // queue so a queued inspection syncs with the same coordinates later.
+      gps_lat: fix?.gps_lat ?? null,
+      gps_lng: fix?.gps_lng ?? null,
+      gps_accuracy: fix?.gps_accuracy ?? null,
+      gps_captured_at: fix?.gps_captured_at ?? null,
     }
 
     // Resolve any photo_uri still lacking a photo_url before the ONLINE insert -
@@ -680,6 +724,56 @@ export default function NewInspectionScreen() {
             />
           ))}
 
+          {/* ── GPS geotag status ────────────────────────────────────────── */}
+          <View
+            style={[
+              styles.gpsChip,
+              isRTL && styles.gpsChipRTL,
+              gpsStatus === 'captured' && styles.gpsChipOk,
+              gpsStatus === 'unavailable' && styles.gpsChipWarn,
+            ]}
+          >
+            <Ionicons
+              name={
+                gpsStatus === 'captured'
+                  ? 'location'
+                  : gpsStatus === 'unavailable'
+                    ? 'location-outline'
+                    : 'navigate-outline'
+              }
+              size={15}
+              color={
+                gpsStatus === 'captured'
+                  ? '#16a34a'
+                  : gpsStatus === 'unavailable'
+                    ? '#b45309'
+                    : '#64748b'
+              }
+            />
+            {gpsStatus === 'capturing' && (
+              <ActivityIndicator size="small" color="#64748b" />
+            )}
+            <Text
+              style={[
+                styles.gpsChipText,
+                { textAlign },
+                gpsStatus === 'captured' && styles.gpsChipTextOk,
+                gpsStatus === 'unavailable' && styles.gpsChipTextWarn,
+              ]}
+            >
+              {gpsStatus === 'captured'
+                ? t('inspection.gpsCaptured')
+                : gpsStatus === 'unavailable'
+                  ? t('inspection.gpsUnavailable')
+                  : t('inspection.gpsCapturing')}
+            </Text>
+            {gpsStatus === 'unavailable' && (
+              <TouchableOpacity onPress={() => captureLocation()} hitSlop={8}>
+                <Text style={styles.gpsRetry}>{t('inspection.gpsRetry')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           <TouchableOpacity
             style={[styles.nextBtn, submitting && styles.nextBtnDisabled]}
             onPress={handleSubmit}
@@ -947,6 +1041,31 @@ const styles = StyleSheet.create({
   },
   positionHintRTL: { flexDirection: 'row-reverse' },
   positionHintText: { flex: 1, fontSize: 12, color: '#64748b', lineHeight: 18 },
+  gpsChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(100,116,139,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(100,116,139,0.15)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  gpsChipRTL: { flexDirection: 'row-reverse' },
+  gpsChipOk: {
+    backgroundColor: 'rgba(22,163,74,0.08)',
+    borderColor: 'rgba(22,163,74,0.2)',
+  },
+  gpsChipWarn: {
+    backgroundColor: 'rgba(245,158,11,0.08)',
+    borderColor: 'rgba(245,158,11,0.25)',
+  },
+  gpsChipText: { flex: 1, fontSize: 12, fontWeight: '600', color: '#64748b' },
+  gpsChipTextOk: { color: '#15803d' },
+  gpsChipTextWarn: { color: '#b45309' },
+  gpsRetry: { fontSize: 12, fontWeight: '700', color: '#3b82f6' },
   successIcon: {
     marginBottom: 16,
     padding: 16,

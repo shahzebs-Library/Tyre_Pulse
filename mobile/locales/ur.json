@@ -94,6 +94,10 @@
     "alertSelectSite": "براہ کرم مقام منتخب کریں۔",
     "alertSelectVehicle": "براہ کرم گاڑی منتخب کریں۔",
     "tyres": "ٹائر",
+    "gpsCapturing": "مقام حاصل کیا جا رہا ہے…",
+    "gpsCaptured": "مقام محفوظ ہو گیا",
+    "gpsUnavailable": "مقام دستیاب نہیں — معائنہ اس کے بغیر جمع ہوگا",
+    "gpsRetry": "دوبارہ کوشش کریں",
     "step1": "۱",
     "step2": "۲"
   },

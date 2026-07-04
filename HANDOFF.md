@@ -3,7 +3,7 @@
 **Branch:** dev `claude/mobile-app-ui-features-tdfxy0` (Session 8 work); `main` auto-deploys to Vercel
 **Web build status:** ✅ Clean - builds, **780/780 tests passing**, auto-deploys to Vercel
 **Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5**, auto-builds on push to `main`
-**DB migrations applied to live Supabase:** through **V71** (project `jhssdmeruxtrlqnwfksc`)
+**DB migrations applied to live Supabase:** through **V73** (project `jhssdmeruxtrlqnwfksc`)
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
 
@@ -27,6 +27,14 @@
 ### Import — cross-file merge library (cost file wins) — P3
 - New `src/lib/import/mergeCrossFile.js` (`mergeCrossFileRows`, `COST_FIELDS`), exported + **9 unit tests**: same natural key across files → one merged record; the cost-bearing row wins on conflict; blanks enriched from the other file; cost fields never back-filled; line-item aggregation preserved.
 - **Deliberately NOT wired client-side.** Traced the batch model: `DataIntakeCenter.runValidation` processes **one sheet at a time**; cross-file rows accumulate server-side across separate `stageRows` passes. A client-side merge (a) would not see cross-file data and (b) would wrongly collapse same-key **lifecycle events** (e.g. a tyre serial re-appearing) that `classifyDuplicates` must preserve. Correct integration is server-side in `import_commit_batch` (a live-DB migration) — deferred rather than applied blind to the production database that emails real tenants. Library is the ready building block for that step.
+
+### Import — server-side cross-file merge, LIVE (V72; closes the deferred half)
+- `MIGRATIONS_V72_IMPORT_CROSS_FILE_MERGE.sql` redefines `import_commit_batch` with a pre-insert MERGE: staged rows sharing a module natural key across files collapse to one record, the **cost-of-record row wins**, blanks enrich from other contributors, cost fields never back-fill, line-items roll up without double-counting. **Gated to cost modules only** — `workorder` / `accident` / `warranty` — with `tyre`/`fleet`/`stock`/`inspection`/`gatepass`/`supplier`/`driver` provably identical to V60 (empty plan + vacuous `id <> ALL('{}')`). Adds a `merged` counter to the return/audit payload; preserves auth/org-scope/idempotency/generated-col exclusion/per-row error isolation.
+- **Applied live** after a validate-first protocol: full migration + self-asserting test run in a rolled-back transaction (workorder 2→1 cost-wins+enriched; tyre 2 events NOT merged), then applied, then re-verified against the now-live function. Previous V60 definition captured for rollback. This is the server-side counterpart to the client `mergeCrossFile.js` shipped earlier in the session.
+
+### Mobile — GPS tagging on inspections, LIVE columns (V73)
+- `expo-location ~19.0.8` (SDK-54 pin from `bundledNativeModules.json`). New `mobile/lib/location.ts` captures a bounded foreground fix on the inspection submit path; a translated status chip (capturing / captured / unavailable + retry) shows state. GPS folds into **both** the online insert and the offline-queued payload, so a queued inspection syncs the same geotag. Graceful degradation — denied/timeout submits with NULL GPS, never blocks the inspection. app.json declares the plugin + Android/iOS permissions. i18n EN/AR/UR.
+- `MIGRATIONS_V73_INSPECTION_GPS.sql` adds `gps_lat/gps_lng/gps_accuracy/gps_captured_at` + a partial index to `inspections`, **applied live**. ⚠️ `expo-location` is a native module — it functions only after the next **EAS rebuild** (on merge to `main`), not via OTA JS.
 
 ### Docs
 - Reconciled stale mobile version facts across the doc set (was SDK 53 / RN 0.79 → actually **SDK 54 / RN 0.81.5**) and refreshed `MOBILE_STATUS.md` (photo upload, push, auto-sync, RBAC, typed `user` were already done in prior sessions but still listed as missing).

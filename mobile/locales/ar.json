@@ -94,6 +94,10 @@
     "alertSelectSite": "يرجى تحديد الموقع.",
     "alertSelectVehicle": "يرجى تحديد المركبة.",
     "tyres": "إطارات",
+    "gpsCapturing": "جارٍ تحديد الموقع…",
+    "gpsCaptured": "تم تحديد الموقع",
+    "gpsUnavailable": "الموقع غير متاح — سيُرسَل الفحص بدونه",
+    "gpsRetry": "إعادة المحاولة",
     "step1": "١",
     "step2": "٢"
   },

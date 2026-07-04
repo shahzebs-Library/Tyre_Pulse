@@ -222,7 +222,7 @@ SyncBanner.addNetworkStateListener fires on reconnect
 | Play Store submission | P1 | ⬜ |
 | Barcode/QR scanner for tyre serial | P1 | ⬜ |
 | Push notifications (inspection reminders) | P1 | ⬜ |
-| GPS location tagging on inspections | P2 | ⬜ |
+| GPS location tagging on inspections | P2 | ✅ (V73 live + expo-location; needs EAS rebuild) |
 | Driver mobile app (separate role/flow) | P2 | ⬜ |
 | Workshop mobile app | P3 | ⬜ |
 | OTA updates via expo-updates | P2 | ⬜ |

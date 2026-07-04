@@ -414,3 +414,12 @@ untouched). Confirmed fixes landed:
   object-src none, frame-ancestors none). Other security headers already present.
 - Gate: 875 web tests · build · mobile typecheck 0 errors. Live DB → **V82**
   (only V75 perf file unapplied).
+
+## 2026-07-04 — Fix: large imports (2k+ rows) couldn't commit (V83)
+- The `authenticated` role's statement_timeout is 8s, and a batch commits in one
+  row-by-row RPC (import_commit_batch), so 2k+ rows exceeded 8s and were killed.
+  V83 raises statement_timeout to 120s on import_commit_batch / import_enrich_batch
+  / import_reverse_batch (SECURITY DEFINER → applies for their duration only).
+  Staging was already size-chunked (earlier fix); no client-side row cap exists
+  (stripFooterRows only prunes sparse footer rows). Very large files (50k+) may
+  still want a future chunked commit.

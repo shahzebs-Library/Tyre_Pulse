@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
@@ -107,6 +108,7 @@ function ChartCardSkeleton() {
 
 // ── main component ────────────────────────────────────────────────────────────
 export default function SiteComparison() {
+  const { t } = useLanguage()
   const { activeCountry, activeCurrency } = useSettings()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -182,7 +184,7 @@ export default function SiteComparison() {
   const costChart = !loading && filteredMetrics.length > 0 ? {
     labels: filteredMetrics.map(s => s.site),
     datasets: [{
-      label: 'Total Cost (SAR)',
+      label: t('sitecomparison.chart.totalCostSar'),
       data: filteredMetrics.map(s => Math.round(s.totalCost)),
       backgroundColor: filteredMetrics.map((_, i) => SITE_COLORS[i % SITE_COLORS.length] + 'bb'),
       borderColor:     filteredMetrics.map((_, i) => SITE_COLORS[i % SITE_COLORS.length]),
@@ -193,7 +195,7 @@ export default function SiteComparison() {
   const riskChart = !loading && filteredMetrics.length > 0 ? {
     labels: filteredMetrics.map(s => s.site),
     datasets: [{
-      label: 'High Risk %',
+      label: t('sitecomparison.chart.highRiskPct'),
       data: filteredMetrics.map(s => parseFloat(s.highRiskPct.toFixed(1))),
       backgroundColor: 'rgba(239,68,68,0.6)',
       borderRadius: 4,
@@ -225,8 +227,8 @@ export default function SiteComparison() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Site Comparison"
-        subtitle="Head-to-head performance across sites"
+        title={t('sitecomparison.title')}
+        subtitle={t('sitecomparison.subtitle')}
         icon={GitMerge}
         actions={!loading && allMetrics.length > 0 ? (
           <div className="flex gap-2">
@@ -234,13 +236,13 @@ export default function SiteComparison() {
               onClick={() => exportToExcel(allMetrics, SITE_COLS.map(c => c.key), SITE_COLS.map(c => c.header), 'TyrePulse_SiteComparison')}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
-              <Download size={14} /> Excel
+              <Download size={14} /> {t('sitecomparison.actions.excel')}
             </button>
             <button
               onClick={() => exportToPdf(allMetrics, SITE_COLS, 'Site Comparison', 'TyrePulse_SiteComparison', 'landscape')}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
             >
-              <FileText size={14} /> PDF
+              <FileText size={14} /> {t('sitecomparison.actions.pdf')}
             </button>
           </div>
         ) : null}
@@ -260,10 +262,10 @@ export default function SiteComparison() {
       ) : error ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
           <AlertTriangle size={40} className="text-red-400 mb-4" />
-          <p className="text-red-300 font-medium text-lg">Could not load site data</p>
+          <p className="text-red-300 font-medium text-lg">{t('sitecomparison.states.loadError')}</p>
           <p className="text-gray-500 text-sm mt-1">{error}</p>
           <button onClick={load} className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
-            <RefreshCw size={16} /> Retry
+            <RefreshCw size={16} /> {t('sitecomparison.states.retry')}
           </button>
         </div>
       ) : allSites.length === 0 ? (
@@ -271,15 +273,15 @@ export default function SiteComparison() {
           <div className="card space-y-4">
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex flex-col gap-1">
-                <label className="label text-xs">Period</label>
+                <label className="label text-xs">{t('sitecomparison.filters.period')}</label>
                 <PeriodFilter records={records} value={period} onChange={setPeriod} />
               </div>
             </div>
           </div>
           <div className="card flex flex-col items-center justify-center py-16 text-center">
             <GitMerge size={40} className="text-gray-700 mb-4" />
-            <p className="text-gray-400 font-medium text-lg">No site data available</p>
-            <p className="text-gray-600 text-sm mt-1">Upload tyre records with site information to start comparing.</p>
+            <p className="text-gray-400 font-medium text-lg">{t('sitecomparison.states.noSiteData')}</p>
+            <p className="text-gray-600 text-sm mt-1">{t('sitecomparison.states.noSiteDataHint')}</p>
           </div>
         </>
       ) : (
@@ -288,23 +290,23 @@ export default function SiteComparison() {
           <div className="card space-y-4">
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex flex-col gap-1">
-                <label className="label text-xs">Period</label>
+                <label className="label text-xs">{t('sitecomparison.filters.period')}</label>
                 <PeriodFilter records={records} value={period} onChange={setPeriod} />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="label text-xs">Granularity</label>
+                <label className="label text-xs">{t('sitecomparison.filters.granularity')}</label>
                 <SegmentedControl
                   ariaLabel="granularity"
                   size="sm"
                   value={granularity}
                   onChange={setGranularity}
-                  options={GRANULARITIES.map(g => ({ value: g, label: g }))}
+                  options={GRANULARITIES.map(g => ({ value: g, label: t(`sitecomparison.granularity.${g}`) }))}
                 />
               </div>
             </div>
 
             <div>
-              <p className="text-sm text-gray-400 mb-3">Select sites to compare (up to 6):</p>
+              <p className="text-sm text-gray-400 mb-3">{t('sitecomparison.filters.selectSites')}</p>
               <div className="flex flex-wrap gap-2">
                 {allSites.map((site, i) => {
                   const active = selectedSites.includes(site)
@@ -331,8 +333,8 @@ export default function SiteComparison() {
           {filteredMetrics.length === 0 ? (
             <div className="card flex flex-col items-center justify-center py-16 text-center">
               <GitMerge size={40} className="text-gray-700 mb-4" />
-              <p className="text-gray-400 font-medium">Select at least one site to compare</p>
-              <p className="text-gray-600 text-sm mt-1">Toggle sites above to begin the comparison.</p>
+              <p className="text-gray-400 font-medium">{t('sitecomparison.states.selectSite')}</p>
+              <p className="text-gray-600 text-sm mt-1">{t('sitecomparison.states.selectSiteHint')}</p>
             </div>
           ) : (
             <>
@@ -342,12 +344,12 @@ export default function SiteComparison() {
                   <div key={s.site} className="card border-t-2" style={{ borderColor: SITE_COLORS[i % SITE_COLORS.length] }}>
                     <p className="text-white font-semibold text-sm">{s.site}</p>
                     <div className="mt-3 space-y-2">
-                      <KpiRow label="Records" value={s.count} />
-                      <KpiRow label="Total Cost" value={formatCurrencyCompact(s.totalCost, activeCurrency)} />
-                      <KpiRow label="High Risk" value={`${s.highRiskCount} (${s.highRiskPct.toFixed(0)}%)`}
+                      <KpiRow label={t('sitecomparison.kpi.records')} value={s.count} />
+                      <KpiRow label={t('sitecomparison.kpi.totalCost')} value={formatCurrencyCompact(s.totalCost, activeCurrency)} />
+                      <KpiRow label={t('sitecomparison.kpi.highRisk')} value={`${s.highRiskCount} (${s.highRiskPct.toFixed(0)}%)`}
                         highlight={s.highRiskPct > 30 ? 'text-red-400' : s.highRiskPct > 15 ? 'text-yellow-400' : 'text-green-400'} />
-                      <KpiRow label="Top Brand" value={s.topBrand} />
-                      <KpiRow label="Top Category" value={s.topCategory} />
+                      <KpiRow label={t('sitecomparison.kpi.topBrand')} value={s.topBrand} />
+                      <KpiRow label={t('sitecomparison.kpi.topCategory')} value={s.topCategory} />
                     </div>
                   </div>
                 ))}
@@ -356,13 +358,13 @@ export default function SiteComparison() {
               {/* Charts */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="card">
-                  <h3 className="text-sm font-medium text-gray-400 mb-4">Total Cost Comparison</h3>
+                  <h3 className="text-sm font-medium text-gray-400 mb-4">{t('sitecomparison.chart.totalCostComparison')}</h3>
                   <div style={{ height: 260 }}>
                     <Bar data={costChart} options={BAR_OPTS} />
                   </div>
                 </div>
                 <div className="card">
-                  <h3 className="text-sm font-medium text-gray-400 mb-4">High-Risk Rate Comparison</h3>
+                  <h3 className="text-sm font-medium text-gray-400 mb-4">{t('sitecomparison.chart.highRiskComparison')}</h3>
                   <div style={{ height: 260 }}>
                     <Bar data={riskChart} options={BAR_OPTS} />
                   </div>
@@ -373,13 +375,13 @@ export default function SiteComparison() {
               {filteredMetrics.length >= 2 && (
                 <div className="card">
                   <h3 className="text-sm font-medium text-gray-400 mb-4">
-                    Multi-Dimension Radar (0-100, higher = better)
+                    {t('sitecomparison.chart.radarTitle')}
                   </h3>
                   <div className="max-w-xl mx-auto" style={{ height: 380 }}>
                     <Radar data={radarData} options={RADAR_OPTS} />
                   </div>
                   <p className="text-xs text-gray-600 text-center mt-2">
-                    Cost Efficiency · Safety · Volume · Risk Quality · Data Quality
+                    {t('sitecomparison.chart.radarLegend')}
                   </p>
                 </div>
               )}
@@ -422,6 +424,7 @@ function KpiRow({ label, value, highlight }) {
 
 // ── Trend chart with granularity ──────────────────────────────────────────────
 function TrendComparison({ records, selectedSites, defaultCost = 1200, granularity, chartRef, onMaximize }) {
+  const { t } = useLanguage()
   const { chartData, allPeriods } = useTrendData(records, selectedSites, defaultCost, granularity)
 
   const opts = {
@@ -435,18 +438,16 @@ function TrendComparison({ records, selectedSites, defaultCost = 1200, granulari
 
   if (allPeriods.length < 2) return null
 
-  const labelMap = { Monthly: 'last 12 months', Quarterly: 'last 8 quarters', Yearly: 'last 5 years' }
-
   return (
     <div className="card relative">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-medium text-gray-400">
-          {granularity} Cost Trend by Site ({labelMap[granularity]})
+          {t('sitecomparison.trend.title', { granularity: t(`sitecomparison.granularity.${granularity}`), period: t(`sitecomparison.periodLabel.${granularity}`) })}
         </h3>
         <button
           onClick={onMaximize}
           className="text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-          title="Fullscreen"
+          title={t('sitecomparison.trend.fullscreen')}
         >
           <Maximize2 size={15} />
         </button>
@@ -460,6 +461,7 @@ function TrendComparison({ records, selectedSites, defaultCost = 1200, granulari
 
 // ── Modal wrapper for trend chart ─────────────────────────────────────────────
 function TrendModal({ open, onClose, records, selectedSites, defaultCost, granularity, onGranularityChange, chartRef }) {
+  const { t } = useLanguage()
   const { chartData } = useTrendData(records, selectedSites, defaultCost, granularity)
 
   const opts = {
@@ -475,7 +477,7 @@ function TrendModal({ open, onClose, records, selectedSites, defaultCost, granul
     <ChartModal
       open={open}
       onClose={onClose}
-      title="Cost Trend by Site"
+      title={t('sitecomparison.trend.modalTitle')}
       chartRef={chartRef}
       filters={{ granularity }}
       onFilterChange={(key, val) => { if (key === 'granularity') onGranularityChange(val) }}
@@ -485,13 +487,13 @@ function TrendModal({ open, onClose, records, selectedSites, defaultCost, granul
       showBrand={false}
     >
       <div className="flex items-center gap-2 mb-4">
-        <span className="text-xs text-gray-500">Granularity:</span>
+        <span className="text-xs text-gray-500">{t('sitecomparison.trend.granularityLabel')}</span>
         <SegmentedControl
           ariaLabel="granularity"
           size="sm"
           value={granularity}
           onChange={onGranularityChange}
-          options={GRANULARITIES.map(g => ({ value: g, label: g }))}
+          options={GRANULARITIES.map(g => ({ value: g, label: t(`sitecomparison.granularity.${g}`) }))}
         />
       </div>
       <div style={{ height: 420 }}>

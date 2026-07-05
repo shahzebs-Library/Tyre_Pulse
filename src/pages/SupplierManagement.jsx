@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { computeSupplierScorecard } from '../lib/analytics/supplierScorecard'
 import { formatDate } from '../lib/formatters'
+import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import {
@@ -37,6 +38,9 @@ const CPK_BENCHMARK = 1.20
 const FAILURE_THRESHOLD = 0.15
 const TABS = ['Directory', 'Performance', 'Spend Analysis', 'Contracts', 'Recommendations', 'Scorecard']
 const RATINGS = ['Preferred', 'Approved', 'Under Review', 'Probation']
+// i18n key lookup for RATINGS/CONTRACT_STATUSES labels (constants stay stable for logic/equality checks)
+const RATING_I18N_KEYS = { Preferred: 'preferred', Approved: 'approved', 'Under Review': 'underReview', Probation: 'probation' }
+const TAB_I18N_KEYS = ['directory', 'performance', 'spendAnalysis', 'contracts', 'recommendations', 'scorecard']
 // Categorical rating <-> numeric (rating column is numeric). Index is 1-based.
 const RATING_TO_NUM = RATINGS.reduce((acc, r, i) => { acc[r] = i + 1; return acc }, {})
 function ratingToNum(label) { return RATING_TO_NUM[label] ?? null }
@@ -59,6 +63,7 @@ const RATING_CONFIG = {
   Probation:     { color: 'text-red-400',     bg: 'bg-red-900/40',     border: 'border-red-700',     icon: ShieldCheck },
 }
 const CONTRACT_STATUSES = ['Active', 'Expiring Soon', 'Expired']
+const CONTRACT_STATUS_I18N_KEYS = { Active: 'active', 'Expiring Soon': 'expiringSoon', Expired: 'expired' }
 const CHART_DEFAULTS = {
   responsive: true,
   maintainAspectRatio: false,
@@ -195,6 +200,7 @@ function pick(obj, cols) {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', trend }) {
+  const { t } = useLanguage()
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -212,7 +218,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', trend
       {trend != null && (
         <div className={`flex items-center gap-1 text-xs ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
           {trend >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-          {Math.abs(trend).toFixed(1)}% vs last year
+          {t('suppliers.kpi.vsLastYear', { pct: Math.abs(trend).toFixed(1) })}
         </div>
       )}
     </motion.div>
@@ -220,18 +226,20 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', trend
 }
 
 function RatingBadge({ rating }) {
+  const { t } = useLanguage()
   const cfg = RATING_CONFIG[rating] || RATING_CONFIG['Approved']
   const Icon = cfg.icon
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
       <Icon size={10} />
-      {rating}
+      {RATING_I18N_KEYS[rating] ? t(`suppliers.ratings.${RATING_I18N_KEYS[rating]}`) : rating}
     </span>
   )
 }
 
 function CpkBadge({ cpk, currency }) {
-  if (cpk == null) return <span className="text-gray-500 text-xs">N/A</span>
+  const { t } = useLanguage()
+  if (cpk == null) return <span className="text-gray-500 text-xs">{t('suppliers.spend.na')}</span>
   const good = cpk <= CPK_BENCHMARK
   return (
     <span className={`text-xs font-mono font-semibold ${good ? 'text-emerald-400' : 'text-amber-400'}`}>
@@ -242,6 +250,7 @@ function CpkBadge({ cpk, currency }) {
 
 // ── Contract Modal ─────────────────────────────────────────────────────────────
 function ContractModal({ contract, onSave, onClose }) {
+  const { t } = useLanguage()
   const [form, setForm] = useState(contract || {
     supplier_name: '', contract_start: '', contract_end: '', payment_terms: '',
     price_per_unit: '', min_order: '', notes: '',
@@ -266,42 +275,42 @@ function ContractModal({ contract, onSave, onClose }) {
         className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl"
       >
         <div className="flex items-center justify-between p-5 border-b border-gray-800">
-          <h3 className="font-semibold text-white">{form.id ? 'Edit Contract' : 'Add Contract'}</h3>
+          <h3 className="font-semibold text-white">{form.id ? t('suppliers.contractModal.editTitle') : t('suppliers.contractModal.addTitle')}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="p-5 grid grid-cols-2 gap-3">
           <div className="col-span-2">
-            <label className="block text-xs text-gray-400 mb-1">Supplier Name *</label>
+            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.supplierName')}</label>
             <input required value={form.supplier_name} onChange={e => set('supplier_name', e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Contract Start</label>
+            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.contractStart')}</label>
             <input type="date" value={form.contract_start} onChange={e => set('contract_start', e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Contract End</label>
+            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.contractEnd')}</label>
             <input type="date" value={form.contract_end} onChange={e => set('contract_end', e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Payment Terms</label>
+            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.paymentTerms')}</label>
             <input value={form.payment_terms} onChange={e => set('payment_terms', e.target.value)}
-              placeholder="e.g. Net 30" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+              placeholder={t('suppliers.contractModal.paymentTermsPlaceholder')} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Price Per Unit</label>
+            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.pricePerUnit')}</label>
             <input type="number" value={form.price_per_unit} onChange={e => set('price_per_unit', e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">Min Order Qty</label>
+            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.minOrderQty')}</label>
             <input type="number" value={form.min_order} onChange={e => set('min_order', e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
           </div>
           <div className="col-span-2">
-            <label className="block text-xs text-gray-400 mb-1">Notes</label>
+            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.notes')}</label>
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none" />
           </div>
@@ -311,10 +320,10 @@ function ContractModal({ contract, onSave, onClose }) {
             </div>
           )}
           <div className="col-span-2 flex gap-2 justify-end pt-1">
-            <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-800 rounded-lg disabled:opacity-50">Cancel</button>
+            <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-800 rounded-lg disabled:opacity-50">{t('suppliers.contractModal.cancel')}</button>
             <button type="submit" disabled={saving} className="btn-primary gap-1.5 disabled:opacity-50">
               {saving && <Loader2 size={13} className="animate-spin" />}
-              {saving ? 'Saving...' : 'Save Contract'}
+              {saving ? t('suppliers.contractModal.saving') : t('suppliers.contractModal.save')}
             </button>
           </div>
         </form>
@@ -325,6 +334,7 @@ function ContractModal({ contract, onSave, onClose }) {
 
 // ── Supplier Detail Drawer ─────────────────────────────────────────────────────
 function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onClose, onRatingChange, onSaveNotes }) {
+  const { t } = useLanguage()
   const [page, setPage] = useState(0)
   const [notes, setNotes] = useState(supplier.notes || '')
   const [noteSaved, setNoteSaved] = useState(false)
@@ -371,7 +381,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
   }
 
   const radarData = {
-    labels: ['CPK Score', 'Life Score', 'Reliability', 'Value', 'Coverage'],
+    labels: [t('suppliers.radarLabels.cpkScore'), t('suppliers.radarLabels.lifeScore'), t('suppliers.radarLabels.reliability'), t('suppliers.radarLabels.value'), t('suppliers.radarLabels.coverage')],
     datasets: [{
       label: supplier.brand,
       data: [radarScores.cpkScore, radarScores.lifeScore, radarScores.reliabilityScore, radarScores.valueScore, radarScores.coverageScore],
@@ -399,7 +409,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
   const spendChartData = {
     labels: months.map(m => { const [y, mo] = m.split('-'); return `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo)-1]}` }),
     datasets: [{
-      label: 'Monthly Spend',
+      label: t('suppliers.monthlySpendLabel'),
       data: monthlySpend,
       backgroundColor: 'rgba(59,130,246,0.7)',
       borderColor: '#3b82f6',
@@ -425,7 +435,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
             <h2 className="font-bold text-white text-lg leading-none">{supplier.brand}</h2>
             <div className="flex items-center gap-2 mt-1">
               <RatingBadge rating={supplier.rating} />
-              <span className="text-xs text-gray-500">{supplier.count} tyres</span>
+              <span className="text-xs text-gray-500">{supplier.count} {t('suppliers.drawer.tyresSuffix')}</span>
             </div>
           </div>
         </div>
@@ -438,19 +448,19 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
         {/* Radar + Stats */}
         <div className="grid grid-cols-2 gap-4">
           <div className="card">
-            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">Performance Radar</h4>
+            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">{t('suppliers.drawer.radarTitle')}</h4>
             <div className="h-48">
               <Radar key={radarKey} data={radarData} options={radarOpts} />
             </div>
           </div>
           <div className="space-y-2">
             {[
-              { label: 'Avg CPK', value: fmtCpk(supplier.avgCpk, currency), good: supplier.avgCpk != null && supplier.avgCpk <= CPK_BENCHMARK },
-              { label: 'Avg Tyre Life', value: fmtKm(supplier.avgLife), good: supplier.avgLife > 80000 },
-              { label: 'Failure Rate', value: fmtPct(supplier.failureRate), good: supplier.failureRate < FAILURE_THRESHOLD },
-              { label: 'Spend This Year', value: fmtCurrency(supplier.spendThisYear, currency), good: null },
-              { label: 'Total Spend', value: fmtCurrency(supplier.totalSpend, currency), good: null },
-              { label: 'Sites Used', value: supplier.sites.length, good: null },
+              { label: t('suppliers.drawer.stats.avgCpk'), value: fmtCpk(supplier.avgCpk, currency), good: supplier.avgCpk != null && supplier.avgCpk <= CPK_BENCHMARK },
+              { label: t('suppliers.drawer.stats.avgTyreLife'), value: fmtKm(supplier.avgLife), good: supplier.avgLife > 80000 },
+              { label: t('suppliers.drawer.stats.failureRate'), value: fmtPct(supplier.failureRate), good: supplier.failureRate < FAILURE_THRESHOLD },
+              { label: t('suppliers.drawer.stats.spendThisYear'), value: fmtCurrency(supplier.spendThisYear, currency), good: null },
+              { label: t('suppliers.drawer.stats.totalSpend'), value: fmtCurrency(supplier.totalSpend, currency), good: null },
+              { label: t('suppliers.drawer.stats.sitesUsed'), value: supplier.sites.length, good: null },
             ].map(item => (
               <div key={item.label} className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
                 <span className="text-xs text-gray-400">{item.label}</span>
@@ -464,7 +474,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
 
         {/* Monthly Spend Trend */}
         <div className="card">
-          <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">Monthly Spend (12 Months)</h4>
+          <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">{t('suppliers.drawer.monthlySpendTitle')}</h4>
           <div className="h-40">
             <Bar data={spendChartData} options={{ ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } } }} />
           </div>
@@ -473,9 +483,9 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
         {/* Size & Site Breakdown */}
         <div className="grid grid-cols-2 gap-4">
           <div className="card">
-            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">Size Distribution</h4>
+            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">{t('suppliers.drawer.sizeDistribution')}</h4>
             <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {sizeBreakdown.length === 0 && <p className="text-xs text-gray-600">No size data</p>}
+              {sizeBreakdown.length === 0 && <p className="text-xs text-gray-600">{t('suppliers.drawer.noSizeData')}</p>}
               {sizeBreakdown.map(([size, count]) => (
                 <div key={size} className="flex items-center gap-2">
                   <div className="flex-1 text-xs text-gray-300 truncate">{size}</div>
@@ -488,9 +498,9 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
             </div>
           </div>
           <div className="card">
-            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">Site Usage</h4>
+            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">{t('suppliers.drawer.siteUsage')}</h4>
             <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {siteBreakdown.length === 0 && <p className="text-xs text-gray-600">No site data</p>}
+              {siteBreakdown.length === 0 && <p className="text-xs text-gray-600">{t('suppliers.drawer.noSiteData')}</p>}
               {siteBreakdown.map(([site, count]) => (
                 <div key={site} className="flex items-center gap-2">
                   <div className="flex-1 text-xs text-gray-300 truncate">{site}</div>
@@ -507,14 +517,17 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
         {/* Tyre Records Table */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-            <h4 className="text-xs text-gray-400 uppercase tracking-wider">Tyre Records</h4>
-            <span className="text-xs text-gray-600">{supplier.count} total</span>
+            <h4 className="text-xs text-gray-400 uppercase tracking-wider">{t('suppliers.drawer.tyreRecords')}</h4>
+            <span className="text-xs text-gray-600">{t('suppliers.drawer.totalSuffix', { count: supplier.count })}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-800">
-                  {['Serial', 'Size', 'Asset', 'Site', 'CPK', 'Risk', 'Date'].map(h => (
+                  {[
+                    t('suppliers.drawer.columns.serial'), t('suppliers.drawer.columns.size'), t('suppliers.drawer.columns.asset'),
+                    t('suppliers.drawer.columns.site'), t('suppliers.drawer.columns.cpk'), t('suppliers.drawer.columns.risk'), t('suppliers.drawer.columns.date'),
+                  ].map(h => (
                     <th key={h} className="px-3 py-2 text-left text-gray-500 font-medium">{h}</th>
                   ))}
                 </tr>
@@ -536,7 +549,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
                   )
                 })}
                 {pagedRecs.length === 0 && (
-                  <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-600">No records</td></tr>
+                  <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-600">{t('suppliers.drawer.noRecords')}</td></tr>
                 )}
               </tbody>
             </table>
@@ -545,12 +558,12 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
             <div className="flex items-center justify-between px-4 py-2 border-t border-gray-800">
               <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
                 className="text-xs text-gray-500 hover:text-white disabled:opacity-30 flex items-center gap-1">
-                <ChevronLeft size={12} /> Prev
+                <ChevronLeft size={12} /> {t('suppliers.drawer.prev')}
               </button>
-              <span className="text-xs text-gray-600">{page + 1} / {totalPages}</span>
+              <span className="text-xs text-gray-600">{t('suppliers.drawer.pageOf', { page: page + 1, total: totalPages })}</span>
               <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
                 className="text-xs text-gray-500 hover:text-white disabled:opacity-30 flex items-center gap-1">
-                Next <ChevronRight size={12} />
+                {t('suppliers.drawer.next')} <ChevronRight size={12} />
               </button>
             </div>
           )}
@@ -559,14 +572,14 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
         {/* Admin Rating Override */}
         {isAdmin && (
           <div className="card">
-            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">Rating Override (Admin)</h4>
+            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">{t('suppliers.drawer.ratingOverride')}</h4>
             <div className="flex flex-wrap gap-2">
               {RATINGS.map(r => (
                 <button key={r} onClick={() => onRatingChange(supplier.brand, r)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                     supplier.rating === r ? `${RATING_CONFIG[r].bg} ${RATING_CONFIG[r].color} ${RATING_CONFIG[r].border}` : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
                   }`}>
-                  {r}
+                  {t(`suppliers.ratings.${RATING_I18N_KEYS[r]}`)}
                 </button>
               ))}
             </div>
@@ -575,19 +588,19 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
 
         {/* Notes */}
         <div className="card">
-          <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-2">Notes</h4>
+          <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-2">{t('suppliers.drawer.notes')}</h4>
           <textarea
             value={notes}
             onChange={e => setNotes(e.target.value)}
             rows={3}
-            placeholder="Add internal notes about this supplier..."
+            placeholder={t('suppliers.drawer.notesPlaceholder')}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
           />
           <div className="flex items-center gap-2 mt-2">
             <button onClick={saveNotes} disabled={noteSaving}
               className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 ${noteSaved ? 'bg-emerald-700 text-emerald-200' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'}`}>
               {noteSaving && <Loader2 size={11} className="animate-spin" />}
-              {noteSaving ? 'Saving...' : noteSaved ? 'Saved' : 'Save Notes'}
+              {noteSaving ? t('suppliers.drawer.saving') : noteSaved ? t('suppliers.drawer.saved') : t('suppliers.drawer.saveNotes')}
             </button>
             {noteError && (
               <span className="text-xs text-red-400 flex items-center gap-1">
@@ -603,6 +616,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function SupplierManagement() {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const { activeCurrency, activeCountry } = useSettings()
   const { user, profile } = useAuth()
@@ -822,7 +836,7 @@ export default function SupplierManagement() {
     setContractDeleteError(null)
     const { data, error: err } = await supplierApi.deleteSupplierContract(contractDeleteTarget.id)
     if (err || (data?.length ?? 0) === 0) {
-      setContractDeleteError(err?.message || 'The contract could not be deleted - you may not have permission, or it was already removed.')
+      setContractDeleteError(err?.message || t('suppliers.deleteContract.defaultError'))
       setContractDeleting(false)
       return
     }
@@ -888,11 +902,11 @@ export default function SupplierManagement() {
     if (best && fleetAvgCpk > 0) {
       const pct = ((fleetAvgCpk - best.avgCpk) / fleetAvgCpk * 100).toFixed(1)
       if (parseFloat(pct) > 5) {
-        recs.push({ type: 'increase', brand: best.brand, msg: `Increase ${best.brand} usage - CPK is ${fmtCpk(best.avgCpk, activeCurrency)}, which is ${pct}% better than fleet average`, impact: 'High' })
+        recs.push({ type: 'increase', brand: best.brand, msg: t('suppliers.recommendations.messages.increase', { brand: best.brand, cpk: fmtCpk(best.avgCpk, activeCurrency), pct }), impact: 'High' })
       }
     }
     allMetrics.filter(m => m.failureRate > FAILURE_THRESHOLD).forEach(m => {
-      recs.push({ type: 'review', brand: m.brand, msg: `Review ${m.brand} - failure rate is ${(m.failureRate * 100).toFixed(1)}%, above ${(FAILURE_THRESHOLD * 100).toFixed(0)}% threshold`, impact: 'Critical' })
+      recs.push({ type: 'review', brand: m.brand, msg: t('suppliers.recommendations.messages.review', { brand: m.brand, rate: (m.failureRate * 100).toFixed(1), threshold: (FAILURE_THRESHOLD * 100).toFixed(0) }), impact: 'Critical' })
     })
     if (worst && best && worst.brand !== best.brand && worst.avgCpk != null && best.avgCpk != null) {
       const annualRecs = worst.recs.length
@@ -901,7 +915,7 @@ export default function SupplierManagement() {
         return s + (km > 0 ? km : 80000)
       }, 0)
       if (saving > 1000) {
-        recs.push({ type: 'saving', brand: worst.brand, msg: `Cost reduction opportunity: replacing ${worst.brand} with ${best.brand} could save approx. ${fmtCurrency(saving, activeCurrency)}/year`, impact: 'High' })
+        recs.push({ type: 'saving', brand: worst.brand, msg: t('suppliers.recommendations.messages.saving', { worstBrand: worst.brand, bestBrand: best.brand, amount: fmtCurrency(saving, activeCurrency) }), impact: 'High' })
       }
     }
     // Size consolidation
@@ -919,11 +933,11 @@ export default function SupplierManagement() {
     const topSizes = Object.entries(sizeMap).slice(0, 2)
     topSizes.forEach(([sz, info]) => {
       if (info.cpk != null) {
-        recs.push({ type: 'consolidate', brand: info.brand, msg: `Consider consolidating ${sz} procurement to ${info.brand} - best CPK for this size at ${fmtCpk(info.cpk, activeCurrency)}`, impact: 'Medium' })
+        recs.push({ type: 'consolidate', brand: info.brand, msg: t('suppliers.recommendations.messages.consolidate', { size: sz, brand: info.brand, cpk: fmtCpk(info.cpk, activeCurrency) }), impact: 'Medium' })
       }
     })
     return recs.slice(0, 8)
-  }, [allMetrics, activeCurrency])
+  }, [allMetrics, activeCurrency, t])
 
   // ── Spend Analysis ─────────────────────────────────────────────────────────
   const spendAnalysis = useMemo(() => {
@@ -1026,9 +1040,9 @@ export default function SupplierManagement() {
     <div className="flex items-center justify-center h-64">
       <div className="text-center">
         <AlertTriangle size={32} className="text-red-400 mx-auto mb-2" />
-        <p className="text-red-400 font-medium">Failed to load data</p>
+        <p className="text-red-400 font-medium">{t('suppliers.errors.loadFailed')}</p>
         <p className="text-gray-500 text-sm mt-1">{error}</p>
-        <button onClick={fetchData} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">Retry</button>
+        <button onClick={fetchData} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">{t('suppliers.retry')}</button>
       </div>
     </div>
   )
@@ -1036,22 +1050,22 @@ export default function SupplierManagement() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Supplier Management"
-        subtitle="Manage suppliers, contracts, and vendor performance"
+        title={t('suppliers.title')}
+        subtitle={t('suppliers.subtitle')}
         icon={Building2}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => navigate('/data-intake?module=supplier')} className="btn-primary gap-1.5">
-              <Upload size={13} /> Import via Data Intake Center
+              <Upload size={13} /> {t('suppliers.actions.import')}
             </button>
             <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm rounded-lg">
-              <RefreshCw size={13} /> Refresh
+              <RefreshCw size={13} /> {t('suppliers.actions.refresh')}
             </button>
             <button onClick={handleExcelExport} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-sm rounded-lg">
-              <FileSpreadsheet size={13} /> Excel
+              <FileSpreadsheet size={13} /> {t('suppliers.actions.excel')}
             </button>
             <button onClick={handlePdfExport} className="flex items-center gap-1.5 px-3 py-2 bg-blue-700 hover:bg-blue-600 text-white text-sm rounded-lg">
-              <FileText size={13} /> PDF
+              <FileText size={13} /> {t('suppliers.actions.pdf')}
             </button>
           </div>
         }
@@ -1059,14 +1073,14 @@ export default function SupplierManagement() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard icon={Building2} label="Total Suppliers" value={kpiSummary.total} sub="Unique brands" color="text-blue-400" />
-        <KpiCard icon={Star} label="Preferred" value={kpiSummary.preferredCount} sub={`of ${kpiSummary.total} suppliers`} color="text-emerald-400" />
-        <KpiCard icon={Target} label="CPK Range"
-          value={kpiSummary.cpkMin != null ? `${fmtCpk(kpiSummary.cpkMin, activeCurrency).split(' ')[1]}` : 'N/A'}
-          sub={kpiSummary.cpkMax != null ? `to ${fmtCpk(kpiSummary.cpkMax, activeCurrency)}` : '-'}
+        <KpiCard icon={Building2} label={t('suppliers.kpi.totalSuppliers')} value={kpiSummary.total} sub={t('suppliers.kpi.uniqueBrands')} color="text-blue-400" />
+        <KpiCard icon={Star} label={t('suppliers.kpi.preferred')} value={kpiSummary.preferredCount} sub={t('suppliers.kpi.ofTotalSuppliers', { total: kpiSummary.total })} color="text-emerald-400" />
+        <KpiCard icon={Target} label={t('suppliers.kpi.cpkRange')}
+          value={kpiSummary.cpkMin != null ? `${fmtCpk(kpiSummary.cpkMin, activeCurrency).split(' ')[1]}` : t('suppliers.recommendations.na')}
+          sub={kpiSummary.cpkMax != null ? t('suppliers.kpi.toValue', { value: fmtCpk(kpiSummary.cpkMax, activeCurrency) }) : '-'}
           color="text-purple-400" />
-        <KpiCard icon={Award} label="Best CPK" value={kpiSummary.best?.brand || 'N/A'} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : '-'} color="text-emerald-400" />
-        <KpiCard icon={AlertTriangle} label="Worst CPK" value={kpiSummary.worst?.brand || 'N/A'} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : '-'} color="text-red-400" />
+        <KpiCard icon={Award} label={t('suppliers.kpi.bestCpk')} value={kpiSummary.best?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : '-'} color="text-emerald-400" />
+        <KpiCard icon={AlertTriangle} label={t('suppliers.kpi.worstCpk')} value={kpiSummary.worst?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : '-'} color="text-red-400" />
       </div>
 
       {/* Ratings persistence error banner */}
@@ -1074,9 +1088,9 @@ export default function SupplierManagement() {
         <div className="flex items-center justify-between gap-3 bg-red-900/20 border border-red-800 rounded-xl px-4 py-2.5">
           <div className="flex items-center gap-2 text-sm text-red-400">
             <AlertTriangle size={15} className="flex-shrink-0" />
-            <span>Supplier ratings/notes could not be saved or loaded: {ratingsError}</span>
+            <span>{t('suppliers.ratingsError', { message: ratingsError })}</span>
           </div>
-          <button onClick={fetchRatings} className="px-3 py-1.5 bg-red-800/40 hover:bg-red-800/60 text-red-200 text-xs rounded-lg flex-shrink-0">Retry</button>
+          <button onClick={fetchRatings} className="px-3 py-1.5 bg-red-800/40 hover:bg-red-800/60 text-red-200 text-xs rounded-lg flex-shrink-0">{t('suppliers.retry')}</button>
         </div>
       )}
 
@@ -1084,18 +1098,18 @@ export default function SupplierManagement() {
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative">
           <Search size={13} className="absolute left-2.5 top-2.5 text-gray-500" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search supplier..."
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('suppliers.searchPlaceholder')}
             className="pl-7 pr-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 w-44" />
         </div>
         {[
-          { label: 'Country', value: filterCountry, opts: countries, set: setFilterCountry },
-          { label: 'Site', value: filterSite, opts: sites, set: setFilterSite },
-          { label: 'Rating', value: filterRating, opts: ['All', ...RATINGS], set: setFilterRating },
+          { label: 'Country', allKey: 'allCountries', value: filterCountry, opts: countries, set: setFilterCountry },
+          { label: 'Site', allKey: 'allSites', value: filterSite, opts: sites, set: setFilterSite },
+          { label: 'Rating', allKey: 'allRatings', value: filterRating, opts: ['All', ...RATINGS], set: setFilterRating },
         ].map(f => (
           <div key={f.label} className="relative">
             <select value={f.value} onChange={e => f.set(e.target.value)}
               className="appearance-none bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 px-3 py-2 pr-7 focus:outline-none focus:border-blue-500">
-              {f.opts.map(o => <option key={o} value={o}>{o === 'All' ? `All ${f.label}s` : o}</option>)}
+              {f.opts.map(o => <option key={o} value={o}>{o === 'All' ? t(`suppliers.filters.${f.allKey}`) : (f.label === 'Rating' ? t(`suppliers.ratings.${RATING_I18N_KEYS[o]}`) : o)}</option>)}
             </select>
             <ChevronDown size={12} className="absolute right-2 top-3 text-gray-500 pointer-events-none" />
           </div>
@@ -1103,20 +1117,20 @@ export default function SupplierManagement() {
         {(search || filterCountry !== 'All' || filterSite !== 'All' || filterRating !== 'All') && (
           <button onClick={() => { setSearch(''); setFilterCountry('All'); setFilterSite('All'); setFilterRating('All') }}
             className="flex items-center gap-1 px-2 py-2 text-xs text-gray-400 hover:text-white bg-gray-800 rounded-lg">
-            <X size={12} /> Clear
+            <X size={12} /> {t('suppliers.filters.clear')}
           </button>
         )}
-        <span className="text-xs text-gray-600 ml-auto">{filteredSuppliers.length} suppliers</span>
+        <span className="text-xs text-gray-600 ml-auto">{t('suppliers.suppliersCount', { count: filteredSuppliers.length })}</span>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-full overflow-x-auto">
-        {TABS.map((t, i) => (
-          <button key={t} onClick={() => setActiveTab(i)}
+        {TABS.map((tabLabel, i) => (
+          <button key={tabLabel} onClick={() => setActiveTab(i)}
             className={`flex-1 min-w-max px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
               activeTab === i ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
             }`}>
-            {t}
+            {t(`suppliers.tabs.${TAB_I18N_KEYS[i]}`)}
           </button>
         ))}
       </div>
@@ -1129,8 +1143,8 @@ export default function SupplierManagement() {
             {filteredSuppliers.length === 0 ? (
               <EmptyState
                 icon={Building2}
-                title="No suppliers found"
-                description="Adjust your filters or upload tyre records to see suppliers here."
+                title={t('suppliers.directory.emptyTitle')}
+                description={t('suppliers.directory.emptyDesc')}
               />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -1157,26 +1171,26 @@ export default function SupplierManagement() {
                         </div>
                         <button onClick={() => toggleCompare(supplier.brand)}
                           className={`p-1.5 rounded-lg text-xs transition-colors ${inCompare ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500 hover:text-white'}`}
-                          title={inCompare ? 'Remove from compare' : 'Add to compare'}>
+                          title={inCompare ? t('suppliers.directory.removeFromCompare') : t('suppliers.directory.addToCompare')}>
                           <BarChart3 size={13} />
                         </button>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
                         <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
-                          <div className="text-xs text-gray-500">Spend YTD</div>
+                          <div className="text-xs text-gray-500">{t('suppliers.directory.spendYtd')}</div>
                           <div className="text-sm font-semibold text-white">{fmtCurrency(supplier.spendThisYear, activeCurrency)}</div>
                         </div>
                         <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
-                          <div className="text-xs text-gray-500">Tyres</div>
+                          <div className="text-xs text-gray-500">{t('suppliers.directory.tyres')}</div>
                           <div className="text-sm font-semibold text-white">{supplier.count}</div>
                         </div>
                         <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
-                          <div className="text-xs text-gray-500">Avg CPK</div>
+                          <div className="text-xs text-gray-500">{t('suppliers.directory.avgCpk')}</div>
                           <CpkBadge cpk={supplier.avgCpk} currency={activeCurrency} />
                         </div>
                         <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
-                          <div className="text-xs text-gray-500">Failure %</div>
+                          <div className="text-xs text-gray-500">{t('suppliers.directory.failurePct')}</div>
                           <div className={`text-sm font-semibold ${supplier.failureRate > FAILURE_THRESHOLD ? 'text-red-400' : 'text-emerald-400'}`}>
                             {fmtPct(supplier.failureRate)}
                           </div>
@@ -1201,7 +1215,7 @@ export default function SupplierManagement() {
 
                       <button onClick={() => setSelectedSupplier(supplier)}
                         className="w-full flex items-center justify-center gap-1.5 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 rounded-lg text-xs text-gray-300 hover:text-white transition-colors">
-                        <Eye size={12} /> View Details
+                        <Eye size={12} /> {t('suppliers.directory.viewDetails')}
                       </button>
                     </motion.div>
                   )
@@ -1216,10 +1230,10 @@ export default function SupplierManagement() {
           <motion.div key="perf" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
             <div className="card">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-white text-sm">Select Suppliers to Compare (up to 4)</h3>
+                <h3 className="font-semibold text-white text-sm">{t('suppliers.performance.selectToCompare')}</h3>
                 {compareList.length > 0 && (
                   <button onClick={() => setCompareList([])} className="text-xs text-gray-500 hover:text-white flex items-center gap-1">
-                    <X size={12} /> Clear selection
+                    <X size={12} /> {t('suppliers.performance.clearSelection')}
                   </button>
                 )}
               </div>
@@ -1242,14 +1256,14 @@ export default function SupplierManagement() {
             {compareList.length === 0 ? (
               <EmptyState
                 icon={BarChart3}
-                title="Select suppliers to compare"
-                description="Choose up to 4 suppliers from the list above to see a side-by-side comparison."
+                title={t('suppliers.performance.emptyTitle')}
+                description={t('suppliers.performance.emptyDesc')}
               />
             ) : (
               <>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                   <div className="card">
-                    <h4 className="text-sm font-semibold text-white mb-4">Performance Radar Comparison</h4>
+                    <h4 className="text-sm font-semibold text-white mb-4">{t('suppliers.performance.radarTitle')}</h4>
                     <div className="h-72">
                       {compareData && (
                         <Radar data={compareData} options={{
@@ -1271,13 +1285,13 @@ export default function SupplierManagement() {
 
                   <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                     <div className="px-4 py-3 border-b border-gray-800">
-                      <h4 className="text-sm font-semibold text-white">Side-by-Side Metrics</h4>
+                      <h4 className="text-sm font-semibold text-white">{t('suppliers.performance.sideBySide')}</h4>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-gray-800">
-                            <th className="px-3 py-2.5 text-left text-gray-500 font-medium">Metric</th>
+                            <th className="px-3 py-2.5 text-left text-gray-500 font-medium">{t('suppliers.performance.metric')}</th>
                             {compareStats.map(m => (
                               <th key={m.brand} className="px-3 py-2.5 text-right text-gray-400 font-semibold">{m.brand}</th>
                             ))}
@@ -1285,13 +1299,13 @@ export default function SupplierManagement() {
                         </thead>
                         <tbody>
                           {[
-                            { label: 'Avg CPK', key: 'avgCpk', fmt: v => fmtCpk(v, activeCurrency), lowerBetter: true },
-                            { label: 'Avg Life (km)', key: 'avgLife', fmt: v => fmtKm(v), lowerBetter: false },
-                            { label: 'Failure Rate', key: 'failureRate', fmt: v => fmtPct(v), lowerBetter: true },
-                            { label: 'Tyre Count', key: 'count', fmt: v => v, lowerBetter: false },
-                            { label: 'Spend YTD', key: 'spendThisYear', fmt: v => fmtCurrency(v, activeCurrency), lowerBetter: false },
-                            { label: 'Total Spend', key: 'totalSpend', fmt: v => fmtCurrency(v, activeCurrency), lowerBetter: false },
-                            { label: 'Rating', key: 'rating', fmt: v => v, lowerBetter: null },
+                            { label: t('suppliers.performance.rows.avgCpk'), key: 'avgCpk', fmt: v => fmtCpk(v, activeCurrency), lowerBetter: true },
+                            { label: t('suppliers.performance.rows.avgLifeKm'), key: 'avgLife', fmt: v => fmtKm(v), lowerBetter: false },
+                            { label: t('suppliers.performance.rows.failureRate'), key: 'failureRate', fmt: v => fmtPct(v), lowerBetter: true },
+                            { label: t('suppliers.performance.rows.tyreCount'), key: 'count', fmt: v => v, lowerBetter: false },
+                            { label: t('suppliers.performance.rows.spendYtd'), key: 'spendThisYear', fmt: v => fmtCurrency(v, activeCurrency), lowerBetter: false },
+                            { label: t('suppliers.performance.rows.totalSpend'), key: 'totalSpend', fmt: v => fmtCurrency(v, activeCurrency), lowerBetter: false },
+                            { label: t('suppliers.performance.rows.rating'), key: 'rating', fmt: v => (RATING_I18N_KEYS[v] ? t(`suppliers.ratings.${RATING_I18N_KEYS[v]}`) : v), lowerBetter: null },
                           ].map(row => {
                             const vals = compareStats.map(m => m[row.key])
                             const numVals = vals.filter(v => typeof v === 'number' && isFinite(v))
@@ -1326,7 +1340,7 @@ export default function SupplierManagement() {
           <motion.div key="spend" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <div className="card">
-                <h4 className="text-sm font-semibold text-white mb-4">Supplier Spend Share</h4>
+                <h4 className="text-sm font-semibold text-white mb-4">{t('suppliers.spend.shareTitle')}</h4>
                 <div className="h-64 flex items-center justify-center">
                   {spendAnalysis.doughnutData.datasets[0].data.some(v => v > 0) ? (
                     <Doughnut data={spendAnalysis.doughnutData} options={{
@@ -1337,17 +1351,17 @@ export default function SupplierManagement() {
                       },
                     }} />
                   ) : (
-                    <p className="text-gray-600 text-sm">No spend data available</p>
+                    <p className="text-gray-600 text-sm">{t('suppliers.spend.noData')}</p>
                   )}
                 </div>
                 <div className="mt-3 text-center">
-                  <span className="text-xs text-gray-500">Total Spend: </span>
+                  <span className="text-xs text-gray-500">{t('suppliers.spend.totalSpend')}</span>
                   <span className="text-sm font-semibold text-white">{fmtCurrency(spendAnalysis.totalSpend, activeCurrency)}</span>
                 </div>
               </div>
 
               <div className="card">
-                <h4 className="text-sm font-semibold text-white mb-4">Monthly Spend by Supplier (12 Months)</h4>
+                <h4 className="text-sm font-semibold text-white mb-4">{t('suppliers.spend.monthlyTitle')}</h4>
                 <div className="h-64">
                   <Bar data={spendAnalysis.stackedData} options={{
                     ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins },
@@ -1364,21 +1378,21 @@ export default function SupplierManagement() {
             {/* YoY Table */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-800">
-                <h4 className="text-sm font-semibold text-white">Year-over-Year Cost Change</h4>
+                <h4 className="text-sm font-semibold text-white">{t('suppliers.spend.yoyTitle')}</h4>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-800">
-                      <th className="px-4 py-3 text-left text-gray-500 font-medium text-xs">Supplier</th>
-                      <th className="px-4 py-3 text-right text-gray-500 font-medium text-xs">This Year</th>
-                      <th className="px-4 py-3 text-right text-gray-500 font-medium text-xs">Last Year</th>
-                      <th className="px-4 py-3 text-right text-gray-500 font-medium text-xs">Change</th>
+                      <th className="px-4 py-3 text-left text-gray-500 font-medium text-xs">{t('suppliers.spend.columns.supplier')}</th>
+                      <th className="px-4 py-3 text-right text-gray-500 font-medium text-xs">{t('suppliers.spend.columns.thisYear')}</th>
+                      <th className="px-4 py-3 text-right text-gray-500 font-medium text-xs">{t('suppliers.spend.columns.lastYear')}</th>
+                      <th className="px-4 py-3 text-right text-gray-500 font-medium text-xs">{t('suppliers.spend.columns.change')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {spendAnalysis.yoy.length === 0 && (
-                      <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-600">No year-over-year data available</td></tr>
+                      <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-600">{t('suppliers.spend.noYoyData')}</td></tr>
                     )}
                     {spendAnalysis.yoy.map(row => (
                       <tr key={row.brand} className="border-b border-gray-800/50 hover:bg-gray-800/20">
@@ -1387,7 +1401,7 @@ export default function SupplierManagement() {
                         <td className="px-4 py-2.5 text-right text-gray-400">{fmtCurrency(row.lastYear, activeCurrency)}</td>
                         <td className="px-4 py-2.5 text-right">
                           {row.change == null ? (
-                            <span className="text-gray-600 text-xs">N/A</span>
+                            <span className="text-gray-600 text-xs">{t('suppliers.spend.na')}</span>
                           ) : (
                             <span className={`flex items-center justify-end gap-1 font-semibold ${row.change > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                               {row.change > 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
@@ -1411,12 +1425,12 @@ export default function SupplierManagement() {
               <div className="relative">
                 <Search size={13} className="absolute left-2.5 top-2.5 text-gray-500" />
                 <input value={contractSearch} onChange={e => setContractSearch(e.target.value)}
-                  placeholder="Search contracts..."
+                  placeholder={t('suppliers.contracts.searchPlaceholder')}
                   className="pl-7 pr-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 w-52" />
               </div>
               <button onClick={() => setContractModal({})}
                 className="btn-primary gap-1.5">
-                <Plus size={13} /> Add Contract
+                <Plus size={13} /> {t('suppliers.contracts.add')}
               </button>
             </div>
 
@@ -1427,15 +1441,15 @@ export default function SupplierManagement() {
             ) : contractsError ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <AlertTriangle size={32} className="text-red-400 mb-2" />
-                <p className="text-red-400 font-medium">Failed to load contracts</p>
+                <p className="text-red-400 font-medium">{t('suppliers.contracts.loadError')}</p>
                 <p className="text-gray-500 text-sm mt-1">{contractsError}</p>
-                <button onClick={fetchContracts} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">Retry</button>
+                <button onClick={fetchContracts} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">{t('suppliers.retry')}</button>
               </div>
             ) : filteredContracts.length === 0 ? (
               <EmptyState
                 icon={FileCheck}
-                title="No contracts found"
-                description="Add supplier contracts to track expiry and terms."
+                title={t('suppliers.contracts.emptyTitle')}
+                description={t('suppliers.contracts.emptyDesc')}
               />
             ) : (
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -1443,7 +1457,11 @@ export default function SupplierManagement() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-800">
-                        {['Supplier', 'Start', 'End', 'Payment Terms', 'Price/Unit', 'Min Order', 'Status', 'Actions'].map(h => (
+                        {[
+                          t('suppliers.contracts.columns.supplier'), t('suppliers.contracts.columns.start'), t('suppliers.contracts.columns.end'),
+                          t('suppliers.contracts.columns.paymentTerms'), t('suppliers.contracts.columns.pricePerUnit'), t('suppliers.contracts.columns.minOrder'),
+                          t('suppliers.contracts.columns.status'), t('suppliers.contracts.columns.actions'),
+                        ].map(h => (
                           <th key={h} className="px-4 py-3 text-left text-gray-500 font-medium text-xs">{h}</th>
                         ))}
                       </tr>
@@ -1467,7 +1485,7 @@ export default function SupplierManagement() {
                             <td className="px-4 py-3">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}>
                                 {status === 'Expiring Soon' && <AlertTriangle size={9} />}
-                                {status}
+                                {t(`suppliers.contracts.statuses.${CONTRACT_STATUS_I18N_KEYS[status]}`)}
                               </span>
                             </td>
                             <td className="px-4 py-3">
@@ -1494,9 +1512,9 @@ export default function SupplierManagement() {
               <div className="bg-amber-900/20 border border-amber-700 rounded-xl p-4 flex items-start gap-3">
                 <AlertTriangle size={16} className="text-amber-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-amber-400 font-medium text-sm">Contracts Expiring Soon</p>
+                  <p className="text-amber-400 font-medium text-sm">{t('suppliers.contracts.expiringBannerTitle')}</p>
                   <p className="text-amber-300/70 text-xs mt-1">
-                    {contracts.filter(c => getContractStatus(c) === 'Expiring Soon').map(c => c.supplier_name).join(', ')} - renewal action required within 30 days
+                    {t('suppliers.contracts.expiringBannerDesc', { names: contracts.filter(c => getContractStatus(c) === 'Expiring Soon').map(c => c.supplier_name).join(', ') })}
                   </p>
                 </div>
               </div>
@@ -1509,14 +1527,14 @@ export default function SupplierManagement() {
           <motion.div key="recs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
             <div className="flex items-center gap-2 mb-1">
               <Zap size={16} className="text-blue-400" />
-              <h3 className="text-sm font-semibold text-white">AI-Powered Procurement Recommendations</h3>
-              <span className="text-xs text-gray-600 ml-auto">Based on {records.length} tyre records</span>
+              <h3 className="text-sm font-semibold text-white">{t('suppliers.recommendations.title')}</h3>
+              <span className="text-xs text-gray-600 ml-auto">{t('suppliers.recommendations.basedOn', { count: records.length })}</span>
             </div>
             {recommendations.length === 0 ? (
               <EmptyState
                 icon={Zap}
-                title="No recommendations yet"
-                description="Upload more tyre records to generate procurement intelligence."
+                title={t('suppliers.recommendations.emptyTitle')}
+                description={t('suppliers.recommendations.emptyDesc')}
               />
             ) : (
               <div className="space-y-3">
@@ -1527,7 +1545,8 @@ export default function SupplierManagement() {
                     Medium:   { color: 'text-blue-400', bg: 'bg-blue-900/20', border: 'border-blue-800', icon: Target },
                   }[rec.impact] || { color: 'text-gray-400', bg: 'bg-gray-800', border: 'border-gray-700', icon: Zap }
                   const IconComp = impactConfig.icon
-                  const typeLabel = { increase: 'INCREASE USAGE', review: 'REVIEW SUPPLIER', saving: 'COST SAVING', consolidate: 'CONSOLIDATE' }[rec.type] || 'ACTION'
+                  const typeI18nKey = { increase: 'increase', review: 'review', saving: 'saving', consolidate: 'consolidate' }[rec.type] || 'action'
+                  const typeLabel = t(`suppliers.recommendations.types.${typeI18nKey}`)
                   return (
                     <motion.div
                       key={i}
@@ -1542,7 +1561,7 @@ export default function SupplierManagement() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`text-xs font-bold uppercase tracking-wider ${impactConfig.color}`}>{typeLabel}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full border ${impactConfig.bg} ${impactConfig.color} ${impactConfig.border}`}>{rec.impact} Impact</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${impactConfig.bg} ${impactConfig.color} ${impactConfig.border}`}>{t('suppliers.recommendations.impact', { impact: t(`suppliers.recommendations.impactLevels.${rec.impact}`) })}</span>
                           <span className="text-xs text-gray-500 font-medium">{rec.brand}</span>
                         </div>
                         <p className="text-sm text-gray-300 leading-relaxed">{rec.msg}</p>
@@ -1556,13 +1575,17 @@ export default function SupplierManagement() {
             {/* Supplier performance summary for context */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mt-5">
               <div className="px-4 py-3 border-b border-gray-800">
-                <h4 className="text-sm font-semibold text-white">Supplier Performance Summary</h4>
+                <h4 className="text-sm font-semibold text-white">{t('suppliers.recommendations.summaryTitle')}</h4>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-800">
-                      {['Supplier', 'Rating', 'Tyres', 'Avg CPK', 'Avg Life', 'Failure %', 'vs Benchmark'].map(h => (
+                      {[
+                        t('suppliers.recommendations.columns.supplier'), t('suppliers.recommendations.columns.rating'), t('suppliers.recommendations.columns.tyres'),
+                        t('suppliers.recommendations.columns.avgCpk'), t('suppliers.recommendations.columns.avgLife'), t('suppliers.recommendations.columns.failurePct'),
+                        t('suppliers.recommendations.columns.vsBenchmark'),
+                      ].map(h => (
                         <th key={h} className="px-3 py-2.5 text-left text-gray-500 font-medium">{h}</th>
                       ))}
                     </tr>
@@ -1579,7 +1602,7 @@ export default function SupplierManagement() {
                           <td className="px-3 py-2.5 text-gray-300">{fmtKm(m.avgLife)}</td>
                           <td className={`px-3 py-2.5 font-semibold ${m.failureRate > FAILURE_THRESHOLD ? 'text-red-400' : 'text-emerald-400'}`}>{fmtPct(m.failureRate)}</td>
                           <td className="px-3 py-2.5">
-                            {vsB == null ? <span className="text-gray-600">N/A</span> : (
+                            {vsB == null ? <span className="text-gray-600">{t('suppliers.recommendations.na')}</span> : (
                               <span className={`flex items-center gap-1 font-semibold ${vsB <= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                 {vsB <= 0 ? <ArrowDownRight size={11} /> : <ArrowUpRight size={11} />}
                                 {Math.abs(vsB).toFixed(1)}%
@@ -1600,24 +1623,29 @@ export default function SupplierManagement() {
         {activeTab === 5 && (
           <motion.div key="scorecard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[['Suppliers', scorecard.totals.supplierCount], ['Tyres', scorecard.totals.totalTyres], ['Total spend', fmtCurrency(scorecard.totals.totalSpend, activeCurrency)], ['Warranty credit', fmtCurrency(scorecard.totals.totalWarrantyCredit, activeCurrency)]].map(([l, v]) => (
+              {[
+                [t('suppliers.scorecard.cards.suppliers'), scorecard.totals.supplierCount],
+                [t('suppliers.scorecard.cards.tyres'), scorecard.totals.totalTyres],
+                [t('suppliers.scorecard.cards.totalSpend'), fmtCurrency(scorecard.totals.totalSpend, activeCurrency)],
+                [t('suppliers.scorecard.cards.warrantyCredit'), fmtCurrency(scorecard.totals.totalWarrantyCredit, activeCurrency)],
+              ].map(([l, v]) => (
                 <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-3"><p className="text-xs text-gray-500">{l}</p><p className="text-xl font-bold text-white">{v}</p></div>
               ))}
             </div>
-            <p className="text-xs text-gray-500">Composite score (0-100, higher is better) blends CPK, failure rate, warranty recovery and on-time delivery. Cost is actual only; missing data is excluded, not penalised. Supplier falls back to tyre brand where a supplier is not recorded.</p>
+            <p className="text-xs text-gray-500">{t('suppliers.scorecard.description')}</p>
             <div className="border border-gray-800 rounded-xl overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-800/60 text-gray-400 text-xs">
                   <tr>
-                    <th className="text-left px-3 py-2">#</th><th className="text-left px-3 py-2">Supplier</th>
-                    <th className="text-right px-3 py-2">Score</th><th className="text-right px-3 py-2">Tyres</th>
-                    <th className="text-right px-3 py-2">Spend</th><th className="text-right px-3 py-2">Avg CPK</th>
-                    <th className="text-right px-3 py-2">Failure %</th><th className="text-right px-3 py-2">Warranty rec.</th>
-                    <th className="text-right px-3 py-2">On-time %</th>
+                    <th className="text-left px-3 py-2">{t('suppliers.scorecard.columns.rank')}</th><th className="text-left px-3 py-2">{t('suppliers.scorecard.columns.supplier')}</th>
+                    <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.score')}</th><th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.tyres')}</th>
+                    <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.spend')}</th><th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.avgCpk')}</th>
+                    <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.failurePct')}</th><th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.warrantyRec')}</th>
+                    <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.onTimePct')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {scorecard.suppliers.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-600">No supplier data yet.</td></tr>}
+                  {scorecard.suppliers.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-600">{t('suppliers.scorecard.empty')}</td></tr>}
                   {scorecard.suppliers.map((s) => (
                     <tr key={s.supplier} className="border-t border-gray-800">
                       <td className="px-3 py-2 text-gray-500">{s.rank}</td>
@@ -1687,8 +1715,8 @@ export default function SupplierManagement() {
               <div className="flex gap-3 mb-4">
                 <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-white font-medium">Delete contract for <span className="text-blue-400">{contractDeleteTarget.supplier_name}</span>?</p>
-                  <p className="text-gray-400 text-sm mt-1">This removes the supplier contract permanently. Tyre and spend records are not affected.</p>
+                  <p className="text-white font-medium">{t('suppliers.deleteContract.confirmTitle', { name: contractDeleteTarget.supplier_name })}</p>
+                  <p className="text-gray-400 text-sm mt-1">{t('suppliers.deleteContract.warning')}</p>
                 </div>
               </div>
               {contractDeleteError && (
@@ -1696,9 +1724,9 @@ export default function SupplierManagement() {
               )}
               <div className="flex gap-3">
                 <button onClick={deleteContract} disabled={contractDeleting} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-                  <X size={15} /> {contractDeleting ? 'Deleting...' : 'Delete Contract'}
+                  <X size={15} /> {contractDeleting ? t('suppliers.deleteContract.deleting') : t('suppliers.deleteContract.delete')}
                 </button>
-                <button onClick={() => { setContractDeleteTarget(null); setContractDeleteError(null) }} className="btn-secondary">Cancel</button>
+                <button onClick={() => { setContractDeleteTarget(null); setContractDeleteError(null) }} className="btn-secondary">{t('suppliers.deleteContract.cancel')}</button>
               </div>
             </motion.div>
           </div>

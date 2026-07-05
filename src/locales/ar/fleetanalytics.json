@@ -1,0 +1,73 @@
+{
+  "title": "تحليلات الأسطول",
+  "loading": "جارٍ تحميل بيانات الأسطول...",
+  "subtitleError": "تاريخ كل أصل، التكلفة، تكرار الأعطال",
+  "subtitleFull": "تاريخ كل أصل، التكلفة، تكرار الأعطال ودورة حياة الإطار",
+  "loadErrorTitle": "تعذّر تحميل بيانات الأسطول",
+  "loadErrorFallback": "فشل تحميل بيانات الأسطول.",
+  "retry": "إعادة المحاولة",
+  "summary": {
+    "totalAssets": "إجمالي الأصول",
+    "totalRecords": "إجمالي السجلات",
+    "highFreqAssets": "أصول عالية التكرار",
+    "avgCostPerAsset": "متوسط التكلفة/أصل"
+  },
+  "filters": {
+    "searchPlaceholder": "ابحث برقم الأصل...",
+    "sortCount": "ترتيب: عدد السجلات",
+    "sortCost": "ترتيب: إجمالي التكلفة",
+    "sortRisk": "ترتيب: عدد الخطورة العالية",
+    "sortFreq": "ترتيب: تكرار الأعطال",
+    "dateRange": "النطاق الزمني:",
+    "to": "إلى",
+    "fromPlaceholder": "من",
+    "toPlaceholder": "إلى",
+    "clearDates": "مسح التواريخ",
+    "allSites": "جميع المواقع",
+    "clearSite": "مسح الموقع"
+  },
+  "actions": {
+    "excel": "إكسل",
+    "pdf": "PDF"
+  },
+  "table": {
+    "assetNo": "رقم الأصل",
+    "records": "السجلات",
+    "totalCost": "إجمالي التكلفة",
+    "highRisk": "خطورة عالية",
+    "failPerMonth": "الأعطال/شهر",
+    "sites": "المواقع",
+    "brands": "العلامات التجارية",
+    "lastSeen": "آخر ظهور"
+  },
+  "empty": {
+    "noMatch": "لا توجد أصول مطابقة للمرشحات الحالية",
+    "showing": "عرض 100 من {count} أصل - قم بتضييق البحث"
+  },
+  "drill": {
+    "recordsSummary": "{count} سجل · إجمالي {cost} · نشط منذ {date}",
+    "costDataset": "التكلفة ({currency})",
+    "recordsDataset": "السجلات",
+    "trendDataset": "الاتجاه",
+    "monthlyCost": "التكلفة الشهرية ({currency})",
+    "failureFrequency": "تكرار الأعطال + الاتجاه",
+    "slope": "الميل",
+    "perMonth": "/شهر",
+    "lifecycleTitle": "دورة حياة الإطار · سجل الأرقام التسلسلية",
+    "unknownRisk": "غير معروف",
+    "unknownBrand": "علامة تجارية غير معروفة",
+    "uncategorised": "غير مصنف",
+    "events": "{count} حدث",
+    "noSerialData": "لا توجد بيانات رقم تسلسلي لهذا الأصل",
+    "fullHistory": "السجل الكامل (آخر 30)",
+    "columns": {
+      "date": "التاريخ",
+      "serial": "الرقم التسلسلي",
+      "brand": "العلامة التجارية",
+      "category": "الفئة",
+      "risk": "الخطورة",
+      "cost": "التكلفة",
+      "remarks": "ملاحظات"
+    }
+  }
+}

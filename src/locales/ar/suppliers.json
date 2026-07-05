@@ -1,0 +1,242 @@
+{
+  "title": "إدارة الموردين",
+  "subtitle": "إدارة الموردين والعقود وأداء البائعين",
+  "actions": {
+    "import": "استيراد عبر مركز إدخال البيانات",
+    "refresh": "تحديث",
+    "excel": "إكسل",
+    "pdf": "PDF"
+  },
+  "kpi": {
+    "totalSuppliers": "إجمالي الموردين",
+    "uniqueBrands": "علامات تجارية فريدة",
+    "preferred": "مفضل",
+    "ofTotalSuppliers": "من أصل {total} مورد",
+    "cpkRange": "نطاق التكلفة/كم",
+    "toValue": "إلى {value}",
+    "bestCpk": "أفضل تكلفة/كم",
+    "worstCpk": "أسوأ تكلفة/كم",
+    "vsLastYear": "{pct}% مقارنة بالعام الماضي"
+  },
+  "ratingsError": "تعذر حفظ أو تحميل تقييمات/ملاحظات الموردين: {message}",
+  "retry": "إعادة المحاولة",
+  "searchPlaceholder": "ابحث عن مورد...",
+  "filters": {
+    "allCountries": "جميع الدول",
+    "allSites": "جميع المواقع",
+    "allRatings": "جميع التقييمات",
+    "clear": "مسح"
+  },
+  "suppliersCount": "{count} مورد",
+  "tabs": {
+    "directory": "الدليل",
+    "performance": "الأداء",
+    "spendAnalysis": "تحليل الإنفاق",
+    "contracts": "العقود",
+    "recommendations": "التوصيات",
+    "scorecard": "بطاقة الأداء"
+  },
+  "ratings": {
+    "preferred": "مفضل",
+    "approved": "معتمد",
+    "underReview": "قيد المراجعة",
+    "probation": "تحت الاختبار"
+  },
+  "directory": {
+    "emptyTitle": "لا يوجد موردون",
+    "emptyDesc": "قم بتعديل عوامل التصفية أو تحميل سجلات الإطارات لعرض الموردين هنا.",
+    "spendYtd": "الإنفاق حتى تاريخه",
+    "tyres": "الإطارات",
+    "avgCpk": "متوسط التكلفة/كم",
+    "failurePct": "نسبة الأعطال",
+    "removeFromCompare": "إزالة من المقارنة",
+    "addToCompare": "إضافة إلى المقارنة",
+    "viewDetails": "عرض التفاصيل"
+  },
+  "performance": {
+    "selectToCompare": "اختر الموردين للمقارنة (حتى 4)",
+    "clearSelection": "مسح التحديد",
+    "emptyTitle": "اختر موردين للمقارنة",
+    "emptyDesc": "اختر حتى 4 موردين من القائمة أعلاه لعرض مقارنة جنبًا إلى جنب.",
+    "radarTitle": "مقارنة رادار الأداء",
+    "sideBySide": "مقارنة المقاييس جنبًا إلى جنب",
+    "metric": "المقياس",
+    "rows": {
+      "avgCpk": "متوسط التكلفة/كم",
+      "avgLifeKm": "متوسط العمر (كم)",
+      "failureRate": "معدل الأعطال",
+      "tyreCount": "عدد الإطارات",
+      "spendYtd": "الإنفاق حتى تاريخه",
+      "totalSpend": "إجمالي الإنفاق",
+      "rating": "التقييم"
+    }
+  },
+  "spend": {
+    "shareTitle": "حصة إنفاق الموردين",
+    "noData": "لا توجد بيانات إنفاق متاحة",
+    "totalSpend": "إجمالي الإنفاق: ",
+    "monthlyTitle": "الإنفاق الشهري حسب المورد (12 شهرًا)",
+    "yoyTitle": "تغير التكلفة سنويًا",
+    "columns": {
+      "supplier": "المورد",
+      "thisYear": "هذا العام",
+      "lastYear": "العام الماضي",
+      "change": "التغير"
+    },
+    "noYoyData": "لا توجد بيانات مقارنة سنوية متاحة",
+    "na": "غير متاح"
+  },
+  "contracts": {
+    "searchPlaceholder": "ابحث في العقود...",
+    "add": "إضافة عقد",
+    "loadError": "فشل تحميل العقود",
+    "emptyTitle": "لا توجد عقود",
+    "emptyDesc": "أضف عقود الموردين لتتبع تواريخ الانتهاء والشروط.",
+    "columns": {
+      "supplier": "المورد",
+      "start": "البداية",
+      "end": "النهاية",
+      "paymentTerms": "شروط الدفع",
+      "pricePerUnit": "السعر/الوحدة",
+      "minOrder": "الحد الأدنى للطلب",
+      "status": "الحالة",
+      "actions": "الإجراءات"
+    },
+    "statuses": {
+      "active": "نشط",
+      "expiringSoon": "قريب الانتهاء",
+      "expired": "منتهٍ"
+    },
+    "expiringBannerTitle": "عقود قريبة من الانتهاء",
+    "expiringBannerDesc": "{names} - يلزم اتخاذ إجراء التجديد خلال 30 يومًا"
+  },
+  "recommendations": {
+    "title": "توصيات المشتريات المدعومة بالذكاء الاصطناعي",
+    "basedOn": "بناءً على {count} سجل إطار",
+    "emptyTitle": "لا توجد توصيات بعد",
+    "emptyDesc": "قم بتحميل المزيد من سجلات الإطارات لتوليد معلومات المشتريات.",
+    "types": {
+      "increase": "زيادة الاستخدام",
+      "review": "مراجعة المورد",
+      "saving": "توفير في التكلفة",
+      "consolidate": "توحيد",
+      "action": "إجراء"
+    },
+    "impact": "تأثير {impact}",
+    "impactLevels": {
+      "Critical": "حرج",
+      "High": "مرتفع",
+      "Medium": "متوسط"
+    },
+    "messages": {
+      "increase": "زيادة استخدام {brand} - التكلفة/كم {cpk}، أفضل بنسبة {pct}% من متوسط الأسطول",
+      "review": "راجع {brand} - معدل الأعطال {rate}%، أعلى من الحد المسموح به {threshold}%",
+      "saving": "فرصة لخفض التكلفة: استبدال {worstBrand} بـ {bestBrand} قد يوفر ما يقارب {amount}/سنويًا",
+      "consolidate": "فكر في توحيد مشتريات مقاس {size} لدى {brand} - أفضل تكلفة/كم لهذا المقاس عند {cpk}"
+    },
+    "summaryTitle": "ملخص أداء الموردين",
+    "columns": {
+      "supplier": "المورد",
+      "rating": "التقييم",
+      "tyres": "الإطارات",
+      "avgCpk": "متوسط التكلفة/كم",
+      "avgLife": "متوسط العمر",
+      "failurePct": "نسبة الأعطال",
+      "vsBenchmark": "مقابل المعيار"
+    },
+    "na": "غير متاح"
+  },
+  "scorecard": {
+    "cards": {
+      "suppliers": "الموردون",
+      "tyres": "الإطارات",
+      "totalSpend": "إجمالي الإنفاق",
+      "warrantyCredit": "رصيد الضمان"
+    },
+    "description": "تجمع الدرجة المركبة (0-100، الأعلى أفضل) بين التكلفة/كم ومعدل الأعطال واسترداد الضمان والتسليم في الموعد. التكلفة فعلية فقط؛ يتم استبعاد البيانات المفقودة دون تطبيق عقوبة. يُستخدم اسم العلامة التجارية بدلاً من المورد في حال عدم تسجيله.",
+    "columns": {
+      "rank": "#",
+      "supplier": "المورد",
+      "score": "الدرجة",
+      "tyres": "الإطارات",
+      "spend": "الإنفاق",
+      "avgCpk": "متوسط التكلفة/كم",
+      "failurePct": "نسبة الأعطال",
+      "warrantyRec": "استرداد الضمان",
+      "onTimePct": "نسبة الالتزام بالمواعيد"
+    },
+    "empty": "لا توجد بيانات موردين بعد."
+  },
+  "drawer": {
+    "tyresSuffix": "إطار",
+    "radarTitle": "رادار الأداء",
+    "stats": {
+      "avgCpk": "متوسط التكلفة/كم",
+      "avgTyreLife": "متوسط عمر الإطار",
+      "failureRate": "معدل الأعطال",
+      "spendThisYear": "الإنفاق هذا العام",
+      "totalSpend": "إجمالي الإنفاق",
+      "sitesUsed": "المواقع المستخدمة"
+    },
+    "monthlySpendTitle": "الإنفاق الشهري (12 شهرًا)",
+    "sizeDistribution": "توزيع المقاسات",
+    "noSizeData": "لا توجد بيانات مقاسات",
+    "siteUsage": "استخدام المواقع",
+    "noSiteData": "لا توجد بيانات مواقع",
+    "tyreRecords": "سجلات الإطارات",
+    "totalSuffix": "{count} إجمالي",
+    "columns": {
+      "serial": "الرقم التسلسلي",
+      "size": "المقاس",
+      "asset": "الأصل",
+      "site": "الموقع",
+      "cpk": "التكلفة/كم",
+      "risk": "الخطورة",
+      "date": "التاريخ"
+    },
+    "noRecords": "لا توجد سجلات",
+    "prev": "السابق",
+    "next": "التالي",
+    "pageOf": "{page} / {total}",
+    "ratingOverride": "تجاوز التقييم (المسؤول)",
+    "notes": "ملاحظات",
+    "notesPlaceholder": "أضف ملاحظات داخلية حول هذا المورد...",
+    "saving": "جارٍ الحفظ...",
+    "saved": "تم الحفظ",
+    "saveNotes": "حفظ الملاحظات"
+  },
+  "radarLabels": {
+    "cpkScore": "درجة التكلفة/كم",
+    "lifeScore": "درجة العمر",
+    "reliability": "الموثوقية",
+    "value": "القيمة",
+    "coverage": "التغطية"
+  },
+  "monthlySpendLabel": "الإنفاق الشهري",
+  "contractModal": {
+    "editTitle": "تعديل العقد",
+    "addTitle": "إضافة عقد",
+    "supplierName": "اسم المورد *",
+    "contractStart": "بداية العقد",
+    "contractEnd": "نهاية العقد",
+    "paymentTerms": "شروط الدفع",
+    "paymentTermsPlaceholder": "مثال: صافي 30 يومًا",
+    "pricePerUnit": "السعر لكل وحدة",
+    "minOrderQty": "الحد الأدنى للكمية",
+    "notes": "ملاحظات",
+    "cancel": "إلغاء",
+    "saving": "جارٍ الحفظ...",
+    "save": "حفظ العقد"
+  },
+  "deleteContract": {
+    "confirmTitle": "حذف عقد {name}؟",
+    "warning": "سيؤدي هذا إلى إزالة عقد المورد نهائيًا. لن تتأثر سجلات الإطارات والإنفاق.",
+    "defaultError": "تعذر حذف العقد - قد لا تملك الصلاحية، أو ربما تمت إزالته بالفعل.",
+    "deleting": "جارٍ الحذف...",
+    "delete": "حذف العقد",
+    "cancel": "إلغاء"
+  },
+  "errors": {
+    "loadFailed": "فشل تحميل البيانات"
+  }
+}

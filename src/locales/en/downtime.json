@@ -1,0 +1,133 @@
+{
+  "loading": "Loading downtime data...",
+  "error": {
+    "retry": "Retry"
+  },
+  "title": "Fleet Downtime & Availability",
+  "subtitle": {
+    "actual": "Actual work-order durations where available, otherwise estimated from tyre removal events",
+    "estimated": "Estimated from tyre removal events"
+  },
+  "badge": {
+    "actualEstimated": "ACTUAL + ESTIMATED",
+    "estimated": "ESTIMATED"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "pdf": "PDF",
+    "excel": "Excel"
+  },
+  "filters": {
+    "periodAriaLabel": "period",
+    "allSites": "All Sites",
+    "allCountries": "All Countries",
+    "allRiskLevels": "All Risk Levels",
+    "searchPlaceholder": "Search asset...",
+    "eventsCount": "{count} events"
+  },
+  "periods": {
+    "30d": "30d",
+    "90d": "90d",
+    "6m": "6m",
+    "1yr": "1yr",
+    "All": "All"
+  },
+  "riskLevels": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "banner": {
+    "title": "Estimated figures.",
+    "bodyActual": "Downtime hours are taken from actual work-order durations (opened → completed) where a matching work order exists, and otherwise estimated per severity - Critical 4h, High 3h, Medium/Low 2h per tyre-removal event. Downtime cost is modelled at {rate}/hr {basis}, assuming {shiftHours} productive hours per shift-day. These are planning estimates, not invoiced downtime.",
+    "bodyEstimated": "Downtime hours are estimated per severity - Critical 4h, High 3h, Medium/Low 2h per tyre-removal event. Downtime cost is modelled at {rate}/hr {basis}, assuming {shiftHours} productive hours per shift-day. These are planning estimates, not invoiced downtime.",
+    "basisConfigured": "(configured via settings)",
+    "basisDefault": "(default assumption - set a \"downtime_rate\" key in Settings to override)"
+  },
+  "kpi": {
+    "availability": "Fleet Availability (Est.)",
+    "availabilityAbove": "Above {pct}% target",
+    "availabilityBelow": "Below {pct}% benchmark",
+    "events": "Downtime Events",
+    "eventsSub": "{count} vehicles affected",
+    "hours": "Total Downtime Hours (Est.)",
+    "hoursSubActual": "{days} shift-days · actual + severity est.",
+    "hoursSubEstimate": "{days} shift-days · severity estimate",
+    "cost": "Downtime Cost (Est.)",
+    "costSub": "@ {rate}/hr · {basis}",
+    "costBasisConfigured": "configured",
+    "costBasisAssumed": "assumed",
+    "mttr": "MTTR (Est.)",
+    "mttrSub": "Mean time between tyre events per vehicle"
+  },
+  "charts": {
+    "availabilityTrend": "Fleet Availability Trend - Last 12 Months",
+    "availabilityLegend": "Availability",
+    "targetLegend": "{pct}% Target",
+    "availabilitySeries": "Fleet Availability %",
+    "targetSeries": "Target {pct}%",
+    "byCause": "Downtime by Cause",
+    "bySite": "Downtime by Site (hours)",
+    "unplannedHours": "Unplanned (h)",
+    "plannedHours": "Planned (h)",
+    "monthlyCost": "Monthly Downtime Cost Analysis",
+    "unplannedCost": "Unplanned Cost",
+    "plannedCost": "Planned Cost",
+    "cumulative": "Cumulative",
+    "unplannedLegend": "Unplanned",
+    "plannedLegend": "Planned",
+    "cumulativeLegend": "Cumulative",
+    "budgetThreshold": "Budget threshold: {value}/mo",
+    "noData": "No data"
+  },
+  "causes": {
+    "criticalFailure": "Critical Failure",
+    "wearRelated": "Wear-Related",
+    "pressureIssue": "Pressure Issue",
+    "routineReplacement": "Routine Replacement",
+    "unknown": "Unknown"
+  },
+  "heatmap": {
+    "heading": "Downtime Heatmap - Top 10 Vehicles × Last 12 Months",
+    "empty": "No vehicle data available",
+    "hoursLabel": "Hours:"
+  },
+  "table": {
+    "heading": "Vehicles by Downtime (Top 20)",
+    "summary": "{count} vehicles · sorted by {col}",
+    "columns": {
+      "asset": "Asset",
+      "site": "Site",
+      "events": "Events",
+      "totalHours": "Total Hours",
+      "totalCost": "Total Cost",
+      "avgBetweenEvents": "Avg Between Events",
+      "riskScore": "Risk Score"
+    },
+    "empty": "No vehicle downtime data for selected period",
+    "highRisk": "HIGH RISK"
+  },
+  "recommendations": {
+    "heading": "Improvement Recommendations",
+    "insightsCount": "{count} insights",
+    "actionPrefix": "Action: {action}",
+    "vehicleMessage": "Vehicle {asset} has had {count} downtime events - root cause investigation recommended",
+    "vehicleAction": "Perform full vehicle inspection, alignment check and driver behaviour review.",
+    "siteMessage": "Site {site} is {pct}% above average downtime - maintenance process review needed",
+    "siteAction": "Audit maintenance schedules, inspect tyre storage conditions and review fitment procedures.",
+    "criticalMessage": "{pct}% of events are Critical - predictive maintenance could reduce unplanned events by ~40%",
+    "criticalAction": "Implement weekly pressure monitoring, increase inspection frequency and set up tyre replacement schedule based on km thresholds.",
+    "availabilityMessage": "Fleet availability is {pct}% - below the {target}% industry benchmark",
+    "availabilityAction": "Review tyre lifecycle management, increase preventive replacements and track tread depth more frequently.",
+    "okMessage": "Fleet downtime is within acceptable range for current period",
+    "okAction": "Continue current maintenance schedule. Monitor monthly for early trend detection."
+  },
+  "severity": {
+    "critical": "critical",
+    "high": "high",
+    "medium": "medium",
+    "low": "low"
+  },
+  "na": "N/A"
+}

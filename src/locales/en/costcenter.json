@@ -1,0 +1,126 @@
+{
+  "title": "Cost Center",
+  "subtitle": "Multi-dimensional tyre cost analysis & optimization intelligence",
+  "periods": {
+    "30d": "30d",
+    "90d": "90d",
+    "6m": "6m",
+    "1yr": "1yr",
+    "All": "All"
+  },
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "tabs": {
+    "bySite": "By Site",
+    "byBrand": "By Brand",
+    "byVehicle": "By Vehicle",
+    "byMonth": "By Month"
+  },
+  "kpi": {
+    "totalSpend": { "label": "Total Spend", "sub": "{count} tyres" },
+    "fleetAvgCpk": { "label": "Fleet Avg CPK", "sub": "Benchmark: {currency} {value}/km" },
+    "monthlyBurn": { "label": "Monthly Burn Rate", "sub": "per month" },
+    "annualized": { "label": "Annualised Projection", "sub": "at current burn rate" },
+    "savings": {
+      "label": "Savings Opportunity",
+      "onTarget": "On Target",
+      "subOpportunity": "15% est. via optimisation",
+      "subOnTarget": "CPK within benchmark"
+    }
+  },
+  "columns": {
+    "bySite": {
+      "site": "Site",
+      "tyres": "Tyres",
+      "totalCost": "Total Cost",
+      "avgCostPerTyre": "Avg Cost/Tyre",
+      "avgCpk": "Avg CPK",
+      "vsFleetAvg": "vs Fleet Avg"
+    },
+    "byBrand": {
+      "rank": "Rank",
+      "brand": "Brand",
+      "count": "Count",
+      "totalCost": "Total Cost",
+      "avgCpk": "Avg CPK",
+      "failureRate": "Failure Rate",
+      "bestPosition": "Best Position"
+    },
+    "byVehicle": {
+      "assetNo": "Asset No.",
+      "tyres": "Tyres",
+      "totalCost": "Total Cost",
+      "avgCpk": "Avg CPK",
+      "riskScore": "Risk Score",
+      "trend": "Trend"
+    }
+  },
+  "risk": {
+    "high": "{count} High Risk",
+    "low": "Low Risk"
+  },
+  "trend": {
+    "rising": "Cost Rising",
+    "falling": "Cost Falling",
+    "stable": "Stable"
+  },
+  "states": {
+    "noDataPeriod": "No data for selected period",
+    "noMonthlyData": "No monthly data available for this period",
+    "noData": "No data",
+    "na": "N/A"
+  },
+  "charts": {
+    "costDistribution": "Cost Distribution by Site",
+    "topAssets": "Top 10 Costliest Assets",
+    "monthlyTrend": "Monthly Spend + 3-Month MA",
+    "totalCost": "Total Cost",
+    "avgCpk": "Avg CPK",
+    "monthlySpend": "Monthly Spend",
+    "movingAvg3": "3-Month Moving Avg",
+    "other": "Other"
+  },
+  "anomaly": {
+    "heading": "Cost Anomaly Detection",
+    "fleetAvgCpk": "Fleet avg CPK: {value}",
+    "noneTitle": "No cost anomalies detected",
+    "noneDesc": "All sites, brands, and assets are within normal cost parameters for this period.",
+    "vehicleLabel": "Vehicle {asset}",
+    "siteLabel": "Site: {site}",
+    "brandLabel": "Brand: {brand}",
+    "metricCpk": "CPK {value}",
+    "metricFailureRate": "Failure rate {value}",
+    "descVehicle": "CPK is {pct}% above fleet average",
+    "descSite": "Site CPK is {pct}% above fleet average",
+    "descBrand": "{failures} failures out of {count} tyres in period",
+    "recVehicle": "Inspect alignment, suspension, driver behaviour. Prioritise for audit.",
+    "recSite": "Review site-specific operating conditions, road quality, overloading.",
+    "recBrand": "Consider procurement review. Evaluate alternative brands."
+  },
+  "severity": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "roi": {
+    "heading": "Maintenance ROI Calculator",
+    "subtitle": "Estimate savings if fleet avg CPK improves through better maintenance, alignment, and driver behaviour.",
+    "sliderLabel": "CPK Improvement Target",
+    "benchmarkTitle": "Industry Benchmark",
+    "benchmarkTarget": "Target CPK: {currency} {value}/km",
+    "aboveBenchmark": "{pct}% above benchmark",
+    "withinBenchmark": "within benchmark",
+    "monthlySavings": "Monthly Savings",
+    "annualSavings": "Annual Savings",
+    "paybackPeriod": "Payback Period",
+    "paybackMonths": "{months} mo",
+    "insight": "A {pct}% CPK improvement across {count} tyres translates to {savings} in annualised savings. This can be achieved through pressure compliance programs, alignment checks, and driver behaviour monitoring."
+  },
+  "empty": {
+    "title": "No tyre records found for the selected period",
+    "subtitle": "Try expanding the date range or adjusting the country filter"
+  }
+}

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import {
   Chart as ChartJS,
@@ -97,6 +98,7 @@ export default function BudgetPlanner() {
   const { activeCurrency, activeCountry, appSettings } = useSettings()
   const { profile } = useAuth()
   const { branding } = useTenant()
+  const { t } = useLanguage()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const isAdmin = profile?.role === 'Admin'
 
@@ -216,6 +218,9 @@ export default function BudgetPlanner() {
     prevYearRecords.forEach(r => { if (r.month != null) arr[r.month] += r.cost })
     return arr
   }, [prevYearRecords])
+
+  // ── Translated month labels (chart display only; exports keep English MONTHS) ──
+  const monthLabels = useMemo(() => MONTHS.map((_, i) => t(`budgetplanner.months.${i}`)), [t])
 
   // ── Sites ──────────────────────────────────────────────────────────────────
   const sites = useMemo(() => {
@@ -393,11 +398,11 @@ export default function BudgetPlanner() {
     }, [])
     const barBgActual = monthlyActuals.map((v, i) => v > monthlyBudgets[i] ? 'rgba(239,68,68,0.75)' : 'rgba(16,185,129,0.75)')
     return {
-      labels: MONTHS,
+      labels: monthLabels,
       datasets: [
         {
           type: 'bar',
-          label: 'Budget',
+          label: t('budgetplanner.chart.budget'),
           data: monthlyBudgets,
           backgroundColor: 'rgba(59,130,246,0.4)',
           borderColor: '#3b82f6',
@@ -406,7 +411,7 @@ export default function BudgetPlanner() {
         },
         {
           type: 'bar',
-          label: 'Actual',
+          label: t('budgetplanner.chart.actual'),
           data: monthlyActuals,
           backgroundColor: barBgActual,
           borderColor: barBgActual.map(c => c.replace('0.75', '1')),
@@ -415,7 +420,7 @@ export default function BudgetPlanner() {
         },
         {
           type: 'line',
-          label: 'Cumulative Actual',
+          label: t('budgetplanner.chart.cumulativeActual'),
           data: cumActual,
           borderColor: '#10b981',
           borderWidth: 2,
@@ -426,7 +431,7 @@ export default function BudgetPlanner() {
         },
         {
           type: 'line',
-          label: 'Cumulative Budget',
+          label: t('budgetplanner.chart.cumulativeBudget'),
           data: cumBudget,
           borderColor: '#3b82f6',
           borderWidth: 2,
@@ -438,7 +443,7 @@ export default function BudgetPlanner() {
         },
       ],
     }
-  }, [monthlyActuals, monthlyBudgets])
+  }, [monthlyActuals, monthlyBudgets, monthLabels, t])
 
   const monthlyChartOptions = useMemo(() => ({
     ...CHART_BASE,
@@ -487,7 +492,7 @@ export default function BudgetPlanner() {
     return {
       labels,
       datasets: [{
-        label: 'Annual Spend',
+        label: t('budgetplanner.chart.annualSpend'),
         data: values,
         borderColor: '#3b82f6',
         backgroundColor: 'rgba(59,130,246,0.15)',
@@ -501,7 +506,7 @@ export default function BudgetPlanner() {
         },
       }],
     }
-  }, [trendYears, trendValues, nextYearProjection, currentYear])
+  }, [trendYears, trendValues, nextYearProjection, currentYear, t])
 
   // ── Inline edit: site budget ───────────────────────────────────────────────
   function startEditSite(site, currentBudget) {
@@ -566,19 +571,19 @@ export default function BudgetPlanner() {
   const recommendations = useMemo(() => {
     const recs = []
     overBudgetSites.forEach(s => {
-      recs.push(`Review ${s.site}: ${fmtPct(s.pct - 100)} over budget - prioritise CPK optimisation.`)
+      recs.push(t('budgetplanner.recommendations.reviewSite', { site: s.site, pct: fmtPct(s.pct - 100) }))
     })
     brandData.filter(b => b.cpkChange > 10).forEach(b => {
-      recs.push(`${b.brand} CPK worsened by ${fmtPct(b.cpkChange)} YoY - consider vendor review or brand switch.`)
+      recs.push(t('budgetplanner.recommendations.brandCpkWorsened', { brand: b.brand, pct: fmtPct(b.cpkChange) }))
     })
     if (projectedYearEnd > annualBudget * 1.1) {
-      recs.push(`Projected year-end (${fmt(projectedYearEnd, activeCurrency)}) exceeds budget by >10% - adjust procurement plan.`)
+      recs.push(t('budgetplanner.recommendations.projectedExceeds', { value: fmt(projectedYearEnd, activeCurrency) }))
     }
     if (scenarioProjection?.saving > 0) {
-      recs.push(`What-If scenario saves ${fmt(scenarioProjection.saving, activeCurrency)}/yr - validate CPK targets with engineering team.`)
+      recs.push(t('budgetplanner.recommendations.whatIfSaves', { value: fmt(scenarioProjection.saving, activeCurrency) }))
     }
     return recs.slice(0, 5)
-  }, [overBudgetSites, brandData, projectedYearEnd, annualBudget, activeCurrency, scenarioProjection])
+  }, [overBudgetSites, brandData, projectedYearEnd, annualBudget, activeCurrency, scenarioProjection, t])
 
   // ── PDF Export ────────────────────────────────────────────────────────────
   async function handleExportPdf() {
@@ -737,6 +742,15 @@ export default function BudgetPlanner() {
   }
 
   // ── Renderers ─────────────────────────────────────────────────────────────
+  const STATUS_KEY_MAP = {
+    'On Track': 'onTrack',
+    'Warning': 'warning',
+    'Over Budget': 'overBudget',
+    'Complete': 'complete',
+    'Active': 'active',
+    'Over': 'over',
+    'Pending': 'pending',
+  }
   const statusBadge = (status) => {
     const map = {
       'On Track': 'bg-green-900/60 text-green-400 border border-green-800',
@@ -749,7 +763,7 @@ export default function BudgetPlanner() {
     }
     return (
       <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${map[status] ?? 'bg-gray-800 text-gray-400'}`}>
-        {status}
+        {t(`budgetplanner.status.${STATUS_KEY_MAP[status] ?? 'pending'}`)}
       </span>
     )
   }
@@ -762,7 +776,7 @@ export default function BudgetPlanner() {
   if (loading || budgetsLoading) return (
     <div className="flex items-center justify-center h-96">
       <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-      <span className="ml-3 text-gray-400">Loading budget data...</span>
+      <span className="ml-3 text-gray-400">{t('budgetplanner.loading')}</span>
     </div>
   )
 
@@ -770,12 +784,12 @@ export default function BudgetPlanner() {
     <div className="flex items-center justify-center h-96">
       <div className="bg-red-900/30 border border-red-800 rounded-xl p-6 text-center">
         <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
-        <p className="text-red-300 font-medium">Failed to load data</p>
+        <p className="text-red-300 font-medium">{t('budgetplanner.error.title')}</p>
         <p className="text-red-400/70 text-sm mt-1">{error || budgetsError}</p>
         <button
           onClick={() => { if (error) fetchRecords(); if (budgetsError) fetchBudgets() }}
           className="mt-4 px-4 py-2 bg-red-800 hover:bg-red-700 text-white rounded-lg text-sm"
-        >Retry</button>
+        >{t('budgetplanner.error.retry')}</button>
       </div>
     </div>
   )
@@ -785,8 +799,8 @@ export default function BudgetPlanner() {
 
       {/* ── Header ── */}
       <PageHeader
-        title="Annual Budget Planner"
-        subtitle="What-if modeling · Actual vs Budget · Site allocation · Scenario analysis"
+        title={t('budgetplanner.title')}
+        subtitle={t('budgetplanner.subtitle')}
         icon={DollarSign}
         actions={<>
           <div className="flex items-center gap-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5">
@@ -810,7 +824,7 @@ export default function BudgetPlanner() {
             className="flex items-center gap-2 px-3 py-2 bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg text-sm transition-colors"
           >
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-            PDF
+            {t('budgetplanner.actions.pdf')}
           </button>
           <button
             onClick={handleExportExcel}
@@ -818,7 +832,7 @@ export default function BudgetPlanner() {
             className="flex items-center gap-2 px-3 py-2 bg-green-900/50 border border-green-800 hover:bg-green-900 text-green-400 hover:text-green-300 rounded-lg text-sm transition-colors"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            Excel
+            {t('budgetplanner.actions.excel')}
           </button>
         </>}
       />
@@ -826,17 +840,17 @@ export default function BudgetPlanner() {
       {/* ── Status Bar ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }}
         className="card px-5 py-3 flex flex-wrap items-center gap-4 text-sm">
-        <span className="text-gray-500 font-medium">FY {selectedYear}</span>
+        <span className="text-gray-500 font-medium">{t('budgetplanner.statusBar.fy', { year: selectedYear })}</span>
         <span className="text-gray-600">|</span>
-        <span className="text-gray-400">Budget Set: <span className="text-blue-400 font-semibold">{fmt(annualBudget, activeCurrency)}</span></span>
+        <span className="text-gray-400">{t('budgetplanner.statusBar.budgetSet')} <span className="text-blue-400 font-semibold">{fmt(annualBudget, activeCurrency)}</span></span>
         <span className="text-gray-600">|</span>
-        <span className="text-gray-400">Actual YTD: <span className="text-white font-semibold">{fmt(ytdActual, activeCurrency)}</span></span>
+        <span className="text-gray-400">{t('budgetplanner.statusBar.actualYtd')} <span className="text-white font-semibold">{fmt(ytdActual, activeCurrency)}</span></span>
         <span className="text-gray-600">|</span>
-        <span className="text-gray-400">Variance: <span className={`font-semibold ${varColor(variance)}`}>{fmt(variance, activeCurrency)}</span></span>
+        <span className="text-gray-400">{t('budgetplanner.statusBar.variance')} <span className={`font-semibold ${varColor(variance)}`}>{fmt(variance, activeCurrency)}</span></span>
         <span className="text-gray-600">|</span>
-        <span className="text-gray-400">% Used: <span className={`font-semibold ${pctUsed > 100 ? 'text-red-400' : pctUsed > 90 ? 'text-amber-400' : 'text-green-400'}`}>{fmtPct(pctUsed)}</span></span>
+        <span className="text-gray-400">{t('budgetplanner.statusBar.pctUsed')} <span className={`font-semibold ${pctUsed > 100 ? 'text-red-400' : pctUsed > 90 ? 'text-amber-400' : 'text-green-400'}`}>{fmtPct(pctUsed)}</span></span>
         <span className="text-gray-600">|</span>
-        <span className="text-gray-400">Projected YE: <span className={`font-semibold ${projectedYearEnd > annualBudget ? 'text-red-400' : 'text-green-400'}`}>{fmt(projectedYearEnd, activeCurrency)}</span></span>
+        <span className="text-gray-400">{t('budgetplanner.statusBar.projectedYe')} <span className={`font-semibold ${projectedYearEnd > annualBudget ? 'text-red-400' : 'text-green-400'}`}>{fmt(projectedYearEnd, activeCurrency)}</span></span>
       </motion.div>
 
       {/* ── Save Error Banner ── */}
@@ -857,7 +871,7 @@ export default function BudgetPlanner() {
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
         {[
           {
-            label: 'Annual Budget',
+            label: t('budgetplanner.kpi.annualBudget'),
             value: editingAnnual ? null : fmt(annualBudget, activeCurrency),
             icon: Target,
             color: 'blue',
@@ -865,26 +879,26 @@ export default function BudgetPlanner() {
             editing: editingAnnual,
             onEdit: () => { setAnnualEditValue(String(Math.round(annualBudget))); setEditingAnnual(true) },
           },
-          { label: 'Actual YTD', value: fmt(ytdActual, activeCurrency), icon: BarChart2, color: 'purple' },
+          { label: t('budgetplanner.kpi.actualYtd'), value: fmt(ytdActual, activeCurrency), icon: BarChart2, color: 'purple' },
           {
-            label: 'Budget Variance',
+            label: t('budgetplanner.kpi.budgetVariance'),
             value: fmt(variance, activeCurrency),
             icon: variance >= 0 ? TrendingDown : TrendingUp,
             color: variance >= 0 ? 'green' : 'red',
-            sub: variance >= 0 ? 'Under budget' : 'Over budget',
+            sub: variance >= 0 ? t('budgetplanner.kpi.underBudget') : t('budgetplanner.kpi.overBudget'),
           },
           {
-            label: '% Budget Used',
+            label: t('budgetplanner.kpi.pctBudgetUsed'),
             value: fmtPct(pctUsed),
             icon: PieIcon,
             color: pctUsed > 100 ? 'red' : pctUsed > 90 ? 'amber' : 'green',
           },
           {
-            label: 'Projected YE',
+            label: t('budgetplanner.kpi.projectedYe'),
             value: fmt(projectedYearEnd, activeCurrency),
             icon: Zap,
             color: projectedYearEnd > annualBudget ? 'red' : 'green',
-            sub: projectedYearEnd > annualBudget ? 'Over trajectory' : 'On trajectory',
+            sub: projectedYearEnd > annualBudget ? t('budgetplanner.kpi.overTrajectory') : t('budgetplanner.kpi.onTrajectory'),
           },
         ].map((kpi, i) => {
           const colorMap = {
@@ -942,9 +956,9 @@ export default function BudgetPlanner() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-white font-semibold flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-blue-400" />
-            Budget vs Actual - Monthly {selectedYear}
+            {t('budgetplanner.chart.budgetVsActual', { year: selectedYear })}
           </h2>
-          <span className="text-xs text-gray-500">Red bars = actual exceeds budget</span>
+          <span className="text-xs text-gray-500">{t('budgetplanner.chart.redBarsHint')}</span>
         </div>
         <div className="h-72">
           <Bar data={monthlyChartData} options={monthlyChartOptions} />
@@ -955,7 +969,7 @@ export default function BudgetPlanner() {
       <div>
         <h2 className="text-white font-semibold mb-3 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-purple-400" />
-          Quarterly Budget Tracking
+          {t('budgetplanner.quarterly.heading')}
         </h2>
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           {quarters.map((q, i) => (
@@ -972,15 +986,15 @@ export default function BudgetPlanner() {
               </div>
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Budget</span>
+                  <span className="text-gray-500">{t('budgetplanner.quarterly.budget')}</span>
                   <span className="text-blue-400 font-medium">{fmt(q.budget, activeCurrency)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Actual</span>
+                  <span className="text-gray-500">{t('budgetplanner.quarterly.actual')}</span>
                   <span className="text-white font-medium">{fmt(q.actual, activeCurrency)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Variance</span>
+                  <span className="text-gray-500">{t('budgetplanner.quarterly.variance')}</span>
                   <span className={`font-medium ${varColor(q.variance)}`}>{fmt(q.variance, activeCurrency)}</span>
                 </div>
               </div>
@@ -991,7 +1005,7 @@ export default function BudgetPlanner() {
                     style={{ width: `${Math.min(100, q.pct)}%` }}
                   />
                 </div>
-                <p className="text-gray-500 text-xs mt-1">{fmtPct(q.pct)} used</p>
+                <p className="text-gray-500 text-xs mt-1">{t('budgetplanner.quarterly.usedPct', { pct: fmtPct(q.pct) })}</p>
               </div>
             </motion.div>
           ))}
@@ -1004,18 +1018,28 @@ export default function BudgetPlanner() {
         <div className="p-5 border-b border-gray-800 flex items-center justify-between">
           <h2 className="text-white font-semibold flex items-center gap-2">
             <Target className="w-5 h-5 text-green-400" />
-            Site Budget Allocation
+            {t('budgetplanner.site.heading')}
           </h2>
-          {isAdmin && <span className="text-xs text-gray-500 flex items-center gap-1"><Edit2 className="w-3 h-3" />Click edit icon to adjust site budgets</span>}
+          {isAdmin && <span className="text-xs text-gray-500 flex items-center gap-1"><Edit2 className="w-3 h-3" />{t('budgetplanner.site.editHint')}</span>}
         </div>
         {siteData.length === 0 ? (
-          <div className="p-10 text-center text-gray-500">No site data available for {selectedYear}</div>
+          <div className="p-10 text-center text-gray-500">{t('budgetplanner.site.empty', { year: selectedYear })}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800">
-                  {['Site', 'Annual Budget', 'YTD Actual', 'Variance', '% Used', 'Projection', 'CPK', 'Status', isAdmin ? '' : null]
+                  {[
+                    t('budgetplanner.site.columns.site'),
+                    t('budgetplanner.site.columns.annualBudget'),
+                    t('budgetplanner.site.columns.ytdActual'),
+                    t('budgetplanner.site.columns.variance'),
+                    t('budgetplanner.site.columns.pctUsed'),
+                    t('budgetplanner.site.columns.projection'),
+                    t('budgetplanner.site.columns.cpk'),
+                    t('budgetplanner.site.columns.status'),
+                    isAdmin ? '' : null,
+                  ]
                     .filter(Boolean)
                     .map(h => (
                       <th key={h} className="text-left text-gray-500 font-medium px-4 py-3 whitespace-nowrap">{h}</th>
@@ -1091,7 +1115,7 @@ export default function BudgetPlanner() {
           className="bg-gray-900 border border-red-900/50 rounded-xl p-5">
           <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-red-400" />
-            CPK Efficiency - Over-Budget Sites
+            {t('budgetplanner.cpkEfficiency.heading')}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {overBudgetSites.map(s => {
@@ -1106,22 +1130,22 @@ export default function BudgetPlanner() {
                     {statusBadge('Over Budget')}
                   </div>
                   <p className="text-gray-400 text-xs mb-3">
-                    Over budget by {fmt(Math.abs(s.variance), activeCurrency)} ({fmtPct(s.pct - 100)} excess)
+                    {t('budgetplanner.cpkEfficiency.overBudgetBy', { value: fmt(Math.abs(s.variance), activeCurrency), pct: fmtPct(s.pct - 100) })}
                   </p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Current CPK</span>
+                      <span className="text-gray-500">{t('budgetplanner.cpkEfficiency.currentCpk')}</span>
                       <span className="text-red-400 font-medium">{fmtCpk(s.cpk, activeCurrency)}</span>
                     </div>
                     {s.prevCpk && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Prior Year CPK</span>
+                        <span className="text-gray-500">{t('budgetplanner.cpkEfficiency.priorYearCpk')}</span>
                         <span className="text-gray-300">{fmtCpk(s.prevCpk, activeCurrency)}</span>
                       </div>
                     )}
                     {cpkImproved && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Target CPK (-15%)</span>
+                        <span className="text-gray-500">{t('budgetplanner.cpkEfficiency.targetCpk')}</span>
                         <span className="text-green-400 font-medium">{fmtCpk(cpkImproved, activeCurrency)}</span>
                       </div>
                     )}
@@ -1129,10 +1153,10 @@ export default function BudgetPlanner() {
                   {saving > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-700 bg-green-900/20 -mx-4 -mb-4 px-4 pb-4 rounded-b-xl">
                       <p className="text-green-400 text-sm font-medium">
-                        Potential saving: {fmt(saving, activeCurrency)}/yr
+                        {t('budgetplanner.cpkEfficiency.potentialSaving', { value: fmt(saving, activeCurrency) })}
                       </p>
                       <p className="text-gray-500 text-xs mt-0.5">
-                        If CPK improved from {fmtCpk(s.cpk, activeCurrency)} to {fmtCpk(cpkImproved, activeCurrency)}
+                        {t('budgetplanner.cpkEfficiency.improvedFromTo', { from: fmtCpk(s.cpk, activeCurrency), to: fmtCpk(cpkImproved, activeCurrency) })}
                       </p>
                     </div>
                   )}
@@ -1148,14 +1172,14 @@ export default function BudgetPlanner() {
         className="card">
         <h2 className="text-white font-semibold mb-5 flex items-center gap-2">
           <Sliders className="w-5 h-5 text-purple-400" />
-          What-If Scenario Builder
+          {t('budgetplanner.whatIf.heading')}
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="space-y-6">
             {/* CPK Target */}
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="text-gray-300 text-sm font-medium">Fleet CPK Target</label>
+                <label className="text-gray-300 text-sm font-medium">{t('budgetplanner.whatIf.cpkTargetLabel')}</label>
                 <span className="text-blue-400 font-semibold text-sm">{activeCurrency} {cpkTarget.toFixed(2)}/km</span>
               </div>
               <input
@@ -1172,14 +1196,14 @@ export default function BudgetPlanner() {
                 <span>{activeCurrency} 5.00</span>
               </div>
               {scenarioProjection?.currentAvgCpk && (
-                <p className="text-gray-500 text-xs mt-1">Current fleet avg CPK: {fmtCpk(scenarioProjection.currentAvgCpk, activeCurrency)}</p>
+                <p className="text-gray-500 text-xs mt-1">{t('budgetplanner.whatIf.currentFleetAvgCpk', { value: fmtCpk(scenarioProjection.currentAvgCpk, activeCurrency) })}</p>
               )}
             </div>
 
             {/* Volume change */}
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="text-gray-300 text-sm font-medium">Replacement Volume Change</label>
+                <label className="text-gray-300 text-sm font-medium">{t('budgetplanner.whatIf.volumeChangeLabel')}</label>
                 <span className={`font-semibold text-sm ${volumeChange > 0 ? 'text-red-400' : volumeChange < 0 ? 'text-green-400' : 'text-gray-400'}`}>
                   {volumeChange > 0 ? '+' : ''}{volumeChange}%
                 </span>
@@ -1194,8 +1218,8 @@ export default function BudgetPlanner() {
                 className="w-full h-2 bg-gray-800 rounded-full appearance-none cursor-pointer accent-purple-500"
               />
               <div className="flex justify-between text-xs text-gray-600 mt-1">
-                <span>-30% (fewer)</span>
-                <span>+30% (more)</span>
+                <span>{t('budgetplanner.whatIf.rangeFewer')}</span>
+                <span>{t('budgetplanner.whatIf.rangeMore')}</span>
               </div>
             </div>
 
@@ -1203,7 +1227,7 @@ export default function BudgetPlanner() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="text-gray-300 text-sm font-medium">Brand Switch Volume</label>
+                  <label className="text-gray-300 text-sm font-medium">{t('budgetplanner.whatIf.brandSwitchVolumeLabel')}</label>
                   <span className="text-amber-400 font-semibold text-sm">{brandSwitchPct}%</span>
                 </div>
                 <input
@@ -1215,11 +1239,11 @@ export default function BudgetPlanner() {
                   onChange={e => setBrandSwitchPct(Number(e.target.value))}
                   className="w-full h-2 bg-gray-800 rounded-full appearance-none cursor-pointer accent-amber-500"
                 />
-                <p className="text-xs text-gray-600 mt-1">% of fleet switching brand</p>
+                <p className="text-xs text-gray-600 mt-1">{t('budgetplanner.whatIf.brandSwitchVolumeHint')}</p>
               </div>
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="text-gray-300 text-sm font-medium">Brand Cost Saving</label>
+                  <label className="text-gray-300 text-sm font-medium">{t('budgetplanner.whatIf.brandCostSavingLabel')}</label>
                   <span className="text-green-400 font-semibold text-sm">{brandSwitchSaving}%</span>
                 </div>
                 <input
@@ -1231,7 +1255,7 @@ export default function BudgetPlanner() {
                   onChange={e => setBrandSwitchSaving(Number(e.target.value))}
                   className="w-full h-2 bg-gray-800 rounded-full appearance-none cursor-pointer accent-green-500"
                 />
-                <p className="text-xs text-gray-600 mt-1">Cost reduction vs current brand</p>
+                <p className="text-xs text-gray-600 mt-1">{t('budgetplanner.whatIf.brandCostSavingHint')}</p>
               </div>
             </div>
           </div>
@@ -1239,25 +1263,29 @@ export default function BudgetPlanner() {
           {/* Scenario output */}
           <div className="card flex flex-col justify-between">
             <div>
-              <p className="text-gray-400 text-sm mb-4">Scenario Projection</p>
+              <p className="text-gray-400 text-sm mb-4">{t('budgetplanner.whatIf.scenarioProjection')}</p>
               <div className="space-y-4">
                 <div>
-                  <p className="text-gray-500 text-xs">Current Trajectory</p>
+                  <p className="text-gray-500 text-xs">{t('budgetplanner.whatIf.currentTrajectory')}</p>
                   <p className="text-xl font-bold text-red-400">{fmt(projectedYearEnd, activeCurrency)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 text-xs">Under This Scenario</p>
-                  <p className="text-2xl font-bold text-green-400">{scenarioProjection ? fmt(scenarioProjection.projected, activeCurrency) : 'N/A'}</p>
+                  <p className="text-gray-500 text-xs">{t('budgetplanner.whatIf.underThisScenario')}</p>
+                  <p className="text-2xl font-bold text-green-400">{scenarioProjection ? fmt(scenarioProjection.projected, activeCurrency) : t('budgetplanner.na')}</p>
                 </div>
               </div>
             </div>
             {scenarioProjection && scenarioProjection.saving !== 0 && (
               <div className={`mt-4 pt-4 border-t border-gray-700 rounded-lg p-3 ${scenarioProjection.saving > 0 ? 'bg-green-900/20' : 'bg-red-900/20'}`}>
                 <p className={`font-bold text-lg ${scenarioProjection.saving > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {scenarioProjection.saving > 0 ? 'Saving' : 'Additional Cost'}: {fmt(Math.abs(scenarioProjection.saving), activeCurrency)}/yr
+                  {scenarioProjection.saving > 0
+                    ? t('budgetplanner.whatIf.savingLine', { value: fmt(Math.abs(scenarioProjection.saving), activeCurrency) })
+                    : t('budgetplanner.whatIf.additionalCostLine', { value: fmt(Math.abs(scenarioProjection.saving), activeCurrency) })}
                 </p>
                 <p className="text-gray-500 text-xs mt-1">
-                  Under this scenario, you {scenarioProjection.saving > 0 ? 'save' : 'spend an extra'} {fmt(Math.abs(scenarioProjection.saving), activeCurrency)} per year
+                  {scenarioProjection.saving > 0
+                    ? t('budgetplanner.whatIf.underScenarioSave', { value: fmt(Math.abs(scenarioProjection.saving), activeCurrency) })
+                    : t('budgetplanner.whatIf.underScenarioSpend', { value: fmt(Math.abs(scenarioProjection.saving), activeCurrency) })}
                 </p>
               </div>
             )}
@@ -1271,7 +1299,7 @@ export default function BudgetPlanner() {
           className="card">
           <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
             <PieIcon className="w-5 h-5 text-amber-400" />
-            Brand Spend Distribution - {selectedYear}
+            {t('budgetplanner.brand.distribution', { year: selectedYear })}
           </h2>
           {brandData.some(b => b.thisYear > 0) ? (
             <div className="h-60">
@@ -1285,7 +1313,7 @@ export default function BudgetPlanner() {
               />
             </div>
           ) : (
-            <div className="h-60 flex items-center justify-center text-gray-600">No brand data for {selectedYear}</div>
+            <div className="h-60 flex items-center justify-center text-gray-600">{t('budgetplanner.brand.noData', { year: selectedYear })}</div>
           )}
         </motion.div>
 
@@ -1294,14 +1322,21 @@ export default function BudgetPlanner() {
           <div className="p-5 border-b border-gray-800">
             <h2 className="text-white font-semibold flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-amber-400" />
-              Brand Cost Analysis
+              {t('budgetplanner.brand.analysis')}
             </h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800">
-                  {['Brand', 'This Year', 'Last Year', 'Change', 'CPK', 'CPK Δ'].map(h => (
+                  {[
+                    t('budgetplanner.brand.columns.brand'),
+                    t('budgetplanner.brand.columns.thisYear'),
+                    t('budgetplanner.brand.columns.lastYear'),
+                    t('budgetplanner.brand.columns.change'),
+                    t('budgetplanner.brand.columns.cpk'),
+                    t('budgetplanner.brand.columns.cpkDelta'),
+                  ].map(h => (
                     <th key={h} className="text-left text-gray-500 font-medium px-4 py-3 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -1313,16 +1348,16 @@ export default function BudgetPlanner() {
                     <td className="px-4 py-2.5 text-blue-400">{fmt(b.thisYear, activeCurrency)}</td>
                     <td className="px-4 py-2.5 text-gray-400">{fmt(b.lastYear, activeCurrency)}</td>
                     <td className={`px-4 py-2.5 font-medium ${b.change == null ? 'text-gray-500' : b.change > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      {b.change != null ? (b.change > 0 ? '+' : '') + fmtPct(b.change) : 'N/A'}
+                      {b.change != null ? (b.change > 0 ? '+' : '') + fmtPct(b.change) : t('budgetplanner.na')}
                     </td>
                     <td className="px-4 py-2.5 text-gray-300">{fmtCpk(b.cpk, activeCurrency)}</td>
                     <td className={`px-4 py-2.5 font-medium ${b.cpkChange == null ? 'text-gray-500' : b.cpkChange > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      {b.cpkChange != null ? (b.cpkChange > 0 ? '+' : '') + fmtPct(b.cpkChange) : 'N/A'}
+                      {b.cpkChange != null ? (b.cpkChange > 0 ? '+' : '') + fmtPct(b.cpkChange) : t('budgetplanner.na')}
                     </td>
                   </tr>
                 ))}
                 {brandData.length === 0 && (
-                  <tr><td colSpan={6} className="text-center text-gray-600 py-8">No brand data available</td></tr>
+                  <tr><td colSpan={6} className="text-center text-gray-600 py-8">{t('budgetplanner.brand.noDataAvailable')}</td></tr>
                 )}
               </tbody>
             </table>
@@ -1336,11 +1371,11 @@ export default function BudgetPlanner() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-white font-semibold flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-blue-400" />
-            Annual Spend Trend &amp; Projection
+            {t('budgetplanner.trend.heading')}
           </h2>
           {nextYearProjection != null && (
             <span className="text-xs text-amber-400 bg-amber-900/20 border border-amber-900 rounded-full px-3 py-1">
-              {Math.max(...trendYears, currentYear) + 1} forecast: {fmt(nextYearProjection, activeCurrency)}
+              {t('budgetplanner.trend.forecast', { year: Math.max(...trendYears, currentYear) + 1, value: fmt(nextYearProjection, activeCurrency) })}
             </span>
           )}
         </div>
@@ -1359,7 +1394,7 @@ export default function BudgetPlanner() {
             />
           </div>
         ) : (
-          <div className="h-56 flex items-center justify-center text-gray-600">Insufficient historical data for trend analysis</div>
+          <div className="h-56 flex items-center justify-center text-gray-600">{t('budgetplanner.trend.insufficientData')}</div>
         )}
       </motion.div>
 
@@ -1369,7 +1404,7 @@ export default function BudgetPlanner() {
           className="bg-gray-900 border border-blue-900/40 rounded-xl p-5">
           <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
             <Zap className="w-5 h-5 text-yellow-400" />
-            AI Budget Recommendations
+            {t('budgetplanner.recommendations.heading')}
           </h2>
           <div className="space-y-2">
             {recommendations.map((r, i) => (

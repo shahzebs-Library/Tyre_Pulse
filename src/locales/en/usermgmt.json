@@ -1,0 +1,148 @@
+{
+  "title": "User Management",
+  "subtitle": "Manage roles, country access, and account approvals",
+  "accessDenied": {
+    "title": "Access Denied",
+    "message": "This page is restricted to Admin users only. Contact your administrator to request access."
+  },
+  "stats": {
+    "totalUsers": "Total Users",
+    "active": "Active",
+    "pendingApproval": "Pending Approval",
+    "admins": "Admins"
+  },
+  "rlsBlocked": {
+    "title": "Admin Policy Missing",
+    "descPrefix": "The",
+    "descSuffix": "RLS policy has not been applied yet. Admin profile edits will silently fail until this migration is run in the Supabase SQL Editor.",
+    "copied": "Copied!",
+    "copySql": "Copy SQL",
+    "footerNote": "After running the SQL, refresh this page. The user list and edit functionality will restore automatically."
+  },
+  "errorPrefix": "Error: ",
+  "tabs": {
+    "users": "Users",
+    "matrix": "Access Control",
+    "branding": "Branding",
+    "activity": "Activity"
+  },
+  "filters": {
+    "searchPlaceholder": "Search by name, username or employee ID",
+    "role": "Role:",
+    "status": "Status:",
+    "all": "All",
+    "activeStatus": "Active",
+    "pendingStatus": "Pending"
+  },
+  "table": {
+    "user": "User",
+    "role": "Role",
+    "organisation": "Organisation",
+    "access": "Access",
+    "status": "Status",
+    "joined": "Joined",
+    "actions": "Actions"
+  },
+  "states": {
+    "na": "n/a",
+    "userFallback": "User",
+    "unknownUser": "Unknown",
+    "rlsUnavailable": "User list unavailable. See warning above.",
+    "noUsersMatch": "No users match the current filters.",
+    "clearFilters": "Clear all filters",
+    "all": "All",
+    "locked": "Locked",
+    "pending": "Pending",
+    "activeBadge": "Active",
+    "you": "You"
+  },
+  "org": {
+    "noOrg": "— No org (all shared) —",
+    "superAdminTooltip": "Super admins see every organisation",
+    "assignTooltip": "Assign this user to an organisation"
+  },
+  "actions": {
+    "approve": "Approve account",
+    "edit": "Edit user",
+    "delete": "Delete user"
+  },
+  "toast": {
+    "roleUpdateFailed": "Role update failed.",
+    "orgUpdateFailed": "Organisation update failed.",
+    "approvalFailed": "Approval failed.",
+    "approved": "{name} approved.",
+    "updated": "{name} updated successfully."
+  },
+  "validation": {
+    "fullNameRequired": "Full name cannot be empty."
+  },
+  "errors": {
+    "rpcMissing": "Permission denied. Ensure the admin_update_profile RPC function is deployed in Supabase.",
+    "updateFailed": "Update failed."
+  },
+  "activity": {
+    "title": "Recent Activity",
+    "subtitle": "Last 100 audit log entries",
+    "refresh": "Refresh",
+    "loading": "Loading activity...",
+    "noData": "No activity data available.",
+    "noDataHint": "The audit_log table may not have data yet. Run MIGRATIONS_V6_AUDIT.sql to create it.",
+    "columns": {
+      "timestamp": "Timestamp",
+      "user": "User",
+      "action": "Action",
+      "table": "Table",
+      "records": "Records",
+      "details": "Details"
+    },
+    "hide": "Hide",
+    "show": "Show"
+  },
+  "editModal": {
+    "title": "Edit User",
+    "ownProfileBanner": "You are editing your own profile.",
+    "lockedBanner": "This account is currently locked and cannot log in.",
+    "updatedPrefix": "Updated:",
+    "lastLoginPrefix": "Last login:",
+    "logins": "{count} logins",
+    "fullName": "Full Name",
+    "username": "Username",
+    "employeeId": "Employee ID",
+    "phone": "Phone",
+    "site": "Site",
+    "region": "Region",
+    "role": "Role",
+    "cannotChangeOwnRole": "You cannot change your own role.",
+    "countryAccess": "Country Access",
+    "noRestriction": "No restriction - user can see all countries.",
+    "restrictedTo": "Restricted to: {countries}",
+    "adminNotes": "Admin Notes",
+    "placeholders": {
+      "fullName": "Full name",
+      "username": "Username",
+      "employeeId": "EMP-001",
+      "phone": "+966 5x xxx xxxx",
+      "site": "e.g. Riyadh Hub",
+      "region": "e.g. Gulf",
+      "notes": "Internal notes (only visible to admins)"
+    },
+    "approvedToggle": "Account Approved",
+    "approvedHint": "Unapproved accounts cannot log in.",
+    "lockedToggle": "Account Locked",
+    "lockedHint": "Locked accounts are blocked from login.",
+    "saving": "Saving...",
+    "save": "Save Changes",
+    "cancel": "Cancel"
+  },
+  "deleteModal": {
+    "title": "Delete User Account",
+    "warningPrefix": "This will permanently delete",
+    "warningSuffix": "'s account and all associated data. This cannot be undone.",
+    "thisUser": "this user",
+    "confirmLabel": "Type",
+    "confirmLabelSuffix": "to confirm",
+    "deleting": "Deleting...",
+    "delete": "Delete Account",
+    "cancel": "Cancel"
+  }
+}

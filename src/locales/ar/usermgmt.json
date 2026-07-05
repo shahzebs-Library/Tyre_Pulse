@@ -1,0 +1,148 @@
+{
+  "title": "إدارة المستخدمين",
+  "subtitle": "إدارة الأدوار، صلاحيات الدول، واعتماد الحسابات",
+  "accessDenied": {
+    "title": "الوصول مرفوض",
+    "message": "هذه الصفحة مقصورة على مستخدمي المسؤول فقط. تواصل مع المسؤول لطلب الوصول."
+  },
+  "stats": {
+    "totalUsers": "إجمالي المستخدمين",
+    "active": "نشط",
+    "pendingApproval": "بانتظار الاعتماد",
+    "admins": "المسؤولون"
+  },
+  "rlsBlocked": {
+    "title": "سياسة المسؤول مفقودة",
+    "descPrefix": "لم يتم بعد تطبيق سياسة",
+    "descSuffix": "على مستوى الصفوف (RLS). ستفشل تعديلات ملف المسؤول بصمت حتى يتم تشغيل هذا الترحيل في محرر SQL الخاص بـ Supabase.",
+    "copied": "تم النسخ!",
+    "copySql": "نسخ SQL",
+    "footerNote": "بعد تشغيل SQL، أعد تحميل هذه الصفحة. ستتم استعادة قائمة المستخدمين ووظيفة التعديل تلقائيًا."
+  },
+  "errorPrefix": "خطأ: ",
+  "tabs": {
+    "users": "المستخدمون",
+    "matrix": "التحكم في الوصول",
+    "branding": "الهوية التجارية",
+    "activity": "النشاط"
+  },
+  "filters": {
+    "searchPlaceholder": "ابحث بالاسم أو اسم المستخدم أو الرقم الوظيفي",
+    "role": "الدور:",
+    "status": "الحالة:",
+    "all": "الكل",
+    "activeStatus": "نشط",
+    "pendingStatus": "بانتظار"
+  },
+  "table": {
+    "user": "المستخدم",
+    "role": "الدور",
+    "organisation": "المؤسسة",
+    "access": "الوصول",
+    "status": "الحالة",
+    "joined": "تاريخ الانضمام",
+    "actions": "الإجراءات"
+  },
+  "states": {
+    "na": "غير متاح",
+    "userFallback": "مستخدم",
+    "unknownUser": "غير معروف",
+    "rlsUnavailable": "قائمة المستخدمين غير متاحة. راجع التحذير أعلاه.",
+    "noUsersMatch": "لا يوجد مستخدمون مطابقون للمرشحات الحالية.",
+    "clearFilters": "مسح جميع المرشحات",
+    "all": "الكل",
+    "locked": "مقفل",
+    "pending": "بانتظار",
+    "activeBadge": "نشط",
+    "you": "أنت"
+  },
+  "org": {
+    "noOrg": "— بدون مؤسسة (مشتركة للجميع) —",
+    "superAdminTooltip": "المسؤولون الرئيسيون يرون جميع المؤسسات",
+    "assignTooltip": "تعيين هذا المستخدم إلى مؤسسة"
+  },
+  "actions": {
+    "approve": "اعتماد الحساب",
+    "edit": "تعديل المستخدم",
+    "delete": "حذف المستخدم"
+  },
+  "toast": {
+    "roleUpdateFailed": "فشل تحديث الدور.",
+    "orgUpdateFailed": "فشل تحديث المؤسسة.",
+    "approvalFailed": "فشل الاعتماد.",
+    "approved": "تم اعتماد {name}.",
+    "updated": "تم تحديث {name} بنجاح."
+  },
+  "validation": {
+    "fullNameRequired": "لا يمكن أن يكون الاسم الكامل فارغًا."
+  },
+  "errors": {
+    "rpcMissing": "تم رفض الإذن. تأكد من نشر دالة admin_update_profile RPC في Supabase.",
+    "updateFailed": "فشل التحديث."
+  },
+  "activity": {
+    "title": "النشاط الأخير",
+    "subtitle": "آخر 100 إدخال في سجل التدقيق",
+    "refresh": "تحديث",
+    "loading": "جارٍ تحميل النشاط...",
+    "noData": "لا توجد بيانات نشاط متاحة.",
+    "noDataHint": "قد لا يحتوي جدول audit_log على بيانات بعد. شغّل MIGRATIONS_V6_AUDIT.sql لإنشائه.",
+    "columns": {
+      "timestamp": "الطابع الزمني",
+      "user": "المستخدم",
+      "action": "الإجراء",
+      "table": "الجدول",
+      "records": "السجلات",
+      "details": "التفاصيل"
+    },
+    "hide": "إخفاء",
+    "show": "عرض"
+  },
+  "editModal": {
+    "title": "تعديل المستخدم",
+    "ownProfileBanner": "أنت تقوم بتعديل ملفك الشخصي.",
+    "lockedBanner": "هذا الحساب مقفل حاليًا ولا يمكنه تسجيل الدخول.",
+    "updatedPrefix": "آخر تحديث:",
+    "lastLoginPrefix": "آخر تسجيل دخول:",
+    "logins": "{count} تسجيل دخول",
+    "fullName": "الاسم الكامل",
+    "username": "اسم المستخدم",
+    "employeeId": "الرقم الوظيفي",
+    "phone": "الهاتف",
+    "site": "الموقع",
+    "region": "المنطقة",
+    "role": "الدور",
+    "cannotChangeOwnRole": "لا يمكنك تغيير دورك الخاص.",
+    "countryAccess": "صلاحية الدول",
+    "noRestriction": "بدون تقييد - يمكن للمستخدم رؤية جميع الدول.",
+    "restrictedTo": "مقيّد بـ: {countries}",
+    "adminNotes": "ملاحظات المسؤول",
+    "placeholders": {
+      "fullName": "الاسم الكامل",
+      "username": "اسم المستخدم",
+      "employeeId": "EMP-001",
+      "phone": "+966 5x xxx xxxx",
+      "site": "مثال: مركز الرياض",
+      "region": "مثال: الخليج",
+      "notes": "ملاحظات داخلية (تظهر للمسؤولين فقط)"
+    },
+    "approvedToggle": "الحساب معتمد",
+    "approvedHint": "لا يمكن للحسابات غير المعتمدة تسجيل الدخول.",
+    "lockedToggle": "الحساب مقفل",
+    "lockedHint": "الحسابات المقفلة ممنوعة من تسجيل الدخول.",
+    "saving": "جارٍ الحفظ...",
+    "save": "حفظ التغييرات",
+    "cancel": "إلغاء"
+  },
+  "deleteModal": {
+    "title": "حذف حساب المستخدم",
+    "warningPrefix": "سيؤدي هذا إلى الحذف الدائم لحساب",
+    "warningSuffix": " وجميع البيانات المرتبطة به. لا يمكن التراجع عن هذا الإجراء.",
+    "thisUser": "هذا المستخدم",
+    "confirmLabel": "اكتب",
+    "confirmLabelSuffix": "للتأكيد",
+    "deleting": "جارٍ الحذف...",
+    "delete": "حذف الحساب",
+    "cancel": "إلغاء"
+  }
+}

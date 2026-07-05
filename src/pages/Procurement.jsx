@@ -22,6 +22,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatCurrency as _fmtCurrencyBase, formatDate, formatMonthYear, formatMonth } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -101,6 +102,7 @@ function StatusBadge({ status }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function Procurement() {
+  const { t } = useLanguage()
   const { activeCountry, activeCurrency, appSettings } = useSettings()
   const { user, profile } = useAuth()
   const { branding } = useTenant()
@@ -302,7 +304,7 @@ export default function Procurement() {
       }),
       datasets: [
         {
-          label: 'Actual Spend',
+          label: t('procurement.charts.actualSpendLabel'),
           data: spendPoints,
           borderColor: '#10b981',
           backgroundColor: 'rgba(16,185,129,0.1)',
@@ -311,7 +313,7 @@ export default function Procurement() {
           pointRadius: 3,
         },
         ...(budget > 0 ? [{
-          label: 'Budget',
+          label: t('procurement.charts.budgetLabel'),
           data: budgetPoints,
           borderColor: '#f59e0b',
           backgroundColor: 'transparent',
@@ -321,7 +323,7 @@ export default function Procurement() {
         }] : []),
       ],
     }
-  }, [orders, budget])
+  }, [orders, budget, t])
 
   // ── Sort helper ────────────────────────────────────────────────────────────
   function handleSort(field) {
@@ -380,7 +382,7 @@ export default function Procurement() {
     if (!po) return
     const items = po.items.map((it, i) => i === itemIdx ? { ...it, received_qty: parseInt(qty) || 0 } : it)
     procurementApi.updatePurchaseOrder(poId, { items, updated_at: new Date().toISOString() }).then(({ error: err }) => {
-      if (err) { alert('Update failed: ' + err.message); return }
+      if (err) { alert(t('procurement.alerts.updateFailed', { message: err.message })); return }
       load()
       setViewPO(v => v ? { ...v, items } : null)
     })
@@ -392,8 +394,8 @@ export default function Procurement() {
 
   // ── Save ───────────────────────────────────────────────────────────────────
   async function handleSave() {
-    if (!formData.vendor_name.trim()) { alert('Vendor name is required.'); return }
-    if (formData.items.length === 0)  { alert('Add at least one line item.'); return }
+    if (!formData.vendor_name.trim()) { alert(t('procurement.alerts.vendorRequired')); return }
+    if (formData.items.length === 0)  { alert(t('procurement.alerts.lineItemRequired')); return }
     setSaving(true)
     try {
       const subtotal    = calcSubtotal(formData.items)
@@ -433,7 +435,7 @@ export default function Procurement() {
       await load()
       setShowForm(false)
     } catch (e) {
-      alert('Save failed: ' + e.message)
+      alert(t('procurement.alerts.saveFailed', { message: e.message }))
     } finally {
       setSaving(false)
     }
@@ -444,7 +446,7 @@ export default function Procurement() {
     const patch = { status: newStatus }
     if (newStatus === 'Delivered') patch.actual_delivery = new Date().toISOString().slice(0, 10)
     const { error: err } = await procurementApi.updatePurchaseOrder(po.id, patch)
-    if (err) { alert('Update failed: ' + err.message); return }
+    if (err) { alert(t('procurement.alerts.updateFailed', { message: err.message })); return }
     await load()
     if (viewPO?.id === po.id) setViewPO(v => ({ ...v, ...patch }))
   }
@@ -459,7 +461,7 @@ export default function Procurement() {
       const { error: err } = await procurementApi.upsertSetting(BUDGET_KEY, JSON.stringify(val))
       if (err) {
         setBudget(prev)
-        setBudgetError(`Could not save the budget: ${err.message}`)
+        setBudgetError(t('procurement.budgetPanel.saveError', { message: err.message }))
       }
     }
     setEditBudget(false)
@@ -558,7 +560,7 @@ export default function Procurement() {
       <div className="flex items-center justify-center min-h-screen bg-gray-950">
         <div className="text-center">
           <Loader2 className="animate-spin text-orange-400 mx-auto mb-3" size={40} />
-          <p className="text-gray-400">Loading procurement data...</p>
+          <p className="text-gray-400">{t('procurement.loading')}</p>
         </div>
       </div>
     )
@@ -568,19 +570,19 @@ export default function Procurement() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Procurement"
-        subtitle={`Purchase order management - ${orders.length} total orders`}
+        title={t('procurement.title')}
+        subtitle={t('procurement.subtitle', { count: orders.length })}
         icon={ShoppingCart}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={load} className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors" title="Refresh">
+            <button onClick={load} className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors" title={t('procurement.refresh')}>
               <RefreshCw size={16} />
             </button>
             <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors">
-              <FileSpreadsheet size={16} />Excel
+              <FileSpreadsheet size={16} />{t('procurement.actions.excel')}
             </button>
             <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-lg transition-colors">
-              <Plus size={16} />New PO
+              <Plus size={16} />{t('procurement.actions.newPo')}
             </button>
           </div>
         }
@@ -599,46 +601,46 @@ export default function Procurement() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
           {
-            label: 'Total POs (YTD)',
+            label: t('procurement.kpi.totalPos'),
             value: kpis.totalPOs,
             suffix: '',
             color: 'orange',
             icon: ShoppingCart,
-            sub: `${orders.length} all time`,
+            sub: t('procurement.kpi.totalPosSub', { count: orders.length }),
           },
           {
-            label: 'Total Spend',
+            label: t('procurement.kpi.totalSpend'),
             value: kpis.spend >= 1_000_000
               ? `${activeCurrency} ${(kpis.spend / 1_000_000).toFixed(2)}M`
               : `${activeCurrency} ${(kpis.spend / 1000).toFixed(1)}k`,
             suffix: '',
             color: 'green',
             icon: DollarSign,
-            sub: 'Delivered & Closed',
+            sub: t('procurement.kpi.totalSpendSub'),
           },
           {
-            label: 'Pending Delivery',
+            label: t('procurement.kpi.pendingDelivery'),
             value: kpis.pendingDelivery,
             suffix: '',
             color: 'yellow',
             icon: Truck,
-            sub: `${activeCurrency} ${(kpis.pendingValue / 1000).toFixed(1)}k pending`,
+            sub: t('procurement.kpi.pendingDeliverySub', { value: `${activeCurrency} ${(kpis.pendingValue / 1000).toFixed(1)}k` }),
           },
           {
-            label: 'Budget Used',
+            label: t('procurement.kpi.budgetUsed'),
             value: budget > 0 ? `${kpis.budgetVariance?.toFixed(1)}%` : '-',
             suffix: '',
             color: kpis.budgetVariance > 100 ? 'red' : kpis.budgetVariance > 80 ? 'yellow' : 'teal',
             icon: BarChart2,
-            sub: budget > 0 ? `of ${activeCurrency} ${(budget / 1000).toFixed(0)}k budget` : 'Set budget below',
+            sub: budget > 0 ? t('procurement.kpi.budgetUsedSub', { value: `${activeCurrency} ${(budget / 1000).toFixed(0)}k` }) : t('procurement.kpi.setBudgetBelow'),
           },
           {
-            label: 'Avg Lead Time',
+            label: t('procurement.kpi.avgLeadTime'),
             value: kpis.avgLeadTime !== null ? `${kpis.avgLeadTime}d` : '-',
             suffix: '',
             color: 'purple',
             icon: Clock,
-            sub: 'Order → Delivery',
+            sub: t('procurement.kpi.avgLeadTimeSub'),
           },
         ].map(({ label, value, color, icon: Icon, sub }) => (
           <motion.div
@@ -661,22 +663,22 @@ export default function Procurement() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Monthly spend by vendor */}
         <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">Monthly PO Spend by Vendor (Top 5)</h3>
+          <h3 className="text-white font-semibold mb-4">{t('procurement.charts.vendorSpendTitle')}</h3>
           <div className="h-56">
             {vendorBarData.datasets.length > 0
               ? <Bar data={vendorBarData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { position: 'top', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 10 } } } } }} />
-              : <div className="h-full flex items-center justify-center text-gray-600 text-sm">No delivered orders yet</div>
+              : <div className="h-full flex items-center justify-center text-gray-600 text-sm">{t('procurement.charts.noDeliveredOrders')}</div>
             }
           </div>
         </div>
 
         {/* Status doughnut */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">Orders by Status</h3>
+          <h3 className="text-white font-semibold mb-4">{t('procurement.charts.ordersByStatus')}</h3>
           <div className="h-56">
             {orders.length > 0
               ? <Doughnut data={statusDoughnutData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 10, font: { size: 10 } } } } }} />
-              : <div className="h-full flex items-center justify-center text-gray-600 text-sm">No orders yet</div>
+              : <div className="h-full flex items-center justify-center text-gray-600 text-sm">{t('procurement.charts.noOrders')}</div>
             }
           </div>
         </div>
@@ -687,12 +689,12 @@ export default function Procurement() {
         {/* Budget panel */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-semibold">Budget vs Actual</h3>
+            <h3 className="text-white font-semibold">{t('procurement.budgetPanel.title')}</h3>
             <button
               onClick={() => { setEditBudget(!editBudget); setBudgetInput(budget > 0 ? budget.toString() : '') }}
               className="text-xs text-orange-400 hover:text-orange-300 px-2 py-1 rounded border border-orange-700/50 hover:border-orange-500 transition-colors"
             >
-              {editBudget ? 'Cancel' : 'Set Budget'}
+              {editBudget ? t('procurement.budgetPanel.cancel') : t('procurement.budgetPanel.setBudget')}
             </button>
           </div>
 
@@ -702,12 +704,12 @@ export default function Procurement() {
                 type="number" min="0" step="1000"
                 value={budgetInput}
                 onChange={e => setBudgetInput(e.target.value)}
-                placeholder={`Annual budget (${activeCurrency})`}
+                placeholder={t('procurement.budgetPanel.placeholder', { currency: activeCurrency })}
                 className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
                 onKeyDown={e => e.key === 'Enter' && saveBudget()}
               />
               <button onClick={saveBudget} className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded-lg transition-colors">
-                Save
+                {t('procurement.budgetPanel.save')}
               </button>
             </div>
           )}
@@ -717,17 +719,17 @@ export default function Procurement() {
 
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Annual Budget</span>
-              <span className="text-white font-medium">{budget > 0 ? fmtCur(budget) : 'Not set'}</span>
+              <span className="text-gray-400">{t('procurement.budgetPanel.annualBudget')}</span>
+              <span className="text-white font-medium">{budget > 0 ? fmtCur(budget) : t('procurement.budgetPanel.notSet')}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Total Spend</span>
+              <span className="text-gray-400">{t('procurement.budgetPanel.totalSpend')}</span>
               <span className="text-green-400 font-medium">{fmtCur(kpis.spend)}</span>
             </div>
             {budget > 0 && (
               <>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Remaining</span>
+                  <span className="text-gray-400">{t('procurement.budgetPanel.remaining')}</span>
                   <span className={`font-medium ${budget - kpis.spend < 0 ? 'text-red-400' : 'text-teal-400'}`}>
                     {fmtCur(budget - kpis.spend)}
                   </span>
@@ -758,7 +760,7 @@ export default function Procurement() {
 
         {/* Cumulative line chart */}
         <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">Cumulative Spend vs Budget ({new Date().getFullYear()})</h3>
+          <h3 className="text-white font-semibold mb-4">{t('procurement.charts.cumulativeTitle', { year: new Date().getFullYear() })}</h3>
           <div className="h-52">
             <Line data={cumulativeLineData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { position: 'top', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />
           </div>
@@ -773,22 +775,22 @@ export default function Procurement() {
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
-              placeholder="Search PO#, vendor, site, budget code..."
+              placeholder={t('procurement.filters.searchPlaceholder')}
               className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500"
             />
           </div>
           <select value={statusFilter} onChange={e => { setStatus(e.target.value); setPage(1) }}
             className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500">
-            <option value="All">All Statuses</option>
+            <option value="All">{t('procurement.filters.allStatuses')}</option>
             {STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
           <select value={vendorFilter} onChange={e => { setVendor(e.target.value); setPage(1) }}
             className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500">
-            {vendors.map(v => <option key={v}>{v === 'All' ? 'All Vendors' : v}</option>)}
+            {vendors.map(v => <option key={v}>{v === 'All' ? t('procurement.filters.allVendors') : v}</option>)}
           </select>
           <select value={siteFilter} onChange={e => { setSite(e.target.value); setPage(1) }}
             className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500">
-            {sites.map(s => <option key={s}>{s === 'All' ? 'All Sites' : s}</option>)}
+            {sites.map(s => <option key={s}>{s === 'All' ? t('procurement.filters.allSites') : s}</option>)}
           </select>
           <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }}
             className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
@@ -797,10 +799,10 @@ export default function Procurement() {
           {(search || statusFilter !== 'All' || vendorFilter !== 'All' || siteFilter !== 'All' || dateFrom || dateTo) && (
             <button onClick={() => { setSearch(''); setStatus('All'); setVendor('All'); setSite('All'); setDateFrom(''); setDateTo(''); setPage(1) }}
               className="px-3 py-2 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm hover:bg-red-900/50 transition-colors">
-              Clear
+              {t('procurement.filters.clear')}
             </button>
           )}
-          <span className="ml-auto self-center text-gray-400 text-sm">{filtered.length} results</span>
+          <span className="ml-auto self-center text-gray-400 text-sm">{t('procurement.filters.resultsCount', { count: filtered.length })}</span>
         </div>
       </div>
 
@@ -811,16 +813,16 @@ export default function Procurement() {
             <thead>
               <tr className="border-b border-gray-800">
                 {[
-                  { label: 'PO #',        field: 'po_number'    },
-                  { label: 'Vendor',      field: 'vendor_name'  },
-                  { label: 'Order Date',  field: 'order_date'   },
-                  { label: 'Exp. Del.',   field: 'expected_delivery' },
-                  { label: 'Status',      field: 'status'       },
-                  { label: 'Priority',    field: 'priority'     },
-                  { label: 'Items',       field: null           },
-                  { label: 'Total',       field: 'total_amount' },
-                  { label: 'Site',        field: 'site'         },
-                  { label: 'Actions',     field: null           },
+                  { label: t('procurement.table.columns.poNumber'),     field: 'po_number'    },
+                  { label: t('procurement.table.columns.vendor'),       field: 'vendor_name'  },
+                  { label: t('procurement.table.columns.orderDate'),    field: 'order_date'   },
+                  { label: t('procurement.table.columns.expDelivery'),  field: 'expected_delivery' },
+                  { label: t('procurement.table.columns.status'),      field: 'status'       },
+                  { label: t('procurement.table.columns.priority'),    field: 'priority'     },
+                  { label: t('procurement.table.columns.items'),       field: null           },
+                  { label: t('procurement.table.columns.total'),       field: 'total_amount' },
+                  { label: t('procurement.table.columns.site'),        field: 'site'         },
+                  { label: t('procurement.table.columns.actions'),     field: null           },
                 ].map(({ label, field }) => (
                   <th key={label}
                     className={`px-4 py-3 text-left text-gray-400 font-medium text-xs uppercase tracking-wide ${field ? 'cursor-pointer hover:text-white' : ''}`}
@@ -839,9 +841,9 @@ export default function Procurement() {
                 <tr>
                   <td colSpan={10} className="text-center py-16 text-gray-500">
                     <ShoppingCart size={40} className="mx-auto mb-3 opacity-30" />
-                    <p>No purchase orders found</p>
+                    <p>{t('procurement.table.emptyTitle')}</p>
                     <button onClick={openNew} className="mt-3 text-orange-400 hover:text-orange-300 text-sm">
-                      Create your first PO →
+                      {t('procurement.table.createFirst')}
                     </button>
                   </td>
                 </tr>
@@ -867,9 +869,9 @@ export default function Procurement() {
                     <td className="px-4 py-3 text-gray-400">{po.site || '-'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => setViewPO(po)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title="View"><Eye size={13} /></button>
-                        <button onClick={() => openEdit(po)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title="Edit"><Edit2 size={13} /></button>
-                        <button onClick={() => exportPDF(po)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title="PDF"><FileText size={13} /></button>
+                        <button onClick={() => setViewPO(po)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title={t('procurement.table.viewTooltip')}><Eye size={13} /></button>
+                        <button onClick={() => openEdit(po)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title={t('procurement.table.editTooltip')}><Edit2 size={13} /></button>
+                        <button onClick={() => exportPDF(po)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title={t('procurement.table.pdfTooltip')}><FileText size={13} /></button>
                       </div>
                     </td>
                   </tr>
@@ -881,12 +883,12 @@ export default function Procurement() {
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-            <span className="text-gray-400 text-sm">Page {page} of {totalPages} · {filtered.length} records</span>
+            <span className="text-gray-400 text-sm">{t('procurement.table.pageSummary', { page, total: totalPages, count: filtered.length })}</span>
             <div className="flex gap-2">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">Prev</button>
+                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">{t('procurement.table.prev')}</button>
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">Next</button>
+                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">{t('procurement.table.next')}</button>
             </div>
           </div>
         )}
@@ -907,7 +909,7 @@ export default function Procurement() {
                 <div className="flex items-center gap-3">
                   <ShoppingCart size={18} className="text-orange-400" />
                   <h2 className="text-white font-bold text-lg">
-                    {editPO ? `Edit ${editPO.po_number}` : 'New Purchase Order'}
+                    {editPO ? t('procurement.modal.editTitle', { poNumber: editPO.po_number }) : t('procurement.modal.newTitle')}
                   </h2>
                 </div>
                 <button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"><X size={18} /></button>

@@ -1,0 +1,66 @@
+{
+  "title": "Country Comparison",
+  "states": {
+    "loading": "Loading fleet data...",
+    "loadError": "Could not load data",
+    "loadErrorTitle": "Could not load country comparison",
+    "retry": "Retry",
+    "noDataSubtitle": "No country data available",
+    "noDataTitle": "No country data yet",
+    "noDataHint": "Upload tyre records with the country field populated to see comparisons",
+    "na": "N/A"
+  },
+  "header": {
+    "subtitle": "KPI breakdown across {countries}"
+  },
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "filters": {
+    "countries": "Countries:",
+    "dateRange": "Date range:",
+    "to": "to",
+    "clear": "Clear"
+  },
+  "summary": {
+    "fleet": "Fleet",
+    "totalCost": "Total Cost",
+    "highRisk": "High Risk",
+    "avgCpk": "Avg CPK",
+    "openActions": "Open Actions",
+    "overdue": "Overdue"
+  },
+  "table": {
+    "title": "Full KPI Breakdown",
+    "metric": "Metric"
+  },
+  "kpiRows": {
+    "count": "Fleet Records",
+    "totalCost": "Total Cost",
+    "avgCostPerTyre": "Avg Cost / Tyre",
+    "avgCpk": "Avg CPK",
+    "highRiskPct": "High Risk %",
+    "openActions": "Open Actions",
+    "overdueActions": "Overdue Actions",
+    "siteCount": "Sites",
+    "brandCount": "Brands Used"
+  },
+  "charts": {
+    "costByCountry": "Total Cost by Country",
+    "riskByCountry": "High Risk % by Country",
+    "cpkByCountry": "Avg CPK by Country",
+    "openActionsByCountry": "Open Corrective Actions by Country"
+  },
+  "trend": {
+    "title": "Trend Comparison",
+    "subtitle": "Monthly & yearly {metric} across countries",
+    "volume": "volume",
+    "cost": "cost",
+    "records": "Records",
+    "costToggle": "Cost",
+    "noTrend": "No dated records yet - upload tyre records with an issue date to see monthly & yearly trends.",
+    "monthlyTrend": "Monthly Trend",
+    "yearOverYear": "Year-over-Year"
+  }
+}

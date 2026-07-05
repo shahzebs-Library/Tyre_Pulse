@@ -22,6 +22,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
 import VehicleTyreDiagram from '../components/VehicleTyreDiagram'
+import { useLanguage } from '../contexts/LanguageContext'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -94,7 +95,15 @@ function scoreBorderClass(score) {
   return 'border-red-800/50'
 }
 
-function scoreLabel(score) {
+function scoreLabelKey(score) {
+  if (score >= 80) return 'operational'
+  if (score >= 60) return 'monitor'
+  if (score >= 40) return 'atRisk'
+  return 'critical'
+}
+
+// English-only label used by the CSV/Excel export builder (exports stay English).
+function scoreLabelEn(score) {
   if (score >= 80) return 'Operational'
   if (score >= 60) return 'Monitor'
   if (score >= 40) return 'At Risk'
@@ -141,7 +150,7 @@ function exportFleetStatus(vehicles, alerts) {
       v.site ?? '',
       v.operator_name ?? '',
       v.score,
-      scoreLabel(v.score),
+      scoreLabelEn(v.score),
       v.criticalCount,
       v.highCount,
       v.mediumCount,
@@ -300,6 +309,7 @@ function KpiCard({ label, value, sub, icon: Icon, color, pulse }) {
 
 // ── Vehicle Card ──────────────────────────────────────────────────────────────
 function VehicleCard({ vehicle, onClick, isSelected }) {
+  const { t } = useLanguage()
   const {
     asset_no, fleet_number, vehicle_type, site, operator_name,
     tyres, score, alertCount, lastInspectionDate,
@@ -357,7 +367,7 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
         </div>
       ) : (
         <div className="flex items-center justify-center py-4 bg-gray-950/40 rounded-lg mb-3">
-          <span className="text-gray-600 text-xs">No tyre data</span>
+          <span className="text-gray-600 text-xs">{t('livefleet.card.noTyreData')}</span>
         </div>
       )}
 
@@ -367,8 +377,8 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
         <span className={`flex items-center gap-1 ${inspectionStale ? 'text-red-400' : 'text-gray-500'}`}>
           <Clock size={9} />
           {lastInspectionDate
-            ? `${daysSinceInspection}d ago`
-            : 'No insp.'
+            ? t('livefleet.card.daysAgo', { days: daysSinceInspection })
+            : t('livefleet.card.noInspection')
           }
         </span>
 
@@ -381,7 +391,7 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
             backgroundColor: scoreColor(score) + '15',
           }}
         >
-          {scoreLabel(score)}
+          {t(`livefleet.scoreLabel.${scoreLabelKey(score)}`)}
         </span>
 
         {/* Alert badge */}
@@ -398,7 +408,7 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
 
       {/* Drill hint */}
       <div className="flex items-center justify-end mt-2 gap-0.5 text-gray-700 hover:text-gray-400 transition-colors">
-        <span className="text-xs">Details</span>
+        <span className="text-xs">{t('livefleet.card.details')}</span>
         <ChevronRight size={10} />
       </div>
     </motion.div>
@@ -407,6 +417,7 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function LiveFleetStatus() {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { activeCurrency, activeCountry } = useSettings()
@@ -646,7 +657,13 @@ export default function LiveFleetStatus() {
     const low      = tyres.filter(t => t.risk_level === 'Low').length
     const noData   = tyres.filter(t => !t.risk_level).length
     return {
-      labels: ['Critical', 'High', 'Medium', 'Low', 'No Data'],
+      labels: [
+        t('livefleet.drawer.doughnut.critical'),
+        t('livefleet.drawer.doughnut.high'),
+        t('livefleet.drawer.doughnut.medium'),
+        t('livefleet.drawer.doughnut.low'),
+        t('livefleet.drawer.doughnut.noData'),
+      ],
       datasets: [{
         data: [critical, high, medium, low, noData],
         backgroundColor: ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#374151'],
@@ -683,8 +700,8 @@ export default function LiveFleetStatus() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">Live Fleet Status</h1>
-            <p className="text-gray-400 text-sm mt-1">Loading fleet data...</p>
+            <h1 className="text-2xl font-bold text-white">{t('livefleet.header.title')}</h1>
+            <p className="text-gray-400 text-sm mt-1">{t('livefleet.header.loading')}</p>
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -709,7 +726,7 @@ export default function LiveFleetStatus() {
         <AlertTriangle size={40} className="text-red-400" />
         <p className="text-red-300 font-medium">{error}</p>
         <button onClick={() => load()} className="flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm transition-colors">
-          <RefreshCw size={14} /> Retry
+          <RefreshCw size={14} /> {t('livefleet.actions.retry')}
         </button>
       </div>
     )
@@ -721,8 +738,8 @@ export default function LiveFleetStatus() {
 
       {/* ── Page Header ── */}
       <PageHeader
-        title="Live Fleet Status"
-        subtitle={`Morning briefing - real-time vehicle & tyre health${lastUpdated ? ` · Updated ${lastUpdated.toLocaleTimeString()}` : ''}`}
+        title={t('livefleet.header.title')}
+        subtitle={`${t('livefleet.header.subtitle')}${lastUpdated ? t('livefleet.header.updated', { time: lastUpdated.toLocaleTimeString() }) : ''}`}
         icon={Radio}
         actions={<>
           <button
@@ -734,14 +751,14 @@ export default function LiveFleetStatus() {
             }`}
           >
             {autoRefresh ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-            Auto-refresh
+            {t('livefleet.actions.autoRefresh')}
             {autoRefresh && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-ping" />}
           </button>
           <button
             onClick={() => exportFleetStatus(filtered, alertsData)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-800 text-gray-400 hover:text-white text-xs transition-colors"
           >
-            <Download size={13} /> Export
+            <Download size={13} /> {t('livefleet.actions.export')}
           </button>
           <button
             onClick={() => load(true)}
@@ -749,7 +766,7 @@ export default function LiveFleetStatus() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-800 text-gray-400 hover:text-white text-xs transition-colors"
           >
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-            Refresh
+            {t('livefleet.actions.refresh')}
           </button>
         </>}
       />
@@ -757,38 +774,38 @@ export default function LiveFleetStatus() {
       {/* ── KPI Status Bar ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiCard
-          label="Fleet Total"
+          label={t('livefleet.kpi.fleetTotal')}
           value={kpis.total}
-          sub="registered vehicles"
+          sub={t('livefleet.kpi.fleetTotalSub')}
           icon={Truck}
           color="blue"
         />
         <KpiCard
-          label="Operational"
+          label={t('livefleet.kpi.operational')}
           value={kpis.operational}
-          sub="no critical/high risk"
+          sub={t('livefleet.kpi.operationalSub')}
           icon={CheckCircle}
           color={kpis.operational === kpis.total ? 'green' : 'yellow'}
         />
         <KpiCard
-          label="At Risk"
+          label={t('livefleet.kpi.atRisk')}
           value={kpis.atRisk}
-          sub="high or critical tyres"
+          sub={t('livefleet.kpi.atRiskSub')}
           icon={AlertTriangle}
           color={kpis.atRisk > 0 ? 'orange' : 'green'}
           pulse={kpis.atRisk > 0}
         />
         <KpiCard
-          label="Inspection Overdue"
+          label={t('livefleet.kpi.inspectionOverdue')}
           value={kpis.overdue}
-          sub="past scheduled date"
+          sub={t('livefleet.kpi.inspectionOverdueSub')}
           icon={Calendar}
           color={kpis.overdue > 0 ? 'red' : 'green'}
         />
         <KpiCard
-          label="Active Alerts"
+          label={t('livefleet.kpi.activeAlerts')}
           value={kpis.activeAlerts}
-          sub={`as of ${formatDate(new Date(), 'All', { day:'2-digit', month:'short' })}`}
+          sub={t('livefleet.kpi.activeAlertsSub', { date: formatDate(new Date(), 'All', { day:'2-digit', month:'short' }) })}
           icon={Bell}
           color={kpis.activeAlerts > 0 ? 'red' : 'green'}
           pulse={kpis.activeAlerts > 0}
@@ -810,7 +827,7 @@ export default function LiveFleetStatus() {
                 <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-7 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700/30 transition"
-                  placeholder="Search asset, fleet no, operator..."
+                  placeholder={t('livefleet.filters.searchPlaceholder')}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
@@ -841,29 +858,35 @@ export default function LiveFleetStatus() {
                   value={statusFilter}
                   onChange={e => setStatusFilter(e.target.value)}
                 >
-                  {['All', 'Operational', 'At Risk', 'Critical', 'Overdue'].map(s => (
-                    <option key={s} value={s}>{s}</option>
+                  {[
+                    { value: 'All',         labelKey: 'all' },
+                    { value: 'Operational', labelKey: 'operational' },
+                    { value: 'At Risk',     labelKey: 'atRisk' },
+                    { value: 'Critical',    labelKey: 'critical' },
+                    { value: 'Overdue',     labelKey: 'overdue' },
+                  ].map(opt => (
+                    <option key={opt.value} value={opt.value}>{t(`livefleet.filters.status.${opt.labelKey}`)}</option>
                   ))}
                 </select>
               </div>
 
               {hasFilters && (
                 <button onClick={clearFilters} className="text-xs text-green-500 hover:text-green-400 underline">
-                  Clear
+                  {t('livefleet.filters.clear')}
                 </button>
               )}
 
               {/* View mode toggle */}
               <div className="flex bg-gray-800 rounded-lg border border-gray-700 overflow-hidden ml-auto">
                 {[
-                  { mode: 'grid', Icon: Grid },
-                  { mode: 'list', Icon: List },
-                  { mode: 'map',  Icon: Map  },
-                ].map(({ mode, Icon }) => (
+                  { mode: 'grid', Icon: Grid, titleKey: 'gridView' },
+                  { mode: 'list', Icon: List, titleKey: 'listView' },
+                  { mode: 'map',  Icon: Map,  titleKey: 'mapView' },
+                ].map(({ mode, Icon, titleKey }) => (
                   <button
                     key={mode}
                     onClick={() => setViewMode(mode)}
-                    title={mode.charAt(0).toUpperCase() + mode.slice(1) + ' view'}
+                    title={t(`livefleet.filters.${titleKey}`)}
                     className={`p-2 transition-colors ${
                       viewMode === mode
                         ? 'bg-green-700 text-white'
@@ -878,7 +901,7 @@ export default function LiveFleetStatus() {
 
             {hasFilters && (
               <p className="text-xs text-green-500 mt-2">
-                {filtered.length} of {vehicles.length} vehicles matching filters
+                {t('livefleet.filters.matchingCount', { filtered: filtered.length, total: vehicles.length })}
               </p>
             )}
           </div>
@@ -887,15 +910,15 @@ export default function LiveFleetStatus() {
           {viewMode === 'map' && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-16 flex flex-col items-center justify-center gap-3">
               <Map size={48} className="text-gray-700" />
-              <p className="text-gray-400 font-semibold">Map view coming soon</p>
+              <p className="text-gray-400 font-semibold">{t('livefleet.map.comingSoon')}</p>
               <p className="text-gray-600 text-sm text-center">
-                Geographic fleet tracking with live GPS integration will be available in a future release.
+                {t('livefleet.map.description')}
               </p>
               <button
                 onClick={() => setViewMode('grid')}
                 className="mt-2 text-sm text-green-500 hover:text-green-400 underline"
               >
-                Switch to Grid view
+                {t('livefleet.map.switchToGrid')}
               </button>
             </div>
           )}
@@ -904,15 +927,15 @@ export default function LiveFleetStatus() {
           {viewMode !== 'map' && filtered.length === 0 && vehicles.length === 0 && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl py-16 flex flex-col items-center justify-center gap-3">
               <Truck size={48} className="text-gray-700" />
-              <p className="text-gray-300 font-semibold">No Fleet Records Found</p>
+              <p className="text-gray-300 font-semibold">{t('livefleet.empty.noFleetTitle')}</p>
               <p className="text-gray-600 text-sm text-center max-w-sm">
-                Add vehicles to your fleet master table to see live status here.
+                {t('livefleet.empty.noFleetDesc')}
               </p>
               <button
                 onClick={() => navigate('/fleet-master')}
                 className="mt-2 bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
               >
-                Go to Fleet Master
+                {t('livefleet.empty.goToFleetMaster')}
               </button>
             </div>
           )}
@@ -920,9 +943,9 @@ export default function LiveFleetStatus() {
           {viewMode !== 'map' && filtered.length === 0 && vehicles.length > 0 && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl py-12 flex flex-col items-center justify-center gap-3">
               <Filter size={36} className="text-gray-700" />
-              <p className="text-gray-400 font-medium">No vehicles match your filters</p>
+              <p className="text-gray-400 font-medium">{t('livefleet.empty.noMatch')}</p>
               <button onClick={clearFilters} className="text-sm text-green-500 hover:text-green-400 underline">
-                Clear filters
+                {t('livefleet.filters.clearFilters')}
               </button>
             </div>
           )}
@@ -959,11 +982,11 @@ export default function LiveFleetStatus() {
                   <thead>
                     <tr className="border-b border-gray-800 bg-gray-900/80">
                       {[
-                        'Asset No', 'Fleet No', 'Type', 'Site', 'Operator',
-                        'Tyres', 'Health', 'Last Inspection', 'Alerts', 'Status',
-                      ].map(h => (
-                        <th key={h} className="text-left px-3 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide whitespace-nowrap">
-                          {h}
+                        'assetNo', 'fleetNo', 'type', 'site', 'operator',
+                        'tyres', 'health', 'lastInspection', 'alerts', 'status',
+                      ].map(hKey => (
+                        <th key={hKey} className="text-left px-3 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide whitespace-nowrap">
+                          {t(`livefleet.list.columns.${hKey}`)}
                         </th>
                       ))}
                     </tr>
@@ -1005,7 +1028,7 @@ export default function LiveFleetStatus() {
                                   </span>
                                 )}
                                 {v.criticalCount === 0 && v.highCount === 0 && (
-                                  <span className="text-gray-600">{v.tyres.length} ok</span>
+                                  <span className="text-gray-600">{v.tyres.length} {t('livefleet.list.ok')}</span>
                                 )}
                               </div>
                             </td>
@@ -1020,8 +1043,8 @@ export default function LiveFleetStatus() {
                             <td className="px-3 py-2.5">
                               <span className={`text-xs ${inspStale ? 'text-red-400' : 'text-gray-500'}`}>
                                 {v.lastInspectionDate
-                                  ? `${daysSinceInsp}d ago`
-                                  : 'Never'
+                                  ? t('livefleet.card.daysAgo', { days: daysSinceInsp })
+                                  : t('livefleet.list.never')
                                 }
                               </span>
                             </td>
@@ -1043,7 +1066,7 @@ export default function LiveFleetStatus() {
                                   backgroundColor: scoreColor(v.score) + '15',
                                 }}
                               >
-                                {scoreLabel(v.score)}
+                                {t(`livefleet.scoreLabel.${scoreLabelKey(v.score)}`)}
                               </span>
                             </td>
                           </motion.tr>
@@ -1068,7 +1091,7 @@ export default function LiveFleetStatus() {
             >
               <div className="flex items-center gap-2">
                 <Eye size={14} className="text-green-400" />
-                <span className="text-sm font-semibold text-white">Daily Briefing</span>
+                <span className="text-sm font-semibold text-white">{t('livefleet.sidebar.dailyBriefing')}</span>
               </div>
               {briefingOpen ? <ChevronUp size={13} className="text-gray-500" /> : <ChevronDown size={13} className="text-gray-500" />}
             </button>
@@ -1086,16 +1109,10 @@ export default function LiveFleetStatus() {
                     {/* Summary text */}
                     <div className="bg-gray-950/60 border border-gray-800/60 rounded-lg p-3">
                       <p className="text-xs text-gray-300 leading-relaxed">
-                        <span className="text-green-400 font-semibold">{kpis.operational}</span> vehicles operational
-                        {kpis.atRisk > 0 && (
-                          <>, <span className="text-orange-400 font-semibold">{kpis.atRisk}</span> at risk</>
-                        )}
-                        {kpis.overdue > 0 && (
-                          <>, <span className="text-red-400 font-semibold">{kpis.overdue}</span> overdue for inspection</>
-                        )}
-                        {kpis.activeAlerts > 0 && (
-                          <>, <span className="text-red-400 font-semibold">{kpis.activeAlerts}</span> active alert{kpis.activeAlerts !== 1 ? 's' : ''}</>
-                        )}.
+                        {t('livefleet.sidebar.briefingOperational', { count: kpis.operational })}
+                        {kpis.atRisk > 0 && t('livefleet.sidebar.briefingAtRisk', { count: kpis.atRisk })}
+                        {kpis.overdue > 0 && t('livefleet.sidebar.briefingOverdue', { count: kpis.overdue })}
+                        {kpis.activeAlerts > 0 && t('livefleet.sidebar.briefingAlerts', { count: kpis.activeAlerts })}.
                       </p>
                     </div>
 
@@ -1103,11 +1120,11 @@ export default function LiveFleetStatus() {
                     <div>
                       <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
                         <TrendingDown size={10} />
-                        Needs Attention Today
+                        {t('livefleet.sidebar.needsAttention')}
                       </p>
                       <div className="space-y-1.5">
                         {topAttention.length === 0 ? (
-                          <p className="text-xs text-gray-600 text-center py-2">All vehicles healthy</p>
+                          <p className="text-xs text-gray-600 text-center py-2">{t('livefleet.sidebar.allHealthy')}</p>
                         ) : (
                           topAttention.map(v => (
                             <button
@@ -1132,7 +1149,9 @@ export default function LiveFleetStatus() {
                               )}
                               {(v.criticalCount > 0 || v.highCount > 0) && (
                                 <p className="text-xs mt-0.5" style={{ color: riskColor(v.criticalCount > 0 ? 'Critical' : 'High') }}>
-                                  {v.criticalCount > 0 ? `${v.criticalCount} critical` : `${v.highCount} high risk`} tyre{(v.criticalCount || v.highCount) !== 1 ? 's' : ''}
+                                  {v.criticalCount > 0
+                                    ? t('livefleet.sidebar.criticalTyres', { count: v.criticalCount })
+                                    : t('livefleet.sidebar.highRiskTyres', { count: v.highCount })}
                                 </p>
                               )}
                             </button>
@@ -1145,17 +1164,17 @@ export default function LiveFleetStatus() {
                     <div>
                       <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
                         <Calendar size={10} />
-                        Inspections This Week
+                        {t('livefleet.sidebar.inspectionsThisWeek')}
                       </p>
                       <div className="space-y-1">
                         {upcomingInspections.length === 0 ? (
-                          <p className="text-xs text-gray-600 text-center py-2">None scheduled this week</p>
+                          <p className="text-xs text-gray-600 text-center py-2">{t('livefleet.sidebar.noneScheduled')}</p>
                         ) : (
                           upcomingInspections.map((ins, idx) => (
                             <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-gray-800/50 last:border-0">
                               <div>
                                 <span className="text-white font-medium">{ins.asset_no}</span>
-                                <span className="text-gray-500 ml-1">{ins.inspection_type ?? 'General'}</span>
+                                <span className="text-gray-500 ml-1">{ins.inspection_type ?? t('livefleet.sidebar.generalInspection')}</span>
                               </div>
                               <span className={`font-mono ${
                                 ins.status === 'Overdue' ? 'text-red-400' : 'text-gray-500'
@@ -1178,7 +1197,7 @@ export default function LiveFleetStatus() {
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex-1 max-h-72 overflow-y-auto">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-800">
                 <Bell size={13} className="text-red-400" />
-                <span className="text-sm font-semibold text-white">Fleet Alerts</span>
+                <span className="text-sm font-semibold text-white">{t('livefleet.sidebar.fleetAlerts')}</span>
                 <span className="ml-auto bg-red-900/50 text-red-300 text-xs px-1.5 py-0.5 rounded-full border border-red-800/50">
                   {alertsData.length}
                 </span>
@@ -1192,7 +1211,7 @@ export default function LiveFleetStatus() {
                   >
                     <div className="flex items-start justify-between gap-1.5">
                       <span className={`text-xs px-1.5 py-0.5 rounded border ${severityBgClass(a.severity)} flex-shrink-0`}>
-                        {a.severity ?? 'Info'}
+                        {a.severity ?? t('livefleet.sidebar.infoSeverity')}
                       </span>
                       {a.asset_no && <span className="text-gray-400 text-xs font-mono flex-shrink-0">{a.asset_no}</span>}
                     </div>
@@ -1284,19 +1303,19 @@ export default function LiveFleetStatus() {
                   )}
                   {drawerVehicle.isOverdue && (
                     <span className="px-2.5 py-1 rounded-full text-xs bg-red-900/30 border border-red-800/50 text-red-300 flex items-center gap-1">
-                      <Calendar size={10} /> Inspection Overdue
+                      <Calendar size={10} /> {t('livefleet.drawer.inspectionOverdue')}
                     </span>
                   )}
                   {drawerVehicle.alertCount > 0 && (
                     <span className="px-2.5 py-1 rounded-full text-xs bg-orange-900/30 border border-orange-800/50 text-orange-300 flex items-center gap-1">
-                      <Bell size={10} /> {drawerVehicle.alertCount} Alert{drawerVehicle.alertCount !== 1 ? 's' : ''}
+                      <Bell size={10} /> {t('livefleet.drawer.alertCount', { count: drawerVehicle.alertCount })}
                     </span>
                   )}
                 </div>
 
                 {/* Tyre diagram + tyre table */}
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-300 mb-3">Tyre Health Map</h3>
+                  <h3 className="text-sm font-semibold text-gray-300 mb-3">{t('livefleet.drawer.tyreHealthMap')}</h3>
                   <div className="grid grid-cols-2 gap-4 items-start">
                     {/* SVG diagram */}
                     <div className="bg-gray-900 border border-gray-800 rounded-lg p-2 flex items-center justify-center min-h-32">
@@ -1316,7 +1335,7 @@ export default function LiveFleetStatus() {
                     {/* Doughnut risk breakdown */}
                     {drawerVehicle.tyres.length > 0 && (
                       <div className="bg-gray-900 border border-gray-800 rounded-lg p-3">
-                        <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Risk Breakdown</p>
+                        <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">{t('livefleet.drawer.riskBreakdown')}</p>
                         <div className="h-32">
                           <Doughnut
                             data={drawerDoughnutData(drawerVehicle.tyres)}
@@ -1347,13 +1366,13 @@ export default function LiveFleetStatus() {
                 {/* Tyre table */}
                 {drawerVehicle.tyres.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-300 mb-2">Current Tyres</h3>
+                    <h3 className="text-sm font-semibold text-gray-300 mb-2">{t('livefleet.drawer.currentTyres')}</h3>
                     <div className="overflow-x-auto rounded-lg border border-gray-800">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-gray-800 bg-gray-900/60">
-                            {['Position', 'Brand', 'Tread', 'PSI', 'Risk', 'Fitted'].map(h => (
-                              <th key={h} className="text-left px-2.5 py-2 text-gray-500 font-medium whitespace-nowrap">{h}</th>
+                            {['position', 'brand', 'tread', 'psi', 'risk', 'fitted'].map(hKey => (
+                              <th key={hKey} className="text-left px-2.5 py-2 text-gray-500 font-medium whitespace-nowrap">{t(`livefleet.drawer.tyreColumns.${hKey}`)}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1398,7 +1417,7 @@ export default function LiveFleetStatus() {
                 {/* Recent inspections */}
                 {drawerInspections.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-300 mb-2">Recent Inspections</h3>
+                    <h3 className="text-sm font-semibold text-gray-300 mb-2">{t('livefleet.drawer.recentInspections')}</h3>
                     <div className="space-y-1.5">
                       {drawerInspections.map((ins, i) => (
                         <div
@@ -1406,7 +1425,7 @@ export default function LiveFleetStatus() {
                           className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-lg px-3 py-2"
                         >
                           <div>
-                            <p className="text-gray-300 text-xs font-medium">{ins.inspection_type ?? 'General Inspection'}</p>
+                            <p className="text-gray-300 text-xs font-medium">{ins.inspection_type ?? t('livefleet.drawer.generalInspectionFallback')}</p>
                             <p className="text-gray-500 text-xs">{fmtDate(ins.scheduled_date)}</p>
                           </div>
                           <span className={`px-2 py-0.5 rounded text-xs border ${
@@ -1416,7 +1435,7 @@ export default function LiveFleetStatus() {
                               ? 'bg-red-900/30 border-red-800/50 text-red-300'
                               : 'bg-gray-800 border-gray-700 text-gray-400'
                           }`}>
-                            {ins.status ?? 'Scheduled'}
+                            {ins.status ?? t('livefleet.drawer.scheduledFallback')}
                           </span>
                         </div>
                       ))}
@@ -1429,7 +1448,7 @@ export default function LiveFleetStatus() {
                   <div>
                     <h3 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-1.5">
                       <Bell size={13} className="text-red-400" />
-                      Active Alerts
+                      {t('livefleet.drawer.activeAlerts')}
                     </h3>
                     <div className="space-y-1.5">
                       {drawerVehicle.vehicleAlerts.map((a, i) => (
@@ -1438,7 +1457,7 @@ export default function LiveFleetStatus() {
                           className={`border rounded-lg px-3 py-2 ${severityBgClass(a.severity)}`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold uppercase tracking-wide">{a.severity ?? 'Info'}</span>
+                            <span className="text-xs font-semibold uppercase tracking-wide">{a.severity ?? t('livefleet.sidebar.infoSeverity')}</span>
                             {a.created_at && (
                               <span className="text-xs opacity-60">{fmtShortDate(a.created_at)}</span>
                             )}
@@ -1461,7 +1480,7 @@ export default function LiveFleetStatus() {
                     }}
                     className="btn-primary flex-1 gap-2"
                   >
-                    <Wrench size={14} /> Create Work Order
+                    <Wrench size={14} /> {t('livefleet.drawer.createWorkOrder')}
                   </button>
                   <button
                     onClick={() => {
@@ -1470,7 +1489,7 @@ export default function LiveFleetStatus() {
                     }}
                     className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm font-medium transition-colors"
                   >
-                    <Calendar size={14} /> Schedule Inspection
+                    <Calendar size={14} /> {t('livefleet.drawer.scheduleInspection')}
                   </button>
                 </div>
               </div>

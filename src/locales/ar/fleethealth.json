@@ -1,0 +1,87 @@
+{
+  "header": {
+    "title": "لوحة صحة الأسطول",
+    "loading": "جارٍ تحميل بيانات الأسطول...",
+    "subtitle": "حالة صحة الإطارات في الوقت الفعلي عبر جميع المركبات",
+    "updated": " · تم التحديث {time}"
+  },
+  "actions": {
+    "refresh": "تحديث",
+    "retry": "إعادة المحاولة"
+  },
+  "kpi": {
+    "fleetHealthScore": "درجة صحة الأسطول",
+    "vehiclesCount": "{count} مركبة",
+    "criticalVehicles": "مركبات حرجة",
+    "criticalVehiclesSub": "إطار حرج واحد أو أكثر",
+    "atRiskTyres": "إطارات معرضة للخطر",
+    "atRiskTyresSub": "حرجة + عالية",
+    "avgTreadDepth": "متوسط عمق المداس",
+    "avgTreadDepthSub": "الإطارات النشطة"
+  },
+  "filters": {
+    "searchPlaceholder": "ابحث بالأصل أو الموقع أو الدولة...",
+    "all": "الكل",
+    "matchingCount": "{filtered} من {total} مركبة"
+  },
+  "empty": {
+    "noMatch": "لا توجد مركبات مطابقة للمرشحات",
+    "tryAdjusting": "حاول تعديل المرشحات أعلاه",
+    "clearFilters": "مسح المرشحات"
+  },
+  "card": {
+    "noTyreData": "لا توجد بيانات إطارات",
+    "tyresCount": "{count} إطار (إطارات)",
+    "noData": "لا توجد بيانات",
+    "details": "التفاصيل",
+    "tread": "المداس: {value}"
+  },
+  "list": {
+    "columns": {
+      "asset": "الأصل",
+      "site": "الموقع",
+      "country": "الدولة",
+      "health": "الصحة",
+      "critical": "حرج",
+      "high": "عالٍ",
+      "medium": "متوسط",
+      "low": "منخفض",
+      "avgTread": "متوسط المداس",
+      "lastTyre": "آخر إطار"
+    }
+  },
+  "trend": {
+    "title": "اتجاه صحة الأسطول - آخر 12 شهرًا",
+    "seriesLabel": "صحة الأسطول %"
+  },
+  "sidebar": {
+    "criticalAlerts": "التنبيهات الحرجة",
+    "noCriticalAlerts": "لا توجد تنبيهات حرجة",
+    "allSafe": "جميع المركبات ضمن الحدود الآمنة",
+    "treadAt": "المداس: {mm} ملم @ {position}",
+    "na": "غير متاح"
+  },
+  "drawer": {
+    "activeTyres": "الإطارات النشطة",
+    "tyreColumns": {
+      "position": "الموضع",
+      "serial": "الرقم التسلسلي",
+      "brand": "العلامة التجارية",
+      "size": "المقاس",
+      "tread": "المداس",
+      "pressure": "الضغط",
+      "risk": "الخطورة",
+      "fitted": "التركيب"
+    },
+    "riskIndexTrend": "اتجاه مؤشر الخطورة",
+    "riskIndexSeriesLabel": "مؤشر الخطورة",
+    "riskAxis": {
+      "critical": "حرج",
+      "high": "عالٍ",
+      "medium": "متوسط",
+      "low": "منخفض"
+    },
+    "viewInTyreRecords": "عرض في سجلات الإطارات",
+    "createWorkOrder": "إنشاء أمر عمل"
+  }
+}

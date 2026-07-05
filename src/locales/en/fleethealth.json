@@ -1,0 +1,87 @@
+{
+  "header": {
+    "title": "Fleet Health Board",
+    "loading": "Loading fleet data...",
+    "subtitle": "Real-time tyre health status across all vehicles",
+    "updated": " · Updated {time}"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "retry": "Retry"
+  },
+  "kpi": {
+    "fleetHealthScore": "Fleet Health Score",
+    "vehiclesCount": "{count} vehicles",
+    "criticalVehicles": "Critical Vehicles",
+    "criticalVehiclesSub": "1+ critical tyre",
+    "atRiskTyres": "At-Risk Tyres",
+    "atRiskTyresSub": "Critical + High",
+    "avgTreadDepth": "Avg Tread Depth",
+    "avgTreadDepthSub": "active tyres"
+  },
+  "filters": {
+    "searchPlaceholder": "Search asset, site, country...",
+    "all": "All",
+    "matchingCount": "{filtered} of {total} vehicles"
+  },
+  "empty": {
+    "noMatch": "No vehicles match your filters",
+    "tryAdjusting": "Try adjusting the filters above",
+    "clearFilters": "Clear Filters"
+  },
+  "card": {
+    "noTyreData": "No tyre data",
+    "tyresCount": "{count} tyre(s)",
+    "noData": "No data",
+    "details": "Details",
+    "tread": "Tread: {value}"
+  },
+  "list": {
+    "columns": {
+      "asset": "Asset",
+      "site": "Site",
+      "country": "Country",
+      "health": "Health",
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "avgTread": "Avg Tread",
+      "lastTyre": "Last Tyre"
+    }
+  },
+  "trend": {
+    "title": "Fleet Health Trend - Last 12 Months",
+    "seriesLabel": "Fleet Health %"
+  },
+  "sidebar": {
+    "criticalAlerts": "Critical Alerts",
+    "noCriticalAlerts": "No Critical Alerts",
+    "allSafe": "All vehicles are within safe thresholds",
+    "treadAt": "Tread: {mm}mm @ {position}",
+    "na": "N/A"
+  },
+  "drawer": {
+    "activeTyres": "Active Tyres",
+    "tyreColumns": {
+      "position": "Position",
+      "serial": "Serial",
+      "brand": "Brand",
+      "size": "Size",
+      "tread": "Tread",
+      "pressure": "Pressure",
+      "risk": "Risk",
+      "fitted": "Fitted"
+    },
+    "riskIndexTrend": "Risk Index Trend",
+    "riskIndexSeriesLabel": "Risk Index",
+    "riskAxis": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "viewInTyreRecords": "View in Tyre Records",
+    "createWorkOrder": "Create Work Order"
+  }
+}

@@ -21,6 +21,7 @@ import { formatDate } from '../lib/formatters'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
+import { useLanguage } from '../contexts/LanguageContext'
 
 ChartJS.register(
   CategoryScale, LinearScale,
@@ -97,6 +98,7 @@ const POSITIONS_LAYOUT = [
 ]
 
 function TyrePositionDot({ tyre, position }) {
+  const { t } = useLanguage()
   const [showTip, setShowTip] = useState(false)
   const color = tyre ? riskColor(tyre.risk_level) : '#374151'
   const opacity = tyre ? 1 : 0.35
@@ -112,7 +114,7 @@ function TyrePositionDot({ tyre, position }) {
       {showTip && tyre && (
         <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 rounded-lg p-2 text-xs whitespace-nowrap shadow-xl pointer-events-none">
           <p className="text-white font-semibold">{position}</p>
-          <p className="text-gray-400">Tread: {tyre.tread_depth != null ? `${tyre.tread_depth}mm` : '-'}</p>
+          <p className="text-gray-400">{t('fleethealth.card.tread', { value: tyre.tread_depth != null ? `${tyre.tread_depth}mm` : '-' })}</p>
           <p style={{ color: riskColor(tyre.risk_level) }}>{tyre.risk_level ?? '-'}</p>
         </div>
       )}
@@ -194,6 +196,7 @@ function SkeletonCard() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function FleetHealthBoard() {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const { activeCountry } = useSettings()
   const { profile } = useAuth()
@@ -374,7 +377,7 @@ export default function FleetHealthBoard() {
     return {
       labels: months.map(m => m.label),
       datasets: [{
-        label: 'Fleet Health %',
+        label: t('fleethealth.trend.seriesLabel'),
         data: scores,
         borderColor: '#16a34a',
         backgroundColor: 'rgba(22,163,74,0.1)',
@@ -385,7 +388,7 @@ export default function FleetHealthBoard() {
         spanGaps: true,
       }],
     }
-  }, [trendData])
+  }, [trendData, t])
 
   const TICK = { color: '#6b7280', font: { size: 10 } }
   const GRID = { color:'var(--text-muted)' }
@@ -448,7 +451,7 @@ export default function FleetHealthBoard() {
     return {
       labels: sorted.map(r => r.issue_date?.slice(0, 10)),
       datasets: [{
-        label: 'Risk Index',
+        label: t('fleethealth.drawer.riskIndexSeriesLabel'),
         data: sorted.map(r => ({ Critical: 0, High: 33, Medium: 66, Low: 100 }[r.risk_level] ?? 50)),
         borderColor: '#f59e0b',
         backgroundColor: 'rgba(245,158,11,0.1)',
@@ -457,7 +460,7 @@ export default function FleetHealthBoard() {
         pointRadius: 3,
       }],
     }
-  }, [selectedVehicle, trendData])
+  }, [selectedVehicle, trendData, t])
 
   function openDrawer(assetNo) {
     setSelectedVehicle(assetNo)
@@ -481,8 +484,8 @@ export default function FleetHealthBoard() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">Fleet Health Board</h1>
-            <p className="text-gray-400 text-sm mt-1">Loading fleet data...</p>
+            <h1 className="text-2xl font-bold text-white">{t('fleethealth.header.title')}</h1>
+            <p className="text-gray-400 text-sm mt-1">{t('fleethealth.header.loading')}</p>
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -506,7 +509,7 @@ export default function FleetHealthBoard() {
         <AlertTriangle size={40} className="text-red-400" />
         <p className="text-red-300 font-medium">{error}</p>
         <button onClick={() => load()} className="btn-primary flex items-center gap-2">
-          <RefreshCw size={14} /> Retry
+          <RefreshCw size={14} /> {t('fleethealth.actions.retry')}
         </button>
       </div>
     )
@@ -517,8 +520,8 @@ export default function FleetHealthBoard() {
 
       {/* ── Header ── */}
       <PageHeader
-        title="Fleet Health Board"
-        subtitle={`Real-time tyre health status across all vehicles${lastUpdated ? ` · Updated ${lastUpdated.toLocaleTimeString()}` : ''}`}
+        title={t('fleethealth.header.title')}
+        subtitle={`${t('fleethealth.header.subtitle')}${lastUpdated ? t('fleethealth.header.updated', { time: lastUpdated.toLocaleTimeString() }) : ''}`}
         icon={Activity}
         actions={
           <button
@@ -527,7 +530,7 @@ export default function FleetHealthBoard() {
             className="btn-secondary flex items-center gap-2 text-sm"
           >
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-            Refresh
+            {t('fleethealth.actions.refresh')}
           </button>
         }
       />
@@ -535,30 +538,30 @@ export default function FleetHealthBoard() {
       {/* ── KPI Bar ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
-          label="Fleet Health Score"
+          label={t('fleethealth.kpi.fleetHealthScore')}
           value={`${kpis.fleetHealth}%`}
-          sub={`${vehicles.length} vehicles`}
+          sub={t('fleethealth.kpi.vehiclesCount', { count: vehicles.length })}
           icon={Shield}
           color={kpis.fleetHealth >= 70 ? 'green' : kpis.fleetHealth >= 40 ? 'yellow' : 'red'}
         />
         <KpiCard
-          label="Critical Vehicles"
+          label={t('fleethealth.kpi.criticalVehicles')}
           value={kpis.criticalVehicles}
-          sub="1+ critical tyre"
+          sub={t('fleethealth.kpi.criticalVehiclesSub')}
           icon={AlertTriangle}
           color={kpis.criticalVehicles > 0 ? 'red' : 'green'}
         />
         <KpiCard
-          label="At-Risk Tyres"
+          label={t('fleethealth.kpi.atRiskTyres')}
           value={kpis.atRiskCount}
-          sub="Critical + High"
+          sub={t('fleethealth.kpi.atRiskTyresSub')}
           icon={Circle}
           color={kpis.atRiskCount > 0 ? 'orange' : 'green'}
         />
         <KpiCard
-          label="Avg Tread Depth"
+          label={t('fleethealth.kpi.avgTreadDepth')}
           value={`${kpis.avgTread}mm`}
-          sub="active tyres"
+          sub={t('fleethealth.kpi.avgTreadDepthSub')}
           icon={BarChart2}
           color="blue"
         />
@@ -578,7 +581,7 @@ export default function FleetHealthBoard() {
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input
                   className="input pl-8 w-full text-sm"
-                  placeholder="Search asset, site, country..."
+                  placeholder={t('fleethealth.filters.searchPlaceholder')}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
@@ -597,7 +600,7 @@ export default function FleetHealthBoard() {
                   value={siteFilter}
                   onChange={e => setSiteFilter(e.target.value)}
                 >
-                  {sites.map(s => <option key={s} value={s}>{s}</option>)}
+                  {sites.map(s => <option key={s} value={s}>{s === 'All' ? t('fleethealth.filters.all') : s}</option>)}
                 </select>
               </div>
 
@@ -609,7 +612,7 @@ export default function FleetHealthBoard() {
                   value={countryFilter}
                   onChange={e => setCountryFilter(e.target.value)}
                 >
-                  {countries.map(c => <option key={c} value={c}>{c}</option>)}
+                  {countries.map(c => <option key={c} value={c}>{c === 'All' ? t('fleethealth.filters.all') : c}</option>)}
                 </select>
               </div>
 
@@ -622,7 +625,7 @@ export default function FleetHealthBoard() {
                   onChange={e => setRiskFilter(e.target.value)}
                 >
                   {['All','Critical','High','Medium','Low'].map(r => (
-                    <option key={r} value={r}>{r}</option>
+                    <option key={r} value={r}>{r === 'All' ? t('fleethealth.filters.all') : r}</option>
                   ))}
                 </select>
               </div>
@@ -646,7 +649,7 @@ export default function FleetHealthBoard() {
 
             {(siteFilter !== 'All' || countryFilter !== 'All' || riskFilter !== 'All' || search) && (
               <p className="text-xs text-green-500 mt-2">
-                {filtered.length} of {vehicles.length} vehicles
+                {t('fleethealth.filters.matchingCount', { filtered: filtered.length, total: vehicles.length })}
               </p>
             )}
           </div>
@@ -655,13 +658,13 @@ export default function FleetHealthBoard() {
           {filtered.length === 0 && (
             <div className="card flex flex-col items-center justify-center py-16 gap-3">
               <Truck size={40} className="text-gray-700" />
-              <p className="text-gray-400 font-medium">No vehicles match your filters</p>
-              <p className="text-gray-600 text-sm">Try adjusting the filters above</p>
+              <p className="text-gray-400 font-medium">{t('fleethealth.empty.noMatch')}</p>
+              <p className="text-gray-600 text-sm">{t('fleethealth.empty.tryAdjusting')}</p>
               <button
                 onClick={() => { setSiteFilter('All'); setCountryFilter('All'); setRiskFilter('All'); setSearch('') }}
                 className="btn-secondary text-sm mt-1"
               >
-                Clear Filters
+                {t('fleethealth.empty.clearFilters')}
               </button>
             </div>
           )}
@@ -697,9 +700,9 @@ export default function FleetHealthBoard() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-800">
-                      {['Asset','Site','Country','Health','Critical','High','Medium','Low','Avg Tread','Last Tyre'].map(h => (
-                        <th key={h} className="text-left px-3 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide whitespace-nowrap">
-                          {h}
+                      {['asset','site','country','health','critical','high','medium','low','avgTread','lastTyre'].map(hKey => (
+                        <th key={hKey} className="text-left px-3 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide whitespace-nowrap">
+                          {t(`fleethealth.list.columns.${hKey}`)}
                         </th>
                       ))}
                     </tr>
@@ -770,7 +773,7 @@ export default function FleetHealthBoard() {
           <div className="card">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp size={16} className="text-green-400" />
-              <h2 className="text-base font-semibold text-white">Fleet Health Trend - Last 12 Months</h2>
+              <h2 className="text-base font-semibold text-white">{t('fleethealth.trend.title')}</h2>
             </div>
             <div className="h-48">
               <Line data={trendChartData} options={trendOpts} />
@@ -783,7 +786,7 @@ export default function FleetHealthBoard() {
           <div className="card flex-1 max-h-[calc(100vh-12rem)] overflow-y-auto">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle size={15} className="text-red-400" />
-              <h2 className="text-sm font-semibold text-white">Critical Alerts</h2>
+              <h2 className="text-sm font-semibold text-white">{t('fleethealth.sidebar.criticalAlerts')}</h2>
               {criticalList.length > 0 && (
                 <span className="ml-auto bg-red-900/50 text-red-300 text-xs px-2 py-0.5 rounded-full border border-red-800/50">
                   {criticalList.length}
@@ -794,8 +797,8 @@ export default function FleetHealthBoard() {
             {criticalList.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-8">
                 <CheckCircle size={28} className="text-green-500" />
-                <p className="text-green-400 text-sm font-medium">No Critical Alerts</p>
-                <p className="text-gray-600 text-xs text-center">All vehicles are within safe thresholds</p>
+                <p className="text-green-400 text-sm font-medium">{t('fleethealth.sidebar.noCriticalAlerts')}</p>
+                <p className="text-gray-600 text-xs text-center">{t('fleethealth.sidebar.allSafe')}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -812,7 +815,7 @@ export default function FleetHealthBoard() {
                     <p className="text-gray-400 text-xs mt-0.5">{v.site} · {v.country}</p>
                     {v.worstTread != null && (
                       <p className="text-red-400 text-xs mt-1">
-                        Tread: {v.worstTread}mm @ {v.worstPos ?? 'N/A'}
+                        {t('fleethealth.sidebar.treadAt', { mm: v.worstTread, position: v.worstPos ?? t('fleethealth.sidebar.na') })}
                       </p>
                     )}
                   </button>
@@ -872,13 +875,13 @@ export default function FleetHealthBoard() {
 
                 {/* Tyre table */}
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-300 mb-2">Active Tyres</h3>
+                  <h3 className="text-sm font-semibold text-gray-300 mb-2">{t('fleethealth.drawer.activeTyres')}</h3>
                   <div className="overflow-x-auto rounded-lg border border-gray-800">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-gray-800 bg-gray-900/50">
-                          {['Position','Serial','Brand','Size','Tread','Pressure','Risk','Fitted'].map(h => (
-                            <th key={h} className="text-left px-2.5 py-2 text-gray-500 font-medium whitespace-nowrap">{h}</th>
+                          {['position','serial','brand','size','tread','pressure','risk','fitted'].map(hKey => (
+                            <th key={hKey} className="text-left px-2.5 py-2 text-gray-500 font-medium whitespace-nowrap">{t(`fleethealth.drawer.tyreColumns.${hKey}`)}</th>
                           ))}
                         </tr>
                       </thead>
@@ -914,7 +917,7 @@ export default function FleetHealthBoard() {
                 {/* Risk trend mini chart */}
                 {drawerTrendData && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-300 mb-2">Risk Index Trend</h3>
+                    <h3 className="text-sm font-semibold text-gray-300 mb-2">{t('fleethealth.drawer.riskIndexTrend')}</h3>
                     <div className="bg-gray-900 rounded-lg border border-gray-800 p-3 h-36">
                       <Line
                         data={drawerTrendData}
@@ -927,7 +930,7 @@ export default function FleetHealthBoard() {
                             y: {
                               ticks: {
                                 color: '#6b7280', font: { size: 9 },
-                                callback: v => v === 0 ? 'Critical' : v === 33 ? 'High' : v === 66 ? 'Medium' : 'Low',
+                                callback: v => v === 0 ? t('fleethealth.drawer.riskAxis.critical') : v === 33 ? t('fleethealth.drawer.riskAxis.high') : v === 66 ? t('fleethealth.drawer.riskAxis.medium') : t('fleethealth.drawer.riskAxis.low'),
                               },
                               grid: GRID,
                               min: 0, max: 100,
@@ -945,13 +948,13 @@ export default function FleetHealthBoard() {
                     onClick={() => navigate(`/vehicle-history?asset=${drawerVehicle.asset_no}`)}
                     className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm"
                   >
-                    <ExternalLink size={13} /> View in Tyre Records
+                    <ExternalLink size={13} /> {t('fleethealth.drawer.viewInTyreRecords')}
                   </button>
                   <button
                     onClick={() => navigate(`/work-orders?asset=${drawerVehicle.asset_no}`)}
                     className="flex-1 btn-primary flex items-center justify-center gap-2 text-sm"
                   >
-                    <Wrench size={13} /> Create Work Order
+                    <Wrench size={13} /> {t('fleethealth.drawer.createWorkOrder')}
                   </button>
                 </div>
               </div>

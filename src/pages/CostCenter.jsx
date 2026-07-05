@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import {
@@ -41,6 +42,7 @@ const PERIOD_PRESETS = [
 ]
 
 const DIMENSION_TABS = ['By Site', 'By Brand', 'By Vehicle', 'By Month']
+const DIMENSION_TAB_KEYS = ['bySite', 'byBrand', 'byVehicle', 'byMonth']
 
 const CHART_DEFAULTS = {
   responsive: true,
@@ -123,6 +125,7 @@ function cpkDeltaBadge(cpk, fleetAvg) {
 // ── Main Component ───────────────────────────────────────────────────────────────
 export default function CostCenter() {
   const { activeCurrency, activeCountry } = useSettings()
+  const { t } = useLanguage()
 
   const [records, setRecords]           = useState([])
   const [loading, setLoading]           = useState(true)
@@ -313,11 +316,11 @@ export default function CostCenter() {
           items.push({
             type: 'vehicle',
             id: v.asset,
-            label: `Vehicle ${v.asset}`,
-            metric: `CPK ${fmtCpk(v.avgCpk, activeCurrency)}`,
+            label: t('costcenter.anomaly.vehicleLabel', { asset: v.asset }),
+            metric: t('costcenter.anomaly.metricCpk', { value: fmtCpk(v.avgCpk, activeCurrency) }),
             severity: 'Critical',
-            description: `CPK is ${((v.avgCpk / fleetAvg - 1) * 100).toFixed(0)}% above fleet average`,
-            recommendation: 'Inspect alignment, suspension, driver behaviour. Prioritise for audit.',
+            description: t('costcenter.anomaly.descVehicle', { pct: ((v.avgCpk / fleetAvg - 1) * 100).toFixed(0) }),
+            recommendation: t('costcenter.anomaly.recVehicle'),
           })
         }
       })
@@ -330,11 +333,11 @@ export default function CostCenter() {
           items.push({
             type: 'site',
             id: s.site,
-            label: `Site: ${s.site}`,
-            metric: `CPK ${fmtCpk(s.avgCpk, activeCurrency)}`,
+            label: t('costcenter.anomaly.siteLabel', { site: s.site }),
+            metric: t('costcenter.anomaly.metricCpk', { value: fmtCpk(s.avgCpk, activeCurrency) }),
             severity: 'High',
-            description: `Site CPK is ${((s.avgCpk / fleetAvg - 1) * 100).toFixed(0)}% above fleet average`,
-            recommendation: 'Review site-specific operating conditions, road quality, overloading.',
+            description: t('costcenter.anomaly.descSite', { pct: ((s.avgCpk / fleetAvg - 1) * 100).toFixed(0) }),
+            recommendation: t('costcenter.anomaly.recSite'),
           })
         }
       })
@@ -346,17 +349,17 @@ export default function CostCenter() {
         items.push({
           type: 'brand',
           id: b.brand,
-          label: `Brand: ${b.brand}`,
-          metric: `Failure rate ${fmtPct(b.failureRate)}`,
+          label: t('costcenter.anomaly.brandLabel', { brand: b.brand }),
+          metric: t('costcenter.anomaly.metricFailureRate', { value: fmtPct(b.failureRate) }),
           severity: 'High',
-          description: `${b.failures} failures out of ${b.count} tyres in period`,
-          recommendation: 'Consider procurement review. Evaluate alternative brands.',
+          description: t('costcenter.anomaly.descBrand', { failures: b.failures, count: b.count }),
+          recommendation: t('costcenter.anomaly.recBrand'),
         })
       }
     })
 
     return items.slice(0, 12)
-  }, [kpis.fleetAvgCpk, byVehicle, bySite, byBrand, activeCurrency])
+  }, [kpis.fleetAvgCpk, byVehicle, bySite, byBrand, activeCurrency, t])
 
   // ── ROI Calculator ────────────────────────────────────────────────────────────
   const roi = useMemo(() => {
@@ -379,22 +382,22 @@ export default function CostCenter() {
   const siteBarData = useMemo(() => ({
     labels: bySite.slice(0, 10).map(s => s.site),
     datasets: [{
-      label: 'Total Cost',
+      label: t('costcenter.charts.totalCost'),
       data: bySite.slice(0, 10).map(s => s.totalCost),
       backgroundColor: PALETTE,
       borderRadius: 4,
     }],
-  }), [bySite])
+  }), [bySite, t])
 
   const brandBarData = useMemo(() => ({
     labels: byBrand.slice(0, 10).map(b => b.brand),
     datasets: [{
-      label: 'Avg CPK',
+      label: t('costcenter.charts.avgCpk'),
       data: byBrand.slice(0, 10).map(b => b.avgCpk ?? 0),
       backgroundColor: PALETTE,
       borderRadius: 4,
     }],
-  }), [byBrand])
+  }), [byBrand, t])
 
   const monthlyLineData = useMemo(() => {
     const costs = byMonth.map(m => m.totalCost)
@@ -403,7 +406,7 @@ export default function CostCenter() {
       labels: byMonth.map(m => monthLabel(m.month)),
       datasets: [
         {
-          label: 'Total Cost',
+          label: t('costcenter.charts.totalCost'),
           data: costs,
           borderColor: '#3b82f6',
           backgroundColor: 'rgba(59,130,246,0.12)',
@@ -414,7 +417,7 @@ export default function CostCenter() {
           pointHoverRadius: 6,
         },
         {
-          label: 'Avg CPK',
+          label: t('costcenter.charts.avgCpk'),
           data: cpks,
           borderColor: '#10b981',
           backgroundColor: 'transparent',
@@ -427,7 +430,7 @@ export default function CostCenter() {
         },
       ],
     }
-  }, [byMonth])
+  }, [byMonth, t])
 
   const monthlyTrendData = useMemo(() => {
     const costs  = byMonth.map(m => m.totalCost)
@@ -436,14 +439,14 @@ export default function CostCenter() {
       labels: byMonth.map(m => monthLabel(m.month)),
       datasets: [
         {
-          label: 'Monthly Spend',
+          label: t('costcenter.charts.monthlySpend'),
           data: costs,
           backgroundColor: 'rgba(59,130,246,0.7)',
           borderRadius: 4,
           type: 'bar',
         },
         {
-          label: '3-Month Moving Avg',
+          label: t('costcenter.charts.movingAvg3'),
           data: ma3,
           borderColor: '#f59e0b',
           backgroundColor: 'transparent',
@@ -455,14 +458,14 @@ export default function CostCenter() {
         },
       ],
     }
-  }, [byMonth])
+  }, [byMonth, t])
 
   const doughnutData = useMemo(() => {
     const top8  = bySite.slice(0, 8)
     const other = bySite.slice(8).reduce((s, r) => s + r.totalCost, 0)
     const labels = [...top8.map(s => s.site)]
     const data   = [...top8.map(s => s.totalCost)]
-    if (other > 0) { labels.push('Other'); data.push(other) }
+    if (other > 0) { labels.push(t('costcenter.charts.other')); data.push(other) }
     return {
       labels,
       datasets: [{
@@ -472,20 +475,20 @@ export default function CostCenter() {
         borderWidth: 1,
       }],
     }
-  }, [bySite])
+  }, [bySite, t])
 
   const topAssetsData = useMemo(() => {
     const top10 = byVehicle.slice(0, 10)
     return {
       labels: top10.map(v => v.asset),
       datasets: [{
-        label: 'Total Cost',
+        label: t('costcenter.charts.totalCost'),
         data: top10.map(v => v.totalCost),
         backgroundColor: 'rgba(139,92,246,0.7)',
         borderRadius: 4,
       }],
     }
-  }, [byVehicle])
+  }, [byVehicle, t])
 
   // ── Export Handlers ───────────────────────────────────────────────────────────
   async function handleExcelExport() {
@@ -551,8 +554,8 @@ export default function CostCenter() {
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <PageHeader
-        title="Cost Center"
-        subtitle="Multi-dimensional tyre cost analysis & optimization intelligence"
+        title={t('costcenter.title')}
+        subtitle={t('costcenter.subtitle')}
         icon={DollarSign}
         actions={<>
           <div className="flex items-center gap-1 p-1 rounded-lg bg-gray-900 border border-gray-800">
@@ -566,7 +569,7 @@ export default function CostCenter() {
                     : 'text-gray-500 hover:text-gray-300'
                 }`}
               >
-                {p.label}
+                {t(`costcenter.periods.${p.label}`)}
               </button>
             ))}
           </div>
@@ -592,7 +595,7 @@ export default function CostCenter() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-gray-400 hover:text-green-400 hover:border-green-700 transition-all text-xs disabled:opacity-50"
           >
             <FileSpreadsheet size={13} />
-            Excel
+            {t('costcenter.actions.excel')}
           </button>
           <button
             onClick={handlePdfExport}
@@ -600,7 +603,7 @@ export default function CostCenter() {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-gray-400 hover:text-green-400 hover:border-green-700 transition-all text-xs disabled:opacity-50"
           >
             <FileText size={13} />
-            PDF
+            {t('costcenter.actions.pdf')}
           </button>
         </>}
       />
@@ -627,37 +630,37 @@ export default function CostCenter() {
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <KpiCard
               icon={DollarSign}
-              label="Total Spend"
+              label={t('costcenter.kpi.totalSpend.label')}
               value={fmtCurrency(kpis.totalSpend, activeCurrency)}
-              sub={`${normalised.length} tyres`}
+              sub={t('costcenter.kpi.totalSpend.sub', { count: normalised.length })}
               accent="green"
             />
             <KpiCard
               icon={Target}
-              label="Fleet Avg CPK"
+              label={t('costcenter.kpi.fleetAvgCpk.label')}
               value={fmtCpk(kpis.fleetAvgCpk, activeCurrency)}
-              sub={`Benchmark: ${activeCurrency} ${INDUSTRY_BENCHMARK_CPK}/km`}
+              sub={t('costcenter.kpi.fleetAvgCpk.sub', { currency: activeCurrency, value: INDUSTRY_BENCHMARK_CPK })}
               accent={kpis.fleetAvgCpk && kpis.fleetAvgCpk > INDUSTRY_BENCHMARK_CPK ? 'red' : 'green'}
             />
             <KpiCard
               icon={BarChart2}
-              label="Monthly Burn Rate"
+              label={t('costcenter.kpi.monthlyBurn.label')}
               value={fmtCurrency(kpis.monthlyBurn, activeCurrency)}
-              sub="per month"
+              sub={t('costcenter.kpi.monthlyBurn.sub')}
               accent="blue"
             />
             <KpiCard
               icon={TrendingUp}
-              label="Annualised Projection"
+              label={t('costcenter.kpi.annualized.label')}
               value={fmtCurrency(kpis.annualized, activeCurrency)}
-              sub="at current burn rate"
+              sub={t('costcenter.kpi.annualized.sub')}
               accent="purple"
             />
             <KpiCard
               icon={Zap}
-              label="Savings Opportunity"
-              value={kpis.savingsOppty > 0 ? fmtCurrency(kpis.savingsOppty, activeCurrency) : 'On Target'}
-              sub={kpis.savingsOppty > 0 ? '15% est. via optimisation' : 'CPK within benchmark'}
+              label={t('costcenter.kpi.savings.label')}
+              value={kpis.savingsOppty > 0 ? fmtCurrency(kpis.savingsOppty, activeCurrency) : t('costcenter.kpi.savings.onTarget')}
+              sub={kpis.savingsOppty > 0 ? t('costcenter.kpi.savings.subOpportunity') : t('costcenter.kpi.savings.subOnTarget')}
               accent={kpis.savingsOppty > 0 ? 'yellow' : 'green'}
             />
           </div>
@@ -677,7 +680,7 @@ export default function CostCenter() {
                     activeTab === i ? 'text-green-300' : 'text-gray-500 hover:text-gray-300'
                   }`}
                 >
-                  {tab}
+                  {t(`costcenter.tabs.${DIMENSION_TAB_KEYS[i]}`)}
                   {activeTab === i && (
                     <motion.span
                       layoutId="tab-underline"
@@ -718,7 +721,14 @@ export default function CostCenter() {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-gray-800 text-left">
-                            {['Site', 'Tyres', 'Total Cost', 'Avg Cost/Tyre', 'Avg CPK', 'vs Fleet Avg'].map(h => (
+                            {[
+                              t('costcenter.columns.bySite.site'),
+                              t('costcenter.columns.bySite.tyres'),
+                              t('costcenter.columns.bySite.totalCost'),
+                              t('costcenter.columns.bySite.avgCostPerTyre'),
+                              t('costcenter.columns.bySite.avgCpk'),
+                              t('costcenter.columns.bySite.vsFleetAvg'),
+                            ].map(h => (
                               <th key={h} className="pb-2 pr-4 text-xs text-gray-500 font-medium">{h}</th>
                             ))}
                           </tr>
@@ -739,13 +749,13 @@ export default function CostCenter() {
                                     <span className={`flex items-center gap-1 text-xs font-medium ${delta.cls}`}>
                                       <DeltaIcon size={12} />{delta.label}
                                     </span>
-                                  ) : <span className="text-gray-600 text-xs">N/A</span>}
+                                  ) : <span className="text-gray-600 text-xs">{t('costcenter.states.na')}</span>}
                                 </td>
                               </tr>
                             )
                           })}
                           {bySite.length === 0 && (
-                            <tr><td colSpan={6} className="text-center py-8 text-gray-600 text-sm">No data for selected period</td></tr>
+                            <tr><td colSpan={6} className="text-center py-8 text-gray-600 text-sm">{t('costcenter.states.noDataPeriod')}</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -773,7 +783,15 @@ export default function CostCenter() {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-gray-800 text-left">
-                            {['Rank', 'Brand', 'Count', 'Total Cost', 'Avg CPK', 'Failure Rate', 'Best Position'].map(h => (
+                            {[
+                              t('costcenter.columns.byBrand.rank'),
+                              t('costcenter.columns.byBrand.brand'),
+                              t('costcenter.columns.byBrand.count'),
+                              t('costcenter.columns.byBrand.totalCost'),
+                              t('costcenter.columns.byBrand.avgCpk'),
+                              t('costcenter.columns.byBrand.failureRate'),
+                              t('costcenter.columns.byBrand.bestPosition'),
+                            ].map(h => (
                               <th key={h} className="pb-2 pr-4 text-xs text-gray-500 font-medium">{h}</th>
                             ))}
                           </tr>
@@ -797,7 +815,7 @@ export default function CostCenter() {
                             </tr>
                           ))}
                           {byBrand.length === 0 && (
-                            <tr><td colSpan={7} className="text-center py-8 text-gray-600 text-sm">No data for selected period</td></tr>
+                            <tr><td colSpan={7} className="text-center py-8 text-gray-600 text-sm">{t('costcenter.states.noDataPeriod')}</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -811,7 +829,14 @@ export default function CostCenter() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-800 text-left">
-                          {['Asset No.', 'Tyres', 'Total Cost', 'Avg CPK', 'Risk Score', 'Trend'].map(h => (
+                          {[
+                            t('costcenter.columns.byVehicle.assetNo'),
+                            t('costcenter.columns.byVehicle.tyres'),
+                            t('costcenter.columns.byVehicle.totalCost'),
+                            t('costcenter.columns.byVehicle.avgCpk'),
+                            t('costcenter.columns.byVehicle.riskScore'),
+                            t('costcenter.columns.byVehicle.trend'),
+                          ].map(h => (
                             <th key={h} className="pb-2 pr-4 text-xs text-gray-500 font-medium">{h}</th>
                           ))}
                         </tr>
@@ -825,18 +850,18 @@ export default function CostCenter() {
                             <td className="py-2.5 pr-4 text-gray-300">{fmtCpk(v.avgCpk, activeCurrency)}</td>
                             <td className="py-2.5 pr-4">
                               <span className={`text-xs font-bold ${v.riskScore > 3 ? 'text-red-400' : v.riskScore > 1 ? 'text-orange-400' : 'text-green-400'}`}>
-                                {v.riskScore > 0 ? `${v.riskScore} High Risk` : 'Low Risk'}
+                                {v.riskScore > 0 ? t('costcenter.risk.high', { count: v.riskScore }) : t('costcenter.risk.low')}
                               </span>
                             </td>
                             <td className="py-2.5 pr-4">
-                              {v.trend === 'up'   && <span className="flex items-center gap-1 text-xs text-red-400"><TrendingUp size={12} />Cost Rising</span>}
-                              {v.trend === 'down' && <span className="flex items-center gap-1 text-xs text-green-400"><TrendingDown size={12} />Cost Falling</span>}
-                              {v.trend === 'flat' && <span className="flex items-center gap-1 text-xs text-gray-500"><Minus size={12} />Stable</span>}
+                              {v.trend === 'up'   && <span className="flex items-center gap-1 text-xs text-red-400"><TrendingUp size={12} />{t('costcenter.trend.rising')}</span>}
+                              {v.trend === 'down' && <span className="flex items-center gap-1 text-xs text-green-400"><TrendingDown size={12} />{t('costcenter.trend.falling')}</span>}
+                              {v.trend === 'flat' && <span className="flex items-center gap-1 text-xs text-gray-500"><Minus size={12} />{t('costcenter.trend.stable')}</span>}
                             </td>
                           </tr>
                         ))}
                         {byVehicle.length === 0 && (
-                          <tr><td colSpan={6} className="text-center py-8 text-gray-600 text-sm">No data for selected period</td></tr>
+                          <tr><td colSpan={6} className="text-center py-8 text-gray-600 text-sm">{t('costcenter.states.noDataPeriod')}</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -868,7 +893,7 @@ export default function CostCenter() {
                       />
                     ) : (
                       <div className="flex items-center justify-center h-full text-gray-600 text-sm">
-                        No monthly data available for this period
+                        {t('costcenter.states.noMonthlyData')}
                       </div>
                     )}
                   </div>
@@ -883,7 +908,7 @@ export default function CostCenter() {
             <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'var(--panel-deep)' }}>
               <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
                 <PieChart size={15} className="text-green-400" />
-                Cost Distribution by Site
+                {t('costcenter.charts.costDistribution')}
               </h3>
               <div className="h-56">
                 {doughnutData.datasets[0].data.length > 0 ? (
@@ -900,7 +925,7 @@ export default function CostCenter() {
                     }}
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-600 text-sm">No data</div>
+                  <div className="flex items-center justify-center h-full text-gray-600 text-sm">{t('costcenter.states.noData')}</div>
                 )}
               </div>
             </div>
@@ -909,7 +934,7 @@ export default function CostCenter() {
             <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'var(--panel-deep)' }}>
               <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
                 <Award size={15} className="text-purple-400" />
-                Top 10 Costliest Assets
+                {t('costcenter.charts.topAssets')}
               </h3>
               <div className="h-56">
                 {topAssetsData.datasets[0].data.length > 0 ? (
@@ -926,7 +951,7 @@ export default function CostCenter() {
                     }}
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-600 text-sm">No data</div>
+                  <div className="flex items-center justify-center h-full text-gray-600 text-sm">{t('costcenter.states.noData')}</div>
                 )}
               </div>
             </div>
@@ -935,7 +960,7 @@ export default function CostCenter() {
             <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'var(--panel-deep)' }}>
               <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
                 <TrendingUp size={15} className="text-blue-400" />
-                Monthly Spend + 3-Month MA
+                {t('costcenter.charts.monthlyTrend')}
               </h3>
               <div className="h-56">
                 {monthlyTrendData.datasets[0].data.length > 0 ? (
@@ -951,7 +976,7 @@ export default function CostCenter() {
                     }}
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-600 text-sm">No data</div>
+                  <div className="flex items-center justify-center h-full text-gray-600 text-sm">{t('costcenter.states.noData')}</div>
                 )}
               </div>
             </div>
@@ -962,22 +987,22 @@ export default function CostCenter() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
                 <AlertTriangle size={15} className="text-yellow-400" />
-                Cost Anomaly Detection
+                {t('costcenter.anomaly.heading')}
                 {anomalies.length > 0 && (
                   <span className="ml-1 px-2 py-0.5 rounded-full bg-red-900/50 text-red-300 text-xs font-bold border border-red-800/60">
                     {anomalies.length}
                   </span>
                 )}
               </h3>
-              <span className="text-xs text-gray-600">Fleet avg CPK: {fmtCpk(kpis.fleetAvgCpk, activeCurrency)}</span>
+              <span className="text-xs text-gray-600">{t('costcenter.anomaly.fleetAvgCpk', { value: fmtCpk(kpis.fleetAvgCpk, activeCurrency) })}</span>
             </div>
 
             {anomalies.length === 0 ? (
               <div className="flex items-center gap-3 p-4 rounded-lg bg-green-900/20 border border-green-800/40">
                 <Target size={18} className="text-green-400 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-green-300">No cost anomalies detected</p>
-                  <p className="text-xs text-gray-500 mt-0.5">All sites, brands, and assets are within normal cost parameters for this period.</p>
+                  <p className="text-sm font-medium text-green-300">{t('costcenter.anomaly.noneTitle')}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{t('costcenter.anomaly.noneDesc')}</p>
                 </div>
               </div>
             ) : (
@@ -994,7 +1019,7 @@ export default function CostCenter() {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <span className="text-sm font-semibold text-gray-200 leading-tight">{a.label}</span>
                       <span className={`flex-shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full ${severityStyle[a.severity] ?? ''}`}>
-                        {a.severity}
+                        {t(`costcenter.severity.${a.severity.toLowerCase()}`)}
                       </span>
                     </div>
                     <p className="text-xs text-gray-400 mb-1">{a.metric}</p>
@@ -1012,17 +1037,17 @@ export default function CostCenter() {
           <div className="rounded-xl border border-gray-800 p-5" style={{ background: 'var(--panel-deep)' }}>
             <h3 className="text-sm font-semibold text-gray-200 mb-1 flex items-center gap-2">
               <Zap size={15} className="text-yellow-400" />
-              Maintenance ROI Calculator
+              {t('costcenter.roi.heading')}
             </h3>
             <p className="text-xs text-gray-500 mb-5">
-              Estimate savings if fleet avg CPK improves through better maintenance, alignment, and driver behaviour.
+              {t('costcenter.roi.subtitle')}
             </p>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Slider input */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-sm text-gray-300 font-medium">CPK Improvement Target</label>
+                  <label className="text-sm text-gray-300 font-medium">{t('costcenter.roi.sliderLabel')}</label>
                   <span className="text-xl font-bold text-green-400">{roiSlider}%</span>
                 </div>
                 <input
@@ -1041,14 +1066,14 @@ export default function CostCenter() {
 
                 {/* Benchmark callout */}
                 <div className="mt-4 p-3 rounded-lg bg-blue-900/20 border border-blue-800/40">
-                  <p className="text-xs text-blue-300 font-medium">Industry Benchmark</p>
+                  <p className="text-xs text-blue-300 font-medium">{t('costcenter.roi.benchmarkTitle')}</p>
                   <p className="text-sm text-gray-300 mt-0.5">
-                    Target CPK: <span className="font-bold text-blue-300">{activeCurrency} {INDUSTRY_BENCHMARK_CPK}/km</span>
+                    <span className="font-bold text-blue-300">{t('costcenter.roi.benchmarkTarget', { currency: activeCurrency, value: INDUSTRY_BENCHMARK_CPK })}</span>
                     {kpis.fleetAvgCpk && (
                       <span className="ml-2 text-gray-500">
                         ({kpis.fleetAvgCpk > INDUSTRY_BENCHMARK_CPK
-                          ? `${((kpis.fleetAvgCpk / INDUSTRY_BENCHMARK_CPK - 1) * 100).toFixed(0)}% above benchmark`
-                          : 'within benchmark'})
+                          ? t('costcenter.roi.aboveBenchmark', { pct: ((kpis.fleetAvgCpk / INDUSTRY_BENCHMARK_CPK - 1) * 100).toFixed(0) })
+                          : t('costcenter.roi.withinBenchmark')})
                       </span>
                     )}
                   </p>
@@ -1058,29 +1083,30 @@ export default function CostCenter() {
               {/* Output tiles */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-4 rounded-xl border border-gray-700 text-center">
-                  <p className="text-xs text-gray-500 mb-1">Monthly Savings</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('costcenter.roi.monthlySavings')}</p>
                   <p className="text-lg font-bold text-green-400">{fmtCurrency(roi.monthlySavings, activeCurrency)}</p>
                 </div>
                 <div className="p-4 rounded-xl border border-gray-700 text-center">
-                  <p className="text-xs text-gray-500 mb-1">Annual Savings</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('costcenter.roi.annualSavings')}</p>
                   <p className="text-lg font-bold text-green-400">{fmtCurrency(roi.annualSavings, activeCurrency)}</p>
                 </div>
                 <div className="p-4 rounded-xl border border-gray-700 text-center">
-                  <p className="text-xs text-gray-500 mb-1">Payback Period</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('costcenter.roi.paybackPeriod')}</p>
                   <p className="text-lg font-bold text-yellow-400">
                     {roi.paybackMonths != null && isFinite(roi.paybackMonths)
-                      ? `${roi.paybackMonths.toFixed(1)} mo`
-                      : 'N/A'}
+                      ? t('costcenter.roi.paybackMonths', { months: roi.paybackMonths.toFixed(1) })
+                      : t('costcenter.states.na')}
                   </p>
                 </div>
 
                 {/* Insight */}
                 <div className="col-span-3 p-3 rounded-lg bg-gray-800/60 border border-gray-700">
                   <p className="text-xs text-gray-400 leading-relaxed">
-                    A <span className="text-green-400 font-semibold">{roiSlider}% CPK improvement</span> across
-                    {' '}{normalised.length} tyres translates to <span className="text-green-400 font-semibold">{fmtCurrency(roi.annualSavings, activeCurrency)}</span> in
-                    annualised savings. This can be achieved through pressure compliance programs, alignment checks,
-                    and driver behaviour monitoring.
+                    {t('costcenter.roi.insight', {
+                      pct: roiSlider,
+                      count: normalised.length,
+                      savings: fmtCurrency(roi.annualSavings, activeCurrency),
+                    })}
                   </p>
                 </div>
               </div>
@@ -1091,8 +1117,8 @@ export default function CostCenter() {
           {normalised.length === 0 && !error && (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
               <BarChart2 size={40} className="text-gray-700" />
-              <p className="text-gray-500 font-medium">No tyre records found for the selected period</p>
-              <p className="text-gray-600 text-sm">Try expanding the date range or adjusting the country filter</p>
+              <p className="text-gray-500 font-medium">{t('costcenter.empty.title')}</p>
+              <p className="text-gray-600 text-sm">{t('costcenter.empty.subtitle')}</p>
             </div>
           )}
         </>

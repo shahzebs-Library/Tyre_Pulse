@@ -5,6 +5,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { applyCountry } from '../lib/countryFilter'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import {
   computeVendorPerformance,
   computeWorkshopPerformance,
@@ -36,6 +37,8 @@ ChartJS.register(
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const POSITIONS = ['All', 'Steer', 'Drive', 'Trailer', 'Other']
+// i18n key lookup for POSITIONS labels (constant stays stable for filter value comparisons)
+const POSITION_I18N_KEYS = { All: 'all', Steer: 'steer', Drive: 'drive', Trailer: 'trailer', Other: 'other' }
 
 const CHART_THEME = {
   gridcolor:'var(--text-muted)',
@@ -176,6 +179,7 @@ function radarOpts() {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function VendorIntelligence() {
+  const { t } = useLanguage()
   const { activeCurrency, activeCountry } = useSettings()
 
   // Data state
@@ -218,11 +222,11 @@ export default function VendorIntelligence() {
       setRecords(recRes.data || [])
       setActions(actRes.data || [])
     } catch (e) {
-      setError(e.message || 'Failed to load data')
+      setError(e.message || t('vendorintel.errors.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [activeCountry])
+  }, [activeCountry, t])
 
   useEffect(() => { load() }, [load])
 
@@ -358,14 +362,14 @@ export default function VendorIntelligence() {
         recs.push({
           priority: 'Critical',
           icon: 'cost',
-          text: `${worst.brand} has the highest CPK at ${fmtCpk(worst.avgCpk, activeCurrency)}/km - significantly above fleet benchmark. Initiate replacement procurement evaluation.`,
+          text: t('vendorintel.recommendations.messages.highestCpk', { brand: worst.brand, cpk: fmtCpk(worst.avgCpk, activeCurrency) }),
         })
       }
       if (best && best.avgCpk != null && best.avgCpk <= 1.0 && best.count >= 5) {
         recs.push({
           priority: 'High',
           icon: 'value',
-          text: `${best.brand} delivers best value at ${fmtCpk(best.avgCpk, activeCurrency)}/km with ${best.count} records. Consider increasing procurement share to reduce fleet cost.`,
+          text: t('vendorintel.recommendations.messages.bestValue', { brand: best.brand, cpk: fmtCpk(best.avgCpk, activeCurrency), count: best.count }),
         })
       }
     }
@@ -375,7 +379,7 @@ export default function VendorIntelligence() {
       recs.push({
         priority: 'High',
         icon: 'failure',
-        text: `${v.brand} shows ${fmtPct(v.failureRate)} failure rate (High + Critical risk). Conduct root cause analysis and review specifications before next procurement cycle.`,
+        text: t('vendorintel.recommendations.messages.highFailure', { brand: v.brand, pct: fmtPct(v.failureRate) }),
       })
     })
 
@@ -384,7 +388,7 @@ export default function VendorIntelligence() {
       recs.push({
         priority: 'High',
         icon: 'scrap',
-        text: `${v.brand} has a ${fmtPct(v.scrapRate)} scrap rate - indicative of premature removal or quality issues. Engineering review recommended.`,
+        text: t('vendorintel.recommendations.messages.highScrap', { brand: v.brand, pct: fmtPct(v.scrapRate) }),
       })
     })
 
@@ -394,7 +398,7 @@ export default function VendorIntelligence() {
         recs.push({
           priority: 'Critical',
           icon: 'site',
-          text: `${worstSite.site} has the highest high-risk tyre rate at ${fmtNum(worstSite.highRiskPct)}%. Schedule an immediate tyre audit and corrective action review for this site.`,
+          text: t('vendorintel.recommendations.messages.worstSiteRisk', { site: worstSite.site, pct: fmtNum(worstSite.highRiskPct) }),
         })
       }
 
@@ -403,7 +407,7 @@ export default function VendorIntelligence() {
         recs.push({
           priority: 'Critical',
           icon: 'action',
-          text: `${w.site} has 0% corrective action close rate. Escalation to site management required - open actions are accumulating without resolution.`,
+          text: t('vendorintel.recommendations.messages.zeroCloseRate', { site: w.site }),
         })
       })
 
@@ -412,7 +416,7 @@ export default function VendorIntelligence() {
         recs.push({
           priority: 'Medium',
           icon: 'action',
-          text: `${w.site} corrective action close rate is only ${fmtPct(w.actionCloseRate)}. Set a 30-day resolution target and assign accountability for open actions.`,
+          text: t('vendorintel.recommendations.messages.slowCloseRate', { site: w.site, pct: fmtPct(w.actionCloseRate) }),
         })
       })
     }
@@ -423,13 +427,13 @@ export default function VendorIntelligence() {
         recs.push({
           priority: 'Medium',
           icon: 'life',
-          text: `${lifeSorted[0].brand} achieves the longest average tyre life at ${fmtKm(lifeSorted[0].avgLifeKm)}. Prioritise for steer and drive axles where durability delivers highest lifecycle value.`,
+          text: t('vendorintel.recommendations.messages.longestLife', { brand: lifeSorted[0].brand, km: fmtKm(lifeSorted[0].avgLifeKm) }),
         })
       }
     }
 
     return recs.slice(0, 8)
-  }, [enrichedVendors, workshops, activeCurrency])
+  }, [enrichedVendors, workshops, activeCurrency, t])
 
   // ── Radar chart data ───────────────────────────────────────────────────────
   const radarData = useMemo(() => {
@@ -441,7 +445,11 @@ export default function VendorIntelligence() {
     const maxCpk = Math.max(...top5.map(v => v.avgCpk ?? 0), 0.001)
 
     return {
-      labels: ['CPK Efficiency', 'Quality', 'Tyre Life', 'Low Scrap', 'Volume'],
+      labels: [
+        t('vendorintel.vendor.radarLabels.cpkEfficiency'), t('vendorintel.vendor.radarLabels.quality'),
+        t('vendorintel.vendor.radarLabels.tyreLife'), t('vendorintel.vendor.radarLabels.lowScrap'),
+        t('vendorintel.vendor.radarLabels.volume'),
+      ],
       datasets: top5.map((v, i) => {
         const cpkEff = v.avgCpk != null ? Math.max(0, (1 - v.avgCpk / maxCpk)) * 100 : 0
         const quality = (1 - (v.failureRate ?? 0)) * 100
@@ -459,7 +467,7 @@ export default function VendorIntelligence() {
         }
       }),
     }
-  }, [enrichedVendors])
+  }, [enrichedVendors, t])
 
   // ── CPK by Brand chart ─────────────────────────────────────────────────────
   const cpkBarData = useMemo(() => {
@@ -470,13 +478,13 @@ export default function VendorIntelligence() {
     return {
       labels: sorted.map(v => v.brand),
       datasets: [{
-        label: 'Avg CPK',
+        label: t('vendorintel.vendor.cpkDatasetLabel'),
         data: sorted.map(v => v.avgCpk),
         backgroundColor: sorted.map(v => cpkBgColor(v.avgCpk)),
         borderRadius: 4,
       }],
     }
-  }, [enrichedVendors])
+  }, [enrichedVendors, t])
 
   // ── Tyre Life by Brand chart ───────────────────────────────────────────────
   const lifeBarData = useMemo(() => {
@@ -487,13 +495,13 @@ export default function VendorIntelligence() {
     return {
       labels: sorted.map(v => v.brand),
       datasets: [{
-        label: 'Avg KM Life',
+        label: t('vendorintel.vendor.lifeDatasetLabel'),
         data: sorted.map(v => v.avgLifeKm),
         backgroundColor: '#3b82f6',
         borderRadius: 4,
       }],
     }
-  }, [enrichedVendors])
+  }, [enrichedVendors, t])
 
   // ── Failure Rate by Brand chart ───────────────────────────────────────────
   const failureBarData = useMemo(() => {
@@ -503,7 +511,7 @@ export default function VendorIntelligence() {
     return {
       labels: sorted.map(v => v.brand),
       datasets: [{
-        label: 'Failure Rate %',
+        label: t('vendorintel.vendor.failureDatasetLabel'),
         data: sorted.map(v => (v.failureRate ?? 0) * 100),
         backgroundColor: sorted.map(v => {
           const pct = (v.failureRate ?? 0) * 100
@@ -512,35 +520,35 @@ export default function VendorIntelligence() {
         borderRadius: 4,
       }],
     }
-  }, [enrichedVendors])
+  }, [enrichedVendors, t])
 
   // ── Workshop chart data ────────────────────────────────────────────────────
   const workshopRiskData = useMemo(() => ({
     labels: workshops.slice(0, 12).map(w => w.site),
     datasets: [{
-      label: 'High Risk %',
+      label: t('vendorintel.workshop.riskDatasetLabel'),
       data: workshops.slice(0, 12).map(w => w.highRiskPct),
       backgroundColor: workshops.slice(0, 12).map(w =>
         w.highRiskPct >= 30 ? '#dc2626' : w.highRiskPct >= 15 ? '#d97706' : '#16a34a'
       ),
       borderRadius: 4,
     }],
-  }), [workshops])
+  }), [workshops, t])
 
   const workshopCpkData = useMemo(() => ({
     labels: workshops.slice(0, 12).map(w => w.site),
     datasets: [{
-      label: 'Avg CPK',
+      label: t('vendorintel.workshop.cpkDatasetLabel'),
       data: workshops.slice(0, 12).map(w => w.avgCpk),
       backgroundColor: workshops.slice(0, 12).map(w => cpkBgColor(w.avgCpk)),
       borderRadius: 4,
     }],
-  }), [workshops])
+  }), [workshops, t])
 
   const workshopCloseData = useMemo(() => ({
     labels: workshops.slice(0, 12).map(w => w.site),
     datasets: [{
-      label: 'Close Rate %',
+      label: t('vendorintel.workshop.closeDatasetLabel'),
       data: workshops.slice(0, 12).map(w => (w.actionCloseRate ?? 0) * 100),
       backgroundColor: workshops.slice(0, 12).map(w => {
         const r = (w.actionCloseRate ?? 0) * 100
@@ -548,7 +556,7 @@ export default function VendorIntelligence() {
       }),
       borderRadius: 4,
     }],
-  }), [workshops])
+  }), [workshops, t])
 
   // ── Sort handlers ─────────────────────────────────────────────────────────
   function handleSort(col) {
@@ -660,7 +668,7 @@ export default function VendorIntelligence() {
     return (
       <div className="flex flex-col items-center justify-center h-72 gap-4 text-gray-400">
         <RefreshCw className="animate-spin text-green-500" size={36} />
-        <span className="text-sm">Loading vendor & workshop intelligence...</span>
+        <span className="text-sm">{t('vendorintel.loading')}</span>
       </div>
     )
   }
@@ -674,7 +682,7 @@ export default function VendorIntelligence() {
           onClick={load}
           className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-colors"
         >
-          Retry
+          {t('vendorintel.retry')}
         </button>
       </div>
     )
@@ -688,8 +696,8 @@ export default function VendorIntelligence() {
     <div className="space-y-6 pb-10">
 
       <PageHeader
-        title="Vendor & Workshop Intelligence"
-        subtitle="Objective performance ranking for tyre brands and workshop sites - cost efficiency, reliability, and procurement intelligence"
+        title={t('vendorintel.title')}
+        subtitle={t('vendorintel.subtitle')}
         icon={Trophy}
         actions={
           <div className="flex items-center gap-2">
@@ -697,19 +705,19 @@ export default function VendorIntelligence() {
               onClick={handleExcelExport}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
             >
-              <Download size={13} /> Excel
+              <Download size={13} /> {t('vendorintel.actions.excel')}
             </button>
             <button
               onClick={handlePdfExport}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
             >
-              <FileText size={13} /> PDF
+              <FileText size={13} /> {t('vendorintel.actions.pdf')}
             </button>
             <button
               onClick={() => setEmailModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs transition-colors border border-gray-700"
             >
-              <Mail size={13} /> Email Report
+              <Mail size={13} /> {t('vendorintel.actions.emailReport')}
             </button>
           </div>
         }
@@ -729,7 +737,7 @@ export default function VendorIntelligence() {
           value={siteFilter}
           onChange={e => setSiteFilter(e.target.value)}
         >
-          <option value="all">All Sites</option>
+          <option value="all">{t('vendorintel.filters.allSites')}</option>
           {uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
 
@@ -740,13 +748,13 @@ export default function VendorIntelligence() {
           onChange={e => setPositionFilter(e.target.value)}
         >
           {POSITIONS.map(p => (
-            <option key={p} value={p.toLowerCase() === 'all' ? 'all' : p}>{p}</option>
+            <option key={p} value={p.toLowerCase() === 'all' ? 'all' : p}>{t(`vendorintel.positions.${POSITION_I18N_KEYS[p]}`)}</option>
           ))}
         </select>
 
         {/* Min records */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">Min records</span>
+          <span className="text-xs text-gray-500">{t('vendorintel.filters.minRecords')}</span>
           <input
             type="number"
             min={1}
@@ -761,10 +769,10 @@ export default function VendorIntelligence() {
           onClick={load}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded-lg text-xs transition-colors"
         >
-          <RefreshCw size={12} /> Refresh
+          <RefreshCw size={12} /> {t('vendorintel.filters.refresh')}
         </button>
 
-        <span className="ml-auto text-xs text-gray-500">{filteredRecords.length.toLocaleString()} records</span>
+        <span className="ml-auto text-xs text-gray-500">{t('vendorintel.filters.recordsCount', { count: filteredRecords.length.toLocaleString() })}</span>
       </div>
 
       {/* ─── Section Toggle ──────────────────────────────────────────────────── */}
@@ -777,7 +785,7 @@ export default function VendorIntelligence() {
               : 'text-gray-400 hover:text-white'
           }`}
         >
-          <Package size={15} /> Brand Rankings
+          <Package size={15} /> {t('vendorintel.sections.brandRankings')}
         </button>
         <button
           onClick={() => setActiveSection('workshops')}
@@ -787,7 +795,7 @@ export default function VendorIntelligence() {
               : 'text-gray-400 hover:text-white'
           }`}
         >
-          <Building2 size={15} /> Workshop Performance
+          <Building2 size={15} /> {t('vendorintel.sections.workshopPerformance')}
         </button>
       </div>
 
@@ -807,12 +815,12 @@ export default function VendorIntelligence() {
             {/* ─── 3a: Vendor Leaderboard ──────────────────────────────────── */}
             <div>
               <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-                <Award size={15} className="text-yellow-400" /> Vendor Leaderboard
+                <Award size={15} className="text-yellow-400" /> {t('vendorintel.vendor.leaderboard')}
               </h2>
 
               {!hasVendorData ? (
                 <div className="card text-center py-16 text-gray-600 text-sm">
-                  No brand records meet the minimum record threshold ({minRecords}).
+                  {t('vendorintel.vendor.emptyThreshold', { minRecords })}
                 </div>
               ) : (
                 <>
@@ -833,13 +841,13 @@ export default function VendorIntelligence() {
                             <div className="flex items-center gap-2">
                               <span className="text-2xl">{badge.icon ?? `#${v.rank}`}</span>
                               <div>
-                                <p className={`text-xs font-bold uppercase tracking-wider ${badge.text}`}>Rank #{v.rank}</p>
+                                <p className={`text-xs font-bold uppercase tracking-wider ${badge.text}`}>{t('vendorintel.vendor.rank', { rank: v.rank })}</p>
                                 <p className="text-lg font-bold text-white">{v.brand}</p>
                               </div>
                             </div>
                             <div className="text-right">
                               <p className="text-2xl font-black text-white">{v.displayScore.toFixed(0)}</p>
-                              <p className="text-[10px] text-gray-500">/ 100 score</p>
+                              <p className="text-[10px] text-gray-500">{t('vendorintel.vendor.outOf100')}</p>
                             </div>
                           </div>
 
@@ -860,9 +868,9 @@ export default function VendorIntelligence() {
                             {/* CPK */}
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">Avg CPK</span>
+                                <span className="text-gray-500">{t('vendorintel.vendor.avgCpk')}</span>
                                 <span className={`font-semibold ${cpkColor(v.avgCpk)}`}>
-                                  {v.avgCpk != null ? fmtCpk(v.avgCpk, activeCurrency) : 'N/A'}
+                                  {v.avgCpk != null ? fmtCpk(v.avgCpk, activeCurrency) : t('vendorintel.na')}
                                 </span>
                               </div>
                               {v.avgCpk != null && miniBar(
@@ -873,7 +881,7 @@ export default function VendorIntelligence() {
                             {/* Failure Rate */}
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">Failure Rate</span>
+                                <span className="text-gray-500">{t('vendorintel.vendor.failureRate')}</span>
                                 <span className={`font-semibold ${riskColor((v.failureRate ?? 0) * 100)}`}>
                                   {fmtPct(v.failureRate)}
                                 </span>
@@ -883,14 +891,14 @@ export default function VendorIntelligence() {
                             {/* Avg Life */}
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">Avg Tyre Life</span>
+                                <span className="text-gray-500">{t('vendorintel.vendor.avgTyreLife')}</span>
                                 <span className="text-gray-200 font-medium">{fmtKm(v.avgLifeKm)}</span>
                               </div>
                             </div>
                             {/* Scrap Rate */}
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">Scrap Rate</span>
+                                <span className="text-gray-500">{t('vendorintel.vendor.scrapRate')}</span>
                                 <span className={`font-semibold ${(v.scrapRate ?? 0) > 0.20 ? 'text-red-400' : (v.scrapRate ?? 0) > 0.10 ? 'text-yellow-400' : 'text-green-400'}`}>
                                   {fmtPct(v.scrapRate)}
                                 </span>
@@ -898,13 +906,13 @@ export default function VendorIntelligence() {
                             </div>
                             {/* Records */}
                             <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">Total Records</span>
+                              <span className="text-gray-500">{t('vendorintel.vendor.totalRecords')}</span>
                               <span className="text-gray-200 font-medium">{v.count.toLocaleString()}</span>
                             </div>
                           </div>
 
                           <div className="mt-3 pt-3 border-t border-gray-800 flex justify-between text-xs">
-                            <span className="text-gray-500">Total Investment</span>
+                            <span className="text-gray-500">{t('vendorintel.vendor.totalInvestment')}</span>
                             <span className="text-gray-200 font-semibold">{totalCostDisplay}</span>
                           </div>
                         </motion.div>
@@ -915,17 +923,17 @@ export default function VendorIntelligence() {
                   {/* Remaining brands compact table */}
                   {enrichedVendors.length > 3 && (
                     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
-                      <p className="text-xs font-semibold text-gray-400 mb-3">Remaining Brands</p>
+                      <p className="text-xs font-semibold text-gray-400 mb-3">{t('vendorintel.vendor.remainingBrands')}</p>
                       <table className="min-w-full text-xs">
                         <thead>
                           <tr>
-                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">Rank</th>
-                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">Brand</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">Records</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">Avg CPK</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">Failure Rate</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">Avg Life</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">Score</th>
+                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">{t('vendorintel.vendor.columns.rank')}</th>
+                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">{t('vendorintel.vendor.columns.brand')}</th>
+                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.vendor.columns.records')}</th>
+                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.vendor.columns.avgCpk')}</th>
+                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.vendor.columns.failureRate')}</th>
+                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.vendor.columns.avgLife')}</th>
+                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.vendor.columns.score')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -935,7 +943,7 @@ export default function VendorIntelligence() {
                               <td className="py-2 pr-4 font-medium text-gray-200">{v.brand}</td>
                               <td className="py-2 px-3 text-right text-gray-300">{v.count}</td>
                               <td className={`py-2 px-3 text-right font-semibold ${cpkColor(v.avgCpk)}`}>
-                                {v.avgCpk != null ? v.avgCpk.toFixed(4) : 'N/A'}
+                                {v.avgCpk != null ? v.avgCpk.toFixed(4) : t('vendorintel.na')}
                               </td>
                               <td className={`py-2 px-3 text-right font-semibold ${riskColor((v.failureRate ?? 0) * 100)}`}>
                                 {fmtPct(v.failureRate)}
@@ -956,29 +964,29 @@ export default function VendorIntelligence() {
             {hasVendorData && (
               <div>
                 <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-                  <BarChart3 size={15} className="text-green-400" /> Brand Performance Analytics
+                  <BarChart3 size={15} className="text-green-400" /> {t('vendorintel.vendor.analyticsTitle')}
                 </h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
                   {/* Radar chart */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">Brand Comparison Radar - Top 5</p>
-                    <p className="text-[10px] text-gray-600 mb-3">Normalized 0-100 across 5 performance dimensions</p>
+                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.vendor.radarTitle')}</p>
+                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.radarSub')}</p>
                     {radarData ? (
                       <div style={{ height: 300 }}>
                         <Radar data={radarData} options={radarOpts()} />
                       </div>
                     ) : (
                       <div className="flex items-center justify-center h-[300px] text-gray-600 text-xs">
-                        Insufficient data for radar comparison
+                        {t('vendorintel.vendor.radarInsufficient')}
                       </div>
                     )}
                   </div>
 
                   {/* CPK bar chart */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">CPK by Brand ({activeCurrency}/km)</p>
-                    <p className="text-[10px] text-gray-600 mb-3">Green ≤1.0 · Amber 1-2 · Red ≥2 - sorted best to worst</p>
+                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.vendor.cpkChartTitle', { currency: activeCurrency })}</p>
+                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.cpkChartSub')}</p>
                     {cpkBarData.labels.length > 0 ? (
                       <div style={{ height: 280 }}>
                         <Bar
@@ -1003,15 +1011,15 @@ export default function VendorIntelligence() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-center h-[280px] text-gray-600 text-xs">
-                        No valid CPK data (requires km_at_fitment, km_at_removal, cost_per_tyre)
+                        {t('vendorintel.vendor.cpkChartEmpty')}
                       </div>
                     )}
                   </div>
 
                   {/* Tyre Life bar chart */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">Average Tyre Life by Brand</p>
-                    <p className="text-[10px] text-gray-600 mb-3">Higher = longer-lasting tyre - sorted descending</p>
+                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.vendor.lifeChartTitle')}</p>
+                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.lifeChartSub')}</p>
                     {lifeBarData.labels.length > 0 ? (
                       <div style={{ height: 280 }}>
                         <Bar
@@ -1050,15 +1058,15 @@ export default function VendorIntelligence() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-center h-[280px] text-gray-600 text-xs">
-                        No tyre life data available
+                        {t('vendorintel.vendor.lifeChartEmpty')}
                       </div>
                     )}
                   </div>
 
                   {/* Failure Rate bar chart */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">Failure Rate by Brand (%)</p>
-                    <p className="text-[10px] text-gray-600 mb-3">High + Critical risk as % of total records</p>
+                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.vendor.failureChartTitle')}</p>
+                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.failureChartSub')}</p>
                     {failureBarData.labels.length > 0 ? (
                       <div style={{ height: 280 }}>
                         <Bar
@@ -1097,7 +1105,7 @@ export default function VendorIntelligence() {
                       </div>
                     ) : (
                       <div className="flex items-center justify-center h-[280px] text-gray-600 text-xs">
-                        No failure rate data available
+                        {t('vendorintel.vendor.failureChartEmpty')}
                       </div>
                     )}
                   </div>
@@ -1109,23 +1117,23 @@ export default function VendorIntelligence() {
             {hasVendorData && (
               <div>
                 <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-                  <Target size={15} className="text-green-400" /> Full Brand Performance Table
+                  <Target size={15} className="text-green-400" /> {t('vendorintel.vendor.fullTableTitle')}
                 </h2>
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
                   <table className="min-w-full text-xs">
                     <thead>
                       <tr className="border-b border-gray-800">
-                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">Rank</th>
-                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">Brand</th>
-                        <Th col="count" label="Records" onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="validCount" label="Valid (CPK)" onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="avgCpk" label="Avg CPK" onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="medianCpk" label="Median CPK" onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="avgLifeKm" label="Avg Life (km)" onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="failureRate" label="Failure Rate" onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="scrapRate" label="Scrap Rate" onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="totalCost" label="Total Cost" onSort={handleSort} activeCol={sortCol} dir={sortDir} />
-                        <Th col="displayScore" label="Score" onSort={handleSort} activeCol={sortCol} dir={sortDir} />
+                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">{t('vendorintel.vendor.columns.rank')}</th>
+                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">{t('vendorintel.vendor.columns.brand')}</th>
+                        <Th col="count" label={t('vendorintel.vendor.columns.records')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
+                        <Th col="validCount" label={t('vendorintel.vendor.columns.validCpk')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
+                        <Th col="avgCpk" label={t('vendorintel.vendor.columns.avgCpk')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
+                        <Th col="medianCpk" label={t('vendorintel.vendor.columns.medianCpk')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
+                        <Th col="avgLifeKm" label={t('vendorintel.vendor.columns.avgLifeKm')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
+                        <Th col="failureRate" label={t('vendorintel.vendor.columns.failureRate')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
+                        <Th col="scrapRate" label={t('vendorintel.vendor.columns.scrapRate')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
+                        <Th col="totalCost" label={t('vendorintel.vendor.columns.totalCost')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
+                        <Th col="displayScore" label={t('vendorintel.vendor.columns.score')} onSort={handleSort} activeCol={sortCol} dir={sortDir} />
                       </tr>
                     </thead>
                     <tbody>
@@ -1142,13 +1150,13 @@ export default function VendorIntelligence() {
                             <td className="py-2.5 px-3 text-right text-gray-300">{v.count.toLocaleString()}</td>
                             <td className="py-2.5 px-3 text-right text-gray-400">{v.validCount}</td>
                             <td className={`py-2.5 px-3 text-right font-semibold ${cpkColor(v.avgCpk)}`}>
-                              {v.avgCpk != null ? v.avgCpk.toFixed(4) : 'N/A'}
+                              {v.avgCpk != null ? v.avgCpk.toFixed(4) : t('vendorintel.na')}
                             </td>
                             <td className="py-2.5 px-3 text-right text-gray-400">
-                              {v.medianCpk != null ? v.medianCpk.toFixed(4) : 'N/A'}
+                              {v.medianCpk != null ? v.medianCpk.toFixed(4) : t('vendorintel.na')}
                             </td>
                             <td className="py-2.5 px-3 text-right text-gray-300">
-                              {v.avgLifeKm != null && v.avgLifeKm > 0 ? Math.round(v.avgLifeKm).toLocaleString() : 'N/A'}
+                              {v.avgLifeKm != null && v.avgLifeKm > 0 ? Math.round(v.avgLifeKm).toLocaleString() : t('vendorintel.na')}
                             </td>
                             <td className={`py-2.5 px-3 text-right font-semibold ${riskColor((v.failureRate ?? 0) * 100)}`}>
                               {fmtPct(v.failureRate)}
@@ -1191,12 +1199,12 @@ export default function VendorIntelligence() {
             {/* ─── 4a: Workshop Rankings ───────────────────────────────────── */}
             <div>
               <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-                <Building2 size={15} className="text-green-400" /> Workshop Site Rankings
+                <Building2 size={15} className="text-green-400" /> {t('vendorintel.workshop.rankings')}
               </h2>
 
               {!hasWorkshopData ? (
                 <div className="card text-center py-16 text-gray-600 text-sm">
-                  No workshop data meets the minimum record threshold ({minRecords}).
+                  {t('vendorintel.workshop.emptyThreshold', { minRecords })}
                 </div>
               ) : (
                 <>
@@ -1216,13 +1224,13 @@ export default function VendorIntelligence() {
                             <div className="flex items-center gap-2">
                               <span className="text-2xl">{badge.icon ?? `#${w.rank}`}</span>
                               <div>
-                                <p className={`text-xs font-bold uppercase tracking-wider ${badge.text}`}>Rank #{w.rank}</p>
+                                <p className={`text-xs font-bold uppercase tracking-wider ${badge.text}`}>{t('vendorintel.vendor.rank', { rank: w.rank })}</p>
                                 <p className="text-base font-bold text-white">{w.site}</p>
                               </div>
                             </div>
                             <div className="text-right">
                               <p className="text-2xl font-black text-white">{w.displayScore.toFixed(0)}</p>
-                              <p className="text-[10px] text-gray-500">/ 100 score</p>
+                              <p className="text-[10px] text-gray-500">{t('vendorintel.vendor.outOf100')}</p>
                             </div>
                           </div>
 
@@ -1240,12 +1248,12 @@ export default function VendorIntelligence() {
 
                           <div className="space-y-2">
                             <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">Records</span>
+                              <span className="text-gray-500">{t('vendorintel.workshop.records')}</span>
                               <span className="text-gray-200 font-medium">{w.recordCount.toLocaleString()}</span>
                             </div>
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">High Risk %</span>
+                                <span className="text-gray-500">{t('vendorintel.workshop.highRiskPct')}</span>
                                 <span className={`font-semibold ${riskColor(w.highRiskPct)}`}>
                                   {fmtNum(w.highRiskPct)}%
                                 </span>
@@ -1256,18 +1264,18 @@ export default function VendorIntelligence() {
                               )}
                             </div>
                             <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">Avg CPK</span>
+                              <span className="text-gray-500">{t('vendorintel.workshop.avgCpk')}</span>
                               <span className={`font-semibold ${cpkColor(w.avgCpk)}`}>
-                                {w.avgCpk != null ? fmtCpk(w.avgCpk, activeCurrency) : 'N/A'}
+                                {w.avgCpk != null ? fmtCpk(w.avgCpk, activeCurrency) : t('vendorintel.na')}
                               </span>
                             </div>
                             <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">Avg Cost/Tyre</span>
+                              <span className="text-gray-500">{t('vendorintel.workshop.avgCostPerTyre')}</span>
                               <span className="text-gray-200 font-medium">{fmtCurrency(w.avgCost, activeCurrency)}</span>
                             </div>
                             <div>
                               <div className="flex justify-between text-xs mb-0.5">
-                                <span className="text-gray-500">Action Close Rate</span>
+                                <span className="text-gray-500">{t('vendorintel.workshop.actionCloseRate')}</span>
                                 <span className={`font-semibold ${(w.actionCloseRate ?? 0) >= 0.7 ? 'text-green-400' : (w.actionCloseRate ?? 0) >= 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
                                   {fmtPct(w.actionCloseRate)}
                                 </span>
@@ -1283,17 +1291,17 @@ export default function VendorIntelligence() {
                   {/* Remaining workshops compact */}
                   {workshops.length > 3 && (
                     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
-                      <p className="text-xs font-semibold text-gray-400 mb-3">All Sites</p>
+                      <p className="text-xs font-semibold text-gray-400 mb-3">{t('vendorintel.workshop.allSitesTitle')}</p>
                       <table className="min-w-full text-xs">
                         <thead>
                           <tr>
-                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">Rank</th>
-                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">Site</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">Records</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">High Risk %</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">Avg CPK</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">Close Rate</th>
-                            <th className="text-right py-2 px-3 text-gray-500 font-medium">Score</th>
+                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">{t('vendorintel.workshop.columns.rank')}</th>
+                            <th className="text-left py-2 pr-4 text-gray-500 font-medium">{t('vendorintel.workshop.columns.site')}</th>
+                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.records')}</th>
+                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.highRiskPct')}</th>
+                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.avgCpk')}</th>
+                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.closeRate')}</th>
+                            <th className="text-right py-2 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.score')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1306,7 +1314,7 @@ export default function VendorIntelligence() {
                                 {fmtNum(w.highRiskPct)}%
                               </td>
                               <td className={`py-2 px-3 text-right font-semibold ${cpkColor(w.avgCpk)}`}>
-                                {w.avgCpk != null ? w.avgCpk.toFixed(4) : 'N/A'}
+                                {w.avgCpk != null ? w.avgCpk.toFixed(4) : t('vendorintel.na')}
                               </td>
                               <td className={`py-2 px-3 text-right font-semibold ${(w.actionCloseRate ?? 0) >= 0.7 ? 'text-green-400' : (w.actionCloseRate ?? 0) >= 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
                                 {fmtPct(w.actionCloseRate)}
@@ -1326,14 +1334,14 @@ export default function VendorIntelligence() {
             {hasWorkshopData && (
               <div>
                 <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-                  <BarChart3 size={15} className="text-green-400" /> Workshop Analytics
+                  <BarChart3 size={15} className="text-green-400" /> {t('vendorintel.workshop.analyticsTitle')}
                 </h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
                   {/* High Risk % by Site */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">High Risk % by Site</p>
-                    <p className="text-[10px] text-gray-600 mb-3">High + Critical risk records as % of site total</p>
+                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.workshop.riskChartTitle')}</p>
+                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.workshop.riskChartSub')}</p>
                     <div style={{ height: 260 }}>
                       <Bar
                         data={workshopRiskData}
@@ -1361,8 +1369,8 @@ export default function VendorIntelligence() {
 
                   {/* Avg CPK by Site */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">Avg CPK by Site ({activeCurrency}/km)</p>
-                    <p className="text-[10px] text-gray-600 mb-3">Higher CPK = more expensive per km driven</p>
+                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.workshop.cpkChartTitle', { currency: activeCurrency })}</p>
+                    <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.workshop.cpkChartSub')}</p>
                     <div style={{ height: 260 }}>
                       <Bar
                         data={workshopCpkData}
@@ -1391,8 +1399,8 @@ export default function VendorIntelligence() {
 
                 {/* Action Close Rate */}
                 <div className="card">
-                  <p className="text-xs font-semibold text-gray-300 mb-1">Corrective Action Close Rate by Site (%)</p>
-                  <p className="text-[10px] text-gray-600 mb-3">% of corrective actions resolved - green ≥70% · amber 40-70% · red &lt;40%</p>
+                  <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.workshop.closeChartTitle')}</p>
+                  <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.workshop.closeChartSub')}</p>
                   <div style={{ height: 220 }}>
                     <Bar
                       data={workshopCloseData}
@@ -1429,21 +1437,21 @@ export default function VendorIntelligence() {
             {hasWorkshopData && (
               <div>
                 <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-                  <Target size={15} className="text-green-400" /> Workshop Performance Table
+                  <Target size={15} className="text-green-400" /> {t('vendorintel.workshop.tableTitle')}
                 </h2>
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
                   <table className="min-w-full text-xs">
                     <thead>
                       <tr className="border-b border-gray-800">
-                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">Rank</th>
-                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">Site</th>
-                        <Th col="recordCount" label="Records" onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                        <Th col="highRiskPct" label="High Risk %" onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                        <Th col="avgCpk" label="Avg CPK" onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                        <Th col="avgCost" label="Avg Cost" onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                        <th className="text-right py-2.5 px-3 text-gray-500 font-medium">Actions Raised</th>
-                        <Th col="actionCloseRate" label="Close Rate %" onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
-                        <Th col="displayScore" label="Score" onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
+                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">{t('vendorintel.workshop.columns.rank')}</th>
+                        <th className="text-left py-2.5 pr-4 text-gray-500 font-medium">{t('vendorintel.workshop.columns.site')}</th>
+                        <Th col="recordCount" label={t('vendorintel.workshop.columns.records')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
+                        <Th col="highRiskPct" label={t('vendorintel.workshop.columns.highRiskPct')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
+                        <Th col="avgCpk" label={t('vendorintel.workshop.columns.avgCpk')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
+                        <Th col="avgCost" label={t('vendorintel.workshop.columns.avgCost')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
+                        <th className="text-right py-2.5 px-3 text-gray-500 font-medium">{t('vendorintel.workshop.columns.actionsRaised')}</th>
+                        <Th col="actionCloseRate" label={t('vendorintel.workshop.columns.closeRatePct')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
+                        <Th col="displayScore" label={t('vendorintel.workshop.columns.score')} onSort={handleWorkshopSort} activeCol={workshopSortCol} dir={workshopSortDir} />
                       </tr>
                     </thead>
                     <tbody>
@@ -1463,7 +1471,7 @@ export default function VendorIntelligence() {
                               {fmtNum(w.highRiskPct)}%
                             </td>
                             <td className={`py-2.5 px-3 text-right font-semibold ${cpkColor(w.avgCpk)}`}>
-                              {w.avgCpk != null ? w.avgCpk.toFixed(4) : 'N/A'}
+                              {w.avgCpk != null ? w.avgCpk.toFixed(4) : t('vendorintel.na')}
                             </td>
                             <td className="py-2.5 px-3 text-right text-gray-300">
                               {fmtCurrency(w.avgCost, activeCurrency)}
@@ -1493,15 +1501,15 @@ export default function VendorIntelligence() {
       {/* ─── Section 5: Procurement Recommendations ─────────────────────────── */}
       <div>
         <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-          <Zap size={15} className="text-amber-400" /> Procurement Recommendations
+          <Zap size={15} className="text-amber-400" /> {t('vendorintel.recommendations.title')}
         </h2>
 
         {recommendations.length === 0 ? (
           <div className="bg-gray-900 border border-green-800/40 rounded-xl p-4 flex items-center gap-3 bg-green-950/10">
             <CheckCircle size={20} className="text-green-400 flex-shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-green-300">Fleet Performance Within Acceptable Parameters</p>
-              <p className="text-xs text-green-400/70 mt-0.5">No critical procurement actions identified. Continue monitoring.</p>
+              <p className="text-sm font-semibold text-green-300">{t('vendorintel.recommendations.allGoodTitle')}</p>
+              <p className="text-xs text-green-400/70 mt-0.5">{t('vendorintel.recommendations.allGoodDesc')}</p>
             </div>
           </div>
         ) : (
@@ -1526,7 +1534,7 @@ export default function VendorIntelligence() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${style.badge}`}>
-                          {rec.priority}
+                          {t(`vendorintel.recommendations.priority.${rec.priority}`)}
                         </span>
                       </div>
                       <p className="text-xs text-gray-300 leading-relaxed">{rec.text}</p>
@@ -1542,7 +1550,7 @@ export default function VendorIntelligence() {
       {/* ─── Section 6: Executive Summary Card ──────────────────────────────── */}
       <div>
         <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-          <Star size={15} className="text-yellow-400" /> Executive Summary
+          <Star size={15} className="text-yellow-400" /> {t('vendorintel.execSummary.title')}
         </h2>
         <div className="bg-gray-900 border border-gray-700/50 rounded-xl p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1551,37 +1559,37 @@ export default function VendorIntelligence() {
             <div className="bg-green-950/20 border border-green-800/30 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingDown size={14} className="text-green-400" />
-                <span className="text-xs font-semibold text-green-300">Best Value Brand</span>
+                <span className="text-xs font-semibold text-green-300">{t('vendorintel.execSummary.bestValueBrand')}</span>
               </div>
               <p className="text-lg font-black text-white">{execSummary.bestBrand?.brand ?? '-'}</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {execSummary.bestBrand?.avgCpk != null
-                  ? `Avg CPK: ${fmtCpk(execSummary.bestBrand.avgCpk, activeCurrency)}/km`
-                  : 'No CPK data'}
+                  ? t('vendorintel.execSummary.avgCpkPerKm', { cpk: fmtCpk(execSummary.bestBrand.avgCpk, activeCurrency) })
+                  : t('vendorintel.execSummary.noCpkData')}
               </p>
-              <p className="text-[11px] text-green-400/70 mt-1">Lowest cost per km - recommended for increased procurement</p>
+              <p className="text-[11px] text-green-400/70 mt-1">{t('vendorintel.execSummary.bestValueNote')}</p>
             </div>
 
             {/* Worst Value Brand */}
             <div className="bg-red-950/20 border border-red-800/30 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp size={14} className="text-red-400" />
-                <span className="text-xs font-semibold text-red-300">Highest Cost Brand</span>
+                <span className="text-xs font-semibold text-red-300">{t('vendorintel.execSummary.highestCostBrand')}</span>
               </div>
               <p className="text-lg font-black text-white">{execSummary.worstBrand?.brand ?? '-'}</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {execSummary.worstBrand?.avgCpk != null
-                  ? `Avg CPK: ${fmtCpk(execSummary.worstBrand.avgCpk, activeCurrency)}/km`
-                  : 'No CPK data'}
+                  ? t('vendorintel.execSummary.avgCpkPerKm', { cpk: fmtCpk(execSummary.worstBrand.avgCpk, activeCurrency) })
+                  : t('vendorintel.execSummary.noCpkData')}
               </p>
-              <p className="text-[11px] text-red-400/70 mt-1">Highest cost per km - evaluate specification or supplier change</p>
+              <p className="text-[11px] text-red-400/70 mt-1">{t('vendorintel.execSummary.highestCostNote')}</p>
             </div>
 
             {/* Estimated Annual Saving */}
             <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <DollarSign size={14} className="text-yellow-400" />
-                <span className="text-xs font-semibold text-yellow-300">Potential Annual Saving</span>
+                <span className="text-xs font-semibold text-yellow-300">{t('vendorintel.execSummary.potentialAnnualSaving')}</span>
               </div>
               <p className="text-lg font-black text-yellow-300">
                 {execSummary.estAnnualSaving > 0
@@ -1590,8 +1598,8 @@ export default function VendorIntelligence() {
               </p>
               <p className="text-[11px] text-yellow-400/70 mt-1">
                 {execSummary.estAnnualSaving > 0
-                  ? `If fleet switches from ${execSummary.worstBrand?.brand ?? '-'} to ${execSummary.bestBrand?.brand ?? '-'}`
-                  : 'Switch best and worst brand CPK to unlock saving estimate'}
+                  ? t('vendorintel.execSummary.savingSwitch', { worst: execSummary.worstBrand?.brand ?? '-', best: execSummary.bestBrand?.brand ?? '-' })
+                  : t('vendorintel.execSummary.savingUnlock')}
               </p>
             </div>
 
@@ -1599,44 +1607,44 @@ export default function VendorIntelligence() {
             <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle size={14} className="text-blue-400" />
-                <span className="text-xs font-semibold text-blue-300">Best Performing Site</span>
+                <span className="text-xs font-semibold text-blue-300">{t('vendorintel.execSummary.bestPerformingSite')}</span>
               </div>
               <p className="text-lg font-black text-white">{execSummary.bestSite?.site ?? '-'}</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {execSummary.bestSite
-                  ? `Score: ${execSummary.bestSite.displayScore.toFixed(0)}/100 · ${fmtNum(execSummary.bestSite.highRiskPct)}% high risk`
-                  : 'No site data'}
+                  ? t('vendorintel.execSummary.siteScoreLine', { score: execSummary.bestSite.displayScore.toFixed(0), pct: fmtNum(execSummary.bestSite.highRiskPct) })
+                  : t('vendorintel.execSummary.noSiteData')}
               </p>
-              <p className="text-[11px] text-blue-400/70 mt-1">Benchmark site for fleet-wide best practices</p>
+              <p className="text-[11px] text-blue-400/70 mt-1">{t('vendorintel.execSummary.bestSiteNote')}</p>
             </div>
 
             {/* Site Needing Attention */}
             <div className="bg-orange-950/20 border border-orange-800/30 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle size={14} className="text-orange-400" />
-                <span className="text-xs font-semibold text-orange-300">Site Needing Attention</span>
+                <span className="text-xs font-semibold text-orange-300">{t('vendorintel.execSummary.siteNeedingAttention')}</span>
               </div>
               <p className="text-lg font-black text-white">{execSummary.worstSite?.site ?? '-'}</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 {execSummary.worstSite
-                  ? `Score: ${execSummary.worstSite.displayScore.toFixed(0)}/100 · ${fmtNum(execSummary.worstSite.highRiskPct)}% high risk`
-                  : 'No site data'}
+                  ? t('vendorintel.execSummary.siteScoreLine', { score: execSummary.worstSite.displayScore.toFixed(0), pct: fmtNum(execSummary.worstSite.highRiskPct) })
+                  : t('vendorintel.execSummary.noSiteData')}
               </p>
-              <p className="text-[11px] text-orange-400/70 mt-1">Schedule tyre audit and corrective action review</p>
+              <p className="text-[11px] text-orange-400/70 mt-1">{t('vendorintel.execSummary.attentionNote')}</p>
             </div>
 
             {/* Total Fleet Investment */}
             <div className="bg-purple-950/20 border border-purple-800/30 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Wrench size={14} className="text-purple-400" />
-                <span className="text-xs font-semibold text-purple-300">Total Fleet Investment</span>
+                <span className="text-xs font-semibold text-purple-300">{t('vendorintel.execSummary.totalFleetInvestment')}</span>
               </div>
               <p className="text-lg font-black text-white">{fmtCurrency(execSummary.totalFleetInvestment, activeCurrency)}</p>
               <p className="text-xs text-gray-400 mt-0.5">
-                Across {filteredRecords.filter(r => Number(r.cost_per_tyre) > 0).length.toLocaleString()} records with cost data
+                {t('vendorintel.execSummary.acrossRecords', { count: filteredRecords.filter(r => Number(r.cost_per_tyre) > 0).length.toLocaleString() })}
               </p>
               <p className="text-[11px] text-purple-400/70 mt-1">
-                {enrichedVendors.length > 0 ? `${enrichedVendors.length} brands tracked in selected period` : 'No brand data'}
+                {enrichedVendors.length > 0 ? t('vendorintel.execSummary.brandsTracked', { count: enrichedVendors.length }) : t('vendorintel.execSummary.noBrandData')}
               </p>
             </div>
 

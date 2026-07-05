@@ -1,0 +1,52 @@
+{
+  "title": "مقارنة المواقع",
+  "subtitle": "أداء وجهاً لوجه عبر المواقع",
+  "actions": {
+    "excel": "إكسل",
+    "pdf": "PDF"
+  },
+  "states": {
+    "loadError": "تعذّر تحميل بيانات الموقع",
+    "retry": "إعادة المحاولة",
+    "noSiteData": "لا تتوفر بيانات مواقع",
+    "noSiteDataHint": "قم برفع سجلات الإطارات مع معلومات الموقع لبدء المقارنة.",
+    "selectSite": "اختر موقعًا واحدًا على الأقل للمقارنة",
+    "selectSiteHint": "فعّل المواقع أعلاه لبدء المقارنة."
+  },
+  "filters": {
+    "period": "الفترة",
+    "granularity": "التجميع الزمني",
+    "selectSites": "اختر المواقع للمقارنة (حتى 6):"
+  },
+  "granularity": {
+    "Monthly": "شهري",
+    "Quarterly": "ربع سنوي",
+    "Yearly": "سنوي"
+  },
+  "kpi": {
+    "records": "السجلات",
+    "totalCost": "إجمالي التكلفة",
+    "highRisk": "خطورة عالية",
+    "topBrand": "أفضل علامة تجارية",
+    "topCategory": "أفضل فئة"
+  },
+  "chart": {
+    "totalCostComparison": "مقارنة إجمالي التكلفة",
+    "highRiskComparison": "مقارنة معدل الخطورة العالية",
+    "totalCostSar": "إجمالي التكلفة (SAR)",
+    "highRiskPct": "نسبة الخطورة العالية %",
+    "radarTitle": "رادار متعدد الأبعاد (0-100، الأعلى أفضل)",
+    "radarLegend": "كفاءة التكلفة · السلامة · الحجم · جودة الخطورة · جودة البيانات"
+  },
+  "trend": {
+    "title": "اتجاه التكلفة {granularity} حسب الموقع ({period})",
+    "fullscreen": "ملء الشاشة",
+    "modalTitle": "اتجاه التكلفة حسب الموقع",
+    "granularityLabel": "التجميع الزمني:"
+  },
+  "periodLabel": {
+    "Monthly": "آخر 12 شهرًا",
+    "Quarterly": "آخر 8 أرباع",
+    "Yearly": "آخر 5 سنوات"
+  }
+}

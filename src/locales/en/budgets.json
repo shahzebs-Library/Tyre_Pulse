@@ -1,0 +1,61 @@
+{
+  "title": "Budgets",
+  "subtitle": "Monthly budget vs actual spending",
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF",
+    "setBudget": "Set Budget"
+  },
+  "viewModes": {
+    "month": "Monthly View",
+    "annual": "Annual Planner"
+  },
+  "months": {
+    "0": "Jan", "1": "Feb", "2": "Mar", "3": "Apr", "4": "May", "5": "Jun",
+    "6": "Jul", "7": "Aug", "8": "Sep", "9": "Oct", "10": "Nov", "11": "Dec"
+  },
+  "kpi": {
+    "totalBudget": "Total Budget",
+    "totalSpent": "Total Spent",
+    "remaining": "Remaining",
+    "utilization": "Utilization"
+  },
+  "columns": {
+    "site": "Site",
+    "budget": "Budget ({currency})",
+    "spent": "Spent ({currency})",
+    "remaining": "Remaining",
+    "progress": "Progress",
+    "status": "Status",
+    "total": "Total"
+  },
+  "status": {
+    "draft": "Draft",
+    "approved": "Approved",
+    "overspent": "Overspent",
+    "closed": "Closed"
+  },
+  "states": {
+    "noBudgetsPeriod": "No budgets for this period",
+    "noBudgetsYear": "No budgets for {year}. Add some using \"{action}\" above."
+  },
+  "annual": {
+    "saving": "Saving...",
+    "saveChanges": "Save {count} Changes",
+    "chartTitle": "Cumulative Budget vs Actual Spend ({year})",
+    "budgetCeiling": "Budget Ceiling",
+    "actualSpend": "Actual Spend",
+    "hint": "Click any cell to edit budget. Green = under budget, red = over.",
+    "actualTooltip": "Actual: {value}"
+  },
+  "form": {
+    "title": "Set Monthly Budget",
+    "site": "Site *",
+    "year": "Year",
+    "month": "Month",
+    "monthlyBudget": "Monthly Budget ({currency})",
+    "saving": "Saving...",
+    "save": "Save",
+    "cancel": "Cancel"
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "title": "مقارنة الفترات",
+  "subtitle": "قارن استبدالات الإطارات أو التكاليف بين فترتين زمنيتين",
+  "periodA": "الفترة أ",
+  "periodB": "الفترة ب",
+  "periodALabel": "الفترة أ - {year}",
+  "periodBLabel": "الفترة ب - {year}",
+  "periodAYear": "الفترة أ ({year})",
+  "periodBYear": "الفترة ب ({year})",
+  "noMonthsSelected": "لم يتم اختيار أي شهر",
+  "all": "الكل",
+  "clear": "مسح",
+  "metric": {
+    "ariaLabel": "المقياس",
+    "replacements": "الاستبدالات",
+    "cost": "التكلفة ({currency})"
+  },
+  "dimension": {
+    "ariaLabel": "البعد",
+    "overall": "إجمالي",
+    "site": "حسب الموقع",
+    "brand": "حسب العلامة التجارية"
+  },
+  "run": {
+    "running": "جارٍ التشغيل...",
+    "rerun": "إعادة التشغيل",
+    "run": "تشغيل المقارنة",
+    "selectMonthWarning": "اختر شهرًا واحدًا على الأقل في كل فترة"
+  },
+  "summary": {
+    "totalCost": "إجمالي التكلفة",
+    "replacements": "استبدالات",
+    "change": "التغيير",
+    "increase": "زيادة",
+    "decrease": "انخفاض"
+  },
+  "insight": {
+    "overall": "الفترة ب لديها {direction} بنسبة {pct}% في {label} مقارنة بالفترة أ ({sign}{amount} {arrow})",
+    "byDimension": "عبر {count} من {dimLabel}، تُظهر الفترة ب {direction} بنسبة {pct}% إجمالاً",
+    "more": "أكثر",
+    "less": "أقل",
+    "spend": "الإنفاق",
+    "increase": "ارتفاع",
+    "decrease": "انخفاض",
+    "sites": "المواقع",
+    "brands": "العلامات التجارية"
+  },
+  "chart": {
+    "replacements": "الاستبدالات",
+    "cost": "التكلفة ({currency})",
+    "bySite": " حسب الموقع",
+    "byBrand": " حسب العلامة التجارية",
+    "byMonth": " حسب الشهر"
+  },
+  "table": {
+    "monthlyBreakdown": "التوزيع الشهري",
+    "siteBreakdown": "التوزيع حسب الموقع",
+    "brandBreakdown": "التوزيع حسب العلامة التجارية",
+    "rows": "{count} صف",
+    "month": "الشهر",
+    "site": "الموقع",
+    "brand": "العلامة التجارية",
+    "difference": "الفرق",
+    "pctChange": "نسبة التغيير",
+    "total": "الإجمالي"
+  },
+  "actions": {
+    "excel": "إكسل",
+    "pdf": "PDF"
+  },
+  "empty": {
+    "noData": "لا توجد بيانات للفترات المحددة",
+    "noDataHint": "حاول اختيار سنوات أو أشهر مختلفة",
+    "configureTitle": "قم بتهيئة الفترات أعلاه وشغّل المقارنة",
+    "configureHint": "اختر الأشهر للفترة أ والفترة ب، ثم اضغط تشغيل"
+  }
+}

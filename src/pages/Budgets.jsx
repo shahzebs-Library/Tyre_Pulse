@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { Plus, Save, X, Download, FileText, PiggyBank } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
@@ -46,6 +47,7 @@ function KpiSkeletons() {
 export default function Budgets() {
   const { profile }   = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
+  const { t } = useLanguage()
   const [budgets, setBudgets]     = useState([])
   const [spending, setSpending]   = useState({})
   const [loading, setLoading]     = useState(true)
@@ -144,6 +146,8 @@ export default function Budgets() {
     setSavingPlanner(false)
   }
 
+  const monthLabels = useMemo(() => MONTHS_LABELS.map((_, i) => t(`budgets.months.${i}`)), [t])
+
   const annualSites = useMemo(() => {
     const s = new Set(budgets.map(b => b.site))
     return [...s].sort()
@@ -189,17 +193,17 @@ export default function Budgets() {
     const cumSpends  = spendPerMonth.map(v => (cumSpend += v))
 
     return {
-      labels: MONTHS_LABELS,
+      labels: monthLabels,
       datasets: [
         {
-          label: 'Budget Ceiling',
+          label: t('budgets.annual.budgetCeiling'),
           data: cumBudgets,
           borderColor: 'rgba(239,68,68,0.8)',
           backgroundColor: 'rgba(239,68,68,0.05)',
           fill: true, tension: 0.3, borderDash: [5, 3], pointRadius: 4,
         },
         {
-          label: 'Actual Spend',
+          label: t('budgets.annual.actualSpend'),
           data: cumSpends,
           borderColor: 'rgba(59,130,246,1)',
           backgroundColor: 'rgba(59,130,246,0.1)',
@@ -207,7 +211,7 @@ export default function Budgets() {
         },
       ],
     }
-  }, [viewMode, annualSites, budgets, spending, plannerYear])
+  }, [viewMode, annualSites, budgets, spending, plannerYear, monthLabels, t])
 
   function exportExcel() {
     if (viewMode === 'month') {
@@ -256,26 +260,26 @@ export default function Budgets() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <PageHeader
-          title="Budgets"
-          subtitle="Monthly budget vs actual spending"
+          title={t('budgets.title')}
+          subtitle={t('budgets.subtitle')}
           icon={PiggyBank}
         />
         <div className="flex gap-2">
           <button onClick={exportExcel} className="btn-secondary text-xs flex items-center gap-1.5">
-            <Download size={14} /> Excel
+            <Download size={14} /> {t('budgets.actions.excel')}
           </button>
           <button onClick={exportPdfFn} className="btn-secondary text-xs flex items-center gap-1.5">
-            <FileText size={14} /> PDF
+            <FileText size={14} /> {t('budgets.actions.pdf')}
           </button>
           <button onClick={() => { setForm(EMPTY_FORM); setShowForm(true); setError('') }} className="btn-primary flex items-center gap-2 text-sm">
-            <Plus size={16} /> Set Budget
+            <Plus size={16} /> {t('budgets.actions.setBudget')}
           </button>
         </div>
       </div>
 
       {/* View mode tabs */}
       <div className="flex gap-2">
-        {[['month', 'Monthly View'], ['annual', 'Annual Planner']].map(([val, label]) => (
+        {[['month', t('budgets.viewModes.month')], ['annual', t('budgets.viewModes.annual')]].map(([val, label]) => (
           <button key={val} onClick={() => setViewMode(val)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${viewMode === val ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
             {label}
@@ -291,7 +295,7 @@ export default function Budgets() {
               {[CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
             <select className="input w-auto" value={filterMonth} onChange={e => setFilterMonth(+e.target.value)}>
-              {MONTHS_LABELS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+              {monthLabels.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
             </select>
           </div>
 
@@ -300,23 +304,23 @@ export default function Budgets() {
           ) : budgets.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="card">
-                <p className="text-gray-400 text-sm">Total Budget</p>
+                <p className="text-gray-400 text-sm">{t('budgets.kpi.totalBudget')}</p>
                 <p className="text-2xl font-bold text-white mt-1">{formatCurrencyCompact(totalBudget, activeCurrency)}</p>
               </div>
               <div className="card">
-                <p className="text-gray-400 text-sm">Total Spent</p>
+                <p className="text-gray-400 text-sm">{t('budgets.kpi.totalSpent')}</p>
                 <p className={`text-2xl font-bold mt-1 ${totalSpend > totalBudget ? 'text-red-400' : 'text-green-400'}`}>
                   {formatCurrencyCompact(totalSpend, activeCurrency)}
                 </p>
               </div>
               <div className="card">
-                <p className="text-gray-400 text-sm">Remaining</p>
+                <p className="text-gray-400 text-sm">{t('budgets.kpi.remaining')}</p>
                 <p className={`text-2xl font-bold mt-1 ${totalBudget - totalSpend < 0 ? 'text-red-400' : 'text-blue-400'}`}>
                   {formatCurrencyCompact(totalBudget - totalSpend, activeCurrency)}
                 </p>
               </div>
               <div className="card">
-                <p className="text-gray-400 text-sm">Utilization</p>
+                <p className="text-gray-400 text-sm">{t('budgets.kpi.utilization')}</p>
                 <p className={`text-2xl font-bold mt-1 ${utilColor}`}>{utilPct}%</p>
               </div>
             </div>
@@ -327,7 +331,14 @@ export default function Budgets() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    {['Site', `Budget (${activeCurrency})`, `Spent (${activeCurrency})`, 'Remaining', 'Progress', 'Status'].map(h => (
+                    {[
+                      t('budgets.columns.site'),
+                      t('budgets.columns.budget', { currency: activeCurrency }),
+                      t('budgets.columns.spent', { currency: activeCurrency }),
+                      t('budgets.columns.remaining'),
+                      t('budgets.columns.progress'),
+                      t('budgets.columns.status'),
+                    ].map(h => (
                       <th key={h} className="table-header">{h}</th>
                     ))}
                   </tr>
@@ -346,7 +357,7 @@ export default function Budgets() {
                       ))}
                     </>
                   ) : budgets.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center py-12 text-gray-500">No budgets for this period</td></tr>
+                    <tr><td colSpan={6} className="text-center py-12 text-gray-500">{t('budgets.states.noBudgetsPeriod')}</td></tr>
                   ) : budgets.map(b => {
                     const spent = getSpend(b.site, filterMonth)
                     const remaining = b.monthly_budget - spent
@@ -376,7 +387,7 @@ export default function Budgets() {
                               setBudgets(prev => prev.map(x => x.id === b.id ? { ...x, status: newStatus } : x))
                             }}
                           >
-                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{t(`budgets.status.${s.toLowerCase()}`)}</option>)}
                           </select>
                         </td>
                       </tr>
@@ -398,7 +409,7 @@ export default function Budgets() {
             </select>
             {Object.keys(plannerEdits).length > 0 && (
               <button onClick={savePlannerEdits} disabled={savingPlanner} className="btn-primary text-sm disabled:opacity-50">
-                {savingPlanner ? 'Saving...' : `Save ${Object.keys(plannerEdits).length} Changes`}
+                {savingPlanner ? t('budgets.annual.saving') : t('budgets.annual.saveChanges', { count: Object.keys(plannerEdits).length })}
               </button>
             )}
           </div>
@@ -406,7 +417,7 @@ export default function Budgets() {
           {/* Budget vs Actuals chart */}
           {cumulativeChartData && (
             <div className="card">
-              <h3 className="text-sm font-medium text-gray-400 mb-4">Cumulative Budget vs Actual Spend ({plannerYear})</h3>
+              <h3 className="text-sm font-medium text-gray-400 mb-4">{t('budgets.annual.chartTitle', { year: plannerYear })}</h3>
               <div style={{ height: 280 }}>
                 <Line
                   data={cumulativeChartData}
@@ -435,19 +446,19 @@ export default function Budgets() {
             </div>
           ) : annualSites.length === 0 ? (
             <div className="card text-center py-12 text-gray-500">
-              No budgets for {plannerYear}. Add some using "Set Budget" above.
+              {t('budgets.states.noBudgetsYear', { year: plannerYear, action: t('budgets.actions.setBudget') })}
             </div>
           ) : (
             <div className="card overflow-x-auto">
-              <p className="text-xs text-gray-500 mb-3">Click any cell to edit budget. Green = under budget, red = over.</p>
+              <p className="text-xs text-gray-500 mb-3">{t('budgets.annual.hint')}</p>
               <table className="w-full text-xs" style={{ minWidth: 900 }}>
                 <thead>
                   <tr className="text-gray-400 border-b border-gray-800">
-                    <th className="pb-2 pr-3 text-left sticky left-0 bg-gray-900">Site</th>
-                    {MONTHS_LABELS.map(m => (
+                    <th className="pb-2 pr-3 text-left sticky left-0 bg-gray-900">{t('budgets.columns.site')}</th>
+                    {monthLabels.map(m => (
                       <th key={m} className="pb-2 px-1 text-center min-w-[80px]">{m}</th>
                     ))}
-                    <th className="pb-2 px-2 text-right">Total</th>
+                    <th className="pb-2 px-2 text-right">{t('budgets.columns.total')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -482,7 +493,7 @@ export default function Budgets() {
                                 {spent > 0 && (
                                   <div
                                     className={`text-[9px] mt-0.5 ${overBudget ? 'text-red-400' : 'text-green-400'}`}
-                                    title={`Actual: ${formatCurrencyCompact(spent, activeCurrency)}`}
+                                    title={t('budgets.annual.actualTooltip', { value: formatCurrencyCompact(spent, activeCurrency) })}
                                   >
                                     ≈{Math.round(spent / 1000)}k
                                   </div>
@@ -509,32 +520,32 @@ export default function Budgets() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
           <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">Set Monthly Budget</h2>
+              <h2 className="text-lg font-semibold text-white">{t('budgets.form.title')}</h2>
               <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
             </div>
             {error && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{error}</div>}
             <form onSubmit={save} className="space-y-3">
-              <div><label className="label">Site *</label><input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} required /></div>
+              <div><label className="label">{t('budgets.form.site')}</label><input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} required /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Year</label>
+                  <label className="label">{t('budgets.form.year')}</label>
                   <select className="input" value={form.year} onChange={e => setForm(f => ({ ...f, year: +e.target.value }))}>
                     {[CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Month</label>
+                  <label className="label">{t('budgets.form.month')}</label>
                   <select className="input" value={form.month} onChange={e => setForm(f => ({ ...f, month: +e.target.value }))}>
-                    {MONTHS_LABELS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+                    {monthLabels.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
                   </select>
                 </div>
               </div>
-              <div><label className="label">Monthly Budget ({activeCurrency})</label><input type="number" className="input" value={form.monthly_budget} onChange={e => setForm(f => ({ ...f, monthly_budget: +e.target.value }))} min={0} step={500} required /></div>
+              <div><label className="label">{t('budgets.form.monthlyBudget', { currency: activeCurrency })}</label><input type="number" className="input" value={form.monthly_budget} onChange={e => setForm(f => ({ ...f, monthly_budget: +e.target.value }))} min={0} step={500} required /></div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Save size={16} /> {saving ? 'Saving...' : 'Save'}
+                  <Save size={16} /> {saving ? t('budgets.form.saving') : t('budgets.form.save')}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
+                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">{t('budgets.form.cancel')}</button>
               </div>
             </form>
           </div>

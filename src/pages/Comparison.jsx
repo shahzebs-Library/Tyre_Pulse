@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { supabase } from '../lib/supabase'
 import { Bar } from 'react-chartjs-2'
@@ -61,18 +62,20 @@ function DeltaBadge({ diff, pct, isGoodWhenDown = true }) {
 }
 
 function PeriodSummaryCard({ label, total, metric, currency, colorClass }) {
+  const { t } = useLanguage()
   const formatted = metric === 'cost' ? formatCurrencyCompact(total, currency) : total.toLocaleString()
   return (
     <div className={`flex-1 min-w-[150px] p-4 rounded-xl border ${colorClass} card`}>
       <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</p>
       <p className="text-2xl font-bold text-white mt-0.5">{formatted}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{metric === 'cost' ? 'total cost' : 'replacements'}</p>
+      <p className="text-xs text-gray-500 mt-0.5">{metric === 'cost' ? t('comparison.summary.totalCost') : t('comparison.summary.replacements')}</p>
     </div>
   )
 }
 
 // ── Period Picker ──────────────────────────────────────────────────────────────
 function PeriodPicker({ label, period, setPeriod, accentBg, accentText, accentBorder }) {
+  const { t } = useLanguage()
   function toggleMonth(m) {
     setPeriod(p => ({
       ...p,
@@ -112,13 +115,13 @@ function PeriodPicker({ label, period, setPeriod, accentBg, accentText, accentBo
         <p className="text-xs text-gray-500">
           {period.months.length > 0
             ? period.months.map(m => MONTHS[m]).join(', ') + ' ' + period.year
-            : 'No months selected'}
+            : t('comparison.noMonthsSelected')}
         </p>
         <div className="flex gap-2">
           <button onClick={() => setPeriod(p => ({ ...p, months: [0,1,2,3,4,5,6,7,8,9,10,11] }))}
-            className="text-xs text-gray-500 hover:text-white transition-colors">All</button>
+            className="text-xs text-gray-500 hover:text-white transition-colors">{t('comparison.all')}</button>
           <button onClick={() => setPeriod(p => ({ ...p, months: [] }))}
-            className="text-xs text-gray-500 hover:text-red-400 transition-colors">Clear</button>
+            className="text-xs text-gray-500 hover:text-red-400 transition-colors">{t('comparison.clear')}</button>
         </div>
       </div>
     </div>
@@ -127,6 +130,7 @@ function PeriodPicker({ label, period, setPeriod, accentBg, accentText, accentBo
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 export default function Comparison() {
+  const { t } = useLanguage()
   const { activeCurrency } = useSettings()
 
   const [periodA, setPeriodA] = useState({ months: [0,1,2,3,4,5,6,7,8,9,10,11], year: now.getFullYear() - 1 })
@@ -182,9 +186,16 @@ export default function Comparison() {
       const totalB = bVals.reduce((s, v) => s + v, 0)
       const diff   = totalB - totalA
       const pct    = pctDiff(totalA, totalB)
-      const label  = metric === 'count' ? 'replacements' : 'spend'
+      const label  = metric === 'count' ? t('comparison.summary.replacements') : t('comparison.insight.spend')
       const insight = totalA > 0
-        ? `Period B has ${Math.abs(pct)}% ${diff >= 0 ? 'more' : 'less'} ${label} vs Period A (${diff >= 0 ? '+' : ''}${metric === 'cost' ? formatCurrencyCompact(diff, activeCurrency) : diff.toLocaleString()} ${diff >= 0 ? '▲' : '▼'})`
+        ? t('comparison.insight.overall', {
+            pct: Math.abs(pct),
+            direction: diff >= 0 ? t('comparison.insight.more') : t('comparison.insight.less'),
+            label,
+            sign: diff >= 0 ? '+' : '',
+            amount: metric === 'cost' ? formatCurrencyCompact(diff, activeCurrency) : diff.toLocaleString(),
+            arrow: diff >= 0 ? '▲' : '▼',
+          })
         : ''
 
       const tableRows = allMonths.map((m, i) => ({
@@ -260,9 +271,16 @@ export default function Comparison() {
       chartData,
       tableRows,
       totals: { a: totalA, b: totalB, diff, pct },
-      insight: totalA > 0 ? `Across ${dims.length} ${dimKey}s, Period B shows ${Math.abs(pct)}% ${diff >= 0 ? 'increase' : 'decrease'} overall` : '',
+      insight: totalA > 0
+        ? t('comparison.insight.byDimension', {
+            count: dims.length,
+            dimLabel: dimKey === 'site' ? t('comparison.insight.sites') : t('comparison.insight.brands'),
+            pct: Math.abs(pct),
+            direction: diff >= 0 ? t('comparison.insight.increase') : t('comparison.insight.decrease'),
+          })
+        : '',
     }
-  }, [ran, records, periodA, periodB, metric, dimension, activeCurrency])
+  }, [ran, records, periodA, periodB, metric, dimension, activeCurrency, t])
 
   // ── Exports ────────────────────────────────────────────────────────────────────
   function doExcelExport() {
@@ -295,20 +313,20 @@ export default function Comparison() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Period Comparison"
-        subtitle="Compare tyre replacements or costs across two time periods"
+        title={t('comparison.title')}
+        subtitle={t('comparison.subtitle')}
         icon={GitCompare}
       />
 
       {/* Period selectors */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <PeriodPicker
-          label="Period A"
+          label={t('comparison.periodA')}
           period={periodA} setPeriod={setPeriodA}
           accentBg="bg-green-900/40" accentText="text-green-300" accentBorder="border-green-700/50"
         />
         <PeriodPicker
-          label="Period B"
+          label={t('comparison.periodB')}
           period={periodB} setPeriod={setPeriodB}
           accentBg="bg-blue-900/40" accentText="text-blue-300" accentBorder="border-blue-700/50"
         />
@@ -318,23 +336,23 @@ export default function Comparison() {
       <div className="flex items-center gap-3 flex-wrap">
         {/* Metric */}
         <SegmentedControl
-          ariaLabel="metric"
+          ariaLabel={t('comparison.metric.ariaLabel')}
           size="sm"
           value={metric}
           onChange={setMetric}
           options={[
-            { value: 'count', label: 'Replacements' },
-            { value: 'cost', label: `Cost (${activeCurrency})` },
+            { value: 'count', label: t('comparison.metric.replacements') },
+            { value: 'cost', label: t('comparison.metric.cost', { currency: activeCurrency }) },
           ]}
         />
 
         {/* Dimension */}
         <SegmentedControl
-          ariaLabel="dimension"
+          ariaLabel={t('comparison.dimension.ariaLabel')}
           size="sm"
           value={dimension}
           onChange={setDimension}
-          options={DIMENSION_OPTS}
+          options={DIMENSION_OPTS.map(o => ({ ...o, label: t(`comparison.dimension.${o.value}`) }))}
         />
 
         <button
@@ -343,11 +361,11 @@ export default function Comparison() {
           className="btn-primary px-6 flex items-center gap-2 disabled:opacity-50"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          {loading ? 'Running...' : ran ? 'Re-run' : 'Run Comparison'}
+          {loading ? t('comparison.run.running') : ran ? t('comparison.run.rerun') : t('comparison.run.run')}
         </button>
 
         {!canRun && (
-          <p className="text-xs text-amber-500">Select at least one month in each period</p>
+          <p className="text-xs text-amber-500">{t('comparison.run.selectMonthWarning')}</p>
         )}
       </div>
 
@@ -358,21 +376,21 @@ export default function Comparison() {
           {totals && (
             <div className="flex gap-3 flex-wrap">
               <PeriodSummaryCard
-                label={`Period A - ${periodA.year}`}
+                label={t('comparison.periodALabel', { year: periodA.year })}
                 total={totals.a} metric={metric} currency={activeCurrency}
                 colorClass="border-green-700/40"
               />
               <PeriodSummaryCard
-                label={`Period B - ${periodB.year}`}
+                label={t('comparison.periodBLabel', { year: periodB.year })}
                 total={totals.b} metric={metric} currency={activeCurrency}
                 colorClass="border-blue-700/40"
               />
               <div className="flex-1 min-w-[150px] p-4 rounded-xl border card">
-                <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Change</p>
+                <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{t('comparison.summary.change')}</p>
                 <p className={`text-2xl font-bold mt-0.5 ${totals.diff === 0 ? 'text-gray-500' : totals.diff > 0 ? 'text-red-400' : 'text-green-400'}`}>
                   {totals.diff > 0 ? '+' : ''}{metric === 'cost' ? formatCurrencyCompact(totals.diff, activeCurrency) : totals.diff.toLocaleString()}
                 </p>
-                <p className="text-xs text-gray-500 mt-0.5">{Math.abs(totals.pct)}% {totals.diff >= 0 ? 'increase' : 'decrease'}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{Math.abs(totals.pct)}% {totals.diff >= 0 ? t('comparison.summary.increase') : t('comparison.summary.decrease')}</p>
               </div>
             </div>
           )}
@@ -390,8 +408,8 @@ export default function Comparison() {
             <div className="flex items-center gap-2 mb-4">
               <BarChart2 size={15} className="text-blue-400" />
               <h3 className="text-base font-semibold text-white">
-                {metric === 'count' ? 'Replacements' : `Cost (${activeCurrency})`}
-                {dimension !== 'overall' ? ` by ${dimension === 'site' ? 'Site' : 'Brand'}` : ' by Month'}
+                {metric === 'count' ? t('comparison.chart.replacements') : t('comparison.chart.cost', { currency: activeCurrency })}
+                {dimension !== 'overall' ? (dimension === 'site' ? t('comparison.chart.bySite') : t('comparison.chart.byBrand')) : t('comparison.chart.byMonth')}
               </h3>
             </div>
             <div style={{ height: 300 }}>
@@ -403,15 +421,15 @@ export default function Comparison() {
           <div className="card p-0 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
               <h3 className="text-sm font-semibold text-white">
-                {dimension === 'overall' ? 'Monthly Breakdown' : dimension === 'site' ? 'Site Breakdown' : 'Brand Breakdown'}
-                <span className="text-gray-500 font-normal ml-2">{tableRows.length} rows</span>
+                {dimension === 'overall' ? t('comparison.table.monthlyBreakdown') : dimension === 'site' ? t('comparison.table.siteBreakdown') : t('comparison.table.brandBreakdown')}
+                <span className="text-gray-500 font-normal ml-2">{t('comparison.table.rows', { count: tableRows.length })}</span>
               </h3>
               <div className="flex gap-2">
                 <button onClick={doExcelExport} className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5">
-                  <Download size={12} /> Excel
+                  <Download size={12} /> {t('comparison.actions.excel')}
                 </button>
                 <button onClick={doPdfExport} className="btn-secondary flex items-center gap-1.5 text-xs px-2.5 py-1.5">
-                  <FileText size={12} /> PDF
+                  <FileText size={12} /> {t('comparison.actions.pdf')}
                 </button>
               </div>
             </div>
@@ -419,11 +437,11 @@ export default function Comparison() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-800/50">
                   <tr className="text-left text-gray-400 text-xs">
-                    <th className="px-4 py-2.5">{dimension === 'overall' ? 'Month' : dimension === 'site' ? 'Site' : 'Brand'}</th>
-                    <th className="px-3 py-2.5 text-green-400">Period A ({periodA.year})</th>
-                    <th className="px-3 py-2.5 text-blue-400">Period B ({periodB.year})</th>
-                    <th className="px-3 py-2.5">Difference</th>
-                    <th className="px-3 py-2.5">% Change</th>
+                    <th className="px-4 py-2.5">{dimension === 'overall' ? t('comparison.table.month') : dimension === 'site' ? t('comparison.table.site') : t('comparison.table.brand')}</th>
+                    <th className="px-3 py-2.5 text-green-400">{t('comparison.periodAYear', { year: periodA.year })}</th>
+                    <th className="px-3 py-2.5 text-blue-400">{t('comparison.periodBYear', { year: periodB.year })}</th>
+                    <th className="px-3 py-2.5">{t('comparison.table.difference')}</th>
+                    <th className="px-3 py-2.5">{t('comparison.table.pctChange')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -448,7 +466,7 @@ export default function Comparison() {
                 {totals && (
                   <tfoot className="bg-gray-800/60 font-semibold text-sm border-t border-gray-700">
                     <tr>
-                      <td className="px-4 py-2.5 text-white">Total</td>
+                      <td className="px-4 py-2.5 text-white">{t('comparison.table.total')}</td>
                       <td className="px-3 py-2.5 text-green-300">
                         {metric === 'cost' ? formatCurrencyCompact(totals.a, activeCurrency) : totals.a.toLocaleString()}
                       </td>
@@ -473,16 +491,16 @@ export default function Comparison() {
       {ran && (!chartData || tableRows.length === 0) && (
         <div className="card text-center py-14">
           <GitCompare size={36} className="text-gray-700 mx-auto mb-3" />
-          <p className="text-gray-400 font-medium">No data found for the selected periods</p>
-          <p className="text-gray-600 text-sm mt-1">Try selecting different years or months</p>
+          <p className="text-gray-400 font-medium">{t('comparison.empty.noData')}</p>
+          <p className="text-gray-600 text-sm mt-1">{t('comparison.empty.noDataHint')}</p>
         </div>
       )}
 
       {!ran && (
         <div className="card text-center py-14 bg-gray-800/20">
           <GitCompare size={36} className="text-gray-700 mx-auto mb-3" />
-          <p className="text-gray-400 font-medium">Configure periods above and run the comparison</p>
-          <p className="text-gray-600 text-sm mt-1">Select months for Period A and Period B, then click Run</p>
+          <p className="text-gray-400 font-medium">{t('comparison.empty.configureTitle')}</p>
+          <p className="text-gray-600 text-sm mt-1">{t('comparison.empty.configureHint')}</p>
         </div>
       )}
     </div>

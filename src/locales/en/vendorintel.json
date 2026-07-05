@@ -1,0 +1,158 @@
+{
+  "loading": "Loading vendor & workshop intelligence...",
+  "retry": "Retry",
+  "errors": {
+    "loadFailed": "Failed to load data"
+  },
+  "title": "Vendor & Workshop Intelligence",
+  "subtitle": "Objective performance ranking for tyre brands and workshop sites - cost efficiency, reliability, and procurement intelligence",
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF",
+    "emailReport": "Email Report"
+  },
+  "filters": {
+    "allSites": "All Sites",
+    "minRecords": "Min records",
+    "refresh": "Refresh",
+    "recordsCount": "{count} records"
+  },
+  "positions": {
+    "all": "All",
+    "steer": "Steer",
+    "drive": "Drive",
+    "trailer": "Trailer",
+    "other": "Other"
+  },
+  "sections": {
+    "brandRankings": "Brand Rankings",
+    "workshopPerformance": "Workshop Performance"
+  },
+  "na": "N/A",
+  "vendor": {
+    "leaderboard": "Vendor Leaderboard",
+    "emptyThreshold": "No brand records meet the minimum record threshold ({minRecords}).",
+    "rank": "Rank #{rank}",
+    "outOf100": "/ 100 score",
+    "avgCpk": "Avg CPK",
+    "failureRate": "Failure Rate",
+    "avgTyreLife": "Avg Tyre Life",
+    "scrapRate": "Scrap Rate",
+    "totalRecords": "Total Records",
+    "totalInvestment": "Total Investment",
+    "remainingBrands": "Remaining Brands",
+    "columns": {
+      "rank": "Rank",
+      "brand": "Brand",
+      "records": "Records",
+      "avgCpk": "Avg CPK",
+      "failureRate": "Failure Rate",
+      "avgLife": "Avg Life",
+      "score": "Score",
+      "validCpk": "Valid (CPK)",
+      "medianCpk": "Median CPK",
+      "avgLifeKm": "Avg Life (km)",
+      "scrapRate": "Scrap Rate",
+      "totalCost": "Total Cost"
+    },
+    "analyticsTitle": "Brand Performance Analytics",
+    "radarTitle": "Brand Comparison Radar - Top 5",
+    "radarSub": "Normalized 0-100 across 5 performance dimensions",
+    "radarInsufficient": "Insufficient data for radar comparison",
+    "cpkChartTitle": "CPK by Brand ({currency}/km)",
+    "cpkChartSub": "Green ≤1.0 · Amber 1-2 · Red ≥2 - sorted best to worst",
+    "cpkChartEmpty": "No valid CPK data (requires km_at_fitment, km_at_removal, cost_per_tyre)",
+    "lifeChartTitle": "Average Tyre Life by Brand",
+    "lifeChartSub": "Higher = longer-lasting tyre - sorted descending",
+    "lifeChartEmpty": "No tyre life data available",
+    "failureChartTitle": "Failure Rate by Brand (%)",
+    "failureChartSub": "High + Critical risk as % of total records",
+    "failureChartEmpty": "No failure rate data available",
+    "fullTableTitle": "Full Brand Performance Table",
+    "radarLabels": {
+      "cpkEfficiency": "CPK Efficiency",
+      "quality": "Quality",
+      "tyreLife": "Tyre Life",
+      "lowScrap": "Low Scrap",
+      "volume": "Volume"
+    },
+    "cpkDatasetLabel": "Avg CPK",
+    "lifeDatasetLabel": "Avg KM Life",
+    "failureDatasetLabel": "Failure Rate %"
+  },
+  "workshop": {
+    "rankings": "Workshop Site Rankings",
+    "emptyThreshold": "No workshop data meets the minimum record threshold ({minRecords}).",
+    "records": "Records",
+    "highRiskPct": "High Risk %",
+    "avgCpk": "Avg CPK",
+    "avgCostPerTyre": "Avg Cost/Tyre",
+    "actionCloseRate": "Action Close Rate",
+    "allSitesTitle": "All Sites",
+    "columns": {
+      "rank": "Rank",
+      "site": "Site",
+      "records": "Records",
+      "highRiskPct": "High Risk %",
+      "avgCpk": "Avg CPK",
+      "closeRate": "Close Rate",
+      "score": "Score",
+      "avgCost": "Avg Cost",
+      "actionsRaised": "Actions Raised",
+      "closeRatePct": "Close Rate %"
+    },
+    "analyticsTitle": "Workshop Analytics",
+    "riskChartTitle": "High Risk % by Site",
+    "riskChartSub": "High + Critical risk records as % of site total",
+    "cpkChartTitle": "Avg CPK by Site ({currency}/km)",
+    "cpkChartSub": "Higher CPK = more expensive per km driven",
+    "closeChartTitle": "Corrective Action Close Rate by Site (%)",
+    "closeChartSub": "% of corrective actions resolved - green ≥70% · amber 40-70% · red <40%",
+    "riskDatasetLabel": "High Risk %",
+    "cpkDatasetLabel": "Avg CPK",
+    "closeDatasetLabel": "Close Rate %",
+    "tableTitle": "Workshop Performance Table"
+  },
+  "recommendations": {
+    "title": "Procurement Recommendations",
+    "allGoodTitle": "Fleet Performance Within Acceptable Parameters",
+    "allGoodDesc": "No critical procurement actions identified. Continue monitoring.",
+    "priority": {
+      "Critical": "Critical",
+      "High": "High",
+      "Medium": "Medium"
+    },
+    "messages": {
+      "highestCpk": "{brand} has the highest CPK at {cpk}/km - significantly above fleet benchmark. Initiate replacement procurement evaluation.",
+      "bestValue": "{brand} delivers best value at {cpk}/km with {count} records. Consider increasing procurement share to reduce fleet cost.",
+      "highFailure": "{brand} shows {pct} failure rate (High + Critical risk). Conduct root cause analysis and review specifications before next procurement cycle.",
+      "highScrap": "{brand} has a {pct} scrap rate - indicative of premature removal or quality issues. Engineering review recommended.",
+      "worstSiteRisk": "{site} has the highest high-risk tyre rate at {pct}%. Schedule an immediate tyre audit and corrective action review for this site.",
+      "zeroCloseRate": "{site} has 0% corrective action close rate. Escalation to site management required - open actions are accumulating without resolution.",
+      "slowCloseRate": "{site} corrective action close rate is only {pct}. Set a 30-day resolution target and assign accountability for open actions.",
+      "longestLife": "{brand} achieves the longest average tyre life at {km}. Prioritise for steer and drive axles where durability delivers highest lifecycle value."
+    }
+  },
+  "execSummary": {
+    "title": "Executive Summary",
+    "bestValueBrand": "Best Value Brand",
+    "avgCpkPerKm": "Avg CPK: {cpk}/km",
+    "noCpkData": "No CPK data",
+    "bestValueNote": "Lowest cost per km - recommended for increased procurement",
+    "highestCostBrand": "Highest Cost Brand",
+    "highestCostNote": "Highest cost per km - evaluate specification or supplier change",
+    "potentialAnnualSaving": "Potential Annual Saving",
+    "savingSwitch": "If fleet switches from {worst} to {best}",
+    "savingUnlock": "Switch best and worst brand CPK to unlock saving estimate",
+    "bestPerformingSite": "Best Performing Site",
+    "siteScoreLine": "Score: {score}/100 · {pct}% high risk",
+    "noSiteData": "No site data",
+    "bestSiteNote": "Benchmark site for fleet-wide best practices",
+    "siteNeedingAttention": "Site Needing Attention",
+    "attentionNote": "Schedule tyre audit and corrective action review",
+    "totalFleetInvestment": "Total Fleet Investment",
+    "acrossRecords": "Across {count} records with cost data",
+    "brandsTracked": "{count} brands tracked in selected period",
+    "noBrandData": "No brand data"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "title": "Site Comparison",
+  "subtitle": "Head-to-head performance across sites",
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "states": {
+    "loadError": "Could not load site data",
+    "retry": "Retry",
+    "noSiteData": "No site data available",
+    "noSiteDataHint": "Upload tyre records with site information to start comparing.",
+    "selectSite": "Select at least one site to compare",
+    "selectSiteHint": "Toggle sites above to begin the comparison."
+  },
+  "filters": {
+    "period": "Period",
+    "granularity": "Granularity",
+    "selectSites": "Select sites to compare (up to 6):"
+  },
+  "granularity": {
+    "Monthly": "Monthly",
+    "Quarterly": "Quarterly",
+    "Yearly": "Yearly"
+  },
+  "kpi": {
+    "records": "Records",
+    "totalCost": "Total Cost",
+    "highRisk": "High Risk",
+    "topBrand": "Top Brand",
+    "topCategory": "Top Category"
+  },
+  "chart": {
+    "totalCostComparison": "Total Cost Comparison",
+    "highRiskComparison": "High-Risk Rate Comparison",
+    "totalCostSar": "Total Cost (SAR)",
+    "highRiskPct": "High Risk %",
+    "radarTitle": "Multi-Dimension Radar (0-100, higher = better)",
+    "radarLegend": "Cost Efficiency · Safety · Volume · Risk Quality · Data Quality"
+  },
+  "trend": {
+    "title": "{granularity} Cost Trend by Site ({period})",
+    "fullscreen": "Fullscreen",
+    "modalTitle": "Cost Trend by Site",
+    "granularityLabel": "Granularity:"
+  },
+  "periodLabel": {
+    "Monthly": "last 12 months",
+    "Quarterly": "last 8 quarters",
+    "Yearly": "last 5 years"
+  }
+}

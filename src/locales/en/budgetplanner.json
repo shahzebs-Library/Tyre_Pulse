@@ -1,0 +1,131 @@
+{
+  "loading": "Loading budget data...",
+  "error": {
+    "title": "Failed to load data",
+    "retry": "Retry"
+  },
+  "title": "Annual Budget Planner",
+  "subtitle": "What-if modeling · Actual vs Budget · Site allocation · Scenario analysis",
+  "actions": {
+    "pdf": "PDF",
+    "excel": "Excel"
+  },
+  "statusBar": {
+    "fy": "FY {year}",
+    "budgetSet": "Budget Set:",
+    "actualYtd": "Actual YTD:",
+    "variance": "Variance:",
+    "pctUsed": "% Used:",
+    "projectedYe": "Projected YE:"
+  },
+  "months": {
+    "0": "Jan", "1": "Feb", "2": "Mar", "3": "Apr", "4": "May", "5": "Jun",
+    "6": "Jul", "7": "Aug", "8": "Sep", "9": "Oct", "10": "Nov", "11": "Dec"
+  },
+  "kpi": {
+    "annualBudget": "Annual Budget",
+    "actualYtd": "Actual YTD",
+    "budgetVariance": "Budget Variance",
+    "underBudget": "Under budget",
+    "overBudget": "Over budget",
+    "pctBudgetUsed": "% Budget Used",
+    "projectedYe": "Projected YE",
+    "overTrajectory": "Over trajectory",
+    "onTrajectory": "On trajectory"
+  },
+  "chart": {
+    "budgetVsActual": "Budget vs Actual - Monthly {year}",
+    "redBarsHint": "Red bars = actual exceeds budget",
+    "budget": "Budget",
+    "actual": "Actual",
+    "cumulativeActual": "Cumulative Actual",
+    "cumulativeBudget": "Cumulative Budget",
+    "annualSpend": "Annual Spend"
+  },
+  "quarterly": {
+    "heading": "Quarterly Budget Tracking",
+    "budget": "Budget",
+    "actual": "Actual",
+    "variance": "Variance",
+    "usedPct": "{pct} used"
+  },
+  "status": {
+    "onTrack": "On Track",
+    "warning": "Warning",
+    "overBudget": "Over Budget",
+    "complete": "Complete",
+    "active": "Active",
+    "over": "Over",
+    "pending": "Pending"
+  },
+  "site": {
+    "heading": "Site Budget Allocation",
+    "editHint": "Click edit icon to adjust site budgets",
+    "empty": "No site data available for {year}",
+    "columns": {
+      "site": "Site",
+      "annualBudget": "Annual Budget",
+      "ytdActual": "YTD Actual",
+      "variance": "Variance",
+      "pctUsed": "% Used",
+      "projection": "Projection",
+      "cpk": "CPK",
+      "status": "Status"
+    }
+  },
+  "cpkEfficiency": {
+    "heading": "CPK Efficiency - Over-Budget Sites",
+    "overBudgetBy": "Over budget by {value} ({pct} excess)",
+    "currentCpk": "Current CPK",
+    "priorYearCpk": "Prior Year CPK",
+    "targetCpk": "Target CPK (-15%)",
+    "potentialSaving": "Potential saving: {value}/yr",
+    "improvedFromTo": "If CPK improved from {from} to {to}"
+  },
+  "whatIf": {
+    "heading": "What-If Scenario Builder",
+    "cpkTargetLabel": "Fleet CPK Target",
+    "currentFleetAvgCpk": "Current fleet avg CPK: {value}",
+    "volumeChangeLabel": "Replacement Volume Change",
+    "rangeFewer": "-30% (fewer)",
+    "rangeMore": "+30% (more)",
+    "brandSwitchVolumeLabel": "Brand Switch Volume",
+    "brandSwitchVolumeHint": "% of fleet switching brand",
+    "brandCostSavingLabel": "Brand Cost Saving",
+    "brandCostSavingHint": "Cost reduction vs current brand",
+    "scenarioProjection": "Scenario Projection",
+    "currentTrajectory": "Current Trajectory",
+    "underThisScenario": "Under This Scenario",
+    "savingLine": "Saving: {value}/yr",
+    "additionalCostLine": "Additional Cost: {value}/yr",
+    "underScenarioSave": "Under this scenario, you save {value} per year",
+    "underScenarioSpend": "Under this scenario, you spend an extra {value} per year"
+  },
+  "brand": {
+    "distribution": "Brand Spend Distribution - {year}",
+    "noData": "No brand data for {year}",
+    "analysis": "Brand Cost Analysis",
+    "columns": {
+      "brand": "Brand",
+      "thisYear": "This Year",
+      "lastYear": "Last Year",
+      "change": "Change",
+      "cpk": "CPK",
+      "cpkDelta": "CPK Δ"
+    },
+    "noDataAvailable": "No brand data available"
+  },
+  "trend": {
+    "heading": "Annual Spend Trend & Projection",
+    "forecast": "{year} forecast: {value}",
+    "insufficientData": "Insufficient historical data for trend analysis"
+  },
+  "recommendations": {
+    "heading": "AI Budget Recommendations",
+    "reviewSite": "Review {site}: {pct} over budget - prioritise CPK optimisation.",
+    "brandCpkWorsened": "{brand} CPK worsened by {pct} YoY - consider vendor review or brand switch.",
+    "projectedExceeds": "Projected year-end ({value}) exceeds budget by >10% - adjust procurement plan.",
+    "whatIfSaves": "What-If scenario saves {value}/yr - validate CPK targets with engineering team."
+  },
+  "na": "N/A"
+}

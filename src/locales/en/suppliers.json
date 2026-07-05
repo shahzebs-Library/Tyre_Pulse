@@ -1,0 +1,242 @@
+{
+  "title": "Supplier Management",
+  "subtitle": "Manage suppliers, contracts, and vendor performance",
+  "actions": {
+    "import": "Import via Data Intake Center",
+    "refresh": "Refresh",
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "kpi": {
+    "totalSuppliers": "Total Suppliers",
+    "uniqueBrands": "Unique brands",
+    "preferred": "Preferred",
+    "ofTotalSuppliers": "of {total} suppliers",
+    "cpkRange": "CPK Range",
+    "toValue": "to {value}",
+    "bestCpk": "Best CPK",
+    "worstCpk": "Worst CPK",
+    "vsLastYear": "{pct}% vs last year"
+  },
+  "ratingsError": "Supplier ratings/notes could not be saved or loaded: {message}",
+  "retry": "Retry",
+  "searchPlaceholder": "Search supplier...",
+  "filters": {
+    "allCountries": "All Countries",
+    "allSites": "All Sites",
+    "allRatings": "All Ratings",
+    "clear": "Clear"
+  },
+  "suppliersCount": "{count} suppliers",
+  "tabs": {
+    "directory": "Directory",
+    "performance": "Performance",
+    "spendAnalysis": "Spend Analysis",
+    "contracts": "Contracts",
+    "recommendations": "Recommendations",
+    "scorecard": "Scorecard"
+  },
+  "ratings": {
+    "preferred": "Preferred",
+    "approved": "Approved",
+    "underReview": "Under Review",
+    "probation": "Probation"
+  },
+  "directory": {
+    "emptyTitle": "No suppliers found",
+    "emptyDesc": "Adjust your filters or upload tyre records to see suppliers here.",
+    "spendYtd": "Spend YTD",
+    "tyres": "Tyres",
+    "avgCpk": "Avg CPK",
+    "failurePct": "Failure %",
+    "removeFromCompare": "Remove from compare",
+    "addToCompare": "Add to compare",
+    "viewDetails": "View Details"
+  },
+  "performance": {
+    "selectToCompare": "Select Suppliers to Compare (up to 4)",
+    "clearSelection": "Clear selection",
+    "emptyTitle": "Select suppliers to compare",
+    "emptyDesc": "Choose up to 4 suppliers from the list above to see a side-by-side comparison.",
+    "radarTitle": "Performance Radar Comparison",
+    "sideBySide": "Side-by-Side Metrics",
+    "metric": "Metric",
+    "rows": {
+      "avgCpk": "Avg CPK",
+      "avgLifeKm": "Avg Life (km)",
+      "failureRate": "Failure Rate",
+      "tyreCount": "Tyre Count",
+      "spendYtd": "Spend YTD",
+      "totalSpend": "Total Spend",
+      "rating": "Rating"
+    }
+  },
+  "spend": {
+    "shareTitle": "Supplier Spend Share",
+    "noData": "No spend data available",
+    "totalSpend": "Total Spend: ",
+    "monthlyTitle": "Monthly Spend by Supplier (12 Months)",
+    "yoyTitle": "Year-over-Year Cost Change",
+    "columns": {
+      "supplier": "Supplier",
+      "thisYear": "This Year",
+      "lastYear": "Last Year",
+      "change": "Change"
+    },
+    "noYoyData": "No year-over-year data available",
+    "na": "N/A"
+  },
+  "contracts": {
+    "searchPlaceholder": "Search contracts...",
+    "add": "Add Contract",
+    "loadError": "Failed to load contracts",
+    "emptyTitle": "No contracts found",
+    "emptyDesc": "Add supplier contracts to track expiry and terms.",
+    "columns": {
+      "supplier": "Supplier",
+      "start": "Start",
+      "end": "End",
+      "paymentTerms": "Payment Terms",
+      "pricePerUnit": "Price/Unit",
+      "minOrder": "Min Order",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "statuses": {
+      "active": "Active",
+      "expiringSoon": "Expiring Soon",
+      "expired": "Expired"
+    },
+    "expiringBannerTitle": "Contracts Expiring Soon",
+    "expiringBannerDesc": "{names} - renewal action required within 30 days"
+  },
+  "recommendations": {
+    "title": "AI-Powered Procurement Recommendations",
+    "basedOn": "Based on {count} tyre records",
+    "emptyTitle": "No recommendations yet",
+    "emptyDesc": "Upload more tyre records to generate procurement intelligence.",
+    "types": {
+      "increase": "INCREASE USAGE",
+      "review": "REVIEW SUPPLIER",
+      "saving": "COST SAVING",
+      "consolidate": "CONSOLIDATE",
+      "action": "ACTION"
+    },
+    "impact": "{impact} Impact",
+    "impactLevels": {
+      "Critical": "Critical",
+      "High": "High",
+      "Medium": "Medium"
+    },
+    "messages": {
+      "increase": "Increase {brand} usage - CPK is {cpk}, which is {pct}% better than fleet average",
+      "review": "Review {brand} - failure rate is {rate}%, above {threshold}% threshold",
+      "saving": "Cost reduction opportunity: replacing {worstBrand} with {bestBrand} could save approx. {amount}/year",
+      "consolidate": "Consider consolidating {size} procurement to {brand} - best CPK for this size at {cpk}"
+    },
+    "summaryTitle": "Supplier Performance Summary",
+    "columns": {
+      "supplier": "Supplier",
+      "rating": "Rating",
+      "tyres": "Tyres",
+      "avgCpk": "Avg CPK",
+      "avgLife": "Avg Life",
+      "failurePct": "Failure %",
+      "vsBenchmark": "vs Benchmark"
+    },
+    "na": "N/A"
+  },
+  "scorecard": {
+    "cards": {
+      "suppliers": "Suppliers",
+      "tyres": "Tyres",
+      "totalSpend": "Total spend",
+      "warrantyCredit": "Warranty credit"
+    },
+    "description": "Composite score (0-100, higher is better) blends CPK, failure rate, warranty recovery and on-time delivery. Cost is actual only; missing data is excluded, not penalised. Supplier falls back to tyre brand where a supplier is not recorded.",
+    "columns": {
+      "rank": "#",
+      "supplier": "Supplier",
+      "score": "Score",
+      "tyres": "Tyres",
+      "spend": "Spend",
+      "avgCpk": "Avg CPK",
+      "failurePct": "Failure %",
+      "warrantyRec": "Warranty rec.",
+      "onTimePct": "On-time %"
+    },
+    "empty": "No supplier data yet."
+  },
+  "drawer": {
+    "tyresSuffix": "tyres",
+    "radarTitle": "Performance Radar",
+    "stats": {
+      "avgCpk": "Avg CPK",
+      "avgTyreLife": "Avg Tyre Life",
+      "failureRate": "Failure Rate",
+      "spendThisYear": "Spend This Year",
+      "totalSpend": "Total Spend",
+      "sitesUsed": "Sites Used"
+    },
+    "monthlySpendTitle": "Monthly Spend (12 Months)",
+    "sizeDistribution": "Size Distribution",
+    "noSizeData": "No size data",
+    "siteUsage": "Site Usage",
+    "noSiteData": "No site data",
+    "tyreRecords": "Tyre Records",
+    "totalSuffix": "{count} total",
+    "columns": {
+      "serial": "Serial",
+      "size": "Size",
+      "asset": "Asset",
+      "site": "Site",
+      "cpk": "CPK",
+      "risk": "Risk",
+      "date": "Date"
+    },
+    "noRecords": "No records",
+    "prev": "Prev",
+    "next": "Next",
+    "pageOf": "{page} / {total}",
+    "ratingOverride": "Rating Override (Admin)",
+    "notes": "Notes",
+    "notesPlaceholder": "Add internal notes about this supplier...",
+    "saving": "Saving...",
+    "saved": "Saved",
+    "saveNotes": "Save Notes"
+  },
+  "radarLabels": {
+    "cpkScore": "CPK Score",
+    "lifeScore": "Life Score",
+    "reliability": "Reliability",
+    "value": "Value",
+    "coverage": "Coverage"
+  },
+  "monthlySpendLabel": "Monthly Spend",
+  "contractModal": {
+    "editTitle": "Edit Contract",
+    "addTitle": "Add Contract",
+    "supplierName": "Supplier Name *",
+    "contractStart": "Contract Start",
+    "contractEnd": "Contract End",
+    "paymentTerms": "Payment Terms",
+    "paymentTermsPlaceholder": "e.g. Net 30",
+    "pricePerUnit": "Price Per Unit",
+    "minOrderQty": "Min Order Qty",
+    "notes": "Notes",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "save": "Save Contract"
+  },
+  "deleteContract": {
+    "confirmTitle": "Delete contract for {name}?",
+    "warning": "This removes the supplier contract permanently. Tyre and spend records are not affected.",
+    "defaultError": "The contract could not be deleted - you may not have permission, or it was already removed.",
+    "deleting": "Deleting...",
+    "delete": "Delete Contract",
+    "cancel": "Cancel"
+  },
+  "errors": {
+    "loadFailed": "Failed to load data"
+  }
+}

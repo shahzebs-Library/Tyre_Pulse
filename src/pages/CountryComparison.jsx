@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useLanguage } from '../contexts/LanguageContext'
 import * as analytics from '../lib/api/analyticsReads'
 import { useSettings, COUNTRIES, COUNTRY_LABEL, COUNTRY_CURRENCY } from '../contexts/SettingsContext'
 import { Globe, TrendingUp, AlertTriangle, DollarSign, Truck, Activity, Download, FileText, Award, RefreshCw } from 'lucide-react'
@@ -25,26 +26,26 @@ const BAR_OPTS = {
   },
 }
 
-function pct(n) { return n == null ? 'N/A' : `${n.toFixed(1)}%` }
-function cpk(n) { return n == null ? 'N/A' : n.toFixed(3) }
+function pct(n, na = 'N/A') { return n == null ? na : `${n.toFixed(1)}%` }
+function cpk(n, na = 'N/A') { return n == null ? na : n.toFixed(3) }
 
 // Re-uses shared formatCurrencyCompact for currency values
-function fmtCost(n, currency) {
-  if (n == null) return 'N/A'
+function fmtCost(n, currency, na = 'N/A') {
+  if (n == null) return na
   return formatCurrencyCompact(n, currency)
 }
 
 // lowerIsBetter: true = green for minimum value, red for maximum
 const KPI_ROWS = [
-  { key: 'count',          label: 'Fleet Records',   fmt: (v)     => v.toLocaleString(),                              icon: Truck,         lowerIsBetter: false },
-  { key: 'totalCost',      label: 'Total Cost',      fmt: (v, c)  => fmtCost(v, COUNTRY_CURRENCY[c] || 'SAR'),   icon: DollarSign,    lowerIsBetter: true  },
-  { key: 'avgCostPerTyre', label: 'Avg Cost / Tyre', fmt: (v, c)  => fmtCost(v, COUNTRY_CURRENCY[c] || 'SAR'),   icon: DollarSign,    lowerIsBetter: true  },
-  { key: 'avgCpk',         label: 'Avg CPK',         fmt: (v)     => cpk(v),                                         icon: Activity,      lowerIsBetter: true  },
-  { key: 'highRiskPct',    label: 'High Risk %',     fmt: (v)     => pct(v),                                         icon: AlertTriangle, lowerIsBetter: true  },
-  { key: 'openActions',    label: 'Open Actions',    fmt: (v)     => v.toLocaleString(),                              icon: TrendingUp,    lowerIsBetter: true  },
-  { key: 'overdueActions', label: 'Overdue Actions', fmt: (v)     => v.toLocaleString(),                              icon: AlertTriangle, lowerIsBetter: true  },
-  { key: 'siteCount',      label: 'Sites',           fmt: (v)     => v.toLocaleString(),                              icon: Globe,         lowerIsBetter: false },
-  { key: 'brandCount',     label: 'Brands Used',     fmt: (v)     => v.toLocaleString(),                              icon: Globe,         lowerIsBetter: false },
+  { key: 'count',          label: 'Fleet Records',   fmt: (v)        => v.toLocaleString(),                                icon: Truck,         lowerIsBetter: false },
+  { key: 'totalCost',      label: 'Total Cost',      fmt: (v, c, na) => fmtCost(v, COUNTRY_CURRENCY[c] || 'SAR', na), icon: DollarSign,    lowerIsBetter: true  },
+  { key: 'avgCostPerTyre', label: 'Avg Cost / Tyre', fmt: (v, c, na) => fmtCost(v, COUNTRY_CURRENCY[c] || 'SAR', na), icon: DollarSign,    lowerIsBetter: true  },
+  { key: 'avgCpk',         label: 'Avg CPK',         fmt: (v, c, na) => cpk(v, na),                                        icon: Activity,      lowerIsBetter: true  },
+  { key: 'highRiskPct',    label: 'High Risk %',     fmt: (v, c, na) => pct(v, na),                                        icon: AlertTriangle, lowerIsBetter: true  },
+  { key: 'openActions',    label: 'Open Actions',    fmt: (v)        => v.toLocaleString(),                                icon: TrendingUp,    lowerIsBetter: true  },
+  { key: 'overdueActions', label: 'Overdue Actions', fmt: (v)        => v.toLocaleString(),                                icon: AlertTriangle, lowerIsBetter: true  },
+  { key: 'siteCount',      label: 'Sites',           fmt: (v)        => v.toLocaleString(),                                icon: Globe,         lowerIsBetter: false },
+  { key: 'brandCount',     label: 'Brands Used',     fmt: (v)        => v.toLocaleString(),                                icon: Globe,         lowerIsBetter: false },
 ]
 
 function riskColor(pct) {
@@ -62,6 +63,7 @@ function overdueColor(n) {
 }
 
 export default function CountryComparison() {
+  const { t } = useLanguage()
   const { appSettings } = useSettings()
   const [countryMetrics, setCountryMetrics] = useState([])
   const [actions, setActions]   = useState([])
@@ -234,7 +236,7 @@ export default function CountryComparison() {
 
   if (loading) return (
     <div className="space-y-5">
-      <PageHeader title="Country Comparison" subtitle="Loading fleet data..." icon={Globe} />
+      <PageHeader title={t('countrycomparison.title')} subtitle={t('countrycomparison.states.loading')} icon={Globe} />
       <SkeletonCards count={3} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <SkeletonChart />
@@ -245,13 +247,13 @@ export default function CountryComparison() {
 
   if (error && !hasAnyData) return (
     <div className="space-y-5">
-      <PageHeader title="Country Comparison" subtitle="Could not load data" icon={Globe} />
+      <PageHeader title={t('countrycomparison.title')} subtitle={t('countrycomparison.states.loadError')} icon={Globe} />
       <div className="card py-16 flex flex-col items-center gap-3">
         <AlertTriangle size={40} className="text-red-400" />
-        <p className="text-red-300 font-medium">Could not load country comparison</p>
+        <p className="text-red-300 font-medium">{t('countrycomparison.states.loadErrorTitle')}</p>
         <p className="text-gray-500 text-sm">{error}</p>
         <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
-          <RefreshCw size={16} /> Retry
+          <RefreshCw size={16} /> {t('countrycomparison.states.retry')}
         </button>
       </div>
     </div>
@@ -259,11 +261,11 @@ export default function CountryComparison() {
 
   if (!hasAnyData) return (
     <div className="space-y-5">
-      <PageHeader title="Country Comparison" subtitle="No country data available" icon={Globe} />
+      <PageHeader title={t('countrycomparison.title')} subtitle={t('countrycomparison.states.noDataSubtitle')} icon={Globe} />
       <div className="card py-16 flex flex-col items-center gap-3">
         <Globe size={40} className="text-gray-700" />
-        <p className="text-gray-400 font-medium">No country data yet</p>
-        <p className="text-gray-600 text-sm">Upload tyre records with the country field populated to see comparisons</p>
+        <p className="text-gray-400 font-medium">{t('countrycomparison.states.noDataTitle')}</p>
+        <p className="text-gray-600 text-sm">{t('countrycomparison.states.noDataHint')}</p>
       </div>
     </div>
   )
@@ -274,8 +276,8 @@ export default function CountryComparison() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <PageHeader
-            title="Country Comparison"
-            subtitle={`KPI breakdown across ${availableCountries.join(', ')}`}
+            title={t('countrycomparison.title')}
+            subtitle={t('countrycomparison.header.subtitle', { countries: availableCountries.join(', ') })}
             icon={Globe}
           />
         </div>
@@ -289,7 +291,7 @@ export default function CountryComparison() {
             )}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
-            <Download size={14}/> Excel
+            <Download size={14}/> {t('countrycomparison.actions.excel')}
           </button>
           <button
             onClick={() => exportToPdf(
@@ -311,7 +313,7 @@ export default function CountryComparison() {
             )}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
-            <FileText size={14}/> PDF
+            <FileText size={14}/> {t('countrycomparison.actions.pdf')}
           </button>
         </div>
       </div>
@@ -319,7 +321,7 @@ export default function CountryComparison() {
       {/* Filters: country checkboxes + date pickers */}
       <div className="card py-3 space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-gray-500">Countries:</span>
+          <span className="text-xs text-gray-500">{t('countrycomparison.filters.countries')}</span>
           {availableCountries.map(c => {
             const color = countryColorMap[c] ?? '#6b7280'
             const checked = selectedCountries.has(c)
@@ -340,14 +342,14 @@ export default function CountryComparison() {
           })}
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-gray-500">Date range:</span>
+          <span className="text-xs text-gray-500">{t('countrycomparison.filters.dateRange')}</span>
           <input
             type="date"
             className="input w-40"
             value={dateFrom}
             onChange={e => setDateFrom(e.target.value)}
           />
-          <span className="text-gray-500 text-xs">to</span>
+          <span className="text-gray-500 text-xs">{t('countrycomparison.filters.to')}</span>
           <input
             type="date"
             className="input w-40"
@@ -356,7 +358,7 @@ export default function CountryComparison() {
           />
           {(dateFrom || dateTo) && (
             <button onClick={() => { setDateFrom(''); setDateTo('') }} className="text-xs text-gray-400 hover:text-white">
-              Clear
+              {t('countrycomparison.filters.clear')}
             </button>
           )}
         </div>
@@ -367,6 +369,7 @@ export default function CountryComparison() {
         {metrics.map(m => {
           const currency = COUNTRY_CURRENCY[m.country] || 'SAR'
           const color    = countryColorMap[m.country] ?? '#6b7280'
+          const naLabel  = t('countrycomparison.states.na')
           return (
             <div key={m.country} className="card" style={{ borderTop: `2px solid ${color}` }}>
               <div className="flex items-center justify-between mb-3">
@@ -377,27 +380,27 @@ export default function CountryComparison() {
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
                 <div>
-                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">Fleet</p>
+                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">{t('countrycomparison.summary.fleet')}</p>
                   <p className="text-lg font-bold text-white">{m.count.toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">Total Cost</p>
-                  <p className="text-lg font-bold text-white">{fmtCost(m.totalCost, currency)}</p>
+                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">{t('countrycomparison.summary.totalCost')}</p>
+                  <p className="text-lg font-bold text-white">{fmtCost(m.totalCost, currency, naLabel)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">High Risk</p>
-                  <p className={`text-lg font-bold ${riskColor(m.highRiskPct)}`}>{pct(m.highRiskPct)}</p>
+                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">{t('countrycomparison.summary.highRisk')}</p>
+                  <p className={`text-lg font-bold ${riskColor(m.highRiskPct)}`}>{pct(m.highRiskPct, naLabel)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">Avg CPK</p>
-                  <p className="text-lg font-bold text-white">{cpk(m.avgCpk)}</p>
+                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">{t('countrycomparison.summary.avgCpk')}</p>
+                  <p className="text-lg font-bold text-white">{cpk(m.avgCpk, naLabel)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">Open Actions</p>
+                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">{t('countrycomparison.summary.openActions')}</p>
                   <p className={`text-lg font-bold ${overdueColor(m.openActions)}`}>{(m.openActions ?? 0).toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">Overdue</p>
+                  <p className="text-[11px] text-gray-600 uppercase tracking-wider mb-0.5">{t('countrycomparison.summary.overdue')}</p>
                   <p className={`text-lg font-bold ${overdueColor(m.overdueActions)}`}>{(m.overdueActions ?? 0).toLocaleString()}</p>
                 </div>
               </div>
@@ -408,12 +411,12 @@ export default function CountryComparison() {
 
       {/* KPI comparison table */}
       <div className="card">
-        <h2 className="text-sm font-semibold text-white mb-4">Full KPI Breakdown</h2>
+        <h2 className="text-sm font-semibold text-white mb-4">{t('countrycomparison.table.title')}</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr>
-                <th className="table-header rounded-tl-md w-48">Metric</th>
+                <th className="table-header rounded-tl-md w-48">{t('countrycomparison.table.metric')}</th>
                 {metrics.map(m => (
                   <th key={m.country} className="table-header text-center" style={{ color: countryColorMap[m.country] || '#6b7280' }}>
                     {m.country}
@@ -422,25 +425,26 @@ export default function CountryComparison() {
               </tr>
             </thead>
             <tbody>
-              {KPI_ROWS.map(({ key, label, fmt: fmtFn, icon: Icon, lowerIsBetter }) => {
+              {KPI_ROWS.map(({ key, fmt: fmtFn, icon: Icon, lowerIsBetter }) => {
                 // Find best / worst for rank highlights
                 const numericVals = metrics.map(m => m[key]).filter(v => v != null && !isNaN(v))
                 const minVal = numericVals.length ? Math.min(...numericVals) : null
                 const maxVal = numericVals.length ? Math.max(...numericVals) : null
                 const bestVal  = lowerIsBetter ? minVal : maxVal
                 const worstVal = lowerIsBetter ? maxVal : minVal
+                const naLabel  = t('countrycomparison.states.na')
 
                 return (
                   <tr key={key} className="hover:bg-white/2 transition-colors">
                     <td className="table-cell">
                       <div className="flex items-center gap-2">
                         <Icon size={13} className="text-gray-600 flex-shrink-0" />
-                        <span className="text-gray-400">{label}</span>
+                        <span className="text-gray-400">{t(`countrycomparison.kpiRows.${key}`)}</span>
                       </div>
                     </td>
                     {metrics.map(m => {
                       const val = m[key]
-                      const display = fmtFn(val, m.country)
+                      const display = fmtFn(val, m.country, naLabel)
                       let colorClass = 'text-gray-200'
                       if (key === 'highRiskPct')    colorClass = riskColor(val)
                       else if (key === 'overdueActions' || key === 'openActions') colorClass = overdueColor(val)
@@ -471,25 +475,25 @@ export default function CountryComparison() {
       {/* Charts */}
       <div className="grid grid-cols-2 gap-4">
         <div className="card">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Total Cost by Country</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{t('countrycomparison.charts.costByCountry')}</p>
           <div style={{ height: 160 }}>
             <Bar data={costChartData} options={BAR_OPTS} />
           </div>
         </div>
         <div className="card">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">High Risk % by Country</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{t('countrycomparison.charts.riskByCountry')}</p>
           <div style={{ height: 160 }}>
             <Bar data={riskChartData} options={{ ...BAR_OPTS, scales: { ...BAR_OPTS.scales, y: { ...BAR_OPTS.scales.y, max: 100 } } }} />
           </div>
         </div>
         <div className="card">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Avg CPK by Country</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{t('countrycomparison.charts.cpkByCountry')}</p>
           <div style={{ height: 160 }}>
             <Bar data={cpkChartData} options={BAR_OPTS} />
           </div>
         </div>
         <div className="card">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Open Corrective Actions by Country</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{t('countrycomparison.charts.openActionsByCountry')}</p>
           <div style={{ height: 160 }}>
             <Bar data={openActionsChartData} options={BAR_OPTS} />
           </div>
@@ -501,12 +505,12 @@ export default function CountryComparison() {
         <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
           <div>
             <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <TrendingUp size={15} className="text-blue-400" /> Trend Comparison
+              <TrendingUp size={15} className="text-blue-400" /> {t('countrycomparison.trend.title')}
             </h2>
-            <p className="text-xs text-gray-500 mt-0.5">Monthly & yearly {trendMetric === 'cnt' ? 'volume' : 'cost'} across countries</p>
+            <p className="text-xs text-gray-500 mt-0.5">{t('countrycomparison.trend.subtitle', { metric: trendMetric === 'cnt' ? t('countrycomparison.trend.volume') : t('countrycomparison.trend.cost') })}</p>
           </div>
           <div className="flex gap-1 bg-gray-800/40 rounded-lg p-1">
-            {[['cnt', 'Records'], ['cost', 'Cost']].map(([k, label]) => (
+            {[['cnt', t('countrycomparison.trend.records')], ['cost', t('countrycomparison.trend.costToggle')]].map(([k, label]) => (
               <button key={k} onClick={() => setTrendMetric(k)}
                 className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${trendMetric === k ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}>
                 {label}
@@ -517,18 +521,18 @@ export default function CountryComparison() {
 
         {!hasTrend ? (
           <div className="py-12 text-center text-gray-600 text-sm">
-            No dated records yet - upload tyre records with an issue date to see monthly &amp; yearly trends.
+            {t('countrycomparison.trend.noTrend')}
           </div>
         ) : (
           <div className="grid lg:grid-cols-3 gap-5">
             <div className="lg:col-span-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Monthly Trend</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t('countrycomparison.trend.monthlyTrend')}</p>
               <div style={{ height: 240 }}>
                 <Line data={monthlyTrendData} options={TREND_OPTS} />
               </div>
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Year-over-Year</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{t('countrycomparison.trend.yearOverYear')}</p>
               <div style={{ height: 240 }}>
                 <Bar data={yearlyTrendData} options={TREND_OPTS} />
               </div>

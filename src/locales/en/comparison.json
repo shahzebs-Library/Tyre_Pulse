@@ -1,0 +1,77 @@
+{
+  "title": "Period Comparison",
+  "subtitle": "Compare tyre replacements or costs across two time periods",
+  "periodA": "Period A",
+  "periodB": "Period B",
+  "periodALabel": "Period A - {year}",
+  "periodBLabel": "Period B - {year}",
+  "periodAYear": "Period A ({year})",
+  "periodBYear": "Period B ({year})",
+  "noMonthsSelected": "No months selected",
+  "all": "All",
+  "clear": "Clear",
+  "metric": {
+    "ariaLabel": "metric",
+    "replacements": "Replacements",
+    "cost": "Cost ({currency})"
+  },
+  "dimension": {
+    "ariaLabel": "dimension",
+    "overall": "Overall",
+    "site": "By Site",
+    "brand": "By Brand"
+  },
+  "run": {
+    "running": "Running...",
+    "rerun": "Re-run",
+    "run": "Run Comparison",
+    "selectMonthWarning": "Select at least one month in each period"
+  },
+  "summary": {
+    "totalCost": "total cost",
+    "replacements": "replacements",
+    "change": "Change",
+    "increase": "increase",
+    "decrease": "decrease"
+  },
+  "insight": {
+    "overall": "Period B has {pct}% {direction} {label} vs Period A ({sign}{amount} {arrow})",
+    "byDimension": "Across {count} {dimLabel}, Period B shows {pct}% {direction} overall",
+    "more": "more",
+    "less": "less",
+    "spend": "spend",
+    "increase": "increase",
+    "decrease": "decrease",
+    "sites": "sites",
+    "brands": "brands"
+  },
+  "chart": {
+    "replacements": "Replacements",
+    "cost": "Cost ({currency})",
+    "bySite": " by Site",
+    "byBrand": " by Brand",
+    "byMonth": " by Month"
+  },
+  "table": {
+    "monthlyBreakdown": "Monthly Breakdown",
+    "siteBreakdown": "Site Breakdown",
+    "brandBreakdown": "Brand Breakdown",
+    "rows": "{count} rows",
+    "month": "Month",
+    "site": "Site",
+    "brand": "Brand",
+    "difference": "Difference",
+    "pctChange": "% Change",
+    "total": "Total"
+  },
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "empty": {
+    "noData": "No data found for the selected periods",
+    "noDataHint": "Try selecting different years or months",
+    "configureTitle": "Configure periods above and run the comparison",
+    "configureHint": "Select months for Period A and Period B, then click Run"
+  }
+}

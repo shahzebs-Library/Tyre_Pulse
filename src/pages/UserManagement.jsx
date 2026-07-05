@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useLanguage } from '../contexts/LanguageContext'
 import * as usersApi from '../lib/api/users'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -83,15 +84,15 @@ function initials(name) {
   return name.slice(0, 2).toUpperCase()
 }
 
-function formatDate(iso) {
-  if (!iso) return 'n/a'
+function formatDate(iso, na = 'n/a') {
+  if (!iso) return na
   const d = new Date(iso)
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`
 }
 
-function formatDateTime(iso) {
-  if (!iso) return 'n/a'
+function formatDateTime(iso, na = 'n/a') {
+  if (!iso) return na
   const d = new Date(iso)
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
@@ -239,6 +240,7 @@ $$;
 grant execute on function public.admin_update_profile to authenticated;`
 
 function RlsBlockedCard() {
+  const { t } = useLanguage()
   const [copied, setCopied] = useState(false)
 
   async function handleCopy() {
@@ -256,11 +258,9 @@ function RlsBlockedCard() {
       <div className="flex items-start gap-3">
         <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
         <div>
-          <p className="text-yellow-300 font-semibold text-sm">Admin Policy Missing</p>
+          <p className="text-yellow-300 font-semibold text-sm">{t('usermgmt.rlsBlocked.title')}</p>
           <p className="text-gray-400 text-sm mt-1">
-            The <code className="bg-gray-800 text-yellow-200 px-1.5 py-0.5 rounded text-xs">profiles_admin_update</code> RLS
-            policy has not been applied yet. Admin profile edits will silently fail until this migration is run
-            in the Supabase SQL Editor.
+            {t('usermgmt.rlsBlocked.descPrefix')} <code className="bg-gray-800 text-yellow-200 px-1.5 py-0.5 rounded text-xs">profiles_admin_update</code> {t('usermgmt.rlsBlocked.descSuffix')}
           </p>
         </div>
       </div>
@@ -280,7 +280,7 @@ function RlsBlockedCard() {
             }`}
           >
             {copied ? <CheckCircle size={12} /> : <Copy size={12} />}
-            {copied ? 'Copied!' : 'Copy SQL'}
+            {copied ? t('usermgmt.rlsBlocked.copied') : t('usermgmt.rlsBlocked.copySql')}
           </button>
         </div>
         <pre className="text-[11px] leading-relaxed text-gray-300 bg-gray-900/60 p-4 overflow-x-auto whitespace-pre-wrap max-h-56 font-mono">
@@ -290,7 +290,7 @@ function RlsBlockedCard() {
 
       <p className="text-xs text-gray-500 flex items-center gap-1.5">
         <Info size={12} className="text-gray-600 flex-shrink-0" />
-        After running the SQL, refresh this page. The user list and edit functionality will restore automatically.
+        {t('usermgmt.rlsBlocked.footerNote')}
       </p>
     </div>
   )
@@ -328,6 +328,7 @@ function Toast({ toast }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function UserManagement() {
+  const { t } = useLanguage()
   const { profile: currentProfile } = useAuth()
 
   // Data
@@ -483,7 +484,7 @@ export default function UserManagement() {
       setTimeout(() => setRoleSaveState(s => ({ ...s, [userId]: null })), 1500)
     } else {
       setRoleSaveState(s => ({ ...s, [userId]: null }))
-      showToast(error?.message ?? data?.error ?? 'Role update failed.', 'err')
+      showToast(error?.message ?? data?.error ?? t('usermgmt.toast.roleUpdateFailed'), 'err')
     }
   }
 
@@ -501,7 +502,7 @@ export default function UserManagement() {
       setTimeout(() => setOrgSaveState(s => ({ ...s, [userId]: null })), 1500)
     } else {
       setOrgSaveState(s => ({ ...s, [userId]: null }))
-      showToast(error?.message ?? data?.error ?? 'Organisation update failed.', 'err')
+      showToast(error?.message ?? data?.error ?? t('usermgmt.toast.orgUpdateFailed'), 'err')
     }
   }
 
@@ -520,9 +521,9 @@ export default function UserManagement() {
     }
     if (!error && data?.success !== false) {
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, approved: true } : u))
-      showToast(`${user.full_name || user.username || 'User'} approved.`, 'ok')
+      showToast(t('usermgmt.toast.approved', { name: user.full_name || user.username || t('usermgmt.states.userFallback') }), 'ok')
     } else {
-      showToast(error?.message ?? data?.error ?? 'Approval failed.', 'err')
+      showToast(error?.message ?? data?.error ?? t('usermgmt.toast.approvalFailed'), 'err')
     }
   }
 
@@ -568,7 +569,7 @@ export default function UserManagement() {
 
     // Validate required fields
     if (!editForm.full_name?.trim()) {
-      setEditMsg({ text: 'Full name cannot be empty.', type: 'err' })
+      setEditMsg({ text: t('usermgmt.validation.fullNameRequired'), type: 'err' })
       return
     }
 
@@ -634,7 +635,7 @@ export default function UserManagement() {
       if (directError) {
         setEditMsg({
           text: directError.code === '42501' || directError.code === 'PGRST301'
-            ? 'Permission denied. Ensure the admin_update_profile RPC function is deployed in Supabase.'
+            ? t('usermgmt.errors.rpcMissing')
             : directError.message,
           type: 'err',
         })
@@ -642,13 +643,13 @@ export default function UserManagement() {
         return
       }
     } else if (rpcData?.success === false) {
-      setEditMsg({ text: rpcData.error ?? 'Update failed.', type: 'err' })
+      setEditMsg({ text: rpcData.error ?? t('usermgmt.errors.updateFailed'), type: 'err' })
       setEditSaving(false)
       return
     }
 
     setEditSaving(false)
-    showToast(`${trimmedName || 'User'} updated successfully.`, 'ok')
+    showToast(t('usermgmt.toast.updated', { name: trimmedName || t('usermgmt.states.userFallback') }), 'ok')
     await loadUsers()
     closeEdit()
   }
@@ -693,9 +694,9 @@ export default function UserManagement() {
     return (
       <div className="flex flex-col items-center justify-center min-h-64 space-y-4 py-20">
         <Shield size={52} className="text-red-400" />
-        <h1 className="text-xl font-bold text-white">Access Denied</h1>
+        <h1 className="text-xl font-bold text-white">{t('usermgmt.accessDenied.title')}</h1>
         <p className="text-gray-400 text-sm text-center max-w-sm">
-          This page is restricted to Admin users only. Contact your administrator to request access.
+          {t('usermgmt.accessDenied.message')}
         </p>
       </div>
     )
@@ -709,18 +710,18 @@ export default function UserManagement() {
     <div className="space-y-5">
 
       <PageHeader
-        title="User Management"
-        subtitle="Manage roles, country access, and account approvals"
+        title={t('usermgmt.title')}
+        subtitle={t('usermgmt.subtitle')}
         icon={Users}
       />
 
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total Users',      value: stats.total,   color: 'text-green-400' },
-          { label: 'Active',           value: stats.active,  color: 'text-green-400' },
-          { label: 'Pending Approval', value: stats.pending, color: stats.pending > 0 ? 'text-yellow-300' : 'text-green-400' },
-          { label: 'Admins',           value: stats.admins,  color: 'text-green-400' },
+          { label: t('usermgmt.stats.totalUsers'),      value: stats.total,   color: 'text-green-400' },
+          { label: t('usermgmt.stats.active'),           value: stats.active,  color: 'text-green-400' },
+          { label: t('usermgmt.stats.pendingApproval'), value: stats.pending, color: stats.pending > 0 ? 'text-yellow-300' : 'text-green-400' },
+          { label: t('usermgmt.stats.admins'),           value: stats.admins,  color: 'text-green-400' },
         ].map(({ label, value, color }) => (
           <div key={label} className="card">
             <p className="text-xs text-gray-500 mb-1">{label}</p>
@@ -737,17 +738,17 @@ export default function UserManagement() {
 
       {loadError && (
         <div className="card border border-red-700/40 bg-red-900/10">
-          <p className="text-red-300 text-sm font-medium">Error: {loadError}</p>
+          <p className="text-red-300 text-sm font-medium">{t('usermgmt.errorPrefix')}{loadError}</p>
         </div>
       )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-700/60">
         {[
-          { id: 'users',    label: 'Users',        icon: Users    },
-          { id: 'matrix',   label: 'Access Control', icon: LayoutGrid  },
-          { id: 'branding', label: 'Branding',     icon: Palette  },
-          { id: 'activity', label: 'Activity',      icon: Activity },
+          { id: 'users',    label: t('usermgmt.tabs.users'),        icon: Users    },
+          { id: 'matrix',   label: t('usermgmt.tabs.matrix'), icon: LayoutGrid  },
+          { id: 'branding', label: t('usermgmt.tabs.branding'),     icon: Palette  },
+          { id: 'activity', label: t('usermgmt.tabs.activity'),      icon: Activity },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -775,14 +776,14 @@ export default function UserManagement() {
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   className="input pl-9 w-full"
-                  placeholder="Search by name, username or employee ID"
+                  placeholder={t('usermgmt.filters.searchPlaceholder')}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
               </div>
             </div>
             <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-xs text-gray-500 mr-1">Role:</span>
+              <span className="text-xs text-gray-500 mr-1">{t('usermgmt.filters.role')}</span>
               {['', ...ROLES].map(r => (
                 <button
                   key={r || '__all__'}
@@ -793,14 +794,14 @@ export default function UserManagement() {
                       : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
                   }`}
                 >
-                  {r || 'All'}
+                  {r ? t(`roles.${r}`) : t('usermgmt.filters.all')}
                 </button>
               ))}
-              <span className="text-xs text-gray-500 ml-3 mr-1">Status:</span>
+              <span className="text-xs text-gray-500 ml-3 mr-1">{t('usermgmt.filters.status')}</span>
               {[
-                { value: '',        label: 'All'     },
-                { value: 'active',  label: 'Active'  },
-                { value: 'pending', label: 'Pending' },
+                { value: '',        label: t('usermgmt.filters.all')     },
+                { value: 'active',  label: t('usermgmt.filters.activeStatus')  },
+                { value: 'pending', label: t('usermgmt.filters.pendingStatus') },
               ].map(({ value, label }) => (
                 <button
                   key={value || '__all_status__'}
@@ -823,7 +824,10 @@ export default function UserManagement() {
               <table className="w-full">
                 <thead>
                   <tr>
-                    {['User', 'Role', 'Organisation', 'Access', 'Status', 'Joined', 'Actions'].map(h => (
+                    {[
+                      t('usermgmt.table.user'), t('usermgmt.table.role'), t('usermgmt.table.organisation'),
+                      t('usermgmt.table.access'), t('usermgmt.table.status'), t('usermgmt.table.joined'), t('usermgmt.table.actions'),
+                    ].map(h => (
                       <th key={h} className="table-header">{h}</th>
                     ))}
                   </tr>
@@ -838,7 +842,7 @@ export default function UserManagement() {
                   ) : rlsBlocked ? (
                     <tr>
                       <td colSpan={7} className="text-center py-12 text-gray-600">
-                        User list unavailable. See warning above.
+                        {t('usermgmt.states.rlsUnavailable')}
                       </td>
                     </tr>
                   ) : filtered.length === 0 ? (
@@ -846,13 +850,13 @@ export default function UserManagement() {
                       <td colSpan={7} className="text-center py-14">
                         <div className="flex flex-col items-center gap-3 text-gray-500">
                           <UserX size={32} className="text-gray-700" />
-                          <p className="text-sm">No users match the current filters.</p>
+                          <p className="text-sm">{t('usermgmt.states.noUsersMatch')}</p>
                           {(search || roleFilter || statusFilter) && (
                             <button
                               onClick={() => { setSearch(''); setRoleFilter(''); setStatusFilter('') }}
                               className="text-xs text-green-400 hover:text-green-300 underline"
                             >
-                              Clear all filters
+                              {t('usermgmt.states.clearFilters')}
                             </button>
                           )}
                         </div>
@@ -861,7 +865,7 @@ export default function UserManagement() {
                   ) : filtered.map(u => {
                     const isSelf      = u.id === currentProfile?.id
                     const isPending   = u.approved === false
-                    const displayName = u.full_name || u.username || 'Unknown'
+                    const displayName = u.full_name || u.username || t('usermgmt.states.unknownUser')
                     const saveState   = roleSaveState[u.id]
 
                     return (
@@ -881,11 +885,11 @@ export default function UserManagement() {
                                 <span className="text-white font-semibold text-sm truncate">{displayName}</span>
                                 {isSelf && (
                                   <span className="text-[10px] font-semibold bg-green-900/40 text-green-400 border border-green-700/40 rounded px-1.5 py-0.5">
-                                    You
+                                    {t('usermgmt.states.you')}
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-gray-500 truncate">{u.username ?? 'n/a'}</p>
+                              <p className="text-xs text-gray-500 truncate">{u.username ?? t('usermgmt.states.na')}</p>
                               {u.employee_id && (
                                 <span className="inline-flex items-center gap-1 text-[10px] bg-gray-800 text-gray-500 border border-gray-700/40 rounded px-1.5 py-0.5 mt-0.5">
                                   <Hash size={9} />
@@ -901,7 +905,7 @@ export default function UserManagement() {
                           <div className="flex items-center gap-2">
                             {isSelf ? (
                               <span className={`badge text-xs ${ROLE_BADGE[u.role] ?? 'bg-gray-800 text-gray-400'}`}>
-                                {u.role ?? 'n/a'}
+                                {u.role ? t(`roles.${u.role}`) : t('usermgmt.states.na')}
                               </span>
                             ) : (
                               <div className="relative">
@@ -911,7 +915,7 @@ export default function UserManagement() {
                                   disabled={saveState === 'saving'}
                                   className="input text-xs py-1 pr-7 pl-2 w-32 appearance-none cursor-pointer"
                                 >
-                                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                                  {ROLES.map(r => <option key={r} value={r}>{t(`roles.${r}`)}</option>)}
                                 </select>
                                 <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                               </div>
@@ -933,10 +937,10 @@ export default function UserManagement() {
                                 value={u.org_id ?? ''}
                                 onChange={e => handleInlineOrgChange(u.id, e.target.value)}
                                 disabled={orgSaveState[u.id] === 'saving' || u.is_super_admin}
-                                title={u.is_super_admin ? 'Super admins see every organisation' : 'Assign this user to an organisation'}
+                                title={u.is_super_admin ? t('usermgmt.org.superAdminTooltip') : t('usermgmt.org.assignTooltip')}
                                 className="input text-xs py-1 pr-7 pl-2 w-40 appearance-none cursor-pointer disabled:opacity-60"
                               >
-                                <option value="">— No org (all shared) —</option>
+                                <option value="">{t('usermgmt.org.noOrg')}</option>
                                 {organisations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                               </select>
                               <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -960,7 +964,7 @@ export default function UserManagement() {
                             </div>
                           ) : (
                             <span className="text-xs text-gray-500 flex items-center gap-1">
-                              <Globe size={11} /> All
+                              <Globe size={11} /> {t('usermgmt.states.all')}
                             </span>
                           )}
                         </td>
@@ -970,16 +974,16 @@ export default function UserManagement() {
                           <div className="flex flex-col gap-1">
                             {isPending ? (
                               <span className="badge bg-yellow-900/40 text-yellow-300 border border-yellow-700/40">
-                                Pending
+                                {t('usermgmt.states.pending')}
                               </span>
                             ) : (
                               <span className="badge bg-green-900/30 text-green-400 border border-green-700/40">
-                                Active
+                                {t('usermgmt.states.activeBadge')}
                               </span>
                             )}
                             {u.locked && (
                               <span className="badge bg-red-900/40 text-red-300 border border-red-700/40 flex items-center gap-1">
-                                <Lock size={9} />Locked
+                                <Lock size={9} />{t('usermgmt.states.locked')}
                               </span>
                             )}
                           </div>
@@ -989,7 +993,7 @@ export default function UserManagement() {
                         <td className="table-cell text-gray-400 text-xs">
                           <span className="flex items-center gap-1">
                             <Calendar size={11} />
-                            {formatDate(u.created_at)}
+                            {formatDate(u.created_at, t('usermgmt.states.na'))}
                           </span>
                         </td>
 
@@ -999,7 +1003,7 @@ export default function UserManagement() {
                             {isPending && (
                               <button
                                 onClick={() => handleApproveQuick(u)}
-                                title="Approve account"
+                                title={t('usermgmt.actions.approve')}
                                 className="p-1.5 rounded text-green-400 hover:bg-green-900/30 transition-colors"
                               >
                                 <UserCheck size={15} />
@@ -1007,7 +1011,7 @@ export default function UserManagement() {
                             )}
                             <button
                               onClick={() => openEdit(u)}
-                              title="Edit user"
+                              title={t('usermgmt.actions.edit')}
                               className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
                             >
                               <Edit2 size={15} />
@@ -1015,7 +1019,7 @@ export default function UserManagement() {
                             {!isSelf && (
                               <button
                                 onClick={() => openDelete(u)}
-                                title="Delete user"
+                                title={t('usermgmt.actions.delete')}
                                 className="p-1.5 rounded text-red-400 hover:bg-red-900/30 transition-colors"
                               >
                                 <Trash2 size={15} />
@@ -1116,24 +1120,24 @@ export default function UserManagement() {
         <div className="card p-0 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-700/60 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-white">Recent Activity</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Last 100 audit log entries</p>
+              <h2 className="text-base font-semibold text-white">{t('usermgmt.activity.title')}</h2>
+              <p className="text-xs text-gray-500 mt-0.5">{t('usermgmt.activity.subtitle')}</p>
             </div>
             <button
               onClick={loadAuditLog}
               className="text-xs text-green-400 hover:text-green-300 transition-colors"
             >
-              Refresh
+              {t('usermgmt.activity.refresh')}
             </button>
           </div>
           {auditLoading ? (
-            <div className="px-5 py-12 text-center text-gray-500 text-sm">Loading activity...</div>
+            <div className="px-5 py-12 text-center text-gray-500 text-sm">{t('usermgmt.activity.loading')}</div>
           ) : auditLog.length === 0 ? (
             <div className="px-5 py-14 text-center">
               <Activity size={36} className="text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">No activity data available.</p>
+              <p className="text-gray-500 text-sm">{t('usermgmt.activity.noData')}</p>
               <p className="text-gray-600 text-xs mt-1">
-                The audit_log table may not have data yet. Run MIGRATIONS_V6_AUDIT.sql to create it.
+                {t('usermgmt.activity.noDataHint')}
               </p>
             </div>
           ) : (
@@ -1141,7 +1145,11 @@ export default function UserManagement() {
               <table className="w-full">
                 <thead>
                   <tr>
-                    {['Timestamp', 'User', 'Action', 'Table', 'Records', 'Details'].map(h => (
+                    {[
+                      t('usermgmt.activity.columns.timestamp'), t('usermgmt.activity.columns.user'),
+                      t('usermgmt.activity.columns.action'), t('usermgmt.activity.columns.table'),
+                      t('usermgmt.activity.columns.records'), t('usermgmt.activity.columns.details'),
+                    ].map(h => (
                       <th key={h} className="table-header">{h}</th>
                     ))}
                   </tr>
@@ -1150,13 +1158,13 @@ export default function UserManagement() {
                   {auditLog.map(entry => {
                     const isExpanded = expandedRow === entry.id
                     const actor = users.find(u => u.id === entry.user_id)
-                    const actorName = actor?.full_name || actor?.username || (entry.user_id ? entry.user_id.slice(0, 8) : 'n/a')
+                    const actorName = actor?.full_name || actor?.username || (entry.user_id ? entry.user_id.slice(0, 8) : t('usermgmt.states.na'))
                     const actionLower = (entry.action ?? '').toLowerCase()
 
                     return (
                       <tr key={entry.id} className="hover:bg-gray-800/50 transition-colors">
                         <td className="table-cell text-xs text-gray-400 whitespace-nowrap">
-                          {formatDateTime(entry.created_at)}
+                          {formatDateTime(entry.created_at, t('usermgmt.states.na'))}
                         </td>
                         <td className="table-cell">
                           <span className="text-sm text-white">{actorName}</span>
@@ -1169,14 +1177,14 @@ export default function UserManagement() {
                                 ? 'bg-green-900/40 text-green-300 border-green-700/40'
                                 : 'bg-blue-900/40 text-blue-300 border-blue-700/40'
                           }`}>
-                            {entry.action ?? 'n/a'}
+                            {entry.action ?? t('usermgmt.states.na')}
                           </span>
                         </td>
                         <td className="table-cell text-gray-400 text-xs">
-                          {entry.table_name ?? 'n/a'}
+                          {entry.table_name ?? t('usermgmt.states.na')}
                         </td>
                         <td className="table-cell text-gray-400 text-xs text-center">
-                          {entry.record_count ?? entry.rows_affected ?? 'n/a'}
+                          {entry.record_count ?? entry.rows_affected ?? t('usermgmt.states.na')}
                         </td>
                         <td className="table-cell">
                           {entry.details ? (
@@ -1188,10 +1196,10 @@ export default function UserManagement() {
                                 size={13}
                                 className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                               />
-                              {isExpanded ? 'Hide' : 'Show'}
+                              {isExpanded ? t('usermgmt.activity.hide') : t('usermgmt.activity.show')}
                             </button>
                           ) : (
-                            <span className="text-gray-700 text-xs">n/a</span>
+                            <span className="text-gray-700 text-xs">{t('usermgmt.states.na')}</span>
                           )}
                           {isExpanded && entry.details && (
                             <pre className="mt-2 text-[10px] text-gray-400 bg-gray-800 rounded p-2 max-w-xs overflow-x-auto whitespace-pre-wrap break-all">
@@ -1213,20 +1221,20 @@ export default function UserManagement() {
 
       {/* ── EDIT MODAL ────────────────────────────────────────────────────────── */}
       {editTarget && (
-        <Modal title="Edit User" onClose={closeEdit} maxWidth="max-w-2xl">
+        <Modal title={t('usermgmt.editModal.title')} onClose={closeEdit} maxWidth="max-w-2xl">
           <div className="space-y-4">
 
             {/* Banners */}
             {editTarget.id === currentProfile?.id && (
               <div className="flex items-center gap-2.5 bg-blue-900/20 border border-blue-700/40 rounded-lg px-4 py-2.5">
                 <Info size={15} className="text-blue-400 flex-shrink-0" />
-                <p className="text-blue-300 text-xs font-medium">You are editing your own profile.</p>
+                <p className="text-blue-300 text-xs font-medium">{t('usermgmt.editModal.ownProfileBanner')}</p>
               </div>
             )}
             {editTarget.locked && (
               <div className="flex items-center gap-2.5 bg-red-900/20 border border-red-700/40 rounded-lg px-4 py-2.5">
                 <Lock size={15} className="text-red-400 flex-shrink-0" />
-                <p className="text-red-300 text-xs font-medium">This account is currently locked and cannot log in.</p>
+                <p className="text-red-300 text-xs font-medium">{t('usermgmt.editModal.lockedBanner')}</p>
               </div>
             )}
 
@@ -1241,19 +1249,19 @@ export default function UserManagement() {
               {editTarget.updated_at && (
                 <span className="flex items-center gap-1.5">
                   <Clock size={11} className="text-gray-600" />
-                  Updated: {formatDateTime(editTarget.updated_at)}
+                  {t('usermgmt.editModal.updatedPrefix')} {formatDateTime(editTarget.updated_at, t('usermgmt.states.na'))}
                 </span>
               )}
               {editTarget.last_login_at && (
                 <span className="flex items-center gap-1.5">
                   <LogIn size={11} className="text-gray-600" />
-                  Last login: {formatDateTime(editTarget.last_login_at)}
+                  {t('usermgmt.editModal.lastLoginPrefix')} {formatDateTime(editTarget.last_login_at, t('usermgmt.states.na'))}
                 </span>
               )}
               {editTarget.login_count > 0 && (
                 <span className="flex items-center gap-1.5">
                   <Activity size={11} className="text-gray-600" />
-                  {editTarget.login_count} login{editTarget.login_count !== 1 ? 's' : ''}
+                  {t('usermgmt.editModal.logins', { count: editTarget.login_count })}
                 </span>
               )}
             </div>
@@ -1261,88 +1269,88 @@ export default function UserManagement() {
             {/* Identity */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Full Name <span className="text-red-500 ml-0.5">*</span></label>
+                <label className="label">{t('usermgmt.editModal.fullName')} <span className="text-red-500 ml-0.5">*</span></label>
                 <input
                   className={`input ${!editForm.full_name?.trim() && editMsg.type === 'err' ? 'border-red-600 focus:ring-red-500/30' : ''}`}
                   value={editForm.full_name ?? ''}
                   onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))}
-                  placeholder="Full name"
+                  placeholder={t('usermgmt.editModal.placeholders.fullName')}
                 />
               </div>
               <div>
-                <label className="label">Username</label>
+                <label className="label">{t('usermgmt.editModal.username')}</label>
                 <input
                   className="input"
                   value={editForm.username ?? ''}
                   onChange={e => setEditForm(f => ({ ...f, username: e.target.value }))}
-                  placeholder="Username"
+                  placeholder={t('usermgmt.editModal.placeholders.username')}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="label">Employee ID</label>
+                <label className="label">{t('usermgmt.editModal.employeeId')}</label>
                 <input
                   className="input"
                   value={editForm.employee_id ?? ''}
                   onChange={e => setEditForm(f => ({ ...f, employee_id: e.target.value }))}
-                  placeholder="EMP-001"
+                  placeholder={t('usermgmt.editModal.placeholders.employeeId')}
                 />
               </div>
               <div>
                 <label className="label">
-                  <Phone size={11} className="inline mr-1 text-gray-500" />Phone
+                  <Phone size={11} className="inline mr-1 text-gray-500" />{t('usermgmt.editModal.phone')}
                 </label>
                 <input
                   className="input"
                   value={editForm.phone ?? ''}
                   onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
-                  placeholder="+966 5x xxx xxxx"
+                  placeholder={t('usermgmt.editModal.placeholders.phone')}
                 />
               </div>
               <div>
                 <label className="label">
-                  <MapPin size={11} className="inline mr-1 text-gray-500" />Site
+                  <MapPin size={11} className="inline mr-1 text-gray-500" />{t('usermgmt.editModal.site')}
                 </label>
                 <input
                   className="input"
                   value={editForm.site ?? ''}
                   onChange={e => setEditForm(f => ({ ...f, site: e.target.value }))}
-                  placeholder="e.g. Riyadh Hub"
+                  placeholder={t('usermgmt.editModal.placeholders.site')}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Region</label>
+                <label className="label">{t('usermgmt.editModal.region')}</label>
                 <input
                   className="input"
                   value={editForm.region ?? ''}
                   onChange={e => setEditForm(f => ({ ...f, region: e.target.value }))}
-                  placeholder="e.g. Gulf"
+                  placeholder={t('usermgmt.editModal.placeholders.region')}
                 />
               </div>
               <div>
-                <label className="label">Role</label>
+                <label className="label">{t('usermgmt.editModal.role')}</label>
                 <select
                   className="input"
                   value={editForm.role ?? ''}
                   onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
                   disabled={editTarget.id === currentProfile?.id}
                 >
-                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                  {ROLES.map(r => <option key={r} value={r}>{t(`roles.${r}`)}</option>)}
                 </select>
                 {editTarget.id === currentProfile?.id && (
-                  <p className="text-xs text-gray-500 mt-1">You cannot change your own role.</p>
+                  <p className="text-xs text-gray-500 mt-1">{t('usermgmt.editModal.cannotChangeOwnRole')}</p>
                 )}
               </div>
             </div>
 
             {/* Country access */}
             <div>
-              <label className="label">Country Access</label>
+              <label className="label">{t('usermgmt.editModal.countryAccess')}</label>
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mt-1">
                 {COUNTRIES.map(c => (
                   <label
@@ -1365,21 +1373,21 @@ export default function UserManagement() {
               </div>
               <p className="text-xs text-gray-500 mt-2">
                 {(editForm.country ?? []).length === 0
-                  ? 'No restriction - user can see all countries.'
-                  : `Restricted to: ${editForm.country.join(', ')}`}
+                  ? t('usermgmt.editModal.noRestriction')
+                  : t('usermgmt.editModal.restrictedTo', { countries: editForm.country.join(', ') })}
               </p>
             </div>
 
             {/* Notes */}
             <div>
               <label className="label">
-                <FileText size={11} className="inline mr-1 text-gray-500" />Admin Notes
+                <FileText size={11} className="inline mr-1 text-gray-500" />{t('usermgmt.editModal.adminNotes')}
               </label>
               <textarea
                 className="input min-h-[72px] resize-y text-sm"
                 value={editForm.notes ?? ''}
                 onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="Internal notes (only visible to admins)"
+                placeholder={t('usermgmt.editModal.placeholders.notes')}
               />
             </div>
 
@@ -1387,8 +1395,8 @@ export default function UserManagement() {
             <div className="grid grid-cols-2 gap-3">
               <div className="flex items-center justify-between bg-gray-800/40 rounded-lg px-4 py-3">
                 <div>
-                  <p className="text-sm text-white font-medium">Account Approved</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Unapproved accounts cannot log in.</p>
+                  <p className="text-sm text-white font-medium">{t('usermgmt.editModal.approvedToggle')}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{t('usermgmt.editModal.approvedHint')}</p>
                 </div>
                 <Toggle
                   checked={editForm.approved ?? true}
@@ -1399,9 +1407,9 @@ export default function UserManagement() {
                 <div>
                   <p className="text-sm text-white font-medium flex items-center gap-1.5">
                     <Lock size={13} className={editForm.locked ? 'text-red-400' : 'text-gray-500'} />
-                    Account Locked
+                    {t('usermgmt.editModal.lockedToggle')}
                   </p>
-                  <p className="text-xs text-gray-500 mt-0.5">Locked accounts are blocked from login.</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{t('usermgmt.editModal.lockedHint')}</p>
                 </div>
                 <Toggle
                   checked={editForm.locked ?? false}
@@ -1432,16 +1440,16 @@ export default function UserManagement() {
                 {editSaving ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                    Saving...
+                    {t('usermgmt.editModal.saving')}
                   </>
                 ) : (
                   <>
                     <CheckCircle size={15} />
-                    Save Changes
+                    {t('usermgmt.editModal.save')}
                   </>
                 )}
               </button>
-              <button onClick={closeEdit} className="btn-secondary">Cancel</button>
+              <button onClick={closeEdit} className="btn-secondary">{t('usermgmt.editModal.cancel')}</button>
             </div>
           </div>
         </Modal>
@@ -1452,21 +1460,21 @@ export default function UserManagement() {
 
       {/* ── DELETE MODAL ─────────────────────────────────────────────────────── */}
       {deleteTarget && (
-        <Modal title="Delete User Account" onClose={closeDelete} maxWidth="max-w-md">
+        <Modal title={t('usermgmt.deleteModal.title')} onClose={closeDelete} maxWidth="max-w-md">
           <div className="space-y-4">
 
             <div className="flex gap-3 bg-red-900/20 border border-red-700/40 rounded-lg p-4">
               <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-red-300 leading-relaxed">
-                This will permanently delete{' '}
-                <strong>{deleteTarget.full_name || deleteTarget.username || 'this user'}&apos;s</strong>{' '}
-                account and all associated data. This cannot be undone.
+                {t('usermgmt.deleteModal.warningPrefix')}{' '}
+                <strong>{deleteTarget.full_name || deleteTarget.username || t('usermgmt.deleteModal.thisUser')}</strong>
+                {t('usermgmt.deleteModal.warningSuffix')}
               </p>
             </div>
 
             <div>
               <label className="label">
-                Type <span className="text-red-400 font-mono font-bold">DELETE</span> to confirm
+                {t('usermgmt.deleteModal.confirmLabel')} <span className="text-red-400 font-mono font-bold">DELETE</span> {t('usermgmt.deleteModal.confirmLabelSuffix')}
               </label>
               <input
                 className="input"
@@ -1492,9 +1500,9 @@ export default function UserManagement() {
                 ) : (
                   <Trash2 size={15} />
                 )}
-                {deleteLoading ? 'Deleting...' : 'Delete Account'}
+                {deleteLoading ? t('usermgmt.deleteModal.deleting') : t('usermgmt.deleteModal.delete')}
               </button>
-              <button onClick={closeDelete} className="btn-secondary">Cancel</button>
+              <button onClick={closeDelete} className="btn-secondary">{t('usermgmt.deleteModal.cancel')}</button>
             </div>
           </div>
         </Modal>

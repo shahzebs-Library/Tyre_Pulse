@@ -1,0 +1,73 @@
+{
+  "title": "Fleet Analytics",
+  "loading": "Loading fleet data...",
+  "subtitleError": "Per-asset history, cost, failure frequency",
+  "subtitleFull": "Per-asset history, cost, failure frequency and tyre lifecycle",
+  "loadErrorTitle": "Could not load fleet data",
+  "loadErrorFallback": "Failed to load fleet data.",
+  "retry": "Retry",
+  "summary": {
+    "totalAssets": "Total Assets",
+    "totalRecords": "Total Records",
+    "highFreqAssets": "High Freq Assets",
+    "avgCostPerAsset": "Avg Cost/Asset"
+  },
+  "filters": {
+    "searchPlaceholder": "Search asset number...",
+    "sortCount": "Sort: Record Count",
+    "sortCost": "Sort: Total Cost",
+    "sortRisk": "Sort: High Risk Count",
+    "sortFreq": "Sort: Failure Freq",
+    "dateRange": "Date range:",
+    "to": "to",
+    "fromPlaceholder": "From",
+    "toPlaceholder": "To",
+    "clearDates": "Clear dates",
+    "allSites": "All sites",
+    "clearSite": "Clear site"
+  },
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "table": {
+    "assetNo": "Asset No",
+    "records": "Records",
+    "totalCost": "Total Cost",
+    "highRisk": "High Risk",
+    "failPerMonth": "Fail/Mo",
+    "sites": "Sites",
+    "brands": "Brands",
+    "lastSeen": "Last Seen"
+  },
+  "empty": {
+    "noMatch": "No assets match the current filters",
+    "showing": "Showing 100 of {count} assets - refine search to narrow"
+  },
+  "drill": {
+    "recordsSummary": "{count} records · {cost} total · active since {date}",
+    "costDataset": "Cost ({currency})",
+    "recordsDataset": "Records",
+    "trendDataset": "Trend",
+    "monthlyCost": "Monthly Cost ({currency})",
+    "failureFrequency": "Failure Frequency + Trend",
+    "slope": "slope",
+    "perMonth": "/mo",
+    "lifecycleTitle": "Tyre Lifecycle · Serial Number History",
+    "unknownRisk": "Unknown",
+    "unknownBrand": "Unknown brand",
+    "uncategorised": "Uncategorised",
+    "events": "{count} events",
+    "noSerialData": "No serial number data available for this asset",
+    "fullHistory": "Full Record History (latest 30)",
+    "columns": {
+      "date": "Date",
+      "serial": "Serial",
+      "brand": "Brand",
+      "category": "Category",
+      "risk": "Risk",
+      "cost": "Cost",
+      "remarks": "Remarks"
+    }
+  }
+}

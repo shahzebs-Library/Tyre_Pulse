@@ -20,6 +20,7 @@ import PageHeader from '../components/ui/PageHeader'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
+import { useLanguage } from '../contexts/LanguageContext'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -175,6 +176,7 @@ function ChartCard({ title, children, onExpand }) {
 export default function DowntimeTracker() {
   const { activeCurrency, activeCountry, appSettings } = useSettings()
   const { branding } = useTenant()
+  const { t } = useLanguage()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   // Cost/hour assumption - overridable via the `downtime_rate` setting key.
@@ -370,7 +372,7 @@ export default function DowntimeTracker() {
       labels,
       datasets: [
         {
-          label: 'Fleet Availability %',
+          label: t('downtime.charts.availabilitySeries'),
           data,
           borderColor: '#22c55e',
           backgroundColor: 'rgba(34,197,94,0.08)',
@@ -380,7 +382,7 @@ export default function DowntimeTracker() {
           pointRadius: 4,
         },
         {
-          label: `Target ${TARGET_AVAILABILITY}%`,
+          label: t('downtime.charts.targetSeries', { pct: TARGET_AVAILABILITY }),
           data: months.map(() => TARGET_AVAILABILITY),
           borderColor: '#6366f1',
           borderDash: [6, 3],
@@ -390,7 +392,7 @@ export default function DowntimeTracker() {
         },
       ],
     }
-  }, [availabilityTrend])
+  }, [availabilityTrend, t])
 
   // ── Downtime by Site ─────────────────────────────────────────────────────────
   const siteData = useMemo(() => {
@@ -410,22 +412,29 @@ export default function DowntimeTracker() {
       labels: entries.map(e => e.site),
       datasets: [
         {
-          label: 'Unplanned (h)',
+          label: t('downtime.charts.unplannedHours'),
           data: entries.map(e => +e.unplanned.toFixed(1)),
           backgroundColor: '#ef4444',
           borderRadius: 4,
         },
         {
-          label: 'Planned (h)',
+          label: t('downtime.charts.plannedHours'),
           data: entries.map(e => +e.planned.toFixed(1)),
           backgroundColor: '#3b82f6',
           borderRadius: 4,
         },
       ],
     }
-  }, [filtered, actualByAsset])
+  }, [filtered, actualByAsset, t])
 
   // ── Downtime by Cause ────────────────────────────────────────────────────────
+  const CAUSE_KEY_MAP = {
+    'Critical Failure':    'criticalFailure',
+    'Wear-Related':        'wearRelated',
+    'Pressure Issue':      'pressureIssue',
+    'Routine Replacement': 'routineReplacement',
+    'Unknown':             'unknown',
+  }
   const causeData = useMemo(() => {
     const map = {}
     filtered.forEach(r => {
@@ -441,7 +450,7 @@ export default function DowntimeTracker() {
       'Unknown':             '#6b7280',
     }
     return {
-      labels,
+      labels: labels.map(l => t(`downtime.causes.${CAUSE_KEY_MAP[l] ?? 'unknown'}`)),
       datasets: [{
         data: labels.map(l => map[l]),
         backgroundColor: labels.map(l => CAUSE_COLORS[l] || '#6b7280'),
@@ -449,7 +458,7 @@ export default function DowntimeTracker() {
         borderWidth: 2,
       }],
     }
-  }, [filtered])
+  }, [filtered, t])
 
   // ── Monthly Cost Analysis ────────────────────────────────────────────────────
   const monthlyCostData = useMemo(() => {
@@ -474,7 +483,7 @@ export default function DowntimeTracker() {
       labels: months.map(monthLabel),
       datasets: [
         {
-          label: 'Unplanned Cost',
+          label: t('downtime.charts.unplannedCost'),
           data: unplanned,
           backgroundColor: 'rgba(239,68,68,0.7)',
           borderRadius: 4,
@@ -482,7 +491,7 @@ export default function DowntimeTracker() {
           yAxisID: 'y',
         },
         {
-          label: 'Planned Cost',
+          label: t('downtime.charts.plannedCost'),
           data: planned,
           backgroundColor: 'rgba(59,130,246,0.7)',
           borderRadius: 4,
@@ -490,7 +499,7 @@ export default function DowntimeTracker() {
           yAxisID: 'y',
         },
         {
-          label: 'Cumulative',
+          label: t('downtime.charts.cumulative'),
           data: running,
           type: 'line',
           borderColor: '#22c55e',
@@ -502,7 +511,7 @@ export default function DowntimeTracker() {
         },
       ],
     }
-  }, [filtered, actualByAsset, downtimeRate])
+  }, [filtered, actualByAsset, downtimeRate, t])
 
   // ── Vehicles by Downtime Table ────────────────────────────────────────────────
   const vehicleTable = useMemo(() => {
@@ -586,8 +595,8 @@ export default function DowntimeTracker() {
         recs.push({
           type: 'vehicle',
           severity: v.eventCount >= 5 ? 'critical' : v.eventCount >= 3 ? 'high' : 'medium',
-          message: `Vehicle ${v.asset} has had ${v.eventCount} downtime event${v.eventCount > 1 ? 's' : ''} - root cause investigation recommended`,
-          action: 'Perform full vehicle inspection, alignment check and driver behaviour review.',
+          message: t('downtime.recommendations.vehicleMessage', { asset: v.asset, count: v.eventCount }),
+          action: t('downtime.recommendations.vehicleAction'),
         })
       }
     })
@@ -604,12 +613,12 @@ export default function DowntimeTracker() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 2)
       .forEach(([site, count]) => {
-        const aboveAvg = avgPerSite > 0 ? (((count - avgPerSite) / avgPerSite) * 100).toFixed(0) : 'N/A'
+        const aboveAvg = avgPerSite > 0 ? (((count - avgPerSite) / avgPerSite) * 100).toFixed(0) : t('downtime.na')
         recs.push({
           type: 'site',
           severity: 'high',
-          message: `Site ${site} is ${aboveAvg}% above average downtime - maintenance process review needed`,
-          action: 'Audit maintenance schedules, inspect tyre storage conditions and review fitment procedures.',
+          message: t('downtime.recommendations.siteMessage', { site, pct: aboveAvg }),
+          action: t('downtime.recommendations.siteAction'),
         })
       })
 
@@ -620,8 +629,8 @@ export default function DowntimeTracker() {
       recs.push({
         type: 'fleet',
         severity: 'critical',
-        message: `${(critRatio * 100).toFixed(0)}% of events are Critical - predictive maintenance could reduce unplanned events by ~40%`,
-        action: 'Implement weekly pressure monitoring, increase inspection frequency and set up tyre replacement schedule based on km thresholds.',
+        message: t('downtime.recommendations.criticalMessage', { pct: (critRatio * 100).toFixed(0) }),
+        action: t('downtime.recommendations.criticalAction'),
       })
     }
 
@@ -630,8 +639,8 @@ export default function DowntimeTracker() {
       recs.push({
         type: 'availability',
         severity: kpis.availability < 90 ? 'critical' : 'high',
-        message: `Fleet availability is ${kpis.availability.toFixed(1)}% - below the ${TARGET_AVAILABILITY}% industry benchmark`,
-        action: 'Review tyre lifecycle management, increase preventive replacements and track tread depth more frequently.',
+        message: t('downtime.recommendations.availabilityMessage', { pct: kpis.availability.toFixed(1), target: TARGET_AVAILABILITY }),
+        action: t('downtime.recommendations.availabilityAction'),
       })
     }
 
@@ -639,13 +648,13 @@ export default function DowntimeTracker() {
       recs.push({
         type: 'fleet',
         severity: 'low',
-        message: 'Fleet downtime is within acceptable range for current period',
-        action: 'Continue current maintenance schedule. Monitor monthly for early trend detection.',
+        message: t('downtime.recommendations.okMessage'),
+        action: t('downtime.recommendations.okAction'),
       })
     }
 
     return recs
-  }, [vehicleTable, filtered, kpis])
+  }, [vehicleTable, filtered, kpis, t])
 
   // ── Sort Handler ──────────────────────────────────────────────────────────────
   function toggleSort(col) {
@@ -832,7 +841,7 @@ export default function DowntimeTracker() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 size={28} className="animate-spin text-green-400" />
-        <span className="ml-3 text-gray-400">Loading downtime data...</span>
+        <span className="ml-3 text-gray-400">{t('downtime.loading')}</span>
       </div>
     )
   }
@@ -842,7 +851,7 @@ export default function DowntimeTracker() {
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <AlertTriangle size={32} className="text-red-400" />
         <p className="text-red-400 text-sm">{error}</p>
-        <button onClick={() => load()} className="btn-primary text-sm">Retry</button>
+        <button onClick={() => load()} className="btn-primary text-sm">{t('downtime.error.retry')}</button>
       </div>
     )
   }
@@ -851,11 +860,11 @@ export default function DowntimeTracker() {
     <div className="space-y-6 pb-10">
       {/* Header */}
       <PageHeader
-        title="Fleet Downtime & Availability"
+        title={t('downtime.title')}
         subtitle={<>
-          {usingActual ? 'Actual work-order durations where available, otherwise estimated from tyre removal events' : 'Estimated from tyre removal events'}
+          {usingActual ? t('downtime.subtitle.actual') : t('downtime.subtitle.estimated')}
           <span className="ml-2 px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-[10px] rounded font-semibold">
-            {usingActual ? 'ACTUAL + ESTIMATED' : 'ESTIMATED'}
+            {usingActual ? t('downtime.badge.actualEstimated') : t('downtime.badge.estimated')}
           </span>
         </>}
         icon={AlertTriangle}
@@ -866,19 +875,19 @@ export default function DowntimeTracker() {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-400 hover:text-white hover:border-gray-600 transition-colors"
           >
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-            Refresh
+            {t('downtime.actions.refresh')}
           </button>
           <button
             onClick={handleExportPdf}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-400 hover:text-white hover:border-gray-600 transition-colors"
           >
-            <FileText size={13} />PDF
+            <FileText size={13} />{t('downtime.actions.pdf')}
           </button>
           <button
             onClick={handleExportExcel}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded-lg text-xs text-white transition-colors"
           >
-            <FileSpreadsheet size={13} />Excel
+            <FileSpreadsheet size={13} />{t('downtime.actions.excel')}
           </button>
         </>}
       />
@@ -888,11 +897,11 @@ export default function DowntimeTracker() {
         <div className="flex flex-wrap gap-2 items-center">
           {/* Period */}
           <SegmentedControl
-            ariaLabel="period"
+            ariaLabel={t('downtime.filters.periodAriaLabel')}
             size="sm"
             value={period}
             onChange={setPeriod}
-            options={PERIOD_PRESETS.map(p => ({ value: p.label, label: p.label }))}
+            options={PERIOD_PRESETS.map(p => ({ value: p.label, label: t(`downtime.periods.${p.label}`) }))}
           />
           {/* Site */}
           <select
@@ -900,7 +909,7 @@ export default function DowntimeTracker() {
             onChange={e => setSiteFilter(e.target.value)}
             className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600"
           >
-            <option value="">All Sites</option>
+            <option value="">{t('downtime.filters.allSites')}</option>
             {sites.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           {/* Country */}
@@ -910,7 +919,7 @@ export default function DowntimeTracker() {
               onChange={e => setCountryFilter(e.target.value)}
               className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600"
             >
-              <option value="">All Countries</option>
+              <option value="">{t('downtime.filters.allCountries')}</option>
               {countries.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
@@ -920,15 +929,15 @@ export default function DowntimeTracker() {
             onChange={e => setRiskFilter(e.target.value)}
             className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600"
           >
-            <option value="">All Risk Levels</option>
-            {RISK_LEVELS.map(r => <option key={r} value={r}>{r}</option>)}
+            <option value="">{t('downtime.filters.allRiskLevels')}</option>
+            {RISK_LEVELS.map(r => <option key={r} value={r}>{t(`downtime.riskLevels.${r.toLowerCase()}`)}</option>)}
           </select>
           {/* Asset search */}
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
-              placeholder="Search asset..."
+              placeholder={t('downtime.filters.searchPlaceholder')}
               value={assetSearch}
               onChange={e => setAssetSearch(e.target.value)}
               className="pl-7 pr-7 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-green-600 w-36"
@@ -939,7 +948,7 @@ export default function DowntimeTracker() {
               </button>
             )}
           </div>
-          <span className="ml-auto text-xs text-gray-500">{filtered.length.toLocaleString()} events</span>
+          <span className="ml-auto text-xs text-gray-500">{t('downtime.filters.eventsCount', { count: filtered.length.toLocaleString() })}</span>
         </div>
       </div>
 
@@ -947,16 +956,12 @@ export default function DowntimeTracker() {
       <div className="flex items-start gap-2.5 bg-yellow-500/5 border border-yellow-500/20 rounded-2xl px-4 py-3">
         <AlertCircle size={15} className="text-yellow-400 shrink-0 mt-0.5" />
         <p className="text-xs text-gray-400 leading-relaxed">
-          <span className="text-yellow-400 font-semibold">Estimated figures.</span>{' '}
-          Downtime hours are{' '}
-          {usingActual
-            ? 'taken from actual work-order durations (opened → completed) where a matching work order exists, and otherwise '
-            : ''}
-          estimated per severity - Critical 4h, High 3h, Medium/Low 2h per tyre-removal event.
-          Downtime cost is modelled at{' '}
-          <span className="text-gray-200 font-medium">{sym} {downtimeRate.toLocaleString()}/hr</span>{' '}
-          {rateIsCustom ? '(configured via settings)' : '(default assumption - set a "downtime_rate" key in Settings to override)'},
-          assuming {SHIFT_HOURS} productive hours per shift-day. These are planning estimates, not invoiced downtime.
+          <span className="text-yellow-400 font-semibold">{t('downtime.banner.title')}</span>{' '}
+          {t(usingActual ? 'downtime.banner.bodyActual' : 'downtime.banner.bodyEstimated', {
+            rate: `${sym} ${downtimeRate.toLocaleString()}`,
+            basis: rateIsCustom ? t('downtime.banner.basisConfigured') : t('downtime.banner.basisDefault'),
+            shiftHours: SHIFT_HOURS,
+          })}
         </p>
       </div>
 

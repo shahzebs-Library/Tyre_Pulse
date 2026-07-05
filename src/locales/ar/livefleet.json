@@ -1,0 +1,125 @@
+{
+  "header": {
+    "title": "حالة الأسطول المباشرة",
+    "loading": "جارٍ تحميل بيانات الأسطول...",
+    "subtitle": "الإحاطة الصباحية - صحة المركبات والإطارات في الوقت الفعلي",
+    "updated": " · تم التحديث {time}"
+  },
+  "actions": {
+    "autoRefresh": "تحديث تلقائي",
+    "export": "تصدير",
+    "refresh": "تحديث",
+    "retry": "إعادة المحاولة"
+  },
+  "kpi": {
+    "fleetTotal": "إجمالي الأسطول",
+    "fleetTotalSub": "مركبات مسجّلة",
+    "operational": "تشغيلي",
+    "operationalSub": "بدون خطورة عالية/حرجة",
+    "atRisk": "معرض للخطر",
+    "atRiskSub": "إطارات عالية أو حرجة الخطورة",
+    "inspectionOverdue": "فحص متأخر",
+    "inspectionOverdueSub": "تجاوز الموعد المحدد",
+    "activeAlerts": "التنبيهات النشطة",
+    "activeAlertsSub": "اعتبارًا من {date}"
+  },
+  "filters": {
+    "searchPlaceholder": "ابحث برقم الأصل أو رقم الأسطول أو المشغّل...",
+    "status": {
+      "all": "الكل",
+      "operational": "تشغيلي",
+      "atRisk": "معرض للخطر",
+      "critical": "حرج",
+      "overdue": "متأخر"
+    },
+    "clear": "مسح",
+    "clearFilters": "مسح المرشحات",
+    "matchingCount": "{filtered} من {total} مركبة مطابقة للمرشحات",
+    "gridView": "عرض شبكي",
+    "listView": "عرض قائمة",
+    "mapView": "عرض خريطة"
+  },
+  "map": {
+    "comingSoon": "عرض الخريطة قريبًا",
+    "description": "سيتوفر تتبع الأسطول الجغرافي مع تكامل GPS المباشر في إصدار مستقبلي.",
+    "switchToGrid": "التبديل إلى العرض الشبكي"
+  },
+  "empty": {
+    "noFleetTitle": "لم يتم العثور على سجلات أسطول",
+    "noFleetDesc": "أضف مركبات إلى جدول إدارة الأسطول لعرض الحالة المباشرة هنا.",
+    "goToFleetMaster": "الانتقال إلى إدارة الأسطول",
+    "noMatch": "لا توجد مركبات مطابقة للمرشحات"
+  },
+  "card": {
+    "noTyreData": "لا توجد بيانات إطارات",
+    "daysAgo": "منذ {days} يوم",
+    "noInspection": "بدون فحص",
+    "details": "التفاصيل"
+  },
+  "scoreLabel": {
+    "operational": "تشغيلي",
+    "monitor": "مراقبة",
+    "atRisk": "معرض للخطر",
+    "critical": "حرج"
+  },
+  "list": {
+    "columns": {
+      "assetNo": "رقم الأصل",
+      "fleetNo": "رقم الأسطول",
+      "type": "النوع",
+      "site": "الموقع",
+      "operator": "المشغّل",
+      "tyres": "الإطارات",
+      "health": "الصحة",
+      "lastInspection": "آخر فحص",
+      "alerts": "التنبيهات",
+      "status": "الحالة"
+    },
+    "ok": "سليم",
+    "never": "أبدًا"
+  },
+  "sidebar": {
+    "dailyBriefing": "الإحاطة اليومية",
+    "briefingOperational": "{count} مركبة تشغيلية",
+    "briefingAtRisk": "، {count} معرضة للخطر",
+    "briefingOverdue": "، {count} متأخرة عن الفحص",
+    "briefingAlerts": "، {count} تنبيه (تنبيهات) نشطة",
+    "needsAttention": "تحتاج إلى اهتمام اليوم",
+    "allHealthy": "جميع المركبات سليمة",
+    "criticalTyres": "{count} إطار (إطارات) حرجة",
+    "highRiskTyres": "{count} إطار (إطارات) عالية الخطورة",
+    "inspectionsThisWeek": "فحوصات هذا الأسبوع",
+    "noneScheduled": "لا يوجد مجدول هذا الأسبوع",
+    "generalInspection": "عام",
+    "fleetAlerts": "تنبيهات الأسطول",
+    "infoSeverity": "معلومة"
+  },
+  "drawer": {
+    "inspectionOverdue": "فحص متأخر",
+    "alertCount": "{count} تنبيه (تنبيهات)",
+    "tyreHealthMap": "خريطة صحة الإطارات",
+    "riskBreakdown": "توزيع الخطورة",
+    "doughnut": {
+      "critical": "حرج",
+      "high": "عالٍ",
+      "medium": "متوسط",
+      "low": "منخفض",
+      "noData": "لا توجد بيانات"
+    },
+    "tyreColumns": {
+      "position": "الموضع",
+      "brand": "العلامة التجارية",
+      "tread": "المداس",
+      "psi": "PSI",
+      "risk": "الخطورة",
+      "fitted": "التركيب"
+    },
+    "currentTyres": "الإطارات الحالية",
+    "recentInspections": "الفحوصات الأخيرة",
+    "generalInspectionFallback": "فحص عام",
+    "scheduledFallback": "مجدول",
+    "activeAlerts": "التنبيهات النشطة",
+    "createWorkOrder": "إنشاء أمر عمل",
+    "scheduleInspection": "جدولة فحص"
+  }
+}

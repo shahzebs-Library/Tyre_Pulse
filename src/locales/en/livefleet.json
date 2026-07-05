@@ -1,0 +1,125 @@
+{
+  "header": {
+    "title": "Live Fleet Status",
+    "loading": "Loading fleet data...",
+    "subtitle": "Morning briefing - real-time vehicle & tyre health",
+    "updated": " · Updated {time}"
+  },
+  "actions": {
+    "autoRefresh": "Auto-refresh",
+    "export": "Export",
+    "refresh": "Refresh",
+    "retry": "Retry"
+  },
+  "kpi": {
+    "fleetTotal": "Fleet Total",
+    "fleetTotalSub": "registered vehicles",
+    "operational": "Operational",
+    "operationalSub": "no critical/high risk",
+    "atRisk": "At Risk",
+    "atRiskSub": "high or critical tyres",
+    "inspectionOverdue": "Inspection Overdue",
+    "inspectionOverdueSub": "past scheduled date",
+    "activeAlerts": "Active Alerts",
+    "activeAlertsSub": "as of {date}"
+  },
+  "filters": {
+    "searchPlaceholder": "Search asset, fleet no, operator...",
+    "status": {
+      "all": "All",
+      "operational": "Operational",
+      "atRisk": "At Risk",
+      "critical": "Critical",
+      "overdue": "Overdue"
+    },
+    "clear": "Clear",
+    "clearFilters": "Clear filters",
+    "matchingCount": "{filtered} of {total} vehicles matching filters",
+    "gridView": "Grid view",
+    "listView": "List view",
+    "mapView": "Map view"
+  },
+  "map": {
+    "comingSoon": "Map view coming soon",
+    "description": "Geographic fleet tracking with live GPS integration will be available in a future release.",
+    "switchToGrid": "Switch to Grid view"
+  },
+  "empty": {
+    "noFleetTitle": "No Fleet Records Found",
+    "noFleetDesc": "Add vehicles to your fleet master table to see live status here.",
+    "goToFleetMaster": "Go to Fleet Master",
+    "noMatch": "No vehicles match your filters"
+  },
+  "card": {
+    "noTyreData": "No tyre data",
+    "daysAgo": "{days}d ago",
+    "noInspection": "No insp.",
+    "details": "Details"
+  },
+  "scoreLabel": {
+    "operational": "Operational",
+    "monitor": "Monitor",
+    "atRisk": "At Risk",
+    "critical": "Critical"
+  },
+  "list": {
+    "columns": {
+      "assetNo": "Asset No",
+      "fleetNo": "Fleet No",
+      "type": "Type",
+      "site": "Site",
+      "operator": "Operator",
+      "tyres": "Tyres",
+      "health": "Health",
+      "lastInspection": "Last Inspection",
+      "alerts": "Alerts",
+      "status": "Status"
+    },
+    "ok": "ok",
+    "never": "Never"
+  },
+  "sidebar": {
+    "dailyBriefing": "Daily Briefing",
+    "briefingOperational": "{count} vehicles operational",
+    "briefingAtRisk": ", {count} at risk",
+    "briefingOverdue": ", {count} overdue for inspection",
+    "briefingAlerts": ", {count} active alert(s)",
+    "needsAttention": "Needs Attention Today",
+    "allHealthy": "All vehicles healthy",
+    "criticalTyres": "{count} critical tyre(s)",
+    "highRiskTyres": "{count} high risk tyre(s)",
+    "inspectionsThisWeek": "Inspections This Week",
+    "noneScheduled": "None scheduled this week",
+    "generalInspection": "General",
+    "fleetAlerts": "Fleet Alerts",
+    "infoSeverity": "Info"
+  },
+  "drawer": {
+    "inspectionOverdue": "Inspection Overdue",
+    "alertCount": "{count} Alert(s)",
+    "tyreHealthMap": "Tyre Health Map",
+    "riskBreakdown": "Risk Breakdown",
+    "doughnut": {
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "noData": "No Data"
+    },
+    "tyreColumns": {
+      "position": "Position",
+      "brand": "Brand",
+      "tread": "Tread",
+      "psi": "PSI",
+      "risk": "Risk",
+      "fitted": "Fitted"
+    },
+    "currentTyres": "Current Tyres",
+    "recentInspections": "Recent Inspections",
+    "generalInspectionFallback": "General Inspection",
+    "scheduledFallback": "Scheduled",
+    "activeAlerts": "Active Alerts",
+    "createWorkOrder": "Create Work Order",
+    "scheduleInspection": "Schedule Inspection"
+  }
+}

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import {
   UploadCloud, FileSpreadsheet, Wand2, ShieldCheck, CheckCircle2, AlertTriangle,
   Loader2, ArrowRight, ArrowLeft, RefreshCw, Database, Save, Bookmark, Paperclip, FileArchive,
-  Trash2, RotateCcw,
+  Trash2, RotateCcw, Download, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -21,6 +21,7 @@ import MappingProfilesManager from '../components/intake/MappingProfilesManager'
 import DataLinkPanel from '../components/intake/DataLinkPanel'
 import CostControlPanel from '../components/intake/CostControlPanel'
 import DataCompletenessPanel from '../components/intake/DataCompletenessPanel'
+import ImportTemplatePanel from '../components/intake/ImportTemplatePanel'
 
 const MODULES = [
   { key: 'fleet', label: 'Fleet / Assets' },
@@ -605,6 +606,8 @@ export default function DataIntakeCenter() {
               ))}
             </div>
           </div>
+
+          <ImportTemplatePanel module={module} />
           <label className="block border-2 border-dashed border-gray-700 rounded-xl p-10 text-center cursor-pointer hover:border-green-600/60">
             <input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt" multiple className="hidden" onChange={onFile} />
             {busy ? <Loader2 className="animate-spin mx-auto text-green-400" /> : <UploadCloud className="mx-auto text-gray-500" size={34} />}

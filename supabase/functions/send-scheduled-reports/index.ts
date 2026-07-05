@@ -103,6 +103,14 @@ type Digest = {
   top_brands: TopItem[]
   top_sites: TopItem[]
   top_removal_reasons: TopItem[]
+  // V86 — deeper analytics
+  monthly_trend: Array<{ label: string; value: number; count: number }>
+  worst_assets: Array<{ label: string; value: number; count: number }>
+  by_position: TopItem[]
+  by_category: Array<{ label: string; value: number; count: number }>
+  by_country: Array<{ label: string; value: number; count: number }>
+  projected_annual_spend: number | null
+  brand_reliability: Array<{ label: string; value: number; risk_pct: number | null }>
 }
 
 // deno-lint-ignore no-explicit-any
@@ -181,6 +189,46 @@ function topList(title: string, items: TopItem[], fmt: (n: number) => string): s
     </td>`
 }
 
+/** Horizontal spend bars for the 6-month trend (max-scaled). */
+function monthlyTrendBars(items: Array<{ label: string; value: number; count: number }>, currency: string): string {
+  const list = items ?? []
+  if (!list.length) return `<div style="font-size:12px;color:#94a3b8;padding:6px 0">No tyre spend in the last 6 months.</div>`
+  const max = Math.max(1, ...list.map((m) => Number(m.value) || 0))
+  return `<table role="presentation" width="100%" cellspacing="0">${
+    list.map((m) => {
+      const v = Number(m.value) || 0
+      const pct = Math.round((v / max) * 100)
+      return `<tr>
+        <td style="width:64px;font-size:11.5px;color:#64748b;padding:3px 8px 3px 0;white-space:nowrap">${m.label}</td>
+        <td style="padding:3px 0">
+          <div style="background:#e2e8f0;border-radius:4px;height:14px;width:100%">
+            <div style="background:#0f172a;border-radius:4px;height:14px;width:${pct}%"></div>
+          </div>
+        </td>
+        <td style="width:120px;text-align:right;font-size:11.5px;color:#0f172a;font-weight:700;padding:3px 0 3px 8px;white-space:nowrap">${money(v, currency)} <span style="color:#94a3b8;font-weight:400">· ${num(m.count)}</span></td>
+      </tr>`
+    }).join('')
+  }</table>`
+}
+
+/** Brand reliability list: worst High/Critical risk-rate first. */
+function brandReliabilityList(items: Array<{ label: string; value: number; risk_pct: number | null }>): string {
+  const rows = (items ?? []).length
+    ? items.map((it) => {
+        const pct = it.risk_pct == null ? null : Number(it.risk_pct)
+        const color = pct == null ? '#94a3b8' : pct >= 40 ? '#b91c1c' : pct >= 15 ? '#b45309' : '#047857'
+        return `<tr>
+          <td style="padding:6px 0;font-size:12.5px;color:#334155">${it.label} <span style="color:#94a3b8;font-size:11px">(${num(it.value)} tyres)</span></td>
+          <td style="padding:6px 0;font-size:12.5px;font-weight:700;text-align:right;color:${color}">${pct == null ? '—' : pct + '% risk'}</td>
+        </tr>`
+      }).join('')
+    : `<tr><td style="padding:6px 0;font-size:12px;color:#94a3b8">Not enough records per brand yet</td></tr>`
+  return `<td style="vertical-align:top;padding:6px 10px 6px 0">
+      <div style="font-size:11px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Brand reliability (worst risk first)</div>
+      <table role="presentation" width="100%" cellspacing="0">${rows}</table>
+    </td>`
+}
+
 function buildRecommendations(d: Digest): string[] {
   const recs: string[] = []
   if (d.dup_serials > 0) recs.push(`Resolve <b>${num(d.dup_serials)}</b> duplicate tyre serial(s) — they distort life &amp; CPK analysis.`)
@@ -193,8 +241,19 @@ function buildRecommendations(d: Digest): string[] {
   if (siteUnknown) recs.push(`Tyre <b>site</b> is blank across records — populate it to unlock branch cost comparison.`)
   if (d.all.cpk == null) recs.push(`Cost-per-km can't be computed — capture <b>fitment/removal km</b> to enable CPK &amp; life forecasting.`)
   if (d.win.tyres.cur === 0) recs.push(`No tyre records in the last ${d.period_days} days — confirm data imports are current (latest record ${dateShort(d.all.last_date)}).`)
+  // Budget outlook: projected annual run-rate vs the fleet's annual budget.
+  if (d.projected_annual_spend != null && d.monthly_budget > 0) {
+    const bud = d.monthly_budget * 12
+    if (d.projected_annual_spend > bud) {
+      const over = Math.round(((d.projected_annual_spend - bud) / bud) * 100)
+      recs.push(`Projected tyre spend is tracking <b>${over}% over</b> the annual budget — review procurement &amp; the highest-cost assets/brands below.`)
+    }
+  }
+  // Worst-reliability brand (highest High/Critical rate with enough records).
+  const worstBrand = (d.brand_reliability ?? []).find((b) => b.risk_pct != null && Number(b.risk_pct) >= 30)
+  if (worstBrand) recs.push(`<b>${worstBrand.label}</b> shows a <b>${worstBrand.risk_pct}%</b> High/Critical risk rate — investigate as a candidate for de-listing or root-cause review.`)
   if (!recs.length) recs.push('No critical issues detected this period. Maintain inspection cadence and monitor high-risk positions.')
-  return recs.slice(0, 6)
+  return recs.slice(0, 8)
 }
 
 function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string): string {
@@ -276,6 +335,35 @@ function renderHtml(s: Schedule, d: Digest, appUrl: string, currency: string): s
           ${topList('Top brands by spend', d.top_brands, (n) => money(n, currency))}
           ${topList('Top sites by spend', d.top_sites, (n) => money(n, currency))}
           ${topList('Top removal reasons', d.top_removal_reasons, (n) => num(n))}
+        </tr>
+
+        ${sectionTitle('Cost Trend & Forecast · last 6 months')}
+        <tr><td colspan="3" style="padding-top:4px">${monthlyTrendBars(d.monthly_trend, currency)}</td></tr>
+        <tr>
+          ${tile('Projected annual spend', d.projected_annual_spend == null ? '—' : money(d.projected_annual_spend, currency), 'run-rate to date')}
+          ${tile('Annual budget (12× monthly)', d.monthly_budget ? money(d.monthly_budget * 12, currency) : '—')}
+          ${(() => {
+            const proj = d.projected_annual_spend
+            const bud = d.monthly_budget ? d.monthly_budget * 12 : null
+            if (proj == null || bud == null || bud === 0) return tile('Budget outlook', '—', 'set a fleet budget')
+            const over = proj > bud
+            const pct = Math.round(Math.abs((proj - bud) / bud) * 100)
+            return tile('Budget outlook', `${over ? 'Over' : 'Under'} by ${pct}%`, over ? 'projected spend exceeds budget' : 'within budget', over ? '#b91c1c' : '#047857')
+          })()}
+        </tr>
+
+        ${sectionTitle('Asset & Position Intelligence')}
+        <tr>
+          ${topList('Highest-cost assets', d.worst_assets, (n) => money(n, currency))}
+          ${topList('Removals by position', d.by_position, (n) => num(n))}
+          ${topList('Spend by category', d.by_category, (n) => money(n, currency))}
+        </tr>
+
+        ${sectionTitle('Fleet Distribution & Reliability')}
+        <tr>
+          ${topList('Spend by country', d.by_country, (n) => money(n, currency))}
+          ${brandReliabilityList(d.brand_reliability)}
+          <td style="vertical-align:top;padding:6px 0 6px 0"></td>
         </tr>
 
         ${sectionTitle('Data Quality')}

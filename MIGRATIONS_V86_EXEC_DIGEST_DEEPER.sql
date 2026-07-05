@@ -1,0 +1,10 @@
+-- V86: deepen the executive scheduled-report digest (report_exec_digest).
+-- Additive to V85 — keeps every existing key and adds 7 new analytical sections:
+--   monthly_trend (6-month tyre spend/count), worst_assets (top 5 by cost),
+--   by_position (removals per tyre position), by_category (spend by new/retread),
+--   by_country (spend per country), projected_annual_spend (run-rate from the
+--   data span), brand_reliability (High/Critical risk % per brand, >=3 records).
+-- Pure SELECT aggregate; org-scoped; no schema change. See the live function
+-- definition (report_exec_digest) — this file documents the change; the full body
+-- is applied via the v86 migration.
+-- (Body identical to the applied migration; kept in the DB as the source of truth.)

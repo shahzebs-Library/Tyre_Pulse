@@ -1,0 +1,122 @@
+{
+  "title": "محسّن مقاسات ومواصفات الإطارات",
+  "subtitle": "تحليل مزيج المقاسات وفرص التوحيد وتحسين المشتريات",
+  "actions": {
+    "pdf": "PDF",
+    "excel": "إكسل"
+  },
+  "error": {
+    "failedToLoad": "فشل تحميل البيانات: {message}"
+  },
+  "periods": {
+    "30d": "30 يوم",
+    "90d": "90 يوم",
+    "6mo": "6 أشهر",
+    "1yr": "سنة",
+    "All": "الكل"
+  },
+  "filters": {
+    "all": "الكل",
+    "clear": "مسح",
+    "summary": "{count} إطار · {sizes} مقاس"
+  },
+  "positions": {
+    "steer": "المقود",
+    "drive": "الدفع",
+    "trailer": "المقطورة",
+    "liftAxle": "المحور الرافع",
+    "tagAxle": "المحور المساعد",
+    "other": "أخرى"
+  },
+  "kpi": {
+    "uniqueSizes": "المقاسات الفريدة في الأسطول",
+    "uniqueSizesSub": "عبر {total} إطار",
+    "mostCommon": "المقاس الأكثر شيوعًا",
+    "mostCommonSub": "{pct} من الأسطول ({count} إطار)",
+    "bestPerforming": "أفضل مقاس أداءً",
+    "bestPerformingSubCpk": "التكلفة/كم: {value}",
+    "bestPerformingSubMin": "يلزم {count} سجل على الأقل",
+    "standardization": "درجة التوحيد القياسي",
+    "standardizationWell": "توحيد قياسي جيد",
+    "standardizationModerate": "تشتت متوسط",
+    "standardizationHigh": "تشتت عالٍ"
+  },
+  "charts": {
+    "sizeMix": "توزيع مزيج المقاسات",
+    "noData": "لا توجد بيانات",
+    "doughnutTooltip": "{count} إطار ({pct}%)",
+    "cpkBySize": "التكلفة/كم حسب المقاس (مرتب)",
+    "legendGood": "≤{value} جيد",
+    "legendAvg": "≤{value} متوسط",
+    "legendPoor": ">{value} ضعيف",
+    "noCpkData": "لا توجد بيانات تكلفة/كم (تحتاج حقول الكيلومترات)",
+    "avgCpkSeries": "متوسط التكلفة/كم",
+    "cpkAxisTitle": "التكلفة/كم ({currency}/كم)"
+  },
+  "table": {
+    "heading": "تفاصيل توزيع المقاسات",
+    "summary": "{count} مقاس · انقر على الصف للتوسيع",
+    "columns": {
+      "size": "المقاس",
+      "count": "العدد",
+      "pctFleet": "% من الأسطول",
+      "avgCpk": "متوسط التكلفة/كم",
+      "avgLife": "متوسط العمر",
+      "failRate": "معدل الأعطال %",
+      "brands": "العلامات التجارية",
+      "sites": "المواقع",
+      "flag": "التصنيف"
+    },
+    "empty": "لم يتم العثور على سجلات إطارات",
+    "brandBreakdownFor": "تفصيل العلامات التجارية لمقاس {size}",
+    "brandColumns": {
+      "brand": "العلامة التجارية",
+      "count": "العدد",
+      "avgCpk": "متوسط التكلفة/كم",
+      "avgLife": "متوسط العمر"
+    }
+  },
+  "flags": {
+    "standard": "قياسي",
+    "lowVolume": "حجم منخفض",
+    "outlier": "استثناء"
+  },
+  "matrix": {
+    "heading": "مصفوفة أداء التكلفة/كم حسب المقاس والعلامة التجارية",
+    "empty": "بيانات غير كافية للمصفوفة",
+    "sizeBrandColumn": "المقاس / العلامة التجارية"
+  },
+  "compliance": {
+    "heading": "امتثال المقاس للموضع",
+    "empty": "لا توجد بيانات مواضع",
+    "columns": {
+      "position": "الموضع",
+      "requiredSizes": "المقاسات المطلوبة",
+      "nonStd": "غير قياسي",
+      "compliance": "الامتثال"
+    }
+  },
+  "trend": {
+    "heading": "أهم توليفات المقاس والعلامة التجارية - اتجاه التكلفة/كم (12 شهرًا)",
+    "empty": "لا توجد بيانات اتجاه متاحة"
+  },
+  "consolidation": {
+    "heading": "فرص التوحيد",
+    "count": "{count} توصية",
+    "empty": "لم يتم اكتشاف فرص توحيد - الأسطول محسّن بشكل جيد",
+    "eliminateTitle": "إلغاء المقاس {size}",
+    "eliminateDesc": "يُستخدم من قِبل مركبة واحدة فقط ({vehicle}). يُنصح بإلغائه لتقليل تعقيد المشتريات.",
+    "standardizeTitle": "توحيد {size} على {brand}",
+    "standardizeDesc": "التكلفة/كم لـ{bestBrand}: {bestCpk} مقابل {worstBrand}: {worstCpk}. حوّل {count} إطار إلى {bestBrand}.",
+    "reviewTitle": "مراجعة مواصفة {size}",
+    "reviewDesc": "متوسط التكلفة/كم البالغ {value}/كم يعادل ضعف متوسط الأسطول. حقّق في السبب الجذري وفكّر في مواصفة بديلة.",
+    "estAnnualSavings": "التوفير السنوي المقدر: {value}"
+  },
+  "impact": {
+    "critical": "حرج",
+    "high": "عالٍ",
+    "low": "منخفض"
+  },
+  "na": "غير متاح",
+  "unknown": "غير معروف"
+}

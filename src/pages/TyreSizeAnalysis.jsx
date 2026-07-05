@@ -5,6 +5,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { normalizePosition } from '../lib/tyrePositions'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import {
   Layers, Download, FileText, AlertTriangle, CheckCircle,
@@ -153,6 +154,7 @@ function last12Months() {
 export default function TyreSizeAnalysis() {
   const { activeCountry, activeCurrency, appSettings } = useSettings()
   const { branding } = useTenant()
+  const { t } = useLanguage()
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
@@ -336,12 +338,12 @@ export default function TyreSizeAnalysis() {
             const val = ctx.parsed
             const total = ctx.dataset.data.reduce((s, v) => s + v, 0)
             const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0
-            return ` ${val} tyres (${pct}%)`
+            return ` ${t('tyresize.charts.doughnutTooltip', { count: val, pct })}`
           },
         },
       },
     },
-  }), [])
+  }), [t])
 
   // ── Horizontal bar: CPK by size ───────────────────────────────────────────────
   const cpkBarData = useMemo(() => {
@@ -349,7 +351,7 @@ export default function TyreSizeAnalysis() {
     return {
       labels: withCpk.map(m => m.size),
       datasets: [{
-        label: 'Avg CPK',
+        label: t('tyresize.charts.avgCpkSeries'),
         data: withCpk.map(m => m.avgCpk),
         backgroundColor: withCpk.map(m =>
           m.avgCpk <= BENCHMARK_GOOD ? 'rgba(16,185,129,0.8)'

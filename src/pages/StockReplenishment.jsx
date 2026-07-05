@@ -78,17 +78,19 @@ function Skeleton({ className = '' }) {
 
 // ── Urgency Badge ─────────────────────────────────────────────────────────────
 function UrgencyBadge({ urgency }) {
+  const { t } = useLanguage()
   const cfg = URGENCY_CONFIG[urgency] || URGENCY_CONFIG.Normal
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color} ${cfg.bg} ${cfg.border}`}>
       {urgency === 'Critical' && <Zap size={10} className="mr-1" />}
-      {urgency}
+      {t(`stockreplenish.urgency.${urgency}`)}
     </span>
   )
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function StockReplenishment() {
+  const { t } = useLanguage()
   const { activeCurrency, activeCountry, appSettings } = useSettings()
   const { user, profile } = useAuth()
   const { branding } = useTenant()
@@ -366,9 +368,9 @@ export default function StockReplenishment() {
     const avg = counts.reduce((a, b) => a + b, 0) / counts.length || 1
     const maxVariance = Math.max(...counts.map(c => Math.abs((c - avg) / avg))) * 100
     return maxVariance > 20
-      ? `High seasonal variance detected (±${maxVariance.toFixed(0)}%). Adjust replenishment quantities accordingly.`
+      ? t('stockreplenish.consumption.seasonalNote', { pct: maxVariance.toFixed(0) })
       : null
-  }, [tyreRecords])
+  }, [tyreRecords, t])
 
   // ── Sort helper ────────────────────────────────────────────────────────────
   function handleSort(field) {
@@ -531,13 +533,13 @@ export default function StockReplenishment() {
   // ── Create Purchase Order (persist to purchase_orders) ─────────────────────
   const handleCreatePurchaseOrder = useCallback(async () => {
     if (orderLines.length === 0) {
-      setPoResult({ type: 'error', message: 'Add at least one order line before creating a PO.' })
+      setPoResult({ type: 'error', message: t('stockreplenish.order.errors.noLines') })
       return
     }
     // A single PO requires a single vendor - derive from the first supplied supplier.
     const vendorName = (orderLines.find(l => l.supplier?.trim())?.supplier || '').trim()
     if (!vendorName) {
-      setPoResult({ type: 'error', message: 'Enter a supplier name on at least one line to set the PO vendor.' })
+      setPoResult({ type: 'error', message: t('stockreplenish.order.errors.noSupplier') })
       return
     }
 
@@ -597,14 +599,14 @@ export default function StockReplenishment() {
 
       await purchaseOrders.createPurchaseOrder(payload)
 
-      setPoResult({ type: 'success', message: `Purchase order ${poNumber} created as Draft. Manage it in Procurement.` })
+      setPoResult({ type: 'success', message: t('stockreplenish.order.createSuccess', { poNumber }) })
       setOrderLines([])
     } catch (e) {
-      setPoResult({ type: 'error', message: e.message || 'Failed to create purchase order.' })
+      setPoResult({ type: 'error', message: e.message || t('stockreplenish.order.errors.createFailed') })
     } finally {
       setCreatingPO(false)
     }
-  }, [orderLines, activeCountry, profile, user])
+  }, [orderLines, activeCountry, profile, user, t])
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (loading) {
@@ -632,8 +634,11 @@ export default function StockReplenishment() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Stock Replenishment"
-        subtitle={`Procurement intelligence - ${stockData.length} SKUs tracked${lastSync ? ` · Synced ${lastSync.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+        title={t('stockreplenish.title')}
+        subtitle={t('stockreplenish.subtitle', {
+          count: stockData.length,
+          syncedSuffix: lastSync ? t('stockreplenish.syncedSuffix', { time: lastSync.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) }) : '',
+        })}
         icon={Package}
         actions={
           <div className="flex items-center gap-2">

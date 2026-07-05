@@ -51,6 +51,12 @@ const POSITION_KEY_MAP = {
   'Lift Axle': 'liftAxle', 'Tag Axle': 'tagAxle', 'Other': 'other',
 }
 
+// stdFlag()/stdFlagColor() return/key on these English strings - keep as-is for
+// logic/exports; only the rendered badge text is translated via this map.
+const FLAG_KEY_MAP = {
+  'Standard': 'standard', 'Low Volume': 'lowVolume', 'Outlier': 'outlier',
+}
+
 const CHART_BASE = {
   responsive: true,
   maintainAspectRatio: false,
@@ -843,30 +849,32 @@ export default function TyreSizeAnalysis() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           {
-            label: 'Unique Sizes in Fleet',
+            label: t('tyresize.kpi.uniqueSizes'),
             value: kpis.uniqueSz.toString(),
-            sub: `across ${kpis.total} tyres`,
+            sub: t('tyresize.kpi.uniqueSizesSub', { total: kpis.total }),
             icon: Layers,
             color: 'blue',
           },
           {
-            label: 'Most Common Size',
-            value: kpis.mostCommon?.size ?? 'N/A',
-            sub: kpis.mostCommon ? `${fmtPct(kpis.mostCommon.pct)} of fleet (${kpis.mostCommon.count} tyres)` : '',
+            label: t('tyresize.kpi.mostCommon'),
+            value: kpis.mostCommon?.size ?? t('tyresize.na'),
+            sub: kpis.mostCommon ? t('tyresize.kpi.mostCommonSub', { pct: fmtPct(kpis.mostCommon.pct), count: kpis.mostCommon.count }) : '',
             icon: Award,
             color: 'green',
           },
           {
-            label: 'Best Performing Size',
-            value: kpis.bestPerf?.size ?? 'N/A',
-            sub: kpis.bestPerf ? `CPK: ${fmtCpk(kpis.bestPerf.avgCpk, activeCurrency)}` : `Min ${MIN_RECORDS_CPK} records needed`,
+            label: t('tyresize.kpi.bestPerforming'),
+            value: kpis.bestPerf?.size ?? t('tyresize.na'),
+            sub: kpis.bestPerf
+              ? t('tyresize.kpi.bestPerformingSubCpk', { value: fmtCpk(kpis.bestPerf.avgCpk, activeCurrency) })
+              : t('tyresize.kpi.bestPerformingSubMin', { count: MIN_RECORDS_CPK }),
             icon: Target,
             color: 'emerald',
           },
           {
-            label: 'Standardization Score',
+            label: t('tyresize.kpi.standardization'),
             value: `${kpis.stdScore.toFixed(0)}%`,
-            sub: kpis.stdScore >= 70 ? 'Well standardized' : kpis.stdScore >= 40 ? 'Moderate fragmentation' : 'High fragmentation',
+            sub: kpis.stdScore >= 70 ? t('tyresize.kpi.standardizationWell') : kpis.stdScore >= 40 ? t('tyresize.kpi.standardizationModerate') : t('tyresize.kpi.standardizationHigh'),
             icon: Activity,
             color: kpis.stdScore >= 70 ? 'green' : kpis.stdScore >= 40 ? 'yellow' : 'red',
           },
@@ -907,10 +915,10 @@ export default function TyreSizeAnalysis() {
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <h2 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-green-400" />
-            Size Mix Distribution
+            {t('tyresize.charts.sizeMix')}
           </h2>
           {doughnutData.labels.length === 0 ? (
-            <div className="flex items-center justify-center h-56 text-gray-500 text-sm">No data</div>
+            <div className="flex items-center justify-center h-56 text-gray-500 text-sm">{t('tyresize.charts.noData')}</div>
           ) : (
             <div className="h-56">
               <Doughnut data={doughnutData} options={doughnutOpts} />
@@ -922,15 +930,15 @@ export default function TyreSizeAnalysis() {
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <h2 className="text-sm font-semibold text-gray-200 mb-1 flex items-center gap-2">
             <DollarSign className="w-4 h-4 text-green-400" />
-            CPK by Size (ranked)
+            {t('tyresize.charts.cpkBySize')}
           </h2>
           <div className="flex gap-4 text-xs text-gray-500 mb-3">
-            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500 inline-block" /> ≤{BENCHMARK_GOOD} Good</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-yellow-500 inline-block" /> ≤{BENCHMARK_AVG} Avg</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-500 inline-block" /> &gt;{BENCHMARK_AVG} Poor</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500 inline-block" /> {t('tyresize.charts.legendGood', { value: BENCHMARK_GOOD })}</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-yellow-500 inline-block" /> {t('tyresize.charts.legendAvg', { value: BENCHMARK_AVG })}</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-500 inline-block" /> {t('tyresize.charts.legendPoor', { value: BENCHMARK_AVG })}</span>
           </div>
           {cpkBarData.labels.length === 0 ? (
-            <div className="flex items-center justify-center h-56 text-gray-500 text-sm">No CPK data (need km fields)</div>
+            <div className="flex items-center justify-center h-56 text-gray-500 text-sm">{t('tyresize.charts.noCpkData')}</div>
           ) : (
             <div style={{ height: Math.max(200, cpkBarData.labels.length * 26) }}>
               <Bar data={cpkBarData} options={cpkBarOpts} />
@@ -944,9 +952,9 @@ export default function TyreSizeAnalysis() {
         <div className="p-4 border-b border-gray-800 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
             <Layers className="w-4 h-4 text-green-400" />
-            Size Distribution Detail
+            {t('tyresize.table.heading')}
           </h2>
-          <span className="text-xs text-gray-500">{sortedSizeMetrics.length} sizes · click row to expand</span>
+          <span className="text-xs text-gray-500">{t('tyresize.table.summary', { count: sortedSizeMetrics.length })}</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -954,15 +962,15 @@ export default function TyreSizeAnalysis() {
             <thead>
               <tr className="border-b border-gray-800 bg-gray-950">
                 {[
-                  { label: 'Size',         field: 'size' },
-                  { label: 'Count',        field: 'count' },
-                  { label: '% Fleet',      field: 'pct' },
-                  { label: 'Avg CPK',      field: 'avgCpk' },
-                  { label: 'Avg Life',     field: 'avgLife' },
-                  { label: 'Fail Rate %',  field: 'failRate' },
-                  { label: 'Brands',       field: null },
-                  { label: 'Sites',        field: null },
-                  { label: 'Flag',         field: 'flag' },
+                  { label: t('tyresize.table.columns.size'),     field: 'size' },
+                  { label: t('tyresize.table.columns.count'),    field: 'count' },
+                  { label: t('tyresize.table.columns.pctFleet'), field: 'pct' },
+                  { label: t('tyresize.table.columns.avgCpk'),   field: 'avgCpk' },
+                  { label: t('tyresize.table.columns.avgLife'),  field: 'avgLife' },
+                  { label: t('tyresize.table.columns.failRate'), field: 'failRate' },
+                  { label: t('tyresize.table.columns.brands'),   field: null },
+                  { label: t('tyresize.table.columns.sites'),    field: null },
+                  { label: t('tyresize.table.columns.flag'),     field: 'flag' },
                 ].map(col => (
                   <th
                     key={col.label}
@@ -981,7 +989,7 @@ export default function TyreSizeAnalysis() {
             <tbody>
               {sortedSizeMetrics.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-12 text-gray-500">No tyre records found</td>
+                  <td colSpan={10} className="text-center py-12 text-gray-500">{t('tyresize.table.empty')}</td>
                 </tr>
               ) : sortedSizeMetrics.map((m, idx) => {
                 const isExpanded = expandedSize === m.size
@@ -999,7 +1007,7 @@ export default function TyreSizeAnalysis() {
                       <td className="px-4 py-2.5 text-white font-medium">{m.count.toLocaleString()}</td>
                       <td className="px-4 py-2.5 text-gray-300">{fmtPct(m.pct)}</td>
                       <td className={`px-4 py-2.5 font-mono ${cpkColor(m.avgCpk)}`}>
-                        {m.avgCpk != null ? `${activeCurrency} ${m.avgCpk.toFixed(4)}` : <span className="text-gray-600">N/A</span>}
+                        {m.avgCpk != null ? `${activeCurrency} ${m.avgCpk.toFixed(4)}` : <span className="text-gray-600">{t('tyresize.na')}</span>}
                       </td>
                       <td className="px-4 py-2.5 text-gray-300">{fmtKm(m.avgLife)}</td>
                       <td className={`px-4 py-2.5 ${m.failRate > 20 ? 'text-red-400' : m.failRate > 10 ? 'text-yellow-400' : 'text-gray-300'}`}>
@@ -1013,7 +1021,7 @@ export default function TyreSizeAnalysis() {
                       </td>
                       <td className="px-4 py-2.5">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${stdFlagColor(m.flag)}`}>
-                          {m.flag}
+                          {t(`tyresize.flags.${FLAG_KEY_MAP[m.flag] ?? 'outlier'}`)}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-gray-600">

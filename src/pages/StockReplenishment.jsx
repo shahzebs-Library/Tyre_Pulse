@@ -1155,28 +1155,28 @@ export default function StockReplenishment() {
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
                 <h3 className="text-white font-semibold flex items-center gap-2">
                   <ShoppingCart size={16} className="text-emerald-400" />
-                  Purchase Order Lines
+                  {t('stockreplenish.order.linesTitle')}
                 </h3>
                 <button
                   onClick={addBlankOrderLine}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700/30 border border-emerald-700 text-emerald-400 text-sm rounded-lg hover:bg-emerald-700/50 transition-colors"
                 >
-                  <Plus size={14} />Add Line
+                  <Plus size={14} />{t('stockreplenish.order.addLine')}
                 </button>
               </div>
 
               {orderLines.length === 0 ? (
                 <div className="py-16 text-center">
                   <ShoppingCart size={48} className="mx-auto mb-4 text-gray-700" />
-                  <p className="text-gray-400 font-medium">No order lines yet</p>
+                  <p className="text-gray-400 font-medium">{t('stockreplenish.order.emptyTitle')}</p>
                   <p className="text-gray-600 text-sm mt-2">
-                    Click "Order" in the Replenishment Matrix or add lines manually
+                    {t('stockreplenish.order.emptyDesc')}
                   </p>
                   <button
                     onClick={() => setActiveTab(0)}
                     className="mt-4 text-emerald-400 hover:text-emerald-300 text-sm flex items-center gap-1 mx-auto"
                   >
-                    <Layers size={14} />Go to Replenishment Matrix →
+                    <Layers size={14} />{t('stockreplenish.order.goToMatrix')}
                   </button>
                 </div>
               ) : (
@@ -1185,13 +1185,13 @@ export default function StockReplenishment() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-800 bg-gray-900/50">
-                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">Brand</th>
-                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">Size</th>
-                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">Site</th>
-                          <th className="px-4 py-3 text-center text-gray-400 text-xs font-medium uppercase tracking-wide">Qty</th>
-                          <th className="px-4 py-3 text-right text-gray-400 text-xs font-medium uppercase tracking-wide">Unit Cost</th>
-                          <th className="px-4 py-3 text-right text-gray-400 text-xs font-medium uppercase tracking-wide">Total</th>
-                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">Supplier</th>
+                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">{t('stockreplenish.order.columns.brand')}</th>
+                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">{t('stockreplenish.order.columns.size')}</th>
+                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">{t('stockreplenish.order.columns.site')}</th>
+                          <th className="px-4 py-3 text-center text-gray-400 text-xs font-medium uppercase tracking-wide">{t('stockreplenish.order.columns.qty')}</th>
+                          <th className="px-4 py-3 text-right text-gray-400 text-xs font-medium uppercase tracking-wide">{t('stockreplenish.order.columns.unitCost')}</th>
+                          <th className="px-4 py-3 text-right text-gray-400 text-xs font-medium uppercase tracking-wide">{t('stockreplenish.order.columns.total')}</th>
+                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">{t('stockreplenish.order.columns.supplier')}</th>
                           <th className="px-4 py-3 w-8"></th>
                         </tr>
                       </thead>
@@ -1202,7 +1202,7 @@ export default function StockReplenishment() {
                               <input
                                 value={line.brand}
                                 onChange={e => updateOrderLine(idx, 'brand', e.target.value)}
-                                placeholder="Brand"
+                                placeholder={t('stockreplenish.order.brandPlaceholder')}
                                 className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:border-emerald-500"
                               />
                             </td>
@@ -1210,7 +1210,7 @@ export default function StockReplenishment() {
                               <input
                                 value={line.size}
                                 onChange={e => updateOrderLine(idx, 'size', e.target.value)}
-                                placeholder="Size"
+                                placeholder={t('stockreplenish.order.sizePlaceholder')}
                                 className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
                               />
                             </td>
@@ -1218,7 +1218,7 @@ export default function StockReplenishment() {
                               <input
                                 value={line.site}
                                 onChange={e => updateOrderLine(idx, 'site', e.target.value)}
-                                placeholder="Site"
+                                placeholder={t('stockreplenish.order.sitePlaceholder')}
                                 className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:border-emerald-500"
                               />
                             </td>
@@ -1250,7 +1250,7 @@ export default function StockReplenishment() {
                               <input
                                 value={line.supplier}
                                 onChange={e => updateOrderLine(idx, 'supplier', e.target.value)}
-                                placeholder="Supplier name"
+                                placeholder={t('stockreplenish.order.supplierPlaceholder')}
                                 className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:border-emerald-500"
                               />
                             </td>
@@ -1271,11 +1271,11 @@ export default function StockReplenishment() {
                   {/* Total row */}
                   <div className="flex items-center justify-between px-5 py-4 border-t border-gray-800 bg-gray-800/30">
                     <span className="text-gray-400 text-sm font-medium">
-                      {orderLines.length} line{orderLines.length !== 1 ? 's' : ''} ·{' '}
-                      {orderLines.reduce((s, l) => s + (parseInt(l.qty) || 0), 0)} units total
+                      {t('stockreplenish.order.lineCount', { count: orderLines.length, plural: orderLines.length !== 1 ? 's' : '' })} ·{' '}
+                      {t('stockreplenish.order.unitsTotal', { count: orderLines.reduce((s, l) => s + (parseInt(l.qty) || 0), 0) })}
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-400 text-sm">Total PO Value:</span>
+                      <span className="text-gray-400 text-sm">{t('stockreplenish.order.totalPoValueLabel')}</span>
                       <span className="text-emerald-400 text-xl font-bold">
                         {fmtCurrency(orderTotal, activeCurrency)}
                       </span>
@@ -1298,7 +1298,7 @@ export default function StockReplenishment() {
                 <span>{poResult.message}</span>
                 {poResult.type === 'success' && (
                   <a href="/procurement" className="ml-2 inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300">
-                    <ExternalLink size={14} />Open Procurement
+                    <ExternalLink size={14} />{t('stockreplenish.order.openProcurement')}
                   </a>
                 )}
                 <button onClick={() => setPoResult(null)} className="ml-auto text-gray-400 hover:text-white">
@@ -1318,35 +1318,35 @@ export default function StockReplenishment() {
                   {creatingPO
                     ? <Loader2 size={16} className="animate-spin" />
                     : <ShoppingCart size={16} />}
-                  {creatingPO ? 'Creating PO...' : 'Create Purchase Order'}
+                  {creatingPO ? t('stockreplenish.order.creatingPo') : t('stockreplenish.order.createPo')}
                 </button>
                 <button
                   onClick={exportOrderExcel}
                   className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm font-medium rounded-xl transition-colors"
                 >
                   <FileSpreadsheet size={16} className="text-emerald-400" />
-                  Export PO to Excel
+                  {t('stockreplenish.order.exportExcel')}
                 </button>
                 <button
                   onClick={exportOrderPDF}
                   className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm font-medium rounded-xl transition-colors"
                 >
                   <FileText size={16} className="text-red-400" />
-                  Export PO to PDF
+                  {t('stockreplenish.order.exportPdf')}
                 </button>
                 <button
                   onClick={() => setOrderLines([])}
                   className="flex items-center gap-2 px-4 py-2.5 bg-red-900/20 border border-red-800 text-red-400 text-sm font-medium rounded-xl hover:bg-red-900/40 transition-colors"
                 >
                   <X size={16} />
-                  Clear All Lines
+                  {t('stockreplenish.order.clearAllLines')}
                 </button>
                 <a
                   href="/procurement"
                   className="ml-auto flex items-center gap-1.5 text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
                 >
                   <ExternalLink size={14} />
-                  Manage full POs in Procurement →
+                  {t('stockreplenish.order.manageInProcurement')}
                 </a>
               </div>
             )}

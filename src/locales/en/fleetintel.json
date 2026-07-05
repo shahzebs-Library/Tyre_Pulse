@@ -1,0 +1,129 @@
+{
+  "header": {
+    "title": "Fleet Management Intelligence",
+    "subtitle": "Fleet availability, downtime, asset utilisation and operating cost intelligence",
+    "fleetMasterUnavailable": "Fleet master unavailable",
+    "refresh": "Refresh",
+    "excel": "Excel",
+    "pdf": "PDF",
+    "emailReport": "Email Report"
+  },
+  "states": {
+    "loading": "Loading fleet intelligence data...",
+    "errorTitle": "Failed to load fleet intelligence",
+    "retry": "Retry",
+    "noRecordsTitle": "No tyre records found",
+    "noRecordsDesc": "Upload tyre data to generate fleet management intelligence"
+  },
+  "filters": {
+    "heading": "Filters",
+    "period": "Period",
+    "site": "Site",
+    "allSites": "All Sites",
+    "vehicleType": "Vehicle Type",
+    "allTypes": "All Types",
+    "availability": "Availability",
+    "all": "All",
+    "available": "Available",
+    "critical": "Critical",
+    "assets": "Assets"
+  },
+  "avail": {
+    "critical": "Critical",
+    "available": "Available"
+  },
+  "kpi": {
+    "fleetAvailability": "Fleet Availability",
+    "fleetAvailabilitySub": "{available} of {total} vehicles",
+    "criticalVehicles": "Vehicles with Critical Tyres",
+    "criticalVehiclesSub": "critical tyre in last 30 days",
+    "totalDowntime": "Total Downtime Hours",
+    "totalDowntimeSub": "{hours}h est. per tyre change",
+    "monthlyCost": "Monthly Fleet Tyre Cost",
+    "monthlyCostSub": "rolling average",
+    "fleetAvgCpk": "Fleet Avg CPK",
+    "fleetAvgCpkSub": "{currency}/km",
+    "avgCostPerVehicle": "Avg Cost per Vehicle",
+    "avgCostPerVehicleSub": "across {count} assets"
+  },
+  "availability": {
+    "title": "Fleet Availability Timeline",
+    "subtitle": "Monthly % of vehicles with no Critical/High risk tyre - 95% target dashed",
+    "seriesLabel": "Fleet Availability %",
+    "targetSeriesLabel": "95% Target"
+  },
+  "downtime": {
+    "title": "Downtime Impact - Top 15 Vehicles",
+    "subtitle": "Estimated tyre-change downtime hours · red = >20 hrs",
+    "noData": "No data available",
+    "seriesLabel": "Downtime Hours"
+  },
+  "siteCost": {
+    "title": "Operating Cost by Site",
+    "subtitle": "Total tyre cost per site",
+    "stackedSuffix": " · stacked by vehicle type",
+    "noData": "No data available",
+    "totalSeriesLabel": "Total Tyre Cost"
+  },
+  "costTrend": {
+    "title": "Monthly Fleet Cost Trend - Last 13 Months",
+    "subtitle": "Actual spend + linear regression trend · forecast dot for next month",
+    "worsening": "Worsening",
+    "improving": "Improving",
+    "stable": "Stable",
+    "forecast": "Forecast: {value}",
+    "seriesLabel": "Monthly Cost ({currency})",
+    "trendLineLabel": "Trend Line"
+  },
+  "register": {
+    "title": "Fleet Asset Register",
+    "assetsSortedBy": "{count} assets · sorted by {sortCol}",
+    "searchPlaceholder": "Search asset no...",
+    "columns": {
+      "assetNo": "Asset No",
+      "site": "Site",
+      "type": "Type",
+      "changes": "Changes",
+      "totalCost": "Total Cost",
+      "avgCpk": "Avg CPK",
+      "highRisk": "High Risk",
+      "status": "Status",
+      "monthlyCost": "Monthly Cost",
+      "lastChange": "Last Change",
+      "action": "Action"
+    },
+    "noMatch": "No assets match current filters",
+    "viewInHistory": "View in Vehicle History",
+    "history": "History",
+    "page": "Page {page} of {totalPages}"
+  },
+  "attention": {
+    "title": "Vehicles Needing Attention",
+    "subtitle": "{count} vehicle(s) with Critical or High risk tyres in last 30 days",
+    "columns": {
+      "hash": "#",
+      "assetNo": "Asset No",
+      "site": "Site",
+      "riskLevel": "Risk Level",
+      "issueDate": "Issue Date",
+      "position": "Position",
+      "brand": "Brand",
+      "records": "Records"
+    }
+  },
+  "benchmarks": {
+    "bestCpkVehicle": "Best CPK Vehicle",
+    "perKm": "{currency}/km",
+    "changesTotal": "{count} changes · {cost} total",
+    "bestDesc": "Lowest cost per km - benchmark for fleet optimisation",
+    "insufficientBest": "Insufficient CPK data (need ≥5 valid records)",
+    "worstCpkVehicle": "Worst CPK Vehicle",
+    "worstDesc": "Highest cost per km - prioritise for root cause investigation",
+    "insufficientWorst": "Insufficient data to identify worst CPK vehicle",
+    "improvementPotential": "Improvement Potential",
+    "estimatedSavings": "estimated annual savings",
+    "fleetAvgCpkLabel": "Fleet avg CPK:",
+    "improvementDesc": "If worst 10% of vehicles matched the fleet average CPK, the above savings could be realised annually.",
+    "actionDesc": "Address driver behaviour, alignment, and maintenance quality for highest-cost vehicles."
+  }
+}

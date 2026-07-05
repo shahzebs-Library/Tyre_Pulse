@@ -919,12 +919,12 @@ export default function Procurement() {
                 {/* Row 1: Vendor + Order Date */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Vendor Name *</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.vendorName')}</label>
                     <input value={formData.vendor_name} onChange={e => setFormData(f => ({ ...f, vendor_name: e.target.value }))}
-                      placeholder="e.g. Bridgestone SA" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.vendorNamePlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Order Date *</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.orderDate')}</label>
                     <input type="date" value={formData.order_date} onChange={e => setFormData(f => ({ ...f, order_date: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                   </div>
@@ -933,19 +933,19 @@ export default function Procurement() {
                 {/* Row 2: Expected Del + Status */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Expected Delivery</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.expectedDelivery')}</label>
                     <input type="date" value={formData.expected_delivery} onChange={e => setFormData(f => ({ ...f, expected_delivery: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Priority</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.priority')}</label>
                     <select value={formData.priority} onChange={e => setFormData(f => ({ ...f, priority: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500">
                       {PRIORITIES.map(p => <option key={p}>{p}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Status</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.status')}</label>
                     <select value={formData.status} onChange={e => setFormData(f => ({ ...f, status: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500">
                       {STATUSES.map(s => <option key={s}>{s}</option>)}
@@ -956,39 +956,39 @@ export default function Procurement() {
                 {/* Row 3: Site + Country + Budget Code */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Site</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.site')}</label>
                     <input value={formData.site} onChange={e => setFormData(f => ({ ...f, site: e.target.value }))}
-                      placeholder="Branch/site" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.sitePlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Country</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.country')}</label>
                     <input value={formData.country} onChange={e => setFormData(f => ({ ...f, country: e.target.value }))}
-                      placeholder="Country" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.countryPlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Budget Code</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.budgetCode')}</label>
                     <input value={formData.budget_code} onChange={e => setFormData(f => ({ ...f, budget_code: e.target.value }))}
-                      placeholder="e.g. CAPEX-2026" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.budgetCodePlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                 </div>
 
                 {/* Row 4: Requested By + Approved By */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Requested By</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.requestedBy')}</label>
                     <input value={formData.requested_by} onChange={e => setFormData(f => ({ ...f, requested_by: e.target.value }))}
-                      placeholder="Name" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.namePlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Approved By</label>
+                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.approvedBy')}</label>
                     <input value={formData.approved_by} onChange={e => setFormData(f => ({ ...f, approved_by: e.target.value }))}
-                      placeholder="Name" className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.namePlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                 </div>
 
                 {/* Line items */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-2 block font-medium uppercase tracking-wide">Line Items *</label>
+                  <label className="text-gray-400 text-xs mb-2 block font-medium uppercase tracking-wide">{t('procurement.modal.lineItems')}</label>
 
                   {/* Existing items */}
                   {formData.items.length > 0 && (
@@ -996,11 +996,11 @@ export default function Procurement() {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="bg-gray-800 text-gray-400">
-                            <th className="px-3 py-2 text-left">Brand</th>
-                            <th className="px-3 py-2 text-left">Size</th>
-                            <th className="px-3 py-2 text-right">Qty</th>
-                            <th className="px-3 py-2 text-right">Unit Price</th>
-                            <th className="px-3 py-2 text-right">Line Total</th>
+                            <th className="px-3 py-2 text-left">{t('procurement.modal.columns.brand')}</th>
+                            <th className="px-3 py-2 text-left">{t('procurement.modal.columns.size')}</th>
+                            <th className="px-3 py-2 text-right">{t('procurement.modal.columns.qty')}</th>
+                            <th className="px-3 py-2 text-right">{t('procurement.modal.columns.unitPrice')}</th>
+                            <th className="px-3 py-2 text-right">{t('procurement.modal.columns.lineTotal')}</th>
                             <th className="px-3 py-2 w-8"></th>
                           </tr>
                         </thead>
@@ -1025,16 +1025,16 @@ export default function Procurement() {
                   {/* Add item row */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
                     <input value={itemRow.brand} onChange={e => setItemRow(r => ({ ...r, brand: e.target.value }))}
-                      placeholder="Brand" className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.brandPlaceholder')} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                     <input value={itemRow.size} onChange={e => setItemRow(r => ({ ...r, size: e.target.value }))}
-                      placeholder="Size (e.g. 315/80R22.5)" className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.sizePlaceholder')} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                     <input type="number" min="1" value={itemRow.quantity} onChange={e => setItemRow(r => ({ ...r, quantity: e.target.value }))}
-                      placeholder="Qty" className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.qtyPlaceholder')} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
                     <input type="number" min="0" step="0.01" value={itemRow.unit_price} onChange={e => setItemRow(r => ({ ...r, unit_price: e.target.value }))}
-                      placeholder="Unit Price (R)" className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                      placeholder={t('procurement.modal.unitPricePlaceholder')} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
                       onKeyDown={e => e.key === 'Enter' && addItem()} />
                     <button onClick={addItem} className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-1">
-                      <Plus size={14} />Add
+                      <Plus size={14} />{t('procurement.modal.add')}
                     </button>
                   </div>
 
@@ -1042,12 +1042,12 @@ export default function Procurement() {
                   {formData.items.length > 0 && (
                     <div className="mt-3 bg-gray-800 rounded-lg p-3 space-y-1.5">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">Subtotal</span>
+                        <span className="text-gray-400">{t('procurement.modal.subtotal')}</span>
                         <span className="text-white">{fmtCur(formSubtotal)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-400 flex items-center gap-2">
-                          Tax
+                          {t('procurement.modal.tax')}
                           <input type="number" min="0" max="100" value={taxPct} onChange={e => setTaxPct(parseFloat(e.target.value) || 0)}
                             className="w-14 px-2 py-0.5 bg-gray-700 border border-gray-600 rounded text-white text-xs focus:outline-none" />
                           %
@@ -1055,7 +1055,7 @@ export default function Procurement() {
                         <span className="text-white">{fmtCur(formTax)}</span>
                       </div>
                       <div className="flex justify-between text-base font-semibold border-t border-gray-700 pt-1.5 mt-1.5">
-                        <span className="text-white">Total</span>
+                        <span className="text-white">{t('procurement.modal.total')}</span>
                         <span className="text-green-400">{fmtCur(formTotal)}</span>
                       </div>
                     </div>
@@ -1064,9 +1064,9 @@ export default function Procurement() {
 
                 {/* Notes */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">Notes</label>
+                  <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.notes')}</label>
                   <textarea value={formData.notes} onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))}
-                    rows={3} placeholder="Additional details, delivery instructions, special requirements..."
+                    rows={3} placeholder={t('procurement.modal.notesPlaceholder')}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500 resize-none" />
                 </div>
               </div>
@@ -1074,17 +1074,17 @@ export default function Procurement() {
               {/* Footer */}
               <div className="sticky bottom-0 bg-gray-900 border-t border-gray-800 px-6 py-4 flex items-center justify-between">
                 <div className="text-gray-400 text-sm">
-                  Total: <span className="text-green-400 font-bold text-base">{fmtCur(formTotal)}</span>
-                  {formData.items.length > 0 && <span className="text-gray-500 ml-2">({formData.items.length} items)</span>}
+                  {t('procurement.modal.totalLabel')} <span className="text-green-400 font-bold text-base">{fmtCur(formTotal)}</span>
+                  {formData.items.length > 0 && <span className="text-gray-500 ml-2">{t('procurement.modal.itemsCount', { count: formData.items.length })}</span>}
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors">
-                    Cancel
+                    {t('procurement.modal.cancel')}
                   </button>
                   <button onClick={handleSave} disabled={saving}
                     className="flex items-center gap-2 px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg transition-colors">
                     {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                    {saving ? 'Saving...' : editPO ? 'Save Changes' : 'Create PO'}
+                    {saving ? t('procurement.modal.saving') : editPO ? t('procurement.modal.saveChanges') : t('procurement.modal.createPo')}
                   </button>
                 </div>
               </div>
@@ -1123,7 +1123,7 @@ export default function Procurement() {
 
                 {/* Status timeline */}
                 <div>
-                  <p className="text-gray-400 text-xs mb-3 uppercase tracking-wide font-medium">Status Timeline</p>
+                  <p className="text-gray-400 text-xs mb-3 uppercase tracking-wide font-medium">{t('procurement.drawer.statusTimeline')}</p>
                   <div className="flex items-center gap-0">
                     {STATUS_TIMELINE.map((s, idx) => {
                       const currentIdx = STATUS_TIMELINE.indexOf(viewPO.status)
@@ -1166,7 +1166,7 @@ export default function Procurement() {
                   const next = nextMap[viewPO.status] || []
                   return next.length > 0 ? (
                     <div>
-                      <p className="text-gray-400 text-xs mb-2">Quick Actions:</p>
+                      <p className="text-gray-400 text-xs mb-2">{t('procurement.drawer.quickActions')}</p>
                       <div className="flex flex-wrap gap-2">
                         {next.map(ns => (
                           <button key={ns} onClick={() => updateStatus(viewPO, ns)}
@@ -1187,16 +1187,16 @@ export default function Procurement() {
                 {/* PO details */}
                 <div className="space-y-2">
                   {[
-                    ['Order Date',      fmtDate(viewPO.order_date)],
-                    ['Expected Del.',   fmtDate(viewPO.expected_delivery)],
-                    ['Actual Delivery', fmtDate(viewPO.actual_delivery)],
-                    ['Priority',        viewPO.priority],
-                    ['Site',            viewPO.site],
-                    ['Country',         viewPO.country],
-                    ['Budget Code',     viewPO.budget_code],
-                    ['Requested By',    viewPO.requested_by],
-                    ['Approved By',     viewPO.approved_by],
-                    ['Lead Time',       viewPO.actual_delivery ? `${daysBetween(viewPO.order_date, viewPO.actual_delivery)} days` : null],
+                    [t('procurement.drawer.fields.orderDate'),      fmtDate(viewPO.order_date)],
+                    [t('procurement.drawer.fields.expDelivery'),    fmtDate(viewPO.expected_delivery)],
+                    [t('procurement.drawer.fields.actualDelivery'), fmtDate(viewPO.actual_delivery)],
+                    [t('procurement.drawer.fields.priority'),        viewPO.priority],
+                    [t('procurement.drawer.fields.site'),            viewPO.site],
+                    [t('procurement.drawer.fields.country'),         viewPO.country],
+                    [t('procurement.drawer.fields.budgetCode'),     viewPO.budget_code],
+                    [t('procurement.drawer.fields.requestedBy'),    viewPO.requested_by],
+                    [t('procurement.drawer.fields.approvedBy'),     viewPO.approved_by],
+                    [t('procurement.drawer.fields.leadTime'),       viewPO.actual_delivery ? t('procurement.drawer.fields.leadTimeDays', { days: daysBetween(viewPO.order_date, viewPO.actual_delivery) }) : null],
                   ].filter(([, v]) => v).map(([label, value]) => (
                     <div key={label} className="flex justify-between py-1.5 border-b border-gray-800">
                       <span className="text-gray-400 text-sm">{label}</span>
@@ -1208,7 +1208,7 @@ export default function Procurement() {
                 {/* Line items with received qty tracking */}
                 {(viewPO.items || []).length > 0 && (
                   <div>
-                    <p className="text-gray-400 text-xs mb-2 uppercase tracking-wide font-medium">Line Items - Delivery Tracking</p>
+                    <p className="text-gray-400 text-xs mb-2 uppercase tracking-wide font-medium">{t('procurement.drawer.lineItemsTitle')}</p>
                     <div className="space-y-2">
                       {viewPO.items.map((it, idx) => {
                         const received = it.received_qty ?? 0
@@ -1220,9 +1220,9 @@ export default function Procurement() {
                               <span className="text-green-400 text-sm font-semibold">{fmtCur(calcItemTotal(it))}</span>
                             </div>
                             <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
-                              <span>{it.quantity} units × {fmtCur(it.unit_price)}</span>
+                              <span>{t('procurement.drawer.unitsAtPrice', { qty: it.quantity, price: fmtCur(it.unit_price) })}</span>
                               <span className={received >= it.quantity ? 'text-green-400' : 'text-orange-400'}>
-                                {received}/{it.quantity} received
+                                {t('procurement.drawer.receivedOf', { received, qty: it.quantity })}
                               </span>
                             </div>
                             <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden mb-2">
@@ -1234,7 +1234,7 @@ export default function Procurement() {
                                 <input type="number" min="0" max={it.quantity} defaultValue={received}
                                   className="w-20 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-xs focus:outline-none"
                                   onBlur={e => updateItemReceivedQty(viewPO.id, idx, e.target.value)} />
-                                <span className="text-gray-500 text-xs">Mark received qty</span>
+                                <span className="text-gray-500 text-xs">{t('procurement.drawer.markReceivedQty')}</span>
                               </div>
                             )}
                           </div>

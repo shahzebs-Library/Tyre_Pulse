@@ -656,6 +656,12 @@ export default function DowntimeTracker() {
     return recs
   }, [vehicleTable, filtered, kpis, t])
 
+  // ── Sort column → translation key (for the "sorted by" summary label) ─────────
+  const SORT_COL_LABEL = {
+    asset: 'asset', site: 'site', eventCount: 'events',
+    totalHours: 'totalHours', totalCost: 'totalCost', riskScore: 'riskScore',
+  }
+
   // ── Sort Handler ──────────────────────────────────────────────────────────────
   function toggleSort(col) {
     if (sortCol === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
@@ -816,7 +822,7 @@ export default function DowntimeTracker() {
   // ── Severity badge ────────────────────────────────────────────────────────────
   function SeverityBadge({ level }) {
     const map = { critical: 'bg-red-500/20 text-red-400', high: 'bg-orange-500/20 text-orange-400', medium: 'bg-yellow-500/20 text-yellow-400', low: 'bg-green-500/20 text-green-400' }
-    return <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${map[level] || map.low}`}>{level}</span>
+    return <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${map[level] || map.low}`}>{t(`downtime.severity.${level}`)}</span>
   }
 
   // ── Sort icon ─────────────────────────────────────────────────────────────────
@@ -968,37 +974,44 @@ export default function DowntimeTracker() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard
-          label="Fleet Availability (Est.)"
+          label={t('downtime.kpi.availability')}
           value={`${kpis.availability.toFixed(2)}%`}
-          sub={kpis.availability >= TARGET_AVAILABILITY ? `Above ${TARGET_AVAILABILITY}% target` : `Below ${TARGET_AVAILABILITY}% benchmark`}
+          sub={kpis.availability >= TARGET_AVAILABILITY
+            ? t('downtime.kpi.availabilityAbove', { pct: TARGET_AVAILABILITY })
+            : t('downtime.kpi.availabilityBelow', { pct: TARGET_AVAILABILITY })}
           icon={Activity}
           color={kpis.availability >= TARGET_AVAILABILITY ? 'green' : 'red'}
         />
         <StatCard
-          label="Downtime Events"
+          label={t('downtime.kpi.events')}
           value={kpis.totalEvents}
-          sub={`${kpis.uniqueVehicles} vehicles affected`}
+          sub={t('downtime.kpi.eventsSub', { count: kpis.uniqueVehicles })}
           icon={AlertTriangle}
           color="orange"
         />
         <StatCard
-          label="Total Downtime Hours (Est.)"
+          label={t('downtime.kpi.hours')}
           value={fmtHours(kpis.totalHours)}
-          sub={`${(kpis.totalHours / SHIFT_HOURS).toFixed(1)} shift-days · ${usingActual ? 'actual + severity est.' : 'severity estimate'}`}
+          sub={usingActual
+            ? t('downtime.kpi.hoursSubActual', { days: (kpis.totalHours / SHIFT_HOURS).toFixed(1) })
+            : t('downtime.kpi.hoursSubEstimate', { days: (kpis.totalHours / SHIFT_HOURS).toFixed(1) })}
           icon={Clock}
           color="yellow"
         />
         <StatCard
-          label="Downtime Cost (Est.)"
+          label={t('downtime.kpi.cost')}
           value={fmtCurrency(kpis.totalCost, sym)}
-          sub={`@ ${sym} ${downtimeRate.toLocaleString()}/hr · ${rateIsCustom ? 'configured' : 'assumed'}`}
+          sub={t('downtime.kpi.costSub', {
+            rate: `${sym} ${downtimeRate.toLocaleString()}`,
+            basis: rateIsCustom ? t('downtime.kpi.costBasisConfigured') : t('downtime.kpi.costBasisAssumed'),
+          })}
           icon={DollarSign}
           color="red"
         />
         <StatCard
-          label="MTTR (Est.)"
-          value={kpis.mttr > 0 ? `${Math.round(kpis.mttr)} h` : 'N/A'}
-          sub="Mean time between tyre events per vehicle"
+          label={t('downtime.kpi.mttr')}
+          value={kpis.mttr > 0 ? `${Math.round(kpis.mttr)} h` : t('downtime.na')}
+          sub={t('downtime.kpi.mttrSub')}
           icon={BarChart2}
           color="blue"
         />
@@ -1008,30 +1021,30 @@ export default function DowntimeTracker() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Availability Trend */}
         <div className="lg:col-span-2">
-          <ChartCard title="Fleet Availability Trend - Last 12 Months">
+          <ChartCard title={t('downtime.charts.availabilityTrend')}>
             <div className="h-56">
               <Line data={availabilityTrendData} options={availOpts} />
             </div>
             <div className="flex items-center gap-4 mt-2">
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-0.5 bg-green-400" />
-                <span className="text-[10px] text-gray-500">Availability</span>
+                <span className="text-[10px] text-gray-500">{t('downtime.charts.availabilityLegend')}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-0.5 bg-indigo-400 border-dashed" style={{ borderTop: '2px dashed #818cf8' }} />
-                <span className="text-[10px] text-gray-500">{TARGET_AVAILABILITY}% Target</span>
+                <span className="text-[10px] text-gray-500">{t('downtime.charts.targetLegend', { pct: TARGET_AVAILABILITY })}</span>
               </div>
             </div>
           </ChartCard>
         </div>
         {/* Cause Doughnut */}
-        <ChartCard title="Downtime by Cause">
+        <ChartCard title={t('downtime.charts.byCause')}>
           {causeData.labels.length > 0 ? (
             <div className="h-56">
               <Doughnut data={causeData} options={doughnutOpts} />
             </div>
           ) : (
-            <div className="h-56 flex items-center justify-center text-gray-600 text-sm">No data</div>
+            <div className="h-56 flex items-center justify-center text-gray-600 text-sm">{t('downtime.charts.noData')}</div>
           )}
         </ChartCard>
       </div>
@@ -1039,37 +1052,37 @@ export default function DowntimeTracker() {
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Site Bar */}
-        <ChartCard title="Downtime by Site (hours)">
+        <ChartCard title={t('downtime.charts.bySite')}>
           {siteData.labels.length > 0 ? (
             <div className="h-64">
               <Bar data={siteData} options={siteBarOpts} />
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-gray-600 text-sm">No data</div>
+            <div className="h-64 flex items-center justify-center text-gray-600 text-sm">{t('downtime.charts.noData')}</div>
           )}
         </ChartCard>
         {/* Monthly Cost */}
-        <ChartCard title="Monthly Downtime Cost Analysis">
+        <ChartCard title={t('downtime.charts.monthlyCost')}>
           <div className="h-64">
             <Bar data={monthlyCostData} options={costBarOpts} />
           </div>
           <div className="mt-2 flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-sm bg-red-500/70" />
-            <span className="text-[10px] text-gray-500">Unplanned</span>
+            <span className="text-[10px] text-gray-500">{t('downtime.charts.unplannedLegend')}</span>
             <div className="w-2 h-2 rounded-sm bg-blue-500/70 ml-2" />
-            <span className="text-[10px] text-gray-500">Planned</span>
+            <span className="text-[10px] text-gray-500">{t('downtime.charts.plannedLegend')}</span>
             <div className="w-4 h-0.5 bg-green-400 ml-2" />
-            <span className="text-[10px] text-gray-500">Cumulative</span>
-            <span className="ml-auto text-[10px] text-gray-600">Budget threshold: {fmtCurrency(BUDGET_THRESHOLD, sym)}/mo</span>
+            <span className="text-[10px] text-gray-500">{t('downtime.charts.cumulativeLegend')}</span>
+            <span className="ml-auto text-[10px] text-gray-600">{t('downtime.charts.budgetThreshold', { value: fmtCurrency(BUDGET_THRESHOLD, sym) })}</span>
           </div>
         </ChartCard>
       </div>
 
       {/* Downtime Heatmap */}
       <div className="card">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">Downtime Heatmap - Top 10 Vehicles × Last 12 Months</h3>
+        <h3 className="text-sm font-semibold text-gray-300 mb-4">{t('downtime.heatmap.heading')}</h3>
         {heatmap.rows.length === 0 ? (
-          <div className="text-center text-gray-600 text-sm py-8">No vehicle data available</div>
+          <div className="text-center text-gray-600 text-sm py-8">{t('downtime.heatmap.empty')}</div>
         ) : (
           <div className="overflow-x-auto">
             <div className="min-w-max">
@@ -1096,7 +1109,7 @@ export default function DowntimeTracker() {
               ))}
               {/* Legend */}
               <div className="flex items-center gap-3 mt-3 ml-28">
-                <span className="text-[9px] text-gray-600">Hours:</span>
+                <span className="text-[9px] text-gray-600">{t('downtime.heatmap.hoursLabel')}</span>
                 {[{ label: '0', cls: 'bg-gray-800' }, { label: '1-4', cls: 'bg-yellow-500/30' }, { label: '5-8', cls: 'bg-orange-500/40' }, { label: '8+', cls: 'bg-red-500/40' }].map(({ label, cls }) => (
                   <span key={label} className="flex items-center gap-1">
                     <span className={`w-4 h-4 rounded ${cls} inline-block`} />
@@ -1112,23 +1125,23 @@ export default function DowntimeTracker() {
       {/* Vehicles Table */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-300">Vehicles by Downtime (Top 20)</h3>
-          <span className="text-xs text-gray-600">{vehicleTable.length} vehicles · sorted by {sortCol}</span>
+          <h3 className="text-sm font-semibold text-gray-300">{t('downtime.table.heading')}</h3>
+          <span className="text-xs text-gray-600">{t('downtime.table.summary', { count: vehicleTable.length, col: SORT_COL_LABEL[sortCol] ? t(`downtime.table.columns.${SORT_COL_LABEL[sortCol]}`) : sortCol })}</span>
         </div>
         <div className="overflow-x-auto">
           {vehicleTable.length === 0 ? (
-            <div className="text-center text-gray-600 text-sm py-10">No vehicle downtime data for selected period</div>
+            <div className="text-center text-gray-600 text-sm py-10">{t('downtime.table.empty')}</div>
           ) : (
             <table className="w-full text-sm">
               <thead className="border-b border-gray-800">
                 <tr>
-                  <Th col="asset"      label="Asset" />
-                  <Th col="site"       label="Site" />
-                  <Th col="eventCount" label="Events" />
-                  <Th col="totalHours" label="Total Hours" />
-                  <Th col="totalCost"  label="Total Cost" />
-                  <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-gray-500 whitespace-nowrap">Avg Between Events</th>
-                  <Th col="riskScore"  label="Risk Score" />
+                  <Th col="asset"      label={t('downtime.table.columns.asset')} />
+                  <Th col="site"       label={t('downtime.table.columns.site')} />
+                  <Th col="eventCount" label={t('downtime.table.columns.events')} />
+                  <Th col="totalHours" label={t('downtime.table.columns.totalHours')} />
+                  <Th col="totalCost"  label={t('downtime.table.columns.totalCost')} />
+                  <th className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-gray-500 whitespace-nowrap">{t('downtime.table.columns.avgBetweenEvents')}</th>
+                  <Th col="riskScore"  label={t('downtime.table.columns.riskScore')} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800/60">
@@ -1142,7 +1155,7 @@ export default function DowntimeTracker() {
                   >
                     <td className="px-3 py-2.5">
                       <span className={`font-semibold ${v.isHigh ? 'text-red-400' : 'text-white'}`}>{v.asset}</span>
-                      {v.isHigh && <span className="ml-2 text-[9px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">HIGH RISK</span>}
+                      {v.isHigh && <span className="ml-2 text-[9px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold">{t('downtime.table.highRisk')}</span>}
                     </td>
                     <td className="px-3 py-2.5 text-gray-400 text-xs">{v.site}</td>
                     <td className="px-3 py-2.5 text-center">
@@ -1170,8 +1183,8 @@ export default function DowntimeTracker() {
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <Zap size={15} className="text-yellow-400" />
-          <h3 className="text-sm font-semibold text-gray-300">Improvement Recommendations</h3>
-          <span className="ml-auto text-xs text-gray-600">{recommendations.length} insight{recommendations.length !== 1 ? 's' : ''}</span>
+          <h3 className="text-sm font-semibold text-gray-300">{t('downtime.recommendations.heading')}</h3>
+          <span className="ml-auto text-xs text-gray-600">{t('downtime.recommendations.insightsCount', { count: recommendations.length })}</span>
         </div>
         <div className="space-y-3">
           {recommendations.map((r, i) => {
@@ -1188,7 +1201,7 @@ export default function DowntimeTracker() {
                 {iconMap[r.severity]}
                 <div className="min-w-0">
                   <p className="text-sm text-gray-200 font-medium leading-snug">{r.message}</p>
-                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">Action: {r.action}</p>
+                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t('downtime.recommendations.actionPrefix', { action: r.action })}</p>
                 </div>
                 <SeverityBadge level={r.severity} />
               </motion.div>

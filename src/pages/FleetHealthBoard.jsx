@@ -995,6 +995,7 @@ function KpiCard({ label, value, sub, icon: Icon, color }) {
 
 // ── Vehicle Card ──────────────────────────────────────────────────────────────
 function VehicleCard({ vehicle, onClick, isSelected }) {
+  const { t } = useLanguage()
   const { asset_no, site, country, tyres, score, worst } = vehicle
 
   const lastDate = tyres
@@ -1039,25 +1040,25 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
         </div>
       ) : (
         <div className="flex items-center justify-center py-4">
-          <span className="text-gray-600 text-xs">No tyre data</span>
+          <span className="text-gray-600 text-xs">{t('fleethealth.card.noTyreData')}</span>
         </div>
       )}
 
       {/* Footer row */}
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-800/60">
-        <span className="text-gray-500 text-xs">{tyres.length} tyre{tyres.length !== 1 ? 's' : ''}</span>
+        <span className="text-gray-500 text-xs">{t('fleethealth.card.tyresCount', { count: tyres.length })}</span>
         {worst && (
           <span className={`badge border text-xs ${riskBgClass(worst)}`}>{worst}</span>
         )}
         {!worst && (
-          <span className="text-gray-600 text-xs">No data</span>
+          <span className="text-gray-600 text-xs">{t('fleethealth.card.noData')}</span>
         )}
         <span className="text-gray-600 text-xs">{lastDate ? formatDate(lastDate, 'All', { day:'2-digit', month:'short' }) : '-'}</span>
       </div>
 
       {/* Drill-in hint */}
       <div className="flex items-center justify-end mt-2 gap-1 text-gray-700 hover:text-gray-400 transition-colors">
-        <span className="text-xs">Details</span>
+        <span className="text-xs">{t('fleethealth.card.details')}</span>
         <ChevronRight size={11} />
       </div>
     </motion.div>

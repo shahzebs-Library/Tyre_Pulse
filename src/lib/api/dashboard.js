@@ -19,7 +19,7 @@ export function listDashboardTyres({ country, from, to } = {}) {
   let q = applyCountry(
     supabase
       .from('tyre_records')
-      .select('id,cost_per_tyre,brand,issue_date,risk_level,site,category,asset_no'),
+      .select('id,cost_per_tyre,qty,brand,issue_date,risk_level,site,category,asset_no'),
     country,
   )
   if (from) q = q.gte('issue_date', from)

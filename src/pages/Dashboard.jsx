@@ -45,6 +45,16 @@ const BASE_OPTS = {
 }
 const NO_SCALE = { ...BASE_OPTS, scales: undefined, plugins: { legend: { ...LEGEND, position: 'right' } } }
 const H_BAR    = { ...BASE_OPTS, indexAxis: 'y', plugins: { legend: { display: false } } }
+const STACKED  = { ...BASE_OPTS, scales: { x: { stacked: true, ticks: TICK, grid: { display: false } }, y: { stacked: true, ticks: TICK, grid: GRID } } }
+
+// Risk palette shared by the risk-distribution bar and the stacked risk-mix trend.
+const RISK_COLORS = { Critical: '#dc2626', High: '#ea580c', Medium: '#ca8a04', Low: '#16a34a' }
+// A record's tyre count: rows are aggregates where `qty` is the number of tyres.
+const recordQty = t => Number(t.qty) || 1
+
+// Same {var} interpolation the i18n layer uses, applied to inline fallbacks.
+const interpolateFallback = (str, vars) =>
+  vars ? str.replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? String(vars[k]) : m)) : str
 
 function inMonth(t, y, m) {
   if (!t.issue_date) return false
@@ -394,6 +404,40 @@ export default function Dashboard() {
     return { labels: top.map(([s]) => s), datasets: [{ label: t('dashboard.legend.cost', { currency: activeCurrency }), data: top.map(([, c]) => Math.round(c)), backgroundColor: 'rgba(6,182,212,0.75)', borderRadius: 5, borderSkipped: false }] }
   }, [tyres, activeCurrency, t])
 
+  /* Stacked monthly risk mix (last 12 months). Tyre counts sum qty per row —
+     rows are aggregates — so the bars reflect tyre volume, not record volume. */
+  const riskMixData = useMemo(() => {
+    const now = new Date()
+    const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1); return { label: d.toLocaleString('default', { month: 'short', year: '2-digit' }), y: d.getFullYear(), m: d.getMonth() + 1 } })
+    const levels = ['Low', 'Medium', 'High', 'Critical']
+    const datasets = levels.map(level => ({
+      label: level,
+      data: months.map(({ y, m }) => tyres.reduce((s, t) => (t.risk_level === level && inMonth(t, y, m)) ? s + recordQty(t) : s, 0)),
+      backgroundColor: `${RISK_COLORS[level]}c0`,
+      borderRadius: 3,
+      stack: 'risk',
+    }))
+    if (!datasets.some(ds => ds.data.some(v => v > 0))) return null
+    return { labels: months.map(m => m.label), datasets }
+  }, [tyres])
+
+  /* Spend split between new and retread purchases (category convention shared
+     with kpiEngine.computeRetreadPerformance: /retread/i marks retreads). */
+  const categorySplitData = useMemo(() => {
+    let fresh = 0, retread = 0
+    tyres.forEach(t => {
+      const c = recordCost(t)
+      if (!c) return
+      if (/retread/i.test(String(t.category ?? ''))) retread += c
+      else fresh += c
+    })
+    if (fresh + retread <= 0) return null
+    return {
+      labels: ['New', 'Retread'],
+      datasets: [{ data: [Math.round(fresh), Math.round(retread)], backgroundColor: ['#3b82f6', '#10b981'], borderWidth: 0, hoverOffset: 6 }],
+    }
+  }, [tyres])
+
   const forecastData = useMemo(() => {
     const now = new Date()
     const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1); return { y: d.getFullYear(), m: d.getMonth() + 1, label: d.toLocaleString('default', { month: 'short' }) } })
@@ -585,6 +629,27 @@ export default function Dashboard() {
         { priority:'Low', text:'Maintain weekly tyre pressure checks and monthly tread depth measurements across all fleet sites.' },
       ].filter(Boolean),
     }, `TyrePulse_Daily_Report_${today}`)
+  }
+
+  /* Translate with an inline English fallback: `t` returns the key itself when
+     a namespace entry is missing, so new chart labels render real copy today
+     and automatically switch to locale files once translators add the keys. */
+  const tf = (key, fallback, vars) => {
+    const v = t(key, vars)
+    return v === key ? interpolateFallback(fallback, vars) : v
+  }
+
+  /* Currency-aware chart formatting: compact ticks on axes, exact values in
+     tooltips. Shared by every spend chart so money always reads consistently. */
+  const fmtMoney = v => `${activeCurrency} ${Math.round(Number(v) || 0).toLocaleString()}`
+  const moneyTick = v => `${activeCurrency} ${(v / 1000).toFixed(0)}K`
+  const moneyTooltip = {
+    callbacks: {
+      label: ctx => {
+        const name = ctx.dataset?.label || ctx.label
+        return name ? `${name}: ${fmtMoney(ctx.raw)}` : fmtMoney(ctx.raw)
+      },
+    },
   }
 
   const TrendIcon = riskTrend?.delta > 0 ? TrendingUp : riskTrend?.delta < 0 ? TrendingDown : Minus
@@ -850,7 +915,7 @@ export default function Dashboard() {
       {/* ── COST TREND ───────────────────────────────────────────────────── */}
       <ChartPanel title={t('dashboard.charts.monthlyCostTrend', { currency: activeCurrency })} subtitle={t('dashboard.charts.costSubtitle')} icon={DollarSign} onExpand={() => setExpandedChart('cost')}>
         <div className="h-52">
-          <Line data={monthlyCostData} options={{ ...BASE_OPTS, plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:TICK, grid:GRID }, y:{ ticks:{ ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid:GRID } } }} />
+          <Line data={monthlyCostData} options={{ ...BASE_OPTS, plugins:{ legend:{ display:false }, tooltip: moneyTooltip }, scales:{ x:{ ticks:TICK, grid:GRID }, y:{ ticks:{ ...TICK, callback: moneyTick }, grid:GRID } } }} />
         </div>
       </ChartPanel>
 
@@ -904,15 +969,33 @@ export default function Dashboard() {
         <ChartPanel title={t('dashboard.charts.topAssets', { currency: activeCurrency })} subtitle={t('dashboard.charts.topAssetsSubtitle')} icon={Cpu}>
           <div className="h-64">
             {topAssetsData
-              ? <Bar data={topAssetsData} options={{ ...H_BAR, scales:{ x:{ ticks:{ ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid:GRID }, y:{ ticks:{ color:'#9ca3af', font:{ size:10 } }, grid:GRID } } }} />
+              ? <Bar data={topAssetsData} options={{ ...H_BAR, plugins:{ ...H_BAR.plugins, tooltip: moneyTooltip }, scales:{ x:{ ticks:{ ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid:GRID }, y:{ ticks:{ color:'#9ca3af', font:{ size:10 } }, grid:GRID } } }} />
               : <EmptyState compact icon="database" title={t('dashboard.charts.noAssetData')} />}
           </div>
         </ChartPanel>
         <ChartPanel title={t('dashboard.charts.topSites', { currency: activeCurrency })} subtitle={t('dashboard.charts.topSitesSubtitle')} icon={BarChart2}>
           <div className="h-64">
             {siteCostData
-              ? <Bar data={siteCostData} options={{ ...H_BAR, scales:{ x:{ ticks:{ ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid:GRID }, y:{ ticks:{ color:'#9ca3af' }, grid:GRID } } }} />
+              ? <Bar data={siteCostData} options={{ ...H_BAR, plugins:{ ...H_BAR.plugins, tooltip: moneyTooltip }, scales:{ x:{ ticks:{ ...TICK, callback: v => `${(v/1000).toFixed(0)}K` }, grid:GRID }, y:{ ticks:{ color:'#9ca3af' }, grid:GRID } } }} />
               : <EmptyState compact icon="database" title={t('dashboard.charts.noSiteData')} />}
+          </div>
+        </ChartPanel>
+      </div>
+
+      {/* ── RISK MIX TREND + SPEND SPLIT ─────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <ChartPanel title={tf('dashboard.charts.riskMixTrend', 'Risk Mix Over Time')} subtitle={tf('dashboard.charts.riskMixSubtitle', 'Monthly tyre volume by risk level · last 12 months')} icon={Activity} onExpand={riskMixData ? () => setExpandedChart('riskMix') : undefined}>
+          <div className="h-64">
+            {riskMixData
+              ? <Bar data={riskMixData} options={STACKED} />
+              : <EmptyState compact icon="database" title={tf('dashboard.charts.noRiskTrend', 'No risk trend data')} description={tf('dashboard.charts.noRiskTrendDesc', 'Records with issue dates and risk levels will chart here.')} />}
+          </div>
+        </ChartPanel>
+        <ChartPanel title={tf('dashboard.charts.categorySplit', 'Spend Split ({currency})', { currency: activeCurrency })} subtitle={tf('dashboard.charts.categorySplitSubtitle', 'New vs retread purchase spend')} icon={DollarSign}>
+          <div className="h-64 flex items-center justify-center">
+            {categorySplitData
+              ? <Doughnut data={categorySplitData} options={{ ...NO_SCALE, plugins: { ...NO_SCALE.plugins, tooltip: moneyTooltip } }} />
+              : <EmptyState compact icon="database" title={tf('dashboard.charts.noSpendSplit', 'No spend data')} description={tf('dashboard.charts.noSpendSplitDesc', 'Records with cost values will chart here.')} />}
           </div>
         </ChartPanel>
       </div>
@@ -1013,7 +1096,12 @@ export default function Dashboard() {
       )}
       {expandedChart === 'cost' && (
         <ChartModal title={t('dashboard.charts.monthlyCostTrend', { currency: activeCurrency })} onClose={() => setExpandedChart(null)}>
-          <Line data={monthlyCostData} options={{ ...BASE_OPTS, plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:TICK, grid:GRID }, y:{ ticks:{ ...TICK, callback: v => `${activeCurrency} ${(v/1000).toFixed(0)}K` }, grid:GRID } } }} />
+          <Line data={monthlyCostData} options={{ ...BASE_OPTS, plugins:{ legend:{ display:false }, tooltip: moneyTooltip }, scales:{ x:{ ticks:TICK, grid:GRID }, y:{ ticks:{ ...TICK, callback: moneyTick }, grid:GRID } } }} />
+        </ChartModal>
+      )}
+      {expandedChart === 'riskMix' && riskMixData && (
+        <ChartModal title={tf('dashboard.charts.riskMixTrend', 'Risk Mix Over Time')} onClose={() => setExpandedChart(null)}>
+          <Bar data={riskMixData} options={STACKED} />
         </ChartModal>
       )}
     </div>

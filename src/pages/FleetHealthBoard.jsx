@@ -242,11 +242,17 @@ export default function FleetHealthBoard() {
       setRawRecords(data ?? [])
       setLastUpdated(new Date())
 
+      // Anchor the 12-month window to the data's latest issue_date (fallback:
+      // today) so historic imports still populate the trend chart.
+      let maxIssue = null
+      for (const r of data ?? []) { if (r.issue_date && (!maxIssue || r.issue_date > maxIssue)) maxIssue = r.issue_date }
+      const anchor = maxIssue ? new Date(maxIssue.slice(0, 10) + 'T00:00:00') : new Date()
+
       // Trend: last 12 months from ALL records (not filtered by km_at_removal)
       const trendQ = supabase
         .from('tyre_records')
         .select('issue_date,risk_level,asset_no')
-        .gte('issue_date', new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+        .gte('issue_date', new Date(anchor.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
       if (activeCountry !== 'All') trendQ.eq('country', activeCountry)
       const { data: trendRaw } = await trendQ
       if (myReq !== reqIdRef.current) return
@@ -333,7 +339,11 @@ export default function FleetHealthBoard() {
 
   // ── Fleet health trend (12 months) ────────────────────────────────────────
   const trendChartData = useMemo(() => {
-    const now = new Date()
+    // Anchor buckets to the trend data's latest issue_date, not today, so
+    // historic datasets still render (matches Dashboard's dataAnchor pattern).
+    let maxIssue = null
+    for (const r of trendData) { if (r.issue_date && (!maxIssue || r.issue_date > maxIssue)) maxIssue = r.issue_date }
+    const now = maxIssue ? new Date(maxIssue.slice(0, 10) + 'T00:00:00') : new Date()
     const months = Array.from({ length: 12 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1)
       return {

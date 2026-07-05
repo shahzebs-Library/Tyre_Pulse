@@ -108,9 +108,17 @@ function fmtPct(v) {
   return `${(v * 100).toFixed(1)}%`
 }
 
-function getLast12Months() {
+// Anchor time windows to the data's latest issue_date (fallback: today) so
+// historic imports still populate "last 12 months" and YoY views.
+function dataAnchorDate(recs) {
+  let max = null
+  for (const r of recs || []) { if (r.issue_date && (!max || r.issue_date > max)) max = r.issue_date }
+  return max ? new Date(max.slice(0, 10) + 'T00:00:00') : new Date()
+}
+
+function getLast12Months(anchor = new Date()) {
   const months = []
-  const now = new Date()
+  const now = anchor
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
@@ -135,7 +143,7 @@ function getContractStatus(contract) {
   return 'Active'
 }
 
-function computeSupplierMetrics(records, brand) {
+function computeSupplierMetrics(records, brand, anchorYear = new Date().getFullYear()) {
   const recs = records.filter(r => r.brand === brand)
   const validRecs = recs.filter(r => {
     const fit = Number(r.km_at_fitment), rem = Number(r.km_at_removal), cost = Number(r.cost_per_tyre)
@@ -148,7 +156,7 @@ function computeSupplierMetrics(records, brand) {
   const failures = recs.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical')
   const failureRate = recs.length > 0 ? failures.length / recs.length : 0
   const totalSpend = recs.reduce((s, r) => s + recordCost(r), 0)
-  const thisYear = new Date().getFullYear()
+  const thisYear = anchorYear
   const yearRecs = recs.filter(r => r.issue_date && new Date(r.issue_date).getFullYear() === thisYear)
   const spendThisYear = yearRecs.reduce((s, r) => s + recordCost(r), 0)
   const sites = [...new Set(recs.map(r => r.site).filter(Boolean))]
@@ -324,7 +332,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
   const [noteError, setNoteError] = useState(null)
   const [radarKey] = useState(() => Math.random())
   const pageSize = 8
-  const months = getLast12Months()
+  const months = useMemo(() => getLast12Months(dataAnchorDate(supplier.recs)), [supplier.recs])
 
   const radarScores = useMemo(() => computeRadarScores(supplier, allMetrics), [supplier, allMetrics])
 
@@ -697,8 +705,9 @@ export default function SupplierManagement() {
   // All supplier metrics
   const allMetrics = useMemo(() => {
     const brands = [...new Set(filteredRecords.map(r => r.brand).filter(Boolean))]
+    const anchorYear = dataAnchorDate(filteredRecords).getFullYear()
     return brands.map(brand => {
-      const m = computeSupplierMetrics(filteredRecords, brand)
+      const m = computeSupplierMetrics(filteredRecords, brand, anchorYear)
       const entry = ratings[brand]
       const rating = entry?.label || autoRate(m)
       return { ...m, rating, notes: entry?.notes || '' }
@@ -918,7 +927,8 @@ export default function SupplierManagement() {
 
   // ── Spend Analysis ─────────────────────────────────────────────────────────
   const spendAnalysis = useMemo(() => {
-    const months12 = getLast12Months()
+    const anchor = dataAnchorDate(filteredRecords)
+    const months12 = getLast12Months(anchor)
     const top5 = [...allMetrics].sort((a, b) => b.spendThisYear - a.spendThisYear).slice(0, 5)
     const top5Brands = top5.map(m => m.brand)
 
@@ -961,8 +971,8 @@ export default function SupplierManagement() {
       ],
     }
 
-    // YoY change
-    const thisYear = new Date().getFullYear()
+    // YoY change (latest data year vs prior year)
+    const thisYear = anchor.getFullYear()
     const lastYear = thisYear - 1
     const yoy = allMetrics.map(m => {
       const tySpend = m.recs.filter(r => r.issue_date && new Date(r.issue_date).getFullYear() === thisYear).reduce((s, r) => s + recordCost(r), 0)
@@ -972,7 +982,7 @@ export default function SupplierManagement() {
     }).filter(y => y.thisYear > 0 || y.lastYear > 0).sort((a, b) => b.thisYear - a.thisYear)
 
     return { doughnutData, stackedData, yoy, top5, totalSpend }
-  }, [allMetrics])
+  }, [allMetrics, filteredRecords])
 
   // ── Performance Comparison ─────────────────────────────────────────────────
   const compareData = useMemo(() => {

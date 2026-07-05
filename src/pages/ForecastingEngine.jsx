@@ -81,10 +81,10 @@ const BASE_OPTS = {
   },
 }
 
-// Build last-12 month keys (YYYY-MM) ending today
-function getLast12MonthKeys() {
+// Build last-12 month keys (YYYY-MM) ending at the anchor date
+function getLast12MonthKeys(anchor = new Date()) {
   const keys = []
-  const now = new Date()
+  const now = anchor
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
@@ -92,10 +92,10 @@ function getLast12MonthKeys() {
   return keys
 }
 
-// Build next-N month labels (Mon YYYY) from now+1
-function getNextMonthLabels(n) {
+// Build next-N month labels (Mon YYYY) from anchor+1
+function getNextMonthLabels(n, anchor = new Date()) {
   const labels = []
-  const now = new Date()
+  const now = anchor
   for (let i = 1; i <= n; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
     labels.push(`${MONTH_LABELS[d.getMonth()]} ${d.getFullYear()}`)
@@ -243,17 +243,25 @@ export default function ForecastingEngine() {
     return () => { cancelled = true }
   }, [activeCountry])
 
+  // Anchor every historical window to the data's latest issue_date (fallback:
+  // today) so historic imports still populate the forecast baselines.
+  const dataAnchor = useMemo(() => {
+    let max = null
+    for (const r of records) { if (r.issue_date && (!max || r.issue_date > max)) max = r.issue_date }
+    return max ? new Date(max.slice(0, 10) + 'T00:00:00') : new Date()
+  }, [records])
+
   // ── Derived: last-12-month records ─────────────────────────────────────────
-  const last12Keys = useMemo(() => getLast12MonthKeys(), [])
+  const last12Keys = useMemo(() => getLast12MonthKeys(dataAnchor), [dataAnchor])
   const last24Keys = useMemo(() => {
     const keys = []
-    const now = new Date()
+    const now = dataAnchor
     for (let i = 23; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
       keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
     }
     return keys
-  }, [])
+  }, [dataAnchor])
 
   const sites = useMemo(() => {
     const s = new Set(records.map(r => r.site).filter(Boolean))
@@ -454,7 +462,7 @@ export default function ForecastingEngine() {
 
   const horizonDemandFc = useMemo(() => demandForecast.slice(0, horizon), [demandForecast, horizon])
   const horizonBudgetFc = useMemo(() => budgetForecast.slice(0, horizon), [budgetForecast, horizon])
-  const nextLabels = useMemo(() => getNextMonthLabels(horizon), [horizon])
+  const nextLabels = useMemo(() => getNextMonthLabels(horizon, dataAnchor), [horizon, dataAnchor])
 
   const histLabels = useMemo(() =>
     last12Keys.map(k => {
@@ -553,7 +561,7 @@ export default function ForecastingEngine() {
   }), [monthlySpend, horizonBudgetFc, histLabels, nextLabels, horizon, fleetMonthlyBudgetTarget])
 
   const failureChartData = useMemo(() => ({
-    labels: [...histLabels, ...getNextMonthLabels(horizon)].slice(0, 12 + horizon),
+    labels: [...histLabels, ...nextLabels].slice(0, 12 + horizon),
     datasets: [
       {
         label: 'Historical Failure Rate %',
@@ -582,7 +590,7 @@ export default function ForecastingEngine() {
         fill: false,
       },
     ],
-  }), [failureRateForecast, histLabels, horizon])
+  }), [failureRateForecast, histLabels, nextLabels, horizon])
 
   const inventoryBarData = useMemo(() => {
     const filtered = siteForecast.slice(0, 12)

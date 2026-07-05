@@ -127,8 +127,10 @@ function fmt(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-function periodDates(preset, custom = {}) {
-  const now = new Date()
+function periodDates(preset, custom = {}, anchor = new Date()) {
+  // Presets window backwards from the anchor (latest issue_date in the data,
+  // fallback: today) so historic imports still return populated periods.
+  const now = anchor
   if (preset === '1d') { const f = new Date(now); f.setDate(f.getDate() - 1); return { from: fmt(f), to: fmt(now) } }
   if (preset === '7d') { const f = new Date(now); f.setDate(f.getDate() - 7); return { from: fmt(f), to: fmt(now) } }
   if (preset === '30d') { const f = new Date(now); f.setDate(f.getDate() - 30); return { from: fmt(f), to: fmt(now) } }
@@ -524,8 +526,9 @@ export default function KpiCommandCenter() {
     } catch {}
   }, [])
 
-  const { from, to } = useMemo(() => periodDates(period, { from: customFrom, to: customTo }), [period, customFrom, customTo])
-  const { from: prevFrom, to: prevTo } = useMemo(() => prevPeriodDates(from, to), [from, to])
+  // Latest issue_date in tyre_records (per active filters), resolved with one
+  // cheap indexed single-row query. undefined = still resolving.
+  const [dataAnchor, setDataAnchor] = useState(undefined)
 
   const applyFilters = useCallback((q) => {
     const c = country !== 'All' ? country : activeCountry !== 'All' ? activeCountry : null
@@ -533,6 +536,26 @@ export default function KpiCommandCenter() {
     if (site !== 'All') q = q.eq('site', site)
     return q
   }, [country, activeCountry, site])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await applyFilters(
+        supabase.from('tyre_records')
+          .select('issue_date')
+          .not('issue_date', 'is', null)
+          .order('issue_date', { ascending: false })
+          .limit(1)
+      )
+      if (cancelled) return
+      const iso = data?.[0]?.issue_date
+      setDataAnchor(iso ? new Date(iso.slice(0, 10) + 'T00:00:00') : new Date())
+    })()
+    return () => { cancelled = true }
+  }, [applyFilters])
+
+  const { from, to } = useMemo(() => periodDates(period, { from: customFrom, to: customTo }, dataAnchor ?? new Date()), [period, customFrom, customTo, dataAnchor])
+  const { from: prevFrom, to: prevTo } = useMemo(() => prevPeriodDates(from, to), [from, to])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -571,7 +594,7 @@ export default function KpiCommandCenter() {
         fetchAllPages((from_, to_) => applyFilters(
           supabase.from('tyre_records')
             .select('id,issue_date,asset_no,cost_per_tyre,km_at_fitment,km_at_removal,risk_level,category,tread_depth')
-            .gte('issue_date', (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return fmt(d) })())
+            .gte('issue_date', (() => { const d = new Date(dataAnchor ?? Date.now()); d.setFullYear(d.getFullYear() - 1); return fmt(d) })())
         ).range(from_, to_), { max: 200000 }),
       ])
 
@@ -611,9 +634,11 @@ export default function KpiCommandCenter() {
     } finally {
       setLoading(false)
     }
-  }, [from, to, prevFrom, prevTo, applyFilters])
+  }, [from, to, prevFrom, prevTo, applyFilters, dataAnchor])
 
-  useEffect(() => { load() }, [load])
+  // Defer the heavy load until the anchor has resolved so the initial fetch
+  // already windows over the data's timeline (avoids a wasted empty round-trip).
+  useEffect(() => { if (dataAnchor !== undefined) load() }, [load, dataAnchor])
 
   const kpiValues = useMemo(() => extractKpiValues(records, inspections), [records, inspections])
   const prevKpiValues = useMemo(() => extractKpiValues(prevRecords, prevInspections), [prevRecords, prevInspections])

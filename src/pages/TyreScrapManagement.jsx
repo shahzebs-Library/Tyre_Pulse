@@ -221,12 +221,25 @@ export default function TyreScrapManagement() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // ── Derived: data anchor ─────────────────────────────────────────────────────
+  // Anchor every "last N days / months" window to the data's latest activity
+  // date (removal or issue, fallback: today) so historic imports still
+  // populate charts and KPIs (matches Dashboard's dataAnchor pattern).
+  const dataAnchor = useMemo(() => {
+    let max = null
+    for (const t of allTyres) {
+      const ref = t.removal_date || t.issue_date
+      if (ref && (!max || ref > max)) max = ref
+    }
+    return max ? new Date(max.slice(0, 10) + 'T00:00:00') : new Date()
+  }, [allTyres])
+
   // ── Derived: filter window ────────────────────────────────────────────────────
   const cutoffDate = useMemo(() => {
     const days = DATE_RANGE_OPTS[dateRangeIdx].days
     if (days == null) return null
-    return subDays(new Date(), days)
-  }, [dateRangeIdx])
+    return subDays(dataAnchor, days)
+  }, [dateRangeIdx, dataAnchor])
 
   // ── Derived: country-filtered base ────────────────────────────────────────────
   const countryFiltered = useMemo(() => {
@@ -291,7 +304,7 @@ export default function TyreScrapManagement() {
 
   // ── Monthly trend (last 12 months) ────────────────────────────────────────────
   const monthlyTrend = useMemo(() => {
-    const now = new Date()
+    const now = dataAnchor
     const months = []
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -313,7 +326,7 @@ export default function TyreScrapManagement() {
       }
     })
     return months
-  }, [allScrapped])
+  }, [allScrapped, dataAnchor])
 
   // ── Doughnut: by removal reason ───────────────────────────────────────────────
   const reasonDonut = useMemo(() => {
@@ -356,9 +369,9 @@ export default function TyreScrapManagement() {
 
   // ── Retread opportunity for current month ─────────────────────────────────────
   const thisMonthKey = useMemo(() => {
-    const n = new Date()
+    const n = dataAnchor
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`
-  }, [])
+  }, [dataAnchor])
 
   const thisMonthScrap = useMemo(() => {
     return allScrapped.filter(t => {
@@ -450,7 +463,7 @@ export default function TyreScrapManagement() {
 
   // ── Site grouped bar (last 6 months) ─────────────────────────────────────────
   const siteBarData = useMemo(() => {
-    const now = new Date()
+    const now = dataAnchor
     const months = []
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -472,7 +485,7 @@ export default function TyreScrapManagement() {
         backgroundColor: COLORS[idx % COLORS.length],
       })),
     }
-  }, [siteAnalysis])
+  }, [siteAnalysis, dataAnchor])
 
   // ── Heat map: brand × site ────────────────────────────────────────────────────
   const heatMapData = useMemo(() => {

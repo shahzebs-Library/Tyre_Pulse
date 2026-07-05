@@ -1755,37 +1755,29 @@ export async function exportDailyExecutivePdf(data, filename) {
   // ── PAGE 5: STRATEGIC INSIGHTS + RECOMMENDATIONS ──────────────────────────
   doc.addPage()
   {
-    // Full dark cover for this page
-    doc.setFillColor(...P.slate)
-    doc.rect(0, 0, PW, PH, 'F')
-    doc.setFillColor(...P.ink)
-    doc.rect(0, 0, PW, 24, 'F')
-    doc.setFillColor(...P.indigo)
-    doc.rect(0, 24, PW, 2.5, 'F')
-    doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(...P.gold)
-    doc.text(company.toUpperCase(), 14, 9)
-    doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(...P.white)
-    doc.text('Strategic Insights & Recommended Actions', 14, 18)
-    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
-    doc.text(date, PW - 14, 15, { align: 'right' })
+    // Light theme page consistent with the rest of the report
+    lsHeader('Strategic Insights & Recommended Actions', ACCENT)
 
     // Insights (left)
     const insights = data.insights ?? []
     if (insights.length > 0) {
       let iy = 36
-      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...P.gold)
-      doc.text('OPERATIONAL INTELLIGENCE', 14, iy); iy += 8
-      insights.forEach((ins, i) => {
-        if (iy > PH - 16) return
-        doc.setFillColor(79, 70, 229, 0.12)
-        doc.setDrawColor(...P.indigo)
-        doc.setLineWidth(0.3)
+      doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+      doc.text('Operational Intelligence', 14, iy)
+      doc.setDrawColor(...ACCENT); doc.setLineWidth(0.8)
+      doc.line(14, iy + 2.2, 32, iy + 2.2)
+      iy += 8
+      insights.forEach((ins) => {
+        if (iy > PH - SECTION_MIN_SPACE + 5) return
         const ilines = doc.splitTextToSize(ins, PW / 2 - 36)
         const ih = ilines.length * 4.5 + 10
+        doc.setFillColor(...P.offWhite)
+        doc.setDrawColor(...P.silver)
+        doc.setLineWidth(0.3)
         doc.roundedRect(14, iy - 3, PW / 2 - 22, ih, 2, 2, 'FD')
-        doc.setFillColor(...P.indigo)
-        doc.roundedRect(14, iy - 3, 3, ih, 1.5, 1.5, 'F')
-        doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(200, 210, 255)
+        doc.setFillColor(...ACCENT)
+        doc.roundedRect(14, iy - 3, 1.6, ih, 0.8, 0.8, 'F')
+        doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.iron)
         doc.text(ilines, 20, iy + 3)
         iy += ih + 5
       })
@@ -1795,17 +1787,21 @@ export async function exportDailyExecutivePdf(data, filename) {
     const recs = data.recommendations ?? []
     if (recs.length > 0) {
       let ry = 36
-      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...P.gold)
-      doc.text('PRIORITY ACTION PLAN', PW / 2 + 10, ry); ry += 8
+      doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+      doc.text('Priority Action Plan', PW / 2 + 10, ry)
+      doc.setDrawColor(...ACCENT); doc.setLineWidth(0.8)
+      doc.line(PW / 2 + 10, ry + 2.2, PW / 2 + 28, ry + 2.2)
+      ry += 8
       const priColors = { Critical: P.crimson, High: P.scarlet, Medium: P.ochre, Low: P.emerald }
+      const priCreams = { Critical: P.rCream, High: P.oCream, Medium: P.yCream, Low: P.eCream }
       recs.forEach(rec => {
-        if (ry > PH - 16) return
+        if (ry > PH - SECTION_MIN_SPACE + 5) return
         const priRgb = priColors[rec.priority] ?? P.indigo
         const [r, g, b] = priRgb
         const rlines = doc.splitTextToSize(rec.text, PW / 2 - 40)
         const rh = rlines.length * 4.5 + 12
-        doc.setFillColor(r * 0.1, g * 0.1, b * 0.1)
-        doc.setDrawColor(r * 0.5, g * 0.5, b * 0.5)
+        doc.setFillColor(...(priCreams[rec.priority] ?? P.offWhite))
+        doc.setDrawColor(...P.silver)
         doc.setLineWidth(0.3)
         doc.roundedRect(PW / 2 + 10, ry - 3, PW / 2 - 24, rh, 2, 2, 'FD')
         // Priority pill
@@ -1813,7 +1809,7 @@ export async function exportDailyExecutivePdf(data, filename) {
         doc.roundedRect(PW / 2 + 12, ry - 1, 26, 6, 1, 1, 'F')
         doc.setFontSize(6); doc.setFont('helvetica','bold'); doc.setTextColor(...P.white)
         doc.text((rec.priority ?? 'Medium').toUpperCase(), PW / 2 + 25, ry + 3.5, { align: 'center' })
-        doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(210, 218, 240)
+        doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.iron)
         doc.text(rlines, PW / 2 + 42, ry + 3)
         ry += rh + 5
       })

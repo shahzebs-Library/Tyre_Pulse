@@ -1,0 +1,111 @@
+{
+  "title": "Stock Replenishment",
+  "subtitle": "Procurement intelligence - {count} SKUs tracked{syncedSuffix}",
+  "syncedSuffix": " · Synced {time}",
+  "leadTime": {
+    "daysSuffix": "days",
+    "editTooltip": "Edit lead time",
+    "leadLabel": "Lead: {days}d"
+  },
+  "refreshTooltip": "Refresh",
+  "retry": "Retry",
+  "kpi": {
+    "needsReorder": "Needs Reorder",
+    "needsReorderSub": "items < {days}d stock",
+    "reorderValue": "Reorder Value",
+    "reorderValueSub": "Suggested orders",
+    "avgDaysRemaining": "Avg Days Remaining",
+    "avgDaysRemainingSub": "Fleet average",
+    "criticalStockouts": "Critical Stockouts",
+    "criticalStockoutsSub": "Zero qty in stock",
+    "overstocked": "Over-Stocked",
+    "overstockedSub": "Items > 180 days"
+  },
+  "tabs": {
+    "matrix": "Replenishment Matrix",
+    "consumption": "Consumption Analysis",
+    "orderGenerator": "Order Generator"
+  },
+  "urgency": {
+    "Critical": "Critical",
+    "Low": "Low",
+    "Normal": "Normal",
+    "Overstocked": "Overstocked"
+  },
+  "matrix": {
+    "searchPlaceholder": "Search brand, size, site...",
+    "clear": "Clear",
+    "itemsCount": "{count} items",
+    "emptyTitle": "No stock data found",
+    "emptyDesc": "Add stock records to see replenishment recommendations",
+    "columns": {
+      "brand": "Brand",
+      "size": "Size",
+      "site": "Site",
+      "inStock": "In Stock",
+      "onOrder": "On Order",
+      "dailyUsage": "Daily Usage",
+      "daysLeft": "Days Left",
+      "suggestQty": "Suggest Qty",
+      "estCost": "Est. Cost",
+      "status": "Status",
+      "action": "Action"
+    },
+    "orderBtn": "Order",
+    "addToOrderTooltip": "Add to order",
+    "legend": "Legend:"
+  },
+  "consumption": {
+    "seasonalNote": "High seasonal variance detected (±{pct}%). Adjust replenishment quantities accordingly.",
+    "barChartTitle": "Monthly Consumption by Top 5 Tyre Sizes (Last 6 Months)",
+    "barChartEmpty": "No tyre issue records in last 90 days",
+    "trendChartTitle": "Consumption Trend by Size",
+    "trendChartEmpty": "No size data available",
+    "matrixTitle": "Size × Site Consumption Matrix (Last 30 Days)",
+    "matrixEmpty": "No issue records in last 30 days",
+    "sizeColumn": "Size",
+    "totalColumn": "Total"
+  },
+  "order": {
+    "totalPoValue": "Total PO Value",
+    "lineItemsCount": "{count} line items",
+    "totalUnits": "Total Units",
+    "tyresAcrossLines": "tyres across all lines",
+    "sitesCovered": "Sites Covered",
+    "uniqueSites": "unique sites",
+    "linesTitle": "Purchase Order Lines",
+    "addLine": "Add Line",
+    "emptyTitle": "No order lines yet",
+    "emptyDesc": "Click \"Order\" in the Replenishment Matrix or add lines manually",
+    "goToMatrix": "Go to Replenishment Matrix →",
+    "columns": {
+      "brand": "Brand",
+      "size": "Size",
+      "site": "Site",
+      "qty": "Qty",
+      "unitCost": "Unit Cost",
+      "total": "Total",
+      "supplier": "Supplier"
+    },
+    "brandPlaceholder": "Brand",
+    "sizePlaceholder": "Size",
+    "sitePlaceholder": "Site",
+    "supplierPlaceholder": "Supplier name",
+    "lineCount": "{count} line{plural}",
+    "unitsTotal": "{count} units total",
+    "totalPoValueLabel": "Total PO Value:",
+    "errors": {
+      "noLines": "Add at least one order line before creating a PO.",
+      "noSupplier": "Enter a supplier name on at least one line to set the PO vendor.",
+      "createFailed": "Failed to create purchase order."
+    },
+    "createSuccess": "Purchase order {poNumber} created as Draft. Manage it in Procurement.",
+    "openProcurement": "Open Procurement",
+    "creatingPo": "Creating PO...",
+    "createPo": "Create Purchase Order",
+    "exportExcel": "Export PO to Excel",
+    "exportPdf": "Export PO to PDF",
+    "clearAllLines": "Clear All Lines",
+    "manageInProcurement": "Manage full POs in Procurement →"
+  }
+}

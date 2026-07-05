@@ -21,6 +21,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
 import { formatCurrency as fmtCurrency, formatDate, formatMonthYear, formatDateTime } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
+import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(
@@ -30,6 +31,8 @@ ChartJS.register(
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const TABS = ['Replenishment Matrix', 'Consumption Analysis', 'Order Generator']
+// i18n key lookup for TABS/URGENCY_CONFIG labels (constants stay stable for logic/indexing)
+const TAB_I18N_KEYS = ['matrix', 'consumption', 'orderGenerator']
 
 const URGENCY_CONFIG = {
   Critical:    { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-700',    row: 'bg-red-950/20 border-l-2 border-l-red-600' },

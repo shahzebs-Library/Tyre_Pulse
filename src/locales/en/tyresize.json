@@ -1,0 +1,122 @@
+{
+  "title": "Tyre Size & Specification Optimizer",
+  "subtitle": "Analyze size mix, consolidation opportunities, and procurement optimization",
+  "actions": {
+    "pdf": "PDF",
+    "excel": "Excel"
+  },
+  "error": {
+    "failedToLoad": "Failed to load data: {message}"
+  },
+  "periods": {
+    "30d": "30d",
+    "90d": "90d",
+    "6mo": "6mo",
+    "1yr": "1yr",
+    "All": "All"
+  },
+  "filters": {
+    "all": "All",
+    "clear": "Clear",
+    "summary": "{count} tyres · {sizes} sizes"
+  },
+  "positions": {
+    "steer": "Steer",
+    "drive": "Drive",
+    "trailer": "Trailer",
+    "liftAxle": "Lift Axle",
+    "tagAxle": "Tag Axle",
+    "other": "Other"
+  },
+  "kpi": {
+    "uniqueSizes": "Unique Sizes in Fleet",
+    "uniqueSizesSub": "across {total} tyres",
+    "mostCommon": "Most Common Size",
+    "mostCommonSub": "{pct} of fleet ({count} tyres)",
+    "bestPerforming": "Best Performing Size",
+    "bestPerformingSubCpk": "CPK: {value}",
+    "bestPerformingSubMin": "Min {count} records needed",
+    "standardization": "Standardization Score",
+    "standardizationWell": "Well standardized",
+    "standardizationModerate": "Moderate fragmentation",
+    "standardizationHigh": "High fragmentation"
+  },
+  "charts": {
+    "sizeMix": "Size Mix Distribution",
+    "noData": "No data",
+    "doughnutTooltip": "{count} tyres ({pct}%)",
+    "cpkBySize": "CPK by Size (ranked)",
+    "legendGood": "≤{value} Good",
+    "legendAvg": "≤{value} Avg",
+    "legendPoor": ">{value} Poor",
+    "noCpkData": "No CPK data (need km fields)",
+    "avgCpkSeries": "Avg CPK",
+    "cpkAxisTitle": "CPK ({currency}/km)"
+  },
+  "table": {
+    "heading": "Size Distribution Detail",
+    "summary": "{count} sizes · click row to expand",
+    "columns": {
+      "size": "Size",
+      "count": "Count",
+      "pctFleet": "% Fleet",
+      "avgCpk": "Avg CPK",
+      "avgLife": "Avg Life",
+      "failRate": "Fail Rate %",
+      "brands": "Brands",
+      "sites": "Sites",
+      "flag": "Flag"
+    },
+    "empty": "No tyre records found",
+    "brandBreakdownFor": "Brand breakdown for {size}",
+    "brandColumns": {
+      "brand": "Brand",
+      "count": "Count",
+      "avgCpk": "Avg CPK",
+      "avgLife": "Avg Life"
+    }
+  },
+  "flags": {
+    "standard": "Standard",
+    "lowVolume": "Low Volume",
+    "outlier": "Outlier"
+  },
+  "matrix": {
+    "heading": "Size × Brand CPK Performance Matrix",
+    "empty": "Insufficient data for matrix",
+    "sizeBrandColumn": "Size / Brand"
+  },
+  "compliance": {
+    "heading": "Position-Size Compliance",
+    "empty": "No position data",
+    "columns": {
+      "position": "Position",
+      "requiredSizes": "Required Sizes",
+      "nonStd": "Non-Std",
+      "compliance": "Compliance"
+    }
+  },
+  "trend": {
+    "heading": "Top Size-Brand Combos - CPK Trend (12 months)",
+    "empty": "No trend data available"
+  },
+  "consolidation": {
+    "heading": "Consolidation Opportunities",
+    "count": "{count} recommendations",
+    "empty": "No consolidation opportunities detected - fleet is well optimized",
+    "eliminateTitle": "Eliminate size {size}",
+    "eliminateDesc": "Used by only 1 vehicle ({vehicle}). Consider eliminating to reduce procurement complexity.",
+    "standardizeTitle": "Standardize {size} on {brand}",
+    "standardizeDesc": "{bestBrand} CPK: {bestCpk} vs {worstBrand} CPK: {worstCpk}. Switch {count} tyres to {bestBrand}.",
+    "reviewTitle": "Review specification for {size}",
+    "reviewDesc": "Avg CPK of {value}/km is 2× fleet average. Investigate root cause and consider alternative specification.",
+    "estAnnualSavings": "Est. annual savings: {value}"
+  },
+  "impact": {
+    "critical": "Critical",
+    "high": "High",
+    "low": "Low"
+  },
+  "na": "N/A",
+  "unknown": "unknown"
+}

@@ -1228,9 +1228,9 @@ export default function FleetIntelligence() {
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-sm font-semibold text-white">Fleet Asset Register</h2>
+            <h2 className="text-sm font-semibold text-white">{t('fleetintel.register.title')}</h2>
             <p className="text-xs text-gray-500">
-              {fmt(filteredRegister.length)} assets · sorted by {sortCol.replace(/_/g, ' ')}
+              {t('fleetintel.register.assetsSortedBy', { count: fmt(filteredRegister.length), sortCol: sortCol.replace(/_/g, ' ') })}
             </p>
           </div>
           <div className="relative">
@@ -1238,7 +1238,7 @@ export default function FleetIntelligence() {
             <input
               value={searchAsset}
               onChange={e => setSearchAsset(e.target.value)}
-              placeholder="Search asset no..."
+              placeholder={t('fleetintel.register.searchPlaceholder')}
               className="pl-8 pr-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 w-48"
             />
           </div>
@@ -1247,7 +1247,7 @@ export default function FleetIntelligence() {
         {filteredRegister.length === 0 ? (
           <div className="text-center py-10">
             <Truck className="text-gray-600 mx-auto mb-2" size={28} />
-            <p className="text-gray-400 text-sm">No assets match current filters</p>
+            <p className="text-gray-400 text-sm">{t('fleetintel.register.noMatch')}</p>
           </div>
         ) : (
           <>
@@ -1255,17 +1255,17 @@ export default function FleetIntelligence() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-gray-800">
-                    <SortTh col="asset_no"           label="Asset No"        sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh col="site"               label="Site"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh col="vehicle_type"       label="Type"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <SortTh col="total_tyre_changes" label="Changes"         sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
-                    <SortTh col="total_tyre_cost"    label="Total Cost"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
-                    <SortTh col="avg_cpk"            label="Avg CPK"         sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
-                    <SortTh col="high_risk_count"    label="High Risk"       sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />
-                    <th className="text-left text-gray-500 font-semibold py-2 px-2 text-xs uppercase tracking-wide">Status</th>
-                    <SortTh col="monthly_cost"       label="Monthly Cost"    sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
-                    <SortTh col="last_change_date"   label="Last Change"     sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                    <th className="text-left text-gray-500 font-semibold py-2 px-2 text-xs uppercase tracking-wide">Action</th>
+                    <SortTh col="asset_no"           label={t('fleetintel.register.columns.assetNo')}        sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh col="site"               label={t('fleetintel.register.columns.site')}            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh col="vehicle_type"       label={t('fleetintel.register.columns.type')}            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <SortTh col="total_tyre_changes" label={t('fleetintel.register.columns.changes')}         sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
+                    <SortTh col="total_tyre_cost"    label={t('fleetintel.register.columns.totalCost')}      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
+                    <SortTh col="avg_cpk"            label={t('fleetintel.register.columns.avgCpk')}         sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
+                    <SortTh col="high_risk_count"    label={t('fleetintel.register.columns.highRisk')}       sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-center" />
+                    <th className="text-left text-gray-500 font-semibold py-2 px-2 text-xs uppercase tracking-wide">{t('fleetintel.register.columns.status')}</th>
+                    <SortTh col="monthly_cost"       label={t('fleetintel.register.columns.monthlyCost')}    sortCol={sortCol} sortDir={sortDir} onSort={handleSort} className="text-right" />
+                    <SortTh col="last_change_date"   label={t('fleetintel.register.columns.lastChange')}     sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
+                    <th className="text-left text-gray-500 font-semibold py-2 px-2 text-xs uppercase tracking-wide">{t('fleetintel.register.columns.action')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1313,10 +1313,10 @@ export default function FleetIntelligence() {
                           <a
                             href={`/vehicle-history?asset=${encodeURIComponent(v.asset_no)}`}
                             className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 transition-colors text-xs"
-                            title="View in Vehicle History"
+                            title={t('fleetintel.register.viewInHistory')}
                           >
                             <ExternalLink size={11} />
-                            History
+                            {t('fleetintel.register.history')}
                           </a>
                         </td>
                       </motion.tr>
@@ -1336,9 +1336,9 @@ export default function FleetIntelligence() {
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="text-red-400 shrink-0" size={16} />
             <div>
-              <h2 className="text-sm font-semibold text-white">Vehicles Needing Attention</h2>
+              <h2 className="text-sm font-semibold text-white">{t('fleetintel.attention.title')}</h2>
               <p className="text-xs text-gray-500">
-                {attentionVehicles.length} vehicle{attentionVehicles.length !== 1 ? 's' : ''} with Critical or High risk tyres in last 30 days
+                {t('fleetintel.attention.subtitle', { count: attentionVehicles.length })}
               </p>
             </div>
           </div>
@@ -1346,8 +1346,8 @@ export default function FleetIntelligence() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-800">
-                  {['#', 'Asset No', 'Site', 'Risk Level', 'Issue Date', 'Position', 'Brand', 'Records'].map(h => (
-                    <th key={h} className="text-left text-gray-500 font-semibold py-2 px-2 whitespace-nowrap text-xs uppercase tracking-wide">{h}</th>
+                  {['hash', 'assetNo', 'site', 'riskLevel', 'issueDate', 'position', 'brand', 'records'].map(hKey => (
+                    <th key={hKey} className="text-left text-gray-500 font-semibold py-2 px-2 whitespace-nowrap text-xs uppercase tracking-wide">{t(`fleetintel.attention.columns.${hKey}`)}</th>
                   ))}
                 </tr>
               </thead>
@@ -1403,22 +1403,22 @@ export default function FleetIntelligence() {
             <div className="p-1.5 bg-green-900/30 rounded-lg">
               <Award className="text-green-400" size={16} />
             </div>
-            <span className="text-xs font-semibold text-green-400 uppercase tracking-wide">Best CPK Vehicle</span>
+            <span className="text-xs font-semibold text-green-400 uppercase tracking-wide">{t('fleetintel.benchmarks.bestCpkVehicle')}</span>
           </div>
           {benchmarks.best ? (
             <>
               <div>
                 <p className="text-2xl font-bold text-green-300">{fmtCpk(benchmarks.best.avg_cpk)}</p>
-                <p className="text-xs text-gray-500">{activeCurrency}/km</p>
+                <p className="text-xs text-gray-500">{t('fleetintel.benchmarks.perKm', { currency: activeCurrency })}</p>
               </div>
               <div className="bg-gray-800/50 rounded-lg p-3">
                 <p className="font-mono text-sm font-bold text-white">{benchmarks.best.asset_no}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{benchmarks.best.total_tyre_changes} changes · {fmtCurrency(benchmarks.best.total_tyre_cost, activeCurrency)} total</p>
+                <p className="text-xs text-gray-400 mt-0.5">{t('fleetintel.benchmarks.changesTotal', { count: benchmarks.best.total_tyre_changes, cost: fmtCurrency(benchmarks.best.total_tyre_cost, activeCurrency) })}</p>
               </div>
-              <p className="text-xs text-gray-500">Lowest cost per km - benchmark for fleet optimisation</p>
+              <p className="text-xs text-gray-500">{t('fleetintel.benchmarks.bestDesc')}</p>
             </>
           ) : (
-            <p className="text-gray-500 text-sm">Insufficient CPK data (need ≥5 valid records)</p>
+            <p className="text-gray-500 text-sm">{t('fleetintel.benchmarks.insufficientBest')}</p>
           )}
         </motion.div>
 
@@ -1433,22 +1433,22 @@ export default function FleetIntelligence() {
             <div className="p-1.5 bg-red-900/30 rounded-lg">
               <Zap className="text-red-400" size={16} />
             </div>
-            <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">Worst CPK Vehicle</span>
+            <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">{t('fleetintel.benchmarks.worstCpkVehicle')}</span>
           </div>
           {benchmarks.worst ? (
             <>
               <div>
                 <p className="text-2xl font-bold text-red-300">{fmtCpk(benchmarks.worst.avg_cpk)}</p>
-                <p className="text-xs text-gray-500">{activeCurrency}/km</p>
+                <p className="text-xs text-gray-500">{t('fleetintel.benchmarks.perKm', { currency: activeCurrency })}</p>
               </div>
               <div className="bg-gray-800/50 rounded-lg p-3">
                 <p className="font-mono text-sm font-bold text-white">{benchmarks.worst.asset_no}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{benchmarks.worst.total_tyre_changes} changes · {fmtCurrency(benchmarks.worst.total_tyre_cost, activeCurrency)} total</p>
+                <p className="text-xs text-gray-400 mt-0.5">{t('fleetintel.benchmarks.changesTotal', { count: benchmarks.worst.total_tyre_changes, cost: fmtCurrency(benchmarks.worst.total_tyre_cost, activeCurrency) })}</p>
               </div>
-              <p className="text-xs text-gray-500">Highest cost per km - prioritise for root cause investigation</p>
+              <p className="text-xs text-gray-500">{t('fleetintel.benchmarks.worstDesc')}</p>
             </>
           ) : (
-            <p className="text-gray-500 text-sm">Insufficient data to identify worst CPK vehicle</p>
+            <p className="text-gray-500 text-sm">{t('fleetintel.benchmarks.insufficientWorst')}</p>
           )}
         </motion.div>
 
@@ -1463,22 +1463,22 @@ export default function FleetIntelligence() {
             <div className="p-1.5 bg-blue-900/30 rounded-lg">
               <Target className="text-blue-400" size={16} />
             </div>
-            <span className="text-xs font-semibold text-blue-400 uppercase tracking-wide">Improvement Potential</span>
+            <span className="text-xs font-semibold text-blue-400 uppercase tracking-wide">{t('fleetintel.benchmarks.improvementPotential')}</span>
           </div>
           <div>
             <p className="text-2xl font-bold text-blue-300">{fmtCurrency(benchmarks.annualSavings, activeCurrency)}</p>
-            <p className="text-xs text-gray-500">estimated annual savings</p>
+            <p className="text-xs text-gray-500">{t('fleetintel.benchmarks.estimatedSavings')}</p>
           </div>
           <div className="bg-gray-800/50 rounded-lg p-3 space-y-1.5">
             <p className="text-xs text-gray-300">
-              Fleet avg CPK: <span className="font-mono font-semibold text-blue-300">{benchmarks.fleetAvgCpk != null ? fmtCpk(benchmarks.fleetAvgCpk) : '-'}</span>
+              {t('fleetintel.benchmarks.fleetAvgCpkLabel')} <span className="font-mono font-semibold text-blue-300">{benchmarks.fleetAvgCpk != null ? fmtCpk(benchmarks.fleetAvgCpk) : '-'}</span>
             </p>
             <p className="text-xs text-gray-400">
-              If worst 10% of vehicles matched the fleet average CPK, the above savings could be realised annually.
+              {t('fleetintel.benchmarks.improvementDesc')}
             </p>
           </div>
           <p className="text-xs text-gray-500">
-            Address driver behaviour, alignment, and maintenance quality for highest-cost vehicles.
+            {t('fleetintel.benchmarks.actionDesc')}
           </p>
         </motion.div>
       </div>

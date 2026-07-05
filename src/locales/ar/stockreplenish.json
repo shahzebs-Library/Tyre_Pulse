@@ -1,0 +1,111 @@
+{
+  "title": "تجديد المخزون",
+  "subtitle": "معلومات المشتريات - {count} صنف مُتابَع{syncedSuffix}",
+  "syncedSuffix": " · تمت المزامنة {time}",
+  "leadTime": {
+    "daysSuffix": "يوم",
+    "editTooltip": "تعديل مدة التوريد",
+    "leadLabel": "مدة التوريد: {days} يوم"
+  },
+  "refreshTooltip": "تحديث",
+  "retry": "إعادة المحاولة",
+  "kpi": {
+    "needsReorder": "يحتاج إعادة طلب",
+    "needsReorderSub": "أصناف بمخزون أقل من {days} يوم",
+    "reorderValue": "قيمة إعادة الطلب",
+    "reorderValueSub": "الطلبات المقترحة",
+    "avgDaysRemaining": "متوسط الأيام المتبقية",
+    "avgDaysRemainingSub": "متوسط الأسطول",
+    "criticalStockouts": "نفاد حرج للمخزون",
+    "criticalStockoutsSub": "كمية صفرية في المخزون",
+    "overstocked": "فائض مخزون",
+    "overstockedSub": "أصناف > 180 يومًا"
+  },
+  "tabs": {
+    "matrix": "مصفوفة التجديد",
+    "consumption": "تحليل الاستهلاك",
+    "orderGenerator": "منشئ الطلبات"
+  },
+  "urgency": {
+    "Critical": "حرج",
+    "Low": "منخفض",
+    "Normal": "عادي",
+    "Overstocked": "فائض"
+  },
+  "matrix": {
+    "searchPlaceholder": "ابحث بالعلامة التجارية أو المقاس أو الموقع...",
+    "clear": "مسح",
+    "itemsCount": "{count} صنف",
+    "emptyTitle": "لم يتم العثور على بيانات مخزون",
+    "emptyDesc": "أضف سجلات مخزون لعرض توصيات التجديد",
+    "columns": {
+      "brand": "العلامة التجارية",
+      "size": "المقاس",
+      "site": "الموقع",
+      "inStock": "في المخزون",
+      "onOrder": "قيد الطلب",
+      "dailyUsage": "الاستخدام اليومي",
+      "daysLeft": "الأيام المتبقية",
+      "suggestQty": "الكمية المقترحة",
+      "estCost": "التكلفة التقديرية",
+      "status": "الحالة",
+      "action": "الإجراء"
+    },
+    "orderBtn": "طلب",
+    "addToOrderTooltip": "إضافة إلى الطلب",
+    "legend": "الدليل:"
+  },
+  "consumption": {
+    "seasonalNote": "تم رصد تباين موسمي مرتفع (±{pct}%). قم بتعديل كميات التجديد وفقًا لذلك.",
+    "barChartTitle": "الاستهلاك الشهري لأفضل 5 مقاسات إطارات (آخر 6 أشهر)",
+    "barChartEmpty": "لا توجد سجلات صرف إطارات خلال آخر 90 يومًا",
+    "trendChartTitle": "اتجاه الاستهلاك حسب المقاس",
+    "trendChartEmpty": "لا توجد بيانات مقاس متاحة",
+    "matrixTitle": "مصفوفة استهلاك المقاس × الموقع (آخر 30 يومًا)",
+    "matrixEmpty": "لا توجد سجلات صرف خلال آخر 30 يومًا",
+    "sizeColumn": "المقاس",
+    "totalColumn": "الإجمالي"
+  },
+  "order": {
+    "totalPoValue": "إجمالي قيمة أمر الشراء",
+    "lineItemsCount": "{count} بند",
+    "totalUnits": "إجمالي الوحدات",
+    "tyresAcrossLines": "إطار عبر جميع البنود",
+    "sitesCovered": "المواقع المشمولة",
+    "uniqueSites": "موقع فريد",
+    "linesTitle": "بنود أمر الشراء",
+    "addLine": "إضافة بند",
+    "emptyTitle": "لا توجد بنود طلب بعد",
+    "emptyDesc": "اضغط على \"طلب\" في مصفوفة التجديد أو أضف بنودًا يدويًا",
+    "goToMatrix": "الانتقال إلى مصفوفة التجديد ←",
+    "columns": {
+      "brand": "العلامة التجارية",
+      "size": "المقاس",
+      "site": "الموقع",
+      "qty": "الكمية",
+      "unitCost": "سعر الوحدة",
+      "total": "الإجمالي",
+      "supplier": "المورد"
+    },
+    "brandPlaceholder": "العلامة التجارية",
+    "sizePlaceholder": "المقاس",
+    "sitePlaceholder": "الموقع",
+    "supplierPlaceholder": "اسم المورد",
+    "lineCount": "{count} بند",
+    "unitsTotal": "{count} وحدة إجمالاً",
+    "totalPoValueLabel": "إجمالي قيمة أمر الشراء:",
+    "errors": {
+      "noLines": "أضف بندًا واحدًا على الأقل قبل إنشاء أمر شراء.",
+      "noSupplier": "أدخل اسم المورد في بند واحد على الأقل لتحديد مورد أمر الشراء.",
+      "createFailed": "فشل إنشاء أمر الشراء."
+    },
+    "createSuccess": "تم إنشاء أمر الشراء {poNumber} كمسودة. يمكنك إدارته من صفحة المشتريات.",
+    "openProcurement": "فتح المشتريات",
+    "creatingPo": "جارٍ إنشاء أمر الشراء...",
+    "createPo": "إنشاء أمر شراء",
+    "exportExcel": "تصدير أمر الشراء إلى إكسل",
+    "exportPdf": "تصدير أمر الشراء إلى PDF",
+    "clearAllLines": "مسح جميع البنود",
+    "manageInProcurement": "إدارة أوامر الشراء الكاملة في المشتريات ←"
+  }
+}

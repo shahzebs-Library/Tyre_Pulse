@@ -306,7 +306,7 @@ export default function StockManagement() {
   const tlChartData = useMemo(() => ({
     labels: tlByDate.map(([d]) => d),
     datasets: [{
-      label: 'Net Change (out)',
+      label: t('stock.timeline.netChangeLabel'),
       data: tlByDate.map(([, v]) => v.out - v.in),
       backgroundColor: tlByDate.map(([, v]) => {
         const net = v.out - v.in
@@ -314,7 +314,7 @@ export default function StockManagement() {
       }),
       borderRadius: 4,
     }],
-  }), [tlByDate])
+  }), [tlByDate, t])
 
   // Reorder request PDF
   async function generateReorderPdf(rec) {
@@ -628,7 +628,7 @@ export default function StockManagement() {
                     }}
                     required
                   >
-                    <option value="">- Select -</option>
+                    <option value="">{t('stock.transfer.selectOption')}</option>
                     {sites.filter(s => s !== transferForm.fromSite).map(s => (
                       <option key={s} value={s}>{s}</option>
                     ))}
@@ -636,14 +636,14 @@ export default function StockManagement() {
                   {transferForm.toSite && (() => {
                     const rec = records.find(r => r.site === transferForm.toSite)
                     return rec ? (
-                      <p className="text-xs text-gray-500 mt-1">Current: <span className="text-gray-300 font-medium">{rec.stock_qty}</span> units</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('stock.transfer.currentPrefix')} <span className="text-gray-300 font-medium">{rec.stock_qty}</span> {t('stock.transfer.unitsSuffix')}</p>
                     ) : null
                   })()}
                 </div>
               </div>
 
               <div>
-                <label className="label">Quantity *</label>
+                <label className="label">{t('stock.transfer.quantity')}</label>
                 <input
                   type="number"
                   className="input"
@@ -659,11 +659,11 @@ export default function StockManagement() {
               </div>
 
               <div>
-                <label className="label">Notes</label>
+                <label className="label">{t('stock.transfer.notes')}</label>
                 <input
                   type="text"
                   className="input"
-                  placeholder="Optional transfer reason or reference"
+                  placeholder={t('stock.transfer.notesPlaceholder')}
                   value={transferForm.notes}
                   onChange={e => setTransferForm(f => ({ ...f, notes: e.target.value }))}
                 />
@@ -672,7 +672,7 @@ export default function StockManagement() {
               {/* Transfer preview */}
               {transferForm.fromSite && transferForm.toSite && transferForm.qty > 0 && (
                 <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-xs text-gray-400 space-y-1">
-                  <p className="text-gray-300 font-medium text-xs mb-2">Transfer Preview</p>
+                  <p className="text-gray-300 font-medium text-xs mb-2">{t('stock.transfer.previewTitle')}</p>
                   {(() => {
                     const from = records.find(r => r.site === transferForm.fromSite)
                     const to   = records.find(r => r.site === transferForm.toSite)
@@ -709,7 +709,7 @@ export default function StockManagement() {
                 className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <ArrowLeftRight size={16} />
-                {transferring ? 'Transferring...' : 'Transfer Stock'}
+                {transferring ? t('stock.transfer.transferring') : t('stock.transfer.transferStock')}
               </button>
             </form>
           </div>
@@ -722,17 +722,17 @@ export default function StockManagement() {
           {/* Comparison stat */}
           <div className="card flex flex-wrap items-center gap-4">
             <div className="text-sm text-gray-400">
-              <span className="font-medium text-white">Today:</span> {todayIssues} issues
+              <span className="font-medium text-white">{t('stock.timeline.today')}</span> {todayIssues} {t('stock.timeline.issues')}
             </div>
             <span className="text-gray-600">·</span>
             <div className="text-sm text-gray-400">
-              <span className="font-medium text-white">Yesterday:</span> {yesterdayIssues} issues
+              <span className="font-medium text-white">{t('stock.timeline.yesterday')}</span> {yesterdayIssues} {t('stock.timeline.issues')}
             </div>
             <span className="text-gray-600">·</span>
             <div className="text-sm">
-              <span className="text-gray-400">Change: </span>
+              <span className="text-gray-400">{t('stock.timeline.change')}</span>
               {changePct === null ? (
-                <span className="text-gray-500">N/A</span>
+                <span className="text-gray-500">{t('stock.timeline.na')}</span>
               ) : (
                 <span className={+changePct > 0 ? 'text-red-400 font-medium' : +changePct < 0 ? 'text-green-400 font-medium' : 'text-gray-400'}>
                   {+changePct > 0 ? '+' : ''}{changePct}%
@@ -744,21 +744,21 @@ export default function StockManagement() {
           {/* Date range picker */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <label className="label text-xs whitespace-nowrap">From</label>
+              <label className="label text-xs whitespace-nowrap">{t('stock.timeline.from')}</label>
               <input type="date" className="input w-40 text-sm" value={tlFrom} onChange={e => setTlFrom(e.target.value)} />
             </div>
             <div className="flex items-center gap-2">
-              <label className="label text-xs whitespace-nowrap">To</label>
+              <label className="label text-xs whitespace-nowrap">{t('stock.timeline.to')}</label>
               <input type="date" className="input w-40 text-sm" value={tlTo} onChange={e => setTlTo(e.target.value)} />
             </div>
             {/* Quick chips */}
             <div className="flex flex-wrap gap-1.5">
               {[
-                { label: 'Today',       from: todayStr(),    to: todayStr() },
-                { label: 'Yesterday',   from: offsetDate(-1), to: offsetDate(-1) },
-                { label: 'Last 7 days', from: offsetDate(-6), to: todayStr() },
-                { label: 'Last 30 days',from: offsetDate(-29), to: todayStr() },
-                { label: 'This Month',  from: firstOfMonth(), to: todayStr() },
+                { label: t('stock.timeline.chips.today'),       from: todayStr(),    to: todayStr() },
+                { label: t('stock.timeline.chips.yesterday'),   from: offsetDate(-1), to: offsetDate(-1) },
+                { label: t('stock.timeline.chips.last7Days'), from: offsetDate(-6), to: todayStr() },
+                { label: t('stock.timeline.chips.last30Days'),from: offsetDate(-29), to: todayStr() },
+                { label: t('stock.timeline.chips.thisMonth'),  from: firstOfMonth(), to: todayStr() },
               ].map(({ label, from, to }) => (
                 <button
                   key={label}
@@ -778,7 +778,7 @@ export default function StockManagement() {
           {/* Bar chart */}
           {tlByDate.length > 0 && (
             <div className="card">
-              <p className="text-sm text-gray-400 mb-3">Daily Issues (Net)</p>
+              <p className="text-sm text-gray-400 mb-3">{t('stock.timeline.chartTitle')}</p>
               <div style={{ height: 220 }}>
                 <Bar
                   data={tlChartData}
@@ -802,16 +802,19 @@ export default function StockManagement() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    {['Date', 'Items In', 'Items Out', 'Net Change'].map(h => (
+                    {[
+                      t('stock.timeline.columns.date'), t('stock.timeline.columns.itemsIn'),
+                      t('stock.timeline.columns.itemsOut'), t('stock.timeline.columns.netChange'),
+                    ].map(h => (
                       <th key={h} className="table-header">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {tlLoading ? (
-                    <tr><td colSpan={4} className="text-center py-12 text-gray-500">Loading...</td></tr>
+                    <tr><td colSpan={4} className="text-center py-12 text-gray-500">{t('stock.timeline.loading')}</td></tr>
                   ) : tlByDate.length === 0 ? (
-                    <tr><td colSpan={4} className="text-center py-12 text-gray-500">No records in this period</td></tr>
+                    <tr><td colSpan={4} className="text-center py-12 text-gray-500">{t('stock.timeline.emptyPeriod')}</td></tr>
                   ) : tlByDate.map(([date, vals]) => {
                     const net = vals.in - vals.out
                     return (
@@ -840,8 +843,8 @@ export default function StockManagement() {
           <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-800">
               <div>
-                <h2 className="text-lg font-semibold text-white">Movement History · {historyFor.site}</h2>
-                <p className="text-gray-400 text-xs mt-0.5">{historyFor.description || ''} · Current: {historyFor.stock_qty}</p>
+                <h2 className="text-lg font-semibold text-white">{t('stock.historyModal.title', { site: historyFor.site })}</h2>
+                <p className="text-gray-400 text-xs mt-0.5">{t('stock.historyModal.subtitle', { description: historyFor.description || '', qty: historyFor.stock_qty })}</p>
               </div>
               <button onClick={() => setHistoryFor(null)} className="text-gray-400 hover:text-white"><X size={18} /></button>
             </div>
@@ -849,34 +852,34 @@ export default function StockManagement() {
             {/* Quick adjustment form */}
             {adjForm && (
               <div className="p-4 border-b border-gray-800 bg-gray-800/30">
-                <p className="text-xs text-gray-400 mb-3">Log Stock Movement</p>
+                <p className="text-xs text-gray-400 mb-3">{t('stock.historyModal.logMovement')}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <div>
-                    <label className="label text-xs">Type</label>
+                    <label className="label text-xs">{t('stock.historyModal.type')}</label>
                     <select className="input text-xs py-1.5"
                       value={adjForm.movement_type}
                       onChange={e => setAdjForm(f => ({ ...f, movement_type: e.target.value }))}>
-                      {MOVEMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      {MOVEMENT_TYPES.map(mt => <option key={mt} value={mt}>{t(`stock.movementTypes.${mt}`)}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="label text-xs">Qty Change</label>
+                    <label className="label text-xs">{t('stock.historyModal.qtyChange')}</label>
                     <input type="number" className="input text-xs py-1.5"
                       value={adjForm.qty_change}
                       onChange={e => setAdjForm(f => ({ ...f, qty_change: +e.target.value }))}
-                      placeholder="e.g. -4 or +10" />
+                      placeholder={t('stock.historyModal.qtyChangePlaceholder')} />
                   </div>
                   <div>
-                    <label className="label text-xs">Reason</label>
+                    <label className="label text-xs">{t('stock.historyModal.reason')}</label>
                     <input className="input text-xs py-1.5" value={adjForm.reason}
                       onChange={e => setAdjForm(f => ({ ...f, reason: e.target.value }))}
-                      placeholder="Why?" />
+                      placeholder={t('stock.historyModal.reasonPlaceholder')} />
                   </div>
                   <div>
-                    <label className="label text-xs">Ref. No</label>
+                    <label className="label text-xs">{t('stock.historyModal.refNo')}</label>
                     <input className="input text-xs py-1.5" value={adjForm.reference_no}
                       onChange={e => setAdjForm(f => ({ ...f, reference_no: e.target.value }))}
-                      placeholder="PO / Job Card" />
+                      placeholder={t('stock.historyModal.refNoPlaceholder')} />
                   </div>
                 </div>
                 <div className="flex gap-2 mt-2">
@@ -885,10 +888,10 @@ export default function StockManagement() {
                     disabled={saving || adjForm.qty_change === 0}
                     className="btn-primary text-xs px-3 py-1.5 disabled:opacity-50"
                   >
-                    {saving ? 'Saving...' : 'Log Movement'}
+                    {saving ? t('stock.historyModal.saving') : t('stock.historyModal.logMovementBtn')}
                   </button>
                   <span className="text-xs text-gray-500 self-center">
-                    New qty: {historyFor.stock_qty + (adjForm.qty_change || 0)}
+                    {t('stock.historyModal.newQty', { qty: historyFor.stock_qty + (adjForm.qty_change || 0) })}
                   </span>
                 </div>
               </div>
@@ -897,20 +900,20 @@ export default function StockManagement() {
             {/* History table */}
             <div className="overflow-y-auto flex-1">
               {loadingMov ? (
-                <div className="text-center py-8 text-gray-500">Loading...</div>
+                <div className="text-center py-8 text-gray-500">{t('stock.historyModal.loading')}</div>
               ) : movements.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">No movement history yet</div>
+                <div className="text-center py-8 text-gray-500">{t('stock.historyModal.emptyHistory')}</div>
               ) : (
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-gray-900">
                     <tr className="text-gray-400 border-b border-gray-800">
-                      <th className="table-header py-2">Date</th>
-                      <th className="table-header py-2">Type</th>
-                      <th className="table-header py-2">Before</th>
-                      <th className="table-header py-2">Change</th>
-                      <th className="table-header py-2">After</th>
-                      <th className="table-header py-2">Reason</th>
-                      <th className="table-header py-2">Ref</th>
+                      <th className="table-header py-2">{t('stock.historyModal.columns.date')}</th>
+                      <th className="table-header py-2">{t('stock.historyModal.columns.type')}</th>
+                      <th className="table-header py-2">{t('stock.historyModal.columns.before')}</th>
+                      <th className="table-header py-2">{t('stock.historyModal.columns.change')}</th>
+                      <th className="table-header py-2">{t('stock.historyModal.columns.after')}</th>
+                      <th className="table-header py-2">{t('stock.historyModal.columns.reason')}</th>
+                      <th className="table-header py-2">{t('stock.historyModal.columns.ref')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -950,34 +953,34 @@ export default function StockManagement() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
           <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">{editId ? 'Edit' : 'Add'} Stock Record</h2>
+              <h2 className="text-lg font-semibold text-white">{editId ? t('stock.form.editTitle') : t('stock.form.addTitle')}</h2>
               <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
             </div>
             {error && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{error}</div>}
             <form onSubmit={save} className="space-y-3">
               <div>
-                <label className="label">Site *</label>
+                <label className="label">{t('stock.form.site')}</label>
                 <input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} required list="stock-sites" />
                 <datalist id="stock-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
               </div>
               <div>
-                <label className="label">Description</label>
-                <input className="input" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. 12.00R24 Bridgestone" />
+                <label className="label">{t('stock.form.description')}</label>
+                <input className="input" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={t('stock.form.descriptionPlaceholder')} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div><label className="label">Stock Qty</label><input type="number" className="input" value={form.stock_qty} onChange={e => setForm(f => ({ ...f, stock_qty: +e.target.value }))} min={0} /></div>
-                <div><label className="label">Min Level</label><input type="number" className="input" value={form.min_level} onChange={e => setForm(f => ({ ...f, min_level: +e.target.value }))} min={0} /></div>
-                <div><label className="label">Critical Level</label><input type="number" className="input" value={form.critical_level} onChange={e => setForm(f => ({ ...f, critical_level: +e.target.value }))} min={0} /></div>
+                <div><label className="label">{t('stock.form.stockQty')}</label><input type="number" className="input" value={form.stock_qty} onChange={e => setForm(f => ({ ...f, stock_qty: +e.target.value }))} min={0} /></div>
+                <div><label className="label">{t('stock.form.minLevel')}</label><input type="number" className="input" value={form.min_level} onChange={e => setForm(f => ({ ...f, min_level: +e.target.value }))} min={0} /></div>
+                <div><label className="label">{t('stock.form.criticalLevel')}</label><input type="number" className="input" value={form.critical_level} onChange={e => setForm(f => ({ ...f, critical_level: +e.target.value }))} min={0} /></div>
               </div>
               <div>
-                <label className="label">Management Action</label>
+                <label className="label">{t('stock.form.managementAction')}</label>
                 <input className="input" value={form.management_action} onChange={e => setForm(f => ({ ...f, management_action: e.target.value }))} />
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Save size={16} /> {saving ? 'Saving...' : 'Save'}
+                  <Save size={16} /> {saving ? t('stock.form.saving') : t('stock.form.save')}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
+                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">{t('stock.form.cancel')}</button>
               </div>
             </form>
           </div>

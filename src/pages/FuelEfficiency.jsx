@@ -849,7 +849,7 @@ export default function FuelEfficiency() {
 
           {/* ── 5. Tread Depth vs Fuel Correlation ──────────────────────── */}
           {scatterData.datasets.length > 0 && (
-            <ChartCard title="Tread Depth vs Fuel Impact Correlation" subtitle="X: tread depth (mm) · Y: estimated fuel impact % · color by site" icon={Activity}>
+            <ChartCard title={t('fuel.charts.treadCorrelation')} subtitle={t('fuel.charts.treadCorrelationSub')} icon={Activity}>
               <div className="h-72">
                 <Scatter
                   data={scatterData}
@@ -860,13 +860,13 @@ export default function FuelEfficiency() {
                       tooltip: {
                         ...CHART_OPTS.plugins.tooltip,
                         callbacks: {
-                          label: ctx => `Tread: ${ctx.parsed.x}mm, Fuel Impact: ${ctx.parsed.y.toFixed(2)}%`,
+                          label: ctx => t('fuel.charts.tooltipTreadFuel', { x: ctx.parsed.x, y: ctx.parsed.y.toFixed(2) }),
                         },
                       },
                     },
                     scales: {
-                      x: { ...CHART_OPTS.scales.x, title: { display: true, text: 'Tread Depth (mm)', color: '#9ca3af' } },
-                      y: { ...CHART_OPTS.scales.y, title: { display: true, text: 'Estimated Fuel Impact %', color: '#9ca3af' } },
+                      x: { ...CHART_OPTS.scales.x, title: { display: true, text: t('fuel.charts.axisTreadDepth'), color: '#9ca3af' } },
+                      y: { ...CHART_OPTS.scales.y, title: { display: true, text: t('fuel.charts.axisFuelImpact'), color: '#9ca3af' } },
                     },
                   }}
                 />
@@ -883,20 +883,20 @@ export default function FuelEfficiency() {
             >
               <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
                 <Globe className="w-5 h-5 text-blue-400" />
-                <h3 className="font-semibold text-white">Site Fuel Impact Analysis</h3>
-                <span className="ml-auto text-xs text-gray-500">Sorted by Annual Impact (highest first)</span>
+                <h3 className="font-semibold text-white">{t('fuel.siteTable.heading')}</h3>
+                <span className="ml-auto text-xs text-gray-500">{t('fuel.siteTable.sortedBy')}</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-800/50 text-gray-400 text-xs uppercase tracking-wide">
-                      <th className="px-4 py-3 text-left">Site</th>
-                      <th className="px-4 py-3 text-right">Vehicles</th>
-                      <th className="px-4 py-3 text-right">Pressure Compliance</th>
-                      <th className="px-4 py-3 text-right">Avg Tread (mm)</th>
-                      <th className="px-4 py-3 text-right">Extra Fuel/Month (L)</th>
-                      <th className="px-4 py-3 text-right">Monthly Extra Cost</th>
-                      <th className="px-4 py-3 text-right">Annual Impact</th>
+                      <th className="px-4 py-3 text-left">{t('fuel.siteTable.columns.site')}</th>
+                      <th className="px-4 py-3 text-right">{t('fuel.siteTable.columns.vehicles')}</th>
+                      <th className="px-4 py-3 text-right">{t('fuel.siteTable.columns.pressureCompliance')}</th>
+                      <th className="px-4 py-3 text-right">{t('fuel.siteTable.columns.avgTread')}</th>
+                      <th className="px-4 py-3 text-right">{t('fuel.siteTable.columns.extraFuelMonth')}</th>
+                      <th className="px-4 py-3 text-right">{t('fuel.siteTable.columns.monthlyExtraCost')}</th>
+                      <th className="px-4 py-3 text-right">{t('fuel.siteTable.columns.annualImpact')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800">
@@ -912,7 +912,7 @@ export default function FuelEfficiency() {
                         <td className="px-4 py-3 text-right">
                           {s.avgTread != null
                             ? <span className={s.avgTread <= 3 ? 'text-red-400' : s.avgTread <= 5 ? 'text-amber-400' : 'text-green-400'}>{s.avgTread}</span>
-                            : <span className="text-gray-500">N/A</span>}
+                            : <span className="text-gray-500">{t('fuel.na')}</span>}
                         </td>
                         <td className="px-4 py-3 text-right text-gray-300">{fmt(s.extraFuelMonth)}</td>
                         <td className="px-4 py-3 text-right text-amber-400 font-medium">{fmtCur(s.totalExtraCostMonth, activeCurrency)}</td>
@@ -926,7 +926,7 @@ export default function FuelEfficiency() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-800/50 font-semibold text-white">
-                      <td className="px-4 py-3">Total</td>
+                      <td className="px-4 py-3">{t('fuel.siteTable.total')}</td>
                       <td className="px-4 py-3 text-right">{siteMetrics.reduce((s, r) => s + r.vehicles, 0)}</td>
                       <td className="px-4 py-3 text-right">-</td>
                       <td className="px-4 py-3 text-right">-</td>
@@ -949,20 +949,20 @@ export default function FuelEfficiency() {
             >
               <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
                 <TrendingDown className="w-5 h-5 text-green-400" />
-                <h3 className="font-semibold text-white">Fuel Savings Opportunity - Top 10 Vehicles</h3>
-                <span className="ml-auto text-xs text-gray-500">Highest improvement potential</span>
+                <h3 className="font-semibold text-white">{t('fuel.opportunitiesTable.heading')}</h3>
+                <span className="ml-auto text-xs text-gray-500">{t('fuel.opportunitiesTable.sortedBy')}</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-800/50 text-gray-400 text-xs uppercase tracking-wide">
-                      <th className="px-4 py-3 text-left">#</th>
-                      <th className="px-4 py-3 text-left">Asset</th>
-                      <th className="px-4 py-3 text-left">Site</th>
-                      <th className="px-4 py-3 text-right">Compliance %</th>
-                      <th className="px-4 py-3 text-right">Avg Tread (mm)</th>
-                      <th className="px-4 py-3 text-right">Monthly Waste</th>
-                      <th className="px-4 py-3 text-right">Potential Saving</th>
+                      <th className="px-4 py-3 text-left">{t('fuel.opportunitiesTable.columns.rank')}</th>
+                      <th className="px-4 py-3 text-left">{t('fuel.opportunitiesTable.columns.asset')}</th>
+                      <th className="px-4 py-3 text-left">{t('fuel.opportunitiesTable.columns.site')}</th>
+                      <th className="px-4 py-3 text-right">{t('fuel.opportunitiesTable.columns.compliance')}</th>
+                      <th className="px-4 py-3 text-right">{t('fuel.opportunitiesTable.columns.avgTread')}</th>
+                      <th className="px-4 py-3 text-right">{t('fuel.opportunitiesTable.columns.monthlyWaste')}</th>
+                      <th className="px-4 py-3 text-right">{t('fuel.opportunitiesTable.columns.potentialSaving')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800">
@@ -979,7 +979,7 @@ export default function FuelEfficiency() {
                         <td className="px-4 py-3 text-right">
                           {v.avgTread != null
                             ? <span className={v.avgTread <= 3 ? 'text-red-400' : v.avgTread <= 5 ? 'text-amber-400' : 'text-gray-300'}>{v.avgTread}mm</span>
-                            : <span className="text-gray-500">N/A</span>}
+                            : <span className="text-gray-500">{t('fuel.na')}</span>}
                         </td>
                         <td className="px-4 py-3 text-right text-red-400">{fmtCur(v.totalExtraCostMonth, activeCurrency)}</td>
                         <td className="px-4 py-3 text-right text-green-400 font-semibold">{fmtCur(v.potentialSaving, activeCurrency)}</td>
@@ -994,8 +994,8 @@ export default function FuelEfficiency() {
           {/* ── 8. Year-over-Year Fuel Impact Trend ─────────────────────── */}
           {monthlyTrend.length > 0 && (
             <ChartCard
-              title="12-Month Fuel Impact Trend"
-              subtitle="Estimated monthly fuel waste cost based on historical tyre data - shows fleet trajectory"
+              title={t('fuel.charts.trend12Month')}
+              subtitle={t('fuel.charts.trend12MonthSub')}
               icon={TrendingUp}
             >
               <div className="h-72">
@@ -1004,7 +1004,7 @@ export default function FuelEfficiency() {
                     labels: monthlyTrend.map(m => m.label),
                     datasets: [
                       {
-                        label: `Monthly Extra Fuel Cost (${activeCurrency})`,
+                        label: t('fuel.charts.monthlyExtraFuelCostSeries', { currency: activeCurrency }),
                         data: monthlyTrend.map(m => m.totalExtraCost),
                         borderColor: '#f59e0b',
                         backgroundColor: '#f59e0b22',
@@ -1022,10 +1022,10 @@ export default function FuelEfficiency() {
                       tooltip: {
                         ...CHART_OPTS.plugins.tooltip,
                         callbacks: {
-                          label: ctx => `${activeCurrency} ${fmt(ctx.raw, 2)}`,
+                          label: ctx => t('fuel.charts.tooltipCurrencyValue', { currency: activeCurrency, value: fmt(ctx.raw, 2) }),
                           afterLabel: ctx => {
                             const m = monthlyTrend[ctx.dataIndex]
-                            return `Records: ${m.count} | Avg Penalty: ${m.avgPenalty.toFixed(2)}%`
+                            return t('fuel.charts.tooltipRecordsAvgPenalty', { count: m.count, pct: m.avgPenalty.toFixed(2) })
                           },
                         },
                       },
@@ -1045,29 +1045,29 @@ export default function FuelEfficiency() {
             >
               <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
                 <Leaf className="w-5 h-5 text-green-400" />
-                Environmental Impact - Excess Emissions from Poor Tyre Maintenance
+                {t('fuel.env.heading')}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <EnvCard
                   icon={Wind}
                   color="blue"
-                  value={`${envMetrics.co2Month} tonnes`}
-                  label="CO₂ per Month"
-                  sub={`${fmt(envMetrics.co2Month * CO2_KG_PER_LITER * 1000, 0)} kg total`}
+                  value={t('fuel.env.co2Value', { tonnes: envMetrics.co2Month })}
+                  label={t('fuel.env.co2Label')}
+                  sub={t('fuel.env.co2Sub', { kg: fmt(envMetrics.co2Month * CO2_KG_PER_LITER * 1000, 0) })}
                 />
                 <EnvCard
                   icon={Leaf}
                   color="green"
                   value={fmt(envMetrics.treesNeeded)}
-                  label="Trees Needed to Offset"
-                  sub="Full year of excess CO₂"
+                  label={t('fuel.env.treesLabel')}
+                  sub={t('fuel.env.treesSub')}
                 />
                 <EnvCard
                   icon={Fuel}
                   color="amber"
-                  value={`${fmt(envMetrics.unnecessaryKm)} km`}
-                  label="Equivalent Unnecessary km"
-                  sub="Same fuel wasted driving"
+                  value={t('fuel.env.kmValue', { km: fmt(envMetrics.unnecessaryKm) })}
+                  label={t('fuel.env.kmLabel')}
+                  sub={t('fuel.env.kmSub')}
                 />
               </div>
             </motion.div>
@@ -1082,8 +1082,8 @@ export default function FuelEfficiency() {
             >
               <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
                 <Zap className="w-5 h-5 text-amber-400" />
-                <h3 className="font-semibold text-white">Fuel Efficiency Recommendations</h3>
-                <span className="ml-auto text-xs text-gray-500">Auto-generated from fleet data</span>
+                <h3 className="font-semibold text-white">{t('fuel.recommendations.heading')}</h3>
+                <span className="ml-auto text-xs text-gray-500">{t('fuel.recommendations.autoGenerated')}</span>
               </div>
               <div className="divide-y divide-gray-800">
                 {recommendations.map((r, i) => (
@@ -1105,8 +1105,8 @@ export default function FuelEfficiency() {
           {!loading && !error && records.length === 0 && (
             <div className="text-center py-24 text-gray-500">
               <Fuel className="w-16 h-16 mx-auto mb-4 text-gray-700" />
-              <p className="text-lg font-medium text-gray-400">No tyre records found</p>
-              <p className="text-sm mt-1">Upload tyre data or adjust the country filter to begin fuel analysis.</p>
+              <p className="text-lg font-medium text-gray-400">{t('fuel.empty.title')}</p>
+              <p className="text-sm mt-1">{t('fuel.empty.subtitle')}</p>
             </div>
           )}
         </>
@@ -1194,6 +1194,7 @@ function EnvCard({ icon: Icon, color, value, label, sub }) {
 }
 
 function ImpactBadge({ impact }) {
+  const { t } = useLanguage()
   const cls = {
     Critical: 'bg-red-900/40 text-red-400 border-red-800',
     High: 'bg-orange-900/40 text-orange-400 border-orange-800',
@@ -1202,7 +1203,7 @@ function ImpactBadge({ impact }) {
   }[impact] ?? 'bg-gray-800 text-gray-400 border-gray-700'
   return (
     <span className={`shrink-0 text-xs border rounded-full px-2.5 py-0.5 font-medium ${cls}`}>
-      {impact}
+      {t(`fuel.impact.${impact.toLowerCase()}`)}
     </span>
   )
 }

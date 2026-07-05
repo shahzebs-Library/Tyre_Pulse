@@ -848,7 +848,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
   // Right-align numeric columns; thousands-format money/quantity columns while
   // leaving identifiers (id/serial/asset/year/date/phone) untouched.
   const numColIdx = new Set(numCols.map(c => columns.indexOf(c)))
-  const isIdLike = c => /(^|_)(id|serial|asset|year|date|month|phone|plate|no)$|serial|asset_no/i.test((c.key || '') + '|' + (c.header || ''))
+  const isIdLike = c => /\b(id|serial|asset|year|date|month|phone|plate|no)\b/i.test(((c.key || '') + ' ' + (c.header || '')).replace(/_/g, ' '))
   const fmtColIdx = new Set(columns.map((c, i) => (numColIdx.has(i) && !isIdLike(c)) ? i : -1).filter(i => i >= 0))
 
   autoTable(doc, {

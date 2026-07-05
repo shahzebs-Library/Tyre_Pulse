@@ -18,6 +18,7 @@ import {
 import * as imports from '../lib/api/imports'
 import MappingProfilesManager from '../components/intake/MappingProfilesManager'
 import DataLinkPanel from '../components/intake/DataLinkPanel'
+import CostControlPanel from '../components/intake/CostControlPanel'
 
 const MODULES = [
   { key: 'fleet', label: 'Fleet / Assets' },
@@ -620,6 +621,9 @@ export default function DataIntakeCenter() {
 
           {/* Cross-table link health (asset_no → vehicles) + one-click repair. */}
           <DataLinkPanel isElevated={isElevated} />
+
+          {/* Budget override commands: set / derive monthly tyre budgets. */}
+          <CostControlPanel isElevated={isElevated} />
         </div>
       )}
 

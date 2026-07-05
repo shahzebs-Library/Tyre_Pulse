@@ -1,0 +1,12 @@
+-- V88: Cost Control commands for the Data Intake Center (admin-only, audited).
+--
+-- cost_budget_overview(): vehicles, budget coverage, total monthly budget, and
+--   the fleet's ACTUAL average monthly tyre spend (real tyre history).
+-- cost_set_monthly_budget(scope, value, amount): override monthly_tyre_budget
+--   for all vehicles / a country / a site / a single asset.
+-- cost_apply_actual_budgets(): per vehicle, budget := its own actual average
+--   monthly spend (total spend / its active months) — derived from real tyre
+--   history, applied explicitly by the admin.
+-- All writes audited to import_audit_events ('budget_override' /
+-- 'budget_from_actuals'). Org-scoped. Sandbox-verified then rolled back.
+-- Full bodies applied via the v88 migration (DB is source of truth).

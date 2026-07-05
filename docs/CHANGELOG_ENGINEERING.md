@@ -433,3 +433,16 @@ untouched). Confirmed fixes landed:
   sections + a spend-bar trend + brand-reliability list + 2 new recommendations
   (budget overrun, worst-reliability brand). Takes effect on edge-function
   redeploy. Live DB → V86.
+
+## 2026-07-05 — Data linkage + Cost Control (V87/V88)
+- **Linkage audit** found the natural-key chain broken at the root: 2,383 tyre
+  records / 162 assets with vehicle_fleet EMPTY (100% orphaned). V87 adds
+  data_link_audit() (per-table linked/unlinked/no-asset health) and the
+  admin-only data_link_create_missing_assets() repair (skeleton vehicle per
+  orphan asset, audited). New "Data links" panel in the Data Intake Center.
+  Owner ran the repair: fleet 0 → 162, orphans 2,383 → 0.
+- **V88 Cost Control**: cost_budget_overview / cost_set_monthly_budget
+  (all|country|site|asset override) / cost_apply_actual_budgets (per-vehicle
+  budget from its own real avg monthly spend — 22 months of history live).
+  New "Cost control" panel (admin commands + coverage vs actual-spend tiles).
+  All writes audited to import_audit_events. Gate: 877 tests, build clean.

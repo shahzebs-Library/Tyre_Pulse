@@ -651,6 +651,33 @@ export async function linkCreateMissingAssets() {
   return data
 }
 
+// ── Cost control (V88) ────────────────────────────────────────────────────────
+/** Fleet budget overview: vehicles, budgets set, total vs actual avg monthly spend. */
+export async function costBudgetOverview() {
+  const { data, error } = await supabase.rpc('cost_budget_overview')
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
+}
+
+/**
+ * Admin override: set monthly_tyre_budget for a scope.
+ * @param {'all'|'country'|'site'|'asset'} scope
+ * @param {string|null} value  country/site/asset value (ignored for 'all')
+ * @param {number} amount
+ */
+export async function costSetMonthlyBudget(scope, value, amount) {
+  const { data, error } = await supabase.rpc('cost_set_monthly_budget', { p_scope: scope, p_value: value, p_amount: amount })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
+}
+
+/** Admin: set each vehicle's budget to its own actual average monthly spend. */
+export async function costApplyActualBudgets() {
+  const { data, error } = await supabase.rpc('cost_apply_actual_budgets')
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
+}
+
 /**
  * Every saved mapping profile for the org (active AND inactive, all modules),
  * newest-used first, with a column-rule count — powers the Saved Mappings

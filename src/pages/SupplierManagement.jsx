@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import * as supplierApi from '../lib/api/supplierManagementApi'
+import { recordCost } from '../lib/analyticsEngine'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -146,10 +147,10 @@ function computeSupplierMetrics(records, brand) {
   const avgLife = kms.length ? kms.reduce((s, v) => s + v, 0) / kms.length : 0
   const failures = recs.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical')
   const failureRate = recs.length > 0 ? failures.length / recs.length : 0
-  const totalSpend = recs.reduce((s, r) => s + Number(r.cost_per_tyre || 0), 0)
+  const totalSpend = recs.reduce((s, r) => s + recordCost(r), 0)
   const thisYear = new Date().getFullYear()
   const yearRecs = recs.filter(r => r.issue_date && new Date(r.issue_date).getFullYear() === thisYear)
-  const spendThisYear = yearRecs.reduce((s, r) => s + Number(r.cost_per_tyre || 0), 0)
+  const spendThisYear = yearRecs.reduce((s, r) => s + recordCost(r), 0)
   const sites = [...new Set(recs.map(r => r.site).filter(Boolean))]
   const sizes = [...new Set(recs.map(r => r.size).filter(Boolean))]
   const countries = [...new Set(recs.map(r => r.country).filter(Boolean))]
@@ -330,7 +331,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
   const monthlySpend = useMemo(() => {
     return months.map(m => {
       const recs = supplier.recs.filter(r => toMonthKey(r.issue_date) === m)
-      return recs.reduce((s, r) => s + Number(r.cost_per_tyre || 0), 0)
+      return recs.reduce((s, r) => s + recordCost(r), 0)
     })
   }, [supplier.recs, months])
 
@@ -925,7 +926,7 @@ export default function SupplierManagement() {
       const m = allMetrics.find(x => x.brand === brand)
       return months12.map(mo => {
         const recs = (m?.recs || []).filter(r => toMonthKey(r.issue_date) === mo)
-        return recs.reduce((s, r) => s + Number(r.cost_per_tyre || 0), 0)
+        return recs.reduce((s, r) => s + recordCost(r), 0)
       })
     })
 
@@ -933,7 +934,7 @@ export default function SupplierManagement() {
       const topTotal = top5Brands.reduce((s, brand, bi) => s + (monthlyByBrand[bi][idx] || 0), 0)
       const totalMo = allMetrics.reduce((s, m) => {
         const recs = m.recs.filter(r => toMonthKey(r.issue_date) === mo)
-        return s + recs.reduce((ss, r) => ss + Number(r.cost_per_tyre || 0), 0)
+        return s + recs.reduce((ss, r) => ss + recordCost(r), 0)
       }, 0)
       return Math.max(0, totalMo - topTotal)
     })
@@ -964,8 +965,8 @@ export default function SupplierManagement() {
     const thisYear = new Date().getFullYear()
     const lastYear = thisYear - 1
     const yoy = allMetrics.map(m => {
-      const tySpend = m.recs.filter(r => r.issue_date && new Date(r.issue_date).getFullYear() === thisYear).reduce((s, r) => s + Number(r.cost_per_tyre || 0), 0)
-      const lySpend = m.recs.filter(r => r.issue_date && new Date(r.issue_date).getFullYear() === lastYear).reduce((s, r) => s + Number(r.cost_per_tyre || 0), 0)
+      const tySpend = m.recs.filter(r => r.issue_date && new Date(r.issue_date).getFullYear() === thisYear).reduce((s, r) => s + recordCost(r), 0)
+      const lySpend = m.recs.filter(r => r.issue_date && new Date(r.issue_date).getFullYear() === lastYear).reduce((s, r) => s + recordCost(r), 0)
       const change = lySpend > 0 ? ((tySpend - lySpend) / lySpend) * 100 : null
       return { brand: m.brand, thisYear: tySpend, lastYear: lySpend, change }
     }).filter(y => y.thisYear > 0 || y.lastYear > 0).sort((a, b) => b.thisYear - a.thisYear)

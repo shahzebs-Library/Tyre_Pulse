@@ -379,7 +379,7 @@ export default function RootCauseEngine() {
       causes.forEach(cause => {
         if (stats[cause]) {
           stats[cause].count++
-          stats[cause].totalCost += parseFloat(r.cost_per_tyre) || 0
+          stats[cause].totalCost += (parseFloat(r.cost_per_tyre) || 0) * (Number(r.qty) || 1)
           stats[cause].records.push(r)
         }
       })

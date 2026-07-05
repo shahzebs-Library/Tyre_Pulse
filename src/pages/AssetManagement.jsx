@@ -162,7 +162,7 @@ function TyrePositionDiagram({ tyres = [] }) {
 // ── Asset Detail Drawer ────────────────────────────────────────────────────────
 function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
   const activeTyres = tyres.filter(t => !t.km_at_removal)
-  const totalCost = tyres.reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0), 0)
+  const totalCost = tyres.reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0)
 
   // Monthly tyre cost chart (last 12 months)
   const monthlyData = useMemo(() => {
@@ -178,7 +178,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
         if (!t.issue_date) return false
         const td = new Date(t.issue_date)
         return td.getMonth() === mo && td.getFullYear() === yr
-      }).reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0), 0)
+      }).reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0)
       costs.push(sum)
     }
     return { labels, costs }

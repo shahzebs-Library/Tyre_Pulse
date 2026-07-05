@@ -446,3 +446,20 @@ untouched). Confirmed fixes landed:
   budget from its own real avg monthly spend — 22 months of history live).
   New "Cost control" panel (admin commands + coverage vs actual-spend tiles).
   All writes audited to import_audit_events. Gate: 877 tests, build clean.
+
+## 2026-07-05 — Cost accuracy sweep (V89 + qty-aware maths everywhere)
+- Root cause of "wrong costs": ALL 2,383 tyre records carry the identical
+  placeholder cost 1200 (not real market data), and 1,251 rows are quantity
+  aggregates (avg qty 10.28, max 832) — so pages summing bare cost_per_tyre
+  understated spend ~10× (2.86M vs 29.4M) on top of the fake base rate.
+- V89: flat-rate detection in cost_budget_overview (>=90% identical value) +
+  audited admin command cost_clear_value to blank the placeholder (honest 0/—
+  until a real cost column is uploaded via Enrich).
+- Qty-aware cost maths standardised across 18 files: kpiEngine (5 sites incl.
+  weighted avgCost + defaultCost paths), ragService, SupplierManagement (7),
+  TyreScrap (4, incl. per-tyre weighted average), ForecastingEngine (4),
+  FleetIntelligence (3), AssetManagement (2), ContinuousImprovement,
+  TyreLifecycle, VendorIntelligence, StockReplenishment, RotationSchedule
+  (also removed the fabricated 1200 fallback rate), RootCauseEngine,
+  DriverManagement. Reports/Dashboard/Analytics/BrandPerformance/exec digest
+  were already qty-aware. Gate: 877 tests, build clean.

@@ -164,7 +164,7 @@ export default function StockReplenishment() {
     tyreRecords.forEach(r => {
       if (!r.cost_per_tyre) return
       const k = `${r.brand}||${r.size}`
-      sums[k] = (sums[k] || 0) + parseFloat(r.cost_per_tyre)
+      sums[k] = (sums[k] || 0) + parseFloat(r.cost_per_tyre) * (Number(r.qty) || 1)
       counts[k] = (counts[k] || 0) + 1
     })
     const result = {}

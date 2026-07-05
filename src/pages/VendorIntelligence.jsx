@@ -348,7 +348,7 @@ export default function VendorIntelligence() {
       : enrichedVendors[enrichedVendors.length - 1] ?? null
 
     const totalFleetInvestment = filteredRecords
-      .reduce((s, r) => s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) : 0), 0)
+      .reduce((s, r) => s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) * (Number(r.qty) || 1) : 0), 0)
 
     const bestSite = workshops.length > 0 ? workshops[0] : null
     const worstSite = workshops.length > 1 ? workshops[workshops.length - 1] : null

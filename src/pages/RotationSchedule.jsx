@@ -260,8 +260,8 @@ function buildRotationAnalytics(records, interval) {
     : null
 
   // Cost savings estimate
-  const avgCost     = records.reduce((s, r) => s + (parseFloat(r.cost_per_tyre) || 0), 0) / Math.max(records.length, 1)
-  const effCost     = avgCost > 0 ? avgCost : 1200
+  const avgCost     = records.reduce((s, r) => s + (parseFloat(r.cost_per_tyre) || 0) * (Number(r.qty) || 1), 0) / Math.max(records.reduce((s, r) => s + (Number(r.qty) || 1), 0), 1)
+  const effCost     = avgCost // actual data only - no fabricated fallback rate
   const lifeBenefit = interval * 0.15
   const costSavings = Math.round((lifeBenefit / 100_000) * effCost * total * 4 * 0.3)
 

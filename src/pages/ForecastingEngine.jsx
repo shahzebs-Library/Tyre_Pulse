@@ -332,7 +332,7 @@ export default function ForecastingEngine() {
       if (!r.brand) return
       if (!brands[r.brand]) brands[r.brand] = { count: 0, cost: 0, monthly: {} }
       brands[r.brand].count++
-      brands[r.brand].cost += parseFloat(r.cost_per_tyre) || 0
+      brands[r.brand].cost += (parseFloat(r.cost_per_tyre) || 0) * (Number(r.qty) || 1)
       const k = buildMonthKey(r.issue_date)
       if (k) brands[r.brand].monthly[k] = (brands[r.brand].monthly[k] || 0) + 1
     })
@@ -364,7 +364,7 @@ export default function ForecastingEngine() {
       if (!r.site) return
       if (!siteMap[r.site]) siteMap[r.site] = { count: 0, cost: 0, monthly: {}, activeCount: 0 }
       siteMap[r.site].count++
-      siteMap[r.site].cost += parseFloat(r.cost_per_tyre) || 0
+      siteMap[r.site].cost += (parseFloat(r.cost_per_tyre) || 0) * (Number(r.qty) || 1)
       const k = buildMonthKey(r.issue_date)
       if (k) siteMap[r.site].monthly[k] = (siteMap[r.site].monthly[k] || 0) + 1
     })
@@ -434,7 +434,7 @@ export default function ForecastingEngine() {
     const prevYearSet = new Set(last24Keys.slice(0, 12))
     return hist24Records
       .filter(r => r.issue_date && prevYearSet.has(buildMonthKey(r.issue_date)))
-      .reduce((s, r) => s + (parseFloat(r.cost_per_tyre) || 0), 0)
+      .reduce((s, r) => s + (parseFloat(r.cost_per_tyre) || 0) * (Number(r.qty) || 1), 0)
   }, [hist24Records, last24Keys])
 
   const hasLastYear = useMemo(() => lastYearActual > 0, [lastYearActual])
@@ -679,7 +679,7 @@ export default function ForecastingEngine() {
   }
 
   const avgCostPerTyre = hist12Records.length
-    ? hist12Records.reduce((s, r) => s + (parseFloat(r.cost_per_tyre) || 0), 0) / hist12Records.length
+    ? hist12Records.reduce((s, r) => s + (parseFloat(r.cost_per_tyre) || 0) * (Number(r.qty) || 1), 0) / Math.max(hist12Records.reduce((s, r) => s + (Number(r.qty) || 1), 0), 1)
     : 0
 
   // ── Full render ────────────────────────────────────────────────────────────

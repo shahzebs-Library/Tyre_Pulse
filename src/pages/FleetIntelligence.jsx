@@ -472,7 +472,7 @@ export default function FleetIntelligence() {
       const master = fleetMasterMap[asset_no] || null
 
       const total_tyre_changes = recs.length
-      const total_tyre_cost = recs.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0), 0)
+      const total_tyre_cost = recs.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (Number(r.qty) || 1), 0)
 
       // CPK - only valid records
       const validRecs = recs.filter(r => {
@@ -628,7 +628,7 @@ export default function FleetIntelligence() {
       const site = r.site || 'Unknown'
       if (!siteMap[site]) siteMap[site] = {}
       const vtype = fleetMasterMap[r.asset_no]?.vehicle_type || 'Unknown'
-      siteMap[site][vtype] = (siteMap[site][vtype] || 0) + (Number(r.cost_per_tyre) || 0)
+      siteMap[site][vtype] = (siteMap[site][vtype] || 0) + (Number(r.cost_per_tyre) || 0) * (Number(r.qty) || 1)
     }
 
     const sites = Object.entries(siteMap)
@@ -666,7 +666,7 @@ export default function FleetIntelligence() {
       const d = new Date(r.issue_date)
       if (d < start) continue
       const mk = monthKey(d)
-      monthMap[mk] = (monthMap[mk] || 0) + (Number(r.cost_per_tyre) || 0)
+      monthMap[mk] = (monthMap[mk] || 0) + (Number(r.cost_per_tyre) || 0) * (Number(r.qty) || 1)
     }
 
     const dataPoints = keys.map(({ key, label }) => ({

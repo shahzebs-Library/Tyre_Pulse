@@ -278,7 +278,7 @@ export default function TyreScrapManagement() {
     const totalCount    = filtered.length
     const scrapCount    = scrapped.length
     const scrapRate     = totalCount > 0 ? (scrapCount / totalCount) * 100 : 0
-    const totalCost     = scrapped.reduce((s, t) => s + (Number(t.cost_per_tyre) || 0), 0)
+    const totalCost     = scrapped.reduce((s, t) => s + (Number(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0)
     const lives         = scrapped.map(kmLife).filter(v => v != null && v > 0)
     const avgKmLife     = lives.length ? lives.reduce((a, b) => a + b, 0) / lives.length : null
     // Retread savings: 30% could have retreaded at 40% lower cost
@@ -309,7 +309,7 @@ export default function TyreScrapManagement() {
       const bucket = months.find(x => x.key === m)
       if (bucket) {
         bucket.count++
-        bucket.cost += Number(t.cost_per_tyre) || 0
+        bucket.cost += (Number(t.cost_per_tyre) || 0) * (Number(t.qty) || 1)
       }
     })
     return months
@@ -370,7 +370,7 @@ export default function TyreScrapManagement() {
   const retreatOpportunity = useMemo(() => {
     const count = Math.round(thisMonthScrap.length * 0.30)
     const avgCost = thisMonthScrap.length > 0
-      ? thisMonthScrap.reduce((s, t) => s + (Number(t.cost_per_tyre) || 0), 0) / thisMonthScrap.length
+      ? thisMonthScrap.reduce((s, t) => s + (Number(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0) / Math.max(thisMonthScrap.reduce((s, t) => s + (Number(t.qty) || 1), 0), 1)
       : 0
     const savings = count * avgCost * 0.40
     return { count, savings }
@@ -422,7 +422,7 @@ export default function TyreScrapManagement() {
       map[s].total++
       if (isScrap(t)) {
         map[s].scrap++
-        map[s].cost += Number(t.cost_per_tyre) || 0
+        map[s].cost += (Number(t.cost_per_tyre) || 0) * (Number(t.qty) || 1)
         const b = t.brand?.trim() || 'Unknown'
         map[s].brands[b] = (map[s].brands[b] || 0) + 1
         const ref = t.removal_date || t.issue_date

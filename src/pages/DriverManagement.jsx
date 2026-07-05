@@ -123,7 +123,7 @@ function aggregateDrivers(records) {
     }
     const d = map.get(name)
     d.records.push(r)
-    d.totalCost += r.cost_per_tyre ?? 0
+    d.totalCost += (r.cost_per_tyre ?? 0) * (r.qty || 1)
     if (isHighRisk(r)) d.highRiskCount++
     const cpk = calcCpk(r.cost_per_tyre, r.km_at_fitment, r.km_at_removal)
     if (cpk !== null && cpk > 0) d.cpkValues.push(cpk)

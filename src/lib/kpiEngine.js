@@ -140,7 +140,7 @@ export function computeCpkByAsset(records = []) {
   return Object.entries(groups)
     .map(([asset_no, rows]) => {
       const cpks      = rows.map(_cpkOf)
-      const totalCost = rows.reduce((s, r) => s + Number(r.cost_per_tyre), 0)
+      const totalCost = rows.reduce((s, r) => s + Number(r.cost_per_tyre || 0) * (Number(r.qty) || 1), 0)
       return {
         asset_no,
         avgCpk:    _mean(cpks),
@@ -469,7 +469,7 @@ export function computeScrapRate(records = [], scrapKmPct = 20, defaultCost = 0)
   })
 
   const estimatedScrapCost = scrapped.reduce(
-    (s, r) => s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) : defaultCost),
+    (s, r) => s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) : defaultCost) * (Number(r.qty) || 1),
     0
   )
 
@@ -580,7 +580,7 @@ export function computeCostTrend(records = [], defaultCost = 0) {
     .map(([month, rows]) => ({
       month,
       totalCost: rows.reduce(
-        (s, r) => s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) : defaultCost),
+        (s, r) => s + (Number(r.cost_per_tyre) > 0 ? Number(r.cost_per_tyre) : defaultCost) * (Number(r.qty) || 1),
         0
       ),
       count: rows.length,
@@ -621,7 +621,7 @@ export function computeVendorPerformance(records = []) {
     const failureRate  = rows.length > 0 ? failureCount / rows.length : 0
     const scrapCount   = rows.filter(r => /scrap/i.test(String(r.category ?? ''))).length
     const scrapRate    = rows.length > 0 ? scrapCount / rows.length : 0
-    const totalCost    = validRows.reduce((s, r) => s + Number(r.cost_per_tyre), 0)
+    const totalCost    = validRows.reduce((s, r) => s + Number(r.cost_per_tyre || 0) * (Number(r.qty) || 1), 0)
 
     // Composite score: lower CPK is better, lower failureRate is better, longer life is better
     const cpkScore     = avgCpk > 0 ? 1 / avgCpk : 0
@@ -651,8 +651,8 @@ export function computeWorkshopPerformance(records = [], actions = []) {
     const valid       = rows.filter(_isValidRecord)
     const cpks        = valid.map(_cpkOf)
     const highRisk    = rows.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical')
-    const totalCost   = valid.reduce((s, r) => s + Number(r.cost_per_tyre), 0)
-    const avgCost     = valid.length > 0 ? totalCost / valid.length : 0
+    const totalCost   = valid.reduce((s, r) => s + Number(r.cost_per_tyre || 0) * (Number(r.qty) || 1), 0)
+    const avgCost     = valid.reduce((s, r) => s + (Number(r.qty) || 1), 0) > 0 ? totalCost / valid.reduce((s, r) => s + (Number(r.qty) || 1), 0) : 0
     const avgCpk      = _mean(cpks)
     const highRiskPct = rows.length > 0 ? (highRisk.length / rows.length) * 100 : 0
 

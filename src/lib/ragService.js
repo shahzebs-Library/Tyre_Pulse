@@ -94,7 +94,7 @@ export async function retrieveVehicleContext(assetNo) {
   const avgLife = validRecords.length
     ? validRecords.reduce((s, r) => s + (Number(r.km_at_removal) - Number(r.km_at_fitment)), 0) / validRecords.length
     : null
-  const totalCost = validRecords.reduce((s, r) => s + Number(r.cost_per_tyre), 0)
+  const totalCost = validRecords.reduce((s, r) => s + Number(r.cost_per_tyre || 0) * (Number(r.qty) || 1), 0)
   const failureCount = tyreHistory.filter(r => r.risk_level === 'High' || r.risk_level === 'Critical').length
 
   const vehicleKpis = {
@@ -335,7 +335,7 @@ export function assembleContext({
     const sites = [...new Set(kpiData.map(r => r.site).filter(Boolean))]
     const brands = [...new Set(kpiData.map(r => r.brand).filter(Boolean))]
     const assets = [...new Set(kpiData.map(r => r.asset_no).filter(Boolean))]
-    const totalCost = kpiData.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0), 0)
+    const totalCost = kpiData.reduce((s, r) => s + (Number(r.cost_per_tyre) || 0) * (Number(r.qty) || 1), 0)
     const highRisk = kpiData.filter(r => r.risk_level === 'Critical' || r.risk_level === 'High').length
     const dateRange = kpiData.reduce((acc, r) => {
       if (r.issue_date) {

@@ -250,7 +250,7 @@ export default function TyreLifecycle() {
 
   // ── Cost doughnut ─────────────────────────────────────────────────────────
   const costDonut = useMemo(() => {
-    const sum = arr => arr.reduce((s, r) => s + (r.cost_per_tyre || 0), 0)
+    const sum = arr => arr.reduce((s, r) => s + (r.cost_per_tyre || 0) * (r.qty || 1), 0)
     const newCost      = sum(filtered.filter(r => r.category === 'New' || !r.category))
     const retreadCost  = sum(filtered.filter(r => r.category === 'Retread'))
     const repairCost   = sum(filtered.filter(r => r.category === 'Repaired'))

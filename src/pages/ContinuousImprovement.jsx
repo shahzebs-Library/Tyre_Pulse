@@ -342,7 +342,7 @@ export default function ContinuousImprovement() {
     }).filter(Boolean)
     const avgCpk = cpkList.length ? cpkList.reduce((a, b) => a + b, 0) / cpkList.length : 0
 
-    const totalCost = records.reduce((s, r) => s + (r.cost_per_tyre ?? 0), 0)
+    const totalCost = records.reduce((s, r) => s + (r.cost_per_tyre ?? 0) * (r.qty || 1), 0)
     const avgCostPerTyre = records.length ? totalCost / records.length : 0
 
     const failures = records.filter(r => r.risk_level === 'High' || r.category === 'Scrap')

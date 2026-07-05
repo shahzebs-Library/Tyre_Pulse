@@ -794,9 +794,9 @@ html.light {
   --border-bright:  rgba(22,163,74,0.35);
   --border-dim:     #e2e8f0;
   --text-primary:   #0f172a;
-  --text-secondary: #374151;
-  --text-muted:     #64748b;
-  --text-dim:       #94a3b8;
+  --text-secondary: #334155;
+  --text-muted:     #475569;
+  --text-dim:       #64748b;
   /* Elegant, soft enterprise shadows (Stripe / Linear style) */
   --shadow-card:    0 1px 2px rgba(16,24,40,0.05), 0 4px 12px rgba(16,24,40,0.06), 0 12px 32px rgba(16,24,40,0.05);
   --shadow-glow:    0 0 0 1px rgba(22,163,74,0.08), 0 8px 28px rgba(16,24,40,0.08);
@@ -810,7 +810,7 @@ html.light {
   --input-border:     #dfe5ec;
   --input-text:       #0f172a;
   --table-head-bg:    #f8fafc;
-  --table-head-text:  #64748b;
+  --table-head-text:  #475569;
   --table-cell-text:  #334155;
   --table-cell-border:#eef1f5;
   --btn-2-bg:         #ffffff;
@@ -882,7 +882,7 @@ html.light .input {
   border-color: rgba(22,163,74,0.18);
   color: #0f172a;
 }
-html.light .input::placeholder { color: #94a3b8; }
+html.light .input::placeholder { color: #64748b; }
 html.light .input:focus {
   background: #ffffff;
   border-color: rgba(22,163,74,0.6);
@@ -905,7 +905,7 @@ html.light .table-header {
   /* Opaque light header for the sticky behaviour (see base .table-header). */
   background: linear-gradient(rgba(22,163,74,0.03), rgba(22,163,74,0.03)), #f8fafc;
   border-bottom-color: rgba(22,163,74,0.09);
-  color: #64748b;
+  color: #475569;
 }
 html.light .table-cell { border-bottom-color: rgba(0,0,0,0.038); color: #374151; }
 html.light tr:hover .table-cell { background: rgba(22,163,74,0.03); }
@@ -935,21 +935,23 @@ html.light .nav-section { color: rgba(22,163,74,0.45) !important; }
 /* text */
 html.light .text-white       { color: #0f172a !important; }
 html.light .text-gray-100    { color: #1e293b !important; }
-html.light .text-gray-200    { color: #334155 !important; }
-html.light .text-gray-300    { color: #475569 !important; }
-html.light .text-gray-400    { color: #64748b !important; }
-html.light .text-gray-500    { color: #64748b !important; }
-html.light .text-gray-600    { color: #94a3b8 !important; }
-html.light .text-gray-700    { color: #cbd5e1 !important; }
+html.light .text-gray-200    { color: #1e293b !important; }
+html.light .text-gray-300    { color: #1e293b !important; }
+html.light .text-gray-400    { color: #475569 !important; }
+html.light .text-gray-500    { color: #475569 !important; }
+/* gray-600/700 were previously mapped LIGHTER (#94a3b8/#cbd5e1) — invisible on
+   white. Secondary/tertiary text must stay dark in light mode. */
+html.light .text-gray-600    { color: #475569 !important; }
+html.light .text-gray-700    { color: #334155 !important; }
 
 /* Dark-mode legibility lift: Tailwind's text-gray-600 (#4b5563) is too dim to
    read on the near-black base. These UNLAYERED rules beat Tailwind's layered
    utility in dark mode; the html.light !important rules above keep light mode. */
 .text-gray-600 { color: #808e86; }
 .text-gray-700 { color: #6b776f; }
-html.light .text-slate-300   { color: #334155 !important; }
-html.light .text-slate-400   { color: #64748b !important; }
-html.light .text-slate-500   { color: #94a3b8 !important; }
+html.light .text-slate-300   { color: #1e293b !important; }
+html.light .text-slate-400   { color: #475569 !important; }
+html.light .text-slate-500   { color: #475569 !important; }
 
 /* backgrounds */
 html.light .bg-gray-950,
@@ -1008,7 +1010,8 @@ html.light input, html.light select, html.light textarea {
   border-color: rgba(22,163,74,0.2) !important;
 }
 html.light input::placeholder,
-html.light textarea::placeholder { color: #94a3b8 !important; }
+html.light textarea::placeholder,
+html.light select::placeholder { color: #64748b !important; }
 
 /* badge adjustments */
 html.light .bg-red-900\/20    { background-color: rgba(239,68,68,0.1)  !important; }
@@ -1068,9 +1071,9 @@ html.light [class*="border-slate-700"] { border-color: rgba(15,23,42,0.10) !impo
 html.light [class*="text-gray-100"],
 html.light [class*="text-white"]:not([class*="bg-"]) { color: #0f172a !important; }
 html.light [class*="text-gray-200"],
-html.light [class*="text-gray-300"] { color: #334155 !important; }
+html.light [class*="text-gray-300"] { color: #1e293b !important; }
 html.light [class*="text-gray-400"],
-html.light [class*="text-gray-500"] { color: #64748b !important; }
+html.light [class*="text-gray-500"] { color: #475569 !important; }
 
 /* ─── Design System Utility Extensions ─────────────────────────────────────── */
 @layer utilities {

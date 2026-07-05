@@ -1774,6 +1774,17 @@ export async function exportDailyExecutivePdf(data, filename) {
 
 // ── PowerPoint Export - light executive theme, native editable charts ─────────
 export async function exportToPptx(data, filename = 'TyrePulse_Report') {
+  const pptx = await buildPptxDeck(data)
+  await pptx.writeFile({ fileName: `${filename}.pptx` })
+}
+
+/**
+ * Build the full executive deck and return the pptxgen instance WITHOUT saving.
+ * Exported so integrity tests can serialise it (`pptx.write('arraybuffer')`) and
+ * validate the real ZIP/XML — the corrupt-file class of bug is invisible when
+ * pptxgenjs is mocked.
+ */
+export async function buildPptxDeck(data) {
   await ensurePptx()
   const pptx = new pptxgen()
   pptx.layout = 'LAYOUT_WIDE'
@@ -1787,7 +1798,11 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
   const INK    = '0F172A'   // primary text
   const SUBTLE = '475569'   // secondary text
   const MUTED  = '94A3B8'   // tertiary text
-  const SHADOW = { type: 'outer', color: 'C7D0DE', blur: 7, offset: 2, angle: 90, opacity: 0.45 }
+  // pptxgenjs MUTATES the shadow options object it is given (re-scaling blur/
+  // offset to EMU on every use). Reusing one shared object made the values
+  // explode exponentially (blurRad ~1e+58) into invalid OOXML - PowerPoint then
+  // reports the file as corrupt. Always hand each shape a FRESH object.
+  const SHADOW = () => ({ type: 'outer', color: 'C7D0DE', blur: 7, offset: 2, angle: 90, opacity: 0.45 })
 
   // Brand accents (saturated, AA-contrast on white). The primary + secondary
   // accents follow the tenant branding when supplied (V68); GOLD stays fixed as
@@ -1825,7 +1840,7 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
     slide.addText(String(idx), { x: 12.4, y: 7.15, w: 0.6, h: 0.3, fontSize: 7.5, color: MUTED, align: 'right' })
   }
   function kpiTile(slide, x, y, w, label, value, color, sub) {
-    slide.addShape(rect, { x, y, w, h: 1.55, fill: { color: CARD }, line: { color: BORDER, width: 1 }, rounding: true, shadow: SHADOW })
+    slide.addShape(rect, { x, y, w, h: 1.55, fill: { color: CARD }, line: { color: BORDER, width: 1 }, rounding: true, shadow: SHADOW() })
     slide.addShape(rect, { x, y, w, h: 0.09, fill: { color } })
     slide.addText(String(label).toUpperCase(), { x: x + 0.18, y: y + 0.2, w: w - 0.36, h: 0.3, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
     slide.addText(String(value ?? '-'), { x: x + 0.18, y: y + 0.46, w: w - 0.36, h: 0.62, fontSize: 27, bold: true, color })
@@ -1922,7 +1937,7 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
   {
     const se = pptx.addSlide(); slideNo++
     header(se, 'Executive Summary', '60-second read', tone)
-    se.addShape(rect, { x: 0.4, y: 1.3, w: 12.55, h: 0.95, fill: { color: CARD }, line: { color: tone, width: 1.25 }, rounding: true, shadow: SHADOW })
+    se.addShape(rect, { x: 0.4, y: 1.3, w: 12.55, h: 0.95, fill: { color: CARD }, line: { color: tone, width: 1.25 }, rounding: true, shadow: SHADOW() })
     se.addShape(rect, { x: 0.4, y: 1.3, w: 0.1, h: 0.95, fill: { color: tone } })
     se.addText('FLEET STATUS', { x: 0.65, y: 1.4, w: 4, h: 0.3, fontSize: 9, bold: true, color: MUTED, charSpacing: 1 })
     se.addText(statusTxt, { x: 0.65, y: 1.67, w: 9, h: 0.45, fontSize: 18, bold: true, color: tone })
@@ -1948,7 +1963,7 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
     ].filter(Boolean)
     chips.forEach((ch, i) => {
       const cy = 2.95 + i * 0.95
-      se.addShape(rect, { x: 8.0, y: cy, w: 4.95, h: 0.82, fill: { color: CARD }, line: { color: BORDER, width: 1 }, rounding: true, shadow: SHADOW })
+      se.addShape(rect, { x: 8.0, y: cy, w: 4.95, h: 0.82, fill: { color: CARD }, line: { color: BORDER, width: 1 }, rounding: true, shadow: SHADOW() })
       se.addShape(rect, { x: 8.0, y: cy, w: 0.08, h: 0.82, fill: { color: ch.c } })
       se.addText(String(ch.l).toUpperCase(), { x: 8.2, y: cy + 0.08, w: 4.6, h: 0.25, fontSize: 8, bold: true, color: MUTED, charSpacing: 1 })
       se.addText(String(ch.v), { x: 8.2, y: cy + 0.32, w: 3.3, h: 0.42, fontSize: 15, bold: true, color: ch.c })
@@ -1991,11 +2006,15 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
   if (trend.length) {
     const s = pptx.addSlide(); slideNo++
     header(s, 'Consumption & Trend Analysis', 'Volume over time', VIOLET)
-    const avg = Math.round(trend.reduce((a, m) => a + m.count, 0) / trend.length)
-    kpiTile(s, 0.4, 1.35, 2.9, 'Latest Period', String(trend[trend.length - 1].count), INDIGO, trend[trend.length - 1].month)
-    kpiTile(s, 3.45, 1.35, 2.9, 'Period Average', String(avg), VIOLET, `${trend.length} periods`)
-    kpiTile(s, 6.5, 1.35, 2.9, 'Trend', `${trendDelta > 0 ? '+' : ''}${trendDelta}`, trendDelta > 0 ? CRIM : EMER, `${trendDir} vs first`)
-    kpiTile(s, 9.55, 1.35, 3.4, 'Peak Period', String(Math.max(...trend.map(m => m.count))), GOLD, 'highest volume')
+    // Data-honest tiles: any non-finite (missing/NaN) value renders as an em
+    // dash rather than the literal string "NaN" on an executive slide.
+    const safeN = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString('en-US') : '\u2014')
+    const counts = trend.map((m) => Number(m.count)).filter(Number.isFinite)
+    const avg = counts.length ? Math.round(counts.reduce((a, n) => a + n, 0) / counts.length) : null
+    kpiTile(s, 0.4, 1.35, 2.9, 'Latest Period', safeN(trend[trend.length - 1].count), INDIGO, String(trend[trend.length - 1].month ?? '\u2014'))
+    kpiTile(s, 3.45, 1.35, 2.9, 'Period Average', safeN(avg), VIOLET, `${trend.length} periods`)
+    kpiTile(s, 6.5, 1.35, 2.9, 'Trend', Number.isFinite(Number(trendDelta)) ? `${trendDelta > 0 ? '+' : ''}${trendDelta}` : '\u2014', trendDelta > 0 ? CRIM : EMER, `${trendDir} vs first`)
+    kpiTile(s, 9.55, 1.35, 3.4, 'Peak Period', counts.length ? Math.max(...counts).toLocaleString('en-US') : '\u2014', GOLD, 'highest volume')
     safeChart(s, pptx.ChartType.area,
       [{ name: 'Tyre Issues', labels: trend.map(m => m.month), values: trend.map(m => m.count) }],
       cOpts({ x: 0.4, y: 3.25, w: 12.55, h: 3.55, chartColors: [INDIGO], chartColorsOpacity: 35,
@@ -2071,7 +2090,7 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
       sectionTitle(s, 0.4, 1.25, 'Operational Intelligence', INDIGO)
       data.insights.slice(0, 4).forEach((ins, i) => {
         const y = 1.75 + i * 1.18
-        s.addShape(rect, { x: 0.4, y, w: 6.1, h: 1.0, fill: { color: CARD }, line: { color: BORDER, width: 1 }, rounding: true, shadow: SHADOW })
+        s.addShape(rect, { x: 0.4, y, w: 6.1, h: 1.0, fill: { color: CARD }, line: { color: BORDER, width: 1 }, rounding: true, shadow: SHADOW() })
         s.addShape(rect, { x: 0.4, y, w: 0.08, h: 1.0, fill: { color: INDIGO } })
         s.addText(ins, { x: 0.62, y: y + 0.1, w: 5.75, h: 0.8, fontSize: 10, color: SLATE, valign: 'middle' })
       })
@@ -2082,7 +2101,7 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
       data.recommendations.slice(0, 4).forEach((rec, i) => {
         const y = 1.75 + i * 1.18
         const col = priCol[rec.priority] || INDIGO
-        s.addShape(rect, { x: 6.9, y, w: 6.05, h: 1.0, fill: { color: CARD }, line: { color: col, width: 1 }, rounding: true, shadow: SHADOW })
+        s.addShape(rect, { x: 6.9, y, w: 6.05, h: 1.0, fill: { color: CARD }, line: { color: col, width: 1 }, rounding: true, shadow: SHADOW() })
         s.addShape(rect, { x: 6.9, y, w: 1.0, h: 0.3, fill: { color: col }, rounding: true })
         s.addText((rec.priority || 'Medium').toUpperCase(), { x: 6.9, y: y + 0.03, w: 1.0, h: 0.25, fontSize: 7.5, bold: true, color: 'FFFFFF', align: 'center' })
         s.addText(rec.text, { x: 8.0, y: y + 0.08, w: 4.85, h: 0.85, fontSize: 9.5, color: SLATE, valign: 'middle' })
@@ -2091,5 +2110,5 @@ export async function exportToPptx(data, filename = 'TyrePulse_Report') {
     footer(s, slideNo)
   }
 
-  await pptx.writeFile({ fileName: `${filename}.pptx` })
+  return pptx
 }

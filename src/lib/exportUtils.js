@@ -229,64 +229,78 @@ async function svgToPngDataUrl(svgEl, scale = 2, bgColor = '#0A0F1E') {
 }
 
 // ── PDF layout helpers ─────────────────────────────────────────────────────────
+// Design system: clean corporate light theme. 14 mm side margins, header band
+// ends at 23 mm (content starts >= 28 mm), footer rule at page-height − 10 mm.
 // opts (all optional, backward-compatible): { accent:[r,g,b], logoData, footerText }
+const MX = 14              // global side margin (mm)
+const HEADER_BOTTOM = 23   // header band ends here; content starts at >= 28
+const FOOTER_SPACE = 12    // keep-clear zone above the page bottom
+const SECTION_MIN_SPACE = 25 // never start a section within 25 mm of page end
+
 function _pageHeader(doc, title, subtitle, company = '', opts = {}) {
   const pw = doc.internal.pageSize.width
   const accent = opts.accent || P.indigo
   const hasLogo = !!opts.logoData
-  const tx = hasLogo ? 30 : 14   // shift text right when a logo is present
+  const tx = hasLogo ? 33 : MX   // shift text right when a logo is present
 
-  // Deep slate header
-  doc.setFillColor(...P.slate)
-  doc.rect(0, 0, pw, 20, 'F')
-  // Tenant accent stripe
+  // Clean corporate band: brand accent bar + white field + hairline base rule
+  doc.setFillColor(...P.white)
+  doc.rect(0, 0, pw, HEADER_BOTTOM, 'F')
   doc.setFillColor(...accent)
-  doc.rect(0, 20, pw, 2.5, 'F')
+  doc.rect(0, 0, pw, 2.5, 'F')
 
   // Tenant logo (best-effort)
   if (hasLogo) {
     const fmt = /image\/jpe?g/i.test(opts.logoData) ? 'JPEG' : 'PNG'
-    try { doc.addImage(opts.logoData, fmt, 12, 3, 14, 14, undefined, 'FAST') } catch { /* ignore */ }
+    try { doc.addImage(opts.logoData, fmt, MX, 5.5, 14, 14, undefined, 'FAST') } catch { /* ignore */ }
   }
 
-  // Company name - left
-  doc.setFontSize(8)
+  // Company name - small uppercase eyebrow
+  doc.setFontSize(7.5)
   doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...P.gold)
-  doc.text((company || 'FLEET OPERATIONS').toUpperCase(), tx, 8)
+  doc.setTextColor(...P.ghost)
+  doc.text((company || 'FLEET OPERATIONS').toUpperCase(), tx, 9, { charSpace: 0.5 })
 
-  // Title - left
-  doc.setFontSize(11)
+  // Report title - large bold ink
+  doc.setFontSize(15)
   doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...P.white)
-  doc.text(title, tx, 15)
+  doc.setTextColor(...P.ink)
+  doc.text(title, tx, 17)
 
-  // Subtitle + date - right
+  // Period/subtitle + generated date - right column
   if (subtitle) {
-    doc.setFontSize(7.5)
+    doc.setFontSize(8)
     doc.setFont('helvetica', 'normal')
-    doc.setTextColor(...P.mist)
-    doc.text(subtitle, pw - 14, 10, { align: 'right' })
+    doc.setTextColor(...P.iron)
+    doc.text(subtitle, pw - MX, 10, { align: 'right' })
   }
   doc.setFontSize(7)
-  doc.setTextColor(...P.ghost)
-  doc.text(nowStr(), pw - 14, 16, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...P.mist)
+  doc.text(`Generated ${nowStr()}`, pw - MX, subtitle ? 15.5 : 12, { align: 'right' })
+
+  // Short accent underline beneath the title + full-width hairline base rule
+  doc.setDrawColor(...accent)
+  doc.setLineWidth(0.9)
+  doc.line(tx, 20.2, tx + 26, 20.2)
+  doc.setDrawColor(...P.silver)
+  doc.setLineWidth(0.25)
+  doc.line(0, HEADER_BOTTOM, pw, HEADER_BOTTOM)
 }
 
 function _pageFooter(doc, page, total, company = '', opts = {}) {
   const pw = doc.internal.pageSize.width
   const ph = doc.internal.pageSize.height
-  doc.setFillColor(...P.cloud)
-  doc.rect(0, ph - 9, pw, 9, 'F')
+  // Thin top rule only - no filled band
   doc.setDrawColor(...P.silver)
-  doc.setLineWidth(0.2)
-  doc.line(0, ph - 9, pw, ph - 9)
-  doc.setFontSize(6.5)
+  doc.setLineWidth(0.25)
+  doc.line(MX, ph - 10, pw - MX, ph - 10)
+  doc.setFontSize(6.8)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...P.ghost)
-  const left = opts.footerText || `${company || 'Fleet Operations Report'}  ·  Confidential & Internal`
-  doc.text(left, 14, ph - 3)
-  doc.text(`${page}${total ? ` / ${total}` : ''}`, pw - 14, ph - 3, { align: 'right' })
+  const left = opts.footerText || `${company || 'Fleet Operations Report'}  ·  Confidential — for internal distribution only`
+  doc.text(left, MX, ph - 5.5)
+  doc.text(total ? `Page ${page} of ${total}` : `Page ${page}`, pw - MX, ph - 5.5, { align: 'right' })
 }
 
 // Resolve a tenant-branding object into PDF drawing inputs (accent rgb + logo
@@ -320,46 +334,54 @@ function _emptyStatePanel(doc, message, sub) {
   }
 }
 
-function _sectionBar(doc, title, y, mx = 14) {
+// Section heading: 12.5 pt bold ink with a short accent underline + hairline
+// rule across the content width. Same geometry contract as before (returns
+// the y where section content should begin).
+function _sectionBar(doc, title, y, mx = MX, accent = P.indigo) {
   const pw = doc.internal.pageSize.width
-  doc.setFillColor(...P.steel)
-  doc.roundedRect(mx, y - 3.5, pw - mx * 2, 8.5, 1, 1, 'F')
-  doc.setFillColor(...P.indigo)
-  doc.roundedRect(mx, y - 3.5, 3, 8.5, 1, 1, 'F')
-  doc.setFontSize(8)
+  doc.setFontSize(12.5)
   doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...P.white)
-  doc.text(title, mx + 7, y + 2)
+  doc.setTextColor(...P.ink)
+  doc.text(String(title), mx, y + 2)
+  // Thin accent underline beneath the heading, extended by a light hairline
+  doc.setDrawColor(...accent)
+  doc.setLineWidth(0.8)
+  doc.line(mx, y + 4.4, mx + 18, y + 4.4)
+  doc.setDrawColor(...P.silver)
+  doc.setLineWidth(0.25)
+  doc.line(mx + 18, y + 4.4, pw - mx, y + 4.4)
   return y + 9
 }
 
+// KPI stat tile: light gray fill, thin border, left accent bar, big number,
+// small uppercase label. Value size adapts so long currency strings fit.
 function _kpiBox(doc, x, y, w, h, value, label, subtext, accentRgb) {
   const [r, g, b] = accentRgb
-  // Card shadow effect
-  doc.setFillColor(r * 0.06, g * 0.06, b * 0.06)
-  doc.roundedRect(x + 0.5, y + 0.5, w, h, 2, 2, 'F')
-  // Card background
+  const v = String(value ?? '-')
+  // Card background - very light gray with a thin neutral border
   doc.setFillColor(...P.offWhite)
-  doc.setDrawColor(r * 0.6, g * 0.6, b * 0.6)
-  doc.setLineWidth(0.4)
-  doc.roundedRect(x, y, w, h, 2, 2, 'FD')
-  // Top accent bar
+  doc.setDrawColor(...P.silver)
+  doc.setLineWidth(0.3)
+  doc.roundedRect(x, y, w, h, 1.5, 1.5, 'FD')
+  // Left accent bar
   doc.setFillColor(r, g, b)
-  doc.roundedRect(x, y, w, 2.5, 2, 0, 'F')
-  // Value
-  doc.setFontSize(22)
+  doc.roundedRect(x, y, 1.4, h, 0.7, 0.7, 'F')
+  // Label - small uppercase, top
+  doc.setFontSize(6.3)
   doc.setFont('helvetica', 'bold')
-  doc.setTextColor(r * 0.65, g * 0.65, b * 0.65)
-  doc.text(String(value ?? '-'), x + w / 2, y + h / 2 + 2, { align: 'center' })
-  // Label
-  doc.setFontSize(6.5)
-  doc.setFont('helvetica', 'normal')
   doc.setTextColor(...P.ghost)
-  doc.text(label, x + w / 2, y + h - 8, { align: 'center' })
+  doc.text(String(label ?? '').toUpperCase(), x + 5, y + 6.5, { charSpace: 0.4 })
+  // Value - big bold number in a deepened accent tone; shrink to fit width
+  const vSize = v.length > 14 ? 10.5 : v.length > 10 ? 12.5 : v.length > 7 ? 15 : 18
+  doc.setFontSize(vSize)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(Math.round(r * 0.72), Math.round(g * 0.72), Math.round(b * 0.72))
+  doc.text(v, x + 5, y + h - (subtext ? 10.5 : 5.5))
   if (subtext) {
     doc.setFontSize(6)
+    doc.setFont('helvetica', 'normal')
     doc.setTextColor(...P.mist)
-    doc.text(String(subtext), x + w / 2, y + h - 3.5, { align: 'center' })
+    doc.text(String(subtext), x + 5, y + h - 4)
   }
 }
 
@@ -758,7 +780,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
     // Left chart: category breakdown
     if (catCol) {
       const cats = _countBy(rows, catCol.key).slice(0, 8)
-      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
       doc.text(`${catCol.header} Breakdown (Top ${cats.length})`, 14, y)
       _hBarChart(doc, 14, chartY, half, chartH, cats, P.indigo)
     }
@@ -768,19 +790,19 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
       const order = ['Critical', 'High', 'Medium', 'Low']
       const rc = _countBy(rows, riskCol.key)
       const entries = order.map(o => [o, rc.find(([k]) => k.toLowerCase() === o.toLowerCase())?.[1] || 0]).filter(e => e[1] > 0)
-      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
       doc.text('Risk Distribution', rx, y)
       _hBarChart(doc, rx, chartY, half, chartH, entries, lbl => _RISK_RGB_PDF[String(lbl).toLowerCase()] || P.ghost)
     } else if (costCol && catCol) {
       const byCat = _sumByGroup(rows, catCol.key, costCol.key).slice(0, 8)
-      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
       doc.text(`${costCol.header} by ${catCol.header} (Top ${byCat.length})`, rx, y)
       _hBarChart(doc, rx, chartY, half, chartH, byCat, P.gold, v => fmtCurr(v, currency))
     } else if (numCols.length > 1) {
       const alt = numCols.find(c => c.key !== costCol?.key)
       if (alt && catCol) {
         const byCat = _sumByGroup(rows, catCol.key, alt.key).slice(0, 8)
-        doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+        doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
         doc.text(`${alt.header} by ${catCol.header}`, rx, y)
         _hBarChart(doc, rx, chartY, half, chartH, byCat, P.violet)
       }
@@ -798,7 +820,7 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
     const narr = doc.splitTextToSize(bits.join(' '), PW - 36)
     doc.setFillColor(...P.offWhite); doc.setDrawColor(...P.silver); doc.setLineWidth(0.3)
     doc.roundedRect(14, ny, PW - 28, narr.length * 4.4 + 8, 2, 2, 'FD')
-    doc.setFillColor(...P.indigo); doc.roundedRect(14, ny, 3, narr.length * 4.4 + 8, 1.5, 1.5, 'F')
+    doc.setFillColor(...brand.accent); doc.roundedRect(14, ny, 3, narr.length * 4.4 + 8, 1.5, 1.5, 'F')
     doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.steel)
     doc.text(narr, 20, ny + 6)
 
@@ -823,15 +845,23 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
   const scaledW = colW.map(w => Math.round(w * sf * 10) / 10)
   const riskIdx = columns.findIndex(c => /risk/i.test(c.header ?? '') || /risk_level/i.test(c.key ?? ''))
 
+  // Right-align numeric columns; thousands-format money/quantity columns while
+  // leaving identifiers (id/serial/asset/year/date/phone) untouched.
+  const numColIdx = new Set(numCols.map(c => columns.indexOf(c)))
+  const isIdLike = c => /(^|_)(id|serial|asset|year|date|month|phone|plate|no)$|serial|asset_no/i.test((c.key || '') + '|' + (c.header || ''))
+  const fmtColIdx = new Set(columns.map((c, i) => (numColIdx.has(i) && !isIdLike(c)) ? i : -1).filter(i => i >= 0))
+
   autoTable(doc, {
+    ..._tableTheme(brand.accent),
     startY: showSummary ? 30 : 28,
-    margin: { left: 14, right: 14, top: 28 },
+    margin: { left: MX, right: MX, top: 28 },
     head: [columns.map(c => c.header)],
-    body: rows.map(r => columns.map(c => String(r[c.key] ?? ''))),
-    styles: { fontSize: 7.5, cellPadding: 2.5, overflow: 'linebreak', textColor: [20, 20, 30] },
-    headStyles: { fillColor: P.steel, textColor: P.white, fontStyle: 'bold', fontSize: 8 },
-    alternateRowStyles: { fillColor: P.cloud },
-    columnStyles: Object.fromEntries(scaledW.map((w, i) => [i, { cellWidth: w }])),
+    body: rows.map(r => columns.map((c, i) => {
+      const v = r[c.key]
+      if (fmtColIdx.has(i) && v !== '' && v != null && _parseNum(v) != null) return _fmtThousands(v)
+      return String(v ?? '')
+    })),
+    columnStyles: Object.fromEntries(scaledW.map((w, i) => [i, { cellWidth: w, ...(numColIdx.has(i) ? { halign: 'right' } : {}) }])),
     didParseCell: riskIdx >= 0 ? (data) => {
       if (data.section !== 'body' || data.column.index !== riskIdx) return
       const v = String(data.cell.raw ?? '').trim().toLowerCase()
@@ -929,7 +959,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   y += 46
 
   // ── Tyre Diagram section ───────────────────────────────────────────────────
-  y = _sectionBar(doc, 'VEHICLE TYRE CONDITION MAP', y, mx) + 3
+  y = _sectionBar(doc, 'Vehicle Tyre Condition Map', y, mx, brand.accent) + 3
 
   // Normalize tyre conditions
   const rawTc = row.tyre_conditions || {}
@@ -1047,19 +1077,20 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const totalT = Object.keys(normTc).length
   if (totalT > 0) {
     const chipW = (pw - mx * 2 - 9) / 4
+    const chipBg = { good: P.eCream, warning: P.oCream, critical: P.rCream, none: P.cloud }
     Object.entries(RISK_RGB).forEach(([key, rgb], i) => {
       const cnt = riskCounts[key] ?? 0
       const [r, g, b] = rgb
       const cx = mx + i * (chipW + 3)
-      doc.setFillColor(r * 0.08, g * 0.08, b * 0.08)
-      doc.setDrawColor(r * 0.5, g * 0.5, b * 0.5)
+      doc.setFillColor(...(chipBg[key] || P.cloud))
+      doc.setDrawColor(...P.silver)
       doc.setLineWidth(0.3)
       doc.roundedRect(cx, y, chipW, 10, 2, 2, 'FD')
       doc.setFillColor(r, g, b)
-      doc.circle(cx + 5, y + 5, 2.5, 'F')
+      doc.circle(cx + 5, y + 5, 2.2, 'F')
       doc.setFontSize(7.5); doc.setFont('helvetica','bold')
-      doc.setTextColor(r * 0.55, g * 0.55, b * 0.55)
-      doc.text(`${RISK_LABEL[key]}: ${cnt}`, cx + 10, y + 6)
+      doc.setTextColor(r, g, b)
+      doc.text(`${RISK_LABEL[key]}: ${cnt}`, cx + 10, y + 6.3)
     })
     y += 15
   }
@@ -1068,9 +1099,10 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const tyreEntries = Object.entries(normTc)
   if (tyreEntries.length > 0) {
     if (y > ph - 70) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
-    y = _sectionBar(doc, 'DETAILED TYRE ANALYSIS', y, mx) + 3
+    y = _sectionBar(doc, 'Detailed Tyre Analysis', y, mx, brand.accent) + 3
 
     autoTable(doc, {
+      ..._tableTheme(brand.accent),
       startY: y,
       head: [['Position', 'Pressure', 'Tread', 'Condition', 'Risk', 'Notes']],
       body: tyreEntries.map(([pos, d]) => [
@@ -1082,13 +1114,9 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
         d.notes ?? '-',
       ]),
       margin: { left: mx, right: mx },
-      theme: 'grid',
-      styles: { fontSize: 7.5, cellPadding: 2.5, overflow: 'linebreak', textColor: P.ink },
-      headStyles: { fillColor: P.steel, textColor: P.white, fontStyle: 'bold', fontSize: 8 },
-      alternateRowStyles: { fillColor: P.cloud },
       columnStyles: {
         0: { cellWidth: 18, fontStyle: 'bold' },
-        1: { cellWidth: 22 }, 2: { cellWidth: 20 },
+        1: { cellWidth: 22, halign: 'right' }, 2: { cellWidth: 20, halign: 'right' },
         3: { cellWidth: 26 }, 4: { cellWidth: 22 },
         5: { cellWidth: 'auto' },
       },
@@ -1107,7 +1135,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // ── Risk progress bars ─────────────────────────────────────────────────────
   if (totalT > 0) {
     if (y > ph - 50) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
-    y = _sectionBar(doc, 'RISK DISTRIBUTION', y, mx) + 6
+    y = _sectionBar(doc, 'Risk Distribution', y, mx, brand.accent) + 6
     Object.entries(RISK_RGB).forEach(([key, [r, g, b]]) => {
       const cnt = riskCounts[key] ?? 0
       const fraction = totalT > 0 ? cnt / totalT : 0
@@ -1130,7 +1158,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // ── Findings ───────────────────────────────────────────────────────────────
   if (row.findings) {
     if (y > ph - 40) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
-    y = _sectionBar(doc, 'FINDINGS & OBSERVATIONS', y, mx) + 4
+    y = _sectionBar(doc, 'Findings & Observations', y, mx, brand.accent) + 4
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ink)
     const fl = doc.splitTextToSize(row.findings, pw - mx * 2)
     doc.text(fl, mx, y); y += fl.length * 4.5 + 6
@@ -1139,7 +1167,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   // ── Notes ──────────────────────────────────────────────────────────────────
   if (row.notes) {
     if (y > ph - 35) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
-    y = _sectionBar(doc, 'ADDITIONAL NOTES', y, mx) + 4
+    y = _sectionBar(doc, 'Additional Notes', y, mx, brand.accent) + 4
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ink)
     const nl = doc.splitTextToSize(row.notes, pw - mx * 2)
     doc.text(nl, mx, y); y += nl.length * 4.5 + 6
@@ -1149,9 +1177,9 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const recs = _buildRecommendations(riskCounts, totalT, row)
   if (recs.length > 0) {
     if (y > ph - 60) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
-    y = _sectionBar(doc, 'RECOMMENDED ACTIONS', y, mx) + 4
+    y = _sectionBar(doc, 'Recommended Actions', y, mx, brand.accent) + 4
     recs.forEach(rec => {
-      if (y > ph - 16) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+      if (y > ph - 20) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
       const [r, g, b] = rec.urgent ? P.crimson : P.indigo
       doc.setFillColor(r, g, b)
       doc.circle(mx + 3, y + 2.5, 2, 'F')
@@ -1165,7 +1193,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   }
 
   // ── Signature block ─────────────────────────────────────────────────────────
-  if (y + 34 > ph - 12) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
+  if (y + 34 > ph - FOOTER_SPACE - 2) { doc.addPage(); _pageHeader(doc, 'Inspection Report', '', company, hdr); y = 30 }
   y += 5
   doc.setFillColor(...P.offWhite)
   doc.setDrawColor(...P.silver)
@@ -1217,15 +1245,40 @@ export function pdfEmptyState(doc, message, sub) { _emptyStatePanel(doc, message
 export function pdfTableTheme(accent) { return _tableTheme(accent) }
 
 // Shared light autoTable theme for a professional, consistent look across every
-// tabular report. Accent-coloured header, alternating soft rows, subtle borders.
+// tabular report: dark slate header with white bold text and a thin tenant-
+// accent rule beneath it, very light alternating stripes (#F8FAFC), #E2E8F0
+// grid lines, generous cell padding, header repeated on every page break.
 function _tableTheme(accent = P.indigo) {
   return {
     theme: 'grid',
-    styles: { fontSize: 8, cellPadding: 2.4, overflow: 'linebreak', textColor: [30, 41, 59], lineColor: P.silver, lineWidth: 0.15 },
-    headStyles: { fillColor: accent, textColor: P.white, fontStyle: 'bold', fontSize: 8.5 },
-    alternateRowStyles: { fillColor: P.cloud },
-    margin: { left: 14, right: 14 },
+    styles: {
+      font: 'helvetica', fontSize: 8, cellPadding: 2.6, overflow: 'linebreak',
+      textColor: P.iron, lineColor: P.silver, lineWidth: 0.15, valign: 'middle',
+    },
+    headStyles: {
+      fillColor: P.slate, textColor: P.white, fontStyle: 'bold', fontSize: 8,
+      cellPadding: 2.8, lineColor: P.slate, lineWidth: 0.15, valign: 'middle',
+    },
+    alternateRowStyles: { fillColor: P.offWhite },
+    margin: { left: MX, right: MX },
+    showHead: 'everyPage',
+    didDrawCell: (d) => {
+      // Thin tenant-accent rule under the header row (branding hook)
+      if (d.section === 'head' && d.doc) {
+        d.doc.setDrawColor(...accent)
+        d.doc.setLineWidth(0.7)
+        d.doc.line(d.cell.x, d.cell.y + d.cell.height, d.cell.x + d.cell.width, d.cell.y + d.cell.height)
+      }
+    },
   }
+}
+
+// Thousands-separated display for numeric cell values (currency & counts).
+// Leaves identifiers (serials, asset numbers, years) untouched via caller checks.
+function _fmtThousands(v) {
+  const n = _parseNum(v)
+  if (n == null) return String(v ?? '')
+  return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
 
 /**
@@ -1274,8 +1327,7 @@ export async function exportDailyOpsBriefingPdf(data = {}, opts = {}) {
 
   // Priority action queue
   if (pq.length > 0) {
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...brand.accent)
-    doc.text('PRIORITY ACTION QUEUE', 14, y); y += 4
+    y = _sectionBar(doc, 'Priority Action Queue', y + 2, MX, brand.accent) + 1
     autoTable(doc, {
       ...theme, startY: y,
       head: [['Severity', 'Type', 'Asset', 'Description']],
@@ -1293,9 +1345,8 @@ export async function exportDailyOpsBriefingPdf(data = {}, opts = {}) {
 
   // Site activity
   if (sa.length > 0) {
-    if (y > doc.internal.pageSize.height - 40) { doc.addPage(); _pageHeader(doc, 'Daily Operations Briefing', data.date || nowStr(), company, hdr); y = 30 }
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...brand.accent)
-    doc.text('SITE ACTIVITY', 14, y); y += 4
+    if (y > doc.internal.pageSize.height - SECTION_MIN_SPACE - 15) { doc.addPage(); _pageHeader(doc, 'Daily Operations Briefing', data.date || nowStr(), company, hdr); y = 30 }
+    y = _sectionBar(doc, 'Site Activity', y + 2, MX, brand.accent) + 1
     autoTable(doc, {
       ...theme, startY: y, tableWidth: 100,
       head: [['Site', 'Events']],
@@ -1351,45 +1402,48 @@ export async function exportDailyExecutivePdf(data, filename) {
   const logoData = await fetchImageDataUri(brand.logo_url)
   const footerLeft = brand.footer_text || `${company}  ·  Fleet Operations Report  ·  Confidential`
 
-  // landscape header/footer helpers
+  // landscape header/footer helpers - clean corporate band matching _pageHeader
   function lsHeader(title, accentRgb = ACCENT) {
-    doc.setFillColor(...P.slate)
-    doc.rect(0, 0, PW, 22, 'F')
+    doc.setFillColor(...P.white)
+    doc.rect(0, 0, PW, HEADER_BOTTOM, 'F')
     doc.setFillColor(...accentRgb)
-    doc.rect(0, 22, PW, 2.5, 'F')
-    doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(...P.gold)
-    doc.text(company.toUpperCase(), 14, 9)
-    doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(...P.white)
-    doc.text(title, 14, 18)
-    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
-    doc.text(`${date}  ·  ${period}  ·  ${siteLabel}`, PW - 14, 15, { align: 'right' })
+    doc.rect(0, 0, PW, 2.5, 'F')
+    if (logoData) {
+      const fmt = /image\/jpe?g/i.test(logoData) ? 'JPEG' : 'PNG'
+      try { doc.addImage(logoData, fmt, PW - MX - 14, 5, 14, 14, undefined, 'FAST') } catch { /* ignore */ }
+    }
+    doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ghost)
+    doc.text(company.toUpperCase(), MX, 9, { charSpace: 0.5 })
+    doc.setFontSize(15); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+    doc.text(title, MX, 17)
+    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.iron)
+    doc.text(`${date}  ·  ${period}  ·  ${siteLabel}`, PW - MX - (logoData ? 18 : 0), 12, { align: 'right' })
+    doc.setDrawColor(...accentRgb); doc.setLineWidth(0.9)
+    doc.line(MX, 20.2, MX + 26, 20.2)
+    doc.setDrawColor(...P.silver); doc.setLineWidth(0.25)
+    doc.line(0, HEADER_BOTTOM, PW, HEADER_BOTTOM)
   }
   function lsFooter(page, total) {
-    doc.setFillColor(...P.cloud)
-    doc.rect(0, PH - 8, PW, 8, 'F')
-    doc.setDrawColor(...P.silver); doc.setLineWidth(0.2)
-    doc.line(0, PH - 8, PW, PH - 8)
-    doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ghost)
-    doc.text(footerLeft, 14, PH - 3)
-    doc.text(date, PW / 2, PH - 3, { align: 'center' })
-    doc.text(`${page} / ${total}`, PW - 14, PH - 3, { align: 'right' })
+    doc.setDrawColor(...P.silver); doc.setLineWidth(0.25)
+    doc.line(MX, PH - 10, PW - MX, PH - 10)
+    doc.setFontSize(6.8); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ghost)
+    doc.text(footerLeft, MX, PH - 5.5)
+    doc.text(date, PW / 2, PH - 5.5, { align: 'center' })
+    doc.text(`Page ${page} of ${total}`, PW - MX, PH - 5.5, { align: 'right' })
   }
 
   // ── PAGE 1: COVER ──────────────────────────────────────────────────────────
   {
-    // Deep navy background
+    // Deep navy field with a restrained corporate composition: top accent bar,
+    // left-aligned title block with accent underline, bottom hairline band.
     doc.setFillColor(...P.ink)
     doc.rect(0, 0, PW, PH, 'F')
-    // Fine dot matrix
-    doc.setFillColor(20, 28, 50)
-    for (let x = 12; x < PW - 12; x += 16)
-      for (let y = 12; y < PH - 12; y += 16)
-        doc.circle(x, y, 0.3, 'F')
-    // Accent diagonal shapes (tenant primary colour)
     doc.setFillColor(...ACCENT)
-    doc.triangle(0, PH * 0.52, 0, PH * 0.64, PW * 0.38, PH * 0.52, 'F')
-    doc.setFillColor(Math.round(ACCENT[0] * 0.5), Math.round(ACCENT[1] * 0.5), Math.round(ACCENT[2] * 0.5))
-    doc.triangle(0, PH * 0.58, 0, PH * 0.72, PW * 0.30, PH * 0.58, 'F')
+    doc.rect(0, 0, PW, 3, 'F')
+    doc.setDrawColor(...P.iron); doc.setLineWidth(0.3)
+    doc.line(28, PH - 24, PW - 28, PH - 24)
+    doc.setFillColor(...ACCENT)
+    doc.rect(0, PH - 6, PW, 2, 'F')
 
     // Tenant logo (best-effort; format detected from the data URI)
     if (logoData) {
@@ -1399,14 +1453,20 @@ export async function exportDailyExecutivePdf(data, filename) {
 
     // Company + title
     doc.setFontSize(9); doc.setFont('helvetica','bold')
-    doc.setTextColor(...P.gold)
-    doc.text(company.toUpperCase() + '  ·  FLEET OPERATIONS', 28, 44)
-    doc.setFontSize(38); doc.setFont('helvetica','bold'); doc.setTextColor(...P.white)
-    doc.text('Operations Report', 28, 76)
-    doc.setFontSize(16); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
-    doc.text(`${period} Intelligence Summary`, 28, 92)
-    doc.setFontSize(11); doc.setTextColor(...P.ghost)
-    doc.text(date + (data.generatedBy ? `  ·  Prepared by: ${data.generatedBy}` : ''), 28, 106)
+    doc.setTextColor(...P.mist)
+    doc.text(company.toUpperCase() + '  ·  FLEET OPERATIONS', 28, 48, { charSpace: 0.8 })
+    doc.setFontSize(34); doc.setFont('helvetica','bold'); doc.setTextColor(...P.white)
+    doc.text('Operations Report', 28, 74)
+    // Accent underline beneath the title
+    doc.setFillColor(...ACCENT)
+    doc.rect(28, 80, 44, 1.4, 'F')
+    doc.setFontSize(14); doc.setFont('helvetica','normal'); doc.setTextColor(...P.mist)
+    doc.text(`${period} Intelligence Summary`, 28, 93)
+    doc.setFontSize(10); doc.setTextColor(...P.ghost)
+    doc.text(date + (data.generatedBy ? `  ·  Prepared by: ${data.generatedBy}` : ''), 28, 103)
+    // Footer meta line on the cover
+    doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(...P.ghost)
+    doc.text(`${siteLabel}  ·  Confidential — for internal distribution only`, 28, PH - 16)
 
     // Right-side KPI tiles
     const kpis = [
@@ -1426,7 +1486,7 @@ export async function exportDailyExecutivePdf(data, filename) {
     const forecast  = data.forecast || _deriveForecast(data)
     const toneRgb   = _TONE_RGB[narrative.tone] || P.indigo
 
-    lsHeader('Executive Summary', toneRgb)
+    lsHeader('Executive Summary', ACCENT)
     let y = 32
 
     // Status banner
@@ -1444,7 +1504,7 @@ export async function exportDailyExecutivePdf(data, filename) {
     y += 18
 
     // Narrative ("what happened / why / what matters")
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
     doc.text('Situation Overview', 14, y); y += 4
     const narrLines = []
     ;(narrative.paragraphs || []).forEach(p => { doc.splitTextToSize(p, PW - 36).forEach(l => narrLines.push(l)) })
@@ -1457,7 +1517,7 @@ export async function exportDailyExecutivePdf(data, filename) {
 
     // Business insights (decisions, not raw data)
     if (biz.length) {
-      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
       doc.text('Business Insights', 14, y); y += 4
       const cols = Math.min(3, biz.length)
       const rows = Math.ceil(biz.length / cols)
@@ -1483,7 +1543,7 @@ export async function exportDailyExecutivePdf(data, filename) {
     // Predictive outlook + priority action (two columns)
     const colW = (PW - 28 - 6) / 2
     const fy = y
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
     doc.text('Predictive Outlook', 14, fy)
     let py = fy + 4
     ;(forecast || []).slice(0, 4).forEach(f => {
@@ -1498,12 +1558,12 @@ export async function exportDailyExecutivePdf(data, filename) {
     })
 
     // Priority action callout (right column)
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(...P.ink)
     doc.text('Priority Action', 14 + colW + 6, fy)
     const actX = 14 + colW + 6
     const actLines = doc.splitTextToSize(narrative.action || '', colW - 12)
     const actH = Math.max(20, actLines.length * 4.6 + 10)
-    doc.setFillColor(toneRgb[0] * 0.1, toneRgb[1] * 0.1, toneRgb[2] * 0.1)
+    doc.setFillColor(Math.round(toneRgb[0] * 0.12 + 224), Math.round(toneRgb[1] * 0.12 + 224), Math.round(toneRgb[2] * 0.12 + 224))
     doc.setDrawColor(...toneRgb); doc.setLineWidth(0.4)
     doc.roundedRect(actX, fy + 4, colW, actH, 2, 2, 'FD')
     doc.setFillColor(...toneRgb); doc.roundedRect(actX, fy + 4, 3, actH, 1.5, 1.5, 'F')
@@ -1514,7 +1574,7 @@ export async function exportDailyExecutivePdf(data, filename) {
   // ── PAGE 3: KPI COMMAND CENTER ─────────────────────────────────────────────
   doc.addPage()
   {
-    lsHeader('KPI Command Center', P.indigo)
+    lsHeader('KPI Command Center', ACCENT)
     let y = 32
 
     const totalT = data.totalTyres || 1
@@ -1536,7 +1596,7 @@ export async function exportDailyExecutivePdf(data, filename) {
     y += 40
 
     // Fleet condition bar
-    doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+    doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
     doc.text('Fleet Tyre Condition Distribution', 14, y)
     y += 5
     const segments = [
@@ -1569,7 +1629,7 @@ export async function exportDailyExecutivePdf(data, filename) {
       { l: 'Budget Variance', v: (data.monthlyBudget && data.monthlySpend) ? fmtCurr(Math.abs(data.monthlyBudget - data.monthlySpend)) : '-', rgb: [...P.emerald] },
       { l: 'Vehicles w/ Alerts', v: data.vehiclesWithAlerts ?? 0, rgb: [...P.scarlet] },
     ]
-    doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+    doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
     doc.text('Financial & Fleet Snapshot', 14, y)
     y += 5
     const fcw = (PW - 28 - (costKpis.length - 1) * 4) / costKpis.length
@@ -1579,12 +1639,12 @@ export async function exportDailyExecutivePdf(data, filename) {
   // ── PAGE 3: TYRE HEALTH + SITE MATRIX ─────────────────────────────────────
   doc.addPage()
   {
-    lsHeader('Tyre Health & Site Analysis', [...P.violet])
+    lsHeader('Tyre Health & Site Analysis', ACCENT)
     let y = 32
 
     // Top defects (left half)
     if (data.topDefects?.length) {
-      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+      doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
       doc.text('Defect Pattern Analysis', 14, y); y += 5
       const totalDef = data.topDefects.reduce((s, d) => s + d.count, 0)
       data.topDefects.slice(0, 7).forEach((d, i) => {
@@ -1605,9 +1665,10 @@ export async function exportDailyExecutivePdf(data, filename) {
 
     // Site breakdown table (right half)
     if (data.siteBreakdown?.length) {
-      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+      doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
       doc.text('Site Performance Matrix', PW / 2 + 4, 32)
       autoTable(doc, {
+        ..._tableTheme(ACCENT),
         startY: 37,
         head: [['Site', 'Vehicles', 'Alerts', 'Compliance', 'Status']],
         body: data.siteBreakdown.map(s => [
@@ -1616,10 +1677,7 @@ export async function exportDailyExecutivePdf(data, filename) {
           s.compliance >= 90 ? '✓ Good' : s.compliance >= 70 ? '⚠ Monitor' : '✗ Action',
         ]),
         margin: { left: PW / 2 + 4, right: 14 },
-        theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: P.steel, textColor: P.white, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: P.cloud },
+        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
         didParseCell: (d) => {
           if (d.section === 'body' && d.column.index === 4) {
             const v = String(d.cell.raw)
@@ -1635,7 +1693,7 @@ export async function exportDailyExecutivePdf(data, filename) {
   // ── PAGE 4: INSPECTIONS + ALERTS ──────────────────────────────────────────
   doc.addPage()
   {
-    lsHeader('Inspections & Critical Alerts', [...P.crimson])
+    lsHeader('Inspections & Critical Alerts', ACCENT)
     let y = 32
 
     // Inspection KPIs
@@ -1652,35 +1710,36 @@ export async function exportDailyExecutivePdf(data, filename) {
     // Alerts table (left)
     const alerts = data.criticalAlerts ?? []
     if (alerts.length > 0) {
-      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+      doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
       doc.text(`Critical Alerts (${alerts.length})`, 14, y)
       autoTable(doc, {
+        ..._tableTheme(ACCENT),
         startY: y + 4,
         head: [['#', 'Alert', 'Asset', 'Site', 'Severity']],
         body: alerts.slice(0, 12).map((a, i) => [i + 1, a.message, a.asset ?? '-', a.site ?? '-', a.severity ?? 'High']),
         margin: { left: 14, right: PW / 2 + 2 },
-        theme: 'grid',
-        styles: { fontSize: 7.5, cellPadding: 2 },
-        headStyles: { fillColor: P.crimson, textColor: P.white, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: P.rCream },
-        columnStyles: { 0: { cellWidth: 8 }, 4: { cellWidth: 20 } },
+        columnStyles: { 0: { cellWidth: 8, halign: 'right' }, 4: { cellWidth: 20 } },
+        didParseCell: (d) => {
+          if (d.section === 'body' && d.column.index === 4) {
+            const v = String(d.cell.raw ?? '').toLowerCase()
+            if (v === 'critical') { d.cell.styles.fillColor = P.rCream; d.cell.styles.textColor = P.crimson; d.cell.styles.fontStyle = 'bold' }
+            else if (v === 'high') { d.cell.styles.fillColor = P.oCream; d.cell.styles.textColor = P.scarlet }
+          }
+        },
       })
     }
 
     // Actions table (right)
     const actions = data.openActions ?? []
     if (actions.length > 0) {
-      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
+      doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(...P.ink)
       doc.text(`Open Actions (${actions.length})`, PW / 2 + 4, y)
       autoTable(doc, {
+        ..._tableTheme(ACCENT),
         startY: y + 4,
         head: [['Action', 'Priority', 'Site', 'Assignee']],
         body: actions.slice(0, 12).map(a => [a.title, a.priority ?? 'Medium', a.site ?? '-', a.assignee ?? 'Unassigned']),
         margin: { left: PW / 2 + 4, right: 14 },
-        theme: 'grid',
-        styles: { fontSize: 7.5, cellPadding: 2 },
-        headStyles: { fillColor: P.steel, textColor: P.white, fontStyle: 'bold' },
-        alternateRowStyles: { fillColor: P.cloud },
         columnStyles: { 1: { cellWidth: 22 } },
         didParseCell: (d) => {
           if (d.section === 'body' && d.column.index === 1) {

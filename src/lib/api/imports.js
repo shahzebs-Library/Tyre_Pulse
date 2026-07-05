@@ -690,6 +690,18 @@ export async function costClearValue(value) {
 }
 
 /**
+ * Admin: convert existing rows whose cost column held the LINE TOTAL (qty
+ * already included, as ERP exports do) into true unit prices
+ * (cost_per_tyre := cost / qty), so all qty-aware maths show the file's real
+ * totals. Audited. Returns { converted, total_spend }.
+ */
+export async function costConvertLineTotals() {
+  const { data, error } = await supabase.rpc('cost_convert_line_totals')
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
+}
+
+/**
  * Every saved mapping profile for the org (active AND inactive, all modules),
  * newest-used first, with a column-rule count — powers the Saved Mappings
  * manager so users can browse and manage their remembered formats without

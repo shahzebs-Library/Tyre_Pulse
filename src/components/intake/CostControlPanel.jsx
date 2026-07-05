@@ -55,6 +55,19 @@ export default function CostControlPanel({ isElevated = false }) {
     } catch (e) { setError(e?.message || 'Override failed.') } finally { setBusy(false) }
   }
 
+  async function convertLineTotals() {
+    if (!window.confirm(
+      'Your file\'s cost column already contains the TOTAL for the quantity (ERP style)?\n\n' +
+      'This converts existing records to true per-tyre prices (cost ÷ qty) so every page and report shows your file\'s real totals — no double counting. Audited. Run once per import style.',
+    )) return
+    setBusy(true); setError(''); setMsg('')
+    try {
+      const res = await imports.costConvertLineTotals()
+      setMsg(`Converted ${Number(res?.converted ?? 0).toLocaleString('en-US')} record(s) to per-tyre prices — total spend is now ${money(res?.total_spend)} (matches your file).`)
+      await load()
+    } catch (e) { setError(e?.message || 'Conversion failed.') } finally { setBusy(false) }
+  }
+
   async function clearFlatRate() {
     const fr = ov?.flat_rate
     if (!fr) return
@@ -143,21 +156,28 @@ export default function CostControlPanel({ isElevated = false }) {
               </div>
 
               {ov.flat_rate && (
-                <div className="bg-red-900/15 border border-red-700/40 rounded-xl p-4 space-y-2">
-                  <p className="text-sm text-red-300 flex items-center gap-2">
+                <div className="bg-amber-900/15 border border-amber-700/40 rounded-xl p-4 space-y-2">
+                  <p className="text-sm text-amber-300 flex items-center gap-2">
                     <AlertCircle size={15} />
-                    Cost data looks wrong: {Number(ov.flat_rate.records).toLocaleString('en-US')} record(s) ({ov.flat_rate.pct}%) share the SAME cost of {money(ov.flat_rate.value)}.
+                    Cost check: {Number(ov.flat_rate.records).toLocaleString('en-US')} record(s) ({ov.flat_rate.pct}%) share the SAME cost of {money(ov.flat_rate.value)}.
                   </p>
                   <p className="text-xs text-gray-400">
-                    One identical value across everything is a default/placeholder, not real market cost — it inflates every cost KPI, report, and forecast.
-                    Clear it so figures are honest, then upload a file that has a real cost column (with <span className="text-gray-200">Enrich existing records</span> on) to fill true costs.
+                    If your file's cost column already contains the <span className="text-gray-200">total for the quantity</span> (ERP exports usually do),
+                    convert it to per-tyre prices so nothing is double-counted. If the value is just a placeholder, clear it instead.
                   </p>
                   {isElevated && (
-                    <button onClick={clearFlatRate} disabled={busy}
-                      className="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs flex items-center gap-1.5 disabled:opacity-50">
-                      {busy ? <Loader2 size={13} className="animate-spin" /> : <AlertCircle size={13} />}
-                      Clear the flat {money(ov.flat_rate.value)} placeholder costs
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={convertLineTotals} disabled={busy}
+                        className="btn-primary text-xs flex items-center gap-1.5 disabled:opacity-50">
+                        {busy ? <Loader2 size={13} className="animate-spin" /> : <Calculator size={13} />}
+                        My costs are line totals — convert to per-tyre
+                      </button>
+                      <button onClick={clearFlatRate} disabled={busy}
+                        className="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs flex items-center gap-1.5 disabled:opacity-50">
+                        {busy ? <Loader2 size={13} className="animate-spin" /> : <AlertCircle size={13} />}
+                        It's a placeholder — clear these costs
+                      </button>
+                    </div>
                   )}
                 </div>
               )}

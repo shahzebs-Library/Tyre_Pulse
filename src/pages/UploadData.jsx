@@ -180,6 +180,21 @@ export const TYRE_FIELDS = [
     guesses: ['qty', 'quantity', 'count', 'qnty', 'q', 'pcs', 'pieces', 'كمية', 'الكمية', 'عدد'],
   },
   {
+    key: 'cost_per_tyre',
+    label: 'Unit Cost / Tyre',
+    required: false,
+    guesses: ['unit cost', 'unit price', 'cost per tyre', 'price per tyre', 'unit rate', 'rate', 'سعر الوحدة', 'سعر الإطار'],
+  },
+  {
+    // ERP exports usually carry the line TOTAL (qty already included). Mapping
+    // that column here derives the true per-tyre price (total ÷ qty) at build
+    // time, so spend is never double-counted downstream.
+    key: 'total_amount',
+    label: 'Total Amount (qty included)',
+    required: false,
+    guesses: ['total amount', 'total cost', 'total value', 'total price', 'amount', 'total', 'value', 'line total', 'net amount', 'cost', 'price', 'tyre cost', 'المبلغ الإجمالي', 'الإجمالي', 'القيمة', 'التكلفة', 'السعر'],
+  },
+  {
     key: 'job_card',
     label: 'Job Card / Work Order',
     required: false,
@@ -1022,15 +1037,36 @@ export default function UploadData() {
       }
     }
 
-    let records = buildRows(headers, rows, mapping).map(r => sanitiseRow({
-      ...r,
-      // Force the selected country onto every row - ignore any country column in
-      // the file so an upload can never mix or mislabel countries.
-      country:         uploadCountry,
-      region:          profile?.region ?? uploadCountry,
-      uploaded_by:     profile?.id,
-      upload_batch_id: batchId,
-    }))
+    let records = buildRows(headers, rows, mapping).map(r => {
+      // ERP cost derivation: when the file's cost column is the line TOTAL
+      // (qty already included), derive the true per-tyre price so downstream
+      // spend maths (unit × qty) never double-counts. total_amount is not a DB
+      // column — always dropped after derivation.
+      const row = { ...r }
+      if (row.cost_per_tyre != null && row.cost_per_tyre !== '') {
+        const u = parseFloat(row.cost_per_tyre)
+        row.cost_per_tyre = Number.isFinite(u) ? u : null
+      }
+      const total = parseFloat(row.total_amount)
+      if (Number.isFinite(total)) {
+        if (row.cost_per_tyre == null || row.cost_per_tyre === '') {
+          const q = Number(row.qty) > 0 ? Number(row.qty) : 1
+          row.cost_per_tyre = Math.round((total / q) * 100) / 100
+        }
+        delete row.total_amount
+      } else {
+        delete row.total_amount
+      }
+      return sanitiseRow({
+        ...row,
+        // Force the selected country onto every row - ignore any country column in
+        // the file so an upload can never mix or mislabel countries.
+        country:         uploadCountry,
+        region:          profile?.region ?? uploadCountry,
+        uploaded_by:     profile?.id,
+        upload_batch_id: batchId,
+      })
+    })
 
     if (skipIds.size > 0) records = records.filter((_, idx) => !skipIds.has(idx))
     if (skipDupes && dupes.length > 0) {

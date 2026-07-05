@@ -463,3 +463,18 @@ untouched). Confirmed fixes landed:
   (also removed the fabricated 1200 fallback rate), RootCauseEngine,
   DriverManagement. Reports/Dashboard/Analytics/BrandPerformance/exec digest
   were already qty-aware. Gate: 877 tests, build clean.
+
+## 2026-07-05 — ERP line-total cost semantics (V90) + upload cost capture
+- Owner clarified: their ERP export's cost column is the LINE TOTAL (qty already
+  included). V90 cost_convert_line_totals() (admin, audited) converts existing
+  rows to true unit prices (cost/qty) — sandbox: spend 29.4M -> 2.86M (file's
+  real sum), 64 distinct unit prices. Cost Control panel now offers BOTH paths
+  on a flat-rate detection: "costs are line totals -> convert" / "placeholder ->
+  clear".
+- Legacy tyre uploader gained cost capture at last: Unit Cost + Total Amount
+  (qty included) mappings with build-time derivation (unit = total/qty) — it
+  previously had NO cost field (root cause of the placeholder 1200s).
+- Intake: stronger total-amount synonyms (tyre value/tyres cost/cost value etc.,
+  minus over-greedy bare tokens) + a Validate-step hint when the tyre total
+  looks inflated ("map your cost column to Total Amount instead").
+- Gate: 877 tests, build clean.

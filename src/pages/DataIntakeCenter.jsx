@@ -715,7 +715,8 @@ export default function DataIntakeCenter() {
                 <p className="text-xs text-emerald-300/80 uppercase tracking-wide">Total tyre amount (this import)</p>
                 <p className="text-3xl font-bold text-emerald-300">{fmtMoney(counts.amount)}</p>
               </div>
-              <p className="text-xs text-gray-400 max-w-xs">Derived from <span className="text-gray-200">{counts.qty || counts.total}</span> tyres × unit cost. Quantity and unit cost are stored; the total is computed so all spend rolls up in one place.</p>
+              <p className="text-xs text-gray-400 max-w-xs">Derived from <span className="text-gray-200">{counts.qty || counts.total}</span> tyres × unit cost. Quantity and unit cost are stored; the total is computed so all spend rolls up in one place.
+                <span className="block mt-1 text-amber-300/90">Looks too high vs your file? Your cost column may already include the quantity — go Back and map it to <span className="font-semibold">"Total Amount"</span> instead; the per-tyre price is derived automatically.</span></p>
             </div>
           )}
           {granularityWarning && (

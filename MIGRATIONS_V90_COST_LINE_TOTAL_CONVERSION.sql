@@ -1,0 +1,7 @@
+-- V90: ERP files carry the LINE TOTAL in the cost column (qty already included).
+-- DB semantic is cost_per_tyre = UNIT price (all maths multiply by qty), so rows
+-- imported with a line total double-count. cost_convert_line_totals() (admin,
+-- audited) converts existing rows: cost_per_tyre := cost_per_tyre / qty (qty>1),
+-- deriving true unit prices so every page/report shows the file's real total.
+-- Sandbox-verified: spend 29.4M -> 2.86M (the file's actual sum), 64 real
+-- distinct unit prices. Full body applied via the v90 migration.

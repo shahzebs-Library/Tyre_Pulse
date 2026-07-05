@@ -136,7 +136,7 @@ const TYRE_FIELDS = [
   { key: 'qty', label: 'Quantity', required: false, type: 'integer',
     synonyms: ['qty', 'quantity', 'qnty', 'qty.', 'no of tyres', 'number of tyres', 'no. of tyres', 'no of tyre', 'nos', 'pcs', 'pieces', 'count', 'units', 'الكمية', 'عدد الإطارات', 'العدد', 'عدد'] },
   { key: 'total_amount', label: 'Total Amount', required: false, type: 'currency', derived: true,
-    synonyms: ['total amount', 'total cost', 'total value', 'total price', 'amount', 'line total', 'net amount', 'gross amount', 'grand total', 'المبلغ الإجمالي', 'الإجمالي', 'المجموع', 'القيمة الإجمالية'] },
+    synonyms: ['total amount', 'total cost', 'total value', 'total price', 'amount', 'line total', 'net amount', 'gross amount', 'grand total', 'tyre value', 'tyres cost', 'cost of tyres', 'tyre amount', 'cost value', 'المبلغ الإجمالي', 'الإجمالي', 'المجموع', 'القيمة الإجمالية'] },
   { key: 'km_at_fitment', label: 'KM at Fitment', required: false, type: 'distance',
     synonyms: ['fitted km', 'fitment km', 'km at fitment', 'fixed km', 'install km', 'km fitted', 'mounting km', 'odometer at fitment', 'كم التركيب', 'عداد التركيب'] },
   { key: 'km_at_removal', label: 'KM at Removal', required: false, type: 'distance',

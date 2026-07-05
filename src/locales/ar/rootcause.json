@@ -1,0 +1,113 @@
+{
+  "title": "محرك ذكاء السبب الجذري",
+  "subtitle": "تصنيف قائم على القواعد لـ 14 سببًا جذريًا هندسيًا عبر الأسطول",
+  "actions": {
+    "excel": "إكسل",
+    "pdf": "PDF"
+  },
+  "loading": "جارٍ تحميل محرك التصنيف...",
+  "error": {
+    "title": "فشل تحميل السجلات"
+  },
+  "empty": {
+    "title": "لم يتم العثور على سجلات إطارات",
+    "subtitle": "قم برفع سجلات تغيير الإطارات لتفعيل تحليل السبب الجذري."
+  },
+  "filters": {
+    "title": "عوامل التصفية",
+    "dateRange": "النطاق الزمني",
+    "site": "الموقع",
+    "allSites": "جميع المواقع",
+    "riskLevel": "مستوى الخطورة",
+    "allLevels": "جميع المستويات",
+    "critical": "حرج",
+    "high": "مرتفع",
+    "medium": "متوسط",
+    "low": "منخفض",
+    "minRecords": "الحد الأدنى للسجلات:",
+    "recordsInView": "{count} سجل ضمن العرض الحالي"
+  },
+  "datePresets": {
+    "last30d": "آخر 30 يومًا",
+    "last90d": "آخر 90 يومًا",
+    "last6mo": "آخر 6 أشهر",
+    "last1yr": "آخر سنة",
+    "allTime": "كل الفترات"
+  },
+  "stats": {
+    "totalRecords": "إجمالي السجلات",
+    "inCurrentFilter": "ضمن عامل التصفية الحالي",
+    "causeCoverage": "تغطية الأسباب",
+    "recordsClassified": "{count} سجل مصنّف",
+    "topRootCause": "أهم سبب جذري",
+    "recordsCount": "{count} سجل",
+    "noData": "لا توجد بيانات",
+    "topCauseCost": "تكلفة أهم سبب",
+    "forCause": "لـ {cause}"
+  },
+  "charts": {
+    "frequencyTitle": "تكرار الأسباب الجذرية",
+    "frequencySeries": "السجلات",
+    "noCausesThreshold": "لا توجد أسباب تستوفي الحد الأدنى للسجلات",
+    "financialTitle": "الأثر المالي حسب السبب الجذري",
+    "financialSeries": "إجمالي التكلفة",
+    "noDataAvailable": "لا توجد بيانات متاحة",
+    "legendHigh": "أكثر من 20% من الإجمالي",
+    "legendMed": "10-20%",
+    "legendLow": "أقل من 10%"
+  },
+  "heatmap": {
+    "title": "خريطة حرارية: الموقع × السبب الجذري",
+    "topCausesNote": "(أهم {count} أسباب)",
+    "site": "الموقع",
+    "noSiteData": "لا توجد بيانات مواقع متاحة",
+    "legendHigh": "مرتفع (أكثر من 75%)",
+    "legendMedHigh": "متوسط إلى مرتفع",
+    "legendMed": "متوسط",
+    "legendLow": "منخفض"
+  },
+  "deepDive": {
+    "title": "التحليل المعمّق للسبب الجذري",
+    "records": "السجلات",
+    "ofTotal": "{pct}% من الإجمالي",
+    "totalCost": "إجمالي التكلفة",
+    "avgCpk": "متوسط التكلفة/كم",
+    "costPerKm": "التكلفة لكل كيلومتر",
+    "coveragePct": "نسبة التغطية %",
+    "ofFilteredRecords": "من السجلات المصفّاة",
+    "topAssets": "أهم 5 أصول متأثرة",
+    "topBrands": "أهم 5 علامات تجارية متأثرة",
+    "topSites": "أهم 5 مواقع متأثرة",
+    "noData": "لا توجد بيانات",
+    "preventionTitle": "توصية الوقاية",
+    "affectedRecords": "السجلات المتأثرة - {count} إجمالاً",
+    "columns": {
+      "assetNo": "رقم الأصل",
+      "site": "الموقع",
+      "brand": "العلامة التجارية",
+      "date": "التاريخ",
+      "risk": "الخطورة",
+      "findings": "النتائج"
+    },
+    "noRecordsClassified": "لا توجد سجلات مصنّفة ضمن {cause} وفق عوامل التصفية الحالية."
+  },
+  "worstVehicles": {
+    "title": "أسوأ المركبات حسب حوادث السبب الجذري",
+    "topNote": "(أعلى 15)",
+    "noData": "لا توجد بيانات مركبات متاحة",
+    "columns": {
+      "hash": "#",
+      "assetNo": "رقم الأصل",
+      "site": "الموقع",
+      "incidents": "الحوادث",
+      "topCause": "أهم سبب",
+      "totalCost": "إجمالي التكلفة",
+      "avgCpk": "متوسط التكلفة/كم",
+      "history": "السجل التاريخي"
+    },
+    "view": "عرض"
+  },
+  "states": {
+    "na": "غير متاح"
+  }
+}

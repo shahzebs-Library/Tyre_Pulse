@@ -14,6 +14,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
@@ -92,8 +93,18 @@ function stageColor(stage) {
   }
 }
 
+const STAGE_KEY_MAP = {
+  'New Fitment':      'newFitment',
+  'In Service':       'inService',
+  'Retread Eligible': 'retreadEligible',
+  'Retreaded':        'retreaded',
+  'Scrapped':         'scrapped',
+  'Removed':          'removed',
+}
+
 export default function TyreLifecycle() {
   const { activeCountry, activeCurrency } = useSettings()
+  const { t } = useLanguage()
 
   const [records, setRecords]       = useState([])
   const [loading, setLoading]       = useState(true)
@@ -201,13 +212,13 @@ export default function TyreLifecycle() {
     }
 
     return [
-      { label: 'New Fitment',      count: newFitment, pct: ((newFitment / total) * 100).toFixed(0), avgCost: avgCostFor('new'),     icon: Package,   color: 'blue'  },
-      { label: 'In Service',       count: inService,  pct: ((inService  / total) * 100).toFixed(0), avgCost: avgCostFor('service'), icon: Activity,  color: 'green' },
-      { label: 'Retread Eligible', count: retreatEl,  pct: ((retreatEl  / total) * 100).toFixed(0), avgCost: avgCostFor('eligible'),icon: TrendingUp, color: 'cyan'  },
-      { label: 'Retreaded',        count: retreaded,  pct: ((retreaded  / total) * 100).toFixed(0), avgCost: avgCostFor('retread'), icon: RefreshCw, color: 'purple'},
-      { label: 'Scrapped',         count: scrapped,   pct: ((scrapped   / total) * 100).toFixed(0), avgCost: avgCostFor('scrap'),   icon: Trash2,    color: 'red'   },
+      { label: t('lifecycle.stages.newFitment'),      count: newFitment, pct: ((newFitment / total) * 100).toFixed(0), avgCost: avgCostFor('new'),     icon: Package,   color: 'blue'  },
+      { label: t('lifecycle.stages.inService'),       count: inService,  pct: ((inService  / total) * 100).toFixed(0), avgCost: avgCostFor('service'), icon: Activity,  color: 'green' },
+      { label: t('lifecycle.stages.retreadEligible'), count: retreatEl,  pct: ((retreatEl  / total) * 100).toFixed(0), avgCost: avgCostFor('eligible'),icon: TrendingUp, color: 'cyan'  },
+      { label: t('lifecycle.stages.retreaded'),        count: retreaded,  pct: ((retreaded  / total) * 100).toFixed(0), avgCost: avgCostFor('retread'), icon: RefreshCw, color: 'purple'},
+      { label: t('lifecycle.stages.scrapped'),         count: scrapped,   pct: ((scrapped   / total) * 100).toFixed(0), avgCost: avgCostFor('scrap'),   icon: Trash2,    color: 'red'   },
     ]
-  }, [filtered])
+  }, [filtered, t])
 
   // ── Brand lifecycle chart ─────────────────────────────────────────────────
   const brandChart = useMemo(() => {
@@ -231,20 +242,20 @@ export default function TyreLifecycle() {
       labels: brands.map(b => b.brand),
       datasets: [
         {
-          label: 'New (avg km)',
+          label: t('lifecycle.charts.newAvgKm'),
           data: brands.map(b => Math.round(b.newAvg)),
           backgroundColor: 'rgba(59,130,246,0.7)',
           borderRadius: 4,
         },
         {
-          label: 'Retread (avg km)',
+          label: t('lifecycle.charts.retreadAvgKm'),
           data: brands.map(b => Math.round(b.retreadAvg)),
           backgroundColor: 'rgba(139,92,246,0.7)',
           borderRadius: 4,
         },
       ],
     }
-  }, [filtered])
+  }, [filtered, t])
 
   // ── Cost doughnut ─────────────────────────────────────────────────────────
   const costDonut = useMemo(() => {

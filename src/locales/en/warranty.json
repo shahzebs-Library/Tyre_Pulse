@@ -82,7 +82,8 @@
   "failureAnalysis": {
     "byTypeTitle": "Claims by Failure Type",
     "noData": "No data available",
-    "mostCommon": "Most common failure: {type} ({count} claims)",
+    "mostCommonPrefix": "Most common failure:",
+    "mostCommonSuffix": "({count} claims)",
     "avgKmTitle": "Average km at Failure by Type",
     "claimsAvgKm": "{count} claims · {avgKm} km avg",
     "claimsNoKm": "{count} claims · N/A",
@@ -111,7 +112,8 @@
     "recoveryRate": "Recovery Rate",
     "estUnclaimedPotential": "Est. Unclaimed Potential",
     "opportunityLabel": "Opportunity:",
-    "opportunityText": "If you filed claims on all eligible removals, you could recover an additional {amount} per year. Based on 30% eligibility assumption at {perTyre} per tyre × 40% credit rate."
+    "opportunityPrefix": "If you filed claims on all eligible removals, you could recover an additional",
+    "opportunitySuffix": "per year. Based on 30% eligibility assumption at {perTyre} per tyre × 40% credit rate."
   },
   "modal": {
     "editTitle": "Edit Warranty Claim",

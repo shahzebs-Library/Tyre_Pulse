@@ -1,0 +1,67 @@
+{
+  "loading": "جارٍ تحميل بيانات الأسطول...",
+  "header": {
+    "title": "الذكاء الاصطناعي للأسطول",
+    "subtitle": "ذكاء أسطول متعدد الوكلاء · محلل · مهندس إطارات · مخطِّط · تنظيف بيانات"
+  },
+  "stats": {
+    "recordsLoaded": "السجلات المحمّلة",
+    "totalCost": "التكلفة الإجمالية",
+    "highRiskTyres": "إطارات عالية الخطورة",
+    "openActions": "الإجراءات المفتوحة"
+  },
+  "agentSelector": {
+    "activeAgent": "الوكيل النشط",
+    "autoDetect": "كشف تلقائي",
+    "fallbackLabel": "محلل"
+  },
+  "conversation": {
+    "emptyTitle": "اسأل أي شيء عن أسطولك",
+    "emptyDesc": "استخدم الأسئلة المقترحة أو الأنماط الجاهزة للتحليل المتعمق للبدء",
+    "analysing": "جارٍ تحليل بيانات الأسطول...",
+    "error": "خطأ"
+  },
+  "response": {
+    "copyAnswer": "نسخ الإجابة",
+    "exportExcel": "تصدير إكسل",
+    "exportPdf": "تصدير PDF",
+    "keyInsights": "أبرز الرؤى",
+    "rootCauseAnalysis": "تحليل السبب الجذري",
+    "recommendedActions": "الإجراءات الموصى بها",
+    "followUp": "متابعة:",
+    "followUpQuestions": {
+      "tellMeMore": "أخبرني المزيد",
+      "whichAssets": "ما هي الأصول المتأثرة؟",
+      "showCostImpact": "عرض تأثير التكلفة",
+      "createActionPlan": "إنشاء خطة عمل"
+    }
+  },
+  "input": {
+    "placeholder": "اسأل {agent}... (Enter للإرسال)",
+    "clearConversation": "مسح المحادثة"
+  },
+  "footer": {
+    "summary": "{records} سجل · {anomalies} حالة شاذة · {inspections} فحص",
+    "allCountries": "جميع الدول",
+    "refreshData": "تحديث البيانات"
+  },
+  "presets": {
+    "title": "تحليل متعمق"
+  },
+  "suggested": {
+    "title": "أسئلة مقترحة"
+  },
+  "snapshot": {
+    "title": "لمحة عن الأسطول",
+    "criticalTyres": "إطارات حرجة",
+    "highRiskTyres": "إطارات عالية الخطورة",
+    "openActions": "الإجراءات المفتوحة",
+    "inspectionIssues": "مشكلات الفحص",
+    "topSitesByCost": "أعلى المواقع إنفاقًا"
+  },
+  "session": {
+    "title": "الجلسة",
+    "clear": "مسح",
+    "questionsAsked": "{count} سؤال مطروح"
+  }
+}

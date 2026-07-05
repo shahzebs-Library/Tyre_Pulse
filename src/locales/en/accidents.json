@@ -1,0 +1,152 @@
+{
+  "title": "Accidents & Incidents",
+  "subtitle": "{count} total incidents",
+  "note": "New: controlled, validated, audited accident & insurance import with private evidence attachments and duplicate detection.",
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF",
+    "importDataIntake": "Import via Data Intake Center",
+    "bulkUpload": "Bulk Upload",
+    "newIncident": "New Incident"
+  },
+  "tabs": {
+    "incidents": "Incidents",
+    "analytics": "Analytics"
+  },
+  "pendingClosures": {
+    "banner": "{count} closure(s) awaiting approval",
+    "tapShowAll": "Tap to show all incidents",
+    "tapReview": "Tap to review and approve closures"
+  },
+  "stats": {
+    "totalIncidents": "Total Incidents",
+    "open": "Open",
+    "insuranceClaims": "Insurance Claims",
+    "totalRepairCost": "Total Repair Cost",
+    "avgDaysToClose": "Avg Days to Close"
+  },
+  "charts": {
+    "incidentsPerMonth": "Incidents per Month (last 12 months)",
+    "incidentsSeries": "Incidents",
+    "topAssets": "Top 5 Assets by Incidents",
+    "bySite": "Incidents by Site",
+    "monthlySeverity": "Monthly Severity Breakdown (last 12 months)",
+    "noData": "No data",
+    "claimsRecovery": "Claims & Cost Recovery",
+    "grossCost": "Gross Cost (repair + parts)",
+    "totalClaimed": "Total Claimed",
+    "recovered": "Recovered",
+    "netAfterRecovery": "Net After Recovery",
+    "partsCost": "Parts Cost",
+    "pendingClosuresLabel": "Pending Closures",
+    "recoveryRate": "Insurance recovery rate",
+    "claimStatusBreakdown": "Claim Status Breakdown",
+    "costByPayer": "Cost by Responsible Payer",
+    "noPayerData": "No payer cost data",
+    "statusFunnel": "Status Funnel",
+    "costSeries": "Cost",
+    "claimsSeries": "Claims",
+    "claimLabels": {
+      "none": "No Claim",
+      "filed": "Filed",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "settled": "Settled"
+    }
+  },
+  "filters": {
+    "searchPlaceholder": "Search asset or description",
+    "allSites": "All Sites",
+    "allSeverities": "All Severities",
+    "allStatuses": "All Statuses",
+    "fromDate": "From date",
+    "toDate": "To date",
+    "clearFilters": "Clear filters",
+    "clear": "Clear"
+  },
+  "bulkBar": {
+    "selected": "{count} selected",
+    "clear": "Clear",
+    "delete": "Delete {count}"
+  },
+  "table": {
+    "selectAllShown": "Select all shown",
+    "date": "Date",
+    "asset": "Asset",
+    "site": "Site",
+    "severity": "Severity",
+    "status": "Status",
+    "repairCost": "Repair Cost",
+    "inspector": "Inspector",
+    "actions": "Actions",
+    "pendingClosureBadge": "Pending Closure"
+  },
+  "states": {
+    "loading": "Loading...",
+    "emptyTitle": "No incidents found",
+    "emptyDesc": "Adjust your filters or log a new incident to start tracking accidents and claims."
+  },
+  "rowActions": {
+    "open": "Open",
+    "edit": "Edit",
+    "raiseCA": "Raise CA",
+    "delete": "Delete"
+  },
+  "confirmDeleteIncident": "Delete this incident record?",
+  "modal": {
+    "editTitle": "Edit Incident",
+    "newTitle": "New Incident",
+    "incidentDate": "Incident Date *",
+    "assetNo": "Asset No *",
+    "searchAsset": "Type to search...",
+    "site": "Site",
+    "country": "Country",
+    "description": "Description",
+    "severity": "Severity",
+    "status": "Status",
+    "repairCost": "Repair Cost",
+    "insuranceClaimNo": "Insurance Claim No",
+    "inspector": "Inspector",
+    "photos": "Photos",
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel"
+  },
+  "bulkDelete": {
+    "title": "Delete {count} incident(s)?",
+    "description": "This permanently removes the selected incident records and their claim data. This cannot be undone.",
+    "delete": "Delete {count}",
+    "deleting": "Deleting...",
+    "cancel": "Cancel"
+  },
+  "bulkUpload": {
+    "title": "Bulk Upload Incidents",
+    "subtitle": "Upload an Excel or CSV file to import multiple incidents at once.",
+    "step1Title": "Step 1 - Download Template",
+    "step1Desc": "Use the official template to ensure correct column mapping. Required columns:",
+    "step1DescSuffix": "All other columns are optional.",
+    "downloadTemplate": "Download Template (.xlsx)",
+    "step2Title": "Step 2 - Upload Your File",
+    "chooseFile": "Choose Excel / CSV file",
+    "rowsParsed": "{count} row(s) parsed",
+    "valid": "{count} valid",
+    "invalid": "{count} invalid (missing date or asset_no)",
+    "previewHeaders": {
+      "row": "Row",
+      "date": "Date",
+      "asset": "Asset",
+      "site": "Site",
+      "severity": "Severity",
+      "status": "Status",
+      "cost": "Cost",
+      "valid": "Valid"
+    },
+    "showingFirst": "Showing first 50 of {count} rows",
+    "resultImported": "{count} incident(s) imported successfully.",
+    "resultSkipped": "{count} row(s) skipped (missing required fields).",
+    "importing": "Importing...",
+    "importValidRows": "Import {count} Valid Rows",
+    "close": "Close"
+  },
+  "photoPlaceholder": "Photo"
+}

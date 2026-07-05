@@ -1,0 +1,67 @@
+{
+  "loading": "Loading fleet data...",
+  "header": {
+    "title": "Fleet AI",
+    "subtitle": "Multi-agent fleet intelligence · Analyst · Tyre Engineer · Planner · QA Data"
+  },
+  "stats": {
+    "recordsLoaded": "Records Loaded",
+    "totalCost": "Total Cost",
+    "highRiskTyres": "High Risk Tyres",
+    "openActions": "Open Actions"
+  },
+  "agentSelector": {
+    "activeAgent": "Active Agent",
+    "autoDetect": "Auto-detect",
+    "fallbackLabel": "Analyst"
+  },
+  "conversation": {
+    "emptyTitle": "Ask anything about your fleet",
+    "emptyDesc": "Use the suggested questions or deep analysis presets to get started",
+    "analysing": "Analysing fleet data...",
+    "error": "Error"
+  },
+  "response": {
+    "copyAnswer": "Copy answer",
+    "exportExcel": "Export Excel",
+    "exportPdf": "Export PDF",
+    "keyInsights": "Key Insights",
+    "rootCauseAnalysis": "Root Cause Analysis",
+    "recommendedActions": "Recommended Actions",
+    "followUp": "Follow up:",
+    "followUpQuestions": {
+      "tellMeMore": "Tell me more",
+      "whichAssets": "Which assets are affected?",
+      "showCostImpact": "Show cost impact",
+      "createActionPlan": "Create action plan"
+    }
+  },
+  "input": {
+    "placeholder": "Ask {agent}... (Enter to send)",
+    "clearConversation": "Clear conversation"
+  },
+  "footer": {
+    "summary": "{records} records · {anomalies} anomalies · {inspections} inspections",
+    "allCountries": "All countries",
+    "refreshData": "Refresh data"
+  },
+  "presets": {
+    "title": "Deep Analysis"
+  },
+  "suggested": {
+    "title": "Suggested Questions"
+  },
+  "snapshot": {
+    "title": "Fleet Snapshot",
+    "criticalTyres": "Critical Tyres",
+    "highRiskTyres": "High Risk Tyres",
+    "openActions": "Open Actions",
+    "inspectionIssues": "Inspection Issues",
+    "topSitesByCost": "Top Sites by Cost"
+  },
+  "session": {
+    "title": "Session",
+    "clear": "Clear",
+    "questionsAsked": "{count} question(s) asked"
+  }
+}

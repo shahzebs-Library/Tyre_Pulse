@@ -1,0 +1,113 @@
+{
+  "title": "Root Cause Intelligence Engine",
+  "subtitle": "Rule-based classification of 14 engineering root causes across the fleet",
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "loading": "Loading classification engine...",
+  "error": {
+    "title": "Failed to load records"
+  },
+  "empty": {
+    "title": "No tyre records found",
+    "subtitle": "Upload tyre change records to enable root cause analysis."
+  },
+  "filters": {
+    "title": "Filters",
+    "dateRange": "Date Range",
+    "site": "Site",
+    "allSites": "All Sites",
+    "riskLevel": "Risk Level",
+    "allLevels": "All Levels",
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "minRecords": "Min Records:",
+    "recordsInView": "{count} records in view"
+  },
+  "datePresets": {
+    "last30d": "Last 30d",
+    "last90d": "Last 90d",
+    "last6mo": "Last 6mo",
+    "last1yr": "Last 1yr",
+    "allTime": "All Time"
+  },
+  "stats": {
+    "totalRecords": "Total Records",
+    "inCurrentFilter": "in current filter",
+    "causeCoverage": "Cause Coverage",
+    "recordsClassified": "{count} records classified",
+    "topRootCause": "Top Root Cause",
+    "recordsCount": "{count} records",
+    "noData": "No data",
+    "topCauseCost": "Top Cause Cost",
+    "forCause": "for {cause}"
+  },
+  "charts": {
+    "frequencyTitle": "Root Cause Frequency",
+    "frequencySeries": "Records",
+    "noCausesThreshold": "No causes meet the minimum records threshold",
+    "financialTitle": "Financial Impact by Root Cause",
+    "financialSeries": "Total Cost",
+    "noDataAvailable": "No data available",
+    "legendHigh": ">20% of total",
+    "legendMed": "10-20%",
+    "legendLow": "<10%"
+  },
+  "heatmap": {
+    "title": "Site × Root Cause Heat Map",
+    "topCausesNote": "(top {count} causes)",
+    "site": "Site",
+    "noSiteData": "No site data available",
+    "legendHigh": "High (>75%)",
+    "legendMedHigh": "Medium-High",
+    "legendMed": "Medium",
+    "legendLow": "Low"
+  },
+  "deepDive": {
+    "title": "Root Cause Deep Dive",
+    "records": "Records",
+    "ofTotal": "{pct}% of total",
+    "totalCost": "Total Cost",
+    "avgCpk": "Avg CPK",
+    "costPerKm": "Cost per km",
+    "coveragePct": "Coverage %",
+    "ofFilteredRecords": "of filtered records",
+    "topAssets": "Top 5 Affected Assets",
+    "topBrands": "Top 5 Affected Brands",
+    "topSites": "Top 5 Affected Sites",
+    "noData": "No data",
+    "preventionTitle": "Prevention Recommendation",
+    "affectedRecords": "Affected Records - {count} total",
+    "columns": {
+      "assetNo": "Asset No",
+      "site": "Site",
+      "brand": "Brand",
+      "date": "Date",
+      "risk": "Risk",
+      "findings": "Findings"
+    },
+    "noRecordsClassified": "No records classified under {cause} with current filters."
+  },
+  "worstVehicles": {
+    "title": "Worst Vehicles by Root Cause Incidents",
+    "topNote": "(top 15)",
+    "noData": "No vehicle data available",
+    "columns": {
+      "hash": "#",
+      "assetNo": "Asset No",
+      "site": "Site",
+      "incidents": "Incidents",
+      "topCause": "Top Cause",
+      "totalCost": "Total Cost",
+      "avgCpk": "Avg CPK",
+      "history": "History"
+    },
+    "view": "View"
+  },
+  "states": {
+    "na": "N/A"
+  }
+}

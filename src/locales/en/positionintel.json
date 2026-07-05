@@ -1,0 +1,114 @@
+{
+  "title": "Tyre Position Intelligence",
+  "subtitle": "Performance analysis by axle position - fastest wear, highest cost, failure-prone positions",
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "filters": {
+    "allSites": "All Sites",
+    "refresh": "Refresh",
+    "recordsCount": "{count} records"
+  },
+  "badge": {
+    "critical": "Critical",
+    "elevated": "Elevated",
+    "normal": "Normal",
+    "worst": "Worst",
+    "best": "Best"
+  },
+  "sections": {
+    "positionSummary": "Position Summary",
+    "positionAnalytics": "Position Analytics",
+    "heatMap": "Site × Position Failure Rate Heat Map",
+    "deepDive": "Position Deep Dive",
+    "corrective": "Corrective Action Recommendations"
+  },
+  "summaryCard": {
+    "noData": "No data",
+    "records": "Records",
+    "failureRate": "Failure Rate",
+    "avgCpk": "Avg CPK",
+    "avgLife": "Avg Life",
+    "efficient": "efficient",
+    "moderate": "moderate",
+    "costly": "costly"
+  },
+  "charts": {
+    "cpkByPosition": "CPK by Position ({currency}/km)",
+    "cpkLegend": "Green <1.0 · Yellow 1.0-2.0 · Red ≥2.0",
+    "failureRateByPosition": "Failure Rate by Position (%)",
+    "failureLegend": "Red >25% · Yellow >15% · Green ≤15%",
+    "avgLifeByPosition": "Average Tyre Life by Position (km)",
+    "noKmData": "No km data available",
+    "costDistribution": "Cost Distribution by Position",
+    "noCostData": "No cost data available"
+  },
+  "heatMapTable": {
+    "site": "Site",
+    "legend": "Red = high failure rate. Blank cells = no data."
+  },
+  "deepDive": {
+    "noDataFor": "No data for {position} position",
+    "stat": {
+      "records": "Records",
+      "failureRate": "Failure Rate",
+      "avgCpk": "Avg CPK",
+      "avgKmLife": "Avg KM Life",
+      "totalCost": "Total Cost",
+      "highRisk": "High Risk"
+    },
+    "brandPerformance": "Brand Performance - {position}",
+    "noBrandData": "No brand data",
+    "brandTable": {
+      "brand": "Brand",
+      "records": "Records",
+      "avgCpk": "Avg CPK",
+      "failurePct": "Failure %",
+      "avgKmLife": "Avg KM Life"
+    },
+    "recommendationTitle": "Engineering Recommendation",
+    "topFailureCategories": "Top Failure Categories",
+    "worstAssetsTitle": "Worst Assets - {position} (Top 5 by CPK)",
+    "assetTable": {
+      "asset": "Asset",
+      "records": "Records",
+      "avgCpk": "Avg CPK",
+      "failureRate": "Failure Rate",
+      "totalCost": "Total Cost"
+    }
+  },
+  "corrective": {
+    "allGoodTitle": "All Positions Within Acceptable Parameters",
+    "allGoodDesc": "No positions currently exceed the 20% failure rate threshold.",
+    "critical": "Critical",
+    "elevated": "Elevated",
+    "axle": "{position} Axle",
+    "failureSummary": "{rate}% failure rate - {multiplier}× fleet average. {highRiskCount} high/critical risk records from {count} total.",
+    "estSavings": "Est. Potential Savings",
+    "savingsNote": "30% failure reduction"
+  },
+  "states": {
+    "loading": "Analyzing tyre position data...",
+    "retry": "Retry",
+    "reload": "Reload",
+    "noPositionData": "No position data available. Ensure tyre records include position field."
+  },
+  "recommendation": {
+    "steerCritical": "Critical: High steer tyre failure rate indicates alignment or inflation issues. Inspect alignment immediately.",
+    "steerCpkHigh": "Steer CPK above fleet average. Review inflation pressure policy for steer axles.",
+    "steerElevated": "Elevated steer failures. Schedule alignment checks and pressure audits across fleet.",
+    "driveElevated": "Drive axle failures elevated. Check overloading and driver behaviour records.",
+    "driveLifeLow": "Drive tyre life below benchmark. Evaluate brand switch or rotation policy.",
+    "driveAboveThreshold": "Drive axle failure rate above threshold. Investigate load compliance and tyre rotation intervals.",
+    "trailerAboveThreshold": "Trailer failures above threshold. Inspect for road damage and misalignment.",
+    "trailerTrendingUp": "Trailer failure rate trending up. Review tyre inspection frequency for trailer axles.",
+    "liftElevated": "Lift axle failures elevated. Ensure correct inflation when axle is deployed.",
+    "liftReview": "Review lift axle deployment procedures and associated tyre pressure compliance.",
+    "tagAboveNorm": "Tag axle failures above fleet norm. Check for uneven load distribution and misalignment.",
+    "genericHigh": "{position} position showing high failure rate ({rate}%). Immediate review required.",
+    "genericElevated": "{position} position failure rate elevated. Schedule inspection and root cause review.",
+    "genericCpkHigh": "CPK for {position} is high ({cpk} /km). Evaluate tyre specification and brand selection.",
+    "acceptable": "Position performing within acceptable parameters."
+  }
+}

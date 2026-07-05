@@ -17,6 +17,7 @@ import {
   TrendingUp, Package,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import { useLanguage } from '../contexts/LanguageContext'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -65,11 +66,12 @@ function applyPalette(chartData) {
 }
 
 function AgentBadge({ agentType }) {
+  const { t } = useLanguage()
   const colors = AGENT_COLORS[agentType] ?? AGENT_COLORS[AGENT_TYPES.ANALYST]
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${colors.bg} ${colors.text} ${colors.border}`}>
       <Bot size={9} />
-      {AGENT_LABELS[agentType] ?? 'Analyst'}
+      {AGENT_LABELS[agentType] ?? t('aianalytics.agentSelector.fallbackLabel')}
     </span>
   )
 }
@@ -126,6 +128,7 @@ function AiTable({ tableHeaders, tableRows }) {
 
 // Single AI response message card
 function ResponseCard({ item, onFollowUp, index }) {
+  const { t } = useLanguage()
   const [expanded, setExpanded] = useState(true)
   const [copied, setCopied] = useState(false)
 
@@ -166,15 +169,15 @@ function ResponseCard({ item, onFollowUp, index }) {
           <span className="text-xs text-gray-400 truncate">{item.question}</span>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-          <button onClick={copyAnswer} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-300 transition-colors" title="Copy answer">
+          <button onClick={copyAnswer} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-300 transition-colors" title={t('aianalytics.response.copyAnswer')}>
             {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
           </button>
           {(r.tableHeaders?.length && r.tableRows?.length) ? (
             <>
-              <button onClick={handleExportExcel} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-300 transition-colors" title="Export Excel">
+              <button onClick={handleExportExcel} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-300 transition-colors" title={t('aianalytics.response.exportExcel')}>
                 <Download size={12} />
               </button>
-              <button onClick={handleExportPdf} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-300 transition-colors" title="Export PDF">
+              <button onClick={handleExportPdf} className="p-1 rounded hover:bg-white/5 text-gray-600 hover:text-gray-300 transition-colors" title={t('aianalytics.response.exportPdf')}>
                 <FileText size={12} />
               </button>
             </>
@@ -195,7 +198,7 @@ function ResponseCard({ item, onFollowUp, index }) {
           {/* Insights */}
           {r.insights?.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Key Insights</p>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{t('aianalytics.response.keyInsights')}</p>
               <ul className="space-y-1">
                 {r.insights.map((ins, i) => (
                   <li key={i} className={`flex items-start gap-2 text-sm ${colors.text}`}>
@@ -210,7 +213,7 @@ function ResponseCard({ item, onFollowUp, index }) {
           {/* Root Cause */}
           {r.rootCause && (
             <div className="p-3 rounded-lg bg-amber-950/30 border border-amber-700/30">
-              <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-1">Root Cause Analysis</p>
+              <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-1">{t('aianalytics.response.rootCauseAnalysis')}</p>
               <p className="text-sm text-amber-200/80">{r.rootCause}</p>
             </div>
           )}
@@ -228,7 +231,7 @@ function ResponseCard({ item, onFollowUp, index }) {
           {/* Recommendations */}
           {r.recommendations?.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Recommended Actions</p>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{t('aianalytics.response.recommendedActions')}</p>
               <ul className="space-y-1.5">
                 {r.recommendations.map((rec, i) => (
                   <li key={i} className="flex items-start gap-2">
@@ -244,11 +247,16 @@ function ResponseCard({ item, onFollowUp, index }) {
 
           {/* Follow-up */}
           <div className="pt-2 border-t border-gray-800 flex items-center gap-2">
-            <span className="text-[10px] text-gray-600">Follow up:</span>
-            {['Tell me more', 'Which assets are affected?', 'Show cost impact', 'Create action plan'].map(q => (
-              <button key={q} onClick={() => onFollowUp?.(q, r.agentType)}
+            <span className="text-[10px] text-gray-600">{t('aianalytics.response.followUp')}</span>
+            {[
+              { key: 'tellMeMore', text: 'Tell me more' },
+              { key: 'whichAssets', text: 'Which assets are affected?' },
+              { key: 'showCostImpact', text: 'Show cost impact' },
+              { key: 'createActionPlan', text: 'Create action plan' },
+            ].map(q => (
+              <button key={q.key} onClick={() => onFollowUp?.(q.text, r.agentType)}
                 className="text-[10px] px-2 py-1 rounded-full text-gray-500 border border-gray-700 hover:border-gray-500 hover:text-gray-300 transition-colors">
-                {q}
+                {t(`aianalytics.response.followUpQuestions.${q.key}`)}
               </button>
             ))}
           </div>
@@ -260,6 +268,7 @@ function ResponseCard({ item, onFollowUp, index }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function AiAnalytics() {
+  const { t } = useLanguage()
   const { activeCountry, appSettings } = useSettings()
 
   const [records, setRecords]         = useState([])
@@ -351,7 +360,7 @@ export default function AiAnalytics() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-400 text-sm">Loading fleet data...</p>
+        <p className="text-gray-400 text-sm">{t('aianalytics.loading')}</p>
       </div>
     )
   }
@@ -359,18 +368,18 @@ export default function AiAnalytics() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Fleet AI"
-        subtitle="Multi-agent fleet intelligence · Analyst · Tyre Engineer · Planner · QA Data"
+        title={t('aianalytics.header.title')}
+        subtitle={t('aianalytics.header.subtitle')}
         icon={Brain}
       />
 
       {/* ── Data Stats Strip ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Records Loaded',   value: records.length.toLocaleString(),              icon: Package,       color: 'text-green-400' },
-          { label: 'Total Cost',       value: totalCostFmt,                                  icon: DollarSign,    color: 'text-teal-400' },
-          { label: 'High Risk Tyres',  value: (dataContext.summary?.highRiskCount || 0).toLocaleString(), icon: AlertTriangle, color: 'text-red-400' },
-          { label: 'Open Actions',     value: (dataContext.actions?.open || 0).toLocaleString(),           icon: Activity,      color: 'text-yellow-400' },
+          { label: t('aianalytics.stats.recordsLoaded'),   value: records.length.toLocaleString(),              icon: Package,       color: 'text-green-400' },
+          { label: t('aianalytics.stats.totalCost'),       value: totalCostFmt,                                  icon: DollarSign,    color: 'text-teal-400' },
+          { label: t('aianalytics.stats.highRiskTyres'),  value: (dataContext.summary?.highRiskCount || 0).toLocaleString(), icon: AlertTriangle, color: 'text-red-400' },
+          { label: t('aianalytics.stats.openActions'),     value: (dataContext.actions?.open || 0).toLocaleString(),           icon: Activity,      color: 'text-yellow-400' },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="card flex items-center gap-3 py-3">
             <Icon size={16} className={color} />
@@ -390,14 +399,14 @@ export default function AiAnalytics() {
           {/* Agent Selector */}
           <div className="card py-3 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Active Agent</p>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{t('aianalytics.agentSelector.activeAgent')}</p>
               <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
                 <div
                   onClick={() => setAutoDetect(v => !v)}
                   className={`w-8 h-4 rounded-full transition-colors cursor-pointer relative ${autoDetect ? 'bg-green-600' : 'bg-gray-700'}`}>
                   <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${autoDetect ? 'left-4.5 translate-x-0.5' : 'left-0.5'}`} style={{ left: autoDetect ? '18px' : '2px' }} />
                 </div>
-                Auto-detect
+                {t('aianalytics.agentSelector.autoDetect')}
               </label>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

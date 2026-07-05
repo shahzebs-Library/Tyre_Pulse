@@ -1,0 +1,77 @@
+{
+  "title": "متتبع دورة حياة الإطار",
+  "subtitle": "رؤية كاملة لدورة الحياة من التركيب حتى التقاعد",
+  "loading": "جارٍ تحميل بيانات دورة الحياة...",
+  "actions": {
+    "pdf": "PDF",
+    "excel": "إكسل"
+  },
+  "kpis": {
+    "tyresTracked": "الإطارات المتتبعة",
+    "avgLife": "متوسط العمر",
+    "retreadRate": "معدل التجديد",
+    "scrapRate": "معدل الخردة",
+    "avgCpk": "متوسط التكلفة/كم"
+  },
+  "filters": {
+    "title": "عوامل التصفية",
+    "clear": "مسح",
+    "searchPlaceholder": "الرقم التسلسلي / الأصل...",
+    "allBrands": "جميع العلامات التجارية",
+    "allSites": "جميع المواقع",
+    "allCategories": "جميع الفئات"
+  },
+  "funnel": {
+    "title": "قمع مراحل دورة الحياة",
+    "ofTotal": "{pct}% من الإجمالي",
+    "avgPrefix": "متوسط"
+  },
+  "stages": {
+    "newFitment": "تركيب جديد",
+    "inService": "قيد الخدمة",
+    "retreadEligible": "مؤهل للتجديد",
+    "retreaded": "مجدد",
+    "scrapped": "خردة",
+    "removed": "مُزال"
+  },
+  "charts": {
+    "brandLifecycle": "تحليل دورة حياة العلامة التجارية (متوسط كم: جديد مقابل مجدد)",
+    "noKmData": "لا تتوفر بيانات الكيلومترات",
+    "newAvgKm": "جديد (متوسط كم)",
+    "retreadAvgKm": "مجدد (متوسط كم)",
+    "costPerStage": "التكلفة حسب مرحلة دورة الحياة",
+    "noCostData": "لا تتوفر بيانات التكلفة",
+    "newTyres": "إطارات جديدة",
+    "retreads": "إطارات مجددة",
+    "repairs": "إصلاحات",
+    "emergency": "طارئ",
+    "ageDistribution": "توزيع عمر الإطارات (نطاقات الكيلومترات)",
+    "countAxis": "العدد"
+  },
+  "table": {
+    "title": "جدول دورة حياة الإطارات",
+    "summary": "{from}-{to} من {total}",
+    "columns": {
+      "serial": "الرقم التسلسلي",
+      "brand": "العلامة التجارية",
+      "size": "المقاس",
+      "position": "الموضع",
+      "asset": "الأصل",
+      "site": "الموقع",
+      "fitmentDate": "تاريخ التركيب",
+      "kmRun": "الكيلومترات المقطوعة",
+      "category": "الفئة",
+      "cpk": "التكلفة/كم",
+      "stage": "المرحلة"
+    },
+    "noRecords": "لا توجد سجلات مطابقة لعوامل التصفية الحالية",
+    "transferHistory": "سجل النقل - الرقم التسلسلي:",
+    "loadingHistory": "جارٍ التحميل...",
+    "noHistory": "لا توجد سجلات تاريخية",
+    "assetLabel": "الأصل:",
+    "siteLabel": "الموقع:",
+    "positionLabel": "الموضع:",
+    "kmLabel": "كم:",
+    "pageSummary": "صفحة {page} من {totalPages} · {total} سجل"
+  }
+}

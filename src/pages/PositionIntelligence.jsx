@@ -6,6 +6,7 @@ import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { AXLE_GROUPS, GROUP_ICONS, normalizePosition } from '../lib/tyrePositions'
 import PageHeader from '../components/ui/PageHeader'
+import { useLanguage } from '../contexts/LanguageContext'
 import {
   MapPin, Download, FileText, AlertTriangle, CheckCircle,
   TrendingUp, TrendingDown, Minus, ChevronDown, RefreshCw,
@@ -84,40 +85,40 @@ function fmtCurrency(n, currency) {
   return _fmtCurrencyBase(n, currency, 0)
 }
 
-function statusBadge(failureRate) {
-  if (failureRate >= 30) return { label: 'Critical', cls: 'bg-red-900/60 text-red-300 border border-red-700/40' }
-  if (failureRate >= 20) return { label: 'Elevated', cls: 'bg-yellow-900/60 text-yellow-300 border border-yellow-700/40' }
-  return { label: 'Normal', cls: 'bg-green-900/60 text-green-300 border border-green-700/40' }
+function statusBadge(t, failureRate) {
+  if (failureRate >= 30) return { label: t('positionintel.badge.critical'), cls: 'bg-red-900/60 text-red-300 border border-red-700/40' }
+  if (failureRate >= 20) return { label: t('positionintel.badge.elevated'), cls: 'bg-yellow-900/60 text-yellow-300 border border-yellow-700/40' }
+  return { label: t('positionintel.badge.normal'), cls: 'bg-green-900/60 text-green-300 border border-green-700/40' }
 }
 
-function buildRecommendation(pos, metrics) {
+function buildRecommendation(t, pos, metrics) {
   const { failureRate, avgCpk, avgKmLife } = metrics
   if (pos === 'Steer') {
-    if (failureRate > 30) return 'Critical: High steer tyre failure rate indicates alignment or inflation issues. Inspect alignment immediately.'
-    if (avgCpk != null && avgCpk > 2) return 'Steer CPK above fleet average. Review inflation pressure policy for steer axles.'
-    if (failureRate > 20) return 'Elevated steer failures. Schedule alignment checks and pressure audits across fleet.'
+    if (failureRate > 30) return t('positionintel.recommendation.steerCritical')
+    if (avgCpk != null && avgCpk > 2) return t('positionintel.recommendation.steerCpkHigh')
+    if (failureRate > 20) return t('positionintel.recommendation.steerElevated')
   }
   if (pos === 'Drive') {
-    if (failureRate > 25) return 'Drive axle failures elevated. Check overloading and driver behaviour records.'
-    if (avgKmLife != null && avgKmLife < 30000) return 'Drive tyre life below benchmark. Evaluate brand switch or rotation policy.'
-    if (failureRate > 15) return 'Drive axle failure rate above threshold. Investigate load compliance and tyre rotation intervals.'
+    if (failureRate > 25) return t('positionintel.recommendation.driveElevated')
+    if (avgKmLife != null && avgKmLife < 30000) return t('positionintel.recommendation.driveLifeLow')
+    if (failureRate > 15) return t('positionintel.recommendation.driveAboveThreshold')
   }
   if (pos === 'Trailer') {
-    if (failureRate > 20) return 'Trailer failures above threshold. Inspect for road damage and misalignment.'
-    if (failureRate > 12) return 'Trailer failure rate trending up. Review tyre inspection frequency for trailer axles.'
+    if (failureRate > 20) return t('positionintel.recommendation.trailerAboveThreshold')
+    if (failureRate > 12) return t('positionintel.recommendation.trailerTrendingUp')
   }
   if (pos === 'Lift Axle') {
-    if (failureRate > 20) return 'Lift axle failures elevated. Ensure correct inflation when axle is deployed.'
-    if (failureRate > 10) return 'Review lift axle deployment procedures and associated tyre pressure compliance.'
+    if (failureRate > 20) return t('positionintel.recommendation.liftElevated')
+    if (failureRate > 10) return t('positionintel.recommendation.liftReview')
   }
   if (pos === 'Tag Axle') {
-    if (failureRate > 20) return 'Tag axle failures above fleet norm. Check for uneven load distribution and misalignment.'
+    if (failureRate > 20) return t('positionintel.recommendation.tagAboveNorm')
   }
   // Generic fallback
-  if (failureRate > 25) return `${pos} position showing high failure rate (${fmtNum(failureRate)}%). Immediate review required.`
-  if (failureRate > 15) return `${pos} position failure rate elevated. Schedule inspection and root cause review.`
-  if (avgCpk != null && avgCpk > 2.5) return `CPK for ${pos} is high (${fmtNum(avgCpk, 2)} ${''}/km). Evaluate tyre specification and brand selection.`
-  return 'Position performing within acceptable parameters.'
+  if (failureRate > 25) return t('positionintel.recommendation.genericHigh', { position: pos, rate: fmtNum(failureRate) })
+  if (failureRate > 15) return t('positionintel.recommendation.genericElevated', { position: pos })
+  if (avgCpk != null && avgCpk > 2.5) return t('positionintel.recommendation.genericCpkHigh', { position: pos, cpk: fmtNum(avgCpk, 2) })
+  return t('positionintel.recommendation.acceptable')
 }
 
 function applyDatePreset(days) {
@@ -140,6 +141,7 @@ function heatColor(rate) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function PositionIntelligence() {
   const { activeCountry, activeCurrency } = useSettings()
+  const { t } = useLanguage()
 
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
@@ -306,7 +308,7 @@ export default function PositionIntelligence() {
         .sort((a, b) => (b.avgCpk ?? 0) - (a.avgCpk ?? 0))
         .slice(0, 5)
 
-      const recommendation = buildRecommendation(pos, { failureRate, avgCpk, avgKmLife })
+      const recommendation = buildRecommendation(t, pos, { failureRate, avgCpk, avgKmLife })
 
       return {
         position: pos,
@@ -327,7 +329,7 @@ export default function PositionIntelligence() {
         catMap,
       }
     })
-  }, [filtered])
+  }, [filtered, t])
 
   // ── Derived summaries ─────────────────────────────────────────────────────────
   const totalRecords = useMemo(() => filtered.length, [filtered])
@@ -477,7 +479,7 @@ export default function PositionIntelligence() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4 text-gray-400">
         <RefreshCw className="animate-spin" size={32} />
-        <span className="text-sm">Analyzing tyre position data...</span>
+        <span className="text-sm">{t('positionintel.states.loading')}</span>
       </div>
     )
   }
@@ -487,7 +489,7 @@ export default function PositionIntelligence() {
       <div className="flex flex-col items-center justify-center h-64 gap-3 text-red-400">
         <AlertTriangle size={32} />
         <span className="text-sm">{error}</span>
-        <button className="btn-secondary text-xs" onClick={load}>Retry</button>
+        <button className="btn-secondary text-xs" onClick={load}>{t('positionintel.states.retry')}</button>
       </div>
     )
   }
@@ -496,8 +498,8 @@ export default function PositionIntelligence() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-500">
         <MapPin size={32} />
-        <span className="text-sm">No position data available. Ensure tyre records include position field.</span>
-        <button className="btn-secondary text-xs" onClick={load}>Reload</button>
+        <span className="text-sm">{t('positionintel.states.noPositionData')}</span>
+        <button className="btn-secondary text-xs" onClick={load}>{t('positionintel.states.reload')}</button>
       </div>
     )
   }
@@ -507,16 +509,16 @@ export default function PositionIntelligence() {
     <div className="space-y-6 pb-10">
 
       <PageHeader
-        title="Tyre Position Intelligence"
-        subtitle="Performance analysis by axle position - fastest wear, highest cost, failure-prone positions"
+        title={t('positionintel.title')}
+        subtitle={t('positionintel.subtitle')}
         icon={MapPin}
         actions={
           <div className="flex items-center gap-2">
             <button className="btn-secondary text-xs flex items-center gap-1" onClick={handleExcelExport}>
-              <Download size={14} /> Excel
+              <Download size={14} /> {t('positionintel.actions.excel')}
             </button>
             <button className="btn-secondary text-xs flex items-center gap-1" onClick={handlePdfExport}>
-              <FileText size={14} /> PDF
+              <FileText size={14} /> {t('positionintel.actions.pdf')}
             </button>
           </div>
         }
@@ -546,7 +548,7 @@ export default function PositionIntelligence() {
           value={siteFilter}
           onChange={e => setSiteFilter(e.target.value)}
         >
-          <option value="">All Sites</option>
+          <option value="">{t('positionintel.filters.allSites')}</option>
           {uniqueSites.filter(Boolean).map(s => (
             <option key={s} value={s}>{s}</option>
           ))}

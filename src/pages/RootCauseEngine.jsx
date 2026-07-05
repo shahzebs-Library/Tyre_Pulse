@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
@@ -55,11 +56,11 @@ const PREVENTION_MAP = {
 }
 
 const DATE_PRESETS = [
-  { label: 'Last 30d', days: 30 },
-  { label: 'Last 90d', days: 90 },
-  { label: 'Last 6mo', days: 180 },
-  { label: 'Last 1yr', days: 365 },
-  { label: 'All Time', days: null },
+  { label: 'Last 30d', key: 'last30d', days: 30 },
+  { label: 'Last 90d', key: 'last90d', days: 90 },
+  { label: 'Last 6mo', key: 'last6mo', days: 180 },
+  { label: 'Last 1yr', key: 'last1yr', days: 365 },
+  { label: 'All Time', key: 'allTime', days: null },
 ]
 
 const RISK_COLORS_MAP = {
@@ -292,6 +293,7 @@ function StatCard({ icon: Icon, label, value, sub, color = 'text-blue-400' }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function RootCauseEngine() {
+  const { t } = useLanguage()
   const { activeCurrency, activeCountry } = useSettings()
   const currency = activeCurrency || 'ZAR'
 

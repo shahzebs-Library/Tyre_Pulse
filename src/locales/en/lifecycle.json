@@ -1,0 +1,77 @@
+{
+  "title": "Tyre Lifecycle Tracker",
+  "subtitle": "Full lifecycle visibility from fitment to retirement",
+  "loading": "Loading lifecycle data...",
+  "actions": {
+    "pdf": "PDF",
+    "excel": "Excel"
+  },
+  "kpis": {
+    "tyresTracked": "Tyres Tracked",
+    "avgLife": "Avg Life",
+    "retreadRate": "Retread Rate",
+    "scrapRate": "Scrap Rate",
+    "avgCpk": "Avg CPK"
+  },
+  "filters": {
+    "title": "Filters",
+    "clear": "Clear",
+    "searchPlaceholder": "Serial / Asset...",
+    "allBrands": "All Brands",
+    "allSites": "All Sites",
+    "allCategories": "All Categories"
+  },
+  "funnel": {
+    "title": "Lifecycle Stage Funnel",
+    "ofTotal": "{pct}% of total",
+    "avgPrefix": "Avg"
+  },
+  "stages": {
+    "newFitment": "New Fitment",
+    "inService": "In Service",
+    "retreadEligible": "Retread Eligible",
+    "retreaded": "Retreaded",
+    "scrapped": "Scrapped",
+    "removed": "Removed"
+  },
+  "charts": {
+    "brandLifecycle": "Brand Lifecycle Analysis (avg km: New vs Retread)",
+    "noKmData": "No km data available",
+    "newAvgKm": "New (avg km)",
+    "retreadAvgKm": "Retread (avg km)",
+    "costPerStage": "Cost per Lifecycle Stage",
+    "noCostData": "No cost data available",
+    "newTyres": "New Tyres",
+    "retreads": "Retreads",
+    "repairs": "Repairs",
+    "emergency": "Emergency",
+    "ageDistribution": "Tyre Age Distribution (km bands)",
+    "countAxis": "Count"
+  },
+  "table": {
+    "title": "Tyre Lifecycle Table",
+    "summary": "{from}-{to} of {total}",
+    "columns": {
+      "serial": "Serial",
+      "brand": "Brand",
+      "size": "Size",
+      "position": "Position",
+      "asset": "Asset",
+      "site": "Site",
+      "fitmentDate": "Fitment Date",
+      "kmRun": "km Run",
+      "category": "Category",
+      "cpk": "CPK",
+      "stage": "Stage"
+    },
+    "noRecords": "No records match the current filters",
+    "transferHistory": "Transfer History - Serial:",
+    "loadingHistory": "Loading...",
+    "noHistory": "No history records found",
+    "assetLabel": "Asset:",
+    "siteLabel": "Site:",
+    "positionLabel": "Position:",
+    "kmLabel": "km:",
+    "pageSummary": "Page {page} of {totalPages} · {total} records"
+  }
+}

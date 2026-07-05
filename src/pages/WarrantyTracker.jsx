@@ -1028,10 +1028,10 @@ export default function WarrantyTracker() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
-              <PieChart size={16} className="text-orange-400" /> Claims by Failure Type
+              <PieChart size={16} className="text-orange-400" /> {t('warranty.failureAnalysis.byTypeTitle')}
             </h3>
             {claims.length === 0 ? (
-              <div className="flex items-center justify-center h-52 text-gray-500 text-sm">No data available</div>
+              <div className="flex items-center justify-center h-52 text-gray-500 text-sm">{t('warranty.failureAnalysis.noData')}</div>
             ) : (
               <>
                 <div className="h-52">
@@ -1039,7 +1039,7 @@ export default function WarrantyTracker() {
                 </div>
                 {failureCounts[0] && (
                   <div className="mt-3 p-3 bg-orange-900/20 border border-orange-800/40 rounded-lg text-xs text-orange-300">
-                    Most common failure: <span className="font-bold">{failureCounts[0].type}</span> ({failureCounts[0].count} claims)
+                    {t('warranty.failureAnalysis.mostCommonPrefix')} <span className="font-bold">{failureCounts[0].type}</span> {t('warranty.failureAnalysis.mostCommonSuffix', { count: failureCounts[0].count })}
                   </div>
                 )}
               </>
@@ -1047,7 +1047,7 @@ export default function WarrantyTracker() {
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
-              <Activity size={16} className="text-purple-400" /> Average km at Failure by Type
+              <Activity size={16} className="text-purple-400" /> {t('warranty.failureAnalysis.avgKmTitle')}
             </h3>
             <div className="space-y-3">
               {failureCounts.filter(f => f.count > 0).map((f, i) => {
@@ -1056,7 +1056,11 @@ export default function WarrantyTracker() {
                   <div key={f.type}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="text-gray-300">{f.type}</span>
-                      <span className="text-gray-400">{f.count} claims · {f.avgKm > 0 ? f.avgKm.toLocaleString() + ' km avg' : 'N/A'}</span>
+                      <span className="text-gray-400">
+                        {f.avgKm > 0
+                          ? t('warranty.failureAnalysis.claimsAvgKm', { count: f.count, avgKm: f.avgKm.toLocaleString() })
+                          : t('warranty.failureAnalysis.claimsNoKm', { count: f.count })}
+                      </span>
                     </div>
                     <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
                       <div
@@ -1073,15 +1077,15 @@ export default function WarrantyTracker() {
               {failureCounts.every(f => f.count === 0) && (
                 <EmptyState
                   icon={Activity}
-                  title="No failure data yet"
-                  description="Average km at failure will appear once claims are recorded."
+                  title={t('warranty.failureAnalysis.emptyTitle')}
+                  description={t('warranty.failureAnalysis.emptyDesc')}
                   compact
                 />
               )}
             </div>
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 lg:col-span-2">
-            <h3 className="text-sm font-semibold text-gray-200 mb-4">Claim Status Distribution</h3>
+            <h3 className="text-sm font-semibold text-gray-200 mb-4">{t('warranty.failureAnalysis.statusDistribution')}</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {CLAIM_STATUSES.map((s, i) => (
                 <div key={s} className={`p-3 rounded-xl border ${STATUS_CFG[s]?.bg} ${STATUS_CFG[s]?.border}`}>
@@ -1098,24 +1102,24 @@ export default function WarrantyTracker() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-gray-400 text-xs mb-1">Total Credits Received</p>
+              <p className="text-gray-400 text-xs mb-1">{t('warranty.creditRecovery.totalReceived')}</p>
               <p className="text-3xl font-bold text-emerald-400">{fmt(creditAnalysis.totalCredits)}</p>
-              <p className="text-gray-500 text-xs mt-1">across {claims.filter(c => ['Credit Issued','Closed'].includes(c.claim_status)).length} claims</p>
+              <p className="text-gray-500 text-xs mt-1">{t('warranty.creditRecovery.acrossClaims', { count: claims.filter(c => ['Credit Issued','Closed'].includes(c.claim_status)).length })}</p>
             </div>
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-gray-400 text-xs mb-1">Est. Unclaimed (Approved)</p>
+              <p className="text-gray-400 text-xs mb-1">{t('warranty.creditRecovery.estUnclaimed')}</p>
               <p className="text-3xl font-bold text-yellow-400">{fmt(creditAnalysis.estimatedUnclaimed)}</p>
-              <p className="text-gray-500 text-xs mt-1">{creditAnalysis.openApprovedCount} approved claims pending credit</p>
+              <p className="text-gray-500 text-xs mt-1">{t('warranty.creditRecovery.approvedPending', { count: creditAnalysis.openApprovedCount })}</p>
             </div>
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-gray-400 text-xs mb-1">Total Recovery Pipeline</p>
+              <p className="text-gray-400 text-xs mb-1">{t('warranty.creditRecovery.totalPipeline')}</p>
               <p className="text-3xl font-bold text-blue-400">{fmt(creditAnalysis.totalCredits + creditAnalysis.estimatedUnclaimed)}</p>
-              <p className="text-gray-500 text-xs mt-1">received + unclaimed potential</p>
+              <p className="text-gray-500 text-xs mt-1">{t('warranty.creditRecovery.pipelineSub')}</p>
             </div>
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
-              <TrendingUp size={16} className="text-emerald-400" /> Monthly Credits Received (12 months)
+              <TrendingUp size={16} className="text-emerald-400" /> {t('warranty.creditRecovery.monthlyChartTitle')}
             </h3>
             <div className="h-64">
               <Bar data={creditTrendData} options={CHART_OPTS} />
@@ -1123,7 +1127,7 @@ export default function WarrantyTracker() {
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
-              <PieChart size={16} className="text-blue-400" /> Claim Status Funnel
+              <PieChart size={16} className="text-blue-400" /> {t('warranty.creditRecovery.funnelTitle')}
             </h3>
             <div className="h-56">
               <Doughnut data={statusDoughnutData} options={DOUGHNUT_OPTS} />
@@ -1136,41 +1140,41 @@ export default function WarrantyTracker() {
         <div className="space-y-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
             <h3 className="text-sm font-semibold text-gray-200 mb-5 flex items-center gap-2">
-              <Target size={16} className="text-blue-400" /> Warranty ROI Calculator
+              <Target size={16} className="text-blue-400" /> {t('warranty.roi.title')}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="text-xs text-gray-400 block mb-1.5">Annual Tyre Count (fleet)</label>
+                <label className="text-xs text-gray-400 block mb-1.5">{t('warranty.roi.annualTyreCount')}</label>
                 <input
                   type="number"
                   value={roiAnnualCount}
                   onChange={e => setRoiAnnualCount(e.target.value)}
-                  placeholder="e.g. 500"
+                  placeholder={t('warranty.roi.annualTyreCountPlaceholder')}
                   className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1.5">Average Tyre Cost ({cur})</label>
+                <label className="text-xs text-gray-400 block mb-1.5">{t('warranty.roi.avgTyreCost', { currency: cur })}</label>
                 <input
                   type="number"
                   value={roiAvgCost}
                   onChange={e => setRoiAvgCost(e.target.value)}
-                  placeholder="e.g. 1200"
+                  placeholder={t('warranty.roi.avgTyreCostPlaceholder')}
                   className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Claims Filed (this year)</p>
+                <p className="text-gray-400 text-xs mb-1">{t('warranty.roi.claimsFiled')}</p>
                 <p className="text-2xl font-bold text-blue-400">{roiCalc.thisYearClaims}</p>
               </div>
               <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Amount Recovered</p>
+                <p className="text-gray-400 text-xs mb-1">{t('warranty.roi.amountRecovered')}</p>
                 <p className="text-2xl font-bold text-emerald-400">{fmt(roiCalc.thisYearCredits)}</p>
               </div>
               <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Recovery Rate</p>
+                <p className="text-gray-400 text-xs mb-1">{t('warranty.roi.recoveryRate')}</p>
                 <p className="text-2xl font-bold text-green-400">
                   {Number(roiAvgCost) > 0 && Number(roiAnnualCount) > 0
                     ? `${roiCalc.recoveryRate.toFixed(1)}%`
@@ -1178,7 +1182,7 @@ export default function WarrantyTracker() {
                 </p>
               </div>
               <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Est. Unclaimed Potential</p>
+                <p className="text-gray-400 text-xs mb-1">{t('warranty.roi.estUnclaimedPotential')}</p>
                 <p className="text-2xl font-bold text-yellow-400">
                   {Number(roiAvgCost) > 0 && Number(roiAnnualCount) > 0 ? fmt(roiCalc.eligibleUnclaimed) : '-'}
                 </p>
@@ -1186,9 +1190,11 @@ export default function WarrantyTracker() {
             </div>
             {Number(roiAvgCost) > 0 && Number(roiAnnualCount) > 0 && roiCalc.eligibleUnclaimed > 0 && (
               <div className="mt-4 p-4 bg-blue-900/20 border border-blue-700/40 rounded-xl text-sm text-blue-300">
-                <strong>Opportunity:</strong> If you filed claims on all eligible removals, you could recover an additional{' '}
-                <span className="font-bold text-blue-200">{fmt(roiCalc.eligibleUnclaimed)}</span> per year.
-                Based on 30% eligibility assumption at {`${cur} ${Number(roiAvgCost).toLocaleString()}`} per tyre × 40% credit rate.
+                <strong>{t('warranty.roi.opportunityLabel')}</strong> {t('warranty.roi.opportunityText', {
+                  amount: fmt(roiCalc.eligibleUnclaimed),
+                  perTyre: `${cur} ${Number(roiAvgCost).toLocaleString()}`,
+                }).replace(fmt(roiCalc.eligibleUnclaimed), '')}
+                <span className="font-bold text-blue-200">{fmt(roiCalc.eligibleUnclaimed)}</span>
               </div>
             )}
           </div>

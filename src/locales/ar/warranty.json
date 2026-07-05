@@ -82,7 +82,8 @@
   "failureAnalysis": {
     "byTypeTitle": "المطالبات حسب نوع العطل",
     "noData": "لا توجد بيانات متاحة",
-    "mostCommon": "العطل الأكثر شيوعًا: {type} ({count} مطالبة)",
+    "mostCommonPrefix": "العطل الأكثر شيوعًا:",
+    "mostCommonSuffix": "({count} مطالبة)",
     "avgKmTitle": "متوسط الكيلومترات عند العطل حسب النوع",
     "claimsAvgKm": "{count} مطالبة · متوسط {avgKm} كم",
     "claimsNoKm": "{count} مطالبة · غير متاح",
@@ -111,7 +112,8 @@
     "recoveryRate": "معدل الاسترداد",
     "estUnclaimedPotential": "الإمكانية التقديرية غير المُطالَب بها",
     "opportunityLabel": "فرصة:",
-    "opportunityText": "إذا قدمت مطالبات على جميع الإزالات المؤهلة، يمكنك استرداد مبلغ إضافي قدره {amount} سنويًا. بناءً على افتراض أهلية 30% عند {perTyre} لكل إطار × معدل رصيد 40%."
+    "opportunityPrefix": "إذا قدمت مطالبات على جميع الإزالات المؤهلة، يمكنك استرداد مبلغ إضافي قدره",
+    "opportunitySuffix": "سنويًا. بناءً على افتراض أهلية 30% عند {perTyre} لكل إطار × معدل رصيد 40%."
   },
   "modal": {
     "editTitle": "تعديل مطالبة الضمان",

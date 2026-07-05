@@ -585,10 +585,10 @@ export default function DataIntakeCenter() {
 
       {/* stepper */}
       <div className="flex items-center gap-2 mb-6">
-        {STEPS.map((s, i) => (
-          <div key={s} className={`flex items-center gap-2 text-sm ${i === step ? 'text-white' : i < step ? 'text-green-400' : 'text-gray-500'}`}>
+        {STEP_KEYS.map((key, i) => (
+          <div key={key} className={`flex items-center gap-2 text-sm ${i === step ? 'text-white' : i < step ? 'text-green-400' : 'text-gray-500'}`}>
             <span className={`w-6 h-6 rounded-full grid place-items-center text-xs ${i === step ? 'bg-green-600 text-white' : i < step ? 'bg-green-900/40' : 'bg-gray-800'}`}>{i + 1}</span>
-            {s}{i < STEPS.length - 1 && <span className="text-gray-700 mx-1">-</span>}
+            {t(`intake.steps.${key}`)}{i < STEP_KEYS.length - 1 && <span className="text-gray-700 mx-1">-</span>}
           </div>
         ))}
       </div>

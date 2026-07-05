@@ -36,7 +36,7 @@ import { recordCost } from '../lib/analyticsEngine'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
 import PageHeader from '../components/ui/PageHeader'
-import SegmentedControl from '../components/ui/SegmentedControl'
+import PeriodFilter, { filterByPeriodValue, periodLabel as periodValueLabel } from '../components/ui/PeriodFilter'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement,
@@ -85,29 +85,10 @@ const DOUGHNUT_OPTS = {
 }
 
 // ── Period helpers ────────────────────────────────────────────────────────────
-const PERIODS = [
-  { key: 'month',   label: 'Last Month',    days: 30  },
-  { key: 'quarter', label: 'Last Quarter',  days: 90  },
-  { key: 'half',    label: 'Last 6 Months', days: 180 },
-  { key: 'year',    label: 'Last Year',     days: 365 },
-  { key: 'ytd',     label: 'YTD',           days: null },
-]
-
-function getPeriodStart(period) {
-  const now = new Date()
-  if (period === 'ytd') return new Date(now.getFullYear(), 0, 1)
-  const days = PERIODS.find(p => p.key === period)?.days ?? 90
-  const d = new Date(now)
-  d.setDate(d.getDate() - days)
-  return d
-}
-
+// Period selection is data-aware (All time / data years / custom calendar) via
+// the shared PeriodFilter, so historic imports always have a matching window.
 function filterByPeriod(records, period, dateField = 'issue_date') {
-  const start = getPeriodStart(period)
-  return records.filter(r => {
-    if (!r[dateField]) return false
-    return new Date(r[dateField]) >= start
-  })
+  return filterByPeriodValue(records, period, dateField)
 }
 
 // ── Root cause classifier ─────────────────────────────────────────────────────
@@ -285,7 +266,7 @@ export default function ExecutiveReport() {
   const [fleet,       setFleet]       = useState([])
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState(null)
-  const [period,      setPeriod]      = useState('quarter')
+  const [period,      setPeriod]      = useState({ mode: 'all' })
   const [exporting,   setExporting]   = useState(false)
   const [emailModalOpen, setEmailModalOpen] = useState(false)
 
@@ -363,8 +344,11 @@ export default function ExecutiveReport() {
 
   const totalBudget = useMemo(() => {
     if (!fleet.length) return 0
-    const periodObj = PERIODS.find(p => p.key === period)
-    const months = periodObj?.days ? periodObj.days / 30 : new Date().getMonth() + 1
+    // Months covered by the selected period, measured from the data itself.
+    const dates = periodRecords.map(r => r.issue_date).filter(Boolean).sort()
+    const months = dates.length
+      ? Math.max(1, Math.round((new Date(dates[dates.length - 1]) - new Date(dates[0])) / 2_592_000_000) + 1)
+      : 1
     return fleet.reduce((s, v) => s + (Number(v.monthly_tyre_budget) || 0), 0) * months
   }, [fleet, period])
 
@@ -413,7 +397,11 @@ export default function ExecutiveReport() {
       const f = Number(r.km_at_fitment), rem = Number(r.km_at_removal)
       return isFinite(f) && isFinite(rem) && rem > f
     }).reduce((s, r) => s + (Number(r.km_at_removal) - Number(r.km_at_fitment)), 0)
-    return improvement * totalKm * (12 / (PERIODS.find(p => p.key === period)?.days ?? 90) * 30)
+    const dates2 = periodRecords.map(r => r.issue_date).filter(Boolean).sort()
+    const periodDays = dates2.length
+      ? Math.max(30, (new Date(dates2[dates2.length - 1]) - new Date(dates2[0])) / 86_400_000 + 1)
+      : 90
+    return improvement * totalKm * (12 / periodDays * 30)
   }, [kpis, periodRecords, period])
 
   // ── Risk matrix ───────────────────────────────────────────────────────────
@@ -753,7 +741,7 @@ export default function ExecutiveReport() {
     try {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const brand = await resolvePdfBrand(branding)
-      const periodLabel = PERIODS.find(p => p.key === period)?.label || 'Quarter'
+      const periodLabel = periodValueLabel(period)
 
       // KPI Dashboard
       pdfHeader(doc, 'Executive Intelligence Report', `KPI Dashboard · ${periodLabel}`, company, brand)
@@ -815,7 +803,7 @@ export default function ExecutiveReport() {
       const totalPages = doc.internal.getNumberOfPages()
       for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
 
-      doc.save(`TyrePulse_Executive_Report_${period}_${new Date().toISOString().slice(0, 10)}.pdf`)
+      doc.save(`TyrePulse_Executive_Report_${periodValueLabel(period).replace(/[^\w-]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`)
     } catch (e) {
       console.error('PDF export failed', e)
     } finally {
@@ -869,7 +857,7 @@ export default function ExecutiveReport() {
     const siteRows = costBySite.map(s => ({ Site: s.site, 'Total Cost': Math.round(s.cost) }))
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(siteRows), 'Cost by Site')
 
-    XLSX.writeFile(wb, `TyrePulse_Executive_Report_${period}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    XLSX.writeFile(wb, `TyrePulse_Executive_Report_${periodValueLabel(period).replace(/[^\w-]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }, [kpis, rootCauses, riskMatrix, actionPlan, costTrend, costBySite, totalSpend, projectedAnnual, currency, period])
 
   const exportActionPlanPDF = useCallback(async () => {
@@ -877,7 +865,7 @@ export default function ExecutiveReport() {
     const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const brand = await resolvePdfBrand(branding)
-    pdfHeader(doc, 'Action Plan', `Period: ${PERIODS.find(p => p.key === period)?.label}`, company, brand)
+    pdfHeader(doc, 'Action Plan', `Period: ${periodValueLabel(period)}`, company, brand)
 
     autoTable(doc, {
       ...pdfTableTheme(brand.accent),
@@ -1044,13 +1032,7 @@ export default function ExecutiveReport() {
             subtitle={`${companyName} · Generated ${formatDate(new Date(), 'All', { day: '2-digit', month: 'long', year: 'numeric' })}`}
             icon={FileText}
             actions={<>
-              <SegmentedControl
-                ariaLabel="period"
-                size="sm"
-                value={period}
-                onChange={setPeriod}
-                options={PERIODS.map(p => ({ value: p.key, label: p.label }))}
-              />
+              <PeriodFilter records={records} value={period} onChange={setPeriod} />
               <button
                 onClick={exportExcel}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium transition-all border border-gray-700"
@@ -1116,7 +1098,7 @@ export default function ExecutiveReport() {
              <div className="lg:col-span-2 bg-gray-950 border border-gray-800 rounded-xl p-5 space-y-4">
               <div className="border-l-4 border-emerald-500 pl-4">
                 <p className="text-sm leading-relaxed text-gray-200">
-                  During the <strong className="text-white">{PERIODS.find(p => p.key === period)?.label}</strong>,{' '}
+                  During the <strong className="text-white">{periodValueLabel(period)}</strong>,{' '}
                   <strong className="text-white">{companyName}</strong> operated a fleet of{' '}
                   <strong className="text-emerald-400">{fleetSize.toLocaleString()} vehicles</strong>{' '}
                   with <strong className="text-white">{periodRecords.length.toLocaleString()} tyre records</strong> processed.
@@ -1237,7 +1219,7 @@ export default function ExecutiveReport() {
             <SectionHeader
               icon={BarChart2}
               title="Section 2 - KPI Dashboard"
-              subtitle={`${periodRecords.length.toLocaleString()} tyre records · ${PERIODS.find(p => p.key === period)?.label}`}
+              subtitle={`${periodRecords.length.toLocaleString()} tyre records · ${periodValueLabel(period)}`}
               badge="12 Metrics"
             />
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">

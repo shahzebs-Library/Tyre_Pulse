@@ -1,0 +1,146 @@
+{
+  "title": "Warranty & Claims Tracker",
+  "subtitle": "Track tyre warranties, claims, and supplier accountability",
+  "actions": {
+    "pdf": "PDF",
+    "excel": "Excel",
+    "import": "Import via Data Intake Center",
+    "addClaim": "Add Claim"
+  },
+  "intakeNote": "New: controlled, validated, audited warranty-claim import with Arabic/English header mapping, fitment/removal lifecycle checks, and duplicate detection.",
+  "kpi": {
+    "totalClaims": "Total Claims",
+    "openClaims": "Open Claims",
+    "totalCredits": "Total Credits",
+    "totalCreditsSub": "received",
+    "approvalRate": "Approval Rate",
+    "avgCreditPerClaim": "Avg Credit/Claim"
+  },
+  "tabs": {
+    "claims": "Claims",
+    "brandAnalysis": "Brand Analysis",
+    "failureAnalysis": "Failure Analysis",
+    "creditRecovery": "Credit Recovery",
+    "roiCalculator": "ROI Calculator"
+  },
+  "errors": {
+    "loadFailed": "Could not load warranty claims. Please retry.",
+    "serialRequired": "Serial number is required.",
+    "brandRequired": "Brand is required.",
+    "failureTypeRequired": "Failure type is required.",
+    "saveFailed": "Could not save the claim. Please retry.",
+    "deleteFailed": "Could not delete the claim."
+  },
+  "confirmDelete": "Delete this warranty claim?",
+  "claims": {
+    "searchPlaceholder": "Search claim, serial, brand, asset...",
+    "columns": {
+      "claimNo": "Claim No",
+      "serial": "Serial",
+      "brand": "Brand",
+      "size": "Size",
+      "asset": "Asset",
+      "site": "Site",
+      "failureType": "Failure Type",
+      "status": "Status",
+      "kmRun": "km Run",
+      "expKm": "Exp km",
+      "pctLife": "% Life",
+      "credit": "Credit",
+      "date": "Date"
+    },
+    "retry": "Retry",
+    "emptyTitle": "No warranty claims found.",
+    "addFirst": "Add First Claim",
+    "exportClaimLetterTooltip": "Export claim letter",
+    "expanded": {
+      "country": "Country",
+      "fitmentDate": "Fitment Date",
+      "removalDate": "Removal Date",
+      "supplier": "Supplier",
+      "creditDate": "Credit Date",
+      "notes": "Notes"
+    },
+    "claimLetter": "Claim Letter",
+    "delete": "Delete",
+    "pageSummary": "{count} claims · page {page} of {total}"
+  },
+  "brandAnalysis": {
+    "chartTitle": "Brand Warranty Performance",
+    "noData": "No data available",
+    "columns": {
+      "brand": "Brand",
+      "totalClaims": "Total Claims",
+      "approvalRate": "Approval Rate",
+      "avgCreditPerClaim": "Avg Credit per Claim",
+      "avgKmAtFailure": "Avg km at Failure"
+    },
+    "kmSuffix": "km",
+    "emptyTitle": "No brand data yet",
+    "emptyDesc": "Brand warranty performance will appear once claims are recorded."
+  },
+  "failureAnalysis": {
+    "byTypeTitle": "Claims by Failure Type",
+    "noData": "No data available",
+    "mostCommon": "Most common failure: {type} ({count} claims)",
+    "avgKmTitle": "Average km at Failure by Type",
+    "claimsAvgKm": "{count} claims · {avgKm} km avg",
+    "claimsNoKm": "{count} claims · N/A",
+    "emptyTitle": "No failure data yet",
+    "emptyDesc": "Average km at failure will appear once claims are recorded.",
+    "statusDistribution": "Claim Status Distribution"
+  },
+  "creditRecovery": {
+    "totalReceived": "Total Credits Received",
+    "acrossClaims": "across {count} claims",
+    "estUnclaimed": "Est. Unclaimed (Approved)",
+    "approvedPending": "{count} approved claims pending credit",
+    "totalPipeline": "Total Recovery Pipeline",
+    "pipelineSub": "received + unclaimed potential",
+    "monthlyChartTitle": "Monthly Credits Received (12 months)",
+    "funnelTitle": "Claim Status Funnel"
+  },
+  "roi": {
+    "title": "Warranty ROI Calculator",
+    "annualTyreCount": "Annual Tyre Count (fleet)",
+    "annualTyreCountPlaceholder": "e.g. 500",
+    "avgTyreCost": "Average Tyre Cost ({currency})",
+    "avgTyreCostPlaceholder": "e.g. 1200",
+    "claimsFiled": "Claims Filed (this year)",
+    "amountRecovered": "Amount Recovered",
+    "recoveryRate": "Recovery Rate",
+    "estUnclaimedPotential": "Est. Unclaimed Potential",
+    "opportunityLabel": "Opportunity:",
+    "opportunityText": "If you filed claims on all eligible removals, you could recover an additional {amount} per year. Based on 30% eligibility assumption at {perTyre} per tyre × 40% credit rate."
+  },
+  "modal": {
+    "editTitle": "Edit Warranty Claim",
+    "newTitle": "New Warranty Claim",
+    "serialNumber": "Serial Number *",
+    "serialNumberPlaceholder": "Enter serial number",
+    "lookup": "Lookup",
+    "brand": "Brand *",
+    "size": "Size",
+    "assetNo": "Asset No",
+    "site": "Site",
+    "country": "Country",
+    "supplier": "Supplier",
+    "fitmentDate": "Fitment Date",
+    "removalDate": "Removal Date",
+    "kmAtFitment": "km at Fitment",
+    "kmAtRemoval": "km at Removal",
+    "kmRunLabel": "km Run:",
+    "kmSuffix": "km",
+    "pctOfExpectedLife": "{pct}% of expected life",
+    "expectedLifeKm": "Expected Life km",
+    "failureType": "Failure Type *",
+    "status": "Status",
+    "creditAmount": "Credit Amount ({currency})",
+    "creditDate": "Credit Date",
+    "notes": "Notes / Failure Description",
+    "notesPlaceholder": "Describe the failure, location on tyre, etc.",
+    "cancel": "Cancel",
+    "updateClaim": "Update Claim",
+    "saveClaim": "Save Claim"
+  }
+}

@@ -57,6 +57,12 @@ const FLAG_KEY_MAP = {
   'Standard': 'standard', 'Low Volume': 'lowVolume', 'Outlier': 'outlier',
 }
 
+// consolidationOps impact values stay English (drive sort rank, style lookup,
+// and Excel export); only the rendered badge text is translated via this map.
+const IMPACT_KEY_MAP = {
+  'Critical': 'critical', 'High': 'high', 'Low': 'low',
+}
+
 const CHART_BASE = {
   responsive: true,
   maintainAspectRatio: false,
@@ -1038,15 +1044,15 @@ export default function TyreSizeAnalysis() {
                               exit={{ opacity: 0, height: 0 }}
                               className="px-4 py-3"
                             >
-                              <p className="text-xs font-semibold text-gray-300 mb-2">Brand breakdown for {m.size}</p>
+                              <p className="text-xs font-semibold text-gray-300 mb-2">{t('tyresize.table.brandBreakdownFor', { size: m.size })}</p>
                               <div className="overflow-x-auto">
                                 <table className="text-xs w-auto">
                                   <thead>
                                     <tr className="text-gray-500">
-                                      <th className="pr-8 py-1 text-left font-medium">Brand</th>
-                                      <th className="pr-8 py-1 text-left font-medium">Count</th>
-                                      <th className="pr-8 py-1 text-left font-medium">Avg CPK</th>
-                                      <th className="pr-8 py-1 text-left font-medium">Avg Life</th>
+                                      <th className="pr-8 py-1 text-left font-medium">{t('tyresize.table.brandColumns.brand')}</th>
+                                      <th className="pr-8 py-1 text-left font-medium">{t('tyresize.table.brandColumns.count')}</th>
+                                      <th className="pr-8 py-1 text-left font-medium">{t('tyresize.table.brandColumns.avgCpk')}</th>
+                                      <th className="pr-8 py-1 text-left font-medium">{t('tyresize.table.brandColumns.avgLife')}</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -1055,7 +1061,7 @@ export default function TyreSizeAnalysis() {
                                         <td className="pr-8 py-1.5 text-gray-200 font-medium">{b.brand}</td>
                                         <td className="pr-8 py-1.5 text-gray-300">{b.count}</td>
                                         <td className={`pr-8 py-1.5 font-mono ${cpkColor(b.avgCpk)}`}>
-                                          {b.avgCpk != null ? `${activeCurrency} ${b.avgCpk.toFixed(4)}` : <span className="text-gray-600">N/A</span>}
+                                          {b.avgCpk != null ? `${activeCurrency} ${b.avgCpk.toFixed(4)}` : <span className="text-gray-600">{t('tyresize.na')}</span>}
                                         </td>
                                         <td className="pr-8 py-1.5 text-gray-300">{fmtKm(b.avgLife)}</td>
                                       </tr>
@@ -1081,7 +1087,7 @@ export default function TyreSizeAnalysis() {
         <div className="p-4 border-b border-gray-800 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-green-400" />
-            Size × Brand CPK Performance Matrix
+            {t('tyresize.matrix.heading')}
           </h2>
           <div className="flex gap-3 text-xs text-gray-500">
             <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-800 inline-block" /> &lt;{BENCHMARK_GOOD}</span>
@@ -1091,12 +1097,12 @@ export default function TyreSizeAnalysis() {
         </div>
         <div className="overflow-x-auto">
           {matrixData.sizes.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-gray-500 text-sm">Insufficient data for matrix</div>
+            <div className="flex items-center justify-center h-32 text-gray-500 text-sm">{t('tyresize.matrix.empty')}</div>
           ) : (
             <table className="text-xs w-full">
               <thead>
                 <tr className="border-b border-gray-800 bg-gray-950">
-                  <th className="text-left px-4 py-3 text-gray-400 font-medium">Size / Brand</th>
+                  <th className="text-left px-4 py-3 text-gray-400 font-medium">{t('tyresize.matrix.sizeBrandColumn')}</th>
                   {matrixData.brands.map(br => (
                     <th key={br} className="text-center px-4 py-3 text-gray-400 font-medium whitespace-nowrap">{br}</th>
                   ))}
@@ -1130,20 +1136,20 @@ export default function TyreSizeAnalysis() {
           <div className="p-4 border-b border-gray-800">
             <h2 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-green-400" />
-              Position-Size Compliance
+              {t('tyresize.compliance.heading')}
             </h2>
           </div>
           {posCompliance.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-gray-500 text-sm">No position data</div>
+            <div className="flex items-center justify-center h-32 text-gray-500 text-sm">{t('tyresize.compliance.empty')}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="text-xs w-full">
                 <thead>
                   <tr className="border-b border-gray-800 bg-gray-950 text-gray-400">
-                    <th className="text-left px-4 py-2.5 font-medium">Position</th>
-                    <th className="text-left px-4 py-2.5 font-medium">Required Sizes</th>
-                    <th className="text-right px-4 py-2.5 font-medium">Non-Std</th>
-                    <th className="text-right px-4 py-2.5 font-medium">Compliance</th>
+                    <th className="text-left px-4 py-2.5 font-medium">{t('tyresize.compliance.columns.position')}</th>
+                    <th className="text-left px-4 py-2.5 font-medium">{t('tyresize.compliance.columns.requiredSizes')}</th>
+                    <th className="text-right px-4 py-2.5 font-medium">{t('tyresize.compliance.columns.nonStd')}</th>
+                    <th className="text-right px-4 py-2.5 font-medium">{t('tyresize.compliance.columns.compliance')}</th>
                     <th className="px-4 py-2.5 w-28" />
                   </tr>
                 </thead>
@@ -1184,10 +1190,10 @@ export default function TyreSizeAnalysis() {
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <h2 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-green-400" />
-            Top Size-Brand Combos - CPK Trend (12 months)
+            {t('tyresize.trend.heading')}
           </h2>
           {trendData.datasets.length === 0 ? (
-            <div className="flex items-center justify-center h-56 text-gray-500 text-sm">No trend data available</div>
+            <div className="flex items-center justify-center h-56 text-gray-500 text-sm">{t('tyresize.trend.empty')}</div>
           ) : (
             <div className="h-56">
               <Line data={trendData} options={trendOpts} />
@@ -1201,15 +1207,15 @@ export default function TyreSizeAnalysis() {
         <div className="p-4 border-b border-gray-800 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
             <Lightbulb className="w-4 h-4 text-yellow-400" />
-            Consolidation Opportunities
+            {t('tyresize.consolidation.heading')}
           </h2>
-          <span className="text-xs text-gray-500">{consolidationOps.length} recommendations</span>
+          <span className="text-xs text-gray-500">{t('tyresize.consolidation.count', { count: consolidationOps.length })}</span>
         </div>
 
         {consolidationOps.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-500">
             <CheckCircle className="w-10 h-10 text-green-700" />
-            <p className="text-sm">No consolidation opportunities detected - fleet is well optimized</p>
+            <p className="text-sm">{t('tyresize.consolidation.empty')}</p>
           </div>
         ) : (
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -1243,14 +1249,14 @@ export default function TyreSizeAnalysis() {
                       <p className="text-sm font-semibold text-gray-100 leading-tight">{op.title}</p>
                     </div>
                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${impactBadge[op.impact]}`}>
-                      {op.impact}
+                      {t(`tyresize.impact.${IMPACT_KEY_MAP[op.impact] ?? 'low'}`)}
                     </span>
                   </div>
                   <p className="text-xs text-gray-400 leading-relaxed">{op.desc}</p>
                   {op.savings != null && (
                     <div className="mt-3 flex items-center gap-1.5 text-xs text-green-400">
                       <DollarSign className="w-3.5 h-3.5" />
-                      <span>Est. annual savings: <span className="font-semibold">{activeCurrency} {Math.round(op.savings).toLocaleString()}</span></span>
+                      <span>{t('tyresize.consolidation.estAnnualSavingsLabel')} <span className="font-semibold">{activeCurrency} {Math.round(op.savings).toLocaleString()}</span></span>
                     </div>
                   )}
                 </motion.div>

@@ -110,7 +110,7 @@
     "standardizeDesc": "التكلفة/كم لـ{bestBrand}: {bestCpk} مقابل {worstBrand}: {worstCpk}. حوّل {count} إطار إلى {bestBrand}.",
     "reviewTitle": "مراجعة مواصفة {size}",
     "reviewDesc": "متوسط التكلفة/كم البالغ {value}/كم يعادل ضعف متوسط الأسطول. حقّق في السبب الجذري وفكّر في مواصفة بديلة.",
-    "estAnnualSavings": "التوفير السنوي المقدر: {value}"
+    "estAnnualSavingsLabel": "التوفير السنوي المقدر:"
   },
   "impact": {
     "critical": "حرج",

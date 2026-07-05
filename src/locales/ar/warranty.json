@@ -1,0 +1,146 @@
+{
+  "title": "متتبع الضمان والمطالبات",
+  "subtitle": "تتبع ضمانات الإطارات والمطالبات ومساءلة الموردين",
+  "actions": {
+    "pdf": "PDF",
+    "excel": "إكسل",
+    "import": "استيراد عبر مركز إدخال البيانات",
+    "addClaim": "إضافة مطالبة"
+  },
+  "intakeNote": "جديد: استيراد مطالبات الضمان الموثق والمدقق مع تخطيط عناوين عربي/إنجليزي، وفحوصات دورة حياة التركيب/الإزالة، وكشف التكرار.",
+  "kpi": {
+    "totalClaims": "إجمالي المطالبات",
+    "openClaims": "المطالبات المفتوحة",
+    "totalCredits": "إجمالي الأرصدة",
+    "totalCreditsSub": "مستلمة",
+    "approvalRate": "معدل الموافقة",
+    "avgCreditPerClaim": "متوسط الرصيد/المطالبة"
+  },
+  "tabs": {
+    "claims": "المطالبات",
+    "brandAnalysis": "تحليل العلامات التجارية",
+    "failureAnalysis": "تحليل الأعطال",
+    "creditRecovery": "استرداد الرصيد",
+    "roiCalculator": "حاسبة العائد على الاستثمار"
+  },
+  "errors": {
+    "loadFailed": "تعذر تحميل مطالبات الضمان. يرجى إعادة المحاولة.",
+    "serialRequired": "الرقم التسلسلي مطلوب.",
+    "brandRequired": "العلامة التجارية مطلوبة.",
+    "failureTypeRequired": "نوع العطل مطلوب.",
+    "saveFailed": "تعذر حفظ المطالبة. يرجى إعادة المحاولة.",
+    "deleteFailed": "تعذر حذف المطالبة."
+  },
+  "confirmDelete": "حذف مطالبة الضمان هذه؟",
+  "claims": {
+    "searchPlaceholder": "ابحث بالمطالبة أو الرقم التسلسلي أو العلامة التجارية أو الأصل...",
+    "columns": {
+      "claimNo": "رقم المطالبة",
+      "serial": "الرقم التسلسلي",
+      "brand": "العلامة التجارية",
+      "size": "المقاس",
+      "asset": "الأصل",
+      "site": "الموقع",
+      "failureType": "نوع العطل",
+      "status": "الحالة",
+      "kmRun": "الكيلومترات المقطوعة",
+      "expKm": "الكيلومترات المتوقعة",
+      "pctLife": "% العمر",
+      "credit": "الرصيد",
+      "date": "التاريخ"
+    },
+    "retry": "إعادة المحاولة",
+    "emptyTitle": "لم يتم العثور على مطالبات ضمان.",
+    "addFirst": "إضافة أول مطالبة",
+    "exportClaimLetterTooltip": "تصدير خطاب المطالبة",
+    "expanded": {
+      "country": "الدولة",
+      "fitmentDate": "تاريخ التركيب",
+      "removalDate": "تاريخ الإزالة",
+      "supplier": "المورد",
+      "creditDate": "تاريخ الرصيد",
+      "notes": "ملاحظات"
+    },
+    "claimLetter": "خطاب المطالبة",
+    "delete": "حذف",
+    "pageSummary": "{count} مطالبة · صفحة {page} من {total}"
+  },
+  "brandAnalysis": {
+    "chartTitle": "أداء ضمان العلامة التجارية",
+    "noData": "لا توجد بيانات متاحة",
+    "columns": {
+      "brand": "العلامة التجارية",
+      "totalClaims": "إجمالي المطالبات",
+      "approvalRate": "معدل الموافقة",
+      "avgCreditPerClaim": "متوسط الرصيد لكل مطالبة",
+      "avgKmAtFailure": "متوسط الكيلومترات عند العطل"
+    },
+    "kmSuffix": "كم",
+    "emptyTitle": "لا توجد بيانات علامات تجارية بعد",
+    "emptyDesc": "سيظهر أداء ضمان العلامة التجارية بمجرد تسجيل المطالبات."
+  },
+  "failureAnalysis": {
+    "byTypeTitle": "المطالبات حسب نوع العطل",
+    "noData": "لا توجد بيانات متاحة",
+    "mostCommon": "العطل الأكثر شيوعًا: {type} ({count} مطالبة)",
+    "avgKmTitle": "متوسط الكيلومترات عند العطل حسب النوع",
+    "claimsAvgKm": "{count} مطالبة · متوسط {avgKm} كم",
+    "claimsNoKm": "{count} مطالبة · غير متاح",
+    "emptyTitle": "لا توجد بيانات أعطال بعد",
+    "emptyDesc": "سيظهر متوسط الكيلومترات عند العطل بمجرد تسجيل المطالبات.",
+    "statusDistribution": "توزيع حالة المطالبات"
+  },
+  "creditRecovery": {
+    "totalReceived": "إجمالي الأرصدة المستلمة",
+    "acrossClaims": "عبر {count} مطالبة",
+    "estUnclaimed": "التقدير غير المُطالَب به (معتمد)",
+    "approvedPending": "{count} مطالبة معتمدة بانتظار الرصيد",
+    "totalPipeline": "إجمالي خط أنابيب الاسترداد",
+    "pipelineSub": "المستلم + المحتمل غير المُطالَب به",
+    "monthlyChartTitle": "الأرصدة الشهرية المستلمة (12 شهرًا)",
+    "funnelTitle": "قمع حالة المطالبات"
+  },
+  "roi": {
+    "title": "حاسبة العائد على استثمار الضمان",
+    "annualTyreCount": "عدد الإطارات السنوي (الأسطول)",
+    "annualTyreCountPlaceholder": "مثال: 500",
+    "avgTyreCost": "متوسط تكلفة الإطار ({currency})",
+    "avgTyreCostPlaceholder": "مثال: 1200",
+    "claimsFiled": "المطالبات المقدمة (هذا العام)",
+    "amountRecovered": "المبلغ المسترد",
+    "recoveryRate": "معدل الاسترداد",
+    "estUnclaimedPotential": "الإمكانية التقديرية غير المُطالَب بها",
+    "opportunityLabel": "فرصة:",
+    "opportunityText": "إذا قدمت مطالبات على جميع الإزالات المؤهلة، يمكنك استرداد مبلغ إضافي قدره {amount} سنويًا. بناءً على افتراض أهلية 30% عند {perTyre} لكل إطار × معدل رصيد 40%."
+  },
+  "modal": {
+    "editTitle": "تعديل مطالبة الضمان",
+    "newTitle": "مطالبة ضمان جديدة",
+    "serialNumber": "الرقم التسلسلي *",
+    "serialNumberPlaceholder": "أدخل الرقم التسلسلي",
+    "lookup": "بحث",
+    "brand": "العلامة التجارية *",
+    "size": "المقاس",
+    "assetNo": "رقم الأصل",
+    "site": "الموقع",
+    "country": "الدولة",
+    "supplier": "المورد",
+    "fitmentDate": "تاريخ التركيب",
+    "removalDate": "تاريخ الإزالة",
+    "kmAtFitment": "الكيلومترات عند التركيب",
+    "kmAtRemoval": "الكيلومترات عند الإزالة",
+    "kmRunLabel": "الكيلومترات المقطوعة:",
+    "kmSuffix": "كم",
+    "pctOfExpectedLife": "{pct}% من العمر المتوقع",
+    "expectedLifeKm": "العمر المتوقع (كم)",
+    "failureType": "نوع العطل *",
+    "status": "الحالة",
+    "creditAmount": "مبلغ الرصيد ({currency})",
+    "creditDate": "تاريخ الرصيد",
+    "notes": "ملاحظات / وصف العطل",
+    "notesPlaceholder": "صف العطل وموقعه على الإطار وما إلى ذلك.",
+    "cancel": "إلغاء",
+    "updateClaim": "تحديث المطالبة",
+    "saveClaim": "حفظ المطالبة"
+  }
+}

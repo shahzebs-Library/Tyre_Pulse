@@ -25,6 +25,7 @@ import { formatDate } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
+import { useLanguage } from '../contexts/LanguageContext'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -41,6 +42,15 @@ const FAILURE_TYPES = [
 const CLAIM_STATUSES = [
   'Submitted', 'Under Review', 'Approved', 'Rejected', 'Credit Issued', 'Closed',
 ]
+
+// i18n key lookup for the tabs array (values stay stable since activeTab is compared by string)
+const TAB_I18N_KEYS = {
+  'Claims': 'claims',
+  'Brand Analysis': 'brandAnalysis',
+  'Failure Analysis': 'failureAnalysis',
+  'Credit Recovery': 'creditRecovery',
+  'ROI Calculator': 'roiCalculator',
+}
 
 const STATUS_CFG = {
   'Submitted':     { text: 'text-blue-400',    bg: 'bg-blue-900/30',    border: 'border-blue-700'    },
@@ -157,6 +167,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', warn 
 }
 
 export default function WarrantyTracker() {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const { activeCurrency, appSettings } = useSettings()
   const { profile } = useAuth()
@@ -197,10 +208,10 @@ export default function WarrantyTracker() {
       const data = await warranty.listWarrantyClaims()
       setClaims(data ?? [])
     } catch (e) {
-      setClaimsError('Could not load warranty claims. Please retry.')
+      setClaimsError(t('warranty.errors.loadFailed'))
       setClaims([])
     }
-  }, [])
+  }, [t])
 
   // Persist a single claim (insert or update) then refresh from the server so
   // the list always reflects committed state - no optimistic divergence.
@@ -418,9 +429,9 @@ export default function WarrantyTracker() {
   }, [form.km_at_fitment, form.km_at_removal])
 
   const handleSave = useCallback(async () => {
-    if (!form.serial_number.trim()) { setFormError('Serial number is required.'); return }
-    if (!form.brand.trim()) { setFormError('Brand is required.'); return }
-    if (!form.failure_type) { setFormError('Failure type is required.'); return }
+    if (!form.serial_number.trim()) { setFormError(t('warranty.errors.serialRequired')); return }
+    if (!form.brand.trim()) { setFormError(t('warranty.errors.brandRequired')); return }
+    if (!form.failure_type) { setFormError(t('warranty.errors.failureTypeRequired')); return }
     setSaving(true)
     setFormError('')
     try {
@@ -458,21 +469,21 @@ export default function WarrantyTracker() {
       setEditClaim(null)
       setForm(EMPTY_FORM)
     } catch (e) {
-      setFormError(e?.message || 'Could not save the claim. Please retry.')
+      setFormError(e?.message || t('warranty.errors.saveFailed'))
     } finally {
       setSaving(false)
     }
-  }, [claims, editClaim, form, kmRun, upsertClaim, profile])
+  }, [claims, editClaim, form, kmRun, upsertClaim, profile, t])
 
   const handleDelete = useCallback(async (id) => {
-    if (!window.confirm('Delete this warranty claim?')) return
+    if (!window.confirm(t('warranty.confirmDelete'))) return
     try {
       await removeClaim(id)
       setDrawer(null)
     } catch (e) {
-      window.alert(e?.message || 'Could not delete the claim.')
+      window.alert(e?.message || t('warranty.errors.deleteFailed'))
     }
-  }, [removeClaim])
+  }, [removeClaim, t])
 
   const exportPDF = useCallback(async () => {
     const { default: jsPDF } = await import('jspdf')
@@ -703,8 +714,8 @@ export default function WarrantyTracker() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Warranty & Claims Tracker"
-        subtitle="Track tyre warranties, claims, and supplier accountability"
+        title={t('warranty.title')}
+        subtitle={t('warranty.subtitle')}
         icon={ShieldCheck}
         actions={
         <div className="flex gap-2">
@@ -712,39 +723,39 @@ export default function WarrantyTracker() {
             onClick={exportPDF}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
           >
-            <FileText size={14} /> PDF
+            <FileText size={14} /> {t('warranty.actions.pdf')}
           </button>
           <button
             onClick={exportExcel}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
           >
-            <FileSpreadsheet size={14} /> Excel
+            <FileSpreadsheet size={14} /> {t('warranty.actions.excel')}
           </button>
           <button
             onClick={() => navigate('/data-intake?module=warranty')}
             className="btn-primary flex items-center gap-2 text-sm"
           >
-            <Upload size={15} /> Import via Data Intake Center
+            <Upload size={15} /> {t('warranty.actions.import')}
           </button>
           <button
             onClick={() => openForm()}
             className="btn-primary gap-1.5"
           >
-            <Plus size={14} /> Add Claim
+            <Plus size={14} /> {t('warranty.actions.addClaim')}
           </button>
         </div>
         }
       />
       <p className="text-xs text-gray-500 -mt-3">
-        New: controlled, validated, audited warranty-claim import with Arabic/English header mapping, fitment/removal lifecycle checks, and duplicate detection.
+        {t('warranty.intakeNote')}
       </p>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard icon={ShieldCheck} label="Total Claims" value={kpis.total} color="text-blue-400" />
-        <KpiCard icon={Clock} label="Open Claims" value={kpis.open} color="text-yellow-400" warn={kpis.open > 10} />
-        <KpiCard icon={DollarSign} label="Total Credits" value={fmt(kpis.totalCredits)} color="text-emerald-400" sub="received" />
-        <KpiCard icon={Percent} label="Approval Rate" value={`${kpis.approvalRate.toFixed(1)}%`} color="text-green-400" />
-        <KpiCard icon={CreditCard} label="Avg Credit/Claim" value={fmt(kpis.avgCredit)} color="text-purple-400" />
+        <KpiCard icon={ShieldCheck} label={t('warranty.kpi.totalClaims')} value={kpis.total} color="text-blue-400" />
+        <KpiCard icon={Clock} label={t('warranty.kpi.openClaims')} value={kpis.open} color="text-yellow-400" warn={kpis.open > 10} />
+        <KpiCard icon={DollarSign} label={t('warranty.kpi.totalCredits')} value={fmt(kpis.totalCredits)} color="text-emerald-400" sub={t('warranty.kpi.totalCreditsSub')} />
+        <KpiCard icon={Percent} label={t('warranty.kpi.approvalRate')} value={`${kpis.approvalRate.toFixed(1)}%`} color="text-green-400" />
+        <KpiCard icon={CreditCard} label={t('warranty.kpi.avgCreditPerClaim')} value={fmt(kpis.avgCredit)} color="text-purple-400" />
       </div>
 
       <div className="flex gap-1 flex-wrap bg-gray-900 border border-gray-800 rounded-xl p-1">
@@ -758,7 +769,7 @@ export default function WarrantyTracker() {
                 : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
             }`}
           >
-            {tab}
+            {t(`warranty.tabs.${TAB_I18N_KEYS[tab]}`)}
           </button>
         ))}
       </div>

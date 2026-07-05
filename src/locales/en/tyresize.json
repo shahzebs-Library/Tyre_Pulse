@@ -110,7 +110,7 @@
     "standardizeDesc": "{bestBrand} CPK: {bestCpk} vs {worstBrand} CPK: {worstCpk}. Switch {count} tyres to {bestBrand}.",
     "reviewTitle": "Review specification for {size}",
     "reviewDesc": "Avg CPK of {value}/km is 2× fleet average. Investigate root cause and consider alternative specification.",
-    "estAnnualSavings": "Est. annual savings: {value}"
+    "estAnnualSavingsLabel": "Est. annual savings:"
   },
   "impact": {
     "critical": "Critical",

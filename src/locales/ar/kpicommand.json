@@ -1,0 +1,126 @@
+{
+  "title": "مركز قيادة KPI",
+  "subtitle": "ذكاء أداء الأسطول في الوقت الفعلي - {count} سجل إطارات",
+  "ariaLabels": {
+    "period": "الفترة"
+  },
+  "actions": {
+    "pdf": "PDF",
+    "excel": "إكسل"
+  },
+  "filters": {
+    "to": "إلى",
+    "allSites": "جميع المواقع",
+    "allCountries": "جميع الدول"
+  },
+  "periods": {
+    "1d": "اليوم",
+    "7d": "7 أيام",
+    "30d": "30 يومًا",
+    "90d": "90 يومًا",
+    "6m": "6 أشهر",
+    "1y": "سنة",
+    "custom": "مخصص"
+  },
+  "benchmarks": {
+    "cpk": { "label": "التكلفة لكل كم (CPK)", "description": "التكلفة المصروفة على الإطارات لكل كيلومتر", "short": "التكلفة/كم" },
+    "tyre_life": { "label": "متوسط عمر الإطار", "description": "متوسط الكيلومترات المقطوعة لكل إطار قبل الإزالة", "short": "عمر الإطار" },
+    "failure_rate": { "label": "معدل الأعطال", "description": "حالات الإزالة ذات الخطورة العالية والحرجة", "short": "معدل الأعطال" },
+    "scrap_rate": { "label": "معدل الخردة", "description": "الإطارات المخردة مقارنة بإجمالي الإطارات المزالة", "short": "معدل الخردة" },
+    "pressure_compliance": { "label": "الامتثال لضغط الإطارات", "description": "الفحوصات ضمن ±10% من المواصفات", "short": "الضغط" },
+    "inspection_compliance": { "label": "الامتثال لجدول الفحص", "description": "إتمام الفحوصات في الموعد المحدد", "short": "الفحص" }
+  },
+  "ratings": {
+    "worldClass": "مستوى عالمي",
+    "good": "جيد",
+    "average": "متوسط",
+    "poor": "ضعيف",
+    "critical": "حرج"
+  },
+  "bands": {
+    "worldClass": "مستوى عالمي",
+    "good": "جيد",
+    "avg": "المتوسط",
+    "average": "المتوسط",
+    "poor": "ضعيف",
+    "vsGood": "مقابل الجيد"
+  },
+  "gauge": {
+    "strong": "قوي",
+    "fair": "مقبول",
+    "weak": "ضعيف",
+    "critical": "حرج"
+  },
+  "panel": {
+    "overallScore": "النتيجة الإجمالية للأسطول",
+    "overallScoreDesc": "متوسط جميع مؤشرات الأداء الستة مقابل المعايير المرجعية"
+  },
+  "sections": {
+    "kpiScorecard": "بطاقة أداء المؤشرات",
+    "fleetVsBenchmark": "الأسطول مقابل المعيار المرجعي",
+    "fleetVsBenchmarkDesc": "أهداف مرجعية صناعية ثابتة. جميع المؤشرات موحدة على مقياس 0-100. الأعلى أفضل.",
+    "periodComparison": "مقارنة الفترات",
+    "periodComparisonDesc": "الفترة الحالية مقابل السابقة (نتائج موحدة)",
+    "trendMatrix": "مصفوفة اتجاهات المؤشرات",
+    "clickCellHint": "انقر على الخلية للتفاصيل",
+    "siteComparison": "مقارنة المؤشرات حسب الموقع",
+    "colorLegendHint": "اللون = تصنيف المعيار المرجعي",
+    "alerts": "تنبيهات ذكاء المؤشرات",
+    "targetVsActual": "الهدف مقابل الفعلي",
+    "topVehicles": "أفضل 5 مركبات حسب نتيجة المؤشرات",
+    "bottomVehicles": "أضعف 5 مركبات - تحتاج إلى اهتمام"
+  },
+  "columns": {
+    "kpi": "المؤشر",
+    "site": "الموقع",
+    "score": "النتيجة"
+  },
+  "radar": {
+    "fleetCurrent": "الأسطول (الحالي)",
+    "referenceAverage": "المتوسط المرجعي"
+  },
+  "periodCompare": {
+    "current": "الفترة الحالية",
+    "previous": "الفترة السابقة"
+  },
+  "charts": {
+    "scoreAxis": "النتيجة (0-100)"
+  },
+  "card": {
+    "vsPrevPeriod": "{pct}% مقابل الفترة السابقة",
+    "target": "الهدف: {value}",
+    "clickDrillDown": "انقر لعرض التفاصيل"
+  },
+  "drilldown": {
+    "title": "{label} - الاتجاه الشهري"
+  },
+  "alerts": {
+    "allWithinRange": "جميع المؤشرات ضمن النطاق المقبول",
+    "type": {
+      "achievement": "إنجاز",
+      "warning": "تحذير",
+      "deteriorating": "تراجع"
+    },
+    "msgAchievement": "بلغ مستوى الأداء العالمي",
+    "msgWarning": "أقل من المعيار المتوسط ({value})",
+    "msgDeteriorating": "تراجع - {pct}% خلال آخر 3 أشهر"
+  },
+  "targetActual": {
+    "target": "الهدف:",
+    "actual": "الفعلي:",
+    "gap": "الفجوة:",
+    "status": {
+      "exceeded": "تجاوز الهدف",
+      "onTrack": "على المسار الصحيح",
+      "behind": "متأخر"
+    }
+  },
+  "vehicles": {
+    "statsBest": "{cpk} تكلفة/كم · عمر {life} ألف كم · {count} سجل",
+    "statsWorst": "{cpk} تكلفة/كم · {fail}% أعطال · {count} سجل"
+  },
+  "empty": {
+    "title": "لم يتم العثور على سجلات إطارات للفترة المحددة.",
+    "subtitle": "اضبط الفترة أو الفلاتر لعرض بيانات المؤشرات."
+  }
+}

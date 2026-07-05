@@ -14,6 +14,7 @@ import {
   Calendar, ChevronDown, ChevronUp, Star, Trophy, AlertOctagon,
   ArrowUpRight, ArrowDownRight, Info, X, FileText,
 } from 'lucide-react'
+import { useLanguage } from '../contexts/LanguageContext'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
@@ -169,11 +170,11 @@ function kpiScore(key, value) {
 }
 
 function ratingLabel(score) {
-  if (score >= 90) return { label: 'World Class', color: 'text-emerald-400', bg: 'bg-emerald-900/30 border-emerald-700', dot: 'bg-emerald-400' }
-  if (score >= 70) return { label: 'Good', color: 'text-blue-400', bg: 'bg-blue-900/30 border-blue-700', dot: 'bg-blue-400' }
-  if (score >= 45) return { label: 'Average', color: 'text-yellow-400', bg: 'bg-yellow-900/30 border-yellow-700', dot: 'bg-yellow-400' }
-  if (score >= 20) return { label: 'Poor', color: 'text-orange-400', bg: 'bg-orange-900/30 border-orange-700', dot: 'bg-orange-400' }
-  return { label: 'Critical', color: 'text-red-400', bg: 'bg-red-900/30 border-red-700', dot: 'bg-red-400' }
+  if (score >= 90) return { key: 'worldClass', label: 'World Class', color: 'text-emerald-400', bg: 'bg-emerald-900/30 border-emerald-700', dot: 'bg-emerald-400' }
+  if (score >= 70) return { key: 'good', label: 'Good', color: 'text-blue-400', bg: 'bg-blue-900/30 border-blue-700', dot: 'bg-blue-400' }
+  if (score >= 45) return { key: 'average', label: 'Average', color: 'text-yellow-400', bg: 'bg-yellow-900/30 border-yellow-700', dot: 'bg-yellow-400' }
+  if (score >= 20) return { key: 'poor', label: 'Poor', color: 'text-orange-400', bg: 'bg-orange-900/30 border-orange-700', dot: 'bg-orange-400' }
+  return { key: 'critical', label: 'Critical', color: 'text-red-400', bg: 'bg-red-900/30 border-red-700', dot: 'bg-red-400' }
 }
 
 function scoreColor(score) {
@@ -221,6 +222,7 @@ function extractKpiValues(records, inspections) {
 
 // ── Circular Score Gauge ──────────────────────────────────────────────────────
 function FleetScoreGauge({ score }) {
+  const { t } = useLanguage()
   const r = 64
   const circ = 2 * Math.PI * r
   const arc = circ * 0.75
@@ -243,7 +245,7 @@ function FleetScoreGauge({ score }) {
         </div>
         <div className="text-gray-400 text-xs mt-1">/ 100</div>
         <div className={`text-xs font-semibold mt-1 ${scoreTextColor(score)}`}>
-          {score >= 75 ? 'STRONG' : score >= 50 ? 'FAIR' : score >= 25 ? 'WEAK' : 'CRITICAL'}
+          {score >= 75 ? t('kpicommand.gauge.strong') : score >= 50 ? t('kpicommand.gauge.fair') : score >= 25 ? t('kpicommand.gauge.weak') : t('kpicommand.gauge.critical')}
         </div>
       </div>
     </div>
@@ -274,6 +276,7 @@ function Sparkline({ data, positive = true, height = 32, width = 100 }) {
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onClick }) {
+  const { t } = useLanguage()
   const b = benchmark
   const score = kpiScore(kpiKey, value)
   const rating = ratingLabel(score)
@@ -309,13 +312,13 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
             <Icon size={15} className={rating.color} />
           </div>
           <div>
-            <p className="text-xs text-gray-400 leading-tight">{b.label}</p>
-            <p className="text-xs text-gray-600">{b.description}</p>
+            <p className="text-xs text-gray-400 leading-tight">{t(`kpicommand.benchmarks.${kpiKey}.label`)}</p>
+            <p className="text-xs text-gray-600">{t(`kpicommand.benchmarks.${kpiKey}.description`)}</p>
           </div>
         </div>
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${rating.bg} ${rating.color}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${rating.dot}`} />
-          {rating.label}
+          {t(`kpicommand.ratings.${rating.key}`)}
         </span>
       </div>
 
@@ -327,7 +330,7 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
           {pctChange != null && (
             <div className={`flex items-center gap-1 text-xs mt-1 ${isImproving ? 'text-emerald-400' : 'text-red-400'}`}>
               {isImproving ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-              {Math.abs(pctChange).toFixed(1)}% vs prev period
+              {t('kpicommand.card.vsPrevPeriod', { pct: Math.abs(pctChange).toFixed(1) })}
             </div>
           )}
         </div>
@@ -336,8 +339,8 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
 
       <div className="space-y-1.5 mb-3">
         <div className="flex justify-between text-xs">
-          <span className="text-gray-600">Poor</span>
-          <span className="text-gray-600">World Class</span>
+          <span className="text-gray-600">{t('kpicommand.bands.poor')}</span>
+          <span className="text-gray-600">{t('kpicommand.bands.worldClass')}</span>
         </div>
         <div className="relative h-2 bg-gray-800 rounded-full overflow-hidden">
           <div className="absolute inset-0 flex">
@@ -356,16 +359,16 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
         </div>
         <div className="flex justify-between text-xs text-gray-500">
           <span>{b.format(b.poor)}</span>
-          <span className="text-gray-600">Target: {b.format(target)}</span>
+          <span className="text-gray-600">{t('kpicommand.card.target', { value: b.format(target) })}</span>
           <span>{b.format(b.world_class)}</span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 text-xs">
         {[
-          { l: 'Good', v: b.good, c: 'text-blue-400' },
-          { l: 'Avg', v: b.average, c: 'text-yellow-400' },
-          { l: 'vs Good', v: null, delta: true },
+          { l: t('kpicommand.bands.good'), v: b.good, c: 'text-blue-400' },
+          { l: t('kpicommand.bands.avg'), v: b.average, c: 'text-yellow-400' },
+          { l: t('kpicommand.bands.vsGood'), v: null, delta: true },
         ].map(({ l, v, c, delta }) => (
           <div key={l} className="bg-gray-800/60 rounded-lg p-1.5 text-center">
             <div className="text-gray-500 text-xs">{l}</div>
@@ -385,7 +388,7 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
       </div>
 
       <div className="mt-3 text-xs text-gray-600 group-hover:text-gray-500 transition-colors text-center">
-        Click to drill down
+        {t('kpicommand.card.clickDrillDown')}
       </div>
     </motion.div>
   )
@@ -393,6 +396,7 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
 
 // ── Drill-down Modal ──────────────────────────────────────────────────────────
 function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
+  const { t } = useLanguage()
   if (!kpiKey) return null
   const b = benchmark
   const labels = monthlyData.map(d => monthLabel(d.month))
@@ -402,7 +406,7 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
     labels,
     datasets: [
       {
-        label: b.label,
+        label: t(`kpicommand.benchmarks.${kpiKey}.label`),
         data: values,
         borderColor: '#3b82f6',
         backgroundColor: 'rgba(59,130,246,0.1)',
@@ -412,7 +416,7 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
         pointRadius: 5,
       },
       {
-        label: 'World Class',
+        label: t('kpicommand.bands.worldClass'),
         data: Array(labels.length).fill(b.world_class),
         borderColor: '#10b981',
         borderDash: [4, 4],
@@ -420,7 +424,7 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
         borderWidth: 1.5,
       },
       {
-        label: 'Good',
+        label: t('kpicommand.bands.good'),
         data: Array(labels.length).fill(b.good),
         borderColor: '#3b82f6',
         borderDash: [4, 4],
@@ -428,7 +432,7 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
         borderWidth: 1.5,
       },
       {
-        label: 'Average',
+        label: t('kpicommand.bands.average'),
         data: Array(labels.length).fill(b.average),
         borderColor: '#f59e0b',
         borderDash: [4, 4],
@@ -456,8 +460,8 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
         >
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h3 className="text-white font-bold text-lg">{b.label} - Monthly Trend</h3>
-              <p className="text-gray-400 text-sm">{b.description}</p>
+              <h3 className="text-white font-bold text-lg">{t('kpicommand.drilldown.title', { label: t(`kpicommand.benchmarks.${kpiKey}.label`) })}</h3>
+              <p className="text-gray-400 text-sm">{t(`kpicommand.benchmarks.${kpiKey}.description`)}</p>
             </div>
             <button onClick={onClose} className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors">
               <X size={16} />
@@ -479,10 +483,10 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
           </div>
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { l: 'World Class', v: b.world_class, c: 'text-emerald-400' },
-              { l: 'Good', v: b.good, c: 'text-blue-400' },
-              { l: 'Average', v: b.average, c: 'text-yellow-400' },
-              { l: 'Poor', v: b.poor, c: 'text-red-400' },
+              { l: t('kpicommand.bands.worldClass'), v: b.world_class, c: 'text-emerald-400' },
+              { l: t('kpicommand.bands.good'), v: b.good, c: 'text-blue-400' },
+              { l: t('kpicommand.bands.average'), v: b.average, c: 'text-yellow-400' },
+              { l: t('kpicommand.bands.poor'), v: b.poor, c: 'text-red-400' },
             ].map(({ l, v, c }) => (
               <div key={l} className="bg-gray-800 rounded-lg p-3 text-center">
                 <div className="text-gray-500 text-xs mb-1">{l}</div>
@@ -498,6 +502,7 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function KpiCommandCenter() {
+  const { t } = useLanguage()
   const { activeCountry, activeCurrency, appSettings } = useSettings()
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
@@ -657,12 +662,12 @@ export default function KpiCommandCenter() {
   }, [monthlyKpiMatrix])
 
   const radarData = useMemo(() => {
-    const labels = KPI_KEYS.map(k => BENCHMARKS[k].label.replace(' Compliance', '').replace('Cost Per Km ', 'CPK').replace('Avg ', ''))
+    const labels = KPI_KEYS.map(k => t(`kpicommand.benchmarks.${k}.short`))
     return {
       labels,
       datasets: [
         {
-          label: 'Fleet (Current)',
+          label: t('kpicommand.radar.fleetCurrent'),
           data: KPI_KEYS.map(k => normalizeForRadar(k, kpiValues[k])),
           backgroundColor: 'rgba(59,130,246,0.15)',
           borderColor: '#3b82f6',
@@ -671,7 +676,7 @@ export default function KpiCommandCenter() {
           pointRadius: 4,
         },
         {
-          label: 'Reference Average',
+          label: t('kpicommand.radar.referenceAverage'),
           data: KPI_KEYS.map(k => normalizeForRadar(k, BENCHMARKS[k].average)),
           backgroundColor: 'transparent',
           borderColor: '#f97316',
@@ -681,7 +686,7 @@ export default function KpiCommandCenter() {
           pointBackgroundColor: '#f97316',
         },
         {
-          label: 'World Class',
+          label: t('kpicommand.bands.worldClass'),
           data: KPI_KEYS.map(() => 100),
           backgroundColor: 'transparent',
           borderColor: '#10b981',
@@ -692,7 +697,7 @@ export default function KpiCommandCenter() {
         },
       ],
     }
-  }, [kpiValues, BENCHMARKS])
+  }, [kpiValues, BENCHMARKS, t])
 
   const siteKpiData = useMemo(() => {
     if (!records.length) return []
@@ -744,9 +749,9 @@ export default function KpiCommandCenter() {
       const score = kpiScore(key, val)
       const b = BENCHMARKS[key]
       if (score >= 90) {
-        alerts.push({ type: 'achievement', kpi: key, label: b.label, value: b.format(val), msg: `reached World Class performance`, severity: 0 })
+        alerts.push({ type: 'achievement', kpi: key, label: b.label, value: b.format(val), msg: t('kpicommand.alerts.msgAchievement'), severity: 0 })
       } else if (score < 45) {
-        alerts.push({ type: 'warning', kpi: key, label: b.label, value: b.format(val), msg: `is below Average benchmark (${b.format(b.average)})`, severity: 2 })
+        alerts.push({ type: 'warning', kpi: key, label: b.label, value: b.format(val), msg: t('kpicommand.alerts.msgWarning', { value: b.format(b.average) }), severity: 2 })
       }
       // Trend check
       if (monthlyKpiMatrix.length >= 3) {
@@ -756,20 +761,20 @@ export default function KpiCommandCenter() {
           : last3[2] > last3[0]
         if (trend && score < 85) {
           const chg = last3[0] !== 0 ? Math.abs((last3[2] - last3[0]) / last3[0] * 100).toFixed(1) : '-'
-          alerts.push({ type: 'deteriorating', kpi: key, label: b.label, value: b.format(val), msg: `deteriorating - ${chg}% over last 3 months`, severity: 1 })
+          alerts.push({ type: 'deteriorating', kpi: key, label: b.label, value: b.format(val), msg: t('kpicommand.alerts.msgDeteriorating', { pct: chg }), severity: 1 })
         }
       }
     })
     return alerts.sort((a, b) => b.severity - a.severity)
-  }, [kpiValues, monthlyKpiMatrix, BENCHMARKS])
+  }, [kpiValues, monthlyKpiMatrix, BENCHMARKS, t])
 
   const periodComparisonData = useMemo(() => {
     if (!KPI_KEYS.some(k => kpiValues[k] != null)) return null
     return {
-      labels: KPI_KEYS.map(k => BENCHMARKS[k].label.replace(' Compliance', '\nCompliance').replace('Cost Per Km ', 'CPK\n')),
+      labels: KPI_KEYS.map(k => t(`kpicommand.benchmarks.${k}.short`)),
       datasets: [
         {
-          label: 'Current Period',
+          label: t('kpicommand.periodCompare.current'),
           data: KPI_KEYS.map(k => normalizeForRadar(k, kpiValues[k])),
           backgroundColor: 'rgba(59,130,246,0.7)',
           borderColor: '#3b82f6',
@@ -777,7 +782,7 @@ export default function KpiCommandCenter() {
           borderRadius: 4,
         },
         {
-          label: 'Previous Period',
+          label: t('kpicommand.periodCompare.previous'),
           data: KPI_KEYS.map(k => normalizeForRadar(k, prevKpiValues[k])),
           backgroundColor: 'rgba(107,114,128,0.4)',
           borderColor: '#6b7280',
@@ -786,7 +791,7 @@ export default function KpiCommandCenter() {
         },
       ],
     }
-  }, [kpiValues, prevKpiValues, BENCHMARKS])
+  }, [kpiValues, prevKpiValues, BENCHMARKS, t])
 
   const drillMonthlyData = useMemo(() => {
     if (!drillKpi || !monthlyKpiMatrix.length) return []
@@ -894,23 +899,23 @@ export default function KpiCommandCenter() {
 
       {/* Header */}
       <PageHeader
-        title="KPI Command Center"
-        subtitle={`Real-time fleet performance intelligence - ${records.length.toLocaleString()} tyre records`}
+        title={t('kpicommand.title')}
+        subtitle={t('kpicommand.subtitle', { count: records.length.toLocaleString() })}
         icon={Command}
         actions={<>
           <SegmentedControl
-            ariaLabel="period"
+            ariaLabel={t('kpicommand.ariaLabels.period')}
             size="sm"
             value={period}
             onChange={setPeriod}
-            options={PERIOD_PRESETS.map(p => ({ value: p.value, label: p.label }))}
+            options={PERIOD_PRESETS.map(p => ({ value: p.value, label: t(`kpicommand.periods.${p.value}`) }))}
           />
 
           {period === 'custom' && (
             <div className="flex items-center gap-1">
               <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
                 className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-xs focus:outline-none" />
-              <span className="text-gray-500 text-xs">to</span>
+              <span className="text-gray-500 text-xs">{t('kpicommand.filters.to')}</span>
               <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
                 className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-xs focus:outline-none" />
             </div>
@@ -918,12 +923,12 @@ export default function KpiCommandCenter() {
 
           <select value={site} onChange={e => setSite(e.target.value)}
             className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-xs focus:outline-none">
-            {sites.map(s => <option key={s}>{s}</option>)}
+            {sites.map(s => <option key={s} value={s}>{s === 'All' ? t('kpicommand.filters.allSites') : s}</option>)}
           </select>
 
           <select value={country} onChange={e => setCountry(e.target.value)}
             className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-xs focus:outline-none">
-            <option value="All">All Countries</option>
+            <option value="All">{t('kpicommand.filters.allCountries')}</option>
             {COUNTRIES.map(c => <option key={c}>{c}</option>)}
           </select>
 
@@ -934,12 +939,12 @@ export default function KpiCommandCenter() {
 
           <button onClick={exportPdf}
             className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-xs rounded-lg transition-colors">
-            <FileText size={14} />PDF
+            <FileText size={14} />{t('kpicommand.actions.pdf')}
           </button>
 
           <button onClick={exportExcel}
             className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-xs rounded-lg transition-colors">
-            <Download size={14} />Excel
+            <Download size={14} />{t('kpicommand.actions.excel')}
           </button>
         </>}
       />
@@ -957,8 +962,8 @@ export default function KpiCommandCenter() {
           <div className="flex flex-col items-center gap-2">
             <FleetScoreGauge score={overallScore} />
             <div className="text-center">
-              <p className="text-white font-semibold">Overall Fleet Score</p>
-              <p className="text-gray-500 text-xs">Avg of all 6 KPIs vs benchmarks</p>
+              <p className="text-white font-semibold">{t('kpicommand.panel.overallScore')}</p>
+              <p className="text-gray-500 text-xs">{t('kpicommand.panel.overallScoreDesc')}</p>
             </div>
           </div>
 
@@ -974,11 +979,11 @@ export default function KpiCommandCenter() {
                   onClick={() => setDrillKpi(key)}
                   className="bg-gray-800 rounded-xl p-3 text-center cursor-pointer hover:border-gray-600 border border-gray-800 transition-all">
                   <Icon size={14} className={`mx-auto mb-1 ${rating.color}`} />
-                  <div className="text-gray-500 text-xs mb-1 truncate">{b.label.replace(' Compliance', '').replace('Cost Per Km ', 'CPK').replace('Avg ', '')}</div>
+                  <div className="text-gray-500 text-xs mb-1 truncate">{t(`kpicommand.benchmarks.${key}.short`)}</div>
                   <div className={`text-lg font-bold ${rating.color}`}>
                     {val != null && !isNaN(val) ? b.format(val) : '-'}
                   </div>
-                  <div className={`text-xs mt-0.5 ${rating.color}`}>{rating.label}</div>
+                  <div className={`text-xs mt-0.5 ${rating.color}`}>{t(`kpicommand.ratings.${rating.key}`)}</div>
                   <div className="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-1000"
@@ -997,7 +1002,7 @@ export default function KpiCommandCenter() {
       <div>
         <h2 className="text-white font-semibold mb-3 flex items-center gap-2">
           <Target size={16} className="text-blue-400" />
-          KPI Scorecard
+          {t('kpicommand.sections.kpiScorecard')}
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {KPI_KEYS.map(key => (
@@ -1021,9 +1026,9 @@ export default function KpiCommandCenter() {
         <div className="card">
           <h3 className="text-white font-semibold mb-1 flex items-center gap-2">
             <Layers size={16} className="text-purple-400" />
-            Fleet vs Benchmark
+            {t('kpicommand.sections.fleetVsBenchmark')}
           </h3>
-          <p className="text-gray-500 text-xs mb-4">Static industry reference targets. All KPIs normalized 0-100. Higher = better.</p>
+          <p className="text-gray-500 text-xs mb-4">{t('kpicommand.sections.fleetVsBenchmarkDesc')}</p>
           <div className="h-72">
             <Radar data={radarData} options={{
               responsive: true,
@@ -1049,9 +1054,9 @@ export default function KpiCommandCenter() {
         <div className="card">
           <h3 className="text-white font-semibold mb-1 flex items-center gap-2">
             <Calendar size={16} className="text-orange-400" />
-            Period Comparison
+            {t('kpicommand.sections.periodComparison')}
           </h3>
-          <p className="text-gray-500 text-xs mb-4">Current vs previous period (normalized scores)</p>
+          <p className="text-gray-500 text-xs mb-4">{t('kpicommand.sections.periodComparisonDesc')}</p>
           <div className="h-72">
             {periodComparisonData && (
               <Bar data={periodComparisonData} options={{
@@ -1062,7 +1067,7 @@ export default function KpiCommandCenter() {
                 },
                 scales: {
                   x: { ...CHART_BASE.scales.x, ticks: { ...CHART_BASE.scales.x.ticks, maxRotation: 30 } },
-                  y: { ...CHART_BASE.scales.y, max: 110, title: { display: true, text: 'Score (0-100)', color: '#6b7280', font: { size: 9 } } },
+                  y: { ...CHART_BASE.scales.y, max: 110, title: { display: true, text: t('kpicommand.charts.scoreAxis'), color: '#6b7280', font: { size: 9 } } },
                 },
               }} />
             )}
@@ -1076,7 +1081,7 @@ export default function KpiCommandCenter() {
               const improving = pct != null ? (b.higherIsBetter ? pct >= 0 : pct <= 0) : null
               return (
                 <div key={key} className="bg-gray-800 rounded-lg p-2 text-center">
-                  <div className="text-gray-500 text-xs truncate">{b.label.replace(' Compliance', '').replace('Avg ', '')}</div>
+                  <div className="text-gray-500 text-xs truncate">{t(`kpicommand.benchmarks.${key}.short`)}</div>
                   <div className="text-white text-sm font-semibold">{b.format(curr)}</div>
                   {pct != null && (
                     <div className={`text-xs flex items-center justify-center gap-0.5 ${improving ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -1096,14 +1101,14 @@ export default function KpiCommandCenter() {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
             <BarChart3 size={16} className="text-blue-400" />
-            <h3 className="text-white font-semibold">KPI Trend Matrix</h3>
-            <span className="text-gray-500 text-xs ml-1">Click cell for drill-down</span>
+            <h3 className="text-white font-semibold">{t('kpicommand.sections.trendMatrix')}</h3>
+            <span className="text-gray-500 text-xs ml-1">{t('kpicommand.sections.clickCellHint')}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-800">
-                  <th className="px-4 py-3 text-left text-gray-400 font-medium sticky left-0 bg-gray-900 min-w-40">KPI</th>
+                  <th className="px-4 py-3 text-left text-gray-400 font-medium sticky left-0 bg-gray-900 min-w-40">{t('kpicommand.columns.kpi')}</th>
                   {monthlyKpiMatrix.map(m => (
                     <th key={m.month} className="px-3 py-3 text-center text-gray-400 font-medium min-w-20">
                       {monthLabel(m.month)}
@@ -1117,7 +1122,7 @@ export default function KpiCommandCenter() {
                   return (
                     <tr key={key} className="border-b border-gray-800 hover:bg-gray-800/30">
                       <td className="px-4 py-2.5 sticky left-0 bg-gray-900">
-                        <div className="text-gray-300 font-medium">{b.label.replace(' Compliance', '').replace('Avg ', '')}</div>
+                        <div className="text-gray-300 font-medium">{t(`kpicommand.benchmarks.${key}.short`)}</div>
                       </td>
                       {monthlyKpiMatrix.map(m => {
                         const val = m[key]
@@ -1143,18 +1148,18 @@ export default function KpiCommandCenter() {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
             <MapPin size={16} className="text-emerald-400" />
-            <h3 className="text-white font-semibold">Site KPI Comparison</h3>
-            <span className="text-gray-500 text-xs ml-1">Color = benchmark rating</span>
+            <h3 className="text-white font-semibold">{t('kpicommand.sections.siteComparison')}</h3>
+            <span className="text-gray-500 text-xs ml-1">{t('kpicommand.sections.colorLegendHint')}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-800">
-                  <th className="px-4 py-3 text-left text-gray-400 font-medium sticky left-0 bg-gray-900 min-w-36">Site</th>
-                  <th className="px-3 py-3 text-center text-gray-400 font-medium">Score</th>
+                  <th className="px-4 py-3 text-left text-gray-400 font-medium sticky left-0 bg-gray-900 min-w-36">{t('kpicommand.columns.site')}</th>
+                  <th className="px-3 py-3 text-center text-gray-400 font-medium">{t('kpicommand.columns.score')}</th>
                   {KPI_KEYS.map(k => (
                     <th key={k} className="px-3 py-3 text-center text-gray-400 font-medium min-w-24">
-                      {BENCHMARKS[k].label.replace(' Compliance', '').replace('Avg ', '').replace('Cost Per Km ', 'CPK').slice(0, 12)}
+                      {t(`kpicommand.benchmarks.${k}.short`)}
                     </th>
                   ))}
                 </tr>
@@ -1199,14 +1204,14 @@ export default function KpiCommandCenter() {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
             <AlertTriangle size={16} className="text-yellow-400" />
-            <h3 className="text-white font-semibold">KPI Intelligence Alerts</h3>
+            <h3 className="text-white font-semibold">{t('kpicommand.sections.alerts')}</h3>
             <span className="ml-auto text-xs bg-gray-800 px-2 py-0.5 rounded-full text-gray-400">{kpiAlerts.length}</span>
           </div>
           <div className="divide-y divide-gray-800 max-h-80 overflow-y-auto">
             {kpiAlerts.length === 0 && (
               <div className="px-5 py-8 text-center">
                 <CheckCircle size={32} className="mx-auto text-emerald-400 mb-2" />
-                <p className="text-emerald-400 font-medium text-sm">All KPIs within acceptable range</p>
+                <p className="text-emerald-400 font-medium text-sm">{t('kpicommand.alerts.allWithinRange')}</p>
               </div>
             )}
             {kpiAlerts.map((a, i) => {
@@ -1223,9 +1228,9 @@ export default function KpiCommandCenter() {
                   <TypeIcon size={16} className={`${typeConfig.color} flex-shrink-0 mt-0.5`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-white text-sm font-medium">{a.label}</span>
+                      <span className="text-white text-sm font-medium">{t(`kpicommand.benchmarks.${a.kpi}.label`)}</span>
                       <span className={`text-xs px-1.5 py-0.5 rounded-full ${typeConfig.badge}`}>
-                        {a.type === 'achievement' ? 'Achievement' : a.type === 'warning' ? 'Warning' : 'Deteriorating'}
+                        {a.type === 'achievement' ? t('kpicommand.alerts.type.achievement') : a.type === 'warning' ? t('kpicommand.alerts.type.warning') : t('kpicommand.alerts.type.deteriorating')}
                       </span>
                     </div>
                     <p className="text-gray-400 text-xs mt-0.5">
@@ -1242,7 +1247,7 @@ export default function KpiCommandCenter() {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
             <Target size={16} className="text-blue-400" />
-            <h3 className="text-white font-semibold">Target vs Actual</h3>
+            <h3 className="text-white font-semibold">{t('kpicommand.sections.targetVsActual')}</h3>
           </div>
           <div className="divide-y divide-gray-800">
             {KPI_KEYS.map(key => {
@@ -1252,7 +1257,7 @@ export default function KpiCommandCenter() {
               const gap = val != null ? val - target : null
               const onTrack = gap != null ? (b.higherIsBetter ? gap >= 0 : gap <= 0) : null
               const exceeded = gap != null ? (b.higherIsBetter ? val >= b.good * 1.1 : val <= b.good * 0.9) : null
-              const status = exceeded ? 'Exceeded' : onTrack ? 'On Track' : 'Behind'
+              const status = exceeded ? t('kpicommand.targetActual.status.exceeded') : onTrack ? t('kpicommand.targetActual.status.onTrack') : t('kpicommand.targetActual.status.behind')
               const statusStyle = exceeded
                 ? 'bg-emerald-900/30 text-emerald-400'
                 : onTrack
@@ -1261,12 +1266,12 @@ export default function KpiCommandCenter() {
               return (
                 <div key={key} className="px-5 py-3 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="text-white text-sm font-medium truncate">{b.label}</div>
+                    <div className="text-white text-sm font-medium truncate">{t(`kpicommand.benchmarks.${key}.label`)}</div>
                     <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                      <span>Target: <span className="text-gray-300">{b.format(target)}</span></span>
-                      <span>Actual: <span className="text-gray-300">{val != null ? b.format(val) : '-'}</span></span>
+                      <span>{t('kpicommand.targetActual.target')} <span className="text-gray-300">{b.format(target)}</span></span>
+                      <span>{t('kpicommand.targetActual.actual')} <span className="text-gray-300">{val != null ? b.format(val) : '-'}</span></span>
                       {gap != null && (
-                        <span>Gap: <span className={onTrack ? 'text-emerald-400' : 'text-red-400'}>
+                        <span>{t('kpicommand.targetActual.gap')} <span className={onTrack ? 'text-emerald-400' : 'text-red-400'}>
                           {b.higherIsBetter ? (gap >= 0 ? '+' : '') : (gap <= 0 ? '' : '+')}
                           {b.format(Math.abs(gap))}
                         </span></span>
@@ -1289,7 +1294,7 @@ export default function KpiCommandCenter() {
           <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
               <Trophy size={16} className="text-yellow-400" />
-              <h3 className="text-white font-semibold">Top 5 Vehicles by KPI Score</h3>
+              <h3 className="text-white font-semibold">{t('kpicommand.sections.topVehicles')}</h3>
             </div>
             <div className="divide-y divide-gray-800">
               {vehicleScores.best.map((v, i) => (
@@ -1305,7 +1310,7 @@ export default function KpiCommandCenter() {
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-sm font-semibold">{v.asset}</div>
                     <div className="text-gray-500 text-xs">
-                      {BENCHMARKS.cpk.format(v.cpk)} CPK · {(v.life / 1000).toFixed(0)}k km life · {v.count} records
+                      {t('kpicommand.vehicles.statsBest', { cpk: BENCHMARKS.cpk.format(v.cpk), life: (v.life / 1000).toFixed(0), count: v.count })}
                     </div>
                   </div>
                   <div className={`text-lg font-bold ${scoreTextColor(v.overall)}`}>{v.overall}</div>
@@ -1317,7 +1322,7 @@ export default function KpiCommandCenter() {
           <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
               <AlertOctagon size={16} className="text-red-400" />
-              <h3 className="text-white font-semibold">Bottom 5 Vehicles - Needs Attention</h3>
+              <h3 className="text-white font-semibold">{t('kpicommand.sections.bottomVehicles')}</h3>
             </div>
             <div className="divide-y divide-gray-800">
               {vehicleScores.worst.map((v, i) => (
@@ -1328,7 +1333,7 @@ export default function KpiCommandCenter() {
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-sm font-semibold">{v.asset}</div>
                     <div className="text-gray-500 text-xs">
-                      {BENCHMARKS.cpk.format(v.cpk)} CPK · {v.fail.toFixed(1)}% failures · {v.count} records
+                      {t('kpicommand.vehicles.statsWorst', { cpk: BENCHMARKS.cpk.format(v.cpk), fail: v.fail.toFixed(1), count: v.count })}
                     </div>
                   </div>
                   <div className={`text-lg font-bold ${scoreTextColor(v.overall)}`}>{v.overall}</div>
@@ -1353,8 +1358,8 @@ export default function KpiCommandCenter() {
       {!loading && records.length === 0 && !error && (
         <div className="text-center py-16">
           <Command size={48} className="mx-auto text-gray-700 mb-4" />
-          <p className="text-gray-400 font-medium">No tyre records found for the selected period.</p>
-          <p className="text-gray-600 text-sm mt-1">Adjust the period or filters to see KPI data.</p>
+          <p className="text-gray-400 font-medium">{t('kpicommand.empty.title')}</p>
+          <p className="text-gray-600 text-sm mt-1">{t('kpicommand.empty.subtitle')}</p>
         </div>
       )}
     </div>

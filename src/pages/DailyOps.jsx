@@ -19,6 +19,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { exportDailyOpsBriefingPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import { useLanguage } from '../contexts/LanguageContext'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -58,6 +59,17 @@ const EVENT_COLORS = {
   'Work Order':  'text-purple-400',
 }
 
+// Stable mapping from the internal (English, logic-relevant) event type value
+// to its translation key — the value itself must stay untouched since it is
+// used to key EVENT_COLORS and other lookups.
+const EVENT_TYPE_I18N_KEY = {
+  'New Fitment': 'newFitment',
+  'Removal':     'removal',
+  'Inspection':  'inspection',
+  'Alert':       'alert',
+  'Work Order':  'workOrder',
+}
+
 function pad(n) { return String(n).padStart(2, '0') }
 function fmtDate(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` }
 function fmtDisp(iso) {
@@ -90,6 +102,7 @@ function addDays(iso, n) {
 }
 
 export default function DailyOps() {
+  const { t } = useLanguage()
   const { activeCurrency, appSettings } = useSettings()
   const { branding } = useTenant()
   const [selectedDate, setSelectedDate] = useState(fmtDate(new Date()))
@@ -168,10 +181,14 @@ export default function DailyOps() {
       items.push({
         id: `crit-${r.id}`,
         severity: 'Critical',
-        type: 'Critical Tyre Fitted',
-        description: `Critical risk tyre fitted today on ${r.asset_no}`,
+        type: t('dailyops.priorityQueue.types.criticalTyreFitted'),
+        description: t('dailyops.priorityQueue.descriptions.criticalFitted', { asset: r.asset_no }),
         asset: r.asset_no,
-        detail: `Serial: ${r.serial_number || 'N/A'} | Position: ${r.position || 'N/A'} | Site: ${r.site || 'N/A'}`,
+        detail: t('dailyops.priorityQueue.details.criticalFitted', {
+          serial: r.serial_number || t('dailyops.na'),
+          position: r.position || t('dailyops.na'),
+          site: r.site || t('dailyops.na'),
+        }),
         link: '/tyres',
       })
     })
@@ -185,10 +202,14 @@ export default function DailyOps() {
       items.push({
         id: `wo-${r.id}`,
         severity: daysPast > 7 ? 'Critical' : 'High',
-        type: 'Overdue Work Order',
-        description: `Work order ${r.work_order_no || r.id} overdue by ${daysPast}d`,
+        type: t('dailyops.priorityQueue.types.overdueWorkOrder'),
+        description: t('dailyops.priorityQueue.descriptions.overdueWorkOrder', { wo: r.work_order_no || r.id, days: daysPast }),
         asset: r.asset_no,
-        detail: `Status: ${r.status} | Priority: ${r.priority || 'N/A'} | Site: ${r.site || 'N/A'}`,
+        detail: t('dailyops.priorityQueue.details.overdueWorkOrder', {
+          status: r.status,
+          priority: r.priority || t('dailyops.na'),
+          site: r.site || t('dailyops.na'),
+        }),
         link: '/work-orders',
       })
     })
@@ -203,17 +224,17 @@ export default function DailyOps() {
         items.push({
           id: `inactive-${asset}`,
           severity: 'Medium',
-          type: 'No Inspection (14d)',
-          description: `Vehicle ${asset} has no inspection in last 14 days`,
+          type: t('dailyops.priorityQueue.types.noInspection'),
+          description: t('dailyops.priorityQueue.descriptions.noInspection', { asset }),
           asset,
-          detail: 'Inspection overdue - last activity >14 days ago',
+          detail: t('dailyops.priorityQueue.details.noInspection'),
           link: '/inspections',
         })
       }
     })
 
     return items.sort((a, b) => (SEV[a.severity]?.order ?? 9) - (SEV[b.severity]?.order ?? 9))
-  }, [todayRecs, workOrders, selectedDate, tyreRecords, inspections, allTyres30])
+  }, [todayRecs, workOrders, selectedDate, tyreRecords, inspections, allTyres30, t])
 
   const activityFeed = useMemo(() => {
     const events = []
@@ -224,7 +245,7 @@ export default function DailyOps() {
         type: r.km_at_removal ? 'Removal' : 'New Fitment',
         asset: r.asset_no,
         site: r.site,
-        detail: `${r.brand || 'Unknown'} | ${r.position || '-'} | ${r.serial_number || 'No Serial'}`,
+        detail: `${r.brand || t('dailyops.unknown')} | ${r.position || '-'} | ${r.serial_number || t('dailyops.noSerial')}`,
       })
     })
     todayIns.forEach(r => {
@@ -238,7 +259,7 @@ export default function DailyOps() {
         type: 'Inspection',
         asset: r.asset_no,
         site: r.site,
-        detail: `Inspector: ${r.inspector || 'N/A'} | Tyres: ${tc.length}${flagged ? ` | ${flagged} flagged` : ''}`,
+        detail: `${t('dailyops.activityFeed.inspectorLabel')} ${r.inspector || t('dailyops.na')} | ${t('dailyops.activityFeed.tyresLabel')} ${tc.length}${flagged ? t('dailyops.activityFeed.flaggedSuffix', { count: flagged }) : ''}`,
       })
     })
     todayAlerts.forEach(r => {
@@ -248,7 +269,7 @@ export default function DailyOps() {
         type: 'Alert',
         asset: r.asset_no,
         site: '',
-        detail: r.message || r.alert_type || 'Alert raised',
+        detail: r.message || r.alert_type || t('dailyops.activityFeed.alertRaised'),
       })
     })
     todayWO.forEach(r => {
@@ -258,11 +279,11 @@ export default function DailyOps() {
         type: 'Work Order',
         asset: r.asset_no,
         site: r.site,
-        detail: `WO: ${r.work_order_no || r.id} | ${r.status} | Priority: ${r.priority || 'N/A'}`,
+        detail: `${t('dailyops.activityFeed.woLabel')} ${r.work_order_no || r.id} | ${r.status} | ${t('dailyops.activityFeed.priorityLabel')} ${r.priority || t('dailyops.na')}`,
       })
     })
     return events.sort((a, b) => new Date(b.time) - new Date(a.time))
-  }, [todayRecs, todayIns, todayAlerts, todayWO])
+  }, [todayRecs, todayIns, todayAlerts, todayWO, t])
 
   const siteActivity = useMemo(() => {
     const map = {}
@@ -283,25 +304,25 @@ export default function DailyOps() {
   }, [allTyres30, tyreRecords, selectedDate])
 
   const fleetStatusData = useMemo(() => ({
-    labels: ['Active Today', 'Critical Risk', 'Dormant (30d)'],
+    labels: [t('dailyops.fleetStatus.activeToday'), t('dailyops.fleetStatus.criticalRisk'), t('dailyops.fleetStatus.chartDormant30d')],
     datasets: [{
       data: [vehiclesActiveToday, vehiclesCritical, vehiclesDormant],
       backgroundColor: ['rgba(34,197,94,0.7)', 'rgba(239,68,68,0.7)', 'rgba(107,114,128,0.7)'],
       borderColor: ['#22c55e', '#ef4444', '#6b7280'],
       borderWidth: 1,
     }],
-  }), [vehiclesActiveToday, vehiclesCritical, vehiclesDormant])
+  }), [vehiclesActiveToday, vehiclesCritical, vehiclesDormant, t])
 
   const sitesChartData = useMemo(() => ({
     labels: siteActivity.map(([s]) => s),
     datasets: [{
-      label: 'Tyre Events',
+      label: t('dailyops.siteActivity.chartLabel'),
       data: siteActivity.map(([, c]) => c),
       backgroundColor: 'rgba(22,163,74,0.65)',
       borderColor: '#16a34a',
       borderWidth: 1,
     }],
-  }), [siteActivity])
+  }), [siteActivity, t])
 
   const costDoughnutData = useMemo(() => {
     const spent = todayCost
@@ -310,12 +331,12 @@ export default function DailyOps() {
     const over = spent > budget && budget > 0 ? spent - budget : 0
     if (budget <= 0) {
       return {
-        labels: ['Today\'s Spend'],
+        labels: [t('dailyops.costTracker.todaysSpend')],
         datasets: [{ data: [Math.max(spent, 1)], backgroundColor: ['rgba(22,163,74,0.7)'], borderColor: ['#16a34a'], borderWidth: 1 }],
       }
     }
     return {
-      labels: over > 0 ? ['Spent (Budget)', 'Over Budget'] : ['Spent', 'Remaining'],
+      labels: over > 0 ? [t('dailyops.costTracker.chartSpentBudget'), t('dailyops.costTracker.chartOverBudget')] : [t('dailyops.costTracker.chartSpent'), t('dailyops.costTracker.chartRemaining')],
       datasets: [{
         data: over > 0 ? [budget, over] : [spent, remaining],
         backgroundColor: over > 0 ? ['rgba(22,163,74,0.65)', 'rgba(239,68,68,0.65)'] : ['rgba(22,163,74,0.65)', 'rgba(31,41,55,0.9)'],
@@ -323,7 +344,7 @@ export default function DailyOps() {
         borderWidth: 1,
       }],
     }
-  }, [todayCost, dailyBudget])
+  }, [todayCost, dailyBudget, t])
 
   const upcomingWOs = useMemo(() => {
     const nextWeekEnd = addDays(selectedDate, 7)
@@ -346,7 +367,13 @@ export default function DailyOps() {
         <p className="text-2xl font-bold text-white">{prefix}{typeof curr === 'number' ? curr.toLocaleString() : curr}</p>
         <div className={`flex items-center gap-1 mt-1 text-xs font-semibold ${val > 0 ? 'text-red-400' : val < 0 ? 'text-green-400' : 'text-gray-500'}`}>
           {val > 0 ? <TrendingUp size={11} /> : val < 0 ? <TrendingDown size={11} /> : <Minus size={11} />}
-          {val !== 0 ? `${val > 0 ? '+' : ''}${prefix}${Math.abs(typeof val === 'number' ? val : val).toLocaleString()} (${pct > 0 ? '+' : ''}${pct}%) vs last week` : 'Same as last week'}
+          {val !== 0 ? t('dailyops.weekSummary.vsLastWeek', {
+            sign: val > 0 ? '+' : '',
+            prefix,
+            absVal: Math.abs(typeof val === 'number' ? val : val).toLocaleString(),
+            pctSign: pct > 0 ? '+' : '',
+            pct,
+          }) : t('dailyops.weekSummary.sameAsLastWeek')}
         </div>
       </div>
     )
@@ -432,7 +459,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
 
       {/* Header + Navigator */}
       <PageHeader
-        title="Daily Ops"
+        title={t('dailyops.header.title')}
         subtitle={fmtDisp(selectedDate)}
         icon={CalendarDays}
         actions={<>
@@ -441,7 +468,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
           </button>
           <button onClick={() => setSelectedDate(fmtDate(new Date()))}
             className="px-3 py-2 rounded-lg bg-green-900/30 border border-green-700/50 text-green-300 text-sm font-medium hover:bg-green-900/50 transition-colors">
-            Today
+            {t('dailyops.header.today')}
           </button>
           <button onClick={() => navigate(1)} className="p-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-gray-600 transition-colors">
             <ChevronRight size={16} />
@@ -452,10 +479,10 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
           </button>
           <button onClick={generatePDF} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-300 text-sm hover:text-white hover:border-gray-600 transition-colors">
-            <FileText size={14} /> PDF
+            <FileText size={14} /> {t('dailyops.header.pdf')}
           </button>
           <button onClick={printBriefing} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-900/30 border border-green-700/50 text-green-300 text-sm font-medium hover:bg-green-900/50 transition-colors">
-            <Printer size={14} /> Print Briefing
+            <Printer size={14} /> {t('dailyops.header.printBriefing')}
           </button>
         </>}
       />
@@ -464,7 +491,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
         <div className="flex items-center justify-center py-20">
           <div className="flex items-center gap-3 text-gray-400">
             <RefreshCw size={18} className="animate-spin text-green-400" />
-            <span>Loading daily operations data...</span>
+            <span>{t('dailyops.loading')}</span>
           </div>
         </div>
       )}
@@ -475,11 +502,11 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
             <div className="flex items-center gap-2 mb-3">
               <ShieldAlert size={16} className="text-red-400" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Priority Action Queue</h2>
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">{t('dailyops.priorityQueue.title')}</h2>
               {priorityQueue.length > 0 && (
                 <div className="flex gap-1.5">
-                  {critCount > 0 && <span className="px-1.5 py-0.5 rounded text-xs bg-red-900/50 text-red-300 border border-red-700/50">{critCount} Critical</span>}
-                  {highCount > 0 && <span className="px-1.5 py-0.5 rounded text-xs bg-orange-900/30 text-orange-300 border border-orange-700/50">{highCount} High</span>}
+                  {critCount > 0 && <span className="px-1.5 py-0.5 rounded text-xs bg-red-900/50 text-red-300 border border-red-700/50">{t('dailyops.priorityQueue.criticalChip', { count: critCount })}</span>}
+                  {highCount > 0 && <span className="px-1.5 py-0.5 rounded text-xs bg-orange-900/30 text-orange-300 border border-orange-700/50">{t('dailyops.priorityQueue.highChip', { count: highCount })}</span>}
                 </div>
               )}
             </div>
@@ -487,7 +514,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
             {priorityQueue.length === 0 ? (
               <div className="card p-6 flex items-center gap-3 text-green-400">
                 <CheckCircle2 size={20} />
-                <span className="text-sm font-medium">No priority actions for this date. All clear.</span>
+                <span className="text-sm font-medium">{t('dailyops.priorityQueue.allClear')}</span>
               </div>
             ) : (
               <div className="space-y-2">
@@ -512,7 +539,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                         </div>
                         {item.link && (
                           <a href={item.link} className={`flex-shrink-0 text-xs px-2.5 py-1.5 rounded-lg border ${cfg.border} ${cfg.text} hover:opacity-80 transition-opacity font-medium`}>
-                            View
+                            {t('dailyops.priorityQueue.view')}
                           </a>
                         )}
                       </motion.div>
@@ -520,7 +547,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                   })}
                 </AnimatePresence>
                 {priorityQueue.length > 12 && (
-                  <p className="text-xs text-gray-500 text-center py-1">+{priorityQueue.length - 12} more items</p>
+                  <p className="text-xs text-gray-500 text-center py-1">{t('dailyops.priorityQueue.moreItems', { count: priorityQueue.length - 12 })}</p>
                 )}
               </div>
             )}
@@ -529,14 +556,14 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
           {/* Stat Cards */}
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
             <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Activity size={14} className="text-green-400" /> Today's Activity Summary
+              <Activity size={14} className="text-green-400" /> {t('dailyops.stats.title')}
             </h2>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
-                { label: 'Tyre Changes', value: todayRecs.length, icon: CircleDot, color: 'text-green-400', bg: 'bg-green-900/20', border: 'border-green-800/40' },
-                { label: 'Inspections', value: todayIns.length, icon: ClipboardList, color: 'text-blue-400', bg: 'bg-blue-900/20', border: 'border-blue-800/40' },
-                { label: 'Work Orders', value: todayWO.length, icon: Wrench, color: 'text-purple-400', bg: 'bg-purple-900/20', border: 'border-purple-800/40' },
-                { label: 'Alerts Raised', value: todayAlerts.length, icon: Bell, color: 'text-red-400', bg: 'bg-red-900/20', border: 'border-red-800/40' },
+                { label: t('dailyops.stats.tyreChanges'), value: todayRecs.length, icon: CircleDot, color: 'text-green-400', bg: 'bg-green-900/20', border: 'border-green-800/40' },
+                { label: t('dailyops.stats.inspections'), value: todayIns.length, icon: ClipboardList, color: 'text-blue-400', bg: 'bg-blue-900/20', border: 'border-blue-800/40' },
+                { label: t('dailyops.stats.workOrders'), value: todayWO.length, icon: Wrench, color: 'text-purple-400', bg: 'bg-purple-900/20', border: 'border-purple-800/40' },
+                { label: t('dailyops.stats.alertsRaised'), value: todayAlerts.length, icon: Bell, color: 'text-red-400', bg: 'bg-red-900/20', border: 'border-red-800/40' },
               ].map(({ label, value, icon: Icon, color, bg, border }) => (
                 <motion.div key={label} whileHover={{ y: -2 }} className={`card p-4 ${bg} border ${border}`}>
                   <div className="flex items-center justify-between mb-2">
@@ -556,17 +583,19 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
               className="xl:col-span-2">
               <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Activity size={14} className="text-green-400" /> Today's Activity Feed
+                <Activity size={14} className="text-green-400" /> {t('dailyops.activityFeed.title')}
               </h2>
               <div className="card p-0 overflow-hidden">
                 {activityFeed.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500 text-sm">No tyre activity recorded for this date.</div>
+                  <div className="p-8 text-center text-gray-500 text-sm">{t('dailyops.activityFeed.empty')}</div>
                 ) : (
                   <div className="overflow-y-auto max-h-[420px]">
                     {activityFeed.map((ev, i) => (
                       <div key={ev.id} className={`flex items-start gap-3 px-4 py-3 border-b border-gray-800/50 hover:bg-white/[0.02] transition-colors ${i === 0 ? '' : ''}`}>
                         <span className="text-[11px] font-mono text-gray-500 w-10 flex-shrink-0 mt-0.5">{fmtTime(ev.time)}</span>
-                        <span className={`text-xs font-semibold w-24 flex-shrink-0 mt-0.5 ${EVENT_COLORS[ev.type] || 'text-gray-400'}`}>{ev.type}</span>
+                        <span className={`text-xs font-semibold w-24 flex-shrink-0 mt-0.5 ${EVENT_COLORS[ev.type] || 'text-gray-400'}`}>
+                          {t(`dailyops.activityFeed.eventTypes.${EVENT_TYPE_I18N_KEY[ev.type] || 'workOrder'}`)}
+                        </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium text-white">{ev.asset || '-'}</span>
@@ -584,14 +613,14 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
             {/* Fleet Status Snapshot */}
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
               <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Truck size={14} className="text-green-400" /> Fleet Status Snapshot
+                <Truck size={14} className="text-green-400" /> {t('dailyops.fleetStatus.title')}
               </h2>
               <div className="card p-4 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[
-                    { label: 'Active Today', value: vehiclesActiveToday, color: 'text-green-400' },
-                    { label: 'Critical Risk', value: vehiclesCritical, color: 'text-red-400' },
-                    { label: 'Dormant 30d', value: vehiclesDormant, color: 'text-gray-400' },
+                    { label: t('dailyops.fleetStatus.activeToday'), value: vehiclesActiveToday, color: 'text-green-400' },
+                    { label: t('dailyops.fleetStatus.criticalRisk'), value: vehiclesCritical, color: 'text-red-400' },
+                    { label: t('dailyops.fleetStatus.dormant30d'), value: vehiclesDormant, color: 'text-gray-400' },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="text-center p-2 rounded-lg bg-gray-800/40">
                       <p className={`text-xl font-bold ${color}`}>{value}</p>

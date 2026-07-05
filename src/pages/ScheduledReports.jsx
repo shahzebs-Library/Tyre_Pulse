@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import SegmentedControl from '../components/ui/SegmentedControl'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -30,21 +31,28 @@ function computeNextRun(frequency, dayOfWeek, dayOfMonth, timeOfDay) {
   return next.toISOString()
 }
 
-function formatNextRun(nextRunAt) {
+function formatNextRun(nextRunAt, t) {
   if (!nextRunAt) return '-'
   const d = new Date(nextRunAt)
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const diff = d - new Date()
-  if (diff < 24 * 3600_000) return `Today at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-  if (diff < 48 * 3600_000) return `Tomorrow at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  if (diff < 24 * 3600_000) return t('schedreports.time.today', { time })
+  if (diff < 48 * 3600_000) return t('schedreports.time.tomorrow', { time })
+  return t('schedreports.time.dateAt', {
+    day: t(`schedreports.daysOfWeek.${d.getDay()}`),
+    date: d.getDate(),
+    month: t(`schedreports.months.${d.getMonth()}`),
+    time,
+  })
 }
 
-function formatLastSent(ts) {
-  if (!ts) return 'Never sent'
+function formatLastSent(ts, t) {
+  if (!ts) return t('schedreports.lastSent.never')
   const d = new Date(ts)
-  return `Last sent ${d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })} at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  return t('schedreports.lastSent.label', {
+    date: d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }),
+    time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  })
 }
 
 function validateEmails(raw) {
@@ -96,11 +104,12 @@ const BLANK_FORM = {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function FrequencyBadge({ frequency }) {
+  const { t } = useLanguage()
   const f = FREQUENCIES.find(x => x.value === frequency) ?? FREQUENCIES[0]
   return (
     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gray-700 text-xs font-medium text-gray-300">
       <span className={`w-1.5 h-1.5 rounded-full ${f.dot}`} />
-      {f.label}
+      {t(`schedreports.frequencies.${f.value}`)}
     </span>
   )
 }
@@ -118,7 +127,9 @@ function ReportTypeIcon({ type, size = 'md' }) {
 }
 
 function ScheduleCard({ schedule, onEdit, onDelete, onToggle }) {
+  const { t } = useLanguage()
   const rtCfg = REPORT_TYPES.find(r => r.value === schedule.report_type) ?? REPORT_TYPES[0]
+  const recipientCount = (schedule.recipients ?? []).length
 
   return (
     <div className={`bg-gray-800 border rounded-xl p-5 flex flex-col gap-4 transition-all duration-200 hover:border-gray-600 ${schedule.active ? 'border-gray-700' : 'border-gray-700/50 opacity-70'}`}>
@@ -128,13 +139,13 @@ function ScheduleCard({ schedule, onEdit, onDelete, onToggle }) {
           <ReportTypeIcon type={schedule.report_type} />
           <div className="min-w-0">
             <p className="text-white font-semibold truncate">{schedule.name}</p>
-            <p className={`text-xs mt-0.5 ${rtCfg.color}`}>{rtCfg.label}</p>
+            <p className={`text-xs mt-0.5 ${rtCfg.color}`}>{t(`schedreports.reportTypes.${rtCfg.value}`)}</p>
           </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => onToggle(schedule)}
-            title={schedule.active ? 'Deactivate' : 'Activate'}
+            title={schedule.active ? t('schedreports.card.deactivate') : t('schedreports.card.activate')}
             className="p-1.5 rounded-lg hover:bg-gray-700 transition-colors"
           >
             {schedule.active
@@ -161,20 +172,22 @@ function ScheduleCard({ schedule, onEdit, onDelete, onToggle }) {
         <FrequencyBadge frequency={schedule.frequency} />
         <span className="flex items-center gap-1.5 text-gray-400">
           <Clock className="w-3.5 h-3.5" />
-          {formatNextRun(schedule.next_run_at)}
+          {formatNextRun(schedule.next_run_at, t)}
         </span>
         <span className="flex items-center gap-1.5 text-gray-400">
           <Mail className="w-3.5 h-3.5" />
-          {(schedule.recipients ?? []).length} recipient{(schedule.recipients ?? []).length !== 1 ? 's' : ''}
+          {recipientCount !== 1
+            ? t('schedreports.card.recipientOther', { count: recipientCount })
+            : t('schedreports.card.recipientOne', { count: recipientCount })}
         </span>
       </div>
 
       {/* Footer */}
       <div className="pt-3 border-t border-gray-700 flex items-center justify-between">
-        <span className="text-xs text-gray-500">{formatLastSent(schedule.last_sent_at)}</span>
+        <span className="text-xs text-gray-500">{formatLastSent(schedule.last_sent_at, t)}</span>
         {schedule.active
-          ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle className="w-3 h-3" />Active</span>
-          : <span className="flex items-center gap-1 text-xs text-gray-500"><XCircle className="w-3 h-3" />Inactive</span>}
+          ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle className="w-3 h-3" />{t('schedreports.card.active')}</span>
+          : <span className="flex items-center gap-1 text-xs text-gray-500"><XCircle className="w-3 h-3" />{t('schedreports.card.inactive')}</span>}
       </div>
     </div>
   )
@@ -204,9 +217,10 @@ function SelectField({ value, onChange, children, className = '' }) {
 }
 
 function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setEmailError }) {
+  const { t } = useLanguage()
   const handleRecipientsBlur = () => {
     const { invalid } = validateEmails(form.recipients_raw)
-    setEmailError(invalid.length ? `Invalid email(s): ${invalid.join(', ')}` : '')
+    setEmailError(invalid.length ? t('schedreports.errors.invalidEmails', { list: invalid.join(', ') }) : '')
   }
 
   return (
@@ -225,10 +239,10 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
         <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
           {/* Name */}
           <div>
-            <FieldLabel required>Schedule Name</FieldLabel>
+            <FieldLabel required>{t('schedreports.modal.scheduleName')}</FieldLabel>
             <input
               type="text"
-              placeholder="e.g. Weekly Executive Summary"
+              placeholder={t('schedreports.modal.namePlaceholder')}
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30"
@@ -237,36 +251,36 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
 
           {/* Report Type */}
           <div>
-            <FieldLabel required>Report Type</FieldLabel>
+            <FieldLabel required>{t('schedreports.modal.reportType')}</FieldLabel>
             <SelectField value={form.report_type} onChange={v => setForm(f => ({ ...f, report_type: v }))}>
               {REPORT_TYPES.map(r => (
-                <option key={r.value} value={r.value}>{r.label}</option>
+                <option key={r.value} value={r.value}>{t(`schedreports.reportTypes.${r.value}`)}</option>
               ))}
             </SelectField>
           </div>
 
           {/* Frequency */}
           <div>
-            <FieldLabel required>Frequency</FieldLabel>
+            <FieldLabel required>{t('schedreports.modal.frequency')}</FieldLabel>
             <SegmentedControl
-              ariaLabel="frequency"
+              ariaLabel={t('schedreports.modal.frequency')}
               size="sm"
               value={form.frequency}
               onChange={(v) => setForm(f => ({ ...f, frequency: v }))}
-              options={FREQUENCIES.map(fr => ({ value: fr.value, label: fr.label }))}
+              options={FREQUENCIES.map(fr => ({ value: fr.value, label: t(`schedreports.frequencies.${fr.value}`) }))}
             />
           </div>
 
           {/* Day of week (weekly only) */}
           {form.frequency === 'weekly' && (
             <div>
-              <FieldLabel required>Day of Week</FieldLabel>
+              <FieldLabel required>{t('schedreports.modal.dayOfWeek')}</FieldLabel>
               <SelectField
                 value={form.day_of_week}
                 onChange={v => setForm(f => ({ ...f, day_of_week: parseInt(v, 10) }))}
               >
                 {DAYS_OF_WEEK.map(d => (
-                  <option key={d.value} value={d.value}>{d.label}</option>
+                  <option key={d.value} value={d.value}>{t(`schedreports.daysOfWeek.${d.value}`)}</option>
                 ))}
               </SelectField>
             </div>
@@ -275,7 +289,7 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
           {/* Day of month (monthly only) */}
           {form.frequency === 'monthly' && (
             <div>
-              <FieldLabel required>Day of Month</FieldLabel>
+              <FieldLabel required>{t('schedreports.modal.dayOfMonth')}</FieldLabel>
               <input
                 type="number"
                 min={1}
@@ -292,19 +306,20 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
 
           {/* Time of day */}
           <div>
-            <FieldLabel required>Time of Day</FieldLabel>
+            <FieldLabel required>{t('schedreports.modal.timeOfDay')}</FieldLabel>
             <SelectField value={form.time_of_day} onChange={v => setForm(f => ({ ...f, time_of_day: v }))}>
-              {TIME_OPTIONS.map(t => {
-                const [h] = t.split(':').map(Number)
-                const label = h < 12 ? `${h === 0 ? 12 : h}:00 AM` : `${h === 12 ? 12 : h - 12}:00 PM`
-                return <option key={t} value={t}>{label} ({t})</option>
+              {TIME_OPTIONS.map(opt => {
+                const [h] = opt.split(':').map(Number)
+                const period = h < 12 ? t('schedreports.time.am') : t('schedreports.time.pm')
+                const label = `${h < 12 ? (h === 0 ? 12 : h) : (h === 12 ? 12 : h - 12)}:00 ${period}`
+                return <option key={opt} value={opt}>{label} ({opt})</option>
               })}
             </SelectField>
           </div>
 
           {/* Recipients */}
           <div>
-            <FieldLabel required>Recipients</FieldLabel>
+            <FieldLabel required>{t('schedreports.modal.recipients')}</FieldLabel>
             <textarea
               rows={4}
               placeholder={'manager@company.com\nexecutive@company.com'}
@@ -313,7 +328,7 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
               onBlur={handleRecipientsBlur}
               className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30 resize-none font-mono"
             />
-            <p className="text-xs text-gray-500 mt-1">One email address per line</p>
+            <p className="text-xs text-gray-500 mt-1">{t('schedreports.modal.recipientsHint')}</p>
             {emailError && (
               <p className="text-xs text-red-400 mt-1 flex items-start gap-1">
                 <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />{emailError}
@@ -324,8 +339,8 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
           {/* Active toggle */}
           <div className="flex items-center justify-between bg-gray-700/50 rounded-lg px-4 py-3">
             <div>
-              <p className="text-sm font-medium text-white">Active Schedule</p>
-              <p className="text-xs text-gray-400 mt-0.5">Reports will be sent automatically when enabled</p>
+              <p className="text-sm font-medium text-white">{t('schedreports.modal.activeSchedule')}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{t('schedreports.modal.activeScheduleDesc')}</p>
             </div>
             <button
               type="button"
@@ -343,7 +358,7 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
           >
-            Cancel
+            {t('schedreports.modal.cancel')}
           </button>
           <button
             onClick={onSave}
@@ -351,9 +366,9 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
             className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {saving ? (
-              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving...</>
+              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t('schedreports.modal.saving')}</>
             ) : (
-              <><Save className="w-4 h-4" />Save Schedule</>
+              <><Save className="w-4 h-4" />{t('schedreports.modal.save')}</>
             )}
           </button>
         </div>
@@ -363,6 +378,7 @@ function Modal({ title, onClose, onSave, saving, form, setForm, emailError, setE
 }
 
 function DeleteConfirmModal({ schedule, onCancel, onConfirm, deleting }) {
+  const { t } = useLanguage()
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
@@ -372,16 +388,16 @@ function DeleteConfirmModal({ schedule, onCancel, onConfirm, deleting }) {
             <Trash2 className="w-5 h-5 text-red-400" />
           </div>
           <div>
-            <p className="text-white font-semibold">Delete Schedule</p>
-            <p className="text-gray-400 text-sm">This action cannot be undone</p>
+            <p className="text-white font-semibold">{t('schedreports.delete.title')}</p>
+            <p className="text-gray-400 text-sm">{t('schedreports.delete.subtitle')}</p>
           </div>
         </div>
         <p className="text-gray-300 text-sm mb-6">
-          Are you sure you want to delete <span className="text-white font-medium">"{schedule?.name}"</span>? Recipients will no longer receive this report.
+          {t('schedreports.delete.questionPrefix')}<span className="text-white font-medium">{schedule?.name}</span>{t('schedreports.delete.questionSuffix')}
         </p>
         <div className="flex justify-end gap-3">
           <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
-            Cancel
+            {t('schedreports.delete.cancel')}
           </button>
           <button
             onClick={onConfirm}
@@ -389,7 +405,7 @@ function DeleteConfirmModal({ schedule, onCancel, onConfirm, deleting }) {
             className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             {deleting ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            Delete
+            {t('schedreports.delete.confirm')}
           </button>
         </div>
       </div>
@@ -401,6 +417,7 @@ function DeleteConfirmModal({ schedule, onCancel, onConfirm, deleting }) {
 
 export default function ScheduledReports() {
   const { profile } = useAuth()
+  const { t } = useLanguage()
   const [schedules, setSchedules] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -477,11 +494,11 @@ export default function ScheduledReports() {
 
     const { emails, invalid } = validateEmails(form.recipients_raw)
     if (invalid.length) {
-      setEmailError(`Invalid email(s): ${invalid.join(', ')}`)
+      setEmailError(t('schedreports.errors.invalidEmails', { list: invalid.join(', ') }))
       return
     }
     if (emails.length === 0) {
-      setEmailError('At least one recipient is required.')
+      setEmailError(t('schedreports.errors.recipientRequired'))
       return
     }
 
@@ -591,9 +608,13 @@ export default function ScheduledReports() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">Scheduled Reports</h1>
+            <h1 className="text-2xl font-bold text-white">{t('schedreports.header.title')}</h1>
             <p className="text-gray-400 text-sm mt-1">
-              {loading ? 'Loading...' : `${activeCount} active schedule${activeCount !== 1 ? 's' : ''} · ${schedules.length} total`}
+              {loading
+                ? t('schedreports.header.loading')
+                : (activeCount !== 1
+                  ? t('schedreports.header.summaryOther', { count: activeCount, total: schedules.length })
+                  : t('schedreports.header.summaryOne', { count: activeCount, total: schedules.length }))}
             </p>
           </div>
           <button
@@ -601,7 +622,7 @@ export default function ScheduledReports() {
             className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" />
-            New Schedule
+            {t('schedreports.header.newSchedule')}
           </button>
         </div>
 
@@ -618,7 +639,7 @@ export default function ScheduledReports() {
         <div className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
-            placeholder="Search schedules..."
+            placeholder={t('schedreports.search.placeholder')}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500"
@@ -635,11 +656,11 @@ export default function ScheduledReports() {
                     : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'
                 }`}
               >
-                {f === 'all' ? 'All Frequencies' : f}
+                {f === 'all' ? t('schedreports.filters.allFrequencies') : t(`schedreports.frequencies.${f}`)}
               </button>
             ))}
             {/* Status filter */}
-            {[['all', 'All Status'], ['active', 'Active'], ['inactive', 'Inactive']].map(([val, lbl]) => (
+            {[['all', t('schedreports.filters.allStatus')], ['active', t('schedreports.filters.active')], ['inactive', t('schedreports.filters.inactive')]].map(([val, lbl]) => (
               <button
                 key={val}
                 onClick={() => setFilterActive(val)}
@@ -665,7 +686,7 @@ export default function ScheduledReports() {
                   <ReportTypeIcon type={rt.value} size="sm" />
                   <div>
                     <p className="text-white font-bold text-lg leading-none">{count}</p>
-                    <p className="text-gray-400 text-xs mt-0.5">{rt.label}</p>
+                    <p className="text-gray-400 text-xs mt-0.5">{t(`schedreports.reportTypes.${rt.value}`)}</p>
                   </div>
                 </div>
               )
@@ -706,27 +727,27 @@ export default function ScheduledReports() {
             </div>
             {schedules.length === 0 ? (
               <>
-                <p className="text-white font-semibold text-lg">No schedules yet</p>
+                <p className="text-white font-semibold text-lg">{t('schedreports.empty.noSchedulesTitle')}</p>
                 <p className="text-gray-400 text-sm mt-2 max-w-sm">
-                  Set up automated email reports to keep your team informed with regular fleet and tyre intelligence.
+                  {t('schedreports.empty.noSchedulesDesc')}
                 </p>
                 <button
                   onClick={openCreate}
                   className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-xl transition-all"
                 >
                   <Plus className="w-4 h-4" />
-                  Create First Schedule
+                  {t('schedreports.empty.createFirst')}
                 </button>
               </>
             ) : (
               <>
-                <p className="text-white font-semibold">No matching schedules</p>
-                <p className="text-gray-400 text-sm mt-1">Try adjusting your filters or search query.</p>
+                <p className="text-white font-semibold">{t('schedreports.empty.noMatchTitle')}</p>
+                <p className="text-gray-400 text-sm mt-1">{t('schedreports.empty.noMatchDesc')}</p>
                 <button
                   onClick={() => { setFilterFreq('all'); setFilterActive('all'); setSearch('') }}
                   className="mt-4 text-orange-400 text-sm hover:text-orange-300 transition-colors"
                 >
-                  Clear filters
+                  {t('schedreports.empty.clearFilters')}
                 </button>
               </>
             )}
@@ -751,7 +772,7 @@ export default function ScheduledReports() {
       {/* Create / Edit Modal */}
       {modalOpen && (
         <Modal
-          title={editTarget ? 'Edit Schedule' : 'New Schedule'}
+          title={editTarget ? t('schedreports.modal.editTitle') : t('schedreports.modal.newTitle')}
           onClose={closeModal}
           onSave={handleSave}
           saving={saving}

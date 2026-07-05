@@ -1,0 +1,58 @@
+{
+  "title": "Report Center",
+  "subtitle": "Generate branded fleet reports on demand and review scheduled deliveries.",
+  "toast": {
+    "success": "Report generated and downloaded.",
+    "errorPrefix": "Could not generate report: {message}",
+    "unexpectedError": "unexpected error"
+  },
+  "errors": {
+    "noRecordsInRange": "No tyre records in the selected range.",
+    "historyLoadFailed": "Could not load delivery history."
+  },
+  "branding": {
+    "activeBranding": "Active branding",
+    "reportsIdentity": "reports use this identity.",
+    "editBranding": "Edit branding",
+    "logoAlt": "logo"
+  },
+  "filters": {
+    "from": "From",
+    "to": "To",
+    "scope": "Scope:",
+    "allCountries": "All countries",
+    "currency": "currency"
+  },
+  "reports": {
+    "pptx": { "label": "Executive PowerPoint", "desc": "12-slide management deck — KPIs, risk, cost, recommendations." },
+    "daily": { "label": "Daily Executive PDF", "desc": "One-page-per-section landscape operations brief." },
+    "excel": { "label": "Tyre Records (Excel)", "desc": "Filterable workbook of tyre records with cost columns." },
+    "pdf": { "label": "Tyre Records (PDF)", "desc": "Print-ready landscape table (top 200 records)." }
+  },
+  "generate": {
+    "building": "Building…",
+    "generate": "Generate"
+  },
+  "automatedDelivery": {
+    "title": "Automated delivery",
+    "desc": "Schedule recurring email delivery of these reports.",
+    "manageSchedules": "Manage schedules"
+  },
+  "history": {
+    "title": "Delivery History",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "loading": "Loading delivery history…",
+    "emptyTitle": "No deliveries yet",
+    "emptyDesc": "Scheduled report sends will appear here once they run. Set one up under Scheduled Reports.",
+    "columns": {
+      "sent": "Sent",
+      "schedule": "Schedule",
+      "type": "Type",
+      "recipients": "Recipients",
+      "status": "Status"
+    },
+    "recipientsCount": "{count} recipient(s)",
+    "statusUnknown": "unknown"
+  }
+}

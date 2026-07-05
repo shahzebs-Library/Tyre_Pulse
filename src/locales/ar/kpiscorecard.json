@@ -1,0 +1,99 @@
+{
+  "title": "بطاقة أداء المؤشرات",
+  "subtitle": "الأهداف الشهرية مقابل الفعلي مع توقعات الانحدار",
+  "errorSubtitle": "تعذّر تحميل البيانات",
+  "states": {
+    "loading": "جارٍ تحميل بيانات المؤشرات...",
+    "errorTitle": "تعذّر تحميل بيانات المؤشرات",
+    "errorDefault": "فشل تحميل بيانات المؤشرات.",
+    "retry": "إعادة المحاولة"
+  },
+  "actions": {
+    "yoyCompare": "مقارنة سنوية",
+    "excel": "إكسل",
+    "pdf": "PDF",
+    "editTargets": "تعديل الأهداف",
+    "cancel": "إلغاء",
+    "saveTargets": "حفظ الأهداف",
+    "saving": "جارٍ الحفظ..."
+  },
+  "filters": {
+    "year": "السنة:",
+    "allCountries": "الكل"
+  },
+  "tabs": {
+    "overview": "نظرة عامة",
+    "sites": "حسب الموقع"
+  },
+  "alerts": {
+    "banner": "{count} مؤشر أداء رئيسي يتجاوز الهدف بأكثر من 20% هذا الشهر",
+    "vsTarget": "مقابل الهدف",
+    "overSuffix": "زيادة"
+  },
+  "targetEditor": {
+    "title": "إعداد أهداف المؤشرات"
+  },
+  "kpiLabels": {
+    "max_monthly_cost": "الحد الأقصى للتكلفة الشهرية",
+    "max_high_risk_pct": "الحد الأقصى لنسبة الخطورة العالية",
+    "min_records_month": "الحد الأدنى للسجلات / شهر",
+    "max_overdue_actions": "الحد الأقصى للإجراءات المتأخرة",
+    "max_avg_cost_tyre": "الحد الأقصى لمتوسط التكلفة / إطار"
+  },
+  "cards": {
+    "monthlyCost": "التكلفة الشهرية",
+    "highRiskPct": "نسبة الخطورة العالية",
+    "recordCount": "عدد السجلات",
+    "overdueActions": "الإجراءات المتأخرة",
+    "avgCostPerTyre": "متوسط التكلفة / إطار",
+    "target": "الهدف:",
+    "pass": "ناجح",
+    "fail": "غير مطابق",
+    "vsPrevMonth": "مقابل الشهر السابق",
+    "vsLastYear": "مقابل العام الماضي",
+    "forecastNextMonth": "التوقع (الشهر القادم)",
+    "rSquaredSlope": "R² = {r2} · الميل {sign}{slope}/شهر"
+  },
+  "charts": {
+    "monthlyCostVsTarget": "التكلفة الشهرية مقابل الهدف + التوقع",
+    "lyOverlaySuffix": " · تراكب العام الماضي",
+    "highRiskVsTarget": "نسبة الخطورة العالية مقابل الهدف",
+    "series": {
+      "actualCost": "التكلفة الفعلية",
+      "targetCeiling": "سقف الهدف",
+      "forecast": "التوقع",
+      "trendLine": "خط الاتجاه",
+      "lyCost": "تكلفة العام الماضي",
+      "highRiskPct": "نسبة الخطورة العالية",
+      "targetMaxPct": "الحد الأقصى المستهدف %"
+    }
+  },
+  "table": {
+    "monthlyActualsTitle": "الفعلي الشهري مقابل الأهداف",
+    "columns": {
+      "month": "الشهر",
+      "records": "السجلات",
+      "totalCost": "التكلفة الإجمالية",
+      "lyCost": "تكلفة العام الماضي",
+      "vsTarget": "مقابل الهدف",
+      "highRiskPct": "نسبة الخطورة العالية",
+      "overdue": "متأخر"
+    },
+    "onTarget": "ضمن الهدف"
+  },
+  "sites": {
+    "title": "أداء المواقع - {month} (مرتب حسب التكلفة الإجمالية)",
+    "siteCount": "{count} موقع",
+    "unknownSite": "غير معروف",
+    "noData": "لا توجد بيانات مواقع لـ {month}.",
+    "columns": {
+      "site": "الموقع",
+      "monthlyCost": "التكلفة الشهرية",
+      "highRiskPct": "نسبة الخطورة العالية",
+      "records": "السجلات",
+      "overdueActions": "الإجراءات المتأخرة",
+      "avgCostPerTyre": "متوسط التكلفة / إطار"
+    },
+    "total": "الإجمالي"
+  }
+}

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import {
   computeSiteMetrics, computeBrandMetrics, computeAssetMetrics,
   bucketByMonth, monthlyTrendWithForecast, sum, recordCost,
@@ -22,6 +23,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend, Filler)
 
 const TABS = ['Cost by Site', 'Cost by Brand', 'Monthly Trend', 'Asset Breakdown']
+const TAB_KEYS = ['costBySite', 'costByBrand', 'monthlyTrend', 'assetBreakdown']
 
 const RISK_LEVELS = ['Low', 'Medium', 'High', 'Critical']
 
@@ -46,6 +48,7 @@ const LINE_OPTS = {
 
 export default function Analytics() {
   const { activeCountry, activeCurrency } = useSettings()
+  const { t } = useLanguage()
   const [records, setRecords]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
@@ -75,12 +78,12 @@ export default function Analytics() {
       if (e) throw new Error(e.message || e)
       setRecords(data || [])
     } catch (err) {
-      setError(err.message || 'Failed to load analytics data.')
+      setError(err.message || t('analytics.error.loadFailed'))
       setRecords([])
     } finally {
       setLoading(false)
     }
-  }, [activeCountry])
+  }, [activeCountry, t])
 
   useEffect(() => { load() }, [load])
 
@@ -145,8 +148,8 @@ export default function Analytics() {
     return (
       <div className="space-y-6">
         <PageHeader
-          title="Analytics"
-          subtitle="Cost, trend and breakdown analysis"
+          title={t('analytics.title')}
+          subtitle={t('analytics.subtitle')}
           icon={BarChart2}
         />
         {/* Filter bar skeleton */}
@@ -178,13 +181,13 @@ export default function Analytics() {
   if (error && !records.length) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Analytics" subtitle="Could not load data" icon={BarChart2} />
+        <PageHeader title={t('analytics.title')} subtitle={t('analytics.subtitleError')} icon={BarChart2} />
         <div className="card py-16 flex flex-col items-center gap-3">
           <AlertTriangle size={40} className="text-red-400" />
-          <p className="text-red-300 font-medium">Could not load analytics</p>
+          <p className="text-red-300 font-medium">{t('analytics.error.couldNotLoad')}</p>
           <p className="text-gray-500 text-sm">{error}</p>
           <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
-            <RefreshCw size={16} /> Retry
+            <RefreshCw size={16} /> {t('analytics.error.retry')}
           </button>
         </div>
       </div>
@@ -194,8 +197,8 @@ export default function Analytics() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Analytics"
-        subtitle="Cost, trend and breakdown analysis"
+        title={t('analytics.title')}
+        subtitle={t('analytics.subtitle')}
         icon={BarChart2}
       />
 
@@ -204,24 +207,24 @@ export default function Analytics() {
         <div className="flex flex-wrap gap-3 items-end">
           {/* Period */}
           <div className="flex flex-col gap-1">
-            <label className="label text-xs">Period</label>
+            <label className="label text-xs">{t('analytics.filters.period')}</label>
             <PeriodFilter records={records} value={period} onChange={setPeriod} />
           </div>
 
           {/* Site */}
           <div className="flex flex-col gap-1">
-            <label className="label text-xs">Site</label>
+            <label className="label text-xs">{t('analytics.filters.site')}</label>
             <select className="input py-1.5 text-sm w-40" value={siteFilter} onChange={e => setSiteFilter(e.target.value)}>
-              <option value="">All Sites</option>
+              <option value="">{t('analytics.filters.allSites')}</option>
               {uniqueSites.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 
           {/* Brand */}
           <div className="flex flex-col gap-1">
-            <label className="label text-xs">Brand</label>
+            <label className="label text-xs">{t('analytics.filters.brand')}</label>
             <select className="input py-1.5 text-sm w-40" value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
-              <option value="">All Brands</option>
+              <option value="">{t('analytics.filters.allBrands')}</option>
               {uniqueBrands.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
@@ -229,21 +232,21 @@ export default function Analytics() {
           {/* Clear */}
           {hasActiveFilter && (
             <button onClick={clearFilters} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 self-end">
-              <X size={14} /> Clear Filters
+              <X size={14} /> {t('analytics.filters.clearFilters')}
             </button>
           )}
         </div>
 
         {/* Risk level chips */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-500">Risk:</span>
+          <span className="text-xs text-gray-500">{t('analytics.filters.riskLabel')}</span>
           <button
             onClick={() => setRiskLevels([])}
             className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
               riskLevels.length === 0 ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'
             }`}
           >
-            All
+            {t('analytics.filters.all')}
           </button>
           {RISK_LEVELS.map(level => {
             const active = riskLevels.includes(level)
@@ -262,7 +265,7 @@ export default function Analytics() {
                     : 'border-gray-700 text-gray-400 hover:border-gray-500'
                 }`}
               >
-                {level}
+                {t(`analytics.risk.${level.toLowerCase()}`)}
               </button>
             )
           })}
@@ -272,10 +275,10 @@ export default function Analytics() {
       {/* KPI summary row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Records', value: totalCount.toLocaleString(), color: 'text-blue-400' },
-          { label: `Total Cost (${activeCurrency})`, value: formatCurrencyCompact(totalCost, activeCurrency), color: 'text-green-400' },
-          { label: 'Sites Active', value: siteMetrics.length, color: 'text-purple-400' },
-          { label: 'Brands Tracked', value: brandMetrics.length, color: 'text-yellow-400' },
+          { label: t('analytics.kpi.totalRecords'), value: totalCount.toLocaleString(), color: 'text-blue-400' },
+          { label: t('analytics.kpi.totalCost', { currency: activeCurrency }), value: formatCurrencyCompact(totalCost, activeCurrency), color: 'text-green-400' },
+          { label: t('analytics.kpi.sitesActive'), value: siteMetrics.length, color: 'text-purple-400' },
+          { label: t('analytics.kpi.brandsTracked'), value: brandMetrics.length, color: 'text-yellow-400' },
         ].map(({ label, value, color }, i) => (
           <motion.div
             key={label}
@@ -292,14 +295,14 @@ export default function Analytics() {
 
       {/* Tabs */}
       <div className="flex border-b border-[var(--border-dim)] gap-1">
-        {TABS.map((t, i) => (
-          <button key={t} onClick={() => setActiveTab(i)}
+        {TABS.map((tab, i) => (
+          <button key={tab} onClick={() => setActiveTab(i)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all duration-200 -mb-px ${
               activeTab === i
                 ? 'border-brand-bright text-brand-bright'
                 : 'border-transparent text-muted hover:text-white'
             }`}>
-            {t}
+            {t(`analytics.tabs.${TAB_KEYS[i]}`)}
           </button>
         ))}
       </div>
@@ -342,7 +345,7 @@ export default function Analytics() {
       <ChartModal
         open={modalChart !== null}
         onClose={() => setModalChart(null)}
-        title={modalChart || ''}
+        title={modalChart ? t(`analytics.tabs.${TAB_KEYS[TABS.indexOf(modalChart)]}`) : ''}
         chartRef={chartRef}
         filters={modalFilters}
         onFilterChange={(key, val) => { if (key === 'year') setPeriod(val !== undefined ? { mode: 'year', year: Number(val) } : { mode: 'all' }) }}
@@ -386,14 +389,14 @@ export default function Analytics() {
                 labels: trendData.map(d => d.month),
                 datasets: [
                   {
-                    label: 'Actual Spend',
+                    label: t('analytics.chart.actualSpend'),
                     data: trendData.map(d => d.isForecast ? null : (d.value ?? d.total)),
                     borderColor: 'rgba(59,130,246,1)',
                     backgroundColor: 'rgba(59,130,246,0.1)',
                     fill: true, tension: 0.4, pointRadius: 4,
                   },
                   {
-                    label: 'Forecast',
+                    label: t('analytics.chart.forecast'),
                     data: trendData.map(d => d.isForecast ? (d.value ?? d.total) : null),
                     borderColor: 'rgba(245,158,11,1)',
                     borderDash: [6, 3], fill: false, tension: 0.4, pointRadius: 4,
@@ -427,6 +430,7 @@ export default function Analytics() {
 
 // ── Tab: Cost by Site ─────────────────────────────────────────────────────────
 function CostBySite({ siteMetrics, currency, onMaximize, chartRef }) {
+  const { t } = useLanguage()
   const top = siteMetrics.slice(0, 15)
   const chartData = {
     labels: top.map(s => s.site),
@@ -443,7 +447,7 @@ function CostBySite({ siteMetrics, currency, onMaximize, chartRef }) {
         <button
           onClick={onMaximize}
           className="absolute top-3 right-3 z-10 text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-          title="Fullscreen"
+          title={t('analytics.chart.fullscreen')}
         >
           <Maximize2 size={15} />
         </button>
@@ -453,12 +457,12 @@ function CostBySite({ siteMetrics, currency, onMaximize, chartRef }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-gray-400 border-b border-gray-800">
-              <th className="pb-2 pr-4">Site</th>
-              <th className="pb-2 pr-4 text-right">Records</th>
-              <th className="pb-2 pr-4 text-right">Total Cost</th>
-              <th className="pb-2 pr-4 text-right">Avg Cost</th>
-              <th className="pb-2 pr-4 text-right">High Risk</th>
-              <th className="pb-2 text-right">Top Category</th>
+              <th className="pb-2 pr-4">{t('analytics.site.site')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.site.records')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.site.totalCost')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.site.avgCost')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.site.highRisk')}</th>
+              <th className="pb-2 text-right">{t('analytics.site.topCategory')}</th>
             </tr>
           </thead>
           <tbody>
@@ -485,6 +489,7 @@ function CostBySite({ siteMetrics, currency, onMaximize, chartRef }) {
 
 // ── Tab: Cost by Brand ────────────────────────────────────────────────────────
 function CostByBrand({ brandMetrics, currency, onMaximize, chartRef }) {
+  const { t } = useLanguage()
   const top = brandMetrics.slice(0, 12)
   const chartData = {
     labels: top.map(b => b.brand),
@@ -501,7 +506,7 @@ function CostByBrand({ brandMetrics, currency, onMaximize, chartRef }) {
         <button
           onClick={onMaximize}
           className="absolute top-3 right-3 z-10 text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-          title="Fullscreen"
+          title={t('analytics.chart.fullscreen')}
         >
           <Maximize2 size={15} />
         </button>
@@ -511,12 +516,12 @@ function CostByBrand({ brandMetrics, currency, onMaximize, chartRef }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-gray-400 border-b border-gray-800">
-              <th className="pb-2 pr-4">Brand</th>
-              <th className="pb-2 pr-4 text-right">Records</th>
-              <th className="pb-2 pr-4 text-right">Total Cost</th>
-              <th className="pb-2 pr-4 text-right">Avg/Tyre</th>
-              <th className="pb-2 pr-4 text-right">Failure Rate</th>
-              <th className="pb-2 text-right">Top Failure</th>
+              <th className="pb-2 pr-4">{t('analytics.brand.brand')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.brand.records')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.brand.totalCost')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.brand.avgPerTyre')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.brand.failureRate')}</th>
+              <th className="pb-2 text-right">{t('analytics.brand.topFailure')}</th>
             </tr>
           </thead>
           <tbody>
@@ -543,6 +548,7 @@ function CostByBrand({ brandMetrics, currency, onMaximize, chartRef }) {
 
 // ── Tab: Monthly Trend ────────────────────────────────────────────────────────
 function MonthlyTrend({ trendData, currency, onMaximize, chartRef }) {
+  const { t } = useLanguage()
   const labels  = trendData.map(d => d.month)
   const forecast = trendData.map(d => d.isForecast ? (d.value ?? d.total) : null)
   const predicted = trendData.map(d => d.predicted ?? null)
@@ -551,21 +557,21 @@ function MonthlyTrend({ trendData, currency, onMaximize, chartRef }) {
     labels,
     datasets: [
       {
-        label: 'Actual Spend',
+        label: t('analytics.chart.actualSpend'),
         data: trendData.map(d => d.isForecast ? null : (d.value ?? d.total)),
         borderColor: 'rgba(59,130,246,1)',
         backgroundColor: 'rgba(59,130,246,0.1)',
         fill: true, tension: 0.4, pointRadius: 4,
       },
       {
-        label: 'Forecast',
+        label: t('analytics.chart.forecast'),
         data: forecast,
         borderColor: 'rgba(245,158,11,1)',
         backgroundColor: 'rgba(245,158,11,0.05)',
         borderDash: [6, 3], fill: false, tension: 0.4, pointRadius: 4,
       },
       {
-        label: 'Trend Line',
+        label: t('analytics.chart.trendLine'),
         data: predicted,
         borderColor: 'rgba(107,114,128,0.6)',
         borderDash: [3, 3], fill: false, tension: 0, pointRadius: 0,
@@ -579,7 +585,7 @@ function MonthlyTrend({ trendData, currency, onMaximize, chartRef }) {
         <button
           onClick={onMaximize}
           className="absolute top-3 right-3 z-10 text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-          title="Fullscreen"
+          title={t('analytics.chart.fullscreen')}
         >
           <Maximize2 size={15} />
         </button>
@@ -588,7 +594,7 @@ function MonthlyTrend({ trendData, currency, onMaximize, chartRef }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {trendData.slice(-3).map(d => (
           <div key={d.month} className={`card ${d.isForecast ? 'border border-yellow-800/50' : ''}`}>
-            <p className="text-xs text-gray-500">{d.isForecast ? 'Forecast' : 'Actual'} - {d.month}</p>
+            <p className="text-xs text-gray-500">{d.isForecast ? t('analytics.trend.forecast') : t('analytics.trend.actual')} - {d.month}</p>
             <p className="text-lg font-bold text-white mt-1">
               {formatCurrencyCompact(d.value ?? d.total ?? 0, currency)}
             </p>
@@ -601,6 +607,7 @@ function MonthlyTrend({ trendData, currency, onMaximize, chartRef }) {
 
 // ── Tab: Asset Breakdown ──────────────────────────────────────────────────────
 function AssetBreakdown({ assetMetrics, currency, onMaximize, chartRef }) {
+  const { t } = useLanguage()
   const [search, setSearch] = useState('')
   const visible = assetMetrics
     .filter(a => !search || a.assetNo.toLowerCase().includes(search.toLowerCase()))
@@ -624,7 +631,7 @@ function AssetBreakdown({ assetMetrics, currency, onMaximize, chartRef }) {
         <button
           onClick={onMaximize}
           className="absolute top-3 right-3 z-10 text-gray-500 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-          title="Fullscreen"
+          title={t('analytics.chart.fullscreen')}
         >
           <Maximize2 size={15} />
         </button>
@@ -633,7 +640,7 @@ function AssetBreakdown({ assetMetrics, currency, onMaximize, chartRef }) {
       <div className="flex gap-3">
         <input
           className="input flex-1"
-          placeholder="Search asset number..."
+          placeholder={t('analytics.asset.searchPlaceholder')}
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -642,13 +649,13 @@ function AssetBreakdown({ assetMetrics, currency, onMaximize, chartRef }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-gray-400 border-b border-gray-800">
-              <th className="pb-2 pr-4">Asset No</th>
-              <th className="pb-2 pr-4 text-right">Records</th>
-              <th className="pb-2 pr-4 text-right">Total Cost</th>
-              <th className="pb-2 pr-4 text-right">High Risk</th>
-              <th className="pb-2 pr-4 text-right">Failure/Mo</th>
-              <th className="pb-2 pr-4">Sites</th>
-              <th className="pb-2">Last Seen</th>
+              <th className="pb-2 pr-4">{t('analytics.asset.assetNo')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.asset.records')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.asset.totalCost')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.asset.highRisk')}</th>
+              <th className="pb-2 pr-4 text-right">{t('analytics.asset.failurePerMonth')}</th>
+              <th className="pb-2 pr-4">{t('analytics.asset.sites')}</th>
+              <th className="pb-2">{t('analytics.asset.lastSeen')}</th>
             </tr>
           </thead>
           <tbody>

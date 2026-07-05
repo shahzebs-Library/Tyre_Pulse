@@ -1,0 +1,98 @@
+{
+  "header": {
+    "title": "Corrective Actions",
+    "subtitleTemplate": "{total} total · {open} open · {overdue}",
+    "overdueCount": "{count} overdue",
+    "noneOverdue": "none overdue"
+  },
+  "kpi": {
+    "overdue": "Overdue",
+    "overdueSubNeedsAttention": "need attention",
+    "overdueSubOnTrack": "on track",
+    "avgResolution": "Avg Resolution",
+    "avgResolutionSub": "time to close"
+  },
+  "toolbar": {
+    "searchPlaceholder": "Search title, asset, site...",
+    "allSites": "All Sites",
+    "sortNewest": "Newest first",
+    "sortByPriority": "By priority",
+    "sortByDueDate": "By due date",
+    "sortMostOverdue": "Most overdue",
+    "analytics": "Analytics",
+    "excel": "Excel",
+    "pdf": "PDF",
+    "newAction": "New Action"
+  },
+  "filtersBar": {
+    "label": "Filters:",
+    "overdueOnly": "Overdue only",
+    "clearAll": "Clear all",
+    "results": "{count} results"
+  },
+  "analytics": {
+    "rootCauseDistribution": "Root Cause Distribution",
+    "withCause": "{count} with cause",
+    "resolutionPerformance": "Resolution Performance",
+    "avgTimeToClose": "Average time to close:",
+    "daysValue": "{count} days",
+    "overdueRate": "Overdue rate:"
+  },
+  "card": {
+    "hasPhoto": "Has photo",
+    "overdueDays": "{count}d overdue",
+    "due": "Due:",
+    "daysToClose": "to close",
+    "daysOpen": "open",
+    "edit": "Edit"
+  },
+  "table": {
+    "columns": {
+      "titleRootCause": "Title / Root Cause",
+      "priority": "Priority",
+      "site": "Site",
+      "assignedTo": "Assigned To",
+      "asset": "Asset",
+      "dueDate": "Due Date",
+      "age": "Age",
+      "status": "Status"
+    },
+    "actionsCount": "{count} actions"
+  },
+  "empty": {
+    "noMatch": "No actions match the current filters",
+    "noneYet": "No corrective actions yet",
+    "noMatchHint": "Try adjusting or clearing the filters",
+    "noneYetHint": "Create an action to track issues and resolutions"
+  },
+  "form": {
+    "editTitle": "Edit Corrective Action",
+    "newTitle": "New Corrective Action",
+    "titleLabel": "Title *",
+    "titlePlaceholder": "Describe the corrective action...",
+    "priority": "Priority",
+    "status": "Status",
+    "site": "Site",
+    "sitePlaceholder": "Enter or pick site",
+    "dueDate": "Due Date",
+    "assignedTo": "Assigned To",
+    "assetNo": "Asset No",
+    "tyreSerial": "Tyre Serial",
+    "tyreSerialPlaceholder": "Linked tyre serial number",
+    "rootCause": "Root Cause",
+    "selectRootCause": "Select root cause...",
+    "description": "Description",
+    "descriptionPlaceholder": "Detailed description of the issue and actions taken...",
+    "photo": "Photo / Evidence",
+    "changePhoto": "Change Photo",
+    "attachPhoto": "Attach Photo",
+    "removePhoto": "Remove",
+    "evidenceAlt": "Evidence",
+    "saving": "Saving...",
+    "save": "Save Action",
+    "cancel": "Cancel"
+  },
+  "errors": {
+    "titleRequired": "Title is required"
+  }
+}

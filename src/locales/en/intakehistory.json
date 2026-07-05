@@ -1,0 +1,160 @@
+{
+  "title": "Import Control",
+  "subtitle": "Imports, quality, mapping profiles and custom fields for {country}.",
+  "newImport": "New import",
+  "tabs": {
+    "imports": "Imports",
+    "quality": "Data Quality",
+    "profiles": "Mapping Profiles",
+    "custom": "Custom Fields",
+    "aliases": "Aliases",
+    "fx": "FX Rates"
+  },
+  "errors": {
+    "loadFailed": "Could not load data.",
+    "aliasSaveFailed": "Could not save alias.",
+    "fxSaveFailed": "Could not save FX rate.",
+    "fxApproveFailed": "Could not approve rate.",
+    "reverseFailed": "Reverse failed."
+  },
+  "confirm": {
+    "reverseImport": "Reverse import {module}/{country}? This deletes only the rows this batch created."
+  },
+  "imports": {
+    "columns": {
+      "module": "Module",
+      "country": "Country",
+      "status": "Status",
+      "rows": "Rows",
+      "errorsDups": "Errors/Dups",
+      "reconcile": "Reconcile",
+      "when": "When"
+    },
+    "empty": "No imports yet.",
+    "showReconcileDetail": "Show reconciliation detail",
+    "rowsAction": "Rows",
+    "reverseAction": "Reverse"
+  },
+  "reconcile": {
+    "heading": "Reconciliation",
+    "expected": "Expected",
+    "imported": "Imported",
+    "skipped": "Skipped",
+    "errors": "Errors",
+    "duplicates": "Duplicates",
+    "accountedFor": "Accounted for",
+    "variance": "Variance: {value}",
+    "balanced": "Balanced",
+    "review": "Review",
+    "allAccounted": "All source rows are accounted for.",
+    "importedOfExpected": "{imported}/{expected} imported"
+  },
+  "drill": {
+    "back": "← Back to imports",
+    "columns": {
+      "index": "#",
+      "validation": "Validation",
+      "dup": "Dup",
+      "action": "Action",
+      "committedId": "Committed id"
+    },
+    "empty": "No rows."
+  },
+  "quality": {
+    "stats": {
+      "imports": "Imports",
+      "pendingApproval": "Pending approval",
+      "errorRows": "Error rows",
+      "importedRows": "Imported rows",
+      "successRate": "Success rate",
+      "validationErrorRate": "Validation error rate",
+      "duplicateRate": "Duplicate rate",
+      "avgApprovalTime": "Avg approval time"
+    },
+    "byCountry": "By country",
+    "bySource": "By source system",
+    "byModule": "By module",
+    "rowQuality": {
+      "heading": "Row quality",
+      "warningRows": "Warning rows",
+      "duplicateRows": "Duplicate rows",
+      "conflictRows": "Conflict rows",
+      "skippedRows": "Skipped rows",
+      "failedRows": "Failed rows"
+    },
+    "topUploaders": {
+      "heading": "Top uploaders",
+      "empty": "No uploads yet."
+    },
+    "latestImports": {
+      "heading": "Latest imports",
+      "empty": "No imports yet.",
+      "rowsOfTotal": "{imported}/{total} rows"
+    }
+  },
+  "profiles": {
+    "columns": {
+      "name": "Name",
+      "module": "Module",
+      "source": "Source",
+      "country": "Country",
+      "version": "v",
+      "lastUsed": "Last used"
+    },
+    "empty": "No saved mapping profiles yet - save one from a mapping step."
+  },
+  "custom": {
+    "columns": {
+      "field": "Field",
+      "module": "Module",
+      "country": "Country",
+      "seen": "Seen",
+      "status": "Status"
+    },
+    "empty": "No custom (unmapped) fields catalogued yet."
+  },
+  "aliases": {
+    "intro": "Normalise inconsistent master-data spellings on import (e.g. \"Qiddiya-1\" → \"Qiddiya G1\", \"Bridge Stone\" → \"Bridgestone\"). Aliases rewrite values during import; they never create master records.",
+    "form": {
+      "entity": "Entity",
+      "rawValue": "Raw value (as in file)",
+      "canonicalValue": "Canonical value"
+    },
+    "addAlias": "Add alias",
+    "columns": {
+      "entity": "Entity",
+      "rawValue": "Raw value",
+      "canonical": "Canonical",
+      "country": "Country",
+      "added": "Added"
+    },
+    "empty": "No master-data aliases yet - add one to normalise inconsistent site/supplier/brand spellings on import."
+  },
+  "fx": {
+    "introPart1": "Approval-gated exchange rates. Imports convert a monetary value to the base currency",
+    "introOnly": "only",
+    "introPart2": "when an approved rate exists for its currency - never a silent or fabricated rate. Rate direction: 1 quote currency = rate × base currency.",
+    "form": {
+      "base": "Base (report)",
+      "quote": "Quote (source)",
+      "rate": "Rate",
+      "date": "Date",
+      "source": "Source"
+    },
+    "addDraft": "Add draft",
+    "columns": {
+      "pair": "Pair",
+      "rate": "Rate",
+      "date": "Date",
+      "source": "Source",
+      "status": "Status",
+      "action": "Action"
+    },
+    "status": {
+      "approved": "approved",
+      "draft": "draft"
+    },
+    "approve": "Approve",
+    "empty": "No FX rates yet - add a draft, then approve it to enable conversion."
+  }
+}

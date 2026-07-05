@@ -1,0 +1,110 @@
+{
+  "header": {
+    "title": "التقارير المجدولة",
+    "loading": "جارٍ التحميل...",
+    "summaryOne": "{count} جدول نشط · {total} الإجمالي",
+    "summaryOther": "{count} جداول نشطة · {total} الإجمالي",
+    "newSchedule": "جدول جديد"
+  },
+  "search": {
+    "placeholder": "ابحث في الجداول..."
+  },
+  "filters": {
+    "allFrequencies": "جميع التكرارات",
+    "allStatus": "جميع الحالات",
+    "active": "نشط",
+    "inactive": "غير نشط"
+  },
+  "frequencies": {
+    "daily": "يومي",
+    "weekly": "أسبوعي",
+    "monthly": "شهري"
+  },
+  "reportTypes": {
+    "executive": "تقرير تنفيذي",
+    "kpi": "بطاقة مؤشرات الأداء (KPI)",
+    "fleet": "تحليلات الأسطول",
+    "inspection": "ملخص الفحص",
+    "cost": "تحليل التكلفة"
+  },
+  "daysOfWeek": {
+    "0": "الأحد",
+    "1": "الاثنين",
+    "2": "الثلاثاء",
+    "3": "الأربعاء",
+    "4": "الخميس",
+    "5": "الجمعة",
+    "6": "السبت"
+  },
+  "months": {
+    "0": "يناير",
+    "1": "فبراير",
+    "2": "مارس",
+    "3": "أبريل",
+    "4": "مايو",
+    "5": "يونيو",
+    "6": "يوليو",
+    "7": "أغسطس",
+    "8": "سبتمبر",
+    "9": "أكتوبر",
+    "10": "نوفمبر",
+    "11": "ديسمبر"
+  },
+  "time": {
+    "am": "ص",
+    "pm": "م",
+    "today": "اليوم الساعة {time}",
+    "tomorrow": "غدًا الساعة {time}",
+    "dateAt": "{day} {date} {month} الساعة {time}"
+  },
+  "lastSent": {
+    "never": "لم يُرسل بعد",
+    "label": "آخر إرسال {date} الساعة {time}"
+  },
+  "card": {
+    "activate": "تفعيل",
+    "deactivate": "إيقاف",
+    "recipientOne": "{count} مستلم",
+    "recipientOther": "{count} مستلمين",
+    "active": "نشط",
+    "inactive": "غير نشط"
+  },
+  "empty": {
+    "noSchedulesTitle": "لا توجد جداول بعد",
+    "noSchedulesDesc": "أنشئ تقارير بريد إلكتروني تلقائية لإبقاء فريقك على اطلاع بذكاء الأسطول والإطارات بشكل دوري.",
+    "createFirst": "إنشاء أول جدول",
+    "noMatchTitle": "لا توجد جداول مطابقة",
+    "noMatchDesc": "حاول تعديل الفلاتر أو عبارة البحث.",
+    "clearFilters": "مسح الفلاتر"
+  },
+  "modal": {
+    "editTitle": "تعديل الجدول",
+    "newTitle": "جدول جديد",
+    "scheduleName": "اسم الجدول",
+    "namePlaceholder": "مثال: ملخص تنفيذي أسبوعي",
+    "reportType": "نوع التقرير",
+    "frequency": "التكرار",
+    "dayOfWeek": "يوم الأسبوع",
+    "dayOfMonth": "يوم الشهر",
+    "timeOfDay": "وقت اليوم",
+    "recipients": "المستلمون",
+    "recipientsHint": "بريد إلكتروني واحد في كل سطر",
+    "activeSchedule": "جدول نشط",
+    "activeScheduleDesc": "سيتم إرسال التقارير تلقائيًا عند التفعيل",
+    "cancel": "إلغاء",
+    "saving": "جارٍ الحفظ...",
+    "save": "حفظ الجدول"
+  },
+  "errors": {
+    "invalidEmails": "بريد إلكتروني غير صالح: {list}",
+    "recipientRequired": "يلزم مستلم واحد على الأقل."
+  },
+  "delete": {
+    "title": "حذف الجدول",
+    "subtitle": "لا يمكن التراجع عن هذا الإجراء",
+    "questionPrefix": "هل أنت متأكد أنك تريد حذف \"",
+    "questionSuffix": "\"؟ لن يتلقى المستلمون هذا التقرير بعد الآن.",
+    "cancel": "إلغاء",
+    "confirm": "حذف"
+  }
+}

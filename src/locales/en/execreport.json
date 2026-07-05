@@ -1,0 +1,207 @@
+{
+  "header": {
+    "title": "Executive Intelligence Report",
+    "subtitle": "{company} · Generated {date}",
+    "excel": "Excel",
+    "print": "Print",
+    "exportPdf": "Export PDF",
+    "emailReport": "Email Report"
+  },
+  "states": {
+    "loading": "Loading executive intelligence...",
+    "errorTitle": "Failed to load report data",
+    "emptyTitle": "No data for selected period",
+    "emptyDesc": "Try selecting a longer period or upload tyre records.",
+    "na": "N/A"
+  },
+  "kpi": {
+    "fleetAvgCpk": "Fleet Avg CPK",
+    "medianCpk": "Median CPK",
+    "fleetAvgTyreLife": "Fleet Avg Tyre Life",
+    "inspectionCompliance": "Inspection Compliance",
+    "pressureCompliance": "Pressure Compliance",
+    "failureRate": "Failure Rate",
+    "criticalRate": "Critical Rate",
+    "scrapRate": "Scrap Rate",
+    "replacementRate": "Replacement Rate",
+    "totalDowntimeHours": "Total Downtime Hours",
+    "fleetAvailability": "Fleet Availability",
+    "costTrend": "Cost Trend",
+    "targetLabel": "Target: {target}",
+    "improvingTarget": "Improving"
+  },
+  "trend": {
+    "improving": "Improving",
+    "stable": "Stable",
+    "worsening": "Worsening"
+  },
+  "priority": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "status": {
+    "open": "Open"
+  },
+  "owners": {
+    "fleetManager": "Fleet Manager",
+    "management": "Management",
+    "procurement": "Procurement",
+    "workshop": "Workshop"
+  },
+  "section1": {
+    "title": "Section 1 - Executive Summary",
+    "confidential": "CONFIDENTIAL",
+    "badge": "EXECUTIVE SUMMARY",
+    "p1": "During the {period}, {company} operated a fleet of {fleetSize} vehicles with {records} tyre records processed. Total tyre expenditure for the period reached {spend}, with the fleet delivering an average Cost Per Kilometre of {cpk}/km.",
+    "momImproved": "Month-over-month cost has improved by {pct}, indicating a positive cost trajectory.",
+    "momIncreased": "Month-over-month cost has increased by {pct}, indicating a worsening cost trajectory.",
+    "p2": "Operational risk remains a priority concern. A total of {criticalCount} critical-risk tyres were identified in the period, representing {criticalPct} of all records. Overall failure rate stands at {failureRate}. Inspection compliance reached {inspectionCompliance} against a target of 85%.",
+    "p2RootCause": "The primary root cause driving failures is {rootCause}, accounting for {pct} of all tyre events.",
+    "keyWinLabel": "Key Win",
+    "keyWinText": "{brand} delivered the best composite performance with CPK of {cpk}/km and failure rate of {rate}. Expanding its fleet share is recommended.",
+    "keyConcernLabel": "Key Concern",
+    "keyConcernText": "{site} records the highest failure rate at {rate}. An immediate site audit is required to identify and address root causes at this location.",
+    "p4": "Annualised tyre spend is projected at {projectedAnnual}.",
+    "p4Savings": "Closing the CPK gap between fleet average and best-in-fleet performance represents a cost optimisation opportunity of approximately {savings} annually.",
+    "p4Closing": "Average tyre life stands at {avgLife} km, with fleet availability at {availability}. Management attention is directed to the Recommendations and Action Plan sections for prioritised interventions.",
+    "keyHighlights": "Key Highlights",
+    "highlights": {
+      "fleetAvailability": "Fleet Availability",
+      "inspectionCompliance": "Inspection Compliance",
+      "failureRate": "Failure Rate",
+      "avgCostPerKm": "Avg Cost / km",
+      "criticalAlerts": "Critical Alerts"
+    }
+  },
+  "section2": {
+    "title": "Section 2 - KPI Dashboard",
+    "subtitle": "{count} tyre records · {period}",
+    "badge": "{count} Metrics"
+  },
+  "section3": {
+    "title": "Section 3 - Root Cause Analysis",
+    "subtitle": "Failure driver classification across all tyre events in period",
+    "badge": "{count} Categories",
+    "tooltipEvents": "{count} events ({pct}%)",
+    "noData": "No root cause data",
+    "columns": { "cause": "Cause", "count": "Count", "costImpact": "Cost Impact" }
+  },
+  "rootCauses": {
+    "inflation": { "label": "Inflation Issues", "prevention": "Implement weekly pressure checks, install TPMS sensors, calibrate gauges quarterly." },
+    "alignment": { "label": "Alignment / Suspension", "prevention": "Schedule alignment checks every 20,000 km, inspect after impact events." },
+    "driver": { "label": "Driver Behavior", "prevention": "Deploy telematics, run defensive driving training, review high-loss records monthly." },
+    "road": { "label": "Road / Load Conditions", "prevention": "Map high-risk routes, enforce load compliance, carry puncture repair kits." },
+    "maintenance": { "label": "Maintenance Quality", "prevention": "Audit workshop standards, enforce mandatory service intervals, verify torque spec." },
+    "manufacturing": { "label": "Manufacturing Defects", "prevention": "Raise warranty claims, audit supplier quality, inspect all incoming tyres." },
+    "other": { "label": "Other / Unclassified", "prevention": "Investigate individual records and assign to appropriate root cause category." }
+  },
+  "section4": {
+    "title": "Section 4 - Financial Impact",
+    "subtitle": "Cost analysis, budget tracking, and financial projections",
+    "stats": {
+      "totalPeriodSpend": "Total Period Spend",
+      "projectedAnnual": "Projected Annual",
+      "budgetVsActual": "Budget vs Actual",
+      "savingsOpportunity": "Savings Opportunity"
+    },
+    "subs": {
+      "atCurrentRate": "at current rate",
+      "budgetLabel": "Budget: {budget}",
+      "noBudgetData": "No budget data",
+      "ifCpkReachedBest": "if CPK reached fleet best"
+    },
+    "charts": {
+      "monthlySpendTrend": "Monthly Spend Trend",
+      "noTrendData": "No trend data",
+      "costBySite": "Cost by Site",
+      "noSiteData": "No site data",
+      "costByBrand": "Cost by Brand",
+      "noBrandData": "No brand data",
+      "topCostVehicles": "Top 5 Cost Vehicles",
+      "noVehicleCostData": "No vehicle cost data",
+      "vehicleTyresCount": "{site} · {count} tyres"
+    }
+  },
+  "section5": {
+    "title": "Section 5 - Risk Assessment",
+    "subtitle": "Fleet risk exposure, site matrix, and risk trend analysis",
+    "fleetRiskScore": "Fleet Risk Score",
+    "outOfMax": "out of 4.00 (max)",
+    "highRisk": "HIGH RISK",
+    "moderateRisk": "MODERATE RISK",
+    "acceptableRisk": "ACCEPTABLE RISK",
+    "riskTrendChartTitle": "6-Month Risk Score Trend",
+    "siteHeatMap": "Site Risk Heat Map",
+    "noRiskData": "No risk data",
+    "riskMatrixTitle": "Risk Matrix - Sites × Risk Level",
+    "columns": {
+      "site": "Site",
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "total": "Total",
+      "riskScore": "Risk Score",
+      "assetNo": "Asset No",
+      "risk": "Risk",
+      "brand": "Brand",
+      "position": "Position",
+      "findings": "Findings"
+    },
+    "top10Title": "Top 10 Highest-Risk Records"
+  },
+  "section6": {
+    "title": "Section 6 - Recommendations",
+    "subtitle": "Prioritised management recommendations based on fleet intelligence",
+    "badge": "{count} Actions"
+  },
+  "recommendations": {
+    "criticalRemoval": { "title": "Immediate Critical Tyre Removal Programme", "description": "{pct} of fleet tyres are classified as Critical risk. An immediate inspection and forced removal programme must be initiated across all sites to prevent blowouts and road incidents.", "impact": "Avoidance of estimated {amount} in accident liability and emergency replacement costs." },
+    "inspectionCompliance": { "title": "Enforce Inspection Compliance Across All Sites", "description": "Fleet inspection compliance is at {pct}, well below the 85% target. Missing inspections are a leading indicator of tyre failures. A mandatory compliance enforcement programme with site manager accountability must be implemented.", "impact": "Compliance improvement to 90%+ historically reduces failure rate by 20-30%, saving approximately {amount} annually." },
+    "procurementReview": { "title": "Procurement Review: Replace {brand} with Higher-Performing Alternatives", "description": "{brand} has the lowest composite performance score in the fleet. CPK of {cpk}/km and failure rate of {rate} significantly exceed fleet averages. Procurement should evaluate contract terms and initiate supplier transition.", "impact": "Switching lower-performing brands to {bestBrand}-equivalent performance could yield {amount} in annual savings." },
+    "tpmsDeployment": { "title": "Deploy Tyre Pressure Monitoring System (TPMS) Fleet-Wide", "description": "Inflation issues are the primary root cause, accounting for {pct} of all tyre events. A fleet-wide TPMS deployment combined with driver training will directly target the highest-impact failure driver.", "impact": "Estimated {amount} in avoidable tyre costs per period." },
+    "driverBehaviour": { "title": "Driver Behaviour Telematics Programme", "description": "Driver behaviour contributes to {pct} of tyre incidents. Deploying telematics with speed, harsh braking, and cornering monitoring - combined with driver-specific coaching - will reduce this cause category significantly.", "impact": "{amount} in potential cost avoidance per period." },
+    "scrapRateInvestigation": { "title": "Scrap Rate Root Cause Investigation", "description": "Scrap rate at {pct} exceeds acceptable limits. Each scrapped tyre represents full cost loss. A structured investigation into premature removal drivers - including improper inflation, fitment errors, and road damage - must be completed within 30 days.", "impact": "Reducing scrap rate by 50% saves approximately {amount} per period." },
+    "siteAudit": { "title": "Site Audit: {site} - Highest Failure Rate", "description": "{site} has the highest failure rate at {pct}. A structured site audit covering inspection compliance, tyre fitment practices, road conditions, and driver behaviour is required to understand and remediate site-specific failure drivers.", "impact": "Bringing {site} to fleet average failure rate could save {amount} per period." },
+    "cpkOptimisation": { "title": "Fleet CPK Optimisation Initiative", "description": "Fleet average CPK is {fleetCpk}/km versus best-in-fleet of {bestCpk}/km. Closing this gap through vendor rationalisation, position optimisation, and maintenance improvements represents significant financial opportunity.", "impact": "Estimated annual saving potential: {amount}." },
+    "downtimeMaintenance": { "title": "Priority Maintenance for High-Downtime Vehicles", "description": "{assets} are responsible for disproportionate downtime. A dedicated maintenance review and tyre specification upgrade for these vehicles will improve fleet availability and operational efficiency.", "impact": "Estimated {hours} hours of recovered vehicle availability per period." },
+    "tyreRotation": { "title": "Tyre Rotation Compliance Enforcement", "description": "Implementing a systematic tyre rotation schedule at 10,000 km intervals will equalise wear across positions, extend average tyre life, and reduce position-specific failure rates, particularly on steer axles.", "impact": "Projected tyre life extension of 10-15%, saving approximately {amount} per period." }
+  },
+  "actionPlan": {
+    "title": "Section 7 - Action Plan",
+    "subtitle": "30/60/90 day structured delivery plan",
+    "exportButton": "Export Action Plan",
+    "phases": {
+      "day30": "30-Day Actions - Immediate",
+      "day60": "60-Day Actions - Short Term",
+      "day90": "90-Day Actions - Strategic"
+    },
+    "daysSuffix": "{range} days",
+    "columns": { "action": "Action", "priority": "Priority", "timeline": "Timeline", "owner": "Owner", "estSaving": "Est. Saving", "status": "Status" },
+    "actions": {
+      "removeCritical": "Remove all {count} Critical-risk tyres from service immediately",
+      "auditSites": "Audit top 3 highest-failure sites with on-site inspection team",
+      "mandatePressureCheck": "Mandate 100% tyre pressure check before vehicle dispatch",
+      "issueCorrectiveNotices": "Issue corrective action notices to all sites below 70% inspection compliance",
+      "procurementReviewBrand": "Initiate procurement review for lowest-performing tyre brand(s)",
+      "deployTelematics": "Deploy telematics driver behaviour scoring across all high-failure vehicles",
+      "implementRotation": "Implement tyre rotation schedule at 10,000 km for all fleet vehicles",
+      "completeTpms": "Complete TPMS sensor installation across all fleet vehicles",
+      "monthlyReview": "Establish monthly executive tyre KPI review cadence",
+      "negotiateContracts": "Negotiate revised contracts with top-3 performing vendors based on CPK data"
+    },
+    "processLabel": "Process",
+    "footer": {
+      "actionsIdentified": "{count} actions identified",
+      "totalOpportunity": "Total opportunity: {amount} estimated annually",
+      "stakeholderGroups": "{count} stakeholder groups engaged",
+      "reportGenerated": "Report generated {date}"
+    }
+  },
+  "emailModal": {
+    "reportTitle": "Executive Fleet Report",
+    "periodFallback": "Quarter"
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "gate": {
+    "subtitle": "للمسؤولين فقط",
+    "message": "للمسؤولين فقط",
+    "description": "يمكن للمسؤول فقط مراجعة بيانات الرفع والموافقة عليها."
+  },
+  "header": {
+    "title": "اعتماد الرفع",
+    "batchSingular": "دفعة",
+    "batchPlural": "دفعات",
+    "subtitle": "{count} {noun} بانتظار المراجعة · {rowsCount} صف"
+  },
+  "tabs": {
+    "intake": "استيراد البيانات ({count})",
+    "pending": "القديم ({count})",
+    "history": "السجل"
+  },
+  "search": {
+    "placeholder": "ابحث عن الملف أو الرافع أو الدولة..."
+  },
+  "intake": {
+    "loadError": "تعذر تحميل موافقات استيراد البيانات.",
+    "empty": {
+      "title": "لا توجد استيرادات بانتظار الموافقة",
+      "description": "تظهر هنا الدفعات المُرسلة من مركز استيراد البيانات ليقوم المعتمد باعتمادها أو رفضها."
+    },
+    "moduleImport": "استيراد",
+    "rowsLabel": "صف",
+    "readySuffix": "جاهز",
+    "warnSuffix": "تحذير",
+    "errorSuffix": "خطأ",
+    "dupSuffix": "مكرر",
+    "buttons": {
+      "rows": "الصفوف",
+      "reject": "رفض",
+      "approveCommit": "اعتماد وترحيل",
+      "committing": "جارٍ الترحيل...",
+      "noReadyRows": "لا توجد صفوف جاهزة للترحيل",
+      "approveTitle": "اعتماد وترحيل إلى الجداول الفعلية"
+    },
+    "rejectConfirm": "رفض استيراد {module} ({count} صف)؟ لن يتم ترحيله إلى الجداول الفعلية.",
+    "rejectFailed": "فشل الرفض.",
+    "viewFailed": "تعذر تحميل الصفوف.",
+    "commitFailed": "فشل ترحيل استيراد {module}: {message}",
+    "unknownError": "خطأ غير معروف"
+  },
+  "legacy": {
+    "empty": {
+      "pendingTitle": "لا يوجد ما ينتظر الموافقة",
+      "pendingDescription": "ستظهر هنا عمليات الرفع المقدَّمة من غير المسؤولين لمراجعتها.",
+      "historyTitle": "لا يوجد سجل بعد",
+      "historyDescription": "ستُدرج هنا عمليات الرفع المعتمدة والمرفوضة."
+    },
+    "untitledUpload": "رفع بدون عنوان",
+    "unknownUploader": "غير معروف",
+    "rowsLabel": "صف",
+    "rejectedNote": "مرفوض: {note}",
+    "buttons": {
+      "viewEdit": "عرض / تعديل",
+      "view": "عرض",
+      "reject": "رفض",
+      "approve": "اعتماد",
+      "approving": "جارٍ الاعتماد...",
+      "deleteTitle": "حذف دفعة الرفع هذه نهائيًا"
+    },
+    "status": {
+      "approved": "معتمد",
+      "rejected": "مرفوض"
+    },
+    "rejectPrompt": "رفض \"{file}\" ({count} صف)؟ سبب اختياري:",
+    "deleteConfirm": "حذف دفعة الرفع \"{file}\" ({count} صف)؟ يؤدي هذا إلى إزالة البيانات المرحلية نهائيًا ولا يمكن التراجع عنه.",
+    "insertFailed": "فشل الإدراج لـ \"{file}\" (تم ترحيل {inserted} من {total} صف): {message}"
+  },
+  "types": {
+    "tyres": "سجلات الإطارات",
+    "stock": "المخزون"
+  },
+  "intakeModal": {
+    "titleSuffix": "استيراد",
+    "rowsLabel": "صف",
+    "subtitle": "بيانات مرحلية للقراءة فقط. الاعتماد يرحّل الصفوف الجاهزة فقط؛ ويتم تجاوز الأخطاء والتكرارات من جانب الخادم.",
+    "searchPlaceholder": "تصفية الصفوف المرحلية...",
+    "noRows": "لا توجد صفوف مرحلية لهذه الدفعة.",
+    "columns": {
+      "index": "#",
+      "status": "الحالة"
+    },
+    "showingFirst": "عرض أول 300 من {count} صف."
+  },
+  "editModal": {
+    "defaultFileName": "رفع",
+    "rowsLabel": "صف",
+    "editableSubtitle": "عدّل أي خلية، أو صحّح عمودًا كاملاً، أو احذف صفوفًا - ثم احفظ.",
+    "readOnlySubtitle": "للقراءة فقط (تمت مراجعته بالفعل).",
+    "searchPlaceholder": "تصفية الصفوف...",
+    "fixWholeColumn": "تصحيح العمود بالكامل",
+    "columnPlaceholder": "العمود...",
+    "setValuePlaceholder": "تعيين قيمة",
+    "applyToAll": "تطبيق على الكل",
+    "removeRowTitle": "إزالة الصف",
+    "noRows": "لا توجد صفوف.",
+    "showingMatching": "عرض {shown} من {total} صف مطابق. استخدم عامل التصفية لإيجاد صفوف محددة؛ “تطبيق على الكل” يؤثر على كل صف في الدفعة.",
+    "unsavedCorrections": "تصحيحات غير محفوظة",
+    "noChanges": "لا توجد تغييرات",
+    "close": "إغلاق",
+    "saveCorrections": "حفظ التصحيحات",
+    "saving": "جارٍ الحفظ..."
+  }
+}

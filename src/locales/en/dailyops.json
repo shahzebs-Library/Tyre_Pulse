@@ -1,0 +1,104 @@
+{
+  "header": {
+    "title": "Daily Ops",
+    "today": "Today",
+    "pdf": "PDF",
+    "printBriefing": "Print Briefing"
+  },
+  "loading": "Loading daily operations data...",
+  "na": "N/A",
+  "unknown": "Unknown",
+  "noSerial": "No Serial",
+  "priorityQueue": {
+    "title": "Priority Action Queue",
+    "criticalChip": "{count} Critical",
+    "highChip": "{count} High",
+    "allClear": "No priority actions for this date. All clear.",
+    "moreItems": "+{count} more items",
+    "view": "View",
+    "types": {
+      "criticalTyreFitted": "Critical Tyre Fitted",
+      "overdueWorkOrder": "Overdue Work Order",
+      "noInspection": "No Inspection (14d)"
+    },
+    "descriptions": {
+      "criticalFitted": "Critical risk tyre fitted today on {asset}",
+      "overdueWorkOrder": "Work order {wo} overdue by {days}d",
+      "noInspection": "Vehicle {asset} has no inspection in last 14 days"
+    },
+    "details": {
+      "criticalFitted": "Serial: {serial} | Position: {position} | Site: {site}",
+      "overdueWorkOrder": "Status: {status} | Priority: {priority} | Site: {site}",
+      "noInspection": "Inspection overdue - last activity >14 days ago"
+    }
+  },
+  "stats": {
+    "title": "Today's Activity Summary",
+    "tyreChanges": "Tyre Changes",
+    "inspections": "Inspections",
+    "workOrders": "Work Orders",
+    "alertsRaised": "Alerts Raised"
+  },
+  "activityFeed": {
+    "title": "Today's Activity Feed",
+    "empty": "No tyre activity recorded for this date.",
+    "eventTypes": {
+      "newFitment": "New Fitment",
+      "removal": "Removal",
+      "inspection": "Inspection",
+      "alert": "Alert",
+      "workOrder": "Work Order"
+    },
+    "inspectorLabel": "Inspector:",
+    "tyresLabel": "Tyres:",
+    "flaggedSuffix": " | {count} flagged",
+    "alertRaised": "Alert raised",
+    "woLabel": "WO:",
+    "priorityLabel": "Priority:"
+  },
+  "fleetStatus": {
+    "title": "Fleet Status Snapshot",
+    "activeToday": "Active Today",
+    "criticalRisk": "Critical Risk",
+    "dormant30d": "Dormant 30d",
+    "chartDormant30d": "Dormant (30d)"
+  },
+  "siteActivity": {
+    "title": "Site Activity Comparison",
+    "empty": "No site activity for this date.",
+    "chartLabel": "Tyre Events"
+  },
+  "costTracker": {
+    "title": "Daily Cost Tracker",
+    "todaysSpend": "Today's Spend",
+    "dailyBudget": "Daily Budget",
+    "overBudget": "Over budget by {currency} {amount}",
+    "noBudgetHint": "Set annual budget in KPI Targets to enable budget tracking.",
+    "chartSpentBudget": "Spent (Budget)",
+    "chartOverBudget": "Over Budget",
+    "chartSpent": "Spent",
+    "chartRemaining": "Remaining"
+  },
+  "weekSummary": {
+    "title": "This Week Summary",
+    "tyreChanges": "Tyre Changes",
+    "cost": "Cost ({currency})",
+    "inspections": "Inspections",
+    "criticalIncidents": "Critical Incidents",
+    "vsLastWeek": "{sign}{prefix}{absVal} ({pctSign}{pct}%) vs last week",
+    "sameAsLastWeek": "Same as last week"
+  },
+  "upcoming": {
+    "title": "Upcoming This Week",
+    "next7Days": "(next 7 days)",
+    "empty": "No upcoming work orders in the next 7 days.",
+    "columns": {
+      "date": "Date",
+      "asset": "Asset",
+      "woNo": "WO No.",
+      "status": "Status",
+      "priority": "Priority",
+      "site": "Site"
+    }
+  }
+}

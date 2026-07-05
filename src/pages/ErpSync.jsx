@@ -5,6 +5,7 @@ import {
   PlugZap, CheckCircle2, FileSpreadsheet,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import { useLanguage } from '../contexts/LanguageContext'
 
 // ── Honest state ──────────────────────────────────────────────────────────────
 // No ERP connector is provisioned for this project yet. Rather than fabricate
@@ -28,6 +29,7 @@ const SETUP_STEPS = [
 ]
 
 function TargetCard({ t }) {
+  const { t: translate } = useLanguage()
   return (
     <div
       className="rounded-xl p-4 flex items-center gap-3"
@@ -44,13 +46,14 @@ function TargetCard({ t }) {
         <p className="text-[11px] text-gray-600">{t.api}</p>
       </div>
       <span className="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-800/60 text-gray-400 border border-gray-700/40 flex-shrink-0">
-        Not configured
+        {translate('erpsync.notConfigured')}
       </span>
     </div>
   )
 }
 
 export default function ErpSync() {
+  const { t } = useLanguage()
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -59,10 +62,10 @@ export default function ErpSync() {
       className="space-y-6"
     >
       <PageHeader
-        title="ERP Sync Hub"
-        subtitle="Automated ERP data pipelines into TyrePulse."
+        title={t('erpsync.pageHeader.title')}
+        subtitle={t('erpsync.pageHeader.subtitle')}
         icon={Database}
-        badge="Not configured"
+        badge={t('erpsync.pageHeader.badge')}
       />
 
       {/* Honest not-connected banner */}
@@ -75,12 +78,10 @@ export default function ErpSync() {
           <Link2Off size={22} className="text-amber-400" />
         </div>
         <div className="flex-1">
-          <h2 className="text-base font-semibold text-gray-100">No ERP connector is configured</h2>
+          <h2 className="text-base font-semibold text-gray-100">{t('erpsync.banner.heading')}</h2>
           <p className="text-sm text-gray-400 mt-1 leading-relaxed max-w-2xl">
-            There is no live ERP connection for this workspace, so there is no sync
-            status or history to show. Until a connector is provisioned, use the
-            <span className="text-gray-200 font-medium"> Data Intake Center</span> to
-            import ERP exports (Excel/CSV) through the same validated staging pipeline.
+            {t('erpsync.banner.bodyPre')}
+            <span className="text-gray-200 font-medium"> {t('erpsync.banner.bodyHighlight')}</span> {t('erpsync.banner.bodySuffix')}
           </p>
         </div>
         <Link
@@ -88,27 +89,27 @@ export default function ErpSync() {
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all flex-shrink-0"
           style={{ background: 'linear-gradient(135deg,rgba(22,163,74,0.35),rgba(22,163,74,0.18))', border: '1px solid rgba(22,163,74,0.35)' }}
         >
-          <Upload size={15} /> Open Data Intake Center <ArrowRight size={14} />
+          <Upload size={15} /> {t('erpsync.banner.cta')} <ArrowRight size={14} />
         </Link>
       </div>
 
       {/* Integration targets */}
       <section>
         <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-          <PlugZap size={14} className="text-green-400" /> Supported integration targets
+          <PlugZap size={14} className="text-green-400" /> {t('erpsync.targets.sectionTitle')}
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {INTEGRATION_TARGETS.map(t => <TargetCard key={t.id} t={t} />)}
         </div>
         <p className="text-[11px] text-gray-600 mt-2 flex items-center gap-1.5">
-          <Info size={11} /> These are systems the connector is designed to integrate with. None is connected yet.
+          <Info size={11} /> {t('erpsync.targets.footerNote')}
         </p>
       </section>
 
       {/* How setup works */}
       <section>
         <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-          <Shield size={14} className="text-green-400" /> How ERP sync will work
+          <Shield size={14} className="text-green-400" /> {t('erpsync.setup.sectionTitle')}
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {SETUP_STEPS.map(s => (
@@ -117,9 +118,9 @@ export default function ErpSync() {
                 <div className="w-6 h-6 rounded-full bg-green-900/40 border border-green-700/40 text-green-300 text-xs font-bold flex items-center justify-center">
                   {s.n}
                 </div>
-                <p className="text-sm font-semibold text-gray-200">{s.title}</p>
+                <p className="text-sm font-semibold text-gray-200">{t(`erpsync.setupSteps.${s.n}.title`)}</p>
               </div>
-              <p className="text-xs text-gray-500 leading-relaxed">{s.body}</p>
+              <p className="text-xs text-gray-500 leading-relaxed">{t(`erpsync.setupSteps.${s.n}.body`)}</p>
             </div>
           ))}
         </div>
@@ -132,22 +133,22 @@ export default function ErpSync() {
       >
         <div className="flex items-center gap-2 mb-3">
           <CheckCircle2 size={16} className="text-green-400" />
-          <h2 className="text-sm font-semibold text-gray-200">Available today: file-based ingestion</h2>
+          <h2 className="text-sm font-semibold text-gray-200">{t('erpsync.today.sectionTitle')}</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Link to="/data-intake" className="flex items-center gap-3 rounded-xl p-4 hover:bg-white/[0.03] transition-colors" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
             <FileSpreadsheet size={20} className="text-green-400 flex-shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-gray-200">Import ERP exports</p>
-              <p className="text-xs text-gray-500">Upload Excel/CSV from any ERP, map, validate and commit.</p>
+              <p className="text-sm font-semibold text-gray-200">{t('erpsync.today.importCard.title')}</p>
+              <p className="text-xs text-gray-500">{t('erpsync.today.importCard.description')}</p>
             </div>
             <ArrowRight size={15} className="text-gray-600 ml-auto flex-shrink-0" />
           </Link>
           <Link to="/data-intake/history" className="flex items-center gap-3 rounded-xl p-4 hover:bg-white/[0.03] transition-colors" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
             <Database size={20} className="text-blue-400 flex-shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-gray-200">Review import history</p>
-              <p className="text-xs text-gray-500">Every batch, mapping profile and validation outcome is auditable.</p>
+              <p className="text-sm font-semibold text-gray-200">{t('erpsync.today.historyCard.title')}</p>
+              <p className="text-xs text-gray-500">{t('erpsync.today.historyCard.description')}</p>
             </div>
             <ArrowRight size={15} className="text-gray-600 ml-auto flex-shrink-0" />
           </Link>

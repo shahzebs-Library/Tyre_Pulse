@@ -1,0 +1,126 @@
+{
+  "title": "KPI Command Center",
+  "subtitle": "Real-time fleet performance intelligence - {count} tyre records",
+  "ariaLabels": {
+    "period": "period"
+  },
+  "actions": {
+    "pdf": "PDF",
+    "excel": "Excel"
+  },
+  "filters": {
+    "to": "to",
+    "allSites": "All Sites",
+    "allCountries": "All Countries"
+  },
+  "periods": {
+    "1d": "Today",
+    "7d": "7D",
+    "30d": "30D",
+    "90d": "90D",
+    "6m": "6M",
+    "1y": "1Y",
+    "custom": "Custom"
+  },
+  "benchmarks": {
+    "cpk": { "label": "Cost Per Km (CPK)", "description": "Cost spent per km on tyres", "short": "CPK" },
+    "tyre_life": { "label": "Avg Tyre Life", "description": "Average km per tyre before removal", "short": "Tyre Life" },
+    "failure_rate": { "label": "Failure Rate", "description": "High + Critical risk removals", "short": "Failure Rate" },
+    "scrap_rate": { "label": "Scrap Rate", "description": "Scrapped vs total tyres removed", "short": "Scrap Rate" },
+    "pressure_compliance": { "label": "Pressure Compliance", "description": "Inspections within ±10% spec", "short": "Pressure" },
+    "inspection_compliance": { "label": "Inspection Compliance", "description": "On-time inspection completion", "short": "Inspection" }
+  },
+  "ratings": {
+    "worldClass": "World Class",
+    "good": "Good",
+    "average": "Average",
+    "poor": "Poor",
+    "critical": "Critical"
+  },
+  "bands": {
+    "worldClass": "World Class",
+    "good": "Good",
+    "avg": "Avg",
+    "average": "Average",
+    "poor": "Poor",
+    "vsGood": "vs Good"
+  },
+  "gauge": {
+    "strong": "STRONG",
+    "fair": "FAIR",
+    "weak": "WEAK",
+    "critical": "CRITICAL"
+  },
+  "panel": {
+    "overallScore": "Overall Fleet Score",
+    "overallScoreDesc": "Avg of all 6 KPIs vs benchmarks"
+  },
+  "sections": {
+    "kpiScorecard": "KPI Scorecard",
+    "fleetVsBenchmark": "Fleet vs Benchmark",
+    "fleetVsBenchmarkDesc": "Static industry reference targets. All KPIs normalized 0-100. Higher = better.",
+    "periodComparison": "Period Comparison",
+    "periodComparisonDesc": "Current vs previous period (normalized scores)",
+    "trendMatrix": "KPI Trend Matrix",
+    "clickCellHint": "Click cell for drill-down",
+    "siteComparison": "Site KPI Comparison",
+    "colorLegendHint": "Color = benchmark rating",
+    "alerts": "KPI Intelligence Alerts",
+    "targetVsActual": "Target vs Actual",
+    "topVehicles": "Top 5 Vehicles by KPI Score",
+    "bottomVehicles": "Bottom 5 Vehicles - Needs Attention"
+  },
+  "columns": {
+    "kpi": "KPI",
+    "site": "Site",
+    "score": "Score"
+  },
+  "radar": {
+    "fleetCurrent": "Fleet (Current)",
+    "referenceAverage": "Reference Average"
+  },
+  "periodCompare": {
+    "current": "Current Period",
+    "previous": "Previous Period"
+  },
+  "charts": {
+    "scoreAxis": "Score (0-100)"
+  },
+  "card": {
+    "vsPrevPeriod": "{pct}% vs prev period",
+    "target": "Target: {value}",
+    "clickDrillDown": "Click to drill down"
+  },
+  "drilldown": {
+    "title": "{label} - Monthly Trend"
+  },
+  "alerts": {
+    "allWithinRange": "All KPIs within acceptable range",
+    "type": {
+      "achievement": "Achievement",
+      "warning": "Warning",
+      "deteriorating": "Deteriorating"
+    },
+    "msgAchievement": "reached World Class performance",
+    "msgWarning": "is below Average benchmark ({value})",
+    "msgDeteriorating": "deteriorating - {pct}% over last 3 months"
+  },
+  "targetActual": {
+    "target": "Target:",
+    "actual": "Actual:",
+    "gap": "Gap:",
+    "status": {
+      "exceeded": "Exceeded",
+      "onTrack": "On Track",
+      "behind": "Behind"
+    }
+  },
+  "vehicles": {
+    "statsBest": "{cpk} CPK · {life}k km life · {count} records",
+    "statsWorst": "{cpk} CPK · {fail}% failures · {count} records"
+  },
+  "empty": {
+    "title": "No tyre records found for the selected period.",
+    "subtitle": "Adjust the period or filters to see KPI data."
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "title": "تقارير مخصصة",
+  "subtitle": "إنشاء وتصفية وتصدير تقارير مخصصة",
+  "steps": {
+    "type": "اختيار النوع",
+    "config": "الإعداد",
+    "preview": "معاينة وتصدير"
+  },
+  "reportTypes": {
+    "vehicleHistory": { "label": "سجل المركبة", "desc": "جميع تغييرات الإطارات لكل مركبة، مجمعة حسب الأصل" },
+    "costAnalysis": { "label": "تحليل التكلفة", "desc": "الإنفاق مجمعًا حسب الموقع والعلامة التجارية" },
+    "riskSummary": { "label": "ملخص المخاطر", "desc": "السجلات ذات الخطورة العالية والحرجة" },
+    "inspectionReport": { "label": "تقرير الفحص", "desc": "جميع عمليات الفحص مع الملاحظات" },
+    "tyreReplacementLog": { "label": "سجل استبدال الإطارات", "desc": "قائمة الاستبدال الزمنية" }
+  },
+  "source": "المصدر: {table}",
+  "config": {
+    "savedRestored": "تمت استعادة الإعداد المحفوظ",
+    "clearSaved": "مسح الإعداد المحفوظ",
+    "filtersTitle": "الفلاتر · {reportType}",
+    "dateRange": "النطاق الزمني",
+    "to": "إلى",
+    "site": "الموقع",
+    "siteFilterPlaceholder": "تصفية حسب الموقع...",
+    "country": "الدولة",
+    "allCountries": "جميع الدول",
+    "assetNumber": "رقم الأصل",
+    "assetNoPlaceholder": "رقم الأصل...",
+    "brand": "العلامة التجارية",
+    "brandFilterPlaceholder": "تصفية حسب العلامة التجارية...",
+    "riskLevel": "مستوى الخطورة",
+    "inspectionType": "نوع الفحص",
+    "allTypes": "جميع الأنواع",
+    "columnsTitle": "الأعمدة",
+    "back": "رجوع",
+    "runReport": "تشغيل التقرير"
+  },
+  "dateShortcuts": {
+    "thisMonth": "هذا الشهر",
+    "last3Months": "آخر 3 أشهر",
+    "thisYear": "هذا العام",
+    "custom": "مخصص"
+  },
+  "columns": {
+    "issueDate": "تاريخ الإصدار",
+    "assetNo": "رقم الأصل",
+    "brand": "العلامة التجارية",
+    "description": "الوصف",
+    "serialNo": "الرقم التسلسلي",
+    "site": "الموقع",
+    "country": "الدولة",
+    "cost": "التكلفة",
+    "riskLevel": "مستوى الخطورة",
+    "remarks": "ملاحظات",
+    "count": "العدد",
+    "totalCost": "التكلفة الإجمالية",
+    "avgCost": "متوسط التكلفة",
+    "inspectionDate": "تاريخ الفحص",
+    "inspectionType": "نوع الفحص",
+    "findings": "النتائج",
+    "inspector": "المفتش",
+    "status": "الحالة",
+    "qty": "الكمية",
+    "brandsUsed": "العلامات التجارية المستخدمة",
+    "lastDate": "آخر تاريخ",
+    "highRiskCount": "عدد الخطورة العالية"
+  },
+  "preview": {
+    "backToFilters": "العودة إلى الفلاتر",
+    "exportExcel": "تصدير Excel",
+    "exportPdf": "تصدير PDF",
+    "print": "طباعة",
+    "emailReport": "إرسال التقرير بالبريد",
+    "totalRecords": "إجمالي السجلات: {count}",
+    "showingRange": "عرض {from}-{to} من {total} سجل",
+    "noRecordsForFilters": "لا توجد سجلات مطابقة للفلاتر المحددة.",
+    "prev": "السابق",
+    "next": "التالي",
+    "pageOf": "صفحة {page} من {total}"
+  }
+}

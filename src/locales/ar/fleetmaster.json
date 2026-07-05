@@ -1,0 +1,152 @@
+{
+  "title": "السجل الرئيسي للأسطول",
+  "subtitle": "{count} مركبة مسجلة",
+  "tabs": {
+    "records": "السجلات",
+    "bulkUpload": "رفع جماعي"
+  },
+  "actions": {
+    "importDataIntake": "استيراد عبر مركز إدخال البيانات",
+    "addVehicle": "إضافة مركبة",
+    "exportExcel": "تصدير إكسل",
+    "template": "القالب"
+  },
+  "summary": {
+    "totalVehicles": "إجمالي المركبات",
+    "active": "نشطة",
+    "missingSpecs": "مواصفات ناقصة",
+    "noPolicySet": "بدون سياسة محددة"
+  },
+  "filters": {
+    "searchPlaceholder": "ابحث بالأصل أو رقم الأسطول أو الصانع أو الطراز...",
+    "allSites": "جميع المواقع",
+    "allStatuses": "جميع الحالات"
+  },
+  "bulkBar": {
+    "selected": "{count} محدد",
+    "clear": "مسح",
+    "delete": "حذف {count}"
+  },
+  "columns": {
+    "assetNo": "رقم الأصل",
+    "fleetNo": "رقم الأسطول",
+    "makeModel": "الصانع / الطراز",
+    "type": "النوع",
+    "year": "السنة",
+    "site": "الموقع",
+    "operator": "المشغّل",
+    "status": "الحالة",
+    "policy": "السياسة"
+  },
+  "table": {
+    "selectAllOnPage": "تحديد الكل في هذه الصفحة",
+    "noVehicles": "لا توجد مركبات",
+    "missing": "ناقص",
+    "noPolicy": "بدون سياسة",
+    "edit": "تعديل",
+    "delete": "حذف"
+  },
+  "pagination": {
+    "showing": "عرض {from}-{to} من {total}",
+    "page": "صفحة {page} من {totalPages}"
+  },
+  "upload": {
+    "heading": "رفع جماعي عبر إكسل",
+    "description": "ارفع ملف .xlsx يحتوي على بيانات مركبات الأسطول. يتم تحديث السجلات الموجودة وإنشاء الجديدة بناءً على رقم الأصل. حمّل القالب أولًا للتأكد من صحة رؤوس الأعمدة.",
+    "intakeCenterPrefix": "جديد: استخدم",
+    "intakeCenterLink": "مركز إدخال البيانات",
+    "intakeCenterSuffix": "الخاضع للرقابة لاستيراد بيانات موثقة ومدققة عبر عدة دول مع كشف التكرار والتراجع.",
+    "dropHere": "أفلت ملف .xlsx هنا",
+    "orBrowse": "أو انقر للتصفح",
+    "expectedColumns": "الأعمدة المتوقعة:",
+    "rowsToUpsert": "{count} صف سيتم تحديثه/إضافته",
+    "previewTitle": "معاينة (أول 5 صفوف)",
+    "upsertVehicles": "تحديث/إضافة {count} مركبة",
+    "cancel": "إلغاء",
+    "uploading": "جارٍ تحديث سجلات الأسطول...",
+    "complete": "اكتمل الرفع",
+    "recordsUpserted": "سجلات تم تحديثها/إضافتها",
+    "failed": "فشلت",
+    "uploadAnother": "رفع ملف آخر",
+    "errEmpty": "الملف فارغ أو لا يحتوي على صفوف بيانات",
+    "errParseFailed": "فشل تحليل الملف: {message}",
+    "previewCols": {
+      "asset_no": "رقم الأصل",
+      "fleet_number": "رقم الأسطول",
+      "make": "الصانع",
+      "model": "الطراز",
+      "vehicle_type": "نوع المركبة",
+      "year": "السنة",
+      "site": "الموقع",
+      "status": "الحالة"
+    }
+  },
+  "form": {
+    "editTitle": "تعديل المركبة",
+    "addTitle": "إضافة مركبة",
+    "sectionIdentity": "بيانات المركبة",
+    "assetNo": "رقم الأصل",
+    "fleetNumber": "رقم الأسطول",
+    "make": "الصانع",
+    "model": "الطراز",
+    "vehicleType": "نوع المركبة",
+    "year": "السنة",
+    "status": "الحالة",
+    "sectionAssignment": "التخصيص",
+    "department": "القسم",
+    "operatorName": "اسم المشغّل",
+    "site": "الموقع",
+    "country": "الدولة",
+    "sectionPolicy": "سياسة الإطارات",
+    "expectedKmPerTyre": "الكيلومترات المتوقعة لكل إطار",
+    "minDaysBetweenChanges": "الحد الأدنى للأيام بين التغييرات",
+    "maxTyresPerDay": "الحد الأقصى للإطارات يوميًا",
+    "tyreSize": "مقاس الإطار",
+    "preferredBrand": "العلامة التجارية المفضلة",
+    "monthlyBudget": "الميزانية الشهرية للإطارات ({currency})",
+    "notes": "ملاحظات",
+    "placeholders": {
+      "assetNo": "مثال: TK-001",
+      "fleetNumber": "مثال: FL-2024-001",
+      "make": "مثال: تويوتا",
+      "model": "مثال: لاند كروزر",
+      "vehicleType": "مثال: SUV، شاحنة",
+      "year": "مثال: 2022",
+      "department": "مثال: العمليات",
+      "operatorName": "السائق / المشغّل",
+      "site": "اختر أو اكتب...",
+      "expectedKm": "مثال: 50000",
+      "minDays": "مثال: 30",
+      "maxTyres": "مثال: 2",
+      "tyreSize": "مثال: 265/70R17",
+      "brand": "مثال: ميشلان",
+      "budget": "مثال: 5000",
+      "notes": "أي ملاحظات إضافية..."
+    },
+    "customFieldsTitle": "حقول إضافية مستوردة (للقراءة فقط)",
+    "save": "حفظ المركبة",
+    "saving": "جارٍ الحفظ...",
+    "cancel": "إلغاء",
+    "required": "رقم الأصل مطلوب"
+  },
+  "delete": {
+    "title": "حذف المركبة",
+    "question": "حذف المركبة {assetNo}؟",
+    "warning": "سيؤدي هذا إلى إزالة سجل الأسطول بشكل دائم. لن تتأثر سجلات تاريخ الإطارات لهذا الأصل.",
+    "confirm": "حذف المركبة",
+    "deleting": "جارٍ الحذف...",
+    "cancel": "إلغاء",
+    "errNoPermission": "تعذّر حذف المركبة - قد لا تملك الصلاحية اللازمة، أو أنها أُزيلت بالفعل.",
+    "errFailed": "فشل الحذف. يرجى المحاولة مرة أخرى."
+  },
+  "bulkDelete": {
+    "title": "حذف المركبات",
+    "question": "حذف {count} مركبة محددة؟",
+    "warning": "سيؤدي هذا إلى إزالة سجلات الأسطول بشكل دائم. لن تتأثر سجلات تاريخ الإطارات لهذه الأصول.",
+    "confirm": "حذف {count}",
+    "deleting": "جارٍ الحذف...",
+    "cancel": "إلغاء",
+    "errNoPermission": "لم يتم حذف أي صفوف — قد لا تملك الصلاحية اللازمة (المسؤول فقط) أو أنها أُزيلت بالفعل.",
+    "errFailed": "فشل الحذف الجماعي. يرجى المحاولة مرة أخرى."
+  }
+}

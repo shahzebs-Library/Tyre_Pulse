@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import * as imports from '../lib/api/imports'
 import PageHeader from '../components/ui/PageHeader'
 import {
@@ -18,6 +19,7 @@ const BATCH = 500
 
 export default function UploadApprovals() {
   const { profile } = useAuth()
+  const { t } = useLanguage()
   const isAdmin = profile?.role === 'Admin'
 
   const [pending, setPending]   = useState([])
@@ -40,7 +42,7 @@ export default function UploadApprovals() {
       setIntake(rows ?? [])
     } catch (e) {
       console.error('[UploadApprovals] loadIntake failed:', e)
-      setError(e?.message || 'Could not load Data Intake approvals.')
+      setError(e?.message || t('uploadapprovals.intake.loadError'))
     } finally {
       setIntakeLoading(false)
     }
@@ -89,7 +91,7 @@ export default function UploadApprovals() {
       const { error: insErr } = await supabase.from(p.target_table).insert(chunk)
       if (insErr) {
         console.error(`[UploadApprovals] approve insert into ${p.target_table} failed:`, insErr)
-        setError(`Insert failed for "${p.file_name}" (${inserted} of ${rows.length} rows committed): ${insErr.message}`)
+        setError(t('uploadapprovals.legacy.insertFailed', { file: p.file_name, inserted, total: rows.length, message: insErr.message }))
         setActing(null); return
       }
       inserted += chunk.length
@@ -104,7 +106,7 @@ export default function UploadApprovals() {
 
   async function reject(p) {
     if (acting) return
-    const note = window.prompt(`Reject "${p.file_name}" (${p.row_count} rows)? Optional reason:`, '')
+    const note = window.prompt(t('uploadapprovals.legacy.rejectPrompt', { file: p.file_name, count: p.row_count }), '')
     if (note === null) return
     setActing(p.id); setError('')
     const { error: err } = await supabase.from('pending_uploads')
@@ -119,7 +121,7 @@ export default function UploadApprovals() {
   // delete for Admins only. Used to clear stale / abandoned / duplicate batches.
   async function remove(p) {
     if (acting) return
-    if (!window.confirm(`Delete the upload batch "${p.file_name}" (${(p.row_count || 0).toLocaleString()} rows)? This removes the staged data permanently and cannot be undone.`)) return
+    if (!window.confirm(t('uploadapprovals.legacy.deleteConfirm', { file: p.file_name, count: (p.row_count || 0).toLocaleString() }))) return
     setActing(p.id); setError('')
     const { error: err } = await supabase.from('pending_uploads').delete().eq('id', p.id)
     setActing(null)
@@ -140,16 +142,16 @@ export default function UploadApprovals() {
       await loadIntake()
     } catch (e) {
       console.error('[UploadApprovals] approveIntake failed:', e)
-      setError(`Commit failed for the ${b.module} import: ${e?.message || 'unknown error'}`)
+      setError(t('uploadapprovals.intake.commitFailed', { module: b.module, message: e?.message || t('uploadapprovals.intake.unknownError') }))
     } finally { setActing(null) }
   }
 
   async function rejectIntake(b) {
     if (acting) return
-    if (!window.confirm(`Reject the ${b.module} import (${(b.total_rows || 0).toLocaleString()} rows)? It will not be committed to live tables.`)) return
+    if (!window.confirm(t('uploadapprovals.intake.rejectConfirm', { module: b.module, count: (b.total_rows || 0).toLocaleString() }))) return
     setActing(b.id); setError('')
     try { await imports.rejectBatch(b.id); await loadIntake() }
-    catch (e) { console.error('[UploadApprovals] rejectIntake failed:', e); setError(e?.message || 'Reject failed.') }
+    catch (e) { console.error('[UploadApprovals] rejectIntake failed:', e); setError(e?.message || t('uploadapprovals.intake.rejectFailed')) }
     finally { setActing(null) }
   }
 
@@ -157,7 +159,7 @@ export default function UploadApprovals() {
     if (acting) return
     setActing(b.id); setError('')
     try { const rows = await imports.getBatchRows(b.id, 500); setIntakePreview({ batch: b, rows: rows ?? [] }) }
-    catch (e) { console.error('[UploadApprovals] viewIntake failed:', e); setError(e?.message || 'Could not load rows.') }
+    catch (e) { console.error('[UploadApprovals] viewIntake failed:', e); setError(e?.message || t('uploadapprovals.intake.viewFailed')) }
     finally { setActing(null) }
   }
 
@@ -175,11 +177,11 @@ export default function UploadApprovals() {
   if (!isAdmin) {
     return (
       <div className="space-y-5">
-        <PageHeader title="Upload Approvals" subtitle="Admin only" icon={ClipboardCheck} />
+        <PageHeader title={t('uploadapprovals.header.title')} subtitle={t('uploadapprovals.gate.subtitle')} icon={ClipboardCheck} />
         <div className="card py-16 flex flex-col items-center gap-3">
           <AlertTriangle size={40} className="text-gray-700" />
-          <p className="text-gray-400 font-medium">Administrators only</p>
-          <p className="text-gray-600 text-sm">Only an admin can review and approve uploaded data.</p>
+          <p className="text-gray-400 font-medium">{t('uploadapprovals.gate.message')}</p>
+          <p className="text-gray-600 text-sm">{t('uploadapprovals.gate.description')}</p>
         </div>
       </div>
     )
@@ -190,8 +192,12 @@ export default function UploadApprovals() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Upload Approvals"
-        subtitle={`${pending.length} batch${pending.length === 1 ? '' : 'es'} awaiting review · ${pendingRows.toLocaleString()} rows`}
+        title={t('uploadapprovals.header.title')}
+        subtitle={t('uploadapprovals.header.subtitle', {
+          count: pending.length,
+          noun: t(`uploadapprovals.header.batch${pending.length === 1 ? 'Singular' : 'Plural'}`),
+          rowsCount: pendingRows.toLocaleString(),
+        })}
         icon={ClipboardCheck}
       />
 
@@ -202,7 +208,7 @@ export default function UploadApprovals() {
       {/* Tabs + search */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex gap-1 bg-gray-800/40 rounded-lg p-1">
-          {[['intake', `Data Intake (${intake.length})`], ['pending', `Legacy (${pending.length})`], ['history', 'History']].map(([k, label]) => (
+          {[['intake', t('uploadapprovals.tabs.intake', { count: intake.length })], ['pending', t('uploadapprovals.tabs.pending', { count: pending.length })], ['history', t('uploadapprovals.tabs.history')]].map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${tab === k ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-white'}`}>
               {label}
@@ -213,7 +219,7 @@ export default function UploadApprovals() {
           <Search size={15} className="text-gray-500" />
           <input
             className="bg-transparent text-sm text-white placeholder-gray-500 outline-none flex-1"
-            placeholder="Search file, uploader, country..."
+            placeholder={t('uploadapprovals.search.placeholder')}
             value={search} onChange={e => setSearch(e.target.value)}
           />
         </div>
@@ -225,8 +231,8 @@ export default function UploadApprovals() {
         ) : intake.length === 0 ? (
           <div className="card py-16 flex flex-col items-center gap-3">
             <Database size={40} className="text-gray-700" />
-            <p className="text-gray-400 font-medium">No imports awaiting approval</p>
-            <p className="text-gray-600 text-sm">Batches submitted from the Data Intake Center appear here for an approver to commit or reject.</p>
+            <p className="text-gray-400 font-medium">{t('uploadapprovals.intake.empty.title')}</p>
+            <p className="text-gray-600 text-sm">{t('uploadapprovals.intake.empty.description')}</p>
           </div>
         ) : (
           <div className="grid gap-3">
@@ -240,13 +246,13 @@ export default function UploadApprovals() {
                         <Database size={18} style={{ color: '#7c3aed' }} />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-white font-semibold capitalize">{b.module} import{b.sheet ? ` · ${b.sheet}` : ''}</p>
+                        <p className="text-white font-semibold capitalize">{b.module} {t('uploadapprovals.intake.moduleImport')}{b.sheet ? ` · ${b.sheet}` : ''}</p>
                         <div className="flex items-center gap-3 flex-wrap mt-1 text-xs text-gray-500">
-                          <span className="flex items-center gap-1"><Package size={11} />{(b.total_rows || 0).toLocaleString()} rows</span>
-                          <span className="text-green-400">{(b.ready_rows || 0).toLocaleString()} ready</span>
-                          {b.warning_rows > 0 && <span className="text-yellow-400">{b.warning_rows} warn</span>}
-                          {b.error_rows > 0 && <span className="text-red-400">{b.error_rows} error</span>}
-                          {b.duplicate_rows > 0 && <span className="text-gray-400">{b.duplicate_rows} dup</span>}
+                          <span className="flex items-center gap-1"><Package size={11} />{(b.total_rows || 0).toLocaleString()} {t('uploadapprovals.intake.rowsLabel')}</span>
+                          <span className="text-green-400">{(b.ready_rows || 0).toLocaleString()} {t('uploadapprovals.intake.readySuffix')}</span>
+                          {b.warning_rows > 0 && <span className="text-yellow-400">{b.warning_rows} {t('uploadapprovals.intake.warnSuffix')}</span>}
+                          {b.error_rows > 0 && <span className="text-red-400">{b.error_rows} {t('uploadapprovals.intake.errorSuffix')}</span>}
+                          {b.duplicate_rows > 0 && <span className="text-gray-400">{b.duplicate_rows} {t('uploadapprovals.intake.dupSuffix')}</span>}
                           <span className="flex items-center gap-1"><Globe size={11} />{b.country || '-'}</span>
                           <span className="flex items-center gap-1"><Clock size={11} />{new Date(b.created_at).toLocaleString()}</span>
                         </div>
@@ -254,16 +260,16 @@ export default function UploadApprovals() {
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <button onClick={() => viewIntake(b)} disabled={busy} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
-                        <Eye size={14} /> Rows
+                        <Eye size={14} /> {t('uploadapprovals.intake.buttons.rows')}
                       </button>
                       <button onClick={() => rejectIntake(b)} disabled={busy}
                         className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-red-700/50 text-red-400 hover:bg-red-900/20 disabled:opacity-50">
-                        <XCircle size={14} /> Reject
+                        <XCircle size={14} /> {t('uploadapprovals.intake.buttons.reject')}
                       </button>
                       <button onClick={() => approveIntake(b)} disabled={busy || (b.ready_rows || 0) === 0}
-                        title={(b.ready_rows || 0) === 0 ? 'No ready rows to commit' : 'Approve and commit to live tables'}
+                        title={(b.ready_rows || 0) === 0 ? t('uploadapprovals.intake.buttons.noReadyRows') : t('uploadapprovals.intake.buttons.approveTitle')}
                         className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
-                        {busy ? <Loader size={14} className="animate-spin" /> : <CheckCircle size={14} />} {busy ? 'Committing...' : 'Approve & Commit'}
+                        {busy ? <Loader size={14} className="animate-spin" /> : <CheckCircle size={14} />} {busy ? t('uploadapprovals.intake.buttons.committing') : t('uploadapprovals.intake.buttons.approveCommit')}
                       </button>
                     </div>
                   </div>
@@ -277,8 +283,8 @@ export default function UploadApprovals() {
       ) : filtered.length === 0 ? (
         <div className="card py-16 flex flex-col items-center gap-3">
           <CheckCircle size={40} className="text-gray-700" />
-          <p className="text-gray-400 font-medium">{tab === 'pending' ? 'Nothing awaiting approval' : 'No history yet'}</p>
-          <p className="text-gray-600 text-sm">{tab === 'pending' ? 'Uploads submitted by non-admins will appear here for review.' : 'Approved and rejected uploads will be listed here.'}</p>
+          <p className="text-gray-400 font-medium">{tab === 'pending' ? t('uploadapprovals.legacy.empty.pendingTitle') : t('uploadapprovals.legacy.empty.historyTitle')}</p>
+          <p className="text-gray-600 text-sm">{tab === 'pending' ? t('uploadapprovals.legacy.empty.pendingDescription') : t('uploadapprovals.legacy.empty.historyDescription')}</p>
         </div>
       ) : (
         <div className="grid gap-3">
@@ -294,40 +300,40 @@ export default function UploadApprovals() {
                       <Icon size={18} style={{ color: meta.color }} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-white font-semibold truncate">{p.file_name || 'Untitled upload'}</p>
+                      <p className="text-white font-semibold truncate">{p.file_name || t('uploadapprovals.legacy.untitledUpload')}</p>
                       <div className="flex items-center gap-3 flex-wrap mt-1 text-xs text-gray-500">
-                        <span className="flex items-center gap-1"><Package size={11} />{(p.row_count || 0).toLocaleString()} rows · {meta.label}</span>
-                        <span className="flex items-center gap-1"><User size={11} />{p.uploader_name || 'Unknown'}</span>
+                        <span className="flex items-center gap-1"><Package size={11} />{(p.row_count || 0).toLocaleString()} {t('uploadapprovals.legacy.rowsLabel')} · {t(`uploadapprovals.types.${TYPE_META[p.upload_type] ? p.upload_type : 'tyres'}`)}</span>
+                        <span className="flex items-center gap-1"><User size={11} />{p.uploader_name || t('uploadapprovals.legacy.unknownUploader')}</span>
                         <span className="flex items-center gap-1"><Globe size={11} />{p.country || '-'}</span>
                         <span className="flex items-center gap-1"><Clock size={11} />{new Date(p.created_at).toLocaleString()}</span>
                       </div>
                       {p.status === 'rejected' && p.review_note && (
-                        <p className="text-xs text-red-400 mt-1.5">Rejected: {p.review_note}</p>
+                        <p className="text-xs text-red-400 mt-1.5">{t('uploadapprovals.legacy.rejectedNote', { note: p.review_note })}</p>
                       )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button onClick={() => setPreviewing(p)} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
-                      <Pencil size={14} /> {p.status === 'pending' ? 'View / Edit' : 'View'}
+                      <Pencil size={14} /> {p.status === 'pending' ? t('uploadapprovals.legacy.buttons.viewEdit') : t('uploadapprovals.legacy.buttons.view')}
                     </button>
                     {p.status === 'pending' ? (
                       <>
                         <button onClick={() => reject(p)} disabled={busy}
                           className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-red-700/50 text-red-400 hover:bg-red-900/20 disabled:opacity-50">
-                          <XCircle size={14} /> Reject
+                          <XCircle size={14} /> {t('uploadapprovals.legacy.buttons.reject')}
                         </button>
                         <button onClick={() => approve(p)} disabled={busy}
                           className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-50">
-                          <CheckCircle size={14} /> {busy ? 'Approving...' : 'Approve'}
+                          <CheckCircle size={14} /> {busy ? t('uploadapprovals.legacy.buttons.approving') : t('uploadapprovals.legacy.buttons.approve')}
                         </button>
                       </>
                     ) : (
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded ${p.status === 'approved' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
-                        {p.status === 'approved' ? 'Approved' : 'Rejected'}
+                        {p.status === 'approved' ? t('uploadapprovals.legacy.status.approved') : t('uploadapprovals.legacy.status.rejected')}
                       </span>
                     )}
-                    <button onClick={() => remove(p)} disabled={busy} title="Delete this upload batch permanently"
+                    <button onClick={() => remove(p)} disabled={busy} title={t('uploadapprovals.legacy.buttons.deleteTitle')}
                       className="flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-red-400 hover:border-red-700/50 disabled:opacity-50">
                       <Trash2 size={14} />
                     </button>
@@ -358,6 +364,7 @@ export default function UploadApprovals() {
 }
 
 function IntakeRowsModal({ data, onClose }) {
+  const { t } = useLanguage()
   const { batch, rows } = data
   const [search, setSearch] = useState('')
   const cols = useMemo(() => {
@@ -376,25 +383,25 @@ function IntakeRowsModal({ data, onClose }) {
       <div className="bg-[var(--panel,#0f1623)] border border-gray-700 rounded-xl max-w-6xl w-full max-h-[88vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
           <div>
-            <h3 className="text-white font-semibold capitalize">{batch.module} import · {(batch.total_rows || 0).toLocaleString()} rows</h3>
-            <p className="text-xs text-gray-500">Read-only staged data. Approve to commit only the ready rows; errors and duplicates are skipped server-side.</p>
+            <h3 className="text-white font-semibold capitalize">{batch.module} {t('uploadapprovals.intakeModal.titleSuffix')} · {(batch.total_rows || 0).toLocaleString()} {t('uploadapprovals.intakeModal.rowsLabel')}</h3>
+            <p className="text-xs text-gray-500">{t('uploadapprovals.intakeModal.subtitle')}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white"><XCircle size={20} /></button>
         </div>
         <div className="px-5 py-3 border-b border-gray-800 flex items-center gap-2 bg-gray-800/40">
           <Search size={14} className="text-gray-500" />
           <input className="bg-transparent text-sm text-white placeholder-gray-500 outline-none flex-1"
-            placeholder="Filter staged rows..." value={search} onChange={e => setSearch(e.target.value)} />
+            placeholder={t('uploadapprovals.intakeModal.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="overflow-auto p-4 flex-1">
           {rows.length === 0 ? (
-            <p className="text-gray-500 text-sm">No staged rows found for this batch.</p>
+            <p className="text-gray-500 text-sm">{t('uploadapprovals.intakeModal.noRows')}</p>
           ) : (
             <table className="w-full text-xs">
               <thead>
                 <tr>
-                  <th className="text-left px-2 py-1.5 text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800">#</th>
-                  <th className="text-left px-2 py-1.5 text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800">Status</th>
+                  <th className="text-left px-2 py-1.5 text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800">{t('uploadapprovals.intakeModal.columns.index')}</th>
+                  <th className="text-left px-2 py-1.5 text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800">{t('uploadapprovals.intakeModal.columns.status')}</th>
                   {cols.map(c => <th key={c} className="text-left px-2 py-1.5 text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-800 whitespace-nowrap">{c}</th>)}
                 </tr>
               </thead>
@@ -415,7 +422,7 @@ function IntakeRowsModal({ data, onClose }) {
               </tbody>
             </table>
           )}
-          {rows.length > 300 && <p className="text-xs text-gray-500 mt-3">Showing first 300 of {rows.length.toLocaleString()} rows.</p>}
+          {rows.length > 300 && <p className="text-xs text-gray-500 mt-3">{t('uploadapprovals.intakeModal.showingFirst', { count: rows.length.toLocaleString() })}</p>}
         </div>
       </div>
     </div>
@@ -426,6 +433,7 @@ const PREFERRED_COLS = ['issue_date', 'asset_no', 'brand', 'serial_no', 'site', 
 const MAX_VISIBLE = 300
 
 function EditBatchModal({ batch, editable, onClose, onSaved }) {
+  const { t } = useLanguage()
   const [rows, setRows]     = useState(() => (Array.isArray(batch.rows) ? batch.rows.map(r => ({ ...r })) : []))
   const [search, setSearch] = useState('')
   const [bulkCol, setBulkCol] = useState('')
@@ -475,8 +483,8 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
       <div className="bg-[var(--panel,#0f1623)] border border-gray-700 rounded-xl max-w-6xl w-full max-h-[88vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
           <div>
-            <h3 className="text-white font-semibold">{batch.file_name || 'Upload'} · {rows.length.toLocaleString()} rows</h3>
-            <p className="text-xs text-gray-500">{editable ? 'Edit any cell, fix a whole column, or remove rows - then Save.' : 'Read-only (already reviewed).'}</p>
+            <h3 className="text-white font-semibold">{batch.file_name || t('uploadapprovals.editModal.defaultFileName')} · {rows.length.toLocaleString()} {t('uploadapprovals.editModal.rowsLabel')}</h3>
+            <p className="text-xs text-gray-500">{editable ? t('uploadapprovals.editModal.editableSubtitle') : t('uploadapprovals.editModal.readOnlySubtitle')}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white"><XCircle size={20} /></button>
         </div>
@@ -486,19 +494,19 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
             <div className="flex items-center gap-2 bg-gray-800/40 rounded-lg px-3 py-1.5 flex-1 min-w-[180px]">
               <Search size={14} className="text-gray-500" />
               <input className="bg-transparent text-sm text-white placeholder-gray-500 outline-none flex-1"
-                placeholder="Filter rows..." value={search} onChange={e => setSearch(e.target.value)} />
+                placeholder={t('uploadapprovals.editModal.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div className="flex items-end gap-2">
               <div>
-                <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">Fix whole column</label>
+                <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">{t('uploadapprovals.editModal.fixWholeColumn')}</label>
                 <select className="input text-sm py-1.5" value={bulkCol} onChange={e => setBulkCol(e.target.value)}>
-                  <option value="">Column...</option>
+                  <option value="">{t('uploadapprovals.editModal.columnPlaceholder')}</option>
                   {cols.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <input className="input text-sm py-1.5 w-40" placeholder="Set value" value={bulkVal} onChange={e => setBulkVal(e.target.value)} />
+              <input className="input text-sm py-1.5 w-40" placeholder={t('uploadapprovals.editModal.setValuePlaceholder')} value={bulkVal} onChange={e => setBulkVal(e.target.value)} />
               <button onClick={applyBulk} disabled={!bulkCol} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-40">
-                <Wand2 size={14} /> Apply to all
+                <Wand2 size={14} /> {t('uploadapprovals.editModal.applyToAll')}
               </button>
             </div>
           </div>
@@ -508,7 +516,7 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
 
         <div className="overflow-auto p-4 flex-1">
           {rows.length === 0 ? (
-            <p className="text-gray-500 text-sm">No rows.</p>
+            <p className="text-gray-500 text-sm">{t('uploadapprovals.editModal.noRows')}</p>
           ) : (
             <table className="w-full text-xs">
               <thead>
@@ -535,7 +543,7 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
                     ))}
                     {editable && (
                       <td className="px-2 py-1">
-                        <button onClick={() => deleteRow(idx)} className="text-gray-600 hover:text-red-400" title="Remove row">
+                        <button onClick={() => deleteRow(idx)} className="text-gray-600 hover:text-red-400" title={t('uploadapprovals.editModal.removeRowTitle')}>
                           <Trash2 size={13} />
                         </button>
                       </td>
@@ -546,17 +554,17 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
             </table>
           )}
           {visible.total > MAX_VISIBLE && (
-            <p className="text-xs text-gray-500 mt-3">Showing {MAX_VISIBLE} of {visible.total.toLocaleString()} matching rows. Use the filter to find specific rows; “Apply to all” affects every row in the batch.</p>
+            <p className="text-xs text-gray-500 mt-3">{t('uploadapprovals.editModal.showingMatching', { shown: MAX_VISIBLE, total: visible.total.toLocaleString() })}</p>
           )}
         </div>
 
         {editable && (
           <div className="px-5 py-3 border-t border-gray-800 flex items-center justify-between">
-            <span className="text-xs text-gray-500">{dirty ? 'Unsaved corrections' : 'No changes'}</span>
+            <span className="text-xs text-gray-500">{dirty ? t('uploadapprovals.editModal.unsavedCorrections') : t('uploadapprovals.editModal.noChanges')}</span>
             <div className="flex gap-2">
-              <button onClick={onClose} className="btn-secondary text-sm px-3 py-1.5">Close</button>
+              <button onClick={onClose} className="btn-secondary text-sm px-3 py-1.5">{t('uploadapprovals.editModal.close')}</button>
               <button onClick={save} disabled={saving || !dirty} className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5 disabled:opacity-40">
-                <Save size={14} /> {saving ? 'Saving...' : 'Save corrections'}
+                <Save size={14} /> {saving ? t('uploadapprovals.editModal.saving') : t('uploadapprovals.editModal.saveCorrections')}
               </button>
             </div>
           </div>

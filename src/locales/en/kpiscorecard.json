@@ -1,0 +1,99 @@
+{
+  "title": "KPI Scorecard",
+  "subtitle": "Monthly targets vs actuals with regression forecasting",
+  "errorSubtitle": "Could not load data",
+  "states": {
+    "loading": "Loading KPI data...",
+    "errorTitle": "Could not load KPI data",
+    "errorDefault": "Failed to load KPI data.",
+    "retry": "Retry"
+  },
+  "actions": {
+    "yoyCompare": "YoY Compare",
+    "excel": "Excel",
+    "pdf": "PDF",
+    "editTargets": "Edit Targets",
+    "cancel": "Cancel",
+    "saveTargets": "Save Targets",
+    "saving": "Saving..."
+  },
+  "filters": {
+    "year": "Year:",
+    "allCountries": "All"
+  },
+  "tabs": {
+    "overview": "Overview",
+    "sites": "By Site"
+  },
+  "alerts": {
+    "banner": "{count} KPI metric{plural} exceeding target by >20% this month",
+    "vsTarget": "vs target",
+    "overSuffix": "over"
+  },
+  "targetEditor": {
+    "title": "Configure KPI Targets"
+  },
+  "kpiLabels": {
+    "max_monthly_cost": "Max Monthly Cost",
+    "max_high_risk_pct": "Max High-Risk %",
+    "min_records_month": "Min Records / Month",
+    "max_overdue_actions": "Max Overdue Actions",
+    "max_avg_cost_tyre": "Max Avg Cost / Tyre"
+  },
+  "cards": {
+    "monthlyCost": "Monthly Cost",
+    "highRiskPct": "High Risk %",
+    "recordCount": "Record Count",
+    "overdueActions": "Overdue Actions",
+    "avgCostPerTyre": "Avg Cost / Tyre",
+    "target": "Target:",
+    "pass": "PASS",
+    "fail": "FAIL",
+    "vsPrevMonth": "vs prev month",
+    "vsLastYear": "vs LY",
+    "forecastNextMonth": "Forecast (next month)",
+    "rSquaredSlope": "R² = {r2} · slope {sign}{slope}/mo"
+  },
+  "charts": {
+    "monthlyCostVsTarget": "Monthly Cost vs Target + Forecast",
+    "lyOverlaySuffix": " · LY overlay",
+    "highRiskVsTarget": "High-Risk % vs Target",
+    "series": {
+      "actualCost": "Actual Cost",
+      "targetCeiling": "Target Ceiling",
+      "forecast": "Forecast",
+      "trendLine": "Trend Line",
+      "lyCost": "LY Cost",
+      "highRiskPct": "High Risk %",
+      "targetMaxPct": "Target Max %"
+    }
+  },
+  "table": {
+    "monthlyActualsTitle": "Monthly Actuals vs Targets",
+    "columns": {
+      "month": "Month",
+      "records": "Records",
+      "totalCost": "Total Cost",
+      "lyCost": "LY Cost",
+      "vsTarget": "vs Target",
+      "highRiskPct": "High Risk %",
+      "overdue": "Overdue"
+    },
+    "onTarget": "On target"
+  },
+  "sites": {
+    "title": "Site Performance - {month} (sorted by total cost)",
+    "siteCount": "{count} site{plural}",
+    "unknownSite": "Unknown",
+    "noData": "No site data for {month}.",
+    "columns": {
+      "site": "Site",
+      "monthlyCost": "Monthly Cost",
+      "highRiskPct": "High Risk %",
+      "records": "Records",
+      "overdueActions": "Overdue Actions",
+      "avgCostPerTyre": "Avg Cost / Tyre"
+    },
+    "total": "Total"
+  }
+}

@@ -10,6 +10,7 @@ import { applyCountry } from '../lib/countryFilter'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { formatDate } from '../lib/formatters'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
@@ -41,6 +42,7 @@ const STATUS_TINT = {
 }
 
 export default function ReportCenter() {
+  const { t } = useLanguage()
   const { profile } = useAuth()
   const { appSettings, activeCountry, activeCurrency } = useSettings()
   const { branding, orgName } = useTenant()
@@ -69,11 +71,11 @@ export default function ReportCenter() {
       if (error) throw error
       setHistory(data ?? [])
     } catch (e) {
-      setHistError(e.message || 'Could not load delivery history.')
+      setHistError(e.message || t('reportcenter.errors.historyLoadFailed'))
     } finally {
       setHistLoading(false)
     }
-  }, [])
+  }, [t])
   useEffect(() => { loadHistory() }, [loadHistory])
 
   // ── Shared data fetch for the executive reports ────────────────────────────
@@ -165,7 +167,7 @@ export default function ReportCenter() {
         }
       } else if (id === 'excel') {
         const rows = await fetchTyreRows()
-        if (!rows.length) throw new Error('No tyre records in the selected range.')
+        if (!rows.length) throw new Error(t('reportcenter.errors.noRecordsInRange'))
         await exportToExcel(
           rows.map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre || 0 })),
           ['issue_date', 'asset_no', 'brand', 'site', 'category', 'risk_level', 'cost_per_tyre'],
@@ -173,17 +175,17 @@ export default function ReportCenter() {
           `${reportCompany.replace(/\s+/g, '_')}_Tyres_${stamp}`, 'Tyre Records', { company: reportCompany })
       } else if (id === 'pdf') {
         const rows = await fetchTyreRows()
-        if (!rows.length) throw new Error('No tyre records in the selected range.')
+        if (!rows.length) throw new Error(t('reportcenter.errors.noRecordsInRange'))
         await exportToPdf(
           rows.slice(0, 200).map(t => ({ ...t, cost_per_tyre: t.cost_per_tyre || 0 })),
           [{ key: 'issue_date', header: 'Date', width: 24 }, { key: 'asset_no', header: 'Asset No', width: 28 }, { key: 'brand', header: 'Brand', width: 24 }, { key: 'site', header: 'Site', width: 30 }, { key: 'category', header: 'Category', width: 32 }, { key: 'risk_level', header: 'Risk', width: 20 }, { key: 'cost_per_tyre', header: `Cost (${activeCurrency})`, width: 24 }],
           `${reportCompany} — Tyre Records · ${formatDate(now, activeCountry)}`,
           `${reportCompany.replace(/\s+/g, '_')}_Tyres_${stamp}`, 'landscape', reportCompany)
       }
-      setToast({ text: 'Report generated and downloaded.', type: 'ok' })
+      setToast({ text: t('reportcenter.toast.success'), type: 'ok' })
     } catch (e) {
       console.error(`[ReportCenter] ${id} failed:`, e)
-      setToast({ text: `Could not generate report: ${e?.message || 'unexpected error'}`, type: 'err' })
+      setToast({ text: t('reportcenter.toast.errorPrefix', { message: e?.message || t('reportcenter.toast.unexpectedError') }), type: 'err' })
     } finally {
       setGenerating(null)
     }
@@ -191,7 +193,7 @@ export default function ReportCenter() {
 
   return (
     <div className="space-y-6 animate-in">
-      <PageHeader title="Report Center" subtitle="Generate branded fleet reports on demand and review scheduled deliveries." icon={FileText} />
+      <PageHeader title={t('reportcenter.title')} subtitle={t('reportcenter.subtitle')} icon={FileText} />
 
       {/* Toast */}
       <AnimatePresence>
@@ -216,48 +218,48 @@ export default function ReportCenter() {
       <div className="card flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div className="flex items-center gap-3">
           {branding?.logo_url
-            ? <img src={branding.logo_url} alt="logo" className="h-10 w-10 rounded object-contain bg-white/5" onError={(e) => { e.currentTarget.style.display = 'none' }} />
+            ? <img src={branding.logo_url} alt={t('reportcenter.branding.logoAlt')} className="h-10 w-10 rounded object-contain bg-white/5" onError={(e) => { e.currentTarget.style.display = 'none' }} />
             : <div className="h-10 w-10 rounded flex items-center justify-center" style={{ background: branding?.primary_color || '#16A34A' }}><Palette size={16} className="text-white/90" /></div>}
           <div>
             <p className="text-sm font-semibold text-gray-100">{reportCompany}</p>
-            <p className="text-xs text-gray-500">Active branding{orgName ? ` · ${orgName}` : ''} · reports use this identity.</p>
+            <p className="text-xs text-gray-500">{t('reportcenter.branding.activeBranding')}{orgName ? ` · ${orgName}` : ''} · {t('reportcenter.branding.reportsIdentity')}</p>
           </div>
         </div>
         <Link to="/users" className="btn-secondary text-xs gap-1.5 self-start sm:self-auto">
-          <Palette size={13} /> Edit branding <ArrowRight size={12} />
+          <Palette size={13} /> {t('reportcenter.branding.editBranding')} <ArrowRight size={12} />
         </Link>
       </div>
 
       {/* Filters */}
       <div className="card flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-xs text-gray-400 mb-1">From</label>
+          <label className="block text-xs text-gray-400 mb-1">{t('reportcenter.filters.from')}</label>
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="input text-sm" />
         </div>
         <div>
-          <label className="block text-xs text-gray-400 mb-1">To</label>
+          <label className="block text-xs text-gray-400 mb-1">{t('reportcenter.filters.to')}</label>
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input text-sm" />
         </div>
         <div className="text-xs text-gray-500 pb-2">
-          Scope: <span className="text-gray-300 font-medium">{activeCountry === 'All' ? 'All countries' : activeCountry}</span> · currency <span className="text-gray-300 font-medium">{activeCurrency}</span>
+          {t('reportcenter.filters.scope')} <span className="text-gray-300 font-medium">{activeCountry === 'All' ? t('reportcenter.filters.allCountries') : activeCountry}</span> · {t('reportcenter.filters.currency')} <span className="text-gray-300 font-medium">{activeCurrency}</span>
         </div>
       </div>
 
       {/* Report cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {REPORTS.map(({ id, label, desc, icon: Icon, tint, bg }) => (
+        {REPORTS.map(({ id, icon: Icon, tint, bg }) => (
           <div key={id} className="card flex flex-col gap-3">
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-lg" style={{ background: bg }}><Icon size={18} className={tint} /></div>
-              <h3 className="text-sm font-semibold text-gray-100">{label}</h3>
+              <h3 className="text-sm font-semibold text-gray-100">{t(`reportcenter.reports.${id}.label`)}</h3>
             </div>
-            <p className="text-xs text-gray-500 flex-1 leading-relaxed">{desc}</p>
+            <p className="text-xs text-gray-500 flex-1 leading-relaxed">{t(`reportcenter.reports.${id}.desc`)}</p>
             <button
               onClick={() => generate(id)}
               disabled={!!generating}
               className="btn-primary text-xs gap-1.5 w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {generating === id ? <><Loader2 size={13} className="animate-spin" /> Building…</> : <><Download size={13} /> Generate</>}
+              {generating === id ? <><Loader2 size={13} className="animate-spin" /> {t('reportcenter.generate.building')}</> : <><Download size={13} /> {t('reportcenter.generate.generate')}</>}
             </button>
           </div>
         ))}
@@ -268,12 +270,12 @@ export default function ReportCenter() {
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg" style={{ background: 'rgba(59,130,246,0.12)' }}><CalendarClock size={18} className="text-blue-400" /></div>
           <div>
-            <p className="text-sm font-semibold text-gray-100">Automated delivery</p>
-            <p className="text-xs text-gray-500">Schedule recurring email delivery of these reports.</p>
+            <p className="text-sm font-semibold text-gray-100">{t('reportcenter.automatedDelivery.title')}</p>
+            <p className="text-xs text-gray-500">{t('reportcenter.automatedDelivery.desc')}</p>
           </div>
         </div>
         <Link to="/scheduled-reports" className="btn-secondary text-xs gap-1.5 self-start sm:self-auto">
-          <CalendarClock size={13} /> Manage schedules <ArrowRight size={12} />
+          <CalendarClock size={13} /> {t('reportcenter.automatedDelivery.manageSchedules')} <ArrowRight size={12} />
         </Link>
       </div>
 
@@ -282,26 +284,26 @@ export default function ReportCenter() {
         <div className="px-5 py-4 border-b border-gray-700/60 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Mail size={15} className="text-gray-400" />
-            <h2 className="text-base font-semibold text-white">Delivery History</h2>
+            <h2 className="text-base font-semibold text-white">{t('reportcenter.history.title')}</h2>
           </div>
-          <button onClick={loadHistory} className="btn-secondary text-xs gap-1.5"><RefreshCw size={12} /> Refresh</button>
+          <button onClick={loadHistory} className="btn-secondary text-xs gap-1.5"><RefreshCw size={12} /> {t('reportcenter.history.refresh')}</button>
         </div>
         {histLoading ? (
-          <LoadingState message="Loading delivery history…" />
+          <LoadingState message={t('reportcenter.history.loading')} />
         ) : histError ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center">
             <AlertTriangle size={28} className="text-red-400" />
             <p className="text-sm text-red-300">{histError}</p>
-            <button onClick={loadHistory} className="btn-secondary text-xs gap-1.5 mt-1"><RefreshCw size={12} /> Retry</button>
+            <button onClick={loadHistory} className="btn-secondary text-xs gap-1.5 mt-1"><RefreshCw size={12} /> {t('reportcenter.history.retry')}</button>
           </div>
         ) : history.length === 0 ? (
-          <EmptyState icon={Clock} title="No deliveries yet" description="Scheduled report sends will appear here once they run. Set one up under Scheduled Reports." />
+          <EmptyState icon={Clock} title={t('reportcenter.history.emptyTitle')} description={t('reportcenter.history.emptyDesc')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr>
-                  {['Sent', 'Schedule', 'Type', 'Recipients', 'Status'].map(h => <th key={h} className="table-header text-left">{h}</th>)}
+                  {['sent', 'schedule', 'type', 'recipients', 'status'].map(h => <th key={h} className="table-header text-left">{t(`reportcenter.history.columns.${h}`)}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -310,10 +312,10 @@ export default function ReportCenter() {
                     <td className="table-cell text-gray-400 text-xs whitespace-nowrap">{r.sent_at ? new Date(r.sent_at).toLocaleString() : '—'}</td>
                     <td className="table-cell text-gray-200 text-sm">{r.schedule_name || '—'}</td>
                     <td className="table-cell text-gray-400 text-xs">{r.report_type || '—'}</td>
-                    <td className="table-cell text-gray-400 text-xs">{Array.isArray(r.recipients) ? `${r.recipients.length} recipient${r.recipients.length === 1 ? '' : 's'}` : '—'}</td>
+                    <td className="table-cell text-gray-400 text-xs">{Array.isArray(r.recipients) ? t('reportcenter.history.recipientsCount', { count: r.recipients.length }) : '—'}</td>
                     <td className="table-cell">
                       <span className={`text-xs font-medium ${STATUS_TINT[String(r.status || '').toLowerCase()] || 'text-gray-400'}`}>
-                        {r.status || 'unknown'}
+                        {r.status || t('reportcenter.history.statusUnknown')}
                       </span>
                       {r.error && <span className="block text-[10px] text-red-400/80 truncate max-w-[220px]" title={r.error}>{r.error}</span>}
                     </td>

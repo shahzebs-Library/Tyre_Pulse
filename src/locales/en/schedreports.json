@@ -1,0 +1,110 @@
+{
+  "header": {
+    "title": "Scheduled Reports",
+    "loading": "Loading...",
+    "summaryOne": "{count} active schedule · {total} total",
+    "summaryOther": "{count} active schedules · {total} total",
+    "newSchedule": "New Schedule"
+  },
+  "search": {
+    "placeholder": "Search schedules..."
+  },
+  "filters": {
+    "allFrequencies": "All Frequencies",
+    "allStatus": "All Status",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "frequencies": {
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly"
+  },
+  "reportTypes": {
+    "executive": "Executive Report",
+    "kpi": "KPI Scorecard",
+    "fleet": "Fleet Analytics",
+    "inspection": "Inspection Summary",
+    "cost": "Cost Analysis"
+  },
+  "daysOfWeek": {
+    "0": "Sunday",
+    "1": "Monday",
+    "2": "Tuesday",
+    "3": "Wednesday",
+    "4": "Thursday",
+    "5": "Friday",
+    "6": "Saturday"
+  },
+  "months": {
+    "0": "Jan",
+    "1": "Feb",
+    "2": "Mar",
+    "3": "Apr",
+    "4": "May",
+    "5": "Jun",
+    "6": "Jul",
+    "7": "Aug",
+    "8": "Sep",
+    "9": "Oct",
+    "10": "Nov",
+    "11": "Dec"
+  },
+  "time": {
+    "am": "AM",
+    "pm": "PM",
+    "today": "Today at {time}",
+    "tomorrow": "Tomorrow at {time}",
+    "dateAt": "{day} {date} {month} at {time}"
+  },
+  "lastSent": {
+    "never": "Never sent",
+    "label": "Last sent {date} at {time}"
+  },
+  "card": {
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "recipientOne": "{count} recipient",
+    "recipientOther": "{count} recipients",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "empty": {
+    "noSchedulesTitle": "No schedules yet",
+    "noSchedulesDesc": "Set up automated email reports to keep your team informed with regular fleet and tyre intelligence.",
+    "createFirst": "Create First Schedule",
+    "noMatchTitle": "No matching schedules",
+    "noMatchDesc": "Try adjusting your filters or search query.",
+    "clearFilters": "Clear filters"
+  },
+  "modal": {
+    "editTitle": "Edit Schedule",
+    "newTitle": "New Schedule",
+    "scheduleName": "Schedule Name",
+    "namePlaceholder": "e.g. Weekly Executive Summary",
+    "reportType": "Report Type",
+    "frequency": "Frequency",
+    "dayOfWeek": "Day of Week",
+    "dayOfMonth": "Day of Month",
+    "timeOfDay": "Time of Day",
+    "recipients": "Recipients",
+    "recipientsHint": "One email address per line",
+    "activeSchedule": "Active Schedule",
+    "activeScheduleDesc": "Reports will be sent automatically when enabled",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "save": "Save Schedule"
+  },
+  "errors": {
+    "invalidEmails": "Invalid email(s): {list}",
+    "recipientRequired": "At least one recipient is required."
+  },
+  "delete": {
+    "title": "Delete Schedule",
+    "subtitle": "This action cannot be undone",
+    "questionPrefix": "Are you sure you want to delete \"",
+    "questionSuffix": "\"? Recipients will no longer receive this report.",
+    "cancel": "Cancel",
+    "confirm": "Delete"
+  }
+}

@@ -5,6 +5,7 @@ import { SkeletonTable } from '../components/ui/Skeleton'
 import PageHeader from '../components/ui/PageHeader'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { applyCountry } from '../lib/countryFilter'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -12,12 +13,18 @@ import EmailReportModal from '../components/EmailReportModal'
 import { formatDate } from '../lib/formatters'
 
 const REPORT_TYPES = [
-  { id: 'Vehicle History',       desc: 'All tyre changes per vehicle, grouped by asset',  table: 'tyre_records' },
-  { id: 'Cost Analysis',         desc: 'Spend grouped by site and brand',                  table: 'tyre_records (aggregated)' },
-  { id: 'Risk Summary',          desc: 'High and Critical risk records',                   table: 'tyre_records filtered' },
-  { id: 'Inspection Report',     desc: 'All inspections with findings',                    table: 'inspections' },
-  { id: 'Tyre Replacement Log',  desc: 'Chronological replacement list',                   table: 'tyre_records ordered by date' },
+  { id: 'Vehicle History',       key: 'vehicleHistory',       desc: 'All tyre changes per vehicle, grouped by asset',  table: 'tyre_records' },
+  { id: 'Cost Analysis',         key: 'costAnalysis',         desc: 'Spend grouped by site and brand',                  table: 'tyre_records (aggregated)' },
+  { id: 'Risk Summary',          key: 'riskSummary',          desc: 'High and Critical risk records',                   table: 'tyre_records filtered' },
+  { id: 'Inspection Report',     key: 'inspectionReport',     desc: 'All inspections with findings',                    table: 'inspections' },
+  { id: 'Tyre Replacement Log',  key: 'tyreReplacementLog',   desc: 'Chronological replacement list',                   table: 'tyre_records ordered by date' },
 ]
+
+// Looks up the translation key for a REPORT_TYPES.id (used wherever the raw
+// reportType string is shown as UI chrome, without altering the id itself).
+function reportTypeKeyFor(id) {
+  return REPORT_TYPES.find(rt => rt.id === id)?.key
+}
 
 const REPORT_COLUMNS = {
   'Vehicle History':      ['asset_no','site','country','count','total_cost','avg_cost','brands','last_date','high_risk_count'],
@@ -36,9 +43,35 @@ const COLUMN_LABELS = {
   brands: 'Brands Used', last_date: 'Last Date', high_risk_count: 'High Risk Count',
 }
 
+// Maps the same column keys to reports.json translation keys, used only for
+// on-screen labels (table headers, column picker). Export builders (Excel/
+// PDF/email) keep using COLUMN_LABELS as-is, per the i18n spec.
+const COLUMN_I18N_KEYS = {
+  issue_date: 'issueDate', asset_no: 'assetNo', brand: 'brand', description: 'description',
+  serial_no: 'serialNo', site: 'site', country: 'country', cost: 'cost', risk_level: 'riskLevel',
+  remarks: 'remarks', count: 'count', total_cost: 'totalCost', avg_cost: 'avgCost',
+  inspection_date: 'inspectionDate', inspection_type: 'inspectionType', findings: 'findings',
+  inspector: 'inspector', status: 'status', qty: 'qty',
+  brands: 'brandsUsed', last_date: 'lastDate', high_risk_count: 'highRiskCount',
+}
+
+function columnLabel(t, col) {
+  const key = COLUMN_I18N_KEYS[col]
+  return key ? t(`reports.columns.${key}`) : (COLUMN_LABELS[col] ?? col)
+}
+
 const RISK_LEVELS = ['High', 'Critical']
 const COUNTRIES   = ['Saudi Arabia', 'UAE', 'Bahrain', 'Kuwait', 'Oman', 'Qatar']
 const PAGE_SIZE   = 100
+
+// Date-shortcut labels double as internal state values compared in
+// applyShortcut(); this map only supplies the translated button text.
+const DATE_SHORTCUT_I18N_KEYS = {
+  'This Month': 'thisMonth',
+  'Last 3 Months': 'last3Months',
+  'This Year': 'thisYear',
+  'Custom': 'custom',
+}
 
 function applyShortcut(label, setDateFrom, setDateTo, setDateShortcut) {
   const now = new Date()
@@ -61,6 +94,7 @@ function applyShortcut(label, setDateFrom, setDateTo, setDateShortcut) {
 }
 
 export default function Reports() {
+  const { t } = useLanguage()
   const { activeCountry, activeCurrency } = useSettings()
   const [step, setStep]               = useState('type')
   const [reportType, setReportType]   = useState('')
@@ -305,8 +339,8 @@ export default function Reports() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Custom Reports"
-        subtitle="Build, filter and export tailored reports"
+        title={t('reports.title')}
+        subtitle={t('reports.subtitle')}
         icon={FileText}
       />
 
@@ -327,7 +361,7 @@ export default function Reports() {
                     : 'text-dim border-transparent'
               }`}
             >
-              {i + 1}. {s === 'type' ? 'Select Type' : s === 'config' ? 'Configure' : 'Preview & Export'}
+              {i + 1}. {t(`reports.steps.${s}`)}
             </motion.span>
           </div>
         ))}
@@ -348,9 +382,9 @@ export default function Reports() {
                   <FileText size={16} className="text-green-400" />
                 </div>
                 <div>
-                  <p className="text-white font-semibold group-hover:text-green-400 transition-colors">{rt.id}</p>
-                  <p className="text-gray-400 text-sm mt-0.5">{rt.desc}</p>
-                  <p className="text-gray-600 text-xs mt-1">Source: {rt.table}</p>
+                  <p className="text-white font-semibold group-hover:text-green-400 transition-colors">{t(`reports.reportTypes.${rt.key}.label`)}</p>
+                  <p className="text-gray-400 text-sm mt-0.5">{t(`reports.reportTypes.${rt.key}.desc`)}</p>
+                  <p className="text-gray-600 text-xs mt-1">{t('reports.source', { table: rt.table })}</p>
                 </div>
               </div>
             </button>
@@ -365,22 +399,24 @@ export default function Reports() {
           {configRestored && (
             <div className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm"
               style={{ background: 'rgba(22,163,74,0.10)', border: '1px solid rgba(22,163,74,0.25)' }}>
-              <span className="text-green-400 font-medium">Saved config restored</span>
+              <span className="text-green-400 font-medium">{t('reports.config.savedRestored')}</span>
               <button
                 onClick={clearSavedConfig}
                 className="ml-auto text-xs text-gray-400 hover:text-white underline underline-offset-2 transition-colors"
               >
-                Clear saved config
+                {t('reports.config.clearSaved')}
               </button>
             </div>
           )}
 
           <div className="card space-y-4">
-            <h2 className="text-base font-semibold text-white">Filters · {reportType}</h2>
+            <h2 className="text-base font-semibold text-white">
+              {t('reports.config.filtersTitle', { reportType: reportTypeKeyFor(reportType) ? t(`reports.reportTypes.${reportTypeKeyFor(reportType)}.label`) : reportType })}
+            </h2>
 
             {/* Date shortcut chips */}
             <div>
-              <label className="label">Date Range</label>
+              <label className="label">{t('reports.config.dateRange')}</label>
               <div className="flex gap-2 flex-wrap mb-2">
                 {['This Month', 'Last 3 Months', 'This Year', 'Custom'].map(lbl => (
                   <button
@@ -393,13 +429,13 @@ export default function Reports() {
                     }`}
                     style={dateShortcut === lbl ? { backgroundColor: 'rgba(22,163,74,0.08)' } : {}}
                   >
-                    {lbl}
+                    {t(`reports.dateShortcuts.${DATE_SHORTCUT_I18N_KEYS[lbl]}`)}
                   </button>
                 ))}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <input type="date" className="input w-36 text-sm" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setDateShortcut('Custom') }} />
-                <span className="text-gray-600">to</span>
+                <span className="text-gray-600">{t('reports.config.to')}</span>
                 <input type="date" className="input w-36 text-sm" value={dateTo} onChange={e => { setDateTo(e.target.value); setDateShortcut('Custom') }} />
               </div>
             </div>
@@ -407,11 +443,11 @@ export default function Reports() {
             {/* Common filters */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="label">Site</label>
+                <label className="label">{t('reports.config.site')}</label>
                 <input
                   list="site-list"
                   className="input w-full"
-                  placeholder="Filter by site..."
+                  placeholder={t('reports.config.siteFilterPlaceholder')}
                   value={filterSite}
                   onChange={e => setFilterSite(e.target.value)}
                 />
@@ -420,9 +456,9 @@ export default function Reports() {
                 </datalist>
               </div>
               <div>
-                <label className="label">Country</label>
+                <label className="label">{t('reports.config.country')}</label>
                 <select className="input w-full" value={filterCountry} onChange={e => setFilterCountry(e.target.value)}>
-                  <option value="">All Countries</option>
+                  <option value="">{t('reports.config.allCountries')}</option>
                   {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
@@ -431,21 +467,21 @@ export default function Reports() {
             {/* Type-specific filters */}
             {reportType === 'Vehicle History' && (
               <div>
-                <label className="label">Asset Number</label>
-                <input className="input w-full" placeholder="Asset no..." value={filterAsset} onChange={e => setFilterAsset(e.target.value)} />
+                <label className="label">{t('reports.config.assetNumber')}</label>
+                <input className="input w-full" placeholder={t('reports.config.assetNoPlaceholder')} value={filterAsset} onChange={e => setFilterAsset(e.target.value)} />
               </div>
             )}
 
             {(reportType === 'Cost Analysis' || reportType === 'Tyre Replacement Log') && (
               <div>
-                <label className="label">Brand</label>
-                <input className="input w-full" placeholder="Filter by brand..." value={filterBrand} onChange={e => setFilterBrand(e.target.value)} />
+                <label className="label">{t('reports.config.brand')}</label>
+                <input className="input w-full" placeholder={t('reports.config.brandFilterPlaceholder')} value={filterBrand} onChange={e => setFilterBrand(e.target.value)} />
               </div>
             )}
 
             {reportType === 'Risk Summary' && (
               <div>
-                <label className="label">Risk Level</label>
+                <label className="label">{t('reports.config.riskLevel')}</label>
                 <div className="flex gap-3 flex-wrap">
                   {RISK_LEVELS.map(level => (
                     <label key={level} className="flex items-center gap-2 cursor-pointer">
@@ -464,9 +500,9 @@ export default function Reports() {
 
             {reportType === 'Inspection Report' && (
               <div>
-                <label className="label">Inspection Type</label>
+                <label className="label">{t('reports.config.inspectionType')}</label>
                 <select className="input w-full" value={filterInspType} onChange={e => setFilterInspType(e.target.value)}>
-                  <option value="">All Types</option>
+                  <option value="">{t('reports.config.allTypes')}</option>
                   <option value="Routine">Routine</option>
                   <option value="Safety">Safety</option>
                   <option value="Pre-trip">Pre-trip</option>
@@ -478,7 +514,7 @@ export default function Reports() {
 
           {/* Column picker */}
           <div className="card space-y-3">
-            <h2 className="text-base font-semibold text-white">Columns</h2>
+            <h2 className="text-base font-semibold text-white">{t('reports.config.columnsTitle')}</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {(REPORT_COLUMNS[reportType] ?? []).map(col => (
                 <label key={col} className="flex items-center gap-2 cursor-pointer">
@@ -488,7 +524,7 @@ export default function Reports() {
                     onChange={() => toggleCol(col)}
                     className="rounded"
                   />
-                  <span className="text-sm text-gray-300">{COLUMN_LABELS[col] ?? col}</span>
+                  <span className="text-sm text-gray-300">{columnLabel(t, col)}</span>
                 </label>
               ))}
             </div>
@@ -496,13 +532,13 @@ export default function Reports() {
 
           <div className="flex gap-3">
             <button onClick={() => setStep('type')} className="btn-secondary flex items-center gap-2">
-              <ArrowLeft size={14} /> Back
+              <ArrowLeft size={14} /> {t('reports.config.back')}
             </button>
             <button
               onClick={() => { runQuery(); setStep('preview') }}
               className="btn-primary flex items-center gap-2"
             >
-              Run Report <ChevronRight size={14} />
+              {t('reports.config.runReport')} <ChevronRight size={14} />
             </button>
           </div>
         </div>
@@ -513,22 +549,22 @@ export default function Reports() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <button onClick={() => setStep('config')} className="btn-secondary flex items-center gap-2">
-              <ArrowLeft size={14} /> Back to Filters
+              <ArrowLeft size={14} /> {t('reports.preview.backToFilters')}
             </button>
             <button onClick={handleExcel} className="btn-secondary flex items-center gap-1.5">
-              <Download size={14} className="text-green-400" /> Export Excel
+              <Download size={14} className="text-green-400" /> {t('reports.preview.exportExcel')}
             </button>
             <button onClick={handlePdf} className="btn-secondary flex items-center gap-1.5">
-              <Download size={14} className="text-red-400" /> Export PDF
+              <Download size={14} className="text-red-400" /> {t('reports.preview.exportPdf')}
             </button>
             <button onClick={handlePrint} className="btn-secondary flex items-center gap-1.5">
-              <Printer size={14} className="text-blue-400" /> Print
+              <Printer size={14} className="text-blue-400" /> {t('reports.preview.print')}
             </button>
             <button
               onClick={() => setEmailModalOpen(true)}
               className="btn-secondary"
             >
-              <Mail size={16} />Email Report
+              <Mail size={16} />{t('reports.preview.emailReport')}
             </button>
           </div>
 
@@ -538,18 +574,18 @@ export default function Reports() {
             <>
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm text-gray-400">
-                  Total records: <span className="text-white font-semibold">{allRows.length.toLocaleString()}</span>
+                  {t('reports.preview.totalRecords', { count: allRows.length.toLocaleString() })}
                 </span>
                 {allRows.length > PAGE_SIZE && (
                   <span className="text-xs text-gray-500">
-                    Showing {rangeStart}-{rangeEnd} of {allRows.length.toLocaleString()} records
+                    {t('reports.preview.showingRange', { from: rangeStart, to: rangeEnd, total: allRows.length.toLocaleString() })}
                   </span>
                 )}
               </div>
 
               {previewRows.length === 0 ? (
                 <div className="card text-center py-12 text-gray-500">
-                  No records found for the selected filters.
+                  {t('reports.preview.noRecordsForFilters')}
                 </div>
               ) : (
                 <>
@@ -559,7 +595,7 @@ export default function Reports() {
                         <tr>
                           {displayCols.map(col => (
                             <th key={col} className="table-header text-left whitespace-nowrap">
-                              {COLUMN_LABELS[col] ?? col}
+                              {columnLabel(t, col)}
                             </th>
                           ))}
                         </tr>
@@ -591,7 +627,7 @@ export default function Reports() {
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between flex-wrap gap-3">
                       <span className="text-xs text-gray-500">
-                        Showing {rangeStart}-{rangeEnd} of {allRows.length.toLocaleString()} records
+                        {t('reports.preview.showingRange', { from: rangeStart, to: rangeEnd, total: allRows.length.toLocaleString() })}
                       </span>
                       <div className="flex items-center gap-2">
                         <button
@@ -599,17 +635,17 @@ export default function Reports() {
                           disabled={previewPage === 1}
                           className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          Prev
+                          {t('reports.preview.prev')}
                         </button>
                         <span className="text-sm text-gray-400 px-1">
-                          Page {previewPage} of {totalPages}
+                          {t('reports.preview.pageOf', { page: previewPage, total: totalPages })}
                         </span>
                         <button
                           onClick={() => setPreviewPage(p => Math.min(totalPages, p + 1))}
                           disabled={previewPage === totalPages}
                           className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          Next
+                          {t('reports.preview.next')}
                         </button>
                       </div>
                     </div>

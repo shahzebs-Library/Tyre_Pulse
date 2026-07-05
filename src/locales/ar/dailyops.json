@@ -1,0 +1,104 @@
+{
+  "header": {
+    "title": "العمليات اليومية",
+    "today": "اليوم",
+    "pdf": "PDF",
+    "printBriefing": "طباعة الموجز"
+  },
+  "loading": "جارٍ تحميل بيانات العمليات اليومية...",
+  "na": "غير متاح",
+  "unknown": "غير معروف",
+  "noSerial": "بدون رقم تسلسلي",
+  "priorityQueue": {
+    "title": "قائمة الإجراءات ذات الأولوية",
+    "criticalChip": "{count} حرجة",
+    "highChip": "{count} عالية",
+    "allClear": "لا توجد إجراءات ذات أولوية لهذا التاريخ. كل شيء تحت السيطرة.",
+    "moreItems": "+{count} عنصر إضافي",
+    "view": "عرض",
+    "types": {
+      "criticalTyreFitted": "تركيب إطار بمستوى خطورة حرج",
+      "overdueWorkOrder": "أمر عمل متأخر",
+      "noInspection": "لا يوجد فحص (14 يومًا)"
+    },
+    "descriptions": {
+      "criticalFitted": "تم تركيب إطار بمستوى خطورة حرج اليوم على {asset}",
+      "overdueWorkOrder": "أمر العمل {wo} متأخر بمقدار {days} يوم",
+      "noInspection": "المركبة {asset} ليس لديها فحص خلال آخر 14 يومًا"
+    },
+    "details": {
+      "criticalFitted": "الرقم التسلسلي: {serial} | الموضع: {position} | الموقع: {site}",
+      "overdueWorkOrder": "الحالة: {status} | الأولوية: {priority} | الموقع: {site}",
+      "noInspection": "الفحص متأخر - آخر نشاط قبل أكثر من 14 يومًا"
+    }
+  },
+  "stats": {
+    "title": "ملخص نشاط اليوم",
+    "tyreChanges": "تغييرات الإطارات",
+    "inspections": "عمليات الفحص",
+    "workOrders": "أوامر العمل",
+    "alertsRaised": "التنبيهات المرفوعة"
+  },
+  "activityFeed": {
+    "title": "سجل نشاط اليوم",
+    "empty": "لا يوجد نشاط إطارات مسجل لهذا التاريخ.",
+    "eventTypes": {
+      "newFitment": "تركيب جديد",
+      "removal": "إزالة",
+      "inspection": "فحص",
+      "alert": "تنبيه",
+      "workOrder": "أمر عمل"
+    },
+    "inspectorLabel": "المفتش:",
+    "tyresLabel": "الإطارات:",
+    "flaggedSuffix": " | تم تمييز {count}",
+    "alertRaised": "تم رفع تنبيه",
+    "woLabel": "أمر العمل:",
+    "priorityLabel": "الأولوية:"
+  },
+  "fleetStatus": {
+    "title": "لقطة حالة الأسطول",
+    "activeToday": "نشط اليوم",
+    "criticalRisk": "خطورة حرجة",
+    "dormant30d": "خامل 30 يومًا",
+    "chartDormant30d": "خامل (30 يومًا)"
+  },
+  "siteActivity": {
+    "title": "مقارنة نشاط المواقع",
+    "empty": "لا يوجد نشاط للمواقع لهذا التاريخ.",
+    "chartLabel": "أحداث الإطارات"
+  },
+  "costTracker": {
+    "title": "متتبع التكلفة اليومية",
+    "todaysSpend": "إنفاق اليوم",
+    "dailyBudget": "الميزانية اليومية",
+    "overBudget": "تجاوز الميزانية بمقدار {currency} {amount}",
+    "noBudgetHint": "قم بتعيين الميزانية السنوية في أهداف مؤشرات الأداء لتفعيل تتبع الميزانية.",
+    "chartSpentBudget": "المُنفق (الميزانية)",
+    "chartOverBudget": "تجاوز الميزانية",
+    "chartSpent": "المُنفق",
+    "chartRemaining": "المتبقي"
+  },
+  "weekSummary": {
+    "title": "ملخص هذا الأسبوع",
+    "tyreChanges": "تغييرات الإطارات",
+    "cost": "التكلفة ({currency})",
+    "inspections": "عمليات الفحص",
+    "criticalIncidents": "الحوادث الحرجة",
+    "vsLastWeek": "{sign}{prefix}{absVal} ({pctSign}{pct}%) مقارنة بالأسبوع الماضي",
+    "sameAsLastWeek": "نفس الأسبوع الماضي"
+  },
+  "upcoming": {
+    "title": "القادم هذا الأسبوع",
+    "next7Days": "(السبعة أيام القادمة)",
+    "empty": "لا توجد أوامر عمل قادمة خلال السبعة أيام القادمة.",
+    "columns": {
+      "date": "التاريخ",
+      "asset": "الأصل",
+      "woNo": "رقم أمر العمل",
+      "status": "الحالة",
+      "priority": "الأولوية",
+      "site": "الموقع"
+    }
+  }
+}

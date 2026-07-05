@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel } from '../lib/exportUtils'
 import { sanitizeSearchTerm } from '../lib/searchFilter'
 import {
@@ -84,12 +85,13 @@ const STATUS_BADGE = {
 }
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
-const TABS = ['Records', 'Bulk Upload']
+const TABS = ['records', 'bulkUpload']
 
 export default function FleetMaster() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
+  const { t } = useLanguage()
 
   // ── data ─────────────────────────────────────────────────────────────────────
   const [records, setRecords]   = useState([])
@@ -230,7 +232,7 @@ export default function FleetMaster() {
 
   async function saveRecord(e) {
     e.preventDefault()
-    if (!form.asset_no.trim()) { setFormError('Asset No is required'); return }
+    if (!form.asset_no.trim()) { setFormError(t('fleetmaster.form.required')); return }
     setSaving(true)
     setFormError('')
     const payload = {
@@ -269,14 +271,14 @@ export default function FleetMaster() {
         .from('vehicle_fleet').delete().eq('id', deleteTarget.id).select('id')
       if (error) throw error
       if ((data?.length ?? 0) === 0) {
-        throw new Error('The vehicle could not be deleted - you may not have permission, or it was already removed.')
+        throw new Error(t('fleetmaster.delete.errNoPermission'))
       }
       setShowDeleteConfirm(false)
       setDeleteTarget(null)
       loadRecords()
       loadSites()
     } catch (e) {
-      setDeleteError(e.message || 'Delete failed. Please try again.')
+      setDeleteError(e.message || t('fleetmaster.delete.errFailed'))
     } finally {
       setSaving(false)
     }
@@ -316,14 +318,14 @@ export default function FleetMaster() {
         deleted += data?.length ?? 0
       }
       if (deleted === 0) {
-        throw new Error('No rows were deleted — you may not have permission (Admin only) or they were already removed.')
+        throw new Error(t('fleetmaster.bulkDelete.errNoPermission'))
       }
       setBulkDeleteOpen(false)
       setSelectedIds(new Set())
       loadRecords()
       loadSites()
     } catch (e) {
-      setBulkError(e.message || 'Bulk delete failed. Please try again.')
+      setBulkError(e.message || t('fleetmaster.bulkDelete.errFailed'))
     } finally {
       setBulkBusy(false)
     }
@@ -375,7 +377,7 @@ export default function FleetMaster() {
         const wb = XLSX.read(ev.target.result, { type: 'binary', cellDates: true })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
-        if (data.length < 2) { setUploadError('File is empty or has no data rows'); return }
+        if (data.length < 2) { setUploadError(t('fleetmaster.upload.errEmpty')); return }
         const headers = data[0].map(String)
         const dataRows = data.slice(1).filter(r => r.some(c => c !== ''))
 
@@ -402,7 +404,7 @@ export default function FleetMaster() {
         setUploadPreview(mapped.slice(0, 5))
         setUploadStep('preview')
       } catch (err) {
-        setUploadError('Failed to parse file: ' + err.message)
+        setUploadError(t('fleetmaster.upload.errParseFailed', { message: err.message }))
       }
     }
     reader.readAsBinaryString(file)
@@ -450,8 +452,8 @@ export default function FleetMaster() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Fleet Master"
-        subtitle={`${total.toLocaleString()} vehicles registered`}
+        title={t('fleetmaster.title')}
+        subtitle={t('fleetmaster.subtitle', { count: total.toLocaleString() })}
         icon={Truck}
       />
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -461,16 +463,16 @@ export default function FleetMaster() {
             onClick={() => navigate('/data-intake?module=fleet')}
             className="btn-primary flex items-center gap-2 text-sm"
           >
-            <Upload size={15} /> Import via Data Intake Center
+            <Upload size={15} /> {t('fleetmaster.actions.importDataIntake')}
           </button>
           <button onClick={openAdd} className="btn-secondary flex items-center gap-2 text-sm">
-            <Plus size={15} /> Add Vehicle
+            <Plus size={15} /> {t('fleetmaster.actions.addVehicle')}
           </button>
           <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-sm">
-            <FileSpreadsheet size={15} className="text-green-400" /> Export Excel
+            <FileSpreadsheet size={15} className="text-green-400" /> {t('fleetmaster.actions.exportExcel')}
           </button>
           <button onClick={downloadTemplate} className="btn-secondary flex items-center gap-2 text-sm">
-            <Download size={15} className="text-blue-400" /> Template
+            <Download size={15} className="text-blue-400" /> {t('fleetmaster.actions.template')}
           </button>
         </div>
       </div>
@@ -478,10 +480,10 @@ export default function FleetMaster() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Vehicles',   value: summary.total,        color: 'text-blue-400' },
-          { label: 'Active',           value: summary.active,       color: 'text-green-400' },
-          { label: 'Missing Specs',    value: summary.missingSpecs, color: 'text-yellow-400' },
-          { label: 'No Policy Set',    value: summary.noPolicy,     color: 'text-orange-400' },
+          { label: t('fleetmaster.summary.totalVehicles'), value: summary.total,        color: 'text-blue-400' },
+          { label: t('fleetmaster.summary.active'),        value: summary.active,       color: 'text-green-400' },
+          { label: t('fleetmaster.summary.missingSpecs'),  value: summary.missingSpecs, color: 'text-yellow-400' },
+          { label: t('fleetmaster.summary.noPolicySet'),   value: summary.noPolicy,     color: 'text-orange-400' },
         ].map(({ label, value, color }) => (
           <div key={label} className="card text-center">
             <p className={`text-2xl font-bold ${color}`}>{value}</p>
@@ -492,9 +494,9 @@ export default function FleetMaster() {
 
       {/* Tabs */}
       <div className="flex border-b border-gray-800 gap-1">
-        {TABS.map((t, i) => (
+        {TABS.map((tabKey, i) => (
           <button
-            key={t}
+            key={tabKey}
             onClick={() => setActiveTab(i)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === i
@@ -502,7 +504,7 @@ export default function FleetMaster() {
                 : 'border-transparent text-gray-400 hover:text-white'
             }`}
           >
-            {t}
+            {t(`fleetmaster.tabs.${tabKey}`)}
           </button>
         ))}
       </div>
@@ -517,17 +519,17 @@ export default function FleetMaster() {
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   className="input pl-9"
-                  placeholder="Search asset, fleet no, make, model..."
+                  placeholder={t('fleetmaster.filters.searchPlaceholder')}
                   value={search}
                   onChange={e => { setSearch(e.target.value); setPage(0) }}
                 />
               </div>
               <select className="input w-auto min-w-36" value={siteFilter} onChange={e => { setSiteFilter(e.target.value); setPage(0) }}>
-                <option value="">All Sites</option>
+                <option value="">{t('fleetmaster.filters.allSites')}</option>
                 {sites.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
               <select className="input w-auto min-w-36" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(0) }}>
-                <option value="">All Statuses</option>
+                <option value="">{t('fleetmaster.filters.allStatuses')}</option>
                 {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -536,12 +538,12 @@ export default function FleetMaster() {
           {/* Bulk selection bar (Admin only) */}
           {isAdmin && selectedIds.size > 0 && (
             <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
-              <span className="text-sm text-blue-200">{selectedIds.size} selected</span>
+              <span className="text-sm text-blue-200">{t('fleetmaster.bulkBar.selected', { count: selectedIds.size })}</span>
               <div className="flex items-center gap-2">
-                <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-white px-2 py-1">Clear</button>
+                <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-white px-2 py-1">{t('fleetmaster.bulkBar.clear')}</button>
                 <button onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
-                  <Trash2 size={14} /> Delete {selectedIds.size}
+                  <Trash2 size={14} /> {t('fleetmaster.bulkBar.delete', { count: selectedIds.size })}
                 </button>
               </div>
             </div>
@@ -556,12 +558,16 @@ export default function FleetMaster() {
                     {isAdmin && (
                       <th className="table-header w-10">
                         <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
-                          title="Select all on this page"
+                          title={t('fleetmaster.table.selectAllOnPage')}
                           className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
                       </th>
                     )}
-                    {['Asset No', 'Fleet No', 'Make / Model', 'Type', 'Year', 'Site', 'Operator', 'Status', 'Policy', ''].map(h => (
-                      <th key={h} className="table-header">{h}</th>
+                    {[
+                      t('fleetmaster.columns.assetNo'), t('fleetmaster.columns.fleetNo'), t('fleetmaster.columns.makeModel'),
+                      t('fleetmaster.columns.type'), t('fleetmaster.columns.year'), t('fleetmaster.columns.site'),
+                      t('fleetmaster.columns.operator'), t('fleetmaster.columns.status'), t('fleetmaster.columns.policy'), '',
+                    ].map((h, i) => (
+                      <th key={i} className="table-header">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -571,7 +577,7 @@ export default function FleetMaster() {
                       <tr key={i}><td colSpan={isAdmin ? 11 : 10} className="px-3.5 py-3"><Skeleton className="h-4 w-full" /></td></tr>
                     ))
                   ) : records.length === 0 ? (
-                    <tr><td colSpan={isAdmin ? 11 : 10} className="text-center py-12 text-gray-500">No vehicles found</td></tr>
+                    <tr><td colSpan={isAdmin ? 11 : 10} className="text-center py-12 text-gray-500">{t('fleetmaster.table.noVehicles')}</td></tr>
                   ) : records.map(r => (
                     <tr key={r.id} className={`hover:bg-gray-800/30 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-950/20' : ''}`}>
                       {isAdmin && (
@@ -585,7 +591,7 @@ export default function FleetMaster() {
                       <td className="table-cell">
                         {r.make || r.model
                           ? <span className="text-gray-200">{[r.make, r.model].filter(Boolean).join(' ')}</span>
-                          : <span className="text-yellow-500 text-xs">Missing</span>}
+                          : <span className="text-yellow-500 text-xs">{t('fleetmaster.table.missing')}</span>}
                       </td>
                       <td className="table-cell text-gray-400">{r.vehicle_type ?? '-'}</td>
                       <td className="table-cell text-gray-400">{r.year ?? '-'}</td>
@@ -598,16 +604,16 @@ export default function FleetMaster() {
                         {r.min_days_between_changes ? `${r.min_days_between_changes}d` : '-'}
                         {r.expected_km_per_tyre ? ` / ${r.expected_km_per_tyre.toLocaleString()} km` : ''}
                         {!r.min_days_between_changes && !r.expected_km_per_tyre && (
-                          <span className="text-orange-500 text-xs">No policy</span>
+                          <span className="text-orange-500 text-xs">{t('fleetmaster.table.noPolicy')}</span>
                         )}
                       </td>
                       <td className="table-cell">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => openEdit(r)} className="text-gray-400 hover:text-yellow-400 transition-colors" title="Edit">
+                          <button onClick={() => openEdit(r)} className="text-gray-400 hover:text-yellow-400 transition-colors" title={t('fleetmaster.table.edit')}>
                             <Edit2 size={15} />
                           </button>
                           {canDelete && (
-                            <button onClick={() => confirmDelete(r)} className="text-gray-400 hover:text-red-400 transition-colors" title="Delete">
+                            <button onClick={() => confirmDelete(r)} className="text-gray-400 hover:text-red-400 transition-colors" title={t('fleetmaster.table.delete')}>
                               <Trash2 size={15} />
                             </button>
                           )}
@@ -622,11 +628,11 @@ export default function FleetMaster() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
                 <p className="text-sm text-gray-400">
-                  Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString()}
+                  {t('fleetmaster.pagination.showing', { from: page * PAGE_SIZE + 1, to: Math.min((page + 1) * PAGE_SIZE, total), total: total.toLocaleString() })}
                 </p>
                 <div className="flex items-center gap-2">
                   <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40"><ChevronLeft size={16} /></button>
-                  <span className="text-sm text-gray-400">Page {page + 1} of {totalPages}</span>
+                  <span className="text-sm text-gray-400">{t('fleetmaster.pagination.page', { page: page + 1, totalPages })}</span>
                   <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="btn-secondary py-1.5 px-3 disabled:opacity-40"><ChevronRight size={16} /></button>
                 </div>
               </div>
@@ -639,21 +645,20 @@ export default function FleetMaster() {
       {activeTab === 1 && (
         <div className="space-y-4 max-w-4xl">
           <div className="card">
-            <h2 className="text-base font-semibold text-white mb-1">Bulk Upload via Excel</h2>
+            <h2 className="text-base font-semibold text-white mb-1">{t('fleetmaster.upload.heading')}</h2>
             <p className="text-xs text-gray-400 mb-4">
-              Upload a .xlsx file with fleet vehicle data. Records are upserted on Asset No (existing records updated, new ones created).
-              Download the template first to ensure correct column headers.
+              {t('fleetmaster.upload.description')}
             </p>
             <p className="text-xs text-gray-500 mb-4">
-              New: use the controlled{' '}
+              {t('fleetmaster.upload.intakeCenterPrefix')}{' '}
               <button
                 type="button"
                 onClick={() => navigate('/data-intake?module=fleet')}
                 className="text-green-400 hover:text-green-300 underline underline-offset-2"
               >
-                Data Intake Center
+                {t('fleetmaster.upload.intakeCenterLink')}
               </button>{' '}
-              for validated, audited, multi-country imports with duplicate detection and rollback.
+              {t('fleetmaster.upload.intakeCenterSuffix')}
             </p>
 
             {uploadStep === 'idle' && (
@@ -663,13 +668,13 @@ export default function FleetMaster() {
                   onClick={() => fileRef.current?.click()}
                 >
                   <Upload size={36} className="text-gray-500 mx-auto mb-3" />
-                  <p className="text-white font-medium mb-1">Drop your .xlsx file here</p>
-                  <p className="text-sm text-gray-400">or click to browse</p>
+                  <p className="text-white font-medium mb-1">{t('fleetmaster.upload.dropHere')}</p>
+                  <p className="text-sm text-gray-400">{t('fleetmaster.upload.orBrowse')}</p>
                   <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleUploadFile} />
                 </div>
                 {uploadError && <p className="text-red-400 text-sm mt-3">{uploadError}</p>}
                 <div className="mt-4">
-                  <p className="text-xs text-gray-500 mb-2">Expected columns:</p>
+                  <p className="text-xs text-gray-500 mb-2">{t('fleetmaster.upload.expectedColumns')}</p>
                   <div className="flex flex-wrap gap-2">
                     {TEMPLATE_HEADERS.map(h => (
                       <span key={h} className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">{h}</span>
@@ -684,16 +689,16 @@ export default function FleetMaster() {
                 <div className="flex items-center gap-3 text-sm text-gray-400">
                   <FileSpreadsheet size={16} className="text-blue-400" />
                   <span>{uploadFileName}</span>
-                  <span>· {uploadRows.length.toLocaleString()} rows to upsert</span>
+                  <span>· {t('fleetmaster.upload.rowsToUpsert', { count: uploadRows.length.toLocaleString() })}</span>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-white mb-2">Preview (first 5 rows)</h3>
+                  <h3 className="text-sm font-medium text-white mb-2">{t('fleetmaster.upload.previewTitle')}</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr>
                           {['asset_no', 'fleet_number', 'make', 'model', 'vehicle_type', 'year', 'site', 'status'].map(f => (
-                            <th key={f} className="table-header capitalize">{f.replace(/_/g, ' ')}</th>
+                            <th key={f} className="table-header capitalize">{t(`fleetmaster.upload.previewCols.${f}`)}</th>
                           ))}
                         </tr>
                       </thead>
@@ -711,9 +716,9 @@ export default function FleetMaster() {
                 </div>
                 <div className="flex gap-3">
                   <button onClick={runBulkUpload} className="btn-primary flex items-center gap-2">
-                    <Upload size={15} /> Upsert {uploadRows.length.toLocaleString()} Vehicles
+                    <Upload size={15} /> {t('fleetmaster.upload.upsertVehicles', { count: uploadRows.length.toLocaleString() })}
                   </button>
-                  <button onClick={resetUpload} className="btn-secondary">Cancel</button>
+                  <button onClick={resetUpload} className="btn-secondary">{t('fleetmaster.upload.cancel')}</button>
                 </div>
               </div>
             )}
@@ -721,7 +726,7 @@ export default function FleetMaster() {
             {uploadStep === 'uploading' && (
               <div className="text-center py-12">
                 <div className="animate-spin h-10 w-10 rounded-full border-2 border-gray-700 border-t-blue-500 mx-auto mb-4" />
-                <p className="text-white font-medium">Upserting fleet records...</p>
+                <p className="text-white font-medium">{t('fleetmaster.upload.uploading')}</p>
               </div>
             )}
 
@@ -731,19 +736,19 @@ export default function FleetMaster() {
                   <div className="w-8 h-8 rounded-full bg-green-900/50 flex items-center justify-center">
                     <FileSpreadsheet size={16} className="text-green-400" />
                   </div>
-                  <h3 className="text-white font-semibold">Upload Complete</h3>
+                  <h3 className="text-white font-semibold">{t('fleetmaster.upload.complete')}</h3>
                 </div>
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <div className="rounded-lg p-3 border border-green-800 bg-green-900/20">
                     <p className="text-2xl font-bold text-green-400">{uploadResult.upserted}</p>
-                    <p className="text-xs text-green-300 mt-0.5">Records Upserted</p>
+                    <p className="text-xs text-green-300 mt-0.5">{t('fleetmaster.upload.recordsUpserted')}</p>
                   </div>
                   <div className="rounded-lg p-3 border border-red-800 bg-red-900/20">
                     <p className="text-2xl font-bold text-red-400">{uploadResult.failed}</p>
-                    <p className="text-xs text-red-300 mt-0.5">Failed</p>
+                    <p className="text-xs text-red-300 mt-0.5">{t('fleetmaster.upload.failed')}</p>
                   </div>
                 </div>
-                <button onClick={resetUpload} className="btn-secondary">Upload Another File</button>
+                <button onClick={resetUpload} className="btn-secondary">{t('fleetmaster.upload.uploadAnother')}</button>
               </div>
             )}
           </div>
@@ -752,7 +757,7 @@ export default function FleetMaster() {
 
       {/* ── Add / Edit Modal ──────────────────────────────────────────────── */}
       {editRecord !== null && (
-        <Modal title={editRecord.id ? 'Edit Vehicle' : 'Add Vehicle'} onClose={() => setEditRecord(null)} wide>
+        <Modal title={editRecord.id ? t('fleetmaster.form.editTitle') : t('fleetmaster.form.addTitle')} onClose={() => setEditRecord(null)} wide>
           {formError && (
             <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{formError}</div>
           )}
@@ -760,38 +765,38 @@ export default function FleetMaster() {
 
             {/* Section 1: Vehicle Identity */}
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">Vehicle Identity</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">{t('fleetmaster.form.sectionIdentity')}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Asset No <span className="text-red-400">*</span></label>
-                  <input className="input" value={form.asset_no} onChange={F('asset_no')} required placeholder="e.g. TK-001" />
+                  <label className="label">{t('fleetmaster.form.assetNo')} <span className="text-red-400">*</span></label>
+                  <input className="input" value={form.asset_no} onChange={F('asset_no')} required placeholder={t('fleetmaster.form.placeholders.assetNo')} />
                 </div>
                 <div>
-                  <label className="label">Fleet Number</label>
-                  <input className="input" value={form.fleet_number} onChange={F('fleet_number')} placeholder="e.g. FL-2024-001" />
+                  <label className="label">{t('fleetmaster.form.fleetNumber')}</label>
+                  <input className="input" value={form.fleet_number} onChange={F('fleet_number')} placeholder={t('fleetmaster.form.placeholders.fleetNumber')} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
-                  <label className="label">Make</label>
-                  <input className="input" value={form.make} onChange={F('make')} placeholder="e.g. Toyota" />
+                  <label className="label">{t('fleetmaster.form.make')}</label>
+                  <input className="input" value={form.make} onChange={F('make')} placeholder={t('fleetmaster.form.placeholders.make')} />
                 </div>
                 <div>
-                  <label className="label">Model</label>
-                  <input className="input" value={form.model} onChange={F('model')} placeholder="e.g. Land Cruiser" />
+                  <label className="label">{t('fleetmaster.form.model')}</label>
+                  <input className="input" value={form.model} onChange={F('model')} placeholder={t('fleetmaster.form.placeholders.model')} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                 <div>
-                  <label className="label">Vehicle Type</label>
-                  <input className="input" value={form.vehicle_type} onChange={F('vehicle_type')} placeholder="e.g. SUV, Truck" />
+                  <label className="label">{t('fleetmaster.form.vehicleType')}</label>
+                  <input className="input" value={form.vehicle_type} onChange={F('vehicle_type')} placeholder={t('fleetmaster.form.placeholders.vehicleType')} />
                 </div>
                 <div>
-                  <label className="label">Year</label>
-                  <input type="number" className="input" value={form.year} onChange={F('year')} placeholder="e.g. 2022" min={1990} max={2100} />
+                  <label className="label">{t('fleetmaster.form.year')}</label>
+                  <input type="number" className="input" value={form.year} onChange={F('year')} placeholder={t('fleetmaster.form.placeholders.year')} min={1990} max={2100} />
                 </div>
                 <div>
-                  <label className="label">Status</label>
+                  <label className="label">{t('fleetmaster.form.status')}</label>
                   <select className="input" value={form.status} onChange={F('status')}>
                     {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -801,25 +806,25 @@ export default function FleetMaster() {
 
             {/* Section 2: Assignment */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem' }}>
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">Assignment</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">{t('fleetmaster.form.sectionAssignment')}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Department</label>
-                  <input className="input" value={form.department} onChange={F('department')} placeholder="e.g. Operations" />
+                  <label className="label">{t('fleetmaster.form.department')}</label>
+                  <input className="input" value={form.department} onChange={F('department')} placeholder={t('fleetmaster.form.placeholders.department')} />
                 </div>
                 <div>
-                  <label className="label">Operator Name</label>
-                  <input className="input" value={form.operator_name} onChange={F('operator_name')} placeholder="Driver / Operator" />
+                  <label className="label">{t('fleetmaster.form.operatorName')}</label>
+                  <input className="input" value={form.operator_name} onChange={F('operator_name')} placeholder={t('fleetmaster.form.placeholders.operatorName')} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
-                  <label className="label">Site</label>
-                  <input className="input" list="fleet-site-list" value={form.site} onChange={F('site')} placeholder="Select or type..." />
+                  <label className="label">{t('fleetmaster.form.site')}</label>
+                  <input className="input" list="fleet-site-list" value={form.site} onChange={F('site')} placeholder={t('fleetmaster.form.placeholders.site')} />
                   <datalist id="fleet-site-list">{sites.map(s => <option key={s} value={s} />)}</datalist>
                 </div>
                 <div>
-                  <label className="label">Country</label>
+                  <label className="label">{t('fleetmaster.form.country')}</label>
                   <select className="input" value={form.country} onChange={F('country')}>
                     <option value="KSA">KSA</option>
                     <option value="UAE">UAE</option>
@@ -831,50 +836,50 @@ export default function FleetMaster() {
 
             {/* Section 3: Tyre Policy */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '1rem' }}>
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">Tyre Policy</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">{t('fleetmaster.form.sectionPolicy')}</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="label">Expected KM / Tyre</label>
-                  <input type="number" className="input" value={form.expected_km_per_tyre} onChange={F('expected_km_per_tyre')} placeholder="e.g. 50000" min={0} />
+                  <label className="label">{t('fleetmaster.form.expectedKmPerTyre')}</label>
+                  <input type="number" className="input" value={form.expected_km_per_tyre} onChange={F('expected_km_per_tyre')} placeholder={t('fleetmaster.form.placeholders.expectedKm')} min={0} />
                 </div>
                 <div>
-                  <label className="label">Min Days Between Changes</label>
-                  <input type="number" className="input" value={form.min_days_between_changes} onChange={F('min_days_between_changes')} placeholder="e.g. 30" min={0} />
+                  <label className="label">{t('fleetmaster.form.minDaysBetweenChanges')}</label>
+                  <input type="number" className="input" value={form.min_days_between_changes} onChange={F('min_days_between_changes')} placeholder={t('fleetmaster.form.placeholders.minDays')} min={0} />
                 </div>
                 <div>
-                  <label className="label">Max Tyres / Day</label>
-                  <input type="number" className="input" value={form.max_tyres_per_day} onChange={F('max_tyres_per_day')} placeholder="e.g. 2" min={1} />
+                  <label className="label">{t('fleetmaster.form.maxTyresPerDay')}</label>
+                  <input type="number" className="input" value={form.max_tyres_per_day} onChange={F('max_tyres_per_day')} placeholder={t('fleetmaster.form.placeholders.maxTyres')} min={1} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                 <div>
-                  <label className="label">Tyre Size</label>
-                  <input className="input" value={form.tyre_size} onChange={F('tyre_size')} placeholder="e.g. 265/70R17" />
+                  <label className="label">{t('fleetmaster.form.tyreSize')}</label>
+                  <input className="input" value={form.tyre_size} onChange={F('tyre_size')} placeholder={t('fleetmaster.form.placeholders.tyreSize')} />
                 </div>
                 <div>
-                  <label className="label">Preferred Brand</label>
-                  <input className="input" value={form.tyre_brand_preferred} onChange={F('tyre_brand_preferred')} placeholder="e.g. Michelin" />
+                  <label className="label">{t('fleetmaster.form.preferredBrand')}</label>
+                  <input className="input" value={form.tyre_brand_preferred} onChange={F('tyre_brand_preferred')} placeholder={t('fleetmaster.form.placeholders.brand')} />
                 </div>
                 <div>
-                  <label className="label">Monthly Tyre Budget ({activeCurrency})</label>
-                  <input type="number" className="input" value={form.monthly_tyre_budget} onChange={F('monthly_tyre_budget')} placeholder="e.g. 5000" min={0} />
+                  <label className="label">{t('fleetmaster.form.monthlyBudget', { currency: activeCurrency })}</label>
+                  <input type="number" className="input" value={form.monthly_tyre_budget} onChange={F('monthly_tyre_budget')} placeholder={t('fleetmaster.form.placeholders.budget')} min={0} />
                 </div>
               </div>
               <div className="mt-3">
-                <label className="label">Notes</label>
-                <textarea className="input" rows={2} value={form.notes} onChange={F('notes')} placeholder="Any additional notes..." />
+                <label className="label">{t('fleetmaster.form.notes')}</label>
+                <textarea className="input" rows={2} value={form.notes} onChange={F('notes')} placeholder={t('fleetmaster.form.placeholders.notes')} />
               </div>
             </div>
 
             {editRecord.id && (
-              <CustomFieldsPanel data={editRecord.custom_data} title="Additional imported fields (read-only)" />
+              <CustomFieldsPanel data={editRecord.custom_data} title={t('fleetmaster.form.customFieldsTitle')} />
             )}
 
             <div className="flex gap-3 pt-2">
               <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                <Save size={15} /> {saving ? 'Saving...' : 'Save Vehicle'}
+                <Save size={15} /> {saving ? t('fleetmaster.form.saving') : t('fleetmaster.form.save')}
               </button>
-              <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">Cancel</button>
+              <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">{t('fleetmaster.form.cancel')}</button>
             </div>
           </form>
         </Modal>
@@ -882,12 +887,12 @@ export default function FleetMaster() {
 
       {/* ── Delete Confirmation ───────────────────────────────────────────── */}
       {showDeleteConfirm && deleteTarget && (
-        <Modal title="Delete Vehicle" onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }}>
+        <Modal title={t('fleetmaster.delete.title')} onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }}>
           <div className="flex gap-3 mb-4">
             <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-white font-medium">Delete vehicle <span className="font-mono text-blue-400">{deleteTarget.asset_no}</span>?</p>
-              <p className="text-gray-400 text-sm mt-1">This removes the fleet record permanently. Tyre history records for this asset are not affected.</p>
+              <p className="text-white font-medium">{t('fleetmaster.delete.question', { assetNo: deleteTarget.asset_no })}</p>
+              <p className="text-gray-400 text-sm mt-1">{t('fleetmaster.delete.warning')}</p>
             </div>
           </div>
           {deleteError && (
@@ -895,21 +900,21 @@ export default function FleetMaster() {
           )}
           <div className="flex gap-3">
             <button onClick={deleteRecord} disabled={saving} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-              <Trash2 size={15} /> {saving ? 'Deleting...' : 'Delete Vehicle'}
+              <Trash2 size={15} /> {saving ? t('fleetmaster.delete.deleting') : t('fleetmaster.delete.confirm')}
             </button>
-            <button onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }} className="btn-secondary">Cancel</button>
+            <button onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }} className="btn-secondary">{t('fleetmaster.delete.cancel')}</button>
           </div>
         </Modal>
       )}
 
       {/* ── Bulk Delete Confirmation (Admin only) ─────────────────────────── */}
       {bulkDeleteOpen && (
-        <Modal title="Delete Vehicles" onClose={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }}>
+        <Modal title={t('fleetmaster.bulkDelete.title')} onClose={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }}>
           <div className="flex gap-3 mb-4">
             <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-white font-medium">Delete {selectedIds.size} selected vehicle{selectedIds.size !== 1 ? 's' : ''}?</p>
-              <p className="text-gray-400 text-sm mt-1">This removes the fleet records permanently. Tyre history records for these assets are not affected.</p>
+              <p className="text-white font-medium">{t('fleetmaster.bulkDelete.question', { count: selectedIds.size })}</p>
+              <p className="text-gray-400 text-sm mt-1">{t('fleetmaster.bulkDelete.warning')}</p>
             </div>
           </div>
           {bulkError && (
@@ -917,9 +922,9 @@ export default function FleetMaster() {
           )}
           <div className="flex gap-3">
             <button onClick={confirmBulkDelete} disabled={bulkBusy} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-              <Trash2 size={15} /> {bulkBusy ? 'Deleting...' : `Delete ${selectedIds.size}`}
+              <Trash2 size={15} /> {bulkBusy ? t('fleetmaster.bulkDelete.deleting') : t('fleetmaster.bulkDelete.confirm', { count: selectedIds.size })}
             </button>
-            <button onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary">Cancel</button>
+            <button onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary">{t('fleetmaster.bulkDelete.cancel')}</button>
           </div>
         </Modal>
       )}

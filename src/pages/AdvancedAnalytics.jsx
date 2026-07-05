@@ -14,6 +14,7 @@ import {
 import { Bar, Line, Doughnut, Scatter } from 'react-chartjs-2'
 import { supabase } from '../lib/supabase'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
 import {
@@ -134,10 +135,10 @@ function applyLR(monthlyValues, futureCount = 3) {
   return { forecast, slope: lr.slope }
 }
 
-function trendBadge(slope, label = '') {
-  if (slope > 0.001)  return { text: `Worsening ↑${label}`, cls: 'bg-red-900/40 text-red-400 border border-red-800' }
-  if (slope < -0.001) return { text: `Improving ↓${label}`, cls: 'bg-emerald-900/40 text-emerald-400 border border-emerald-800' }
-  return { text: `Stable →${label}`, cls: 'bg-yellow-900/40 text-yellow-400 border border-yellow-800' }
+function trendBadge(slope, label = '', t) {
+  if (slope > 0.001)  return { text: `${t('advancedanalytics.trend.worsening')} ↑${label}`, cls: 'bg-red-900/40 text-red-400 border border-red-800' }
+  if (slope < -0.001) return { text: `${t('advancedanalytics.trend.improving')} ↓${label}`, cls: 'bg-emerald-900/40 text-emerald-400 border border-emerald-800' }
+  return { text: `${t('advancedanalytics.trend.stable')} →${label}`, cls: 'bg-yellow-900/40 text-yellow-400 border border-yellow-800' }
 }
 
 function heatColor(value, min, max) {
@@ -184,11 +185,12 @@ function LoadingOverlay() {
   )
 }
 
-function EmptyState({ message = 'No data available for the selected filters.' }) {
+function EmptyState({ message }) {
+  const { t } = useLanguage()
   return (
     <div className="flex flex-col items-center justify-center h-48 gap-2 text-gray-500">
       <BarChart2 size={32} className="opacity-30" />
-      <p className="text-sm">{message}</p>
+      <p className="text-sm">{message || t('advancedanalytics.states.noData')}</p>
     </div>
   )
 }
@@ -221,6 +223,7 @@ function SortIcon({ field, sortField, sortDir }) {
 
 export default function AdvancedAnalytics() {
   const { activeCurrency, activeCountry } = useSettings()
+  const { t } = useLanguage()
 
   const [records,        setRecords]        = useState([])
   const [loading,        setLoading]        = useState(true)
@@ -249,7 +252,7 @@ export default function AdvancedAnalytics() {
         if (err) throw err
         setRecords(data || [])
       } catch (e) {
-        setError(e.message || 'Failed to load records')
+        setError(e.message || t('advancedanalytics.states.loadFailed'))
       } finally {
         setLoading(false)
       }
@@ -338,11 +341,11 @@ export default function AdvancedAnalytics() {
       labels, fLabels,
       costVals, countVals, cpkVals, failRateVals, movAvgCpk,
       cpkForecast, failForecast, countForecast,
-      cpkTrend:  trendBadge(cpkForecast.slope,  ' CPK'),
-      failTrend: trendBadge(failForecast.slope, ' Failure Rate'),
-      countTrend: trendBadge(countForecast.slope, ' Volume'),
+      cpkTrend:  trendBadge(cpkForecast.slope,  ` ${t('advancedanalytics.trend.cpk')}`, t),
+      failTrend: trendBadge(failForecast.slope, ` ${t('advancedanalytics.trend.failureRate')}`, t),
+      countTrend: trendBadge(countForecast.slope, ` ${t('advancedanalytics.trend.volume')}`, t),
     }
-  }, [filtered])
+  }, [filtered, t])
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TAB 2 - SEASONAL ANALYSIS
@@ -663,8 +666,8 @@ export default function AdvancedAnalytics() {
       {/* Page Header */}
       <div className="px-6 pt-6 pb-4 border-b border-gray-800">
         <PageHeader
-          title="Advanced Analytics"
-          subtitle={`${fmt(filtered.length)} records · ${uniqueSites.length} sites`}
+          title={t('advancedanalytics.title')}
+          subtitle={t('advancedanalytics.subtitle', { records: fmt(filtered.length), sites: uniqueSites.length })}
           icon={BarChart2}
           actions={<>
             <button
@@ -672,14 +675,14 @@ export default function AdvancedAnalytics() {
               className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
             >
               <FileSpreadsheet size={13} />
-              Excel
+              {t('advancedanalytics.actions.excel')}
             </button>
             <button
               onClick={handleExportPdf}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
             >
               <Download size={13} />
-              PDF
+              {t('advancedanalytics.actions.pdf')}
             </button>
           </>}
         />
@@ -698,7 +701,7 @@ export default function AdvancedAnalytics() {
                     : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
-                {p.label}
+                {t(`advancedanalytics.datePresets.${p.id}`)}
               </button>
             ))}
           </div>
@@ -709,7 +712,7 @@ export default function AdvancedAnalytics() {
             onChange={e => setSiteFilter(e.target.value)}
             className="text-xs bg-gray-900 border border-gray-800 rounded-lg px-2 py-1.5 text-gray-300 focus:outline-none focus:border-blue-600"
           >
-            <option value="all">All Sites</option>
+            <option value="all">{t('advancedanalytics.filters.allSites')}</option>
             {uniqueSites.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
@@ -722,7 +725,7 @@ export default function AdvancedAnalytics() {
             className="text-xs bg-gray-900 border border-gray-800 rounded-lg px-2 py-1.5 text-gray-300 focus:outline-none focus:border-blue-600"
           >
             {POSITIONS.map(p => (
-              <option key={p} value={p === 'All' ? 'all' : p}>{p}</option>
+              <option key={p} value={p === 'All' ? 'all' : p}>{t(`advancedanalytics.positions.${p.toLowerCase()}`)}</option>
             ))}
           </select>
         </div>
@@ -731,20 +734,20 @@ export default function AdvancedAnalytics() {
       {/* Tab Navigation */}
       <div className="px-6 pt-4 pb-0 overflow-x-auto">
         <div className="flex gap-1 border-b border-gray-800 min-w-max">
-          {TABS.map(t => {
-            const Icon = t.icon
+          {TABS.map(tab => {
+            const Icon = tab.icon
             return (
               <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  activeTab === t.id
+                  activeTab === tab.id
                     ? 'border-blue-500 text-blue-400'
                     : 'border-transparent text-gray-500 hover:text-gray-300'
                 }`}
               >
                 <Icon size={13} />
-                {t.label}
+                {t(`advancedanalytics.tabs.${tab.id}`)}
               </button>
             )
           })}
@@ -792,6 +795,7 @@ export default function AdvancedAnalytics() {
 
 // ── Tab 1: Trend Analysis ──────────────────────────────────────────────────────
 function TrendTab({ data, currency }) {
+  const { t } = useLanguage()
   if (!data) return <EmptyState />
 
   const { labels, fLabels, cpkVals, failRateVals, countVals,
@@ -806,7 +810,7 @@ function TrendTab({ data, currency }) {
     labels: allCpkLabels,
     datasets: [
       {
-        label: 'Avg CPK',
+        label: t('advancedanalytics.trend.avgCpk'),
         data: [...cpkVals, ...Array(fLabels.length).fill(null)],
         borderColor: '#3b82f6',
         backgroundColor: 'rgba(59,130,246,0.1)',
@@ -816,7 +820,7 @@ function TrendTab({ data, currency }) {
         pointRadius: 3,
       },
       {
-        label: '3-Month Moving Avg',
+        label: t('advancedanalytics.trend.movingAvg'),
         data: [...movAvgCpk, ...Array(fLabels.length).fill(null)],
         borderColor: '#f59e0b',
         borderWidth: 2,
@@ -825,7 +829,7 @@ function TrendTab({ data, currency }) {
         tension: 0.3,
       },
       {
-        label: 'Forecast',
+        label: t('advancedanalytics.trend.forecast'),
         data: [...Array(labels.length).fill(null), ...cpkForecast.forecast],
         borderColor: '#3b82f6',
         borderDash: [6, 4],
@@ -841,7 +845,7 @@ function TrendTab({ data, currency }) {
     labels: allFailLabels,
     datasets: [
       {
-        label: 'Failure Rate %',
+        label: t('advancedanalytics.trend.failureRatePct'),
         data: [...failRateVals, ...Array(fLabels.length).fill(null)],
         borderColor: '#ef4444',
         backgroundColor: 'rgba(239,68,68,0.1)',
@@ -851,7 +855,7 @@ function TrendTab({ data, currency }) {
         pointRadius: 3,
       },
       {
-        label: 'Forecast',
+        label: t('advancedanalytics.trend.forecast'),
         data: [...Array(labels.length).fill(null), ...failForecast.forecast],
         borderColor: '#ef4444',
         borderDash: [6, 4],
@@ -866,7 +870,7 @@ function TrendTab({ data, currency }) {
     labels: allCountLabels,
     datasets: [
       {
-        label: 'Replacements',
+        label: t('advancedanalytics.trend.replacements'),
         data: [...countVals, ...Array(fLabels.length).fill(null)],
         backgroundColor: 'rgba(139,92,246,0.7)',
         borderColor: '#8b5cf6',

@@ -1,0 +1,137 @@
+{
+  "title": "Custom Data Manager",
+  "subtitle": "Every column from every upload is saved here - nothing is ever lost",
+  "actions": {
+    "exportAll": "Export All Custom Data"
+  },
+  "stats": {
+    "uniqueFields": "Unique Custom Fields",
+    "recordsWithCustomData": "Records with Custom Data",
+    "permanentSynonyms": "Permanent Synonyms",
+    "autoMappedOnUpload": "Auto-mapped on Upload"
+  },
+  "banner": {
+    "title": "All your data is always saved - nothing is skipped or lost",
+    "bodyPart1": "When you upload a file, every column maps to a standard field. Any column that doesn't match a standard field is automatically saved as ",
+    "customData": "custom data",
+    "bodyPart2": ". You can view it here, use it across modules, export it, or teach the system to always recognise it by creating a ",
+    "permanentSynonym": "permanent synonym",
+    "bodyPart3": "."
+  },
+  "tabs": {
+    "fields": "Custom Fields",
+    "synonyms": "Synonyms",
+    "records": "Browse Records"
+  },
+  "fields": {
+    "sr": "Row / SR No.",
+    "issue_date": "Issue Date",
+    "description": "Description",
+    "brand": "Brand",
+    "serial_no": "Serial Number",
+    "qty": "Quantity",
+    "job_card": "Job Card",
+    "mis_number": "MIS Number",
+    "asset_no": "Asset / Vehicle No.",
+    "site": "Site / Location",
+    "country": "Country",
+    "remarks": "Remarks / Notes",
+    "cost_per_tyre": "Cost Per Tyre",
+    "driver_name": "Driver Name",
+    "supplier": "Supplier",
+    "size": "Tyre Size",
+    "position": "Tyre Position",
+    "tread_depth": "Tread Depth (mm)",
+    "pressure_reading": "Pressure (PSI)"
+  },
+  "customFields": {
+    "searchPlaceholder": "Search custom fields...",
+    "empty": {
+      "title": "No custom fields yet",
+      "body": "Upload a file with columns beyond the standard fields - they'll appear here automatically."
+    },
+    "recordsCount": "{count} records",
+    "autoMapsTo": "auto-maps to",
+    "actions": {
+      "createSynonym": "Create Synonym",
+      "copyToField": "Copy to Field",
+      "browseRecords": "Browse Records"
+    },
+    "promote": {
+      "promptBefore": "Map \"",
+      "promptAfter": "\" to which standard field?",
+      "choose": "- choose field -",
+      "save": "Save Synonym",
+      "cancel": "Cancel"
+    },
+    "backfill": {
+      "promptBefore": "Copy values from \"",
+      "promptAfter": "\" into which standard field?",
+      "hint": "Only fills records where the target field is currently empty.",
+      "chooseTarget": "- choose target field -",
+      "result": "Updated {count} records",
+      "run": "Run Backfill",
+      "running": "Running...",
+      "done": "Done"
+    }
+  },
+  "synonyms": {
+    "add": {
+      "title": "Add Permanent Synonym",
+      "description": "Teach the upload engine to always recognise a column name. Next time a file contains that column, it will auto-map with 100% confidence.",
+      "columnNameLabel": "Column name in file",
+      "columnNamePlaceholder": "e.g. \"Reg Number\", \"رقم التسجيل\"",
+      "mapsToLabel": "Maps to standard field",
+      "select": "- select -",
+      "save": "Save",
+      "errorBothRequired": "Both fields are required."
+    },
+    "table": {
+      "columnName": "Column Name in File",
+      "mapsTo": "Maps To",
+      "timesUsed": "Times Used",
+      "lastUsed": "Last Used",
+      "never": "-"
+    },
+    "empty": {
+      "title": "No synonyms yet",
+      "body": "Add a synonym above or use \"Create Synonym\" on any custom field."
+    },
+    "info": {
+      "title": "How synonyms power future uploads",
+      "body": "When you upload a new file, the system loads all synonyms first. A synonym match scores 100% confidence - the highest possible - so the column maps automatically without you needing to adjust anything. Synonyms work for any variation of the column name including Arabic headers."
+    },
+    "delete": {
+      "title": "Delete Synonym",
+      "questionBefore": "Delete synonym ",
+      "questionAfter": "?",
+      "warningBefore": "Future uploads will no longer auto-map this column to ",
+      "warningAfter": ". Existing records are not affected.",
+      "confirm": "Delete Synonym",
+      "deleting": "Deleting...",
+      "cancel": "Cancel",
+      "errNotDeleted": "The synonym could not be deleted - you may not have permission, or it was already removed.",
+      "errFailed": "Delete failed. Please try again."
+    }
+  },
+  "records": {
+    "filters": {
+      "byFieldLabel": "Filter by custom field",
+      "allFields": "All custom fields",
+      "valueLabel": "Field value contains",
+      "valuePlaceholder": "e.g. Riyadh, ABC-123...",
+      "clear": "Clear",
+      "export": "Export"
+    },
+    "countSuffix": "records with custom data",
+    "table": {
+      "assetNo": "Asset No",
+      "serialNo": "Serial No",
+      "date": "Date",
+      "site": "Site",
+      "customFields": "Custom Fields",
+      "moreCount": "+{count} more"
+    },
+    "empty": "No records match this filter."
+  }
+}

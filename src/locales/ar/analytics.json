@@ -1,0 +1,74 @@
+{
+  "title": "التحليلات",
+  "subtitle": "تحليل التكلفة والاتجاهات والتوزيع",
+  "subtitleError": "تعذّر تحميل البيانات",
+  "error": {
+    "loadFailed": "فشل تحميل بيانات التحليلات.",
+    "couldNotLoad": "تعذّر تحميل التحليلات",
+    "retry": "إعادة المحاولة"
+  },
+  "filters": {
+    "period": "الفترة",
+    "site": "الموقع",
+    "brand": "العلامة التجارية",
+    "allSites": "جميع المواقع",
+    "allBrands": "جميع العلامات التجارية",
+    "clearFilters": "مسح عوامل التصفية",
+    "riskLabel": "الخطورة:",
+    "all": "الكل"
+  },
+  "risk": {
+    "low": "منخفضة",
+    "medium": "متوسطة",
+    "high": "عالية",
+    "critical": "حرجة"
+  },
+  "kpi": {
+    "totalRecords": "إجمالي السجلات",
+    "totalCost": "التكلفة الإجمالية ({currency})",
+    "sitesActive": "المواقع النشطة",
+    "brandsTracked": "العلامات التجارية المتتبعة"
+  },
+  "tabs": {
+    "costBySite": "التكلفة حسب الموقع",
+    "costByBrand": "التكلفة حسب العلامة التجارية",
+    "monthlyTrend": "الاتجاه الشهري",
+    "assetBreakdown": "توزيع الأصول"
+  },
+  "chart": {
+    "fullscreen": "ملء الشاشة",
+    "actualSpend": "الإنفاق الفعلي",
+    "forecast": "التوقعات",
+    "trendLine": "خط الاتجاه"
+  },
+  "site": {
+    "site": "الموقع",
+    "records": "السجلات",
+    "totalCost": "التكلفة الإجمالية",
+    "avgCost": "متوسط التكلفة",
+    "highRisk": "خطورة عالية",
+    "topCategory": "الفئة الأعلى"
+  },
+  "brand": {
+    "brand": "العلامة التجارية",
+    "records": "السجلات",
+    "totalCost": "التكلفة الإجمالية",
+    "avgPerTyre": "المتوسط/إطار",
+    "failureRate": "معدل الأعطال",
+    "topFailure": "العطل الأكثر شيوعًا"
+  },
+  "trend": {
+    "forecast": "متوقع",
+    "actual": "فعلي"
+  },
+  "asset": {
+    "searchPlaceholder": "ابحث برقم الأصل...",
+    "assetNo": "رقم الأصل",
+    "records": "السجلات",
+    "totalCost": "التكلفة الإجمالية",
+    "highRisk": "خطورة عالية",
+    "failurePerMonth": "الأعطال/شهر",
+    "sites": "المواقع",
+    "lastSeen": "آخر ظهور"
+  }
+}

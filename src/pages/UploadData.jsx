@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { uploads } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { batchClassify } from '../lib/tyreClassifier'
 import { canonicalCode } from '../lib/tyrePositions'
 import { logAuditEvent } from '../lib/auditLogger'
@@ -26,6 +27,7 @@ const STEPS = [
 ]
 
 function StepBar({ current }) {
+  const { t } = useLanguage()
   const activeIdx = STEPS.findIndex(s => s.key === current)
   return (
     <div className="flex items-center gap-0 mb-8 overflow-x-auto pb-1">
@@ -40,7 +42,7 @@ function StepBar({ current }) {
               done    ? 'text-green-500 opacity-70' : 'text-gray-600'
             }`}>
               <Icon size={13} />
-              <span className="hidden sm:inline">{s.label}</span>
+              <span className="hidden sm:inline">{t(`uploaddata.steps.${s.key}`)}</span>
             </div>
             {i < STEPS.length - 1 && (
               <ChevronRight size={12} className={`mx-1 flex-shrink-0 ${i < activeIdx ? 'text-green-600' : 'text-gray-700'}`} />
@@ -579,6 +581,7 @@ function parseDelimitedText(text) {
 export default function UploadData() {
   const { profile }      = useAuth()
   const { activeCountry }= useSettings()
+  const { t }            = useLanguage()
   const navigate         = useNavigate()
   const fileRef          = useRef(null)
   const wbRef            = useRef(null)
@@ -614,6 +617,7 @@ export default function UploadData() {
   const [synonyms, setSynonyms]   = useState([])  // permanent field synonyms from DB
 
   const activeFields  = uploadType === 'stock' ? STOCK_FIELDS  : TYRE_FIELDS
+  const fieldsNs      = uploadType === 'stock' ? 'stock' : 'tyre'
 
   // Load permanent synonyms once - injected into smart mapping for 100% confidence
   useEffect(() => {
@@ -672,24 +676,24 @@ export default function UploadData() {
 
   // Resolve a single extracted table → mapping step (with raw preview + header
   // override). Only hard-fails when the sheet genuinely has no populated cells.
-  async function loadFromExtract(t) {
-    const hasAnyCell = (t.aoa || []).some(r => (r || []).some(c => c != null && String(c).trim() !== ''))
-    if (!hasAnyCell) { setError('This file/sheet has no readable cells.'); return }
-    setRawAoa(t.aoa || [])
-    setHeaderRowIdx(t.headerRow ?? 0)
+  async function loadFromExtract(tbl) {
+    const hasAnyCell = (tbl.aoa || []).some(r => (r || []).some(c => c != null && String(c).trim() !== ''))
+    if (!hasAnyCell) { setError(t('uploaddata.idle.noCells')); return }
+    setRawAoa(tbl.aoa || [])
+    setHeaderRowIdx(tbl.headerRow ?? 0)
     if (uploadType === 'auto') {
-      const detected = guessFileType(t.headers)
+      const detected = guessFileType(tbl.headers)
       if (detected === 'fleet') { setUploadType('fleet'); return }
       setUploadType('tyres')
     }
-    await applyHeaders(t.headers, t.rows)
+    await applyHeaders(tbl.headers, tbl.rows)
   }
 
   async function handleFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 50 * 1024 * 1024) {
-      setError('File too large - maximum 50 MB. Split the file into smaller parts and upload separately.')
+      setError(t('uploaddata.idle.fileTooLarge'))
       return
     }
     setFileName(file.name)
@@ -701,7 +705,7 @@ export default function UploadData() {
     // Without this, a file that fails to read (open in Excel, too large, blocked)
     // would silently do nothing - the upload box would just sit there.
     reader.onerror = () =>
-      setError(`Could not read "${file.name}". It may be open in another program, too large, or corrupted - close it elsewhere and try again.`)
+      setError(t('uploaddata.idle.readError', { fileName: file.name }))
 
     reader.onload = async (ev) => {
       const buf = ev.target.result
@@ -745,7 +749,7 @@ export default function UploadData() {
         if (isText) { try { await tryText() } catch { await tryBinary() } }
         else        { try { await tryBinary() } catch { await tryText() } }
       } catch (err) {
-        setError(`Could not read "${file.name}" as a spreadsheet or CSV. If it opens in Excel, re-save it as .xlsx or .csv and upload again. (${err.message})`)
+        setError(t('uploaddata.idle.parseError', { fileName: file.name, message: err.message }))
       }
     }
 
@@ -825,7 +829,7 @@ export default function UploadData() {
         built.forEach(r => { if (r.serial_no) counts[r.serial_no] = (counts[r.serial_no] || 0) + 1 })
         dupes = Object.values(counts).filter(n => n > 1).reduce((a, n) => a + (n - 1), 0)
       }
-      return { key: f.key, label: f.label, required: !!f.required, fillPct: Math.round((filled / total) * 100), invalid, dupes }
+      return { key: f.key, label: t(`uploaddata.fields.${fieldsNs}.${f.key}`), required: !!f.required, fillPct: Math.round((filled / total) * 100), invalid, dupes }
     })
     setQuality(q)
 
@@ -874,7 +878,7 @@ export default function UploadData() {
     setStep('preview')
     } catch (err) {
       console.error('[UploadData] buildPreview failed:', err)
-      setError('Could not build the preview: ' + (err?.message || 'unknown error') + '. Check the column mapping and try again.')
+      setError(t('uploaddata.preview.buildError', { message: err?.message || 'unknown error' }))
     }
   }
 
@@ -955,7 +959,7 @@ export default function UploadData() {
     // stamped with this one country, so a file can never mix countries or land in
     // the wrong one. A specific country must be selected (not "All").
     if (activeCountry === 'All') {
-      setError('Select a specific country in the top bar before uploading. Every row will be stamped with that country so your data never mixes.')
+      setError(t('uploaddata.preview.countrySelectError'))
       return
     }
     const uploadCountry = activeCountry
@@ -983,7 +987,7 @@ export default function UploadData() {
       }))
       if (!isAdminUploader) {
         const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'stock', targetTable: 'stock_records', rows: stockRows })
-        if (pErr) { setError('Could not submit for approval: ' + pErr.message); setStep('preview'); return }
+        if (pErr) { setError(t('uploaddata.errors.approvalError', { message: pErr.message })); setStep('preview'); return }
         setResult({ pending: true, submitted: stockRows.length, added: 0, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipLog: [] })
         setStep('done')
         return
@@ -1093,7 +1097,7 @@ export default function UploadData() {
     // Non-admins: stage the fully-prepared rows for admin approval, don't go live.
     if (!isAdminUploader) {
       const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'tyres', targetTable: 'tyre_records', rows: records })
-      if (pErr) { setError('Could not submit for approval: ' + pErr.message); setStep('preview'); return }
+      if (pErr) { setError(t('uploaddata.errors.approvalError', { message: pErr.message })); setStep('preview'); return }
       setResult({ pending: true, submitted: records.length, added: 0, skipped: 0, skipLog: [], autoClassifiedCount, needsReviewCount, dupesSkipped: skipDupes ? dupes.length : 0, extraColCount: unmappedSource.length })
       setStep('done')
       return
@@ -1166,28 +1170,28 @@ export default function UploadData() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Upload Data"
-        subtitle="Import tyre and fleet data from Excel or CSV files"
+        title={t('uploaddata.title')}
+        subtitle={t('uploaddata.subtitle')}
         icon={Upload}
         actions={
           <button
             onClick={() => navigate('/data-intake?module=tyre')}
             className="btn-primary flex items-center gap-2 text-sm"
           >
-            <Database size={15} /> Import via Data Intake Center
+            <Database size={15} /> {t('uploaddata.importDataIntake')}
           </button>
         }
       />
       <p className="text-xs text-gray-500 -mt-2 mb-1">
-        New: use the controlled{' '}
+        {t('uploaddata.banner.prefix')}{' '}
         <button
           type="button"
           onClick={() => navigate('/data-intake?module=tyre')}
           className="text-green-400 hover:text-green-300 underline underline-offset-2"
         >
-          Data Intake Center
+          {t('uploaddata.banner.link')}
         </button>{' '}
-        for validated, audited, multi-country imports with duplicate detection and rollback.
+        {t('uploaddata.banner.suffix')}
       </p>
       <StepBar current={step} />
 

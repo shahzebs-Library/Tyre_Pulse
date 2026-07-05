@@ -1,0 +1,47 @@
+{
+  "pageHeader": {
+    "title": "ERP Sync Hub",
+    "subtitle": "Automated ERP data pipelines into TyrePulse.",
+    "badge": "Not configured"
+  },
+  "notConfigured": "Not configured",
+  "banner": {
+    "heading": "No ERP connector is configured",
+    "bodyPre": "There is no live ERP connection for this workspace, so there is no sync status or history to show. Until a connector is provisioned, use the",
+    "bodyHighlight": "Data Intake Center",
+    "bodySuffix": "to import ERP exports (Excel/CSV) through the same validated staging pipeline.",
+    "cta": "Open Data Intake Center"
+  },
+  "targets": {
+    "sectionTitle": "Supported integration targets",
+    "footerNote": "These are systems the connector is designed to integrate with. None is connected yet."
+  },
+  "setup": {
+    "sectionTitle": "How ERP sync will work"
+  },
+  "setupSteps": {
+    "1": {
+      "title": "Provision a connector",
+      "body": "An administrator configures ERP endpoint, credentials (stored server-side) and the sync schedule. Requires API access - not available in read-only mode."
+    },
+    "2": {
+      "title": "Map fields once",
+      "body": "Reuse a saved mapping profile from the Data Intake Center so ERP fields land in the correct TyrePulse columns with validation and currency normalisation."
+    },
+    "3": {
+      "title": "Scheduled read-only sync",
+      "body": "The connector pulls on a schedule, stages every row for review, and commits only validated records - the same controlled pipeline as manual imports."
+    }
+  },
+  "today": {
+    "sectionTitle": "Available today: file-based ingestion",
+    "importCard": {
+      "title": "Import ERP exports",
+      "description": "Upload Excel/CSV from any ERP, map, validate and commit."
+    },
+    "historyCard": {
+      "title": "Review import history",
+      "description": "Every batch, mapping profile and validation outcome is auditable."
+    }
+  }
+}

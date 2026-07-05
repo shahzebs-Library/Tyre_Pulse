@@ -1,0 +1,98 @@
+{
+  "header": {
+    "title": "الإجراءات التصحيحية",
+    "subtitleTemplate": "{total} إجمالي · {open} مفتوح · {overdue}",
+    "overdueCount": "{count} متأخر",
+    "noneOverdue": "لا يوجد تأخير"
+  },
+  "kpi": {
+    "overdue": "متأخر",
+    "overdueSubNeedsAttention": "يحتاج إلى اهتمام",
+    "overdueSubOnTrack": "ضمن الجدول",
+    "avgResolution": "متوسط الحل",
+    "avgResolutionSub": "وقت الإغلاق"
+  },
+  "toolbar": {
+    "searchPlaceholder": "ابحث بالعنوان أو الأصل أو الموقع...",
+    "allSites": "جميع المواقع",
+    "sortNewest": "الأحدث أولاً",
+    "sortByPriority": "حسب الأولوية",
+    "sortByDueDate": "حسب تاريخ الاستحقاق",
+    "sortMostOverdue": "الأكثر تأخرًا",
+    "analytics": "التحليلات",
+    "excel": "إكسل",
+    "pdf": "PDF",
+    "newAction": "إجراء جديد"
+  },
+  "filtersBar": {
+    "label": "عوامل التصفية:",
+    "overdueOnly": "المتأخر فقط",
+    "clearAll": "مسح الكل",
+    "results": "{count} نتيجة"
+  },
+  "analytics": {
+    "rootCauseDistribution": "توزيع الأسباب الجذرية",
+    "withCause": "{count} بسبب محدد",
+    "resolutionPerformance": "أداء الحل",
+    "avgTimeToClose": "متوسط وقت الإغلاق:",
+    "daysValue": "{count} يوم",
+    "overdueRate": "معدل التأخير:"
+  },
+  "card": {
+    "hasPhoto": "يحتوي على صورة",
+    "overdueDays": "متأخر {count} يوم",
+    "due": "الاستحقاق:",
+    "daysToClose": "حتى الإغلاق",
+    "daysOpen": "مفتوح",
+    "edit": "تعديل"
+  },
+  "table": {
+    "columns": {
+      "titleRootCause": "العنوان / السبب الجذري",
+      "priority": "الأولوية",
+      "site": "الموقع",
+      "assignedTo": "المسؤول",
+      "asset": "الأصل",
+      "dueDate": "تاريخ الاستحقاق",
+      "age": "المدة",
+      "status": "الحالة"
+    },
+    "actionsCount": "{count} إجراء"
+  },
+  "empty": {
+    "noMatch": "لا توجد إجراءات تطابق عوامل التصفية الحالية",
+    "noneYet": "لا توجد إجراءات تصحيحية بعد",
+    "noMatchHint": "حاول تعديل أو مسح عوامل التصفية",
+    "noneYetHint": "أنشئ إجراءً لتتبع المشكلات وحلولها"
+  },
+  "form": {
+    "editTitle": "تعديل الإجراء التصحيحي",
+    "newTitle": "إجراء تصحيحي جديد",
+    "titleLabel": "العنوان *",
+    "titlePlaceholder": "صف الإجراء التصحيحي...",
+    "priority": "الأولوية",
+    "status": "الحالة",
+    "site": "الموقع",
+    "sitePlaceholder": "أدخل أو اختر الموقع",
+    "dueDate": "تاريخ الاستحقاق",
+    "assignedTo": "المسؤول",
+    "assetNo": "رقم الأصل",
+    "tyreSerial": "الرقم التسلسلي للإطار",
+    "tyreSerialPlaceholder": "الرقم التسلسلي للإطار المرتبط",
+    "rootCause": "السبب الجذري",
+    "selectRootCause": "اختر السبب الجذري...",
+    "description": "الوصف",
+    "descriptionPlaceholder": "وصف تفصيلي للمشكلة والإجراءات المتخذة...",
+    "photo": "صورة / دليل",
+    "changePhoto": "تغيير الصورة",
+    "attachPhoto": "إرفاق صورة",
+    "removePhoto": "إزالة",
+    "evidenceAlt": "دليل",
+    "saving": "جارٍ الحفظ...",
+    "save": "حفظ الإجراء",
+    "cancel": "إلغاء"
+  },
+  "errors": {
+    "titleRequired": "العنوان مطلوب"
+  }
+}

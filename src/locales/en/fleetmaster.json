@@ -1,0 +1,152 @@
+{
+  "title": "Fleet Master",
+  "subtitle": "{count} vehicles registered",
+  "tabs": {
+    "records": "Records",
+    "bulkUpload": "Bulk Upload"
+  },
+  "actions": {
+    "importDataIntake": "Import via Data Intake Center",
+    "addVehicle": "Add Vehicle",
+    "exportExcel": "Export Excel",
+    "template": "Template"
+  },
+  "summary": {
+    "totalVehicles": "Total Vehicles",
+    "active": "Active",
+    "missingSpecs": "Missing Specs",
+    "noPolicySet": "No Policy Set"
+  },
+  "filters": {
+    "searchPlaceholder": "Search asset, fleet no, make, model...",
+    "allSites": "All Sites",
+    "allStatuses": "All Statuses"
+  },
+  "bulkBar": {
+    "selected": "{count} selected",
+    "clear": "Clear",
+    "delete": "Delete {count}"
+  },
+  "columns": {
+    "assetNo": "Asset No",
+    "fleetNo": "Fleet No",
+    "makeModel": "Make / Model",
+    "type": "Type",
+    "year": "Year",
+    "site": "Site",
+    "operator": "Operator",
+    "status": "Status",
+    "policy": "Policy"
+  },
+  "table": {
+    "selectAllOnPage": "Select all on this page",
+    "noVehicles": "No vehicles found",
+    "missing": "Missing",
+    "noPolicy": "No policy",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "pagination": {
+    "showing": "Showing {from}-{to} of {total}",
+    "page": "Page {page} of {totalPages}"
+  },
+  "upload": {
+    "heading": "Bulk Upload via Excel",
+    "description": "Upload a .xlsx file with fleet vehicle data. Records are upserted on Asset No (existing records updated, new ones created). Download the template first to ensure correct column headers.",
+    "intakeCenterPrefix": "New: use the controlled",
+    "intakeCenterLink": "Data Intake Center",
+    "intakeCenterSuffix": "for validated, audited, multi-country imports with duplicate detection and rollback.",
+    "dropHere": "Drop your .xlsx file here",
+    "orBrowse": "or click to browse",
+    "expectedColumns": "Expected columns:",
+    "rowsToUpsert": "{count} rows to upsert",
+    "previewTitle": "Preview (first 5 rows)",
+    "upsertVehicles": "Upsert {count} Vehicles",
+    "cancel": "Cancel",
+    "uploading": "Upserting fleet records...",
+    "complete": "Upload Complete",
+    "recordsUpserted": "Records Upserted",
+    "failed": "Failed",
+    "uploadAnother": "Upload Another File",
+    "errEmpty": "File is empty or has no data rows",
+    "errParseFailed": "Failed to parse file: {message}",
+    "previewCols": {
+      "asset_no": "Asset No",
+      "fleet_number": "Fleet Number",
+      "make": "Make",
+      "model": "Model",
+      "vehicle_type": "Vehicle Type",
+      "year": "Year",
+      "site": "Site",
+      "status": "Status"
+    }
+  },
+  "form": {
+    "editTitle": "Edit Vehicle",
+    "addTitle": "Add Vehicle",
+    "sectionIdentity": "Vehicle Identity",
+    "assetNo": "Asset No",
+    "fleetNumber": "Fleet Number",
+    "make": "Make",
+    "model": "Model",
+    "vehicleType": "Vehicle Type",
+    "year": "Year",
+    "status": "Status",
+    "sectionAssignment": "Assignment",
+    "department": "Department",
+    "operatorName": "Operator Name",
+    "site": "Site",
+    "country": "Country",
+    "sectionPolicy": "Tyre Policy",
+    "expectedKmPerTyre": "Expected KM / Tyre",
+    "minDaysBetweenChanges": "Min Days Between Changes",
+    "maxTyresPerDay": "Max Tyres / Day",
+    "tyreSize": "Tyre Size",
+    "preferredBrand": "Preferred Brand",
+    "monthlyBudget": "Monthly Tyre Budget ({currency})",
+    "notes": "Notes",
+    "placeholders": {
+      "assetNo": "e.g. TK-001",
+      "fleetNumber": "e.g. FL-2024-001",
+      "make": "e.g. Toyota",
+      "model": "e.g. Land Cruiser",
+      "vehicleType": "e.g. SUV, Truck",
+      "year": "e.g. 2022",
+      "department": "e.g. Operations",
+      "operatorName": "Driver / Operator",
+      "site": "Select or type...",
+      "expectedKm": "e.g. 50000",
+      "minDays": "e.g. 30",
+      "maxTyres": "e.g. 2",
+      "tyreSize": "e.g. 265/70R17",
+      "brand": "e.g. Michelin",
+      "budget": "e.g. 5000",
+      "notes": "Any additional notes..."
+    },
+    "customFieldsTitle": "Additional imported fields (read-only)",
+    "save": "Save Vehicle",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "required": "Asset No is required"
+  },
+  "delete": {
+    "title": "Delete Vehicle",
+    "question": "Delete vehicle {assetNo}?",
+    "warning": "This removes the fleet record permanently. Tyre history records for this asset are not affected.",
+    "confirm": "Delete Vehicle",
+    "deleting": "Deleting...",
+    "cancel": "Cancel",
+    "errNoPermission": "The vehicle could not be deleted - you may not have permission, or it was already removed.",
+    "errFailed": "Delete failed. Please try again."
+  },
+  "bulkDelete": {
+    "title": "Delete Vehicles",
+    "question": "Delete {count} selected vehicle(s)?",
+    "warning": "This removes the fleet records permanently. Tyre history records for these assets are not affected.",
+    "confirm": "Delete {count}",
+    "deleting": "Deleting...",
+    "cancel": "Cancel",
+    "errNoPermission": "No rows were deleted — you may not have permission (Admin only) or they were already removed.",
+    "errFailed": "Bulk delete failed. Please try again."
+  }
+}

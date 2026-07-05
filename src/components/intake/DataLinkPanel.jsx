@@ -4,14 +4,9 @@ import {
   CheckCircle2, Wrench, Truck,
 } from 'lucide-react'
 import * as imports from '../../lib/api/imports'
+import { useLanguage } from '../../contexts/LanguageContext'
 
-const TABLE_LABELS = {
-  tyre_records: 'Tyre Records',
-  work_orders: 'Work Orders',
-  inspections: 'Inspections',
-  corrective_actions: 'Corrective Actions',
-  accidents: 'Accidents',
-}
+const TABLE_KEYS = ['tyre_records', 'work_orders', 'inspections', 'corrective_actions', 'accidents']
 
 /**
  * Data Links — cross-table linkage health for the Data Intake Center. The whole
@@ -23,6 +18,7 @@ const TABLE_LABELS = {
  * @param {{ isElevated?: boolean }} props
  */
 export default function DataLinkPanel({ isElevated = false }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const [audit, setAudit] = useState(null) // null = loading
   const [error, setError] = useState('')
@@ -32,23 +28,19 @@ export default function DataLinkPanel({ isElevated = false }) {
   const load = useCallback(async () => {
     setError('')
     try { setAudit(await imports.linkAudit()) }
-    catch (e) { setError(e?.message || 'Could not load link health.'); setAudit({}) }
-  }, [])
+    catch (e) { setError(e?.message || t('intake.panels.dataLink.errorLoad')); setAudit({}) }
+  }, [t])
   useEffect(() => { load() }, [load])
 
   async function repair() {
-    if (!window.confirm(
-      `Create ${audit?.missing_assets_count ?? 'the'} missing vehicle record(s) from your tyre data?\n\n` +
-      'Each orphan Asset No becomes a skeleton vehicle (country + site copied from its tyres) so every ' +
-      'tyre/work-order/inspection links to a real vehicle. You can complete the details later in Fleet Master.',
-    )) return
+    if (!window.confirm(t('intake.panels.dataLink.repairConfirm', { count: audit?.missing_assets_count ?? '' }))) return
     setRepairing(true); setRepairMsg(''); setError('')
     try {
       const res = await imports.linkCreateMissingAssets()
-      setRepairMsg(`Created ${res?.created ?? 0} vehicle record(s). All linked records now resolve.`)
+      setRepairMsg(t('intake.panels.dataLink.repairSuccess', { count: res?.created ?? 0 }))
       await load()
     } catch (e) {
-      setError(e?.message || 'Repair failed.')
+      setError(e?.message || t('intake.panels.dataLink.errorRepair'))
     } finally { setRepairing(false) }
   }
 
@@ -64,20 +56,20 @@ export default function DataLinkPanel({ isElevated = false }) {
       >
         {open ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
         <Link2 size={16} className="text-[var(--accent)]" />
-        <span className="text-sm font-semibold text-[var(--text-primary)]">Data links</span>
+        <span className="text-sm font-semibold text-[var(--text-primary)]">{t('intake.panels.dataLink.header')}</span>
         {audit == null ? (
           <span className="text-xs text-[var(--text-muted)]">…</span>
         ) : healthy ? (
-          <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 size={13} /> all linked</span>
+          <span className="flex items-center gap-1 text-xs text-green-400"><CheckCircle2 size={13} /> {t('intake.panels.dataLink.allLinked')}</span>
         ) : (
-          <span className="flex items-center gap-1 text-xs text-amber-400"><AlertCircle size={13} /> {totalOrphans.toLocaleString('en-US')} unlinked record(s)</span>
+          <span className="flex items-center gap-1 text-xs text-amber-400"><AlertCircle size={13} /> {t('intake.panels.dataLink.unlinkedCount', { count: totalOrphans.toLocaleString('en-US') })}</span>
         )}
         <span className="ml-auto" />
         <RefreshCw
           size={14}
           className="text-gray-500 hover:text-gray-300"
           onClick={(e) => { e.stopPropagation(); setAudit(null); load() }}
-          title="Refresh"
+          title={t('intake.panels.dataLink.refresh')}
         />
       </button>
 
@@ -95,39 +87,37 @@ export default function DataLinkPanel({ isElevated = false }) {
           )}
 
           {audit == null && (
-            <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]"><Loader2 size={15} className="animate-spin" /> Checking cross-table links…</div>
+            <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]"><Loader2 size={15} className="animate-spin" /> {t('intake.panels.dataLink.checking')}</div>
           )}
 
           {audit != null && (
             <>
               <p className="text-xs text-[var(--text-muted)]">
-                Every module links to a vehicle by <span className="text-[var(--text-secondary)] font-medium">Asset No</span>.
-                Fleet has <span className="text-[var(--text-primary)] font-semibold">{Number(audit.fleet_assets ?? 0).toLocaleString('en-US')}</span> vehicle(s).
-                An <span className="text-amber-300">unlinked</span> row references an asset that doesn't exist in the fleet yet.
+                {t('intake.panels.dataLink.intro', { count: Number(audit.fleet_assets ?? 0).toLocaleString('en-US') })}
               </p>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-[var(--text-muted)] text-left">
-                      <th className="py-1.5 pr-4 font-medium">Table</th>
-                      <th className="py-1.5 pr-4 font-medium text-right">Rows</th>
-                      <th className="py-1.5 pr-4 font-medium text-right">Linked</th>
-                      <th className="py-1.5 pr-4 font-medium text-right">Unlinked</th>
-                      <th className="py-1.5 font-medium text-right">No asset</th>
+                      <th className="py-1.5 pr-4 font-medium">{t('intake.panels.dataLink.table')}</th>
+                      <th className="py-1.5 pr-4 font-medium text-right">{t('intake.panels.dataLink.rows')}</th>
+                      <th className="py-1.5 pr-4 font-medium text-right">{t('intake.panels.dataLink.linked')}</th>
+                      <th className="py-1.5 pr-4 font-medium text-right">{t('intake.panels.dataLink.unlinked')}</th>
+                      <th className="py-1.5 font-medium text-right">{t('intake.panels.dataLink.noAsset')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.entries(TABLE_LABELS).map(([key, label]) => {
-                      const t = tables[key] ?? { total: 0, orphans: 0, blank_asset: 0 }
-                      const linked = Math.max(0, (t.total ?? 0) - (t.orphans ?? 0) - (t.blank_asset ?? 0))
+                    {TABLE_KEYS.map((key) => {
+                      const row = tables[key] ?? { total: 0, orphans: 0, blank_asset: 0 }
+                      const linked = Math.max(0, (row.total ?? 0) - (row.orphans ?? 0) - (row.blank_asset ?? 0))
                       return (
                         <tr key={key} className="border-t border-gray-800/60">
-                          <td className="py-1.5 pr-4 text-[var(--text-secondary)]">{label}</td>
-                          <td className="py-1.5 pr-4 text-right text-[var(--text-primary)]">{Number(t.total ?? 0).toLocaleString('en-US')}</td>
+                          <td className="py-1.5 pr-4 text-[var(--text-secondary)]">{t(`intake.panels.dataLink.tables.${key}`)}</td>
+                          <td className="py-1.5 pr-4 text-right text-[var(--text-primary)]">{Number(row.total ?? 0).toLocaleString('en-US')}</td>
                           <td className="py-1.5 pr-4 text-right text-green-400">{linked.toLocaleString('en-US')}</td>
-                          <td className={`py-1.5 pr-4 text-right ${t.orphans ? 'text-amber-400 font-semibold' : 'text-[var(--text-muted)]'}`}>{Number(t.orphans ?? 0).toLocaleString('en-US')}</td>
-                          <td className="py-1.5 text-right text-[var(--text-muted)]">{Number(t.blank_asset ?? 0).toLocaleString('en-US')}</td>
+                          <td className={`py-1.5 pr-4 text-right ${row.orphans ? 'text-amber-400 font-semibold' : 'text-[var(--text-muted)]'}`}>{Number(row.orphans ?? 0).toLocaleString('en-US')}</td>
+                          <td className="py-1.5 text-right text-[var(--text-muted)]">{Number(row.blank_asset ?? 0).toLocaleString('en-US')}</td>
                         </tr>
                       )
                     })}
@@ -139,7 +129,7 @@ export default function DataLinkPanel({ isElevated = false }) {
                 <div className="bg-amber-900/15 border border-amber-700/40 rounded-xl p-4 space-y-3">
                   <p className="text-sm text-amber-300 flex items-center gap-2">
                     <Truck size={15} />
-                    {Number(audit.missing_assets_count).toLocaleString('en-US')} asset(s) referenced by your data don't exist in Fleet Master yet.
+                    {t('intake.panels.dataLink.missingAssets', { count: Number(audit.missing_assets_count).toLocaleString('en-US') })}
                   </p>
                   {(audit.missing_assets_top ?? []).length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
@@ -149,7 +139,7 @@ export default function DataLinkPanel({ isElevated = false }) {
                         </span>
                       ))}
                       {audit.missing_assets_top.length > 12 && (
-                        <span className="text-[11px] text-gray-500">+{audit.missing_assets_top.length - 12} more…</span>
+                        <span className="text-[11px] text-gray-500">{t('intake.panels.dataLink.moreAssets', { count: audit.missing_assets_top.length - 12 })}</span>
                       )}
                     </div>
                   )}
@@ -160,14 +150,13 @@ export default function DataLinkPanel({ isElevated = false }) {
                       className="btn-primary text-xs flex items-center gap-1.5 disabled:opacity-50"
                     >
                       {repairing ? <Loader2 size={13} className="animate-spin" /> : <Wrench size={13} />}
-                      Create the missing vehicles from tyre data
+                      {t('intake.panels.dataLink.repairButton')}
                     </button>
                   ) : (
-                    <p className="text-xs text-gray-400">Ask an administrator to run the linkage repair.</p>
+                    <p className="text-xs text-gray-400">{t('intake.panels.dataLink.askAdmin')}</p>
                   )}
                   <p className="text-[11px] text-gray-500">
-                    Creates one skeleton vehicle per missing Asset No (country &amp; site copied from its latest tyre record),
-                    marked "Auto-created" — complete the details later in Fleet Master. Fully audited.
+                    {t('intake.panels.dataLink.repairNote')}
                   </p>
                 </div>
               )}

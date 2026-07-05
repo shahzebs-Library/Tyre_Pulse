@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase'
 import * as customData from '../lib/api/customData'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import {
   Database, Search, Plus, Trash2, Check, X, ArrowRight,
@@ -45,11 +46,12 @@ const CANONICAL_FIELDS = [
   { key: 'pressure_reading', label: 'Pressure (PSI)' },
 ]
 
-const TABS = ['Custom Fields', 'Synonyms', 'Browse Records']
+const TABS = ['fields', 'synonyms', 'records']
 
 export default function CustomData() {
   const { profile } = useAuth()
   const { activeCountry } = useSettings()
+  const { t } = useLanguage()
 
   const [tab, setTab]             = useState(0)
   const [fieldStats, setFieldStats] = useState([])   // [{ field_key, record_count, sample_vals }]
@@ -142,7 +144,7 @@ export default function CustomData() {
   // ── Synonym CRUD ─────────────────────────────────────────────────────────────
 
   async function addSynonym(customName, mapsTo) {
-    if (!customName.trim() || !mapsTo) { setAddError('Both fields are required.'); return }
+    if (!customName.trim() || !mapsTo) { setAddError(t('customdata.synonyms.add.errorBothRequired')); return }
     setAddSaving(true); setAddError('')
     try {
       await customData.createFieldSynonym({
@@ -178,12 +180,12 @@ export default function CustomData() {
         .from('field_synonyms').delete().eq('id', deleteTarget.id).select('id')
       if (error) throw error
       if ((data?.length ?? 0) === 0) {
-        throw new Error('The synonym could not be deleted - you may not have permission, or it was already removed.')
+        throw new Error(t('customdata.synonyms.delete.errNotDeleted'))
       }
       setSynonyms(s => s.filter(x => x.id !== deleteTarget.id))
       setDeleteTarget(null)
     } catch (e) {
-      setDeleteError(e.message || 'Delete failed. Please try again.')
+      setDeleteError(e.message || t('customdata.synonyms.delete.errFailed'))
     } finally {
       setDeleting(false)
     }
@@ -279,22 +281,22 @@ export default function CustomData() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Custom Data Manager"
-        subtitle="Every column from every upload is saved here - nothing is ever lost"
+        title={t('customdata.title')}
+        subtitle={t('customdata.subtitle')}
         icon={Database}
         actions={
           <button onClick={exportExtraFields} className="btn-secondary flex items-center gap-2 text-sm">
-            <Download size={14} /> Export All Custom Data
+            <Download size={14} /> {t('customdata.actions.exportAll')}
           </button>
         }
       />
 
       {/* ── Summary strip ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile icon={Layers}        label="Unique Custom Fields"  value={fieldStats.length}         color="blue" />
-        <StatTile icon={Database}      label="Records with Custom Data" value={totalCustomRecords}     color="green" />
-        <StatTile icon={Tag}           label="Permanent Synonyms"    value={synonyms.length}           color="purple" />
-        <StatTile icon={Link2}         label="Auto-mapped on Upload" value={synonyms.reduce((a,b) => a + b.use_count, 0)} color="yellow" />
+        <StatTile icon={Layers}        label={t('customdata.stats.uniqueFields')}  value={fieldStats.length}         color="blue" />
+        <StatTile icon={Database}      label={t('customdata.stats.recordsWithCustomData')} value={totalCustomRecords}     color="green" />
+        <StatTile icon={Tag}           label={t('customdata.stats.permanentSynonyms')}    value={synonyms.length}           color="purple" />
+        <StatTile icon={Link2}         label={t('customdata.stats.autoMappedOnUpload')} value={synonyms.reduce((a,b) => a + b.use_count, 0)} color="yellow" />
       </div>
 
       {/* ── How it works banner ── */}
@@ -302,11 +304,9 @@ export default function CustomData() {
         <div className="flex items-start gap-3">
           <Info size={18} className="text-blue-400 flex-shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-blue-300">All your data is always saved - nothing is skipped or lost</p>
+            <p className="text-sm font-semibold text-blue-300">{t('customdata.banner.title')}</p>
             <p className="text-sm text-gray-400">
-              When you upload a file, every column maps to a standard field. Any column that doesn't match a standard field
-              is automatically saved as <strong className="text-gray-300">custom data</strong>. You can view it here, use it across modules,
-              export it, or teach the system to always recognise it by creating a <strong className="text-gray-300">permanent synonym</strong>.
+              {t('customdata.banner.bodyPart1')}<strong className="text-gray-300">{t('customdata.banner.customData')}</strong>{t('customdata.banner.bodyPart2')}<strong className="text-gray-300">{t('customdata.banner.permanentSynonym')}</strong>{t('customdata.banner.bodyPart3')}
             </p>
           </div>
         </div>
@@ -314,15 +314,15 @@ export default function CustomData() {
 
       {/* ── Tabs ── */}
       <div className="flex gap-1 bg-gray-900/60 rounded-xl p-1 w-fit border border-gray-800">
-        {TABS.map((t, i) => (
+        {TABS.map((tabKey, i) => (
           <button
-            key={t}
+            key={tabKey}
             onClick={() => setTab(i)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               tab === i ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300'
             }`}
           >
-            {t}
+            {t(`customdata.tabs.${tabKey}`)}
             {i === 0 && fieldStats.length > 0 && (
               <span className="ml-2 text-xs bg-blue-900/60 text-blue-300 px-1.5 py-0.5 rounded-full">{fieldStats.length}</span>
             )}
@@ -342,7 +342,7 @@ export default function CustomData() {
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input
                   className="input pl-8 text-sm w-full"
-                  placeholder="Search custom fields..."
+                  placeholder={t('customdata.customFields.searchPlaceholder')}
                   value={statsSearch}
                   onChange={e => setStatsSearch(e.target.value)}
                 />
@@ -377,8 +377,8 @@ export default function CustomData() {
             ) : filteredStats.length === 0 ? (
               <div className="card text-center py-16">
                 <Database size={32} className="text-gray-700 mx-auto mb-3" />
-                <p className="text-gray-400 font-medium">No custom fields yet</p>
-                <p className="text-gray-600 text-sm mt-1">Upload a file with columns beyond the standard fields - they'll appear here automatically.</p>
+                <p className="text-gray-400 font-medium">{t('customdata.customFields.empty.title')}</p>
+                <p className="text-gray-600 text-sm mt-1">{t('customdata.customFields.empty.body')}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -399,11 +399,11 @@ export default function CustomData() {
                           <span className="font-mono text-sm font-semibold text-white">{stat.field_key}</span>
                           {hasSynonym && (
                             <span className="text-xs bg-green-900/50 text-green-300 border border-green-700/40 px-2 py-0.5 rounded-full flex items-center gap-1">
-                              <Check size={10} /> auto-maps to <strong>{hasSynonym.maps_to}</strong>
+                              <Check size={10} /> {t('customdata.customFields.autoMapsTo')} <strong>{hasSynonym.maps_to}</strong>
                             </span>
                           )}
                         </div>
-                        <span className="text-xs text-gray-500 flex-shrink-0">{Number(stat.record_count).toLocaleString()} records</span>
+                        <span className="text-xs text-gray-500 flex-shrink-0">{t('customdata.customFields.recordsCount', { count: Number(stat.record_count).toLocaleString() })}</span>
                       </div>
 
                       {/* Sample values */}
@@ -423,20 +423,20 @@ export default function CustomData() {
                               onClick={() => { setPromoteKey(stat.field_key); setPromoteTarget('') }}
                               className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-900/30 text-purple-300 border border-purple-700/40 hover:bg-purple-900/50"
                             >
-                              <Link2 size={11} /> Create Synonym
+                              <Link2 size={11} /> {t('customdata.customFields.actions.createSynonym')}
                             </button>
                           )}
                           <button
                             onClick={() => { setBackfillKey(stat.field_key); setBackfillTarget(''); setBackfillResult(null) }}
                             className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-900/30 text-blue-300 border border-blue-700/40 hover:bg-blue-900/50"
                           >
-                            <ArrowRight size={11} /> Copy to Field
+                            <ArrowRight size={11} /> {t('customdata.customFields.actions.copyToField')}
                           </button>
                           <button
                             onClick={() => { setFilterKey(stat.field_key); setFilterVal(''); setTab(2) }}
                             className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-700/50 text-gray-300 border border-gray-600/40 hover:bg-gray-700"
                           >
-                            <Eye size={11} /> Browse Records
+                            <Eye size={11} /> {t('customdata.customFields.actions.browseRecords')}
                           </button>
                         </div>
                       )}
@@ -444,14 +444,14 @@ export default function CustomData() {
                       {/* Promote panel */}
                       {isPromoting && (
                         <div className="mt-2 p-3 rounded-lg bg-purple-900/20 border border-purple-700/40 space-y-2">
-                          <p className="text-xs text-purple-300 font-medium">Map "<span className="font-mono">{stat.field_key}</span>" to which standard field?</p>
+                          <p className="text-xs text-purple-300 font-medium">{t('customdata.customFields.promote.promptBefore')}<span className="font-mono">{stat.field_key}</span>{t('customdata.customFields.promote.promptAfter')}</p>
                           <select className="input text-xs w-full" value={promoteTarget} onChange={e => setPromoteTarget(e.target.value)}>
-                            <option value="">- choose field -</option>
-                            {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                            <option value="">{t('customdata.customFields.promote.choose')}</option>
+                            {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{t(`customdata.fields.${f.key}`)}</option>)}
                           </select>
                           <div className="flex gap-2">
-                            <button onClick={() => promote(stat.field_key, promoteTarget)} disabled={!promoteTarget} className="btn-primary text-xs py-1.5 px-3 disabled:opacity-40">Save Synonym</button>
-                            <button onClick={() => setPromoteKey(null)} className="btn-secondary text-xs py-1.5 px-3">Cancel</button>
+                            <button onClick={() => promote(stat.field_key, promoteTarget)} disabled={!promoteTarget} className="btn-primary text-xs py-1.5 px-3 disabled:opacity-40">{t('customdata.customFields.promote.save')}</button>
+                            <button onClick={() => setPromoteKey(null)} className="btn-secondary text-xs py-1.5 px-3">{t('customdata.customFields.promote.cancel')}</button>
                           </div>
                         </div>
                       )}
@@ -460,15 +460,15 @@ export default function CustomData() {
                       {isBackfilling && (
                         <div className="mt-2 p-3 rounded-lg bg-blue-900/20 border border-blue-700/40 space-y-2">
                           <p className="text-xs text-blue-300 font-medium">
-                            Copy values from "<span className="font-mono">{stat.field_key}</span>" into which standard field?
+                            {t('customdata.customFields.backfill.promptBefore')}<span className="font-mono">{stat.field_key}</span>{t('customdata.customFields.backfill.promptAfter')}
                           </p>
-                          <p className="text-xs text-gray-500">Only fills records where the target field is currently empty.</p>
+                          <p className="text-xs text-gray-500">{t('customdata.customFields.backfill.hint')}</p>
                           <select className="input text-xs w-full" value={backfillTarget} onChange={e => setBackfillTarget(e.target.value)}>
-                            <option value="">- choose target field -</option>
-                            {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                            <option value="">{t('customdata.customFields.backfill.chooseTarget')}</option>
+                            {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{t(`customdata.fields.${f.key}`)}</option>)}
                           </select>
                           {backfillResult && (
-                            <p className="text-xs text-green-300">✓ Updated {backfillResult.updated.toLocaleString()} records</p>
+                            <p className="text-xs text-green-300">✓ {t('customdata.customFields.backfill.result', { count: backfillResult.updated.toLocaleString() })}</p>
                           )}
                           <div className="flex gap-2">
                             <button
@@ -476,9 +476,9 @@ export default function CustomData() {
                               disabled={!backfillTarget || backfillRunning}
                               className="btn-primary text-xs py-1.5 px-3 disabled:opacity-40 flex items-center gap-1.5"
                             >
-                              {backfillRunning ? <><RefreshCw size={11} className="animate-spin" /> Running...</> : 'Run Backfill'}
+                              {backfillRunning ? <><RefreshCw size={11} className="animate-spin" /> {t('customdata.customFields.backfill.running')}</> : t('customdata.customFields.backfill.run')}
                             </button>
-                            <button onClick={() => { setBackfillKey(null); setBackfillResult(null) }} className="btn-secondary text-xs py-1.5 px-3">Done</button>
+                            <button onClick={() => { setBackfillKey(null); setBackfillResult(null) }} className="btn-secondary text-xs py-1.5 px-3">{t('customdata.customFields.backfill.done')}</button>
                           </div>
                         </div>
                       )}
@@ -497,24 +497,24 @@ export default function CustomData() {
             {/* Add new synonym */}
             <div className="card border-green-800/40">
               <h3 className="text-sm font-semibold text-white mb-1 flex items-center gap-2">
-                <Plus size={14} className="text-green-400" /> Add Permanent Synonym
+                <Plus size={14} className="text-green-400" /> {t('customdata.synonyms.add.title')}
               </h3>
               <p className="text-xs text-gray-400 mb-3">
-                Teach the upload engine to always recognise a column name. Next time a file contains that column, it will auto-map with 100% confidence.
+                {t('customdata.synonyms.add.description')}
               </p>
               {addError && <p className="text-xs text-red-400 mb-2">{addError}</p>}
               <div className="flex flex-wrap gap-3 items-end">
                 <div className="flex-1 min-w-[180px]">
-                  <label className="label text-xs">Column name in file</label>
-                  <input className="input text-sm" placeholder='e.g. "Reg Number", "رقم التسجيل"'
+                  <label className="label text-xs">{t('customdata.synonyms.add.columnNameLabel')}</label>
+                  <input className="input text-sm" placeholder={t('customdata.synonyms.add.columnNamePlaceholder')}
                     value={newCustom} onChange={e => { setNewCustom(e.target.value); setAddError('') }} />
                 </div>
                 <div className="text-gray-500 self-center pt-4"><ArrowRight size={16} /></div>
                 <div className="flex-1 min-w-[180px]">
-                  <label className="label text-xs">Maps to standard field</label>
+                  <label className="label text-xs">{t('customdata.synonyms.add.mapsToLabel')}</label>
                   <select className="input text-sm" value={newMapsTo} onChange={e => setNewMapsTo(e.target.value)}>
-                    <option value="">- select -</option>
-                    {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                    <option value="">{t('customdata.synonyms.add.select')}</option>
+                    {CANONICAL_FIELDS.map(f => <option key={f.key} value={f.key}>{t(`customdata.fields.${f.key}`)}</option>)}
                   </select>
                 </div>
                 <button
@@ -523,7 +523,7 @@ export default function CustomData() {
                   className="btn-primary disabled:opacity-40 flex items-center gap-2 self-end"
                 >
                   {addSaving ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                  Save
+                  {t('customdata.synonyms.add.save')}
                 </button>
               </div>
             </div>
@@ -534,10 +534,10 @@ export default function CustomData() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr>
-                      <th className="table-header">Column Name in File</th>
-                      <th className="table-header">Maps To</th>
-                      <th className="table-header">Times Used</th>
-                      <th className="table-header">Last Used</th>
+                      <th className="table-header">{t('customdata.synonyms.table.columnName')}</th>
+                      <th className="table-header">{t('customdata.synonyms.table.mapsTo')}</th>
+                      <th className="table-header">{t('customdata.synonyms.table.timesUsed')}</th>
+                      <th className="table-header">{t('customdata.synonyms.table.lastUsed')}</th>
                       <th className="table-header w-16"></th>
                     </tr>
                   </thead>
@@ -557,18 +557,18 @@ export default function CustomData() {
             ) : synonyms.length === 0 ? (
               <div className="card text-center py-12">
                 <Tag size={28} className="text-gray-700 mx-auto mb-3" />
-                <p className="text-gray-400 font-medium">No synonyms yet</p>
-                <p className="text-gray-600 text-sm mt-1">Add a synonym above or use "Create Synonym" on any custom field.</p>
+                <p className="text-gray-400 font-medium">{t('customdata.synonyms.empty.title')}</p>
+                <p className="text-gray-600 text-sm mt-1">{t('customdata.synonyms.empty.body')}</p>
               </div>
             ) : (
               <div className="card overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr>
-                      <th className="table-header">Column Name in File</th>
-                      <th className="table-header">Maps To</th>
-                      <th className="table-header">Times Used</th>
-                      <th className="table-header">Last Used</th>
+                      <th className="table-header">{t('customdata.synonyms.table.columnName')}</th>
+                      <th className="table-header">{t('customdata.synonyms.table.mapsTo')}</th>
+                      <th className="table-header">{t('customdata.synonyms.table.timesUsed')}</th>
+                      <th className="table-header">{t('customdata.synonyms.table.lastUsed')}</th>
                       <th className="table-header w-16"></th>
                     </tr>
                   </thead>
@@ -579,12 +579,12 @@ export default function CustomData() {
                         <td className="table-cell">
                           <span className="flex items-center gap-1.5">
                             <ArrowRight size={12} className="text-gray-600" />
-                            <span className="text-green-300 font-medium">{CANONICAL_FIELDS.find(f => f.key === s.maps_to)?.label ?? s.maps_to}</span>
+                            <span className="text-green-300 font-medium">{CANONICAL_FIELDS.find(f => f.key === s.maps_to) ? t(`customdata.fields.${s.maps_to}`) : s.maps_to}</span>
                           </span>
                         </td>
                         <td className="table-cell text-gray-400">{s.use_count.toLocaleString()}</td>
                         <td className="table-cell text-gray-500 text-xs">
-                          {s.last_used_at ? formatDate(s.last_used_at) : '-'}
+                          {s.last_used_at ? formatDate(s.last_used_at) : t('customdata.synonyms.table.never')}
                         </td>
                         <td className="table-cell">
                           <button onClick={() => confirmDeleteSynonym(s)} className="p-1.5 rounded hover:bg-red-900/30 text-gray-600 hover:text-red-400 transition-colors">
@@ -603,10 +603,9 @@ export default function CustomData() {
               <div className="flex items-start gap-3">
                 <Zap size={16} className="text-yellow-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-gray-300 mb-1">How synonyms power future uploads</p>
+                  <p className="text-sm font-semibold text-gray-300 mb-1">{t('customdata.synonyms.info.title')}</p>
                   <p className="text-xs text-gray-500 leading-relaxed">
-                    When you upload a new file, the system loads all synonyms first. A synonym match scores 100% confidence - the highest possible -
-                    so the column maps automatically without you needing to adjust anything. Synonyms work for any variation of the column name including Arabic headers.
+                    {t('customdata.synonyms.info.body')}
                   </p>
                 </div>
               </div>
@@ -622,24 +621,24 @@ export default function CustomData() {
             <div className="card">
               <div className="flex flex-wrap gap-3 items-end">
                 <div className="flex-1 min-w-[180px]">
-                  <label className="label text-xs">Filter by custom field</label>
+                  <label className="label text-xs">{t('customdata.records.filters.byFieldLabel')}</label>
                   <select className="input text-sm" value={filterKey} onChange={e => { setFilterKey(e.target.value); setFilterVal(''); setRecPage(0) }}>
-                    <option value="">All custom fields</option>
+                    <option value="">{t('customdata.records.filters.allFields')}</option>
                     {fieldStats.map(f => <option key={f.field_key} value={f.field_key}>{f.field_key} ({Number(f.record_count).toLocaleString()})</option>)}
                   </select>
                 </div>
                 {filterKey && (
                   <div className="flex-1 min-w-[180px]">
-                    <label className="label text-xs">Field value contains</label>
-                    <input className="input text-sm" placeholder="e.g. Riyadh, ABC-123..."
+                    <label className="label text-xs">{t('customdata.records.filters.valueLabel')}</label>
+                    <input className="input text-sm" placeholder={t('customdata.records.filters.valuePlaceholder')}
                       value={filterVal} onChange={e => { setFilterVal(e.target.value); setRecPage(0) }} />
                   </div>
                 )}
                 <button onClick={() => { setFilterKey(''); setFilterVal(''); setRecPage(0) }} className="btn-secondary text-xs self-end flex items-center gap-1.5">
-                  <X size={12} /> Clear
+                  <X size={12} /> {t('customdata.records.filters.clear')}
                 </button>
                 <button onClick={exportExtraFields} className="btn-secondary text-xs self-end flex items-center gap-1.5">
-                  <Download size={12} /> Export
+                  <Download size={12} /> {t('customdata.records.filters.export')}
                 </button>
               </div>
             </div>
@@ -648,7 +647,7 @@ export default function CustomData() {
             <div className="card overflow-x-auto">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm text-gray-400">
-                  <span className="text-white font-semibold">{totalRecords.toLocaleString()}</span> records with custom data
+                  <span className="text-white font-semibold">{totalRecords.toLocaleString()}</span> {t('customdata.records.countSuffix')}
                 </p>
                 {totalPages > 1 && (
                   <div className="flex items-center gap-2 text-sm">
@@ -664,11 +663,11 @@ export default function CustomData() {
                   <thead>
                     <tr>
                       <th className="table-header w-8"></th>
-                      <th className="table-header">Asset No</th>
-                      <th className="table-header">Serial No</th>
-                      <th className="table-header">Date</th>
-                      <th className="table-header">Site</th>
-                      <th className="table-header">Custom Fields</th>
+                      <th className="table-header">{t('customdata.records.table.assetNo')}</th>
+                      <th className="table-header">{t('customdata.records.table.serialNo')}</th>
+                      <th className="table-header">{t('customdata.records.table.date')}</th>
+                      <th className="table-header">{t('customdata.records.table.site')}</th>
+                      <th className="table-header">{t('customdata.records.table.customFields')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -691,17 +690,17 @@ export default function CustomData() {
                   </tbody>
                 </table>
               ) : records.length === 0 ? (
-                <div className="text-center py-10 text-gray-500">No records match this filter.</div>
+                <div className="text-center py-10 text-gray-500">{t('customdata.records.empty')}</div>
               ) : (
                 <table className="w-full text-xs">
                   <thead>
                     <tr>
                       <th className="table-header w-8"></th>
-                      <th className="table-header">Asset No</th>
-                      <th className="table-header">Serial No</th>
-                      <th className="table-header">Date</th>
-                      <th className="table-header">Site</th>
-                      <th className="table-header">Custom Fields</th>
+                      <th className="table-header">{t('customdata.records.table.assetNo')}</th>
+                      <th className="table-header">{t('customdata.records.table.serialNo')}</th>
+                      <th className="table-header">{t('customdata.records.table.date')}</th>
+                      <th className="table-header">{t('customdata.records.table.site')}</th>
+                      <th className="table-header">{t('customdata.records.table.customFields')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -727,7 +726,7 @@ export default function CustomData() {
                                   </span>
                                 ))}
                                 {efKeys.length > 3 && (
-                                  <span className="text-gray-600 text-xs">+{efKeys.length - 3} more</span>
+                                  <span className="text-gray-600 text-xs">{t('customdata.records.table.moreCount', { count: efKeys.length - 3 })}</span>
                                 )}
                               </div>
                             </td>
@@ -770,20 +769,23 @@ export default function CustomData() {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">Delete Synonym</h2>
+              <h2 className="text-lg font-semibold text-white">{t('customdata.synonyms.delete.title')}</h2>
               <button onClick={closeDeleteSynonym} className="text-gray-400 hover:text-white"><X size={18} /></button>
             </div>
             <div className="flex gap-3 mb-4">
               <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-white font-medium">
-                  Delete synonym <span className="font-mono text-yellow-300">{deleteTarget.custom_name}</span>?
+                  {t('customdata.synonyms.delete.questionBefore')}
+                  <span className="font-mono text-yellow-300">{deleteTarget.custom_name}</span>
+                  {t('customdata.synonyms.delete.questionAfter')}
                 </p>
                 <p className="text-gray-400 text-sm mt-1">
-                  Future uploads will no longer auto-map this column to{' '}
+                  {t('customdata.synonyms.delete.warningBefore')}
                   <span className="text-green-300 font-medium">
-                    {CANONICAL_FIELDS.find(f => f.key === deleteTarget.maps_to)?.label ?? deleteTarget.maps_to}
-                  </span>. Existing records are not affected.
+                    {CANONICAL_FIELDS.find(f => f.key === deleteTarget.maps_to) ? t(`customdata.fields.${deleteTarget.maps_to}`) : deleteTarget.maps_to}
+                  </span>
+                  {t('customdata.synonyms.delete.warningAfter')}
                 </p>
               </div>
             </div>
@@ -792,9 +794,9 @@ export default function CustomData() {
             )}
             <div className="flex gap-3">
               <button onClick={deleteSynonym} disabled={deleting} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-                <Trash2 size={15} /> {deleting ? 'Deleting...' : 'Delete Synonym'}
+                <Trash2 size={15} /> {deleting ? t('customdata.synonyms.delete.deleting') : t('customdata.synonyms.delete.confirm')}
               </button>
-              <button onClick={closeDeleteSynonym} disabled={deleting} className="btn-secondary disabled:opacity-50">Cancel</button>
+              <button onClick={closeDeleteSynonym} disabled={deleting} className="btn-secondary disabled:opacity-50">{t('customdata.synonyms.delete.cancel')}</button>
             </div>
           </div>
         </div>

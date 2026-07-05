@@ -1,0 +1,219 @@
+{
+  "title": "Upload Data",
+  "subtitle": "Import tyre and fleet data from Excel or CSV files",
+  "importDataIntake": "Import via Data Intake Center",
+  "banner": {
+    "prefix": "New: use the controlled",
+    "link": "Data Intake Center",
+    "suffix": "for validated, audited, multi-country imports with duplicate detection and rollback."
+  },
+  "steps": {
+    "idle": "Upload File",
+    "sheets": "Select Sheets",
+    "mapping": "Map Columns",
+    "preview": "Preview & Check",
+    "uploading": "Uploading",
+    "done": "Complete"
+  },
+  "fields": {
+    "tyre": {
+      "sr": "Row / SR No.",
+      "issue_date": "Issue / Fitment Date",
+      "description": "Description / Tyre Size",
+      "brand": "Brand / Make",
+      "serial_no": "Serial / Tyre Number",
+      "qty": "Quantity",
+      "cost_per_tyre": "Unit Cost / Tyre",
+      "total_amount": "Total Amount (qty included)",
+      "job_card": "Job Card / Work Order",
+      "mis_number": "MIS Number",
+      "asset_no": "Asset / Vehicle No.",
+      "site": "Site / Location",
+      "country": "Country",
+      "remarks": "Remarks / Complaint",
+      "vehicle_type": "Vehicle Type / Category",
+      "position": "Tyre Position",
+      "km_at_fitment": "Fitted KM",
+      "hrs_at_fitment": "Fitted Hours",
+      "removal_date": "Removed Date",
+      "km_at_removal": "Removed KM",
+      "hrs_at_removal": "Removed Hours",
+      "removal_reason": "Removal Reason",
+      "total_km": "Total KM Run",
+      "total_hrs": "Total Hours Run"
+    },
+    "stock": {
+      "item_code": "Item Code",
+      "description": "Description",
+      "brand": "Brand",
+      "category": "Category",
+      "qty": "Quantity",
+      "unit_cost": "Unit Cost",
+      "site": "Site",
+      "location": "Bin Location",
+      "min_level": "Min Stock",
+      "reorder_qty": "Reorder Qty",
+      "supplier": "Supplier",
+      "notes": "Notes"
+    }
+  },
+  "idle": {
+    "types": {
+      "tyres": { "label": "Tyre Records", "desc": "Issue records, replacements, costs" },
+      "fleet": { "label": "Fleet / Vehicle", "desc": "Vehicle registry, asset specs" },
+      "stock": { "label": "Stock Records", "desc": "Inventory items and stock levels" },
+      "auto": { "label": "Auto-detect", "desc": "Figure it out from column names" }
+    },
+    "fleetBanner": {
+      "title": "Fleet data has a dedicated upload",
+      "desc": "Use Fleet Master for vehicle imports - it has correct column mapping and validation.",
+      "link": "Go to Fleet Master →"
+    },
+    "columnsInfo": {
+      "title": "Your columns don't need to match exactly",
+      "desc": "The smart mapping engine recognises hundreds of column name variations, abbreviations, and Arabic headers. Use any naming convention - the engine will match automatically. You can adjust any mapping before uploading."
+    },
+    "dropzone": {
+      "dropActive": "Drop to upload",
+      "prompt": "Drop your Excel or CSV file here",
+      "hint": "or click to browse · Excel, OpenDocument, CSV/TSV supported"
+    },
+    "fileTooLarge": "File too large - maximum 50 MB. Split the file into smaller parts and upload separately.",
+    "readError": "Could not read \"{fileName}\". It may be open in another program, too large, or corrupted - close it elsewhere and try again.",
+    "parseError": "Could not read \"{fileName}\" as a spreadsheet or CSV. If it opens in Excel, re-save it as .xlsx or .csv and upload again. ({message})",
+    "noCells": "This file/sheet has no readable cells."
+  },
+  "sheets": {
+    "title": "Select Sheets to Import",
+    "subtitle": "This workbook has {count} sheets. Choose which to include - pivot and summary sheets are suggested to skip.",
+    "pivotBadge": "looks like a pivot",
+    "rowsCount": "{count} rows",
+    "import": "Import {count} rows →",
+    "cancel": "Cancel"
+  },
+  "mapping": {
+    "rowsColumnsCount": "· {rows} rows · {columns} columns detected",
+    "recalledFromMemory": "Recalled from memory",
+    "smartAutoMapped": "Smart auto-mapped",
+    "filePreview": {
+      "title": "File Preview",
+      "hint": "If the wrong row was detected as the header, pick the correct one - the table re-maps instantly.",
+      "headerRowLabel": "Header row:",
+      "rowOption": "Row {n}",
+      "rowOptionWithLabel": "Row {n} - {label}",
+      "rowOptionEmpty": "Row {n} (empty)",
+      "noDataRows": "No data rows detected below the current header row - try selecting a different header row above."
+    },
+    "completeness": {
+      "allMapped": "All {count} required fields are mapped. You can proceed to preview.",
+      "partial": "{mapped}/{total} required fields mapped. Map the remaining fields before uploading."
+    },
+    "unmappedWarning": {
+      "prefix": "{count} column(s) from your file are not mapped to any field - they will be saved in",
+      "suffix": "and not lost:"
+    },
+    "columnMapping": {
+      "title": "Column Mapping",
+      "subtitle": "Match your file's columns to the system fields. Confidence shown by colour.",
+      "searchPlaceholder": "Filter fields...",
+      "legend": {
+        "exactHigh": "Exact / High match",
+        "medium": "Medium match",
+        "noMatch": "No match - please select",
+        "optional": "Optional / Skipped"
+      },
+      "matchPct": "{score}% match",
+      "skipOption": "(skip this field)"
+    },
+    "buttons": {
+      "preview": "Preview & Check Duplicates",
+      "cancel": "Cancel"
+    }
+  },
+  "preview": {
+    "dupCheck": {
+      "title": "Duplicate Check Results",
+      "reuploadWarning": "This looks like data you have already uploaded - {count} matching records found.",
+      "exactDuplicates": "{count} exact duplicate(s)",
+      "serialConflicts": "{count} serial conflict(s)",
+      "skipDuplicates": "Skip duplicates ({count})",
+      "reviewIndividually": "Review individually",
+      "uploadAllAnyway": "Upload all anyway",
+      "rowsWillBeSkipped": "{count} row(s) will be skipped"
+    },
+    "reviewModal": {
+      "title": "Review Duplicates",
+      "rowLabel": "Row {n}: {serial}",
+      "fileVsDb": "File: {fileAsset} · {fileDate} | DB: {dbAsset} · {dbDate}",
+      "skip": "Skip",
+      "keep": "Keep",
+      "done": "Done"
+    },
+    "dupesBanner": {
+      "title": "{count} potential duplicate serial number(s) detected",
+      "skipCheckbox": "Skip duplicate records ({count} rows)"
+    },
+    "autoClassifyInfo": "Records will be auto-classified on upload. High/Medium confidence results are marked cleaned instantly. Low confidence records are flagged for review in Data Cleaning.",
+    "quality": {
+      "title": "Data Quality",
+      "rowsAnalysed": "· {count} rows analysed",
+      "columns": { "field": "Field", "filled": "Filled", "invalid": "Invalid", "dupes": "In-file dupes" },
+      "lowFillWarning": "⚠ A required field is under 50% filled - check the column mapping or header row before uploading."
+    },
+    "cleaning": {
+      "title": "Cleaning Preview",
+      "autoClassified": "{count} auto-classified",
+      "needReview": "{count} need review",
+      "ofSampled": "of {count} sampled",
+      "aiCheckboxLabel": "Clean low-confidence rows with AI",
+      "aiCheckboxHint": "Routes the {count} \"need review\" rows through the secure AI cleaning function for better category/risk. Uses AI tokens - off by default."
+    },
+    "table": { "title": "Preview (first 5 rows)" },
+    "country": {
+      "selectWarningTitle": "Select a country before uploading",
+      "selectWarningDesc": "Pick a specific country in the top bar (KSA / UAE / Egypt). Every row will be stamped with it so your data never mixes.",
+      "confirmed": "Uploading to {country} - every row will be stamped with this country."
+    },
+    "buttons": {
+      "upload": "Upload {count} Records",
+      "back": "Back",
+      "cancel": "Cancel"
+    },
+    "countrySelectError": "Select a specific country in the top bar before uploading. Every row will be stamped with that country so your data never mixes.",
+    "buildError": "Could not build the preview: {message}. Check the column mapping and try again."
+  },
+  "uploading": {
+    "title": "Uploading & classifying",
+    "subtitle": "Auto-classifying records with the Smart Engine",
+    "rowsProcessed": "{count} rows processed",
+    "totalRecords": "{count} total records"
+  },
+  "done": {
+    "submittedTitle": "Submitted for Approval",
+    "completeTitle": "Upload Complete",
+    "submittedDesc": "{count} records sent to an administrator - they will appear once approved.",
+    "completeDesc": "Records imported and classified successfully",
+    "tiles": {
+      "recordsSubmitted": "Records Submitted",
+      "recordsAdded": "Records Added",
+      "autoClassified": "Auto-Classified",
+      "needReview": "Need Review",
+      "dupesSkipped": "Dupes Skipped"
+    },
+    "extraFields": {
+      "title": "{count} extra column(s) saved as custom data - nothing was lost",
+      "desc": "All columns that don't match a standard field are preserved in Custom Data. You can browse, search, export, or teach the system to recognise them permanently.",
+      "link": "View Custom Data →"
+    },
+    "needsReview": {
+      "title": "{count} records need manual classification",
+      "desc": "Open Data Cleaning to approve or adjust them.",
+      "button": "Go to Data Cleaning"
+    },
+    "errorLog": "View error log ({count} row(s) skipped - see reason per row)",
+    "uploadAnother": "Upload Another File"
+  },
+  "errors": {
+    "approvalError": "Could not submit for approval: {message}"
+  }
+}

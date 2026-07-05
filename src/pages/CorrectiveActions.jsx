@@ -12,6 +12,7 @@ import { SkeletonTable } from '../components/ui/Skeleton'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import { RISK_BADGE_DARK } from '../lib/formatters'
+import { useLanguage } from '../contexts/LanguageContext'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const STATUS_META = {
@@ -81,6 +82,7 @@ function KpiCard({ label, value, sub, icon: Icon, color = 'text-blue-400', onCli
 }
 
 function RootCauseBar({ actions }) {
+  const { t } = useLanguage()
   const map = useMemo(() => {
     const m = {}
     actions.filter(a => a.root_cause).forEach(a => { m[a.root_cause] = (m[a.root_cause] || 0) + 1 })
@@ -94,8 +96,8 @@ function RootCauseBar({ actions }) {
     <div className="card p-4">
       <div className="flex items-center gap-2 mb-3">
         <BarChart2 size={14} className="text-blue-400" />
-        <span className="text-sm font-semibold text-white">Root Cause Distribution</span>
-        <span className="text-xs text-gray-500 ml-auto">{actions.filter(a => a.root_cause).length} with cause</span>
+        <span className="text-sm font-semibold text-white">{t('correctiveactions.analytics.rootCauseDistribution')}</span>
+        <span className="text-xs text-gray-500 ml-auto">{t('correctiveactions.analytics.withCause', { count: actions.filter(a => a.root_cause).length })}</span>
       </div>
       <div className="space-y-2">
         {map.map(([cause, count]) => (
@@ -116,6 +118,7 @@ function RootCauseBar({ actions }) {
 }
 
 function ActionCard({ a, onEdit, onStatusChange, country }) {
+  const { t } = useLanguage()
   const od = overdueDays(a.due_date, a.status)
   const meta = STATUS_META[a.status] ?? STATUS_META.Open
   const Icon = meta.icon
@@ -129,14 +132,14 @@ function ActionCard({ a, onEdit, onStatusChange, country }) {
             <Icon size={14} className={meta.color} />
             <h3 className="font-semibold text-white text-sm">
               {a.title}
-              {a.photo_data && <Camera className="inline w-3 h-3 ml-1.5 text-gray-500" title="Has photo" />}
+              {a.photo_data && <Camera className="inline w-3 h-3 ml-1.5 text-gray-500" title={t('correctiveactions.card.hasPhoto')} />}
             </h3>
             <span className={`badge text-xs px-2 py-0.5 rounded-full border font-medium ${PRIORITY_BADGE[a.priority]}`}>
               {a.priority}
             </span>
             {od && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/40 text-red-400 border border-red-700/50 font-medium">
-                {od}d overdue
+                {t('correctiveactions.card.overdueDays', { count: od })}
               </span>
             )}
           </div>
@@ -148,11 +151,11 @@ function ActionCard({ a, onEdit, onStatusChange, country }) {
             {a.tyre_serial && <span>🔵 {a.tyre_serial}</span>}
             {a.due_date    && (
               <span className={od ? 'text-red-400' : ''}>
-                📅 Due: {formatDate(a.due_date, country)}
+                📅 {t('correctiveactions.card.due')} {formatDate(a.due_date, country)}
               </span>
             )}
             <span className="text-gray-600">
-              {daysOpen(a.created_at, a.closed_at)}d {a.status === 'Closed' ? 'to close' : 'open'}
+              {daysOpen(a.created_at, a.closed_at)}d {a.status === 'Closed' ? t('correctiveactions.card.daysToClose') : t('correctiveactions.card.daysOpen')}
             </span>
           </div>
 
@@ -178,7 +181,7 @@ function ActionCard({ a, onEdit, onStatusChange, country }) {
             <option value="Closed">Closed</option>
           </select>
           <button onClick={() => onEdit(a)} className="text-xs text-gray-400 hover:text-blue-400 transition-colors px-2 py-1 rounded border border-gray-700 hover:border-blue-600/50">
-            Edit
+            {t('correctiveactions.card.edit')}
           </button>
         </div>
       </div>
@@ -187,6 +190,7 @@ function ActionCard({ a, onEdit, onStatusChange, country }) {
 }
 
 function TableRow({ a, onEdit, onStatusChange, country }) {
+  const { t } = useLanguage()
   const od = overdueDays(a.due_date, a.status)
   const meta = STATUS_META[a.status] ?? STATUS_META.Open
   const Icon = meta.icon
@@ -211,7 +215,7 @@ function TableRow({ a, onEdit, onStatusChange, country }) {
       <td className="px-3 py-2.5 text-xs text-gray-400">{a.asset_no || '-'}</td>
       <td className="px-3 py-2.5 text-xs">
         {od
-          ? <span className="text-red-400">{od}d overdue</span>
+          ? <span className="text-red-400">{t('correctiveactions.card.overdueDays', { count: od })}</span>
           : a.due_date ? <span className="text-gray-400">{formatDate(a.due_date, country)}</span>
           : <span className="text-gray-600">-</span>
         }
@@ -229,7 +233,7 @@ function TableRow({ a, onEdit, onStatusChange, country }) {
         </select>
       </td>
       <td className="px-3 py-2.5">
-        <button onClick={() => onEdit(a)} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">Edit</button>
+        <button onClick={() => onEdit(a)} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{t('correctiveactions.card.edit')}</button>
       </td>
     </tr>
   )
@@ -237,6 +241,7 @@ function TableRow({ a, onEdit, onStatusChange, country }) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function CorrectiveActions() {
+  const { t } = useLanguage()
   const { profile } = useAuth()
   const { activeCountry } = useSettings()
 
@@ -352,7 +357,7 @@ export default function CorrectiveActions() {
 
   async function save(e) {
     e.preventDefault()
-    if (!form.title.trim()) { setFormError('Title is required'); return }
+    if (!form.title.trim()) { setFormError(t('correctiveactions.errors.titleRequired')); return }
     setSaving(true)
     setFormError('')
     const payload = {
@@ -425,8 +430,14 @@ export default function CorrectiveActions() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Corrective Actions"
-        subtitle={`${actions.length} total · ${counts['Open']} open · ${overdueCount > 0 ? `${overdueCount} overdue` : 'none overdue'}`}
+        title={t('correctiveactions.header.title')}
+        subtitle={t('correctiveactions.header.subtitleTemplate', {
+          total: actions.length,
+          open: counts['Open'],
+          overdue: overdueCount > 0
+            ? t('correctiveactions.header.overdueCount', { count: overdueCount })
+            : t('correctiveactions.header.noneOverdue'),
+        })}
         icon={ClipboardCheck}
       />
 
@@ -451,16 +462,16 @@ export default function CorrectiveActions() {
           onClick={() => setStatusFilter(statusFilter === 'Closed' ? '' : 'Closed')}
         />
         <KpiCard
-          label="Overdue" value={overdueCount}
-          sub={overdueCount > 0 ? 'need attention' : 'on track'}
+          label={t('correctiveactions.kpi.overdue')} value={overdueCount}
+          sub={overdueCount > 0 ? t('correctiveactions.kpi.overdueSubNeedsAttention') : t('correctiveactions.kpi.overdueSubOnTrack')}
           icon={AlertTriangle} color={overdueCount > 0 ? 'text-red-400' : 'text-gray-500'}
           active={overdueOnly}
           onClick={() => setOverdueOnly(!overdueOnly)}
         />
         {avgClose !== null && (
           <KpiCard
-            label="Avg Resolution" value={`${avgClose}d`}
-            sub="time to close"
+            label={t('correctiveactions.kpi.avgResolution')} value={`${avgClose}d`}
+            sub={t('correctiveactions.kpi.avgResolutionSub')}
             icon={Timer} color="text-blue-400"
           />
         )}
@@ -473,7 +484,7 @@ export default function CorrectiveActions() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input
             className="input pl-9 text-sm"
-            placeholder="Search title, asset, site..."
+            placeholder={t('correctiveactions.toolbar.searchPlaceholder')}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -498,7 +509,7 @@ export default function CorrectiveActions() {
             onChange={e => setSiteFilter(e.target.value)}
             className="input text-sm py-1.5 pr-7 max-w-[160px]"
           >
-            <option value="">All Sites</option>
+            <option value="">{t('correctiveactions.toolbar.allSites')}</option>
             {sites.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         )}
@@ -509,10 +520,10 @@ export default function CorrectiveActions() {
           onChange={e => setSortBy(e.target.value)}
           className="input text-sm py-1.5 max-w-[150px]"
         >
-          <option value="created_at">Newest first</option>
-          <option value="priority">By priority</option>
-          <option value="due_date">By due date</option>
-          <option value="overdue">Most overdue</option>
+          <option value="created_at">{t('correctiveactions.toolbar.sortNewest')}</option>
+          <option value="priority">{t('correctiveactions.toolbar.sortByPriority')}</option>
+          <option value="due_date">{t('correctiveactions.toolbar.sortByDueDate')}</option>
+          <option value="overdue">{t('correctiveactions.toolbar.sortMostOverdue')}</option>
         </select>
 
         <div className="ml-auto flex items-center gap-2">
@@ -521,7 +532,7 @@ export default function CorrectiveActions() {
             onClick={() => setShowAnalytics(!showAnalytics)}
             className={`btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5 ${showAnalytics ? 'text-blue-400 border-blue-600/50' : ''}`}
           >
-            <BarChart2 size={14} /> Analytics
+            <BarChart2 size={14} /> {t('correctiveactions.toolbar.analytics')}
           </button>
 
           {/* View mode */}
@@ -549,15 +560,15 @@ export default function CorrectiveActions() {
 
           {/* Exports */}
           <button onClick={doExcelExport} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
-            <Download size={14} /> Excel
+            <Download size={14} /> {t('correctiveactions.toolbar.excel')}
           </button>
           <button onClick={doPdfExport} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
-            <FileText size={14} /> PDF
+            <FileText size={14} /> {t('correctiveactions.toolbar.pdf')}
           </button>
 
           {/* New */}
           <button onClick={startAdd} className="btn-primary flex items-center gap-2 text-sm">
-            <Plus size={16} /> New Action
+            <Plus size={16} /> {t('correctiveactions.toolbar.newAction')}
           </button>
         </div>
       </div>
@@ -566,17 +577,17 @@ export default function CorrectiveActions() {
       {(search || statusFilter || priorityFilter || siteFilter || overdueOnly) && (
         <div className="flex items-center gap-2 flex-wrap text-xs">
           <Filter size={12} className="text-gray-500" />
-          <span className="text-gray-500">Filters:</span>
+          <span className="text-gray-500">{t('correctiveactions.filtersBar.label')}</span>
           {statusFilter   && <Chip label={statusFilter}   onRemove={() => setStatusFilter('')} />}
           {priorityFilter && <Chip label={priorityFilter} onRemove={() => setPriorityFilter('')} />}
           {siteFilter     && <Chip label={siteFilter}     onRemove={() => setSiteFilter('')} />}
-          {overdueOnly    && <Chip label="Overdue only"   onRemove={() => setOverdueOnly(false)} />}
+          {overdueOnly    && <Chip label={t('correctiveactions.filtersBar.overdueOnly')} onRemove={() => setOverdueOnly(false)} />}
           {search         && <Chip label={`"${search}"`}  onRemove={() => setSearch('')} />}
           <button
             onClick={() => { setSearch(''); setStatusFilter(''); setPriorityFilter(''); setSiteFilter(''); setOverdueOnly(false) }}
             className="text-gray-500 hover:text-red-400 transition-colors ml-1"
-          >Clear all</button>
-          <span className="ml-auto text-gray-500">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
+          >{t('correctiveactions.filtersBar.clearAll')}</button>
+          <span className="ml-auto text-gray-500">{t('correctiveactions.filtersBar.results', { count: filtered.length })}</span>
         </div>
       )}
 
@@ -587,7 +598,7 @@ export default function CorrectiveActions() {
           <div className="card p-4">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp size={14} className="text-blue-400" />
-              <span className="text-sm font-semibold text-white">Resolution Performance</span>
+              <span className="text-sm font-semibold text-white">{t('correctiveactions.analytics.resolutionPerformance')}</span>
             </div>
             <div className="space-y-2">
               {[
@@ -605,11 +616,11 @@ export default function CorrectiveActions() {
               ))}
               {avgClose !== null && (
                 <p className="text-xs text-gray-500 pt-2 border-t border-gray-800 mt-2">
-                  Average time to close: <span className="text-blue-400 font-medium">{avgClose} days</span>
+                  {t('correctiveactions.analytics.avgTimeToClose')} <span className="text-blue-400 font-medium">{t('correctiveactions.analytics.daysValue', { count: avgClose })}</span>
                 </p>
               )}
               <p className="text-xs text-gray-500">
-                Overdue rate: <span className={`font-medium ${overdueCount > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                {t('correctiveactions.analytics.overdueRate')} <span className={`font-medium ${overdueCount > 0 ? 'text-red-400' : 'text-green-400'}`}>
                   {counts.Open + counts['In Progress'] > 0
                     ? Math.round(overdueCount / (counts.Open + counts['In Progress']) * 100)
                     : 0}%
@@ -637,7 +648,17 @@ export default function CorrectiveActions() {
             <table className="w-full text-left">
               <thead className="bg-gray-800/60 border-b border-gray-700">
                 <tr>
-                  {['Title / Root Cause', 'Priority', 'Site', 'Assigned To', 'Asset', 'Due Date', 'Age', 'Status', ''].map(h => (
+                  {[
+                    t('correctiveactions.table.columns.titleRootCause'),
+                    t('correctiveactions.table.columns.priority'),
+                    t('correctiveactions.table.columns.site'),
+                    t('correctiveactions.table.columns.assignedTo'),
+                    t('correctiveactions.table.columns.asset'),
+                    t('correctiveactions.table.columns.dueDate'),
+                    t('correctiveactions.table.columns.age'),
+                    t('correctiveactions.table.columns.status'),
+                    '',
+                  ].map(h => (
                     <th key={h} className="px-3 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -650,7 +671,7 @@ export default function CorrectiveActions() {
             </table>
           </div>
           <div className="px-4 py-2 border-t border-gray-800 text-xs text-gray-500">
-            {filtered.length} action{filtered.length !== 1 ? 's' : ''}
+            {t('correctiveactions.table.actionsCount', { count: filtered.length })}
           </div>
         </div>
       )}
@@ -668,7 +689,7 @@ export default function CorrectiveActions() {
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-semibold text-white flex items-center gap-2">
                 <ClipboardCheck size={16} className="text-blue-400" />
-                {editId ? 'Edit Corrective Action' : 'New Corrective Action'}
+                {editId ? t('correctiveactions.form.editTitle') : t('correctiveactions.form.newTitle')}
               </h2>
               <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white transition-colors">
                 <X size={18} />
@@ -683,10 +704,10 @@ export default function CorrectiveActions() {
 
             <form onSubmit={save} className="space-y-3">
               <div>
-                <label className="label">Title *</label>
+                <label className="label">{t('correctiveactions.form.titleLabel')}</label>
                 <input
                   className="input"
-                  placeholder="Describe the corrective action..."
+                  placeholder={t('correctiveactions.form.titlePlaceholder')}
                   value={form.title}
                   onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                   required
@@ -695,13 +716,13 @@ export default function CorrectiveActions() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Priority</label>
+                  <label className="label">{t('correctiveactions.form.priority')}</label>
                   <select className="input" value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
                     {['High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label">Status</label>
+                  <label className="label">{t('correctiveactions.form.status')}</label>
                   <select className="input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
                     {['Open', 'In Progress', 'Closed'].map(s => <option key={s}>{s}</option>)}
                   </select>
@@ -710,13 +731,13 @@ export default function CorrectiveActions() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Site</label>
+                  <label className="label">{t('correctiveactions.form.site')}</label>
                   <input className="input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
-                    list="ca-sites" placeholder="Enter or pick site" />
+                    list="ca-sites" placeholder={t('correctiveactions.form.sitePlaceholder')} />
                   <datalist id="ca-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
                 </div>
                 <div>
-                  <label className="label">Due Date</label>
+                  <label className="label">{t('correctiveactions.form.dueDate')}</label>
                   <input type="date" className="input" value={form.due_date}
                     onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
                 </div>
@@ -724,68 +745,68 @@ export default function CorrectiveActions() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Assigned To</label>
+                  <label className="label">{t('correctiveactions.form.assignedTo')}</label>
                   <input className="input" value={form.assigned_to}
                     onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="label">Asset No</label>
+                  <label className="label">{t('correctiveactions.form.assetNo')}</label>
                   <input className="input" value={form.asset_no}
                     onChange={e => setForm(f => ({ ...f, asset_no: e.target.value }))} />
                 </div>
               </div>
 
               <div>
-                <label className="label">Tyre Serial</label>
+                <label className="label">{t('correctiveactions.form.tyreSerial')}</label>
                 <input className="input" value={form.tyre_serial}
                   onChange={e => setForm(f => ({ ...f, tyre_serial: e.target.value }))}
-                  placeholder="Linked tyre serial number" />
+                  placeholder={t('correctiveactions.form.tyreSerialPlaceholder')} />
               </div>
 
               <div>
-                <label className="label">Root Cause</label>
+                <label className="label">{t('correctiveactions.form.rootCause')}</label>
                 <select className="input" value={form.root_cause}
                   onChange={e => setForm(f => ({ ...f, root_cause: e.target.value }))}>
-                  <option value="">Select root cause...</option>
+                  <option value="">{t('correctiveactions.form.selectRootCause')}</option>
                   {ROOT_CAUSES.map(r => <option key={r}>{r}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="label">Description</label>
+                <label className="label">{t('correctiveactions.form.description')}</label>
                 <textarea className="input" rows={3} value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Detailed description of the issue and actions taken..." />
+                  placeholder={t('correctiveactions.form.descriptionPlaceholder')} />
               </div>
 
               {/* Photo */}
               <div>
-                <label className="label">Photo / Evidence</label>
+                <label className="label">{t('correctiveactions.form.photo')}</label>
                 <div className="flex items-center gap-3">
                   <button type="button"
                     onClick={() => photoRef.current?.click()}
                     className="btn-secondary text-sm flex items-center gap-2 px-3 py-2">
-                    <Camera size={14} /> {form.photo_data ? 'Change Photo' : 'Attach Photo'}
+                    <Camera size={14} /> {form.photo_data ? t('correctiveactions.form.changePhoto') : t('correctiveactions.form.attachPhoto')}
                   </button>
                   {form.photo_data && (
                     <button type="button"
                       onClick={() => setForm(f => ({ ...f, photo_data: null }))}
                       className="text-xs text-red-400 hover:text-red-300 transition-colors">
-                      Remove
+                      {t('correctiveactions.form.removePhoto')}
                     </button>
                   )}
                   <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
                 </div>
                 {form.photo_data && (
-                  <img src={form.photo_data} alt="Evidence" className="mt-2 rounded-lg max-h-40 border border-gray-700 object-cover w-full" />
+                  <img src={form.photo_data} alt={t('correctiveactions.form.evidenceAlt')} className="mt-2 rounded-lg max-h-40 border border-gray-700 object-cover w-full" />
                 )}
               </div>
 
               <div className="flex gap-3 pt-2 border-t border-gray-800">
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                  <Save size={15} /> {saving ? 'Saving...' : 'Save Action'}
+                  <Save size={15} /> {saving ? t('correctiveactions.form.saving') : t('correctiveactions.form.save')}
                 </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
+                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">{t('correctiveactions.form.cancel')}</button>
               </div>
             </form>
           </div>
@@ -810,18 +831,19 @@ function LoadingState() {
 }
 
 function EmptyState({ hasFilters, onAdd }) {
+  const { t } = useLanguage()
   return (
     <div className="card text-center py-16">
       <ClipboardCheck size={40} className="mx-auto text-gray-700 mb-3" />
       <p className="text-gray-400 font-medium">
-        {hasFilters ? 'No actions match the current filters' : 'No corrective actions yet'}
+        {hasFilters ? t('correctiveactions.empty.noMatch') : t('correctiveactions.empty.noneYet')}
       </p>
       <p className="text-gray-600 text-sm mt-1">
-        {hasFilters ? 'Try adjusting or clearing the filters' : 'Create an action to track issues and resolutions'}
+        {hasFilters ? t('correctiveactions.empty.noMatchHint') : t('correctiveactions.empty.noneYetHint')}
       </p>
       {!hasFilters && (
         <button onClick={onAdd} className="btn-primary mt-4 inline-flex items-center gap-2 text-sm">
-          <Plus size={14} /> New Action
+          <Plus size={14} /> {t('correctiveactions.toolbar.newAction')}
         </button>
       )}
     </div>

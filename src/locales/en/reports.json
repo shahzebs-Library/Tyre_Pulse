@@ -1,0 +1,81 @@
+{
+  "title": "Custom Reports",
+  "subtitle": "Build, filter and export tailored reports",
+  "steps": {
+    "type": "Select Type",
+    "config": "Configure",
+    "preview": "Preview & Export"
+  },
+  "reportTypes": {
+    "vehicleHistory": { "label": "Vehicle History", "desc": "All tyre changes per vehicle, grouped by asset" },
+    "costAnalysis": { "label": "Cost Analysis", "desc": "Spend grouped by site and brand" },
+    "riskSummary": { "label": "Risk Summary", "desc": "High and Critical risk records" },
+    "inspectionReport": { "label": "Inspection Report", "desc": "All inspections with findings" },
+    "tyreReplacementLog": { "label": "Tyre Replacement Log", "desc": "Chronological replacement list" }
+  },
+  "source": "Source: {table}",
+  "config": {
+    "savedRestored": "Saved config restored",
+    "clearSaved": "Clear saved config",
+    "filtersTitle": "Filters · {reportType}",
+    "dateRange": "Date Range",
+    "to": "to",
+    "site": "Site",
+    "siteFilterPlaceholder": "Filter by site...",
+    "country": "Country",
+    "allCountries": "All Countries",
+    "assetNumber": "Asset Number",
+    "assetNoPlaceholder": "Asset no...",
+    "brand": "Brand",
+    "brandFilterPlaceholder": "Filter by brand...",
+    "riskLevel": "Risk Level",
+    "inspectionType": "Inspection Type",
+    "allTypes": "All Types",
+    "columnsTitle": "Columns",
+    "back": "Back",
+    "runReport": "Run Report"
+  },
+  "dateShortcuts": {
+    "thisMonth": "This Month",
+    "last3Months": "Last 3 Months",
+    "thisYear": "This Year",
+    "custom": "Custom"
+  },
+  "columns": {
+    "issueDate": "Issue Date",
+    "assetNo": "Asset No",
+    "brand": "Brand",
+    "description": "Description",
+    "serialNo": "Serial No",
+    "site": "Site",
+    "country": "Country",
+    "cost": "Cost",
+    "riskLevel": "Risk Level",
+    "remarks": "Remarks",
+    "count": "Count",
+    "totalCost": "Total Cost",
+    "avgCost": "Avg Cost",
+    "inspectionDate": "Inspection Date",
+    "inspectionType": "Inspection Type",
+    "findings": "Findings",
+    "inspector": "Inspector",
+    "status": "Status",
+    "qty": "Qty",
+    "brandsUsed": "Brands Used",
+    "lastDate": "Last Date",
+    "highRiskCount": "High Risk Count"
+  },
+  "preview": {
+    "backToFilters": "Back to Filters",
+    "exportExcel": "Export Excel",
+    "exportPdf": "Export PDF",
+    "print": "Print",
+    "emailReport": "Email Report",
+    "totalRecords": "Total records: {count}",
+    "showingRange": "Showing {from}-{to} of {total} records",
+    "noRecordsForFilters": "No records found for the selected filters.",
+    "prev": "Prev",
+    "next": "Next",
+    "pageOf": "Page {page} of {total}"
+  }
+}

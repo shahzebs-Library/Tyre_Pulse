@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import * as kpiTargets from '../lib/api/kpiTargets'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import {
   bucketByMonth, forecastMonthly, linearRegression,
@@ -37,6 +38,7 @@ const KPI_LABELS = {
 
 export default function KpiScorecard() {
   const { profile } = useAuth()
+  const { t } = useLanguage()
   const { activeCountry, activeCurrency } = useSettings()
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency, 0)
   const [records, setRecords]         = useState([])
@@ -75,7 +77,7 @@ export default function KpiScorecard() {
       setDraftTargets(merged)
       setDbTargets(t.data || [])
     } catch (e) {
-      setError(e.message || 'Failed to load KPI data.')
+      setError(e.message || t('kpiscorecard.states.errorDefault'))
     } finally {
       setLoading(false)
     }
@@ -166,58 +168,58 @@ export default function KpiScorecard() {
       labels: all.map(d => d.month),
       datasets: [
         {
-          label: 'Actual Cost',
+          label: t('kpiscorecard.charts.series.actualCost'),
           data: all.map(d => d.isForecast ? null : d.value),
           borderColor: 'rgba(59,130,246,1)',
           backgroundColor: 'rgba(59,130,246,0.1)',
           fill: true, tension: 0.4, spanGaps: true,
         },
         {
-          label: 'Target Ceiling',
+          label: t('kpiscorecard.charts.series.targetCeiling'),
           data: all.map(() => targets.max_monthly_cost),
           borderColor: 'rgba(239,68,68,0.6)',
           borderDash: [6, 3], fill: false, pointRadius: 0,
         },
         {
-          label: 'Forecast',
+          label: t('kpiscorecard.charts.series.forecast'),
           data: all.map(d => d.isForecast ? d.value : null),
           borderColor: 'rgba(245,158,11,1)',
           borderDash: [4, 2], fill: false, tension: 0.4, spanGaps: true,
         },
         costTrend.reg && {
-          label: 'Trend Line',
+          label: t('kpiscorecard.charts.series.trendLine'),
           data: actuals.map((_, i) => Math.max(0, Math.round(costTrend.reg.predict(i)))),
           borderColor: 'rgba(107,114,128,0.4)',
           borderDash: [2, 4], fill: false, pointRadius: 0,
         },
         showYoY && {
-          label: 'LY Cost',
+          label: t('kpiscorecard.charts.series.lyCost'),
           data: months.map(m => yoyActualsMap[m]?.totalCost ?? null),
           borderColor: 'rgba(139,92,246,0.7)',
           borderDash: [3, 3], fill: false, tension: 0.4, spanGaps: true,
         },
       ].filter(Boolean),
     }
-  }, [actuals, targets, costTrend, showYoY, yoyActualsMap, months])
+  }, [actuals, targets, costTrend, showYoY, yoyActualsMap, months, t])
 
   const highRiskChartData = useMemo(() => ({
     labels: months,
     datasets: [
       {
-        label: 'High Risk %',
+        label: t('kpiscorecard.charts.series.highRiskPct'),
         data: actuals.map(a => parseFloat(a.highRiskPct.toFixed(1))),
         borderColor: 'rgba(239,68,68,1)',
         backgroundColor: 'rgba(239,68,68,0.1)',
         fill: true, tension: 0.4,
       },
       {
-        label: 'Target Max %',
+        label: t('kpiscorecard.charts.series.targetMaxPct'),
         data: months.map(() => targets.max_high_risk_pct),
         borderColor: 'rgba(245,158,11,0.6)',
         borderDash: [6, 3], fill: false, pointRadius: 0,
       },
     ],
-  }), [actuals, months, targets])
+  }), [actuals, months, targets, t])
 
   const chartOpts = () => ({
     responsive: true, maintainAspectRatio: false,
@@ -265,19 +267,19 @@ export default function KpiScorecard() {
     const fmtPct   = v => `${v.toFixed(1)}%`
     const fmtNum   = v => v.toString()
 
-    check('max_monthly_cost',    currentMonth.totalCost,     targets.max_monthly_cost,    true, 'Monthly Cost',    fmtCost)
-    check('max_high_risk_pct',   currentMonth.highRiskPct,   targets.max_high_risk_pct,   true, 'High Risk %',     fmtPct)
-    check('max_overdue_actions', currentMonth.overdueActions, targets.max_overdue_actions, true, 'Overdue Actions', fmtNum)
+    check('max_monthly_cost',    currentMonth.totalCost,     targets.max_monthly_cost,    true, t('kpiscorecard.cards.monthlyCost'),    fmtCost)
+    check('max_high_risk_pct',   currentMonth.highRiskPct,   targets.max_high_risk_pct,   true, t('kpiscorecard.cards.highRiskPct'),     fmtPct)
+    check('max_overdue_actions', currentMonth.overdueActions, targets.max_overdue_actions, true, t('kpiscorecard.cards.overdueActions'), fmtNum)
     const avgCost = currentMonth.count ? Math.round(currentMonth.totalCost / currentMonth.count) : 0
-    check('max_avg_cost_tyre',   avgCost,                    targets.max_avg_cost_tyre,   true, 'Avg Cost/Tyre',   fmtCost)
+    check('max_avg_cost_tyre',   avgCost,                    targets.max_avg_cost_tyre,   true, t('kpiscorecard.cards.avgCostPerTyre'),   fmtCost)
     return alerts
-  }, [currentMonth, targets, activeCurrency])
+  }, [currentMonth, targets, activeCurrency, t])
 
   // Site breakdown for current month
   const siteBreakdown = useMemo(() => {
     const siteMap = {}
     filteredRecords.forEach(r => {
-      const site = r.site || 'Unknown'
+      const site = r.site || t('kpiscorecard.sites.unknownSite')
       if (!siteMap[site]) siteMap[site] = []
       siteMap[site].push(r)
     })
@@ -295,19 +297,19 @@ export default function KpiScorecard() {
       const avgCostPerTyre = count ? totalCost / count : 0
       return { site, totalCost, count, highRiskPct, overdueActions: overdueCount, avgCostPerTyre }
     }).sort((a, b) => b.totalCost - a.totalCost)
-  }, [filteredRecords, filteredActions, currentMonthStr])
+  }, [filteredRecords, filteredActions, currentMonthStr, t])
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading KPI data...</div>
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">{t('kpiscorecard.states.loading')}</div>
 
   if (error && !records.length) return (
     <div className="space-y-5">
-      <PageHeader title="KPI Scorecard" subtitle="Could not load data" icon={Target} />
+      <PageHeader title={t('kpiscorecard.title')} subtitle={t('kpiscorecard.errorSubtitle')} icon={Target} />
       <div className="card py-16 flex flex-col items-center gap-3">
         <AlertTriangle size={40} className="text-red-400" />
-        <p className="text-red-300 font-medium">Could not load KPI data</p>
+        <p className="text-red-300 font-medium">{t('kpiscorecard.states.errorTitle')}</p>
         <p className="text-gray-500 text-sm">{error}</p>
         <button onClick={load} className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
-          <RefreshCw size={16} /> Retry
+          <RefreshCw size={16} /> {t('kpiscorecard.states.retry')}
         </button>
       </div>
     </div>
@@ -326,8 +328,8 @@ export default function KpiScorecard() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <PageHeader
-          title="KPI Scorecard"
-          subtitle="Monthly targets vs actuals with regression forecasting"
+          title={t('kpiscorecard.title')}
+          subtitle={t('kpiscorecard.subtitle')}
           icon={Target}
         />
         <div className="flex flex-wrap items-center gap-2">
@@ -341,7 +343,7 @@ export default function KpiScorecard() {
             }`}
           >
             {showYoY ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
-            YoY Compare
+            {t('kpiscorecard.actions.yoyCompare')}
             {yoyLoading && <span className="text-xs text-gray-500 ml-1">...</span>}
           </button>
 
@@ -349,21 +351,21 @@ export default function KpiScorecard() {
             onClick={() => exportToExcel(actuals, KPI_COLS.map(c => c.key), KPI_COLS.map(c => c.header), 'TyrePulse_KpiScorecard')}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
-            <Download size={14} /> Excel
+            <Download size={14} /> {t('kpiscorecard.actions.excel')}
           </button>
           <button
             onClick={() => exportToPdf(actuals, KPI_COLS, 'KPI Scorecard · Monthly Actuals', 'TyrePulse_KpiScorecard', 'landscape')}
             className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5"
           >
-            <FileText size={14} /> PDF
+            <FileText size={14} /> {t('kpiscorecard.actions.pdf')}
           </button>
           {!editing
-            ? <button onClick={() => setEditing(true)} className="btn-secondary text-sm">Edit Targets</button>
+            ? <button onClick={() => setEditing(true)} className="btn-secondary text-sm">{t('kpiscorecard.actions.editTargets')}</button>
             : (
               <div className="flex gap-2">
-                <button onClick={() => { setEditing(false); setDraftTargets(targets) }} className="btn-secondary text-sm">Cancel</button>
+                <button onClick={() => { setEditing(false); setDraftTargets(targets) }} className="btn-secondary text-sm">{t('kpiscorecard.actions.cancel')}</button>
                 <button onClick={saveTargets} disabled={saving} className="btn-primary text-sm disabled:opacity-50">
-                  {saving ? 'Saving...' : 'Save Targets'}
+                  {saving ? t('kpiscorecard.actions.saving') : t('kpiscorecard.actions.saveTargets')}
                 </button>
               </div>
             )
@@ -374,7 +376,7 @@ export default function KpiScorecard() {
       {/* Filter row: year + country chips */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">Year:</span>
+          <span className="text-xs text-gray-400">{t('kpiscorecard.filters.year')}</span>
           <select
             className="input w-28 text-sm"
             value={yearFilter}
@@ -396,7 +398,7 @@ export default function KpiScorecard() {
                   : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'
               }`}
             >
-              {c}
+              {c === 'All' ? t('kpiscorecard.filters.allCountries') : c}
             </button>
           ))}
         </div>
@@ -417,7 +419,7 @@ export default function KpiScorecard() {
                 : 'border-transparent text-gray-500 hover:text-gray-300'
             }`}
           >
-            {tab.label}
+            {t(`kpiscorecard.tabs.${tab.id}`)}
           </button>
         ))}
       </div>
@@ -435,7 +437,7 @@ export default function KpiScorecard() {
           />
           <div className="flex-1 min-w-0">
             <p className={`text-sm font-semibold ${performanceAlerts.some(a => a.overage > 0.50) ? 'text-red-300' : 'text-amber-300'}`}>
-              {performanceAlerts.length} KPI metric{performanceAlerts.length > 1 ? 's' : ''} exceeding target by &gt;20% this month
+              {t('kpiscorecard.alerts.banner', { count: performanceAlerts.length, plural: performanceAlerts.length > 1 ? 's' : '' })}
             </p>
             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
               {performanceAlerts.map(alert => (
@@ -443,10 +445,10 @@ export default function KpiScorecard() {
                   <span className={alert.overage > 0.50 ? 'text-red-400 font-medium' : 'text-amber-400 font-medium'}>
                     {alert.label}
                   </span>
-                  {' '}- {alert.fmt(alert.actual)} vs target {alert.fmt(alert.target)}
+                  {' '}- {alert.fmt(alert.actual)} {t('kpiscorecard.alerts.vsTarget')} {alert.fmt(alert.target)}
                   {' '}
                   <span className={alert.overage > 0.50 ? 'text-red-400' : 'text-amber-400'}>
-                    (+{(alert.overage * 100).toFixed(0)}% over)
+                    (+{(alert.overage * 100).toFixed(0)}% {t('kpiscorecard.alerts.overSuffix')})
                   </span>
                 </span>
               ))}
@@ -458,11 +460,11 @@ export default function KpiScorecard() {
       {/* Target editor */}
       {editing && (
         <div className="card border border-yellow-700/50">
-          <p className="text-sm font-medium text-yellow-400 mb-4">Configure KPI Targets</p>
+          <p className="text-sm font-medium text-yellow-400 mb-4">{t('kpiscorecard.targetEditor.title')}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {Object.entries(KPI_LABELS).map(([key, { label, unit }]) => (
+            {Object.entries(KPI_LABELS).map(([key, { unit }]) => (
               <div key={key}>
-                <label className="label text-xs">{label} {unit && `(${unit === 'currency' ? activeCurrency : unit})`}</label>
+                <label className="label text-xs">{t(`kpiscorecard.kpiLabels.${key}`)} {unit && `(${unit === 'currency' ? activeCurrency : unit})`}</label>
                 <input
                   type="number"
                   className="input"
@@ -482,7 +484,7 @@ export default function KpiScorecard() {
           {currentMonth && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <KpiCard
-                label="Monthly Cost"
+                label={t('kpiscorecard.cards.monthlyCost')}
                 actual={currentMonth.totalCost}
                 target={targets.max_monthly_cost}
                 format={fmtCurrency}
@@ -492,7 +494,7 @@ export default function KpiScorecard() {
                 yoyFormat={fmtCurrency}
               />
               <KpiCard
-                label="High Risk %"
+                label={t('kpiscorecard.cards.highRiskPct')}
                 actual={parseFloat(currentMonth.highRiskPct.toFixed(1))}
                 target={targets.max_high_risk_pct}
                 format={v => `${v.toFixed(1)}%`}
@@ -502,7 +504,7 @@ export default function KpiScorecard() {
                 yoyFormat={v => `${v.toFixed(1)}%`}
               />
               <KpiCard
-                label="Record Count"
+                label={t('kpiscorecard.cards.recordCount')}
                 actual={currentMonth.count}
                 target={targets.min_records_month}
                 format={v => v.toString()}
@@ -512,7 +514,7 @@ export default function KpiScorecard() {
                 yoyFormat={v => v.toString()}
               />
               <KpiCard
-                label="Overdue Actions"
+                label={t('kpiscorecard.cards.overdueActions')}
                 actual={currentMonth.overdueActions}
                 target={targets.max_overdue_actions}
                 format={v => v.toString()}
@@ -522,7 +524,7 @@ export default function KpiScorecard() {
                 yoyFormat={v => v.toString()}
               />
               <KpiCard
-                label="Avg Cost / Tyre"
+                label={t('kpiscorecard.cards.avgCostPerTyre')}
                 actual={currentMonth.count ? Math.round(currentMonth.totalCost / currentMonth.count) : 0}
                 target={targets.max_avg_cost_tyre}
                 format={fmtCurrency}
@@ -535,12 +537,16 @@ export default function KpiScorecard() {
               />
               {costTrend.reg && (
                 <div className="card">
-                  <p className="text-xs text-gray-400 mb-1">Forecast (next month)</p>
+                  <p className="text-xs text-gray-400 mb-1">{t('kpiscorecard.cards.forecastNextMonth')}</p>
                   <p className="text-xl font-bold text-yellow-400">
                     {fmtCurrency(Math.max(0, Math.round(costTrend.reg.predict(months.length))))}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    R² = {costTrend.reg.r2.toFixed(2)} · slope {costTrend.reg.slope > 0 ? '+' : ''}{Math.round(costTrend.reg.slope).toLocaleString()}/mo
+                    {t('kpiscorecard.cards.rSquaredSlope', {
+                      r2: costTrend.reg.r2.toFixed(2),
+                      sign: costTrend.reg.slope > 0 ? '+' : '',
+                      slope: Math.round(costTrend.reg.slope).toLocaleString(),
+                    })}
                   </p>
                 </div>
               )}
@@ -551,14 +557,14 @@ export default function KpiScorecard() {
           <div className="space-y-6">
             <div className="card">
               <h3 className="text-sm font-medium text-gray-400 mb-4">
-                Monthly Cost vs Target + Forecast{showYoY ? ' · LY overlay' : ''}
+                {t('kpiscorecard.charts.monthlyCostVsTarget')}{showYoY ? t('kpiscorecard.charts.lyOverlaySuffix') : ''}
               </h3>
               <div style={{ height: 320 }}>
                 <Line data={costChartData} options={chartOpts()} />
               </div>
             </div>
             <div className="card">
-              <h3 className="text-sm font-medium text-gray-400 mb-4">High-Risk % vs Target</h3>
+              <h3 className="text-sm font-medium text-gray-400 mb-4">{t('kpiscorecard.charts.highRiskVsTarget')}</h3>
               <div style={{ height: 260 }}>
                 <Line data={highRiskChartData} options={chartOpts()} />
               </div>
@@ -567,17 +573,17 @@ export default function KpiScorecard() {
 
           {/* Monthly table */}
           <div className="card overflow-x-auto">
-            <h3 className="text-sm font-medium text-gray-400 mb-4">Monthly Actuals vs Targets</h3>
+            <h3 className="text-sm font-medium text-gray-400 mb-4">{t('kpiscorecard.table.monthlyActualsTitle')}</h3>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-400 border-b border-gray-800">
-                  <th className="pb-2 pr-4">Month</th>
-                  <th className="pb-2 pr-4 text-right">Records</th>
-                  <th className="pb-2 pr-4 text-right">Total Cost</th>
-                  {showYoY && <th className="pb-2 pr-4 text-right text-purple-400">LY Cost</th>}
-                  <th className="pb-2 pr-4 text-right">vs Target</th>
-                  <th className="pb-2 pr-4 text-right">High Risk %</th>
-                  <th className="pb-2 text-right">Overdue</th>
+                  <th className="pb-2 pr-4">{t('kpiscorecard.table.columns.month')}</th>
+                  <th className="pb-2 pr-4 text-right">{t('kpiscorecard.table.columns.records')}</th>
+                  <th className="pb-2 pr-4 text-right">{t('kpiscorecard.table.columns.totalCost')}</th>
+                  {showYoY && <th className="pb-2 pr-4 text-right text-purple-400">{t('kpiscorecard.table.columns.lyCost')}</th>}
+                  <th className="pb-2 pr-4 text-right">{t('kpiscorecard.table.columns.vsTarget')}</th>
+                  <th className="pb-2 pr-4 text-right">{t('kpiscorecard.table.columns.highRiskPct')}</th>
+                  <th className="pb-2 text-right">{t('kpiscorecard.table.columns.overdue')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -616,7 +622,7 @@ export default function KpiScorecard() {
                         {a.count === 0
                           ? <span className="text-gray-600">-</span>
                           : <span className={`text-xs px-2 py-0.5 rounded-full ${overBudget ? 'bg-red-900/40 text-red-400' : 'bg-green-900/40 text-green-400'}`}>
-                              {overBudget ? `+${fmtCurrency(a.totalCost - targets.max_monthly_cost)}` : 'On target'}
+                              {overBudget ? `+${fmtCurrency(a.totalCost - targets.max_monthly_cost)}` : t('kpiscorecard.table.onTarget')}
                             </span>
                         }
                       </td>
@@ -645,22 +651,22 @@ export default function KpiScorecard() {
         <div className="card overflow-x-auto">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-medium text-gray-400">
-              Site Performance - {currentMonthStr} (sorted by total cost)
+              {t('kpiscorecard.sites.title', { month: currentMonthStr })}
             </h3>
-            <p className="text-xs text-gray-500">{siteBreakdown.length} site{siteBreakdown.length !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-gray-500">{t('kpiscorecard.sites.siteCount', { count: siteBreakdown.length, plural: siteBreakdown.length !== 1 ? 's' : '' })}</p>
           </div>
           {siteBreakdown.length === 0 ? (
-            <p className="text-gray-500 text-sm py-8 text-center">No site data for {currentMonthStr}.</p>
+            <p className="text-gray-500 text-sm py-8 text-center">{t('kpiscorecard.sites.noData', { month: currentMonthStr })}</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-400 border-b border-gray-800">
-                  <th className="pb-2 pr-4">Site</th>
-                  <th className="pb-2 pr-4 text-right">Monthly Cost</th>
-                  <th className="pb-2 pr-4 text-right">High Risk %</th>
-                  <th className="pb-2 pr-4 text-right">Records</th>
-                  <th className="pb-2 pr-4 text-right">Overdue Actions</th>
-                  <th className="pb-2 text-right">Avg Cost / Tyre</th>
+                  <th className="pb-2 pr-4">{t('kpiscorecard.sites.columns.site')}</th>
+                  <th className="pb-2 pr-4 text-right">{t('kpiscorecard.sites.columns.monthlyCost')}</th>
+                  <th className="pb-2 pr-4 text-right">{t('kpiscorecard.sites.columns.highRiskPct')}</th>
+                  <th className="pb-2 pr-4 text-right">{t('kpiscorecard.sites.columns.records')}</th>
+                  <th className="pb-2 pr-4 text-right">{t('kpiscorecard.sites.columns.overdueActions')}</th>
+                  <th className="pb-2 text-right">{t('kpiscorecard.sites.columns.avgCostPerTyre')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -712,7 +718,7 @@ export default function KpiScorecard() {
               </tbody>
               <tfoot>
                 <tr className="border-t border-gray-700 text-gray-400 text-xs">
-                  <td className="pt-2 pr-4 font-medium">Total</td>
+                  <td className="pt-2 pr-4 font-medium">{t('kpiscorecard.sites.total')}</td>
                   <td className="pt-2 pr-4 text-right font-medium text-gray-300">
                     {fmtCurrency(siteBreakdown.reduce((s, r) => s + r.totalCost, 0))}
                   </td>
@@ -733,6 +739,7 @@ export default function KpiScorecard() {
 }
 
 function KpiCard({ label, actual, target, format, invert, higherIsBad, prev, yoyValue, yoyFormat }) {
+  const { t } = useLanguage()
   const passing = invert ? actual <= target : actual >= target
   const delta   = prev !== undefined ? actual - prev : null
 
@@ -749,15 +756,15 @@ function KpiCard({ label, actual, target, format, invert, higherIsBad, prev, yoy
       </p>
       <div className="flex items-center justify-between mt-2">
         <p className="text-xs text-gray-500">
-          Target: {format(target)}
+          {t('kpiscorecard.cards.target')} {format(target)}
         </p>
         <span className={`text-xs px-1.5 py-0.5 rounded ${passing ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>
-          {passing ? 'PASS' : 'FAIL'}
+          {passing ? t('kpiscorecard.cards.pass') : t('kpiscorecard.cards.fail')}
         </span>
       </div>
       {delta !== null && (
         <p className={`text-xs mt-1 ${delta === 0 ? 'text-gray-500' : (higherIsBad ? delta > 0 : delta < 0) ? 'text-red-400' : 'text-green-400'}`}>
-          {delta > 0 ? '▲' : delta < 0 ? '▼' : '-'} {format(Math.abs(delta))} vs prev month
+          {delta > 0 ? '▲' : delta < 0 ? '▼' : '-'} {format(Math.abs(delta))} {t('kpiscorecard.cards.vsPrevMonth')}
         </p>
       )}
       {yoyDelta !== null && yoyPct !== null && (
@@ -766,7 +773,7 @@ function KpiCard({ label, actual, target, format, invert, higherIsBad, prev, yoy
           {(yoyFormat || format)(Math.abs(yoyDelta))}
           {' '}
           <span className={`${(higherIsBad ? yoyDelta > 0 : yoyDelta < 0) ? 'text-red-400/70' : 'text-green-400/70'}`}>
-            ({yoyPct > 0 ? '+' : ''}{yoyPct.toFixed(1)}%) vs LY
+            ({yoyPct > 0 ? '+' : ''}{yoyPct.toFixed(1)}%) {t('kpiscorecard.cards.vsLastYear')}
           </span>
         </p>
       )}

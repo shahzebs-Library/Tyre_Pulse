@@ -35,6 +35,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { recordCost } from '../lib/analyticsEngine'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import { useTenant } from '../contexts/TenantContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import PageHeader from '../components/ui/PageHeader'
 import PeriodFilter, { filterByPeriodValue, periodLabel as periodValueLabel } from '../components/ui/PeriodFilter'
 
@@ -254,6 +255,7 @@ function SectionHeader({ icon: Icon, title, subtitle, badge }) {
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ExecutiveReport() {
+  const { t } = useLanguage()
   const { appSettings, activeCurrency, activeCountry } = useSettings()
   const { branding } = useTenant()
   const currency = activeCurrency
@@ -508,20 +510,20 @@ export default function ExecutiveReport() {
     if (critRate > 0.15) {
       recs.push({
         priority: 'Critical',
-        title: 'Immediate Critical Tyre Removal Programme',
-        description: `${fmtPct(critRate * 100)} of fleet tyres are classified as Critical risk. An immediate inspection and forced removal programme must be initiated across all sites to prevent blowouts and road incidents.`,
-        impact: `Avoidance of estimated ${fmtCurrency(kpis.scrapRate?.estimatedScrapCost * 0.4, currency)} in accident liability and emergency replacement costs.`,
-        owner: 'Fleet Manager',
+        title: t('execreport.recommendations.criticalRemoval.title'),
+        description: t('execreport.recommendations.criticalRemoval.description', { pct: fmtPct(critRate * 100) }),
+        impact: t('execreport.recommendations.criticalRemoval.impact', { amount: fmtCurrency(kpis.scrapRate?.estimatedScrapCost * 0.4, currency) }),
+        owner: t('execreport.owners.fleetManager'),
       })
     }
 
     if (inspComp < 85) {
       recs.push({
         priority: critRate > 0.1 ? 'Critical' : 'High',
-        title: 'Enforce Inspection Compliance Across All Sites',
-        description: `Fleet inspection compliance is at ${fmtPct(inspComp)}, well below the 85% target. Missing inspections are a leading indicator of tyre failures. A mandatory compliance enforcement programme with site manager accountability must be implemented.`,
-        impact: `Compliance improvement to 90%+ historically reduces failure rate by 20-30%, saving approximately ${fmtCurrency(totalSpend * 0.15, currency)} annually.`,
-        owner: 'Management',
+        title: t('execreport.recommendations.inspectionCompliance.title'),
+        description: t('execreport.recommendations.inspectionCompliance.description', { pct: fmtPct(inspComp) }),
+        impact: t('execreport.recommendations.inspectionCompliance.impact', { amount: fmtCurrency(totalSpend * 0.15, currency) }),
+        owner: t('execreport.owners.management'),
       })
     }
 
@@ -529,147 +531,147 @@ export default function ExecutiveReport() {
       const worst = vendors[vendors.length - 1]
       recs.push({
         priority: 'High',
-        title: `Procurement Review: Replace ${worst.brand} with Higher-Performing Alternatives`,
-        description: `${worst.brand} has the lowest composite performance score in the fleet. CPK of ${fmtCpk(worst.avgCpk, currency)}/km and failure rate of ${fmtPct(worst.failureRate * 100)} significantly exceed fleet averages. Procurement should evaluate contract terms and initiate supplier transition.`,
-        impact: `Switching lower-performing brands to ${bestBrandByScore.brand}-equivalent performance could yield ${fmtCurrency(savingsOpportunity * 0.3, currency)} in annual savings.`,
-        owner: 'Procurement',
+        title: t('execreport.recommendations.procurementReview.title', { brand: worst.brand }),
+        description: t('execreport.recommendations.procurementReview.description', { brand: worst.brand, cpk: fmtCpk(worst.avgCpk, currency), rate: fmtPct(worst.failureRate * 100) }),
+        impact: t('execreport.recommendations.procurementReview.impact', { bestBrand: bestBrandByScore.brand, amount: fmtCurrency(savingsOpportunity * 0.3, currency) }),
+        owner: t('execreport.owners.procurement'),
       })
     }
 
     if (topRootCause && topRootCause.key === 'inflation') {
       recs.push({
         priority: 'High',
-        title: 'Deploy Tyre Pressure Monitoring System (TPMS) Fleet-Wide',
-        description: `Inflation issues are the primary root cause, accounting for ${fmtPct(topRootCause.pct)} of all tyre events. A fleet-wide TPMS deployment combined with driver training will directly target the highest-impact failure driver.`,
-        impact: `Estimated ${fmtCurrency(topRootCause.cost * 0.6, currency)} in avoidable tyre costs per period.`,
-        owner: 'Fleet Manager',
+        title: t('execreport.recommendations.tpmsDeployment.title'),
+        description: t('execreport.recommendations.tpmsDeployment.description', { pct: fmtPct(topRootCause.pct) }),
+        impact: t('execreport.recommendations.tpmsDeployment.impact', { amount: fmtCurrency(topRootCause.cost * 0.6, currency) }),
+        owner: t('execreport.owners.fleetManager'),
       })
     }
 
     if (topRootCause && topRootCause.key === 'driver') {
       recs.push({
         priority: 'High',
-        title: 'Driver Behaviour Telematics Programme',
-        description: `Driver behaviour contributes to ${fmtPct(topRootCause.pct)} of tyre incidents. Deploying telematics with speed, harsh braking, and cornering monitoring - combined with driver-specific coaching - will reduce this cause category significantly.`,
-        impact: `${fmtCurrency(topRootCause.cost * 0.5, currency)} in potential cost avoidance per period.`,
-        owner: 'Fleet Manager',
+        title: t('execreport.recommendations.driverBehaviour.title'),
+        description: t('execreport.recommendations.driverBehaviour.description', { pct: fmtPct(topRootCause.pct) }),
+        impact: t('execreport.recommendations.driverBehaviour.impact', { amount: fmtCurrency(topRootCause.cost * 0.5, currency) }),
+        owner: t('execreport.owners.fleetManager'),
       })
     }
 
     if (scrapRate > 0.15) {
       recs.push({
         priority: 'High',
-        title: 'Scrap Rate Root Cause Investigation',
-        description: `Scrap rate at ${fmtPct(scrapRate * 100)} exceeds acceptable limits. Each scrapped tyre represents full cost loss. A structured investigation into premature removal drivers - including improper inflation, fitment errors, and road damage - must be completed within 30 days.`,
-        impact: `Reducing scrap rate by 50% saves approximately ${fmtCurrency(kpis.scrapRate?.estimatedScrapCost * 0.5, currency)} per period.`,
-        owner: 'Workshop',
+        title: t('execreport.recommendations.scrapRateInvestigation.title'),
+        description: t('execreport.recommendations.scrapRateInvestigation.description', { pct: fmtPct(scrapRate * 100) }),
+        impact: t('execreport.recommendations.scrapRateInvestigation.impact', { amount: fmtCurrency(kpis.scrapRate?.estimatedScrapCost * 0.5, currency) }),
+        owner: t('execreport.owners.workshop'),
       })
     }
 
     if (worstSiteByFailure) {
       recs.push({
         priority: 'Medium',
-        title: `Site Audit: ${worstSiteByFailure.site} - Highest Failure Rate`,
-        description: `${worstSiteByFailure.site} has the highest failure rate at ${fmtPct(worstSiteByFailure.rate * 100)}. A structured site audit covering inspection compliance, tyre fitment practices, road conditions, and driver behaviour is required to understand and remediate site-specific failure drivers.`,
-        impact: `Bringing ${worstSiteByFailure.site} to fleet average failure rate could save ${fmtCurrency(costBySite.find(s => s.site === worstSiteByFailure.site)?.cost * 0.2 || 0, currency)} per period.`,
-        owner: 'Fleet Manager',
+        title: t('execreport.recommendations.siteAudit.title', { site: worstSiteByFailure.site }),
+        description: t('execreport.recommendations.siteAudit.description', { site: worstSiteByFailure.site, pct: fmtPct(worstSiteByFailure.rate * 100) }),
+        impact: t('execreport.recommendations.siteAudit.impact', { site: worstSiteByFailure.site, amount: fmtCurrency(costBySite.find(s => s.site === worstSiteByFailure.site)?.cost * 0.2 || 0, currency) }),
+        owner: t('execreport.owners.fleetManager'),
       })
     }
 
     if (kpis.cpk.fleetAvgCpk > 0 && savingsOpportunity > 5000) {
       recs.push({
         priority: 'Medium',
-        title: 'Fleet CPK Optimisation Initiative',
-        description: `Fleet average CPK is ${fmtCpk(kpis.cpk.fleetAvgCpk, currency)}/km versus best-in-fleet of ${fmtCpk(kpis.cpk.p10Cpk, currency)}/km. Closing this gap through vendor rationalisation, position optimisation, and maintenance improvements represents significant financial opportunity.`,
-        impact: `Estimated annual saving potential: ${fmtCurrency(savingsOpportunity, currency)}.`,
-        owner: 'Management',
+        title: t('execreport.recommendations.cpkOptimisation.title'),
+        description: t('execreport.recommendations.cpkOptimisation.description', { fleetCpk: fmtCpk(kpis.cpk.fleetAvgCpk, currency), bestCpk: fmtCpk(kpis.cpk.p10Cpk, currency) }),
+        impact: t('execreport.recommendations.cpkOptimisation.impact', { amount: fmtCurrency(savingsOpportunity, currency) }),
+        owner: t('execreport.owners.management'),
       })
     }
 
     if (kpis.downtimeImpact?.totalDowntimeHours > 100) {
       recs.push({
         priority: 'Medium',
-        title: 'Priority Maintenance for High-Downtime Vehicles',
-        description: `${kpis.downtimeImpact.worstAssets?.slice(0, 3).map(a => a.assetNo).join(', ')} are responsible for disproportionate downtime. A dedicated maintenance review and tyre specification upgrade for these vehicles will improve fleet availability and operational efficiency.`,
-        impact: `Estimated ${Math.round(kpis.downtimeImpact.totalDowntimeHours * 0.3)} hours of recovered vehicle availability per period.`,
-        owner: 'Workshop',
+        title: t('execreport.recommendations.downtimeMaintenance.title'),
+        description: t('execreport.recommendations.downtimeMaintenance.description', { assets: kpis.downtimeImpact.worstAssets?.slice(0, 3).map(a => a.assetNo).join(', ') }),
+        impact: t('execreport.recommendations.downtimeMaintenance.impact', { hours: Math.round(kpis.downtimeImpact.totalDowntimeHours * 0.3) }),
+        owner: t('execreport.owners.workshop'),
       })
     }
 
     if (recs.length < 6) {
       recs.push({
         priority: 'Medium',
-        title: 'Tyre Rotation Compliance Enforcement',
-        description: 'Implementing a systematic tyre rotation schedule at 10,000 km intervals will equalise wear across positions, extend average tyre life, and reduce position-specific failure rates, particularly on steer axles.',
-        impact: `Projected tyre life extension of 10-15%, saving approximately ${fmtCurrency(totalSpend * 0.1, currency)} per period.`,
-        owner: 'Workshop',
+        title: t('execreport.recommendations.tyreRotation.title'),
+        description: t('execreport.recommendations.tyreRotation.description'),
+        impact: t('execreport.recommendations.tyreRotation.impact', { amount: fmtCurrency(totalSpend * 0.1, currency) }),
+        owner: t('execreport.owners.workshop'),
       })
     }
 
     return recs.slice(0, 10)
-  }, [kpis, vendors, topRootCause, worstSiteByFailure, totalSpend, savingsOpportunity, currency, costBySite])
+  }, [kpis, vendors, topRootCause, worstSiteByFailure, totalSpend, savingsOpportunity, currency, costBySite, t])
 
   // ── Action plan ───────────────────────────────────────────────────────────
   const actionPlan = useMemo(() => {
     const critCount = periodRecords.filter(r => r.risk_level === 'Critical').length
     const actions30 = [
       {
-        action: `Remove all ${critCount} Critical-risk tyres from service immediately`,
-        priority: 'Critical', timeline: '0-7 days',
-        owner: 'Fleet Manager', saving: fmtCurrency(kpis.scrapRate?.estimatedScrapCost * 0.2, currency), status: 'Open',
+        action: t('execreport.actionPlan.actions.removeCritical', { count: critCount }),
+        priority: 'Critical', timeline: t('execreport.actionPlan.daysSuffix', { range: '0-7' }),
+        owner: t('execreport.owners.fleetManager'), saving: fmtCurrency(kpis.scrapRate?.estimatedScrapCost * 0.2, currency), status: t('execreport.status.open'),
       },
       {
-        action: 'Audit top 3 highest-failure sites with on-site inspection team',
-        priority: 'Critical', timeline: '7-14 days',
-        owner: 'Fleet Manager', saving: fmtCurrency(totalSpend * 0.08, currency), status: 'Open',
+        action: t('execreport.actionPlan.actions.auditSites'),
+        priority: 'Critical', timeline: t('execreport.actionPlan.daysSuffix', { range: '7-14' }),
+        owner: t('execreport.owners.fleetManager'), saving: fmtCurrency(totalSpend * 0.08, currency), status: t('execreport.status.open'),
       },
       {
-        action: 'Mandate 100% tyre pressure check before vehicle dispatch',
-        priority: 'High', timeline: '1-7 days',
-        owner: 'Workshop', saving: fmtCurrency(topRootCause?.cost * 0.3 || 0, currency), status: 'Open',
+        action: t('execreport.actionPlan.actions.mandatePressureCheck'),
+        priority: 'High', timeline: t('execreport.actionPlan.daysSuffix', { range: '1-7' }),
+        owner: t('execreport.owners.workshop'), saving: fmtCurrency(topRootCause?.cost * 0.3 || 0, currency), status: t('execreport.status.open'),
       },
       {
-        action: 'Issue corrective action notices to all sites below 70% inspection compliance',
-        priority: 'High', timeline: '7-30 days',
-        owner: 'Management', saving: fmtCurrency(totalSpend * 0.1, currency), status: 'Open',
+        action: t('execreport.actionPlan.actions.issueCorrectiveNotices'),
+        priority: 'High', timeline: t('execreport.actionPlan.daysSuffix', { range: '7-30' }),
+        owner: t('execreport.owners.management'), saving: fmtCurrency(totalSpend * 0.1, currency), status: t('execreport.status.open'),
       },
     ]
     const actions60 = [
       {
-        action: `Initiate procurement review for lowest-performing tyre brand(s)`,
-        priority: 'High', timeline: '30-60 days',
-        owner: 'Procurement', saving: fmtCurrency(savingsOpportunity * 0.3, currency), status: 'Open',
+        action: t('execreport.actionPlan.actions.procurementReviewBrand'),
+        priority: 'High', timeline: t('execreport.actionPlan.daysSuffix', { range: '30-60' }),
+        owner: t('execreport.owners.procurement'), saving: fmtCurrency(savingsOpportunity * 0.3, currency), status: t('execreport.status.open'),
       },
       {
-        action: 'Deploy telematics driver behaviour scoring across all high-failure vehicles',
-        priority: 'High', timeline: '30-60 days',
-        owner: 'Fleet Manager', saving: fmtCurrency(totalSpend * 0.12, currency), status: 'Open',
+        action: t('execreport.actionPlan.actions.deployTelematics'),
+        priority: 'High', timeline: t('execreport.actionPlan.daysSuffix', { range: '30-60' }),
+        owner: t('execreport.owners.fleetManager'), saving: fmtCurrency(totalSpend * 0.12, currency), status: t('execreport.status.open'),
       },
       {
-        action: 'Implement tyre rotation schedule at 10,000 km for all fleet vehicles',
-        priority: 'Medium', timeline: '30-60 days',
-        owner: 'Workshop', saving: fmtCurrency(totalSpend * 0.1, currency), status: 'Open',
+        action: t('execreport.actionPlan.actions.implementRotation'),
+        priority: 'Medium', timeline: t('execreport.actionPlan.daysSuffix', { range: '30-60' }),
+        owner: t('execreport.owners.workshop'), saving: fmtCurrency(totalSpend * 0.1, currency), status: t('execreport.status.open'),
       },
     ]
     const actions90 = [
       {
-        action: 'Complete TPMS sensor installation across all fleet vehicles',
-        priority: 'High', timeline: '60-90 days',
-        owner: 'Fleet Manager', saving: fmtCurrency(totalSpend * 0.15, currency), status: 'Open',
+        action: t('execreport.actionPlan.actions.completeTpms'),
+        priority: 'High', timeline: t('execreport.actionPlan.daysSuffix', { range: '60-90' }),
+        owner: t('execreport.owners.fleetManager'), saving: fmtCurrency(totalSpend * 0.15, currency), status: t('execreport.status.open'),
       },
       {
-        action: 'Establish monthly executive tyre KPI review cadence',
-        priority: 'Medium', timeline: '60-90 days',
-        owner: 'Management', saving: 'Process', status: 'Open',
+        action: t('execreport.actionPlan.actions.monthlyReview'),
+        priority: 'Medium', timeline: t('execreport.actionPlan.daysSuffix', { range: '60-90' }),
+        owner: t('execreport.owners.management'), saving: t('execreport.actionPlan.processLabel'), status: t('execreport.status.open'),
       },
       {
-        action: 'Negotiate revised contracts with top-3 performing vendors based on CPK data',
-        priority: 'Medium', timeline: '60-90 days',
-        owner: 'Procurement', saving: fmtCurrency(savingsOpportunity * 0.4, currency), status: 'Open',
+        action: t('execreport.actionPlan.actions.negotiateContracts'),
+        priority: 'Medium', timeline: t('execreport.actionPlan.daysSuffix', { range: '60-90' }),
+        owner: t('execreport.owners.procurement'), saving: fmtCurrency(savingsOpportunity * 0.4, currency), status: t('execreport.status.open'),
       },
     ]
     return [...actions30, ...actions60, ...actions90]
-  }, [periodRecords, kpis, totalSpend, savingsOpportunity, topRootCause, currency])
+  }, [periodRecords, kpis, totalSpend, savingsOpportunity, topRootCause, currency, t])
 
   // ── Chart datasets ────────────────────────────────────────────────────────
   const costTrendChart = useMemo(() => ({
@@ -885,7 +887,7 @@ export default function ExecutiveReport() {
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-400 text-sm">Loading executive intelligence...</p>
+          <p className="text-gray-400 text-sm">{t('execreport.states.loading')}</p>
         </div>
       </div>
     )
@@ -896,7 +898,7 @@ export default function ExecutiveReport() {
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <Card className="max-w-md text-center">
           <AlertOctagon className="w-10 h-10 text-red-400 mx-auto mb-3" />
-          <p className="text-white font-semibold mb-1">Failed to load report data</p>
+          <p className="text-white font-semibold mb-1">{t('execreport.states.errorTitle')}</p>
           <p className="text-gray-400 text-sm">{error}</p>
         </Card>
       </div>
@@ -908,8 +910,8 @@ export default function ExecutiveReport() {
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <Card className="max-w-md text-center">
           <FileText className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-          <p className="text-white font-semibold mb-1">No data for selected period</p>
-          <p className="text-gray-400 text-sm">Try selecting a longer period or upload tyre records.</p>
+          <p className="text-white font-semibold mb-1">{t('execreport.states.emptyTitle')}</p>
+          <p className="text-gray-400 text-sm">{t('execreport.states.emptyDesc')}</p>
         </Card>
       </div>
     )
@@ -923,87 +925,87 @@ export default function ExecutiveReport() {
 
   const kpiCards = [
     {
-      label: 'Fleet Avg CPK',
+      label: t('execreport.kpi.fleetAvgCpk'),
       value: fmtCpk(kpis.cpk.fleetAvgCpk, currency),
       status: cpkStatus(kpis.cpk.fleetAvgCpk),
       target: '< 0.012',
       icon: DollarSign,
     },
     {
-      label: 'Median CPK',
+      label: t('execreport.kpi.medianCpk'),
       value: fmtCpk(kpis.cpk.medianCpk, currency),
       status: cpkStatus(kpis.cpk.medianCpk),
       target: '< 0.012',
       icon: BarChart2,
     },
     {
-      label: 'Fleet Avg Tyre Life',
+      label: t('execreport.kpi.fleetAvgTyreLife'),
       value: `${fmtNum(kpis.avgTyreLife.avgKm)} km`,
       status: kpis.avgTyreLife.avgKm >= 60000 ? 'green' : kpis.avgTyreLife.avgKm >= 40000 ? 'amber' : 'red',
       target: '≥ 60,000 km',
       icon: Activity,
     },
     {
-      label: 'Inspection Compliance',
+      label: t('execreport.kpi.inspectionCompliance'),
       value: fmtPct(kpis.inspectionCompliance.compliancePct),
       status: pctStatus(kpis.inspectionCompliance.compliancePct),
       target: '≥ 85%',
       icon: CheckCircle,
     },
     {
-      label: 'Pressure Compliance',
+      label: t('execreport.kpi.pressureCompliance'),
       value: fmtPct(kpis.pressureCompliance.compliancePct),
       status: pctStatus(kpis.pressureCompliance.compliancePct),
       target: '≥ 90%',
       icon: Target,
     },
     {
-      label: 'Failure Rate',
+      label: t('execreport.kpi.failureRate'),
       value: fmtPct(kpis.failureRate.failureRate * 100),
       status: failStatus(kpis.failureRate.failureRate),
       target: '< 10%',
       icon: AlertTriangle,
     },
     {
-      label: 'Critical Rate',
+      label: t('execreport.kpi.criticalRate'),
       value: fmtPct(kpis.failureRate.criticalRate * 100),
       status: kpis.failureRate.criticalRate <= 0.05 ? 'green' : kpis.failureRate.criticalRate <= 0.15 ? 'amber' : 'red',
       target: '< 5%',
       icon: ShieldAlert,
     },
     {
-      label: 'Scrap Rate',
+      label: t('execreport.kpi.scrapRate'),
       value: fmtPct(kpis.scrapRate.scrapRate * 100),
       status: kpis.scrapRate.scrapRate <= 0.15 ? 'green' : kpis.scrapRate.scrapRate <= 0.25 ? 'amber' : 'red',
       target: '< 15%',
       icon: Package,
     },
     {
-      label: 'Replacement Rate',
+      label: t('execreport.kpi.replacementRate'),
       value: `${fmtNum(kpis.replacementRate.avgPerVehiclePerMonth, 2)}/veh/mo`,
       status: 'amber',
       target: '< 1.0',
       icon: Wrench,
     },
     {
-      label: 'Total Downtime Hours',
+      label: t('execreport.kpi.totalDowntimeHours'),
       value: `${fmtNum(kpis.downtimeImpact.totalDowntimeHours)} hrs`,
       status: kpis.downtimeImpact.totalDowntimeHours <= 100 ? 'green' : kpis.downtimeImpact.totalDowntimeHours <= 300 ? 'amber' : 'red',
       target: '< 100 hrs',
       icon: Clock,
     },
     {
-      label: 'Fleet Availability',
+      label: t('execreport.kpi.fleetAvailability'),
       value: fmtPct(kpis.fleetAvailability.availabilityPct),
       status: pctStatus(kpis.fleetAvailability.availabilityPct, 95),
       target: '≥ 95%',
       icon: Zap,
     },
     {
-      label: 'Cost Trend',
-      value: costTrend.trend.charAt(0).toUpperCase() + costTrend.trend.slice(1),
+      label: t('execreport.kpi.costTrend'),
+      value: t(`execreport.trend.${costTrend.trend}`),
       status: costTrend.trend === 'improving' ? 'green' : costTrend.trend === 'stable' ? 'amber' : 'red',
-      target: 'Improving',
+      target: t('execreport.kpi.improvingTarget'),
       icon: TrendingUp,
     },
   ]
@@ -1028,8 +1030,8 @@ export default function ExecutiveReport() {
       <div className="sticky top-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800 no-print">
         <div className="max-w-[1800px] mx-auto px-4 py-3">
           <PageHeader
-            title="Executive Intelligence Report"
-            subtitle={`${companyName} · Generated ${formatDate(new Date(), 'All', { day: '2-digit', month: 'long', year: 'numeric' })}`}
+            title={t('execreport.header.title')}
+            subtitle={t('execreport.header.subtitle', { company: companyName, date: formatDate(new Date(), 'All', { day: '2-digit', month: 'long', year: 'numeric' }) })}
             icon={FileText}
             actions={<>
               <PeriodFilter records={records} value={period} onChange={setPeriod} />
@@ -1038,14 +1040,14 @@ export default function ExecutiveReport() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium transition-all border border-gray-700"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
-                Excel
+                {t('execreport.header.excel')}
               </button>
               <button
                 onClick={() => window.print()}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium transition-all border border-gray-700"
               >
                 <Printer className="w-3.5 h-3.5" />
-                Print
+                {t('execreport.header.print')}
               </button>
               <button
                 onClick={exportPDF}
@@ -1056,13 +1058,13 @@ export default function ExecutiveReport() {
                   ? <div className="w-3.5 h-3.5 border border-white border-t-transparent rounded-full animate-spin" />
                   : <Download className="w-3.5 h-3.5" />
                 }
-                Export PDF
+                {t('execreport.header.exportPdf')}
               </button>
               <button
                 onClick={() => setEmailModalOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                <Mail size={16} />Email Report
+                <Mail size={16} />{t('execreport.header.emailReport')}
               </button>
             </>}
           />

@@ -1,0 +1,74 @@
+{
+  "title": "Analytics",
+  "subtitle": "Cost, trend and breakdown analysis",
+  "subtitleError": "Could not load data",
+  "error": {
+    "loadFailed": "Failed to load analytics data.",
+    "couldNotLoad": "Could not load analytics",
+    "retry": "Retry"
+  },
+  "filters": {
+    "period": "Period",
+    "site": "Site",
+    "brand": "Brand",
+    "allSites": "All Sites",
+    "allBrands": "All Brands",
+    "clearFilters": "Clear Filters",
+    "riskLabel": "Risk:",
+    "all": "All"
+  },
+  "risk": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "critical": "Critical"
+  },
+  "kpi": {
+    "totalRecords": "Total Records",
+    "totalCost": "Total Cost ({currency})",
+    "sitesActive": "Sites Active",
+    "brandsTracked": "Brands Tracked"
+  },
+  "tabs": {
+    "costBySite": "Cost by Site",
+    "costByBrand": "Cost by Brand",
+    "monthlyTrend": "Monthly Trend",
+    "assetBreakdown": "Asset Breakdown"
+  },
+  "chart": {
+    "fullscreen": "Fullscreen",
+    "actualSpend": "Actual Spend",
+    "forecast": "Forecast",
+    "trendLine": "Trend Line"
+  },
+  "site": {
+    "site": "Site",
+    "records": "Records",
+    "totalCost": "Total Cost",
+    "avgCost": "Avg Cost",
+    "highRisk": "High Risk",
+    "topCategory": "Top Category"
+  },
+  "brand": {
+    "brand": "Brand",
+    "records": "Records",
+    "totalCost": "Total Cost",
+    "avgPerTyre": "Avg/Tyre",
+    "failureRate": "Failure Rate",
+    "topFailure": "Top Failure"
+  },
+  "trend": {
+    "forecast": "Forecast",
+    "actual": "Actual"
+  },
+  "asset": {
+    "searchPlaceholder": "Search asset number...",
+    "assetNo": "Asset No",
+    "records": "Records",
+    "totalCost": "Total Cost",
+    "highRisk": "High Risk",
+    "failurePerMonth": "Failure/Mo",
+    "sites": "Sites",
+    "lastSeen": "Last Seen"
+  }
+}

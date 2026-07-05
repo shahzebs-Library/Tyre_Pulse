@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import {
   parseWorkbook, sha256OfArrayBuffer, suggestMapping, transformRow, validateRow,
   classifyDuplicates, naturalKey, countryConflict, rowFingerprint, MODULE_FIELDS,
@@ -35,7 +36,7 @@ const MODULES = [
 ]
 const MODULE_LABELS = Object.fromEntries(MODULES.map((m) => [m.key, m.label]))
 const ELEVATED = ['admin', 'manager', 'director']
-const STEPS = ['Upload', 'Map columns', 'Validate', 'Approve & Commit']
+const STEP_KEYS = ['upload', 'mapColumns', 'validate', 'approve']
 
 function statusColor(s) {
   return s === 'ready' ? 'text-green-400 bg-green-900/30'
@@ -47,6 +48,7 @@ function statusColor(s) {
 export default function DataIntakeCenter() {
   const { profile } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
+  const { t } = useLanguage()
   const fmtMoney = (n) => `${activeCurrency || ''} ${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim()
   const isElevated = ELEVATED.includes(String(profile?.role || '').toLowerCase())
   const countryReady = activeCountry && activeCountry !== 'All'

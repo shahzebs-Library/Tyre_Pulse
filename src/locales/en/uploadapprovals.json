@@ -1,0 +1,109 @@
+{
+  "gate": {
+    "subtitle": "Admin only",
+    "message": "Administrators only",
+    "description": "Only an admin can review and approve uploaded data."
+  },
+  "header": {
+    "title": "Upload Approvals",
+    "batchSingular": "batch",
+    "batchPlural": "batches",
+    "subtitle": "{count} {noun} awaiting review · {rowsCount} rows"
+  },
+  "tabs": {
+    "intake": "Data Intake ({count})",
+    "pending": "Legacy ({count})",
+    "history": "History"
+  },
+  "search": {
+    "placeholder": "Search file, uploader, country..."
+  },
+  "intake": {
+    "loadError": "Could not load Data Intake approvals.",
+    "empty": {
+      "title": "No imports awaiting approval",
+      "description": "Batches submitted from the Data Intake Center appear here for an approver to commit or reject."
+    },
+    "moduleImport": "import",
+    "rowsLabel": "rows",
+    "readySuffix": "ready",
+    "warnSuffix": "warn",
+    "errorSuffix": "error",
+    "dupSuffix": "dup",
+    "buttons": {
+      "rows": "Rows",
+      "reject": "Reject",
+      "approveCommit": "Approve & Commit",
+      "committing": "Committing...",
+      "noReadyRows": "No ready rows to commit",
+      "approveTitle": "Approve and commit to live tables"
+    },
+    "rejectConfirm": "Reject the {module} import ({count} rows)? It will not be committed to live tables.",
+    "rejectFailed": "Reject failed.",
+    "viewFailed": "Could not load rows.",
+    "commitFailed": "Commit failed for the {module} import: {message}",
+    "unknownError": "unknown error"
+  },
+  "legacy": {
+    "empty": {
+      "pendingTitle": "Nothing awaiting approval",
+      "pendingDescription": "Uploads submitted by non-admins will appear here for review.",
+      "historyTitle": "No history yet",
+      "historyDescription": "Approved and rejected uploads will be listed here."
+    },
+    "untitledUpload": "Untitled upload",
+    "unknownUploader": "Unknown",
+    "rowsLabel": "rows",
+    "rejectedNote": "Rejected: {note}",
+    "buttons": {
+      "viewEdit": "View / Edit",
+      "view": "View",
+      "reject": "Reject",
+      "approve": "Approve",
+      "approving": "Approving...",
+      "deleteTitle": "Delete this upload batch permanently"
+    },
+    "status": {
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "rejectPrompt": "Reject \"{file}\" ({count} rows)? Optional reason:",
+    "deleteConfirm": "Delete the upload batch \"{file}\" ({count} rows)? This removes the staged data permanently and cannot be undone.",
+    "insertFailed": "Insert failed for \"{file}\" ({inserted} of {total} rows committed): {message}"
+  },
+  "types": {
+    "tyres": "Tyre Records",
+    "stock": "Stock"
+  },
+  "intakeModal": {
+    "titleSuffix": "import",
+    "rowsLabel": "rows",
+    "subtitle": "Read-only staged data. Approve to commit only the ready rows; errors and duplicates are skipped server-side.",
+    "searchPlaceholder": "Filter staged rows...",
+    "noRows": "No staged rows found for this batch.",
+    "columns": {
+      "index": "#",
+      "status": "Status"
+    },
+    "showingFirst": "Showing first 300 of {count} rows."
+  },
+  "editModal": {
+    "defaultFileName": "Upload",
+    "rowsLabel": "rows",
+    "editableSubtitle": "Edit any cell, fix a whole column, or remove rows - then Save.",
+    "readOnlySubtitle": "Read-only (already reviewed).",
+    "searchPlaceholder": "Filter rows...",
+    "fixWholeColumn": "Fix whole column",
+    "columnPlaceholder": "Column...",
+    "setValuePlaceholder": "Set value",
+    "applyToAll": "Apply to all",
+    "removeRowTitle": "Remove row",
+    "noRows": "No rows.",
+    "showingMatching": "Showing {shown} of {total} matching rows. Use the filter to find specific rows; “Apply to all” affects every row in the batch.",
+    "unsavedCorrections": "Unsaved corrections",
+    "noChanges": "No changes",
+    "close": "Close",
+    "saveCorrections": "Save corrections",
+    "saving": "Saving..."
+  }
+}

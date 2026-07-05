@@ -1,0 +1,222 @@
+{
+  "title": "Advanced Analytics",
+  "subtitle": "{records} records · {sites} sites",
+  "actions": {
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "states": {
+    "loadFailed": "Failed to load records",
+    "noData": "No data available for the selected filters.",
+    "noFailures": "No high/critical risk records found in selected filters."
+  },
+  "tabs": {
+    "trend": "Trend Analysis",
+    "seasonal": "Seasonal Analysis",
+    "geo": "Geographic Analysis",
+    "country": "Country Comparison",
+    "branch": "Branch Comparison",
+    "vehicle": "Vehicle Comparison",
+    "driver": "Driver Comparison",
+    "brand": "Brand Comparison",
+    "failure": "Failure Patterns"
+  },
+  "datePresets": {
+    "3mo": "Last 3 Mo",
+    "6mo": "Last 6 Mo",
+    "1yr": "Last 1 Yr",
+    "2yr": "Last 2 Yr",
+    "all": "All Time"
+  },
+  "filters": {
+    "allSites": "All Sites"
+  },
+  "positions": {
+    "all": "All",
+    "steer": "Steer",
+    "drive": "Drive",
+    "trailer": "Trailer",
+    "other": "Other"
+  },
+  "months": {
+    "jan": "Jan", "feb": "Feb", "mar": "Mar", "apr": "Apr", "may": "May", "jun": "Jun",
+    "jul": "Jul", "aug": "Aug", "sep": "Sep", "oct": "Oct", "nov": "Nov", "dec": "Dec"
+  },
+  "chart": {
+    "totalCost": "Total Cost ({currency})"
+  },
+  "trend": {
+    "worsening": "Worsening",
+    "improving": "Improving",
+    "stable": "Stable",
+    "cpk": "CPK",
+    "failureRate": "Failure Rate",
+    "volume": "Volume",
+    "forecastNote": "Dashed lines = 3-month forecast",
+    "cpkChart": "CPK Trend (Last 24 Months) with Moving Average & Forecast",
+    "failChart": "Monthly Failure Rate % (Last 24 Months) with Forecast",
+    "volumeChart": "Monthly Replacement Volume (Last 24 Months) with Forecast",
+    "avgCpk": "Avg CPK",
+    "movingAvg": "3-Month Moving Avg",
+    "forecast": "Forecast",
+    "failureRatePct": "Failure Rate %",
+    "replacements": "Replacements"
+  },
+  "seasonal": {
+    "insight": "has the highest tyre costs ({cost}) - investigate seasonal road conditions, vehicle loading patterns, or inspection compliance for this period.",
+    "cpkChart": "Average CPK by Calendar Month",
+    "avgCpkCur": "Avg CPK ({currency})",
+    "failChart": "Failure Rate % by Calendar Month",
+    "failureRatePct": "Failure Rate %",
+    "heatTitle": "Month × Metric Heat Map",
+    "month": "Month",
+    "count": "Count",
+    "failurePct": "Failure %",
+    "totalCost": "Total Cost",
+    "avgCost": "Avg Cost",
+    "blowouts": "Blowouts"
+  },
+  "geo": {
+    "costChart": "Total Cost by Site (Top 15)",
+    "failChart": "High-Risk Rate % by Site",
+    "highRiskPct": "High Risk %",
+    "summaryTitle": "Site Performance Summary",
+    "heatTitle": "Site × Month Failure Rate Heat Map (Last 12 Months)",
+    "headers": {
+      "site": "Site",
+      "records": "Records",
+      "totalCost": "Total Cost",
+      "avgCost": "Avg Cost",
+      "highRiskPct": "High Risk %",
+      "riskScore": "Risk Score",
+      "topCategory": "Top Category",
+      "topBrand": "Top Brand"
+    }
+  },
+  "country": {
+    "costChart": "Total Cost by Country/Region",
+    "cpkChart": "Average CPK by Country/Region",
+    "avgCpk": "Avg CPK",
+    "tableTitle": "Full Metrics by Country/Region",
+    "headers": {
+      "region": "Region",
+      "records": "Records",
+      "sites": "Sites",
+      "totalCost": "Total Cost",
+      "avgCpk": "Avg CPK",
+      "failurePct": "Failure %",
+      "sitesList": "Sites"
+    }
+  },
+  "branch": {
+    "gold": "Gold",
+    "silver": "Silver",
+    "bronze": "Bronze",
+    "rank": "Rank #{rank}",
+    "score": "Score",
+    "records": "Records",
+    "failPct": "Fail %",
+    "cost": "Cost",
+    "scoreChart": "Branch Composite Score (Top 12)",
+    "compositeScore": "Composite Score",
+    "tableTitle": "Full Branch Comparison Table",
+    "headers": {
+      "branch": "Branch",
+      "score": "Score",
+      "records": "Records",
+      "totalCost": "Total Cost",
+      "avgCost": "Avg Cost",
+      "avgCpk": "Avg CPK",
+      "avgLife": "Avg Life (km)",
+      "failurePct": "Failure %",
+      "highRisk": "High Risk"
+    }
+  },
+  "vehicle": {
+    "outlierCount": "{count} vehicle(s)",
+    "outlierText": "flagged as CPK outliers (>2σ above fleet average of {cpk}). These vehicles are highlighted in red and require investigation.",
+    "costChart": "Top 20 Vehicles by Total Tyre Cost (Red = CPK Outlier)",
+    "scatterChart": "Total Cost vs Avg CPK Scatter (bubble = replacement count)",
+    "axisAvgCpk": "Avg CPK",
+    "tableTitle": "All Vehicles - Tyre Cost Analysis",
+    "highCpk": "⚠ High CPK",
+    "showingTop": "Showing top 100 of {total} vehicles",
+    "tooltip": {
+      "cpk": "CPK",
+      "cost": "Cost",
+      "count": "Count"
+    },
+    "headers": {
+      "assetNo": "Asset No",
+      "records": "Records",
+      "totalCost": "Total Cost",
+      "avgCpk": "Avg CPK",
+      "avgLife": "Avg Life (km)",
+      "failures": "Failures",
+      "lastSeen": "Last Seen",
+      "outlier": "Outlier"
+    }
+  },
+  "driver": {
+    "detected": "Driver name patterns detected in findings - analysis reflects both driver assignments and vehicle-level tyre consumption.",
+    "proxy": "Driver data is not available as a direct column. This analysis uses vehicle asset numbers as a proxy for driver performance, reflecting vehicle-level tyre consumption.",
+    "vehiclesAnalyzed": "Vehicles Analyzed",
+    "sampleShown": "sample shown",
+    "highestCost": "Highest Cost Vehicle",
+    "lowestCost": "Lowest Cost Vehicle",
+    "worstTitle": "Top 10 Worst Performing Vehicles",
+    "bestTitle": "Top 10 Best Performing Vehicles",
+    "detailTitle": "Worst Performing Vehicle Details",
+    "headers": {
+      "rank": "Rank",
+      "assetNo": "Asset No",
+      "records": "Records",
+      "totalCost": "Total Cost",
+      "failCount": "Fail Count",
+      "sites": "Sites",
+      "categories": "Categories"
+    }
+  },
+  "brandTab": {
+    "scatterChart": "CPK vs Tyre Life by Brand (size = count)",
+    "axisAvgCpk": "Avg CPK",
+    "axisAvgLife": "Avg Life (km)",
+    "monthlyChart": "Monthly Cost by Brand (Last 12 Mo)",
+    "yoy": " · YoY data available",
+    "tableTitle": "Brand Performance Ranking",
+    "tooltip": {
+      "cpk": "CPK",
+      "life": "Life",
+      "count": "Count"
+    },
+    "headers": {
+      "rank": "Rank",
+      "brand": "Brand",
+      "score": "Score",
+      "records": "Records",
+      "avgCpk": "Avg CPK",
+      "avgLife": "Avg Life (km)",
+      "failurePct": "Failure %",
+      "scrapPct": "Scrap %",
+      "totalCost": "Total Cost",
+      "topCategory": "Top Category"
+    }
+  },
+  "failure": {
+    "totalFailures": "Total Failures",
+    "totalFailuresSub": "High + Critical records",
+    "topFailureType": "Top Failure Type",
+    "recordsSub": "{count} records",
+    "highestFailPosition": "Highest Fail Position",
+    "highestFailBrand": "Highest Fail Brand",
+    "typeChart": "Failure Type Distribution",
+    "posChart": "Failure Rate % by Position",
+    "brandChart": "Failure Rate % by Brand (Top 10)",
+    "siteChart": "Failure Rate % by Site",
+    "kmChart": "Tyre Life Distribution at Removal (km buckets)",
+    "failureRatePct": "Failure Rate %",
+    "count": "Count",
+    "heatTitle": "Failure Seasonality - Month × Category Heat Map",
+    "category": "Category"
+  }
+}

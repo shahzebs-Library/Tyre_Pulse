@@ -19,6 +19,7 @@ import { SkeletonCards, SkeletonTable } from '../components/ui/Skeleton'
 import * as assetApi from '../lib/api/assetManagement'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact, formatDate, formatMonthYear } from '../lib/formatters'
 import PageHeader from '../components/ui/PageHeader'
@@ -161,6 +162,7 @@ function TyrePositionDiagram({ tyres = [] }) {
 
 // ── Asset Detail Drawer ────────────────────────────────────────────────────────
 function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
+  const { t } = useLanguage()
   const activeTyres = tyres.filter(t => !t.km_at_removal)
   const totalCost = tyres.reduce((s, t) => s + (parseFloat(t.cost_per_tyre) || 0) * (Number(t.qty) || 1), 0)
 
@@ -187,7 +189,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
   const chartData = {
     labels: monthlyData.labels,
     datasets: [{
-      label: 'Monthly Tyre Cost',
+      label: t('assetmgmt.drawer.monthlyCostSeriesLabel'),
       data: monthlyData.costs,
       borderColor: '#3b82f6',
       backgroundColor: 'rgba(59,130,246,0.1)',
@@ -204,11 +206,11 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
   const criticalTyres = activeTyres.filter(t => t.risk_level === 'Critical')
   const highTyres = activeTyres.filter(t => t.risk_level === 'High')
   const lowTread = activeTyres.filter(t => parseFloat(t.tread_depth) < 3)
-  if (criticalTyres.length) recommendations.push({ level: 'Critical', msg: `${criticalTyres.length} tyre(s) at Critical risk - immediate replacement required.` })
-  if (highTyres.length) recommendations.push({ level: 'High', msg: `${highTyres.length} tyre(s) at High risk - schedule replacement within 7 days.` })
-  if (lowTread.length) recommendations.push({ level: 'High', msg: `${lowTread.length} tyre(s) below 3mm tread - safety limit approaching.` })
-  if (!activeTyres.length) recommendations.push({ level: 'Medium', msg: 'No active tyre records - verify fitment data is up to date.' })
-  if (recommendations.length === 0) recommendations.push({ level: 'Low', msg: 'All tyres within acceptable parameters. Continue routine inspections.' })
+  if (criticalTyres.length) recommendations.push({ level: 'Critical', msg: t('assetmgmt.drawer.recCriticalRisk', { count: criticalTyres.length }) })
+  if (highTyres.length) recommendations.push({ level: 'High', msg: t('assetmgmt.drawer.recHighRisk', { count: highTyres.length }) })
+  if (lowTread.length) recommendations.push({ level: 'High', msg: t('assetmgmt.drawer.recLowTread', { count: lowTread.length }) })
+  if (!activeTyres.length) recommendations.push({ level: 'Medium', msg: t('assetmgmt.drawer.recNoActive') })
+  if (recommendations.length === 0) recommendations.push({ level: 'Low', msg: t('assetmgmt.drawer.recAllGood') })
 
   return (
     <motion.div
@@ -219,14 +221,14 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
       {/* Header */}
       <div className="flex items-center justify-between p-5 border-b border-gray-800 bg-gray-900 shrink-0">
         <div>
-          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Asset Profile</p>
+          <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">{t('assetmgmt.drawer.assetProfile')}</p>
           <h2 className="text-xl font-bold text-white">{asset.asset_no}</h2>
           <p className="text-sm text-gray-400">{asset.vehicle_type} · {asset.make} {asset.model} {asset.year}</p>
           <p className="text-xs text-gray-500 mt-0.5"><MapPin className="inline w-3 h-3 mr-1" />{asset.site ?? '-'}</p>
         </div>
         <div className="flex items-center gap-3">
           <span className={`px-2 py-1 rounded-full text-xs font-semibold ${asset.active ? 'bg-green-900/50 text-green-300' : 'bg-gray-800 text-gray-400'}`}>
-            {asset.active ? 'Active' : 'Inactive'}
+            {asset.active ? t('assetmgmt.drawer.active') : t('assetmgmt.drawer.inactive')}
           </span>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
             <X className="w-5 h-5" />
@@ -239,7 +241,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
 
         {/* Tyre Position Diagram */}
         <div className="card">
-          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2"><Layers className="w-4 h-4 text-blue-400" /> Tyre Position Map</h3>
+          <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2"><Layers className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.tyrePositionMap')}</h3>
           <div className="flex gap-4 items-start">
             <div className="flex-1">
               <TyrePositionDiagram tyres={activeTyres} />
@@ -253,7 +255,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
               ))}
               <div className="flex items-center gap-2 text-xs mt-1">
                 <span className="w-3 h-3 rounded-full bg-gray-600 opacity-40" />
-                <span className="text-gray-400">No data</span>
+                <span className="text-gray-400">{t('assetmgmt.drawer.noDataLegend')}</span>
               </div>
             </div>
           </div>
@@ -263,7 +265,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
         <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
           <div className="p-4 border-b border-gray-700">
             <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-green-400" /> Active Tyres ({activeTyres.length})
+              <Activity className="w-4 h-4 text-green-400" /> {t('assetmgmt.drawer.activeTyres', { count: activeTyres.length })}
             </h3>
           </div>
           {activeTyres.length ? (
@@ -271,7 +273,11 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-gray-700">
-                    {['Position','Serial','Brand','Size','Tread','Risk','Days Fitted','CPK'].map(h => (
+                    {[
+                      t('assetmgmt.drawer.columns.position'), t('assetmgmt.drawer.columns.serial'), t('assetmgmt.drawer.columns.brand'),
+                      t('assetmgmt.drawer.columns.size'), t('assetmgmt.drawer.columns.tread'), t('assetmgmt.drawer.columns.risk'),
+                      t('assetmgmt.drawer.columns.daysFitted'), t('assetmgmt.drawer.columns.cpk'),
+                    ].map(h => (
                       <th key={h} className="px-3 py-2 text-left text-gray-500 font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -303,14 +309,14 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
               </table>
             </div>
           ) : (
-            <div className="p-6 text-center text-gray-500 text-sm">No active tyre records found.</div>
+            <div className="p-6 text-center text-gray-500 text-sm">{t('assetmgmt.drawer.noActiveTyres')}</div>
           )}
         </div>
 
         {/* Monthly Cost Chart */}
         <div className="card">
           <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-blue-400" /> Tyre Cost - Last 12 Months
+            <TrendingUp className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.monthlyCostChartTitle')}
           </h3>
           <div className="h-44">
             <Line data={chartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
@@ -322,14 +328,14 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
           <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
             <div className="p-4 border-b border-gray-700">
               <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-                <Zap className="w-4 h-4 text-yellow-400" /> Recent Work Orders
+                <Zap className="w-4 h-4 text-yellow-400" /> {t('assetmgmt.drawer.recentWorkOrders')}
               </h3>
             </div>
             <div className="divide-y divide-gray-700/50">
               {assetWOs.map((wo, i) => (
                 <div key={wo.id ?? i} className="px-4 py-3 flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-300">{wo.work_type ?? 'Work Order'}</p>
+                    <p className="text-sm text-gray-300">{wo.work_type ?? t('assetmgmt.drawer.workOrderFallback')}</p>
                     <p className="text-xs text-gray-500">{fmtDate(wo.created_at)}</p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -349,9 +355,9 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
         {/* Lifetime Cost */}
         <div className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 rounded-xl border border-blue-800/30 p-4 flex items-center justify-between">
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-widest">Total Lifetime Tyre Cost</p>
+            <p className="text-xs text-gray-500 uppercase tracking-widest">{t('assetmgmt.drawer.totalLifetimeCost')}</p>
             <p className="text-2xl font-bold text-white mt-1">{fmtCurrency(totalCost, currency)}</p>
-            <p className="text-xs text-gray-500 mt-1">{tyres.length} tyre record{tyres.length !== 1 ? 's' : ''} total</p>
+            <p className="text-xs text-gray-500 mt-1">{t('assetmgmt.drawer.tyreRecordsTotal', { count: tyres.length })}</p>
           </div>
           <DollarSign className="w-10 h-10 text-blue-500 opacity-40" />
         </div>
@@ -359,7 +365,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
         {/* Recommendations */}
         <div className="card">
           <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-            <Target className="w-4 h-4 text-purple-400" /> Recommendations
+            <Target className="w-4 h-4 text-purple-400" /> {t('assetmgmt.drawer.recommendations')}
           </h3>
           <div className="space-y-2">
             {recommendations.map((r, i) => {
@@ -375,7 +381,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
         </div>
 
         {/* Additional imported fields */}
-        <CustomFieldsPanel data={asset.custom_data} title="Additional imported fields" />
+        <CustomFieldsPanel data={asset.custom_data} title={t('assetmgmt.drawer.customFieldsTitle')} />
       </div>
     </motion.div>
   )
@@ -383,6 +389,7 @@ function AssetDrawer({ asset, tyres = [], workOrders, currency, onClose }) {
 
 // ── Add/Edit Asset Modal ────────────────────────────────────────────────────────
 function AssetModal({ asset, sites, countries, onSave, onClose }) {
+  const { t } = useLanguage()
   const [form, setForm] = useState(asset ?? EMPTY_ASSET())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -392,7 +399,7 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
   function set(k, v) { setForm(prev => ({ ...prev, [k]: v })) }
 
   async function handleSave() {
-    if (!form.asset_no?.trim()) { setError('Asset No is required.'); return }
+    if (!form.asset_no?.trim()) { setError(t('assetmgmt.modal.errRequired')); return }
     setSaving(true)
     setError('')
     try {
@@ -415,13 +422,13 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
       // everyone else and lost on cache clear. Surface the real error instead.
       if (supaErr) {
         const dup = /duplicate key|unique constraint/i.test(supaErr.message || '')
-        setError(dup ? 'Asset No already exists.' : (supaErr.message || 'Save failed. Please retry.'))
+        setError(dup ? t('assetmgmt.modal.errDuplicate') : (supaErr.message || t('assetmgmt.modal.errSaveFailed')))
         setSaving(false)
         return
       }
       onSave()
     } catch (e) {
-      setError(e.message ?? 'Unexpected error.')
+      setError(e.message ?? t('assetmgmt.modal.errUnexpected'))
     } finally {
       setSaving(false)
     }
@@ -440,7 +447,7 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
         <div className="flex items-center justify-between p-5 border-b border-gray-800">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <Truck className="w-5 h-5 text-blue-400" />
-            {isEdit ? 'Edit Asset' : 'Add Asset'}
+            {isEdit ? t('assetmgmt.modal.editTitle') : t('assetmgmt.modal.addTitle')}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
             <X className="w-5 h-5" />
@@ -449,63 +456,63 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Asset No *</label>
+              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.assetNo')}</label>
               <input
                 value={form.asset_no}
                 onChange={e => set('asset_no', e.target.value.toUpperCase())}
-                placeholder="e.g. TK-001"
+                placeholder={t('assetmgmt.modal.placeholders.assetNo')}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Vehicle Type</label>
+              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.vehicleType')}</label>
               <select
                 value={form.vehicle_type}
                 onChange={e => set('vehicle_type', e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
               >
-                <option value="">Select type</option>
-                {VEHICLE_TYPES.map(t => <option key={t}>{t}</option>)}
+                <option value="">{t('assetmgmt.modal.selectType')}</option>
+                {VEHICLE_TYPES.map(vt => <option key={vt}>{vt}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Make</label>
-              <input value={form.make} onChange={e => set('make', e.target.value)} placeholder="e.g. Volvo"
+              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.make')}</label>
+              <input value={form.make} onChange={e => set('make', e.target.value)} placeholder={t('assetmgmt.modal.placeholders.make')}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Model</label>
-              <input value={form.model} onChange={e => set('model', e.target.value)} placeholder="e.g. FH16"
+              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.model')}</label>
+              <input value={form.model} onChange={e => set('model', e.target.value)} placeholder={t('assetmgmt.modal.placeholders.model')}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Year</label>
-              <input type="number" min="1990" max="2030" value={form.year} onChange={e => set('year', e.target.value)} placeholder="e.g. 2022"
+              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.year')}</label>
+              <input type="number" min="1990" max="2030" value={form.year} onChange={e => set('year', e.target.value)} placeholder={t('assetmgmt.modal.placeholders.year')}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Site</label>
-              <input value={form.site} onChange={e => set('site', e.target.value)} placeholder="e.g. Riyadh Plant"
+              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.site')}</label>
+              <input value={form.site} onChange={e => set('site', e.target.value)} placeholder={t('assetmgmt.modal.placeholders.site')}
                 list="am-sites-list"
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500" />
               <datalist id="am-sites-list">{sites.map(s => <option key={s} value={s} />)}</datalist>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Country</label>
+              <label className="text-xs text-gray-400 mb-1 block">{t('assetmgmt.modal.country')}</label>
               <select value={form.country} onChange={e => set('country', e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
-                <option value="">Select</option>
+                <option value="">{t('assetmgmt.modal.select')}</option>
                 {(countries.length ? countries : ['KSA','UAE','Egypt']).map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex items-center gap-3 mt-1">
-              <label className="text-xs text-gray-400">Active Status</label>
+              <label className="text-xs text-gray-400">{t('assetmgmt.modal.activeStatus')}</label>
               <button onClick={() => set('active', !form.active)} className="flex items-center gap-2">
                 {form.active
                   ? <ToggleRight className="w-8 h-8 text-green-400" />
                   : <ToggleLeft className="w-8 h-8 text-gray-600" />}
                 <span className={`text-sm font-medium ${form.active ? 'text-green-400' : 'text-gray-500'}`}>
-                  {form.active ? 'Active' : 'Inactive'}
+                  {form.active ? t('assetmgmt.modal.active') : t('assetmgmt.modal.inactive')}
                 </span>
               </button>
             </div>
@@ -513,11 +520,11 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
           {error && <p className="text-red-400 text-xs bg-red-900/20 rounded-lg px-3 py-2">{error}</p>}
         </div>
         <div className="flex justify-end gap-3 px-5 pb-5">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 text-sm hover:bg-gray-700 transition-colors">Cancel</button>
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 text-sm hover:bg-gray-700 transition-colors">{t('assetmgmt.modal.cancel')}</button>
           <button onClick={handleSave} disabled={saving}
             className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-50 transition-colors flex items-center gap-2">
             {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {saving ? 'Saving...' : 'Save Asset'}
+            {saving ? t('assetmgmt.modal.saving') : t('assetmgmt.modal.save')}
           </button>
         </div>
       </motion.div>
@@ -527,6 +534,7 @@ function AssetModal({ asset, sites, countries, onSave, onClose }) {
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 function KpiCard({ icon: Icon, label, value, sub, color = 'blue', trend }) {
+  const { t } = useLanguage()
   const colors = {
     blue:   { bg: 'from-blue-900/30 to-blue-800/10',   border: 'border-blue-800/30',   icon: 'text-blue-400' },
     red:    { bg: 'from-red-900/30 to-red-800/10',     border: 'border-red-800/30',     icon: 'text-red-400' },
@@ -547,7 +555,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'blue', trend }) {
       {trend != null && (
         <p className={`text-xs font-medium flex items-center gap-1 ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
           {trend >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingUp className="w-3 h-3 rotate-180" />}
-          {Math.abs(trend)}% vs last month
+          {t('assetmgmt.kpis.vsLastMonth', { percent: Math.abs(trend) })}
         </p>
       )}
     </motion.div>
@@ -558,6 +566,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'blue', trend }) {
 export default function AssetManagement() {
   const { profile } = useAuth()
   const { activeCurrency, activeCountry } = useSettings()
+  const { t } = useLanguage()
   const isAdmin = profile?.role === 'Admin'
 
   // ── data state ───────────────────────────────────────────────────────────────

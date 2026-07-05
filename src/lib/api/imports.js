@@ -247,7 +247,7 @@ async function insertRowChunk(chunk, attempts = 4) {
 }
 
 export async function stageRows(batchId, rows) {
-  const MAX_ROWS = 100          // hard cap per request
+  const MAX_ROWS = 500          // hard cap per request (byte budget still applies)
   const MAX_BYTES = 1_200_000   // ~1.2 MB serialized budget per request
   const payload = rows.map((r) => ({
     batch_id: batchId,
@@ -416,23 +416,78 @@ export async function runPostImportAutomation(batchId, module, opts = {}) {
   }
 }
 
-/** Commit an approved batch into live tables via the secure server RPC. */
-export async function commitBatch(batchId) {
-  const { data, error } = await supabase.rpc('import_commit_batch', { p_batch_id: batchId })
-  if (error) throw new ServiceError(error.message, error.code, error)
-  return data
+/** Rows committed per RPC call. Sized so a chunk finishes far inside the 120s
+ * statement timeout, letting 50k+ row ERP exports commit reliably. */
+export const COMMIT_CHUNK_ROWS = 1000
+
+/**
+ * Commit an approved batch into live tables via the secure server RPC.
+ * V93: commits in chunks (`p_max_rows`) and loops until the server reports no
+ * pending rows remain, so batch size is unbounded. Returns the aggregated
+ * totals in the same shape as the old single-shot call, plus `remaining` (0
+ * on success). `onProgress` receives the running totals after every chunk.
+ */
+export async function commitBatch(batchId, { chunkSize = COMMIT_CHUNK_ROWS, onProgress } = {}) {
+  const totals = { status: 'committed', inserted: 0, skipped: 0, failed: 0, merged: 0, errors: [], remaining: 0, target: null }
+  let stalls = 0
+  for (;;) {
+    const { data, error } = await supabase.rpc('import_commit_batch', {
+      p_batch_id: batchId,
+      p_max_rows: chunkSize,
+    })
+    if (error) throw new ServiceError(error.message, error.code, error)
+    const d = data || {}
+    totals.inserted += d.inserted || 0
+    totals.skipped  += d.skipped  || 0
+    totals.failed   += d.failed   || 0
+    totals.merged   += d.merged   || 0
+    if (Array.isArray(d.errors) && d.errors.length) totals.errors = totals.errors.concat(d.errors).slice(0, 20)
+    totals.target = d.target ?? totals.target
+    totals.remaining = d.remaining ?? 0
+    totals.status = d.status || totals.status
+    onProgress?.({ ...totals })
+    if (d.status !== 'partial' || !(d.remaining > 0)) return totals
+    // Every chunk must make progress (rows become processed or errored).
+    const progressed = (d.inserted || 0) + (d.skipped || 0) + (d.failed || 0) + (d.merged || 0)
+    stalls = progressed > 0 ? 0 : stalls + 1
+    if (stalls >= 3) {
+      throw new ServiceError(`Commit stalled with ${d.remaining} row(s) remaining. Re-open the batch from Intake History to retry.`, 'COMMIT_STALLED')
+    }
+  }
 }
+
+/** Rows enriched per RPC call — smaller than commit chunks because each row
+ * does a live-table natural-key lookup. */
+export const ENRICH_CHUNK_ROWS = 400
 
 /**
  * Cross-file enrichment (V79). For the batch's `action='update'` rows (rows whose
  * natural key already exists live), fill ONLY the empty columns on the matching
  * live record from this file — never overwriting existing values. Returns
  * `{ enriched, skipped, no_match }`.
+ * V93: pages through the batch by row id (`p_max_rows` + `p_after_id`) so
+ * 50k+ row files never hit the DB statement timeout; a fresh call still
+ * retries earlier skipped/no-match rows (e.g. after creating missing assets).
  */
-export async function enrichBatch(batchId) {
-  const { data, error } = await supabase.rpc('import_enrich_batch', { p_batch_id: batchId })
-  if (error) throw new ServiceError(error.message, error.code, error)
-  return data
+export async function enrichBatch(batchId, { chunkSize = ENRICH_CHUNK_ROWS, onProgress } = {}) {
+  const totals = { enriched: 0, skipped: 0, no_match: 0 }
+  let after = null
+  for (;;) {
+    const { data, error } = await supabase.rpc('import_enrich_batch', {
+      p_batch_id: batchId,
+      p_max_rows: chunkSize,
+      p_after_id: after,
+    })
+    if (error) throw new ServiceError(error.message, error.code, error)
+    const d = data || {}
+    totals.enriched += d.enriched || 0
+    totals.skipped  += d.skipped  || 0
+    totals.no_match += d.no_match || 0
+    onProgress?.({ ...totals })
+    if (d.done !== false) return totals
+    if (!d.last_id || d.last_id === after) return totals // cursor safety: never loop in place
+    after = d.last_id
+  }
 }
 
 /**

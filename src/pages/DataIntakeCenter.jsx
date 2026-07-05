@@ -74,6 +74,8 @@ export default function DataIntakeCenter() {
   const [annotated, setAnnotated] = useState([])
   const [counts, setCounts] = useState(null)
   const [result, setResult] = useState(null)
+  // Live per-chunk totals while a large (50k+) batch commits/enriches (V93).
+  const [commitProgress, setCommitProgress] = useState(null)
   const [automation, setAutomation] = useState(null)
   const [recent, setRecent] = useState([])
   const [files, setFiles] = useState([])
@@ -524,15 +526,21 @@ export default function DataIntakeCenter() {
 
   // ── Step 4: approve + commit ─────────────────────────────────────────────────
   async function commit() {
-    setError(''); setBusy(true)
+    setError(''); setBusy(true); setCommitProgress(null)
     try {
       await imports.submitForApproval(batchId)
       if (isElevated) await imports.approveBatch(batchId)
-      const res = await imports.commitBatch(batchId)
+      // V93: commits run in server-side chunks so 50k+ row files never time
+      // out; each chunk reports running totals for the progress line below.
+      const res = await imports.commitBatch(batchId, {
+        onProgress: (p) => setCommitProgress({ phase: 'commit', ...p }),
+      })
       // Cross-file enrichment: fill blanks on existing records from this file.
       if (enrichExisting && isElevated) {
         try {
-          const enr = await imports.enrichBatch(batchId)
+          const enr = await imports.enrichBatch(batchId, {
+            onProgress: (p) => setCommitProgress({ phase: 'enrich', ...p }),
+          })
           if (enr) res.enriched = enr.enriched ?? 0
         } catch (e) { res.enrichError = e?.message || 'Enrichment failed' }
       }
@@ -547,7 +555,7 @@ export default function DataIntakeCenter() {
       loadRecent()
     } catch (err) {
       setError(err?.message || 'Commit failed.')
-    } finally { setBusy(false) }
+    } finally { setBusy(false); setCommitProgress(null) }
   }
 
   if (!countryReady) {
@@ -870,6 +878,28 @@ export default function DataIntakeCenter() {
               )}
               {!isElevated && <p className="text-xs text-amber-400">Your role can stage but not approve - this will be submitted for approval.</p>}
               <button onClick={commit} disabled={busy} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {isElevated ? 'Approve & commit' : 'Submit for approval'}</button>
+              {busy && commitProgress && (
+                <div className="space-y-1.5">
+                  {commitProgress.phase === 'commit' ? (
+                    <>
+                      <div className="w-full bg-gray-800 rounded h-1.5 overflow-hidden">
+                        <div className="bg-green-500 h-1.5 rounded transition-all"
+                          style={{ width: `${Math.min(100, Math.round(((commitProgress.inserted + commitProgress.skipped + commitProgress.failed + commitProgress.merged) / Math.max(1, commitProgress.inserted + commitProgress.skipped + commitProgress.failed + commitProgress.merged + (commitProgress.remaining || 0))) * 100))}%` }} />
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        Committing in chunks… {(commitProgress.inserted || 0).toLocaleString('en-US')} inserted
+                        {commitProgress.merged ? ` · ${commitProgress.merged.toLocaleString('en-US')} merged` : ''}
+                        {commitProgress.failed ? ` · ${commitProgress.failed.toLocaleString('en-US')} failed` : ''}
+                        {' · '}{(commitProgress.remaining || 0).toLocaleString('en-US')} remaining
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-400">
+                      Enriching existing records… {(commitProgress.enriched || 0).toLocaleString('en-US')} enriched · {(commitProgress.no_match || 0).toLocaleString('en-US')} no match
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className={`rounded-xl p-6 ${result.status === 'failed'

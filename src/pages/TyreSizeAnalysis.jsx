@@ -45,6 +45,12 @@ const PALETTE = [
   '#ec4899','#14b8a6','#f97316','#6366f1','#84cc16',
 ]
 
+// Canonical position labels (used only for the Position filter dropdown display).
+const POSITION_KEY_MAP = {
+  'Steer': 'steer', 'Drive': 'drive', 'Trailer': 'trailer',
+  'Lift Axle': 'liftAxle', 'Tag Axle': 'tagAxle', 'Other': 'other',
+}
+
 const CHART_BASE = {
   responsive: true,
   maintainAspectRatio: false,
@@ -361,7 +367,7 @@ export default function TyreSizeAnalysis() {
         borderRadius: 3,
       }],
     }
-  }, [sizeMetrics])
+  }, [sizeMetrics, t])
 
   const cpkBarOpts = useMemo(() => ({
     ...CHART_BASE,
@@ -380,11 +386,11 @@ export default function TyreSizeAnalysis() {
     scales: {
       x: {
         ...CHART_BASE.scales.x,
-        title: { display: true, text: `CPK (${activeCurrency}/km)`, color: '#6b7280' },
+        title: { display: true, text: t('tyresize.charts.cpkAxisTitle', { currency: activeCurrency }), color: '#6b7280' },
       },
       y: { ...CHART_BASE.scales.y },
     },
-  }), [activeCurrency])
+  }), [activeCurrency, t])
 
   // ── Size × Brand Matrix ────────────────────────────────────────────────────────
   const matrixData = useMemo(() => {
@@ -487,10 +493,10 @@ export default function TyreSizeAnalysis() {
       x: { ...CHART_BASE.scales.x },
       y: {
         ...CHART_BASE.scales.y,
-        title: { display: true, text: `CPK (${activeCurrency}/km)`, color: '#6b7280' },
+        title: { display: true, text: t('tyresize.charts.cpkAxisTitle', { currency: activeCurrency }), color: '#6b7280' },
       },
     },
-  }), [activeCurrency])
+  }), [activeCurrency, t])
 
   // ── Consolidation Opportunities ───────────────────────────────────────────────
   const consolidationOps = useMemo(() => {
@@ -501,8 +507,8 @@ export default function TyreSizeAnalysis() {
       if (m.vehicles.length === 1) {
         ops.push({
           type: 'eliminate',
-          title: `Eliminate size ${m.size}`,
-          desc: `Used by only 1 vehicle (${m.vehicles[0] || 'unknown'}). Consider eliminating to reduce procurement complexity.`,
+          title: t('tyresize.consolidation.eliminateTitle', { size: m.size }),
+          desc: t('tyresize.consolidation.eliminateDesc', { vehicle: m.vehicles[0] || t('tyresize.unknown') }),
           impact: 'Low',
           savings: null,
           size: m.size,
@@ -523,8 +529,14 @@ export default function TyreSizeAnalysis() {
             const annualSavings = worst.count * (worst.avgCpk - best.avgCpk) * (m.avgLife ?? 50000)
             ops.push({
               type: 'standardize',
-              title: `Standardize ${m.size} on ${best.brand}`,
-              desc: `${best.brand} CPK: ${activeCurrency} ${best.avgCpk.toFixed(4)} vs ${worst.brand} CPK: ${activeCurrency} ${worst.avgCpk.toFixed(4)}. Switch ${worst.count} tyres to ${best.brand}.`,
+              title: t('tyresize.consolidation.standardizeTitle', { size: m.size, brand: best.brand }),
+              desc: t('tyresize.consolidation.standardizeDesc', {
+                bestBrand: best.brand,
+                bestCpk: `${activeCurrency} ${best.avgCpk.toFixed(4)}`,
+                worstBrand: worst.brand,
+                worstCpk: `${activeCurrency} ${worst.avgCpk.toFixed(4)}`,
+                count: worst.count,
+              }),
               impact: 'High',
               savings: annualSavings,
               size: m.size,
@@ -537,8 +549,8 @@ export default function TyreSizeAnalysis() {
         const annualSavings = m.count * (m.avgCpk - fleetCpk) * (m.avgLife ?? 50000)
         ops.push({
           type: 'review',
-          title: `Review specification for ${m.size}`,
-          desc: `Avg CPK of ${activeCurrency} ${m.avgCpk.toFixed(4)}/km is 2× fleet average. Investigate root cause and consider alternative specification.`,
+          title: t('tyresize.consolidation.reviewTitle', { size: m.size }),
+          desc: t('tyresize.consolidation.reviewDesc', { value: `${activeCurrency} ${m.avgCpk.toFixed(4)}` }),
           impact: 'Critical',
           savings: annualSavings,
           size: m.size,
@@ -550,7 +562,7 @@ export default function TyreSizeAnalysis() {
       const rank = { Critical: 0, High: 1, Low: 2 }
       return rank[a.impact] - rank[b.impact]
     })
-  }, [sizeMetrics, filtered, fleetAvgCpk, activeCurrency])
+  }, [sizeMetrics, filtered, fleetAvgCpk, activeCurrency, t])
 
   // ── Brand breakdown for expanded row ─────────────────────────────────────────
   function getBrandBreakdown(size) {
@@ -708,7 +720,7 @@ export default function TyreSizeAnalysis() {
     return (
       <div className="flex items-center justify-center h-64 gap-3 text-red-400">
         <AlertTriangle className="w-6 h-6" />
-        <span>Failed to load data: {error}</span>
+        <span>{t('tyresize.error.failedToLoad', { message: error })}</span>
       </div>
     )
   }
@@ -723,8 +735,8 @@ export default function TyreSizeAnalysis() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Tyre Size & Specification Optimizer"
-        subtitle="Analyze size mix, consolidation opportunities, and procurement optimization"
+        title={t('tyresize.title')}
+        subtitle={t('tyresize.subtitle')}
         icon={Layers}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
@@ -740,7 +752,7 @@ export default function TyreSizeAnalysis() {
               className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-sm"
             >
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              PDF
+              {t('tyresize.actions.pdf')}
             </button>
             <button
               onClick={exportExcel}
@@ -748,7 +760,7 @@ export default function TyreSizeAnalysis() {
               className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-sm"
             >
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-              Excel
+              {t('tyresize.actions.excel')}
             </button>
           </div>
         }
@@ -767,7 +779,7 @@ export default function TyreSizeAnalysis() {
                     ? 'bg-green-900/50 border-green-700 text-green-300'
                     : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
                 }`}
-              >{p.label}</button>
+              >{t(`tyresize.periods.${p.label}`)}</button>
             ))}
           </div>
 
@@ -800,7 +812,13 @@ export default function TyreSizeAnalysis() {
                   onChange={e => setter(e.target.value)}
                   className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-green-600"
                 >
-                  {opts.map(o => <option key={o} value={o}>{o}</option>)}
+                  {opts.map(o => (
+                    <option key={o} value={o}>
+                      {o === 'All'
+                        ? t('tyresize.filters.all')
+                        : (label === 'Position' && POSITION_KEY_MAP[o]) ? t(`tyresize.positions.${POSITION_KEY_MAP[o]}`) : o}
+                    </option>
+                  ))}
                 </select>
               </div>
             ))}
@@ -810,13 +828,13 @@ export default function TyreSizeAnalysis() {
                 onClick={clearFilters}
                 className="flex items-center gap-1 px-2 py-1.5 text-xs rounded-lg bg-red-900/30 border border-red-800 text-red-400 hover:bg-red-900/50 transition-colors"
               >
-                <X className="w-3 h-3" /> Clear
+                <X className="w-3 h-3" /> {t('tyresize.filters.clear')}
               </button>
             )}
           </div>
 
           <div className="ml-auto text-xs text-gray-500">
-            {filtered.length.toLocaleString()} tyres · {kpis.uniqueSz} sizes
+            {t('tyresize.filters.summary', { count: filtered.length.toLocaleString(), sizes: kpis.uniqueSz })}
           </div>
         </div>
       </div>

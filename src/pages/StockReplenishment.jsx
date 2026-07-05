@@ -653,7 +653,7 @@ export default function StockReplenishment() {
                     className="w-16 px-2 py-1.5 bg-gray-800 border border-emerald-600 rounded-lg text-white text-sm focus:outline-none"
                     autoFocus
                   />
-                  <span className="text-gray-400 text-xs">days</span>
+                  <span className="text-gray-400 text-xs">{t('stockreplenish.leadTime.daysSuffix')}</span>
                   <button onClick={saveLeadTime} className="px-2 py-1.5 bg-emerald-700 text-white text-xs rounded-lg">
                     <CheckCircle size={13} />
                   </button>
@@ -665,10 +665,10 @@ export default function StockReplenishment() {
                 <button
                   onClick={() => { setLeadTimeEdit(true); setLeadTimeInput(leadTimeDays.toString()) }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg hover:border-emerald-600 transition-colors"
-                  title="Edit lead time"
+                  title={t('stockreplenish.leadTime.editTooltip')}
                 >
                   <Clock size={13} className="text-emerald-400" />
-                  Lead: {leadTimeDays}d
+                  {t('stockreplenish.leadTime.leadLabel', { days: leadTimeDays })}
                   <Edit2 size={11} className="text-gray-600" />
                 </button>
               )}
@@ -676,7 +676,7 @@ export default function StockReplenishment() {
             <button
               onClick={load}
               className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors"
-              title="Refresh"
+              title={t('stockreplenish.refreshTooltip')}
             >
               <RefreshCw size={16} />
             </button>
@@ -693,7 +693,7 @@ export default function StockReplenishment() {
             onClick={load}
             className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-red-800/40 border border-red-600 rounded-lg text-red-200 text-xs hover:bg-red-800/70 transition-colors"
           >
-            <RefreshCw size={13} />Retry
+            <RefreshCw size={13} />{t('stockreplenish.retry')}
           </button>
           <button onClick={() => setError(null)} className="text-red-300 hover:text-white">
             <X size={16} />
@@ -705,41 +705,41 @@ export default function StockReplenishment() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
           {
-            label:  'Needs Reorder',
+            label:  t('stockreplenish.kpi.needsReorder'),
             value:  kpis.needsReorder,
             color:  'red',
             icon:   AlertTriangle,
-            sub:    `items < ${leadTimeDays}d stock`,
+            sub:    t('stockreplenish.kpi.needsReorderSub', { days: leadTimeDays }),
           },
           {
-            label:  'Reorder Value',
+            label:  t('stockreplenish.kpi.reorderValue'),
             value:  kpis.totalReorderVal >= 1_000_000
               ? `${activeCurrency} ${(kpis.totalReorderVal / 1_000_000).toFixed(2)}M`
               : `${activeCurrency} ${(kpis.totalReorderVal / 1000).toFixed(1)}k`,
             color:  'orange',
             icon:   ShoppingCart,
-            sub:    'Suggested orders',
+            sub:    t('stockreplenish.kpi.reorderValueSub'),
           },
           {
-            label:  'Avg Days Remaining',
+            label:  t('stockreplenish.kpi.avgDaysRemaining'),
             value:  `${kpis.avgDays}d`,
             color:  kpis.avgDays < 30 ? 'red' : kpis.avgDays < 60 ? 'yellow' : 'emerald',
             icon:   Clock,
-            sub:    'Fleet average',
+            sub:    t('stockreplenish.kpi.avgDaysRemainingSub'),
           },
           {
-            label:  'Critical Stockouts',
+            label:  t('stockreplenish.kpi.criticalStockouts'),
             value:  kpis.criticalStockouts,
             color:  kpis.criticalStockouts > 0 ? 'red' : 'gray',
             icon:   Zap,
-            sub:    'Zero qty in stock',
+            sub:    t('stockreplenish.kpi.criticalStockoutsSub'),
           },
           {
-            label:  'Over-Stocked',
+            label:  t('stockreplenish.kpi.overstocked'),
             value:  kpis.overstocked,
             color:  'blue',
             icon:   TrendingUp,
-            sub:    'Items > 180 days',
+            sub:    t('stockreplenish.kpi.overstockedSub'),
           },
         ].map(({ label, value, color, icon: Icon, sub }) => (
           <motion.div
@@ -773,7 +773,7 @@ export default function StockReplenishment() {
             {idx === 0 && <Layers size={14} />}
             {idx === 1 && <BarChart2 size={14} />}
             {idx === 2 && <ShoppingCart size={14} />}
-            {tab}
+            {t(`stockreplenish.tabs.${TAB_I18N_KEYS[idx]}`)}
             {idx === 2 && orderLines.length > 0 && (
               <span className="bg-emerald-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                 {orderLines.length}
@@ -805,7 +805,7 @@ export default function StockReplenishment() {
                   <input
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    placeholder="Search brand, size, site..."
+                    placeholder={t('stockreplenish.matrix.searchPlaceholder')}
                     className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
@@ -830,11 +830,11 @@ export default function StockReplenishment() {
                     onClick={() => { setSearch(''); setSiteFilter('All') }}
                     className="px-3 py-1.5 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-xs hover:bg-red-900/50 transition-colors"
                   >
-                    Clear
+                    {t('stockreplenish.matrix.clear')}
                   </button>
                 )}
                 <span className="ml-auto self-center text-gray-400 text-sm">
-                  {filteredMatrix.length} items
+                  {t('stockreplenish.matrix.itemsCount', { count: filteredMatrix.length })}
                 </span>
               </div>
             </div>
@@ -843,8 +843,8 @@ export default function StockReplenishment() {
             {filteredMatrix.length === 0 ? (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-16 text-center">
                 <Package size={48} className="mx-auto mb-4 text-gray-700" />
-                <p className="text-gray-400 text-lg font-medium">No stock data found</p>
-                <p className="text-gray-600 text-sm mt-2">Add stock records to see replenishment recommendations</p>
+                <p className="text-gray-400 text-lg font-medium">{t('stockreplenish.matrix.emptyTitle')}</p>
+                <p className="text-gray-600 text-sm mt-2">{t('stockreplenish.matrix.emptyDesc')}</p>
               </div>
             ) : (
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -853,17 +853,17 @@ export default function StockReplenishment() {
                     <thead>
                       <tr className="border-b border-gray-800 bg-gray-900/80">
                         {[
-                          { label: 'Brand',        field: 'brand'         },
-                          { label: 'Size',         field: 'size'          },
-                          { label: 'Site',         field: 'site'          },
-                          { label: 'In Stock',     field: 'qtyInStock'    },
-                          { label: 'On Order',     field: 'qtyOnOrder'    },
-                          { label: 'Daily Usage',  field: 'consumptionPerDay' },
-                          { label: 'Days Left',    field: 'days_remaining' },
-                          { label: 'Suggest Qty',  field: 'suggestedQty'  },
-                          { label: 'Est. Cost',    field: 'estimatedCost' },
-                          { label: 'Status',       field: 'urgency'       },
-                          { label: 'Action',       field: null            },
+                          { label: t('stockreplenish.matrix.columns.brand'),        field: 'brand'         },
+                          { label: t('stockreplenish.matrix.columns.size'),         field: 'size'          },
+                          { label: t('stockreplenish.matrix.columns.site'),         field: 'site'          },
+                          { label: t('stockreplenish.matrix.columns.inStock'),      field: 'qtyInStock'    },
+                          { label: t('stockreplenish.matrix.columns.onOrder'),      field: 'qtyOnOrder'    },
+                          { label: t('stockreplenish.matrix.columns.dailyUsage'),   field: 'consumptionPerDay' },
+                          { label: t('stockreplenish.matrix.columns.daysLeft'),     field: 'days_remaining' },
+                          { label: t('stockreplenish.matrix.columns.suggestQty'),   field: 'suggestedQty'  },
+                          { label: t('stockreplenish.matrix.columns.estCost'),      field: 'estimatedCost' },
+                          { label: t('stockreplenish.matrix.columns.status'),       field: 'urgency'       },
+                          { label: t('stockreplenish.matrix.columns.action'),       field: null            },
                         ].map(({ label, field }) => (
                           <th
                             key={label}
@@ -951,10 +951,10 @@ export default function StockReplenishment() {
                               <button
                                 onClick={() => addToOrder(row)}
                                 disabled={suggestedDisplay <= 0}
-                                title="Add to order"
+                                title={t('stockreplenish.matrix.addToOrderTooltip')}
                                 className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-700/30 border border-emerald-700 text-emerald-400 rounded-lg text-xs font-medium hover:bg-emerald-700/60 transition-colors disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
                               >
-                                <Plus size={12} />Order
+                                <Plus size={12} />{t('stockreplenish.matrix.orderBtn')}
                               </button>
                             </td>
                           </tr>
@@ -966,11 +966,11 @@ export default function StockReplenishment() {
 
                 {/* Urgency legend */}
                 <div className="flex items-center gap-4 px-4 py-3 border-t border-gray-800 text-xs text-gray-500">
-                  <span className="font-medium text-gray-400">Legend:</span>
+                  <span className="font-medium text-gray-400">{t('stockreplenish.matrix.legend')}</span>
                   {Object.entries(URGENCY_CONFIG).map(([k, v]) => (
                     <span key={k} className={`flex items-center gap-1 ${v.color}`}>
                       <span className={`w-2 h-2 rounded-full inline-block ${v.bg.replace('/20', '')} border ${v.border}`} />
-                      {k}
+                      {t(`stockreplenish.urgency.${k}`)}
                     </span>
                   ))}
                 </div>
@@ -1001,7 +1001,7 @@ export default function StockReplenishment() {
             {/* Bar chart: top 5 sizes */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
               <h3 className="text-white font-semibold mb-4">
-                Monthly Consumption by Top 5 Tyre Sizes (Last 6 Months)
+                {t('stockreplenish.consumption.barChartTitle')}
               </h3>
               <div className="h-64">
                 {consumptionBarData.datasets.length > 0 ? (
@@ -1017,7 +1017,7 @@ export default function StockReplenishment() {
                   />
                 ) : (
                   <div className="h-full flex items-center justify-center text-gray-600 text-sm">
-                    No tyre issue records in last 90 days
+                    {t('stockreplenish.consumption.barChartEmpty')}
                   </div>
                 )}
               </div>
@@ -1026,7 +1026,7 @@ export default function StockReplenishment() {
             {/* Line chart: single size trend */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-semibold">Consumption Trend by Size</h3>
+                <h3 className="text-white font-semibold">{t('stockreplenish.consumption.trendChartTitle')}</h3>
                 {allSizes.length > 0 && (
                   <select
                     value={selectedSize}
@@ -1051,7 +1051,7 @@ export default function StockReplenishment() {
                   />
                 ) : (
                   <div className="h-full flex items-center justify-center text-gray-600 text-sm">
-                    No size data available
+                    {t('stockreplenish.consumption.trendChartEmpty')}
                   </div>
                 )}
               </div>
@@ -1060,22 +1060,22 @@ export default function StockReplenishment() {
             {/* Consumption matrix: size × site */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
               <h3 className="text-white font-semibold mb-4">
-                Size × Site Consumption Matrix (Last 30 Days)
+                {t('stockreplenish.consumption.matrixTitle')}
               </h3>
               {consumptionMatrix.sizes.length === 0 ? (
-                <div className="py-8 text-center text-gray-600 text-sm">No issue records in last 30 days</div>
+                <div className="py-8 text-center text-gray-600 text-sm">{t('stockreplenish.consumption.matrixEmpty')}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="text-xs">
                     <thead>
                       <tr className="border-b border-gray-800">
-                        <th className="px-3 py-2 text-left text-gray-400 font-medium whitespace-nowrap">Size</th>
+                        <th className="px-3 py-2 text-left text-gray-400 font-medium whitespace-nowrap">{t('stockreplenish.consumption.sizeColumn')}</th>
                         {consumptionMatrix.sites.map(site => (
                           <th key={site} className="px-3 py-2 text-center text-gray-400 font-medium whitespace-nowrap">
                             {site}
                           </th>
                         ))}
-                        <th className="px-3 py-2 text-center text-gray-300 font-semibold">Total</th>
+                        <th className="px-3 py-2 text-center text-gray-300 font-semibold">{t('stockreplenish.consumption.totalColumn')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1128,25 +1128,25 @@ export default function StockReplenishment() {
             {/* PO summary card */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Total PO Value</p>
+                <p className="text-gray-400 text-xs mb-1">{t('stockreplenish.order.totalPoValue')}</p>
                 <p className="text-2xl font-bold text-emerald-400">
                   {fmtCurrency(orderTotal, activeCurrency)}
                 </p>
-                <p className="text-gray-500 text-xs mt-1">{orderLines.length} line items</p>
+                <p className="text-gray-500 text-xs mt-1">{t('stockreplenish.order.lineItemsCount', { count: orderLines.length })}</p>
               </div>
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Total Units</p>
+                <p className="text-gray-400 text-xs mb-1">{t('stockreplenish.order.totalUnits')}</p>
                 <p className="text-2xl font-bold text-white">
                   {orderLines.reduce((s, l) => s + (parseInt(l.qty) || 0), 0)}
                 </p>
-                <p className="text-gray-500 text-xs mt-1">tyres across all lines</p>
+                <p className="text-gray-500 text-xs mt-1">{t('stockreplenish.order.tyresAcrossLines')}</p>
               </div>
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Sites Covered</p>
+                <p className="text-gray-400 text-xs mb-1">{t('stockreplenish.order.sitesCovered')}</p>
                 <p className="text-2xl font-bold text-white">
                   {new Set(orderLines.map(l => l.site).filter(Boolean)).size}
                 </p>
-                <p className="text-gray-500 text-xs mt-1">unique sites</p>
+                <p className="text-gray-500 text-xs mt-1">{t('stockreplenish.order.uniqueSites')}</p>
               </div>
             </div>
 

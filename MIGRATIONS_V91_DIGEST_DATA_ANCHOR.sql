@@ -1,0 +1,6 @@
+-- V91: anchor the executive digest's windows to the DATA's latest date.
+-- "Last 30 days" + the 6-month trend anchored at current_date, so tenants on
+-- imported history (2020-21 ERP data) got zero recent activity and an empty
+-- trend despite thousands of records. Windows now anchor at max(issue_date)
+-- (fallback current_date). Verified: recent_tyres=139, trend_months=7,
+-- window 2021-09-07 -> 2021-10-07. Full body in the v91 migration.

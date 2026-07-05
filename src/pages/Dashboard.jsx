@@ -292,17 +292,26 @@ export default function Dashboard() {
     }],
   }), [seasonalTrends, t])
 
+  // Anchor every time-bucketed chart/KPI to the DATA's latest date, not today.
+  // Historic imports (e.g. 2020-21 ERP files) would otherwise render every
+  // "last N periods" chart empty even though the records are all loaded.
+  const dataAnchor = useMemo(() => {
+    let max = null
+    for (const r of tyres) { if (r.issue_date && (!max || r.issue_date > max)) max = r.issue_date }
+    return max ? new Date(max.slice(0, 10) + 'T00:00:00') : new Date()
+  }, [tyres])
+
   const riskTrend = useMemo(() => {
-    const now = new Date()
+    const now = dataAnchor
     const thisM = { y: now.getFullYear(), m: now.getMonth() + 1 }
     const lastM = now.getMonth() === 0 ? { y: now.getFullYear() - 1, m: 12 } : { y: now.getFullYear(), m: now.getMonth() }
     const thisHigh = tyres.filter(t => inMonth(t, thisM.y, thisM.m) && isHigh(t)).length
     const lastHigh = tyres.filter(t => inMonth(t, lastM.y, lastM.m) && isHigh(t)).length
     return { delta: thisHigh - lastHigh, lastHigh }
-  }, [tyres])
+  }, [tyres, dataAnchor])
 
   const periodChartData = useMemo(() => {
-    const now = new Date()
+    const now = dataAnchor
     if (granularity === 'daily') {
       const days = []
       for (let i = 29; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); days.push(fmt(d)) }
@@ -348,10 +357,10 @@ export default function Dashboard() {
         { label: t('dashboard.legend.highRisk'), data: months.map(({ y, m }) => tyres.filter(t => inMonth(t, y, m) && isHigh(t)).length), backgroundColor: 'rgba(239,68,68,0.7)', borderRadius: 4 },
       ],
     }
-  }, [tyres, granularity, t])
+  }, [tyres, granularity, t, dataAnchor])
 
   const monthlyCostData = useMemo(() => {
-    const now = new Date()
+    const now = dataAnchor
     const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1); return { label: d.toLocaleString('default', { month: 'short', year: '2-digit' }), y: d.getFullYear(), m: d.getMonth() + 1 } })
     return {
       labels: months.map(m => m.label),
@@ -367,7 +376,7 @@ export default function Dashboard() {
         borderWidth: 2,
       }],
     }
-  }, [tyres, activeCurrency, t])
+  }, [tyres, activeCurrency, t, dataAnchor])
 
   const brandData = useMemo(() => {
     const m = {}; tyres.forEach(t => { if (t.brand) m[t.brand] = (m[t.brand] ?? 0) + 1 })
@@ -407,7 +416,7 @@ export default function Dashboard() {
   /* Stacked monthly risk mix (last 12 months). Tyre counts sum qty per row —
      rows are aggregates — so the bars reflect tyre volume, not record volume. */
   const riskMixData = useMemo(() => {
-    const now = new Date()
+    const now = dataAnchor
     const months = Array.from({ length: 12 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1); return { label: d.toLocaleString('default', { month: 'short', year: '2-digit' }), y: d.getFullYear(), m: d.getMonth() + 1 } })
     const levels = ['Low', 'Medium', 'High', 'Critical']
     const datasets = levels.map(level => ({
@@ -419,7 +428,7 @@ export default function Dashboard() {
     }))
     if (!datasets.some(ds => ds.data.some(v => v > 0))) return null
     return { labels: months.map(m => m.label), datasets }
-  }, [tyres])
+  }, [tyres, dataAnchor])
 
   /* Spend split between new and retread purchases (category convention shared
      with kpiEngine.computeRetreadPerformance: /retread/i marks retreads). */

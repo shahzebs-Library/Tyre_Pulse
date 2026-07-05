@@ -38,6 +38,7 @@
     "assetCount": "{count} أصل",
     "filteredFrom": "(مُصفّاة من {total})",
     "loadErrorTitle": "تعذّر تحميل أصول الأسطول",
+    "loadErrorFallback": "فشل تحميل أصول الأسطول.",
     "retry": "إعادة المحاولة",
     "noAssets": "لا توجد أصول. عدّل عوامل التصفية أو أضف أول أصل.",
     "columns": {

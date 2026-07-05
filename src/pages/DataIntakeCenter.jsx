@@ -120,10 +120,10 @@ export default function DataIntakeCenter() {
   // Uploaded files that never became an import (orphans from abandoned attempts).
   const orphanFiles = useMemo(() => files.filter((f) => f.orphan), [files])
   async function deleteOrphan(f) {
-    if (!window.confirm(`Delete the uploaded file "${f.original_filename}"? It was never imported, so nothing in your live data is affected.`)) return
+    if (!window.confirm(t('intake.orphans.deletePrompt', { name: f.original_filename }))) return
     setError('')
     try { await imports.deleteFile(f.id); await loadRecent() }
-    catch (err) { setError(err?.message || 'Could not delete the file.') }
+    catch (err) { setError(err?.message || t('intake.errors.couldNotDeleteFile')) }
   }
 
   // Warn before an accidental full-page reload/close while an import is in
@@ -144,8 +144,8 @@ export default function DataIntakeCenter() {
     if (rowBusyId) return
     const committed = b.import_status === 'committed'
     const msg = committed
-      ? `Reverse the committed ${b.module} import? This removes the ${b.imported_rows || 0} rows it added to the live ${b.module} table.`
-      : `Delete the ${b.module} import (${b.import_status}, ${b.total_rows || 0} rows)? This permanently removes the staged batch.`
+      ? t('intake.recent.reverseCommittedConfirm', { module: b.module, rows: b.imported_rows || 0 })
+      : t('intake.recent.deleteStagedConfirm', { module: b.module, status: b.import_status, rows: b.total_rows || 0 })
     if (!window.confirm(msg)) return
     setRowBusyId(b.id); setError('')
     try {
@@ -154,7 +154,7 @@ export default function DataIntakeCenter() {
       await loadRecent()
     } catch (err) {
       console.error('[DataIntakeCenter] delete/reverse batch failed:', err)
-      setError(err?.message || 'Could not remove the batch.')
+      setError(err?.message || t('intake.errors.couldNotRemoveBatch'))
     } finally { setRowBusyId(null) }
   }
 
@@ -172,7 +172,7 @@ export default function DataIntakeCenter() {
       const wb = await parseWorkbook(buf)
       setFile(f); setParsed(wb); setSheetIdx(0)
     } catch (err) {
-      setError(err?.message || 'Could not read the file.')
+      setError(err?.message || t('intake.errors.couldNotReadFile'))
     } finally { setBusy(false) }
   }
 

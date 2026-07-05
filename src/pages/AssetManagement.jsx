@@ -644,7 +644,7 @@ export default function AssetManagement() {
       setOverview(ov)
       setWorkOrders(rawWOs)
     } catch (e) {
-      setLoadError(e.message || 'Failed to load fleet assets.')
+      setLoadError(e.message || t('assetmgmt.registry.loadErrorFallback'))
       setAssets([])
     } finally {
       setLoading(false)
@@ -843,8 +843,8 @@ export default function AssetManagement() {
 
         {/* Page Header */}
         <PageHeader
-          title="Asset Management"
-          subtitle="Fleet registry · tyre profiling · health scoring · operational intelligence"
+          title={t('assetmgmt.title')}
+          subtitle={t('assetmgmt.subtitle')}
           icon={Truck}
           actions={<>
             <button onClick={() => setRefreshKey(k => k + 1)}
@@ -853,16 +853,16 @@ export default function AssetManagement() {
             </button>
             <button onClick={handleExcelExport}
               className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-green-400 hover:text-green-300 text-sm transition-colors border border-gray-700">
-              <FileSpreadsheet className="w-4 h-4" /> Excel
+              <FileSpreadsheet className="w-4 h-4" /> {t('assetmgmt.actions.excel')}
             </button>
             <button onClick={handlePdfExport}
               className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-red-400 hover:text-red-300 text-sm transition-colors border border-gray-700">
-              <FileText className="w-4 h-4" /> PDF
+              <FileText className="w-4 h-4" /> {t('assetmgmt.actions.pdf')}
             </button>
             {isAdmin && (
               <button onClick={() => setShowAdd(true)}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition-colors">
-                <Plus className="w-4 h-4" /> Add Asset
+                <Plus className="w-4 h-4" /> {t('assetmgmt.actions.addAsset')}
               </button>
             )}
           </>}
@@ -870,19 +870,19 @@ export default function AssetManagement() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
-          <KpiCard icon={Truck} label="Total Active Assets" value={fmt(kpis.totalActive)} sub={`${fmt(kpis.totalInactive)} inactive`} color="blue" />
-          <KpiCard icon={AlertTriangle} label="Fleet At Risk" value={fmt(kpis.atRisk)} sub="Critical or High risk" color="red" />
-          <KpiCard icon={DollarSign} label="Avg Asset Cost YTD" value={fmtCurrency(kpis.avgCost, activeCurrency)} sub="Per active vehicle" color="purple" />
-          <KpiCard icon={Clock} label="Needs Attention" value={fmt(kpis.needsAttention)} sub="No tyre record >60d" color="yellow" />
-          <KpiCard icon={Activity} label="Active / Inactive" value={`${fmt(kpis.totalActive)} / ${fmt(kpis.totalInactive)}`} sub={`${enrichedAssets.length} total fleet`} color="green" />
+          <KpiCard icon={Truck} label={t('assetmgmt.kpis.totalActiveAssets')} value={fmt(kpis.totalActive)} sub={t('assetmgmt.kpis.inactiveSub', { count: fmt(kpis.totalInactive) })} color="blue" />
+          <KpiCard icon={AlertTriangle} label={t('assetmgmt.kpis.fleetAtRisk')} value={fmt(kpis.atRisk)} sub={t('assetmgmt.kpis.criticalOrHighRisk')} color="red" />
+          <KpiCard icon={DollarSign} label={t('assetmgmt.kpis.avgAssetCostYtd')} value={fmtCurrency(kpis.avgCost, activeCurrency)} sub={t('assetmgmt.kpis.perActiveVehicle')} color="purple" />
+          <KpiCard icon={Clock} label={t('assetmgmt.kpis.needsAttention')} value={fmt(kpis.needsAttention)} sub={t('assetmgmt.kpis.noRecordOver60d')} color="yellow" />
+          <KpiCard icon={Activity} label={t('assetmgmt.kpis.activeInactive')} value={`${fmt(kpis.totalActive)} / ${fmt(kpis.totalInactive)}`} sub={t('assetmgmt.kpis.totalFleet', { count: enrichedAssets.length })} color="green" />
         </div>
 
         {/* Tab Navigation */}
         <div className="flex gap-1 bg-gray-900 rounded-xl p-1 border border-gray-800 w-fit">
           {[
-            { id: 'registry', label: 'Asset Registry', icon: Layers },
-            { id: 'charts', label: 'Fleet Composition', icon: BarChart2 },
-            { id: 'health', label: 'Health Matrix', icon: Shield },
+            { id: 'registry', label: t('assetmgmt.tabs.registry'), icon: Layers },
+            { id: 'charts', label: t('assetmgmt.tabs.charts'), icon: BarChart2 },
+            { id: 'health', label: t('assetmgmt.tabs.health'), icon: Shield },
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${

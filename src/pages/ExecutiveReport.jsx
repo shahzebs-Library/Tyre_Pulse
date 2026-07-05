@@ -1084,14 +1084,14 @@ export default function ExecutiveReport() {
                 <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
                   <Star className="w-5 h-5 text-emerald-400" />
                 </div>
-                <h2 className="text-lg font-semibold text-white">Section 1 - Executive Summary</h2>
+                <h2 className="text-lg font-semibold text-white">{t('execreport.section1.title')}</h2>
               </div>
               <div className="flex items-center gap-2">
                 <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-red-500/10 text-red-400 border border-red-500/20 tracking-wide">
-                  CONFIDENTIAL
+                  {t('execreport.section1.confidential')}
                 </span>
                 <span className="px-2.5 py-1 text-xs rounded-full bg-gray-800 text-gray-400 border border-gray-700">
-                  EXECUTIVE SUMMARY
+                  {t('execreport.section1.badge')}
                 </span>
               </div>
             </div>
@@ -1100,23 +1100,21 @@ export default function ExecutiveReport() {
              <div className="lg:col-span-2 bg-gray-950 border border-gray-800 rounded-xl p-5 space-y-4">
               <div className="border-l-4 border-emerald-500 pl-4">
                 <p className="text-sm leading-relaxed text-gray-200">
-                  During the <strong className="text-white">{periodValueLabel(period)}</strong>,{' '}
-                  <strong className="text-white">{companyName}</strong> operated a fleet of{' '}
-                  <strong className="text-emerald-400">{fleetSize.toLocaleString()} vehicles</strong>{' '}
-                  with <strong className="text-white">{periodRecords.length.toLocaleString()} tyre records</strong> processed.
-                  Total tyre expenditure for the period reached{' '}
-                  <strong className="text-emerald-400">{fmtCurrency(totalSpend, currency)}</strong>,
-                  with the fleet delivering an average Cost Per Kilometre of{' '}
-                  <strong className="text-white">{fmtCpk(kpis.cpk.fleetAvgCpk, currency)}/km</strong>.
+                  {t('execreport.section1.p1', {
+                    period: periodValueLabel(period),
+                    company: companyName,
+                    fleetSize: fleetSize.toLocaleString(),
+                    records: periodRecords.length.toLocaleString(),
+                    spend: fmtCurrency(totalSpend, currency),
+                    cpk: fmtCpk(kpis.cpk.fleetAvgCpk, currency),
+                  })}
                   {momChange !== null && (
-                    <> Month-over-month cost has{' '}
+                    <>{' '}
                       <strong className={momChange < 0 ? 'text-emerald-400' : 'text-red-400'}>
-                        {momChange < 0 ? 'improved' : 'increased'} by {fmtPct(Math.abs(momChange))}
-                      </strong>,
-                      indicating a{' '}
-                      <strong className={momChange < 0 ? 'text-emerald-400' : 'text-red-400'}>
-                        {momChange < 0 ? 'positive' : 'worsening'} cost trajectory
-                      </strong>.
+                        {momChange < 0
+                          ? t('execreport.section1.momImproved', { pct: fmtPct(Math.abs(momChange)) })
+                          : t('execreport.section1.momIncreased', { pct: fmtPct(Math.abs(momChange)) })}
+                      </strong>
                     </>
                   )}
                 </p>
@@ -1124,23 +1122,18 @@ export default function ExecutiveReport() {
 
               <div className="border-l-4 border-amber-500 pl-4">
                 <p className="text-sm leading-relaxed text-gray-200">
-                  <strong className="text-amber-400">Operational risk</strong> remains a priority concern.
-                  A total of{' '}
-                  <strong className="text-red-400">{periodRecords.filter(r => r.risk_level === 'Critical').length} critical-risk tyres</strong>{' '}
-                  were identified in the period, representing{' '}
-                  <strong className="text-white">{fmtPct(kpis.failureRate.criticalRate * 100)}</strong> of all records.
-                  Overall failure rate stands at{' '}
-                  <strong className={kpis.failureRate.failureRate > 0.2 ? 'text-red-400' : kpis.failureRate.failureRate > 0.1 ? 'text-amber-400' : 'text-emerald-400'}>
-                    {fmtPct(kpis.failureRate.failureRate * 100)}
-                  </strong>.
-                  Inspection compliance reached{' '}
-                  <strong className={kpis.inspectionCompliance.compliancePct >= 85 ? 'text-emerald-400' : 'text-amber-400'}>
-                    {fmtPct(kpis.inspectionCompliance.compliancePct)}
-                  </strong>{' '}
-                  against a target of 85%.
+                  {t('execreport.section1.p2', {
+                    criticalCount: periodRecords.filter(r => r.risk_level === 'Critical').length,
+                    criticalPct: fmtPct(kpis.failureRate.criticalRate * 100),
+                    failureRate: fmtPct(kpis.failureRate.failureRate * 100),
+                    inspectionCompliance: fmtPct(kpis.inspectionCompliance.compliancePct),
+                  })}
                   {topRootCause && (
-                    <> The primary root cause driving failures is <strong className="text-white">{topRootCause.label}</strong>,
-                      accounting for <strong className="text-white">{fmtPct(topRootCause.pct)}</strong> of all tyre events.
+                    <>{' '}
+                      {t('execreport.section1.p2RootCause', {
+                        rootCause: t(`execreport.rootCauses.${topRootCause.key}.label`),
+                        pct: fmtPct(topRootCause.pct),
+                      })}
                     </>
                   )}
                 </p>
@@ -1151,13 +1144,14 @@ export default function ExecutiveReport() {
                   <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-1">
                       <Award className="w-4 h-4 text-emerald-400" />
-                      <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wide">Key Win</span>
+                      <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wide">{t('execreport.section1.keyWinLabel')}</span>
                     </div>
                     <p className="text-sm text-gray-200">
-                      <strong className="text-white">{bestBrandByScore.brand}</strong> delivered the best composite performance
-                      with CPK of <strong className="text-emerald-400">{fmtCpk(bestBrandByScore.avgCpk, currency)}/km</strong>{' '}
-                      and failure rate of <strong className="text-white">{fmtPct(bestBrandByScore.failureRate * 100)}</strong>.
-                      Expanding its fleet share is recommended.
+                      {t('execreport.section1.keyWinText', {
+                        brand: bestBrandByScore.brand,
+                        cpk: fmtCpk(bestBrandByScore.avgCpk, currency),
+                        rate: fmtPct(bestBrandByScore.failureRate * 100),
+                      })}
                     </p>
                   </div>
                 )}
@@ -1165,12 +1159,13 @@ export default function ExecutiveReport() {
                   <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-1">
                       <AlertOctagon className="w-4 h-4 text-red-400" />
-                      <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">Key Concern</span>
+                      <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">{t('execreport.section1.keyConcernLabel')}</span>
                     </div>
                     <p className="text-sm text-gray-200">
-                      <strong className="text-white">{worstSiteByFailure.site}</strong> records the highest failure rate at{' '}
-                      <strong className="text-red-400">{fmtPct(worstSiteByFailure.rate * 100)}</strong>.
-                      An immediate site audit is required to identify and address root causes at this location.
+                      {t('execreport.section1.keyConcernText', {
+                        site: worstSiteByFailure.site,
+                        rate: fmtPct(worstSiteByFailure.rate * 100),
+                      })}
                     </p>
                   </div>
                 )}
@@ -1178,32 +1173,30 @@ export default function ExecutiveReport() {
 
               <div className="border-l-4 border-blue-500 pl-4">
                 <p className="text-sm leading-relaxed text-gray-200">
-                  Annualised tyre spend is projected at{' '}
-                  <strong className="text-white">{fmtCurrency(projectedAnnual, currency)}</strong>.
+                  {t('execreport.section1.p4', { projectedAnnual: fmtCurrency(projectedAnnual, currency) })}
                   {savingsOpportunity > 1000 && (
-                    <> Closing the CPK gap between fleet average and best-in-fleet performance represents
-                      a cost optimisation opportunity of approximately{' '}
-                      <strong className="text-emerald-400">{fmtCurrency(savingsOpportunity, currency)} annually</strong>.
-                    </>
+                    <>{' '}{t('execreport.section1.p4Savings', { savings: `${fmtCurrency(savingsOpportunity, currency)}` })}</>
                   )}
-                  {' '}Average tyre life stands at <strong className="text-white">{fmtNum(kpis.avgTyreLife.avgKm)} km</strong>,
-                  with fleet availability at <strong className="text-white">{fmtPct(kpis.fleetAvailability.availabilityPct)}</strong>.
-                  Management attention is directed to the Recommendations and Action Plan sections for prioritised interventions.
+                  {' '}
+                  {t('execreport.section1.p4Closing', {
+                    avgLife: fmtNum(kpis.avgTyreLife.avgKm),
+                    availability: fmtPct(kpis.fleetAvailability.availabilityPct),
+                  })}
                 </p>
               </div>
              </div>
 
              {/* Right: Key Highlights (saves vertical space — UI/UX #12) */}
              <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col gap-2.5">
-               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Key Highlights</p>
+               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">{t('execreport.section1.keyHighlights')}</p>
                {[
-                 { label: 'Fleet Availability',    value: fmtPct(kpis.fleetAvailability.availabilityPct),   good: kpis.fleetAvailability.availabilityPct >= 95 },
-                 { label: 'Inspection Compliance', value: fmtPct(kpis.inspectionCompliance.compliancePct),  good: kpis.inspectionCompliance.compliancePct >= 85 },
-                 { label: 'Failure Rate',          value: fmtPct(kpis.failureRate.failureRate * 100),        good: kpis.failureRate.failureRate <= 0.1 },
-                 { label: 'Avg Cost / km',         value: `${fmtCpk(kpis.cpk.fleetAvgCpk, currency)}`,       good: true, neutral: true },
-                 { label: 'Critical Alerts',       value: periodRecords.filter(r => r.risk_level === 'Critical').length.toLocaleString(), good: periodRecords.filter(r => r.risk_level === 'Critical').length === 0 },
+                 { key: 'fleetAvailability', label: t('execreport.section1.highlights.fleetAvailability'),    value: fmtPct(kpis.fleetAvailability.availabilityPct),   good: kpis.fleetAvailability.availabilityPct >= 95 },
+                 { key: 'inspectionCompliance', label: t('execreport.section1.highlights.inspectionCompliance'), value: fmtPct(kpis.inspectionCompliance.compliancePct),  good: kpis.inspectionCompliance.compliancePct >= 85 },
+                 { key: 'failureRate', label: t('execreport.section1.highlights.failureRate'),          value: fmtPct(kpis.failureRate.failureRate * 100),        good: kpis.failureRate.failureRate <= 0.1 },
+                 { key: 'avgCostPerKm', label: t('execreport.section1.highlights.avgCostPerKm'),         value: `${fmtCpk(kpis.cpk.fleetAvgCpk, currency)}`,       good: true, neutral: true },
+                 { key: 'criticalAlerts', label: t('execreport.section1.highlights.criticalAlerts'),       value: periodRecords.filter(r => r.risk_level === 'Critical').length.toLocaleString(), good: periodRecords.filter(r => r.risk_level === 'Critical').length === 0 },
                ].map((h) => (
-                 <div key={h.label} className="bg-gray-900/60 border border-gray-800 rounded-lg px-3 py-2.5 flex items-center justify-between">
+                 <div key={h.key} className="bg-gray-900/60 border border-gray-800 rounded-lg px-3 py-2.5 flex items-center justify-between">
                    <span className="text-xs text-gray-400">{h.label}</span>
                    <span className={`text-base font-bold ${h.neutral ? 'text-white' : h.good ? 'text-emerald-400' : 'text-amber-400'}`}>{h.value}</span>
                  </div>

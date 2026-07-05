@@ -1202,10 +1202,10 @@ export default function UploadData() {
           <motion.div key="idle" initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:-10 }} transition={{ duration:0.25 }}>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
               {[
-                { val: 'tyres', label: 'Tyre Records',   desc: 'Issue records, replacements, costs',  icon: FileSpreadsheet, color: 'green' },
-                { val: 'fleet', label: 'Fleet / Vehicle', desc: 'Vehicle registry, asset specs',       icon: Package,         color: 'blue' },
-                { val: 'stock', label: 'Stock Records',   desc: 'Inventory items and stock levels',   icon: Layers,          color: 'purple' },
-                { val: 'auto',  label: 'Auto-detect',     desc: 'Figure it out from column names',    icon: Wand2,           color: 'yellow' },
+                { val: 'tyres', label: t('uploaddata.idle.types.tyres.label'), desc: t('uploaddata.idle.types.tyres.desc'), icon: FileSpreadsheet, color: 'green' },
+                { val: 'fleet', label: t('uploaddata.idle.types.fleet.label'), desc: t('uploaddata.idle.types.fleet.desc'), icon: Package,         color: 'blue' },
+                { val: 'stock', label: t('uploaddata.idle.types.stock.label'), desc: t('uploaddata.idle.types.stock.desc'), icon: Layers,          color: 'purple' },
+                { val: 'auto',  label: t('uploaddata.idle.types.auto.label'),  desc: t('uploaddata.idle.types.auto.desc'),  icon: Wand2,           color: 'yellow' },
               ].map(opt => {
                 const Icon = opt.icon
                 const active = uploadType === opt.val
@@ -1238,9 +1238,9 @@ export default function UploadData() {
                 <div className="flex items-start gap-3">
                   <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-yellow-300">Fleet data has a dedicated upload</p>
-                    <p className="text-sm text-gray-400 mt-1">Use Fleet Master for vehicle imports - it has correct column mapping and validation.</p>
-                    <a href="/fleet-master" className="inline-block mt-2 text-sm text-green-400 underline hover:text-green-300">Go to Fleet Master →</a>
+                    <p className="text-sm font-semibold text-yellow-300">{t('uploaddata.idle.fleetBanner.title')}</p>
+                    <p className="text-sm text-gray-400 mt-1">{t('uploaddata.idle.fleetBanner.desc')}</p>
+                    <a href="/fleet-master" className="inline-block mt-2 text-sm text-green-400 underline hover:text-green-300">{t('uploaddata.idle.fleetBanner.link')}</a>
                   </div>
                 </div>
               </motion.div>

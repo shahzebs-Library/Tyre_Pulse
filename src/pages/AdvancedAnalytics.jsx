@@ -878,7 +878,7 @@ function TrendTab({ data, currency }) {
         borderRadius: 3,
       },
       {
-        label: 'Forecast',
+        label: t('advancedanalytics.trend.forecast'),
         data: [...Array(labels.length).fill(null), ...countForecast.forecast],
         backgroundColor: 'rgba(139,92,246,0.3)',
         borderColor: '#8b5cf6',
@@ -897,11 +897,11 @@ function TrendTab({ data, currency }) {
           <span key={i} className={`text-xs px-3 py-1 rounded-full font-medium ${t.cls}`}>{t.text}</span>
         ))}
         <span className="text-xs px-3 py-1 rounded-full bg-gray-800 text-gray-400 border border-gray-700">
-          Dashed lines = 3-month forecast
+          {t('advancedanalytics.trend.forecastNote')}
         </span>
       </div>
 
-      <ChartBox title="CPK Trend (Last 24 Months) with Moving Average & Forecast" height={280}>
+      <ChartBox title={t('advancedanalytics.trend.cpkChart')} height={280}>
         <Line data={cpkData} options={{
           ...BASE_OPTS,
           plugins: { ...BASE_OPTS.plugins, legend: { labels: { color: '#9ca3af', font: { size: 10 } } } },
@@ -912,7 +912,7 @@ function TrendTab({ data, currency }) {
         }} />
       </ChartBox>
 
-      <ChartBox title="Monthly Failure Rate % (Last 24 Months) with Forecast" height={260}>
+      <ChartBox title={t('advancedanalytics.trend.failChart')} height={260}>
         <Line data={failData} options={{
           ...BASE_OPTS,
           scales: {
@@ -922,7 +922,7 @@ function TrendTab({ data, currency }) {
         }} />
       </ChartBox>
 
-      <ChartBox title="Monthly Replacement Volume (Last 24 Months) with Forecast" height={260}>
+      <ChartBox title={t('advancedanalytics.trend.volumeChart')} height={260}>
         <Bar data={countData} options={BASE_OPTS} />
       </ChartBox>
     </div>
@@ -931,13 +931,14 @@ function TrendTab({ data, currency }) {
 
 // ── Tab 2: Seasonal Analysis ───────────────────────────────────────────────────
 function SeasonalTab({ data, currency }) {
+  const { t } = useLanguage()
   if (!data) return <EmptyState />
   const { seasons, cpkByMonth, maxCost, maxFail, worstCostMonth } = data
 
   const cpkBar = {
-    labels: MONTH_LABELS,
+    labels: MONTH_LABELS.map(m => t(`advancedanalytics.months.${m.toLowerCase()}`)),
     datasets: [{
-      label: `Avg CPK (${currency})`,
+      label: t('advancedanalytics.seasonal.avgCpkCur', { currency }),
       data: cpkByMonth,
       backgroundColor: cpkByMonth.map(v =>
         v == null ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.75)'
@@ -949,9 +950,9 @@ function SeasonalTab({ data, currency }) {
   }
 
   const failBar = {
-    labels: MONTH_LABELS,
+    labels: MONTH_LABELS.map(m => t(`advancedanalytics.months.${m.toLowerCase()}`)),
     datasets: [{
-      label: 'Failure Rate %',
+      label: t('advancedanalytics.seasonal.failureRatePct'),
       data: seasons.map(s => s.highRiskRate * 100),
       backgroundColor: seasons.map(s => {
         const v = s.highRiskRate * 100
@@ -977,15 +978,13 @@ function SeasonalTab({ data, currency }) {
         <div className="flex items-start gap-2 bg-yellow-900/20 border border-yellow-800/40 rounded-xl px-4 py-3">
           <Info size={15} className="text-yellow-400 mt-0.5 shrink-0" />
           <p className="text-xs text-yellow-300">
-            <strong>{worstCostMonth.month}</strong> has the highest tyre costs (
-            {fmtCur(worstCostMonth.cost, currency)}) - investigate seasonal road conditions,
-            vehicle loading patterns, or inspection compliance for this period.
+            <strong>{worstCostMonth.month}</strong> {t('advancedanalytics.seasonal.insight', { cost: fmtCur(worstCostMonth.cost, currency) })}
           </p>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartBox title="Average CPK by Calendar Month" height={250}>
+        <ChartBox title={t('advancedanalytics.seasonal.cpkChart')} height={250}>
           <Bar data={cpkBar} options={{
             ...NO_LEGEND_OPTS,
             scales: {
@@ -994,24 +993,24 @@ function SeasonalTab({ data, currency }) {
             },
           }} />
         </ChartBox>
-        <ChartBox title="Failure Rate % by Calendar Month" height={250}>
+        <ChartBox title={t('advancedanalytics.seasonal.failChart')} height={250}>
           <Bar data={failBar} options={NO_LEGEND_OPTS} />
         </ChartBox>
       </div>
 
       {/* Heat map table */}
       <Card>
-        <SectionTitle>Month × Metric Heat Map</SectionTitle>
+        <SectionTitle>{t('advancedanalytics.seasonal.heatTitle')}</SectionTitle>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-gray-800">
-                <th className="text-left py-2 pr-3 text-gray-500 font-medium w-16">Month</th>
-                <th className="text-right py-2 px-2 text-gray-500 font-medium">Count</th>
-                <th className="text-right py-2 px-2 text-gray-500 font-medium">Failure %</th>
-                <th className="text-right py-2 px-2 text-gray-500 font-medium">Total Cost</th>
-                <th className="text-right py-2 px-2 text-gray-500 font-medium">Avg Cost</th>
-                <th className="text-right py-2 px-2 text-gray-500 font-medium">Blowouts</th>
+                <th className="text-left py-2 pr-3 text-gray-500 font-medium w-16">{t('advancedanalytics.seasonal.month')}</th>
+                <th className="text-right py-2 px-2 text-gray-500 font-medium">{t('advancedanalytics.seasonal.count')}</th>
+                <th className="text-right py-2 px-2 text-gray-500 font-medium">{t('advancedanalytics.seasonal.failurePct')}</th>
+                <th className="text-right py-2 px-2 text-gray-500 font-medium">{t('advancedanalytics.seasonal.totalCost')}</th>
+                <th className="text-right py-2 px-2 text-gray-500 font-medium">{t('advancedanalytics.seasonal.avgCost')}</th>
+                <th className="text-right py-2 px-2 text-gray-500 font-medium">{t('advancedanalytics.seasonal.blowouts')}</th>
               </tr>
             </thead>
             <tbody>

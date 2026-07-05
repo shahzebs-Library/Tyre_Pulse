@@ -639,13 +639,13 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
               <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Building2 size={14} className="text-green-400" /> Site Activity Comparison
+                <Building2 size={14} className="text-green-400" /> {t('dailyops.siteActivity.title')}
               </h2>
               <div className="card p-4">
                 {siteActivity.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-48 text-gray-500 text-sm gap-2">
                     <ZapOff size={22} />
-                    <span>No site activity for this date.</span>
+                    <span>{t('dailyops.siteActivity.empty')}</span>
                   </div>
                 ) : (
                   <div className="h-52">
@@ -657,26 +657,26 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
 
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
               <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
-                <DollarSign size={14} className="text-green-400" /> Daily Cost Tracker
+                <DollarSign size={14} className="text-green-400" /> {t('dailyops.costTracker.title')}
               </h2>
               <div className="card p-4 flex flex-col gap-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-[11px] text-gray-500 uppercase tracking-wider">Today's Spend</p>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t('dailyops.costTracker.todaysSpend')}</p>
                     <p className="text-2xl font-bold text-green-400">{activeCurrency} {todayCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                   </div>
                   {dailyBudget > 0 && (
                     <div className="text-right">
-                      <p className="text-[11px] text-gray-500 uppercase tracking-wider">Daily Budget</p>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t('dailyops.costTracker.dailyBudget')}</p>
                       <p className="text-lg font-semibold text-gray-300">{activeCurrency} {dailyBudget.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                      {todayCost > dailyBudget && <p className="text-xs text-red-400 font-medium mt-0.5">Over budget by {activeCurrency} {(todayCost - dailyBudget).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>}
+                      {todayCost > dailyBudget && <p className="text-xs text-red-400 font-medium mt-0.5">{t('dailyops.costTracker.overBudget', { currency: activeCurrency, amount: (todayCost - dailyBudget).toLocaleString(undefined, { maximumFractionDigits: 0 }) })}</p>}
                     </div>
                   )}
                 </div>
                 <div className="h-40">
                   <Doughnut data={costDoughnutData} options={DOUGHNUT_OPTS} />
                 </div>
-                {dailyBudget === 0 && <p className="text-xs text-gray-500 text-center">Set annual budget in KPI Targets to enable budget tracking.</p>}
+                {dailyBudget === 0 && <p className="text-xs text-gray-500 text-center">{t('dailyops.costTracker.noBudgetHint')}</p>}
               </div>
             </motion.section>
           </div>

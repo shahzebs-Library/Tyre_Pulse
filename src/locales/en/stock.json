@@ -1,0 +1,148 @@
+{
+  "errors": {
+    "loadFailed": "Failed to load stock records."
+  },
+  "title": "Stock Management",
+  "subtitle": "{count} sites tracked",
+  "actions": {
+    "import": "Import via Data Intake Center",
+    "excel": "Excel",
+    "pdf": "PDF",
+    "addStock": "Add Stock"
+  },
+  "intakeNote": {
+    "prefix": "New: use the controlled",
+    "linkText": "Data Intake Center",
+    "suffix": "for validated, audited, multi-country imports with duplicate detection and rollback."
+  },
+  "tabs": {
+    "stock": "Stock Levels",
+    "transfer": "Transfer",
+    "timeline": "Timeline"
+  },
+  "statuses": {
+    "OK": "OK",
+    "Low": "Low",
+    "Critical": "Critical"
+  },
+  "table": {
+    "columns": {
+      "site": "Site",
+      "description": "Description",
+      "stock": "Stock",
+      "min": "Min",
+      "critical": "Critical",
+      "reorderQty": "Reorder Qty",
+      "status": "Status",
+      "velocity": "Velocity",
+      "daysLeft": "Days Left",
+      "action": "Action"
+    },
+    "emptyTitle": "No stock records yet",
+    "reorderBadge": "Reorder: {qty}",
+    "edit": "Edit",
+    "movementHistoryTooltip": "Movement history",
+    "generateReorderPdfTooltip": "Generate reorder PDF"
+  },
+  "transfer": {
+    "heading": "Inter-Site Stock Transfer",
+    "subtitle": "Move stock between sites. Both movement records and stock quantities will be updated.",
+    "successMsg": "Successfully transferred {qty} units from {fromSite} to {toSite}.",
+    "errors": {
+      "selectBoth": "Select both From and To sites.",
+      "sameSite": "From and To sites must be different.",
+      "minQty": "Quantity must be at least 1.",
+      "noRecordForSite": "No stock record found for site: {site}",
+      "insufficientStock": "Insufficient stock at {site}. Available: {qty}",
+      "inboundFailed": "Outbound posted but inbound failed: {message}"
+    },
+    "fromSite": "From Site *",
+    "toSite": "To Site *",
+    "quantity": "Quantity *",
+    "notes": "Notes",
+    "selectOption": "- Select -",
+    "availablePrefix": "Available:",
+    "currentPrefix": "Current:",
+    "unitsSuffix": "units",
+    "notesPlaceholder": "Optional transfer reason or reference",
+    "previewTitle": "Transfer Preview",
+    "transferring": "Transferring...",
+    "transferStock": "Transfer Stock"
+  },
+  "timeline": {
+    "today": "Today:",
+    "yesterday": "Yesterday:",
+    "issues": "issues",
+    "change": "Change: ",
+    "na": "N/A",
+    "from": "From",
+    "to": "To",
+    "chips": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last7Days": "Last 7 days",
+      "last30Days": "Last 30 days",
+      "thisMonth": "This Month"
+    },
+    "chartTitle": "Daily Issues (Net)",
+    "netChangeLabel": "Net Change (out)",
+    "columns": {
+      "date": "Date",
+      "itemsIn": "Items In",
+      "itemsOut": "Items Out",
+      "netChange": "Net Change"
+    },
+    "loading": "Loading...",
+    "emptyPeriod": "No records in this period"
+  },
+  "historyModal": {
+    "title": "Movement History · {site}",
+    "subtitle": "{description} · Current: {qty}",
+    "logMovement": "Log Stock Movement",
+    "type": "Type",
+    "qtyChange": "Qty Change",
+    "qtyChangePlaceholder": "e.g. -4 or +10",
+    "reason": "Reason",
+    "reasonPlaceholder": "Why?",
+    "refNo": "Ref. No",
+    "refNoPlaceholder": "PO / Job Card",
+    "saving": "Saving...",
+    "logMovementBtn": "Log Movement",
+    "newQty": "New qty: {qty}",
+    "loading": "Loading...",
+    "emptyHistory": "No movement history yet",
+    "columns": {
+      "date": "Date",
+      "type": "Type",
+      "before": "Before",
+      "change": "Change",
+      "after": "After",
+      "reason": "Reason",
+      "ref": "Ref"
+    }
+  },
+  "movementTypes": {
+    "receipt": "receipt",
+    "return": "return",
+    "transfer_in": "transfer in",
+    "adjustment_up": "adjustment up",
+    "issue": "issue",
+    "transfer_out": "transfer out",
+    "scrap": "scrap",
+    "adjustment_down": "adjustment down"
+  },
+  "form": {
+    "editTitle": "Edit Stock Record",
+    "addTitle": "Add Stock Record",
+    "site": "Site *",
+    "description": "Description",
+    "descriptionPlaceholder": "e.g. 12.00R24 Bridgestone",
+    "stockQty": "Stock Qty",
+    "minLevel": "Min Level",
+    "criticalLevel": "Critical Level",
+    "managementAction": "Management Action",
+    "saving": "Saving...",
+    "save": "Save",
+    "cancel": "Cancel"
+  }
+}

@@ -841,7 +841,7 @@ export default function FleetIntelligence() {
     labels: availabilityTimeline.map(d => d.label),
     datasets: [
       {
-        label: 'Fleet Availability %',
+        label: t('fleetintel.availability.seriesLabel'),
         data: availabilityTimeline.map(d => d.pct),
         borderColor: '#3b82f6',
         backgroundColor: 'rgba(59,130,246,0.12)',
@@ -853,7 +853,7 @@ export default function FleetIntelligence() {
         pointRadius: 5,
       },
       {
-        label: '95% Target',
+        label: t('fleetintel.availability.targetSeriesLabel'),
         data: availabilityTimeline.map(() => 95),
         borderColor: 'rgba(16,185,129,0.7)',
         borderDash: [6, 4],
@@ -863,12 +863,12 @@ export default function FleetIntelligence() {
         tension: 0,
       },
     ],
-  }), [availabilityTimeline])
+  }), [availabilityTimeline, t])
 
   const downtimeChartData = useMemo(() => ({
     labels: downtimeTop15.map(v => v.asset_no),
     datasets: [{
-      label: 'Downtime Hours',
+      label: t('fleetintel.downtime.seriesLabel'),
       data: downtimeTop15.map(v => v.downtime_hours),
       backgroundColor: downtimeTop15.map(v =>
         v.downtime_hours > 20 ? 'rgba(239,68,68,0.7)' : 'rgba(59,130,246,0.6)'
@@ -879,7 +879,7 @@ export default function FleetIntelligence() {
       borderWidth: 1,
       borderRadius: 4,
     }],
-  }), [downtimeTop15])
+  }), [downtimeTop15, t])
 
   const siteCostChartData = useMemo(() => {
     const { sites, vtypes } = costBySite
@@ -892,7 +892,7 @@ export default function FleetIntelligence() {
       return {
         labels: sites.map(s => s.site),
         datasets: [{
-          label: 'Total Tyre Cost',
+          label: t('fleetintel.siteCost.totalSeriesLabel'),
           data: sites.map(s => s.total),
           backgroundColor: 'rgba(59,130,246,0.65)',
           borderColor: '#3b82f6',
@@ -913,13 +913,13 @@ export default function FleetIntelligence() {
         stack: 'stack',
       })),
     }
-  }, [costBySite, fleetMasterAvail])
+  }, [costBySite, fleetMasterAvail, t])
 
   const costTrendChartData = useMemo(() => ({
     labels: costTrendData.labels,
     datasets: [
       {
-        label: `Monthly Cost (${activeCurrency})`,
+        label: t('fleetintel.costTrend.seriesLabel', { currency: activeCurrency }),
         data: costTrendData.actual,
         borderColor: '#3b82f6',
         backgroundColor: 'rgba(59,130,246,0.12)',
@@ -930,7 +930,7 @@ export default function FleetIntelligence() {
         spanGaps: false,
       },
       {
-        label: 'Trend Line',
+        label: t('fleetintel.costTrend.trendLineLabel'),
         data: costTrendData.regression,
         borderColor: 'rgba(107,114,128,0.6)',
         borderDash: [5, 4],
@@ -941,7 +941,7 @@ export default function FleetIntelligence() {
         tension: 0,
       },
     ],
-  }), [costTrendData, activeCurrency])
+  }), [costTrendData, activeCurrency, t])
 
   // ── KPI derived values ────────────────────────────────────────────────────
   const availColor = fleetAggs.availability_pct >= 95 ? 'green' : fleetAggs.availability_pct >= 90 ? 'amber' : 'red'
@@ -964,13 +964,13 @@ export default function FleetIntelligence() {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="bg-gray-900 border border-red-800/50 rounded-xl p-8 max-w-md text-center space-y-3">
           <AlertTriangle className="text-red-400 mx-auto" size={32} />
-          <p className="text-red-300 font-semibold">Failed to load fleet intelligence</p>
+          <p className="text-red-300 font-semibold">{t('fleetintel.states.errorTitle')}</p>
           <p className="text-gray-400 text-sm">{error}</p>
           <button
             onClick={loadData}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors"
           >
-            Retry
+            {t('fleetintel.states.retry')}
           </button>
         </div>
       </div>
@@ -983,9 +983,9 @@ export default function FleetIntelligence() {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center max-w-md">
           <Truck className="text-gray-600 mx-auto mb-3" size={40} />
-          <p className="text-gray-300 font-semibold">No tyre records found</p>
+          <p className="text-gray-300 font-semibold">{t('fleetintel.states.noRecordsTitle')}</p>
           <p className="text-gray-500 text-sm mt-1">
-            Upload tyre data to generate fleet management intelligence
+            {t('fleetintel.states.noRecordsDesc')}
           </p>
         </div>
       </div>
@@ -998,19 +998,19 @@ export default function FleetIntelligence() {
 
       {/* ── 1. Header ──────────────────────────────────────────────────────── */}
       <PageHeader
-        title="Fleet Management Intelligence"
-        subtitle="Fleet availability, downtime, asset utilisation and operating cost intelligence"
+        title={t('fleetintel.header.title')}
+        subtitle={t('fleetintel.header.subtitle')}
         icon={Truck}
         actions={<>
           {!fleetMasterAvail && (
             <span className="text-xs text-amber-400 border border-amber-800/40 bg-amber-900/20 px-2 py-1 rounded-lg">
-              Fleet master unavailable
+              {t('fleetintel.header.fleetMasterUnavailable')}
             </span>
           )}
           <button
             onClick={loadData}
             className="p-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors text-gray-300"
-            title="Refresh"
+            title={t('fleetintel.header.refresh')}
           >
             <RefreshCw size={15} />
           </button>
@@ -1018,19 +1018,19 @@ export default function FleetIntelligence() {
             onClick={handleExcelExport}
             className="flex items-center gap-2 px-3 py-2 bg-green-700/80 hover:bg-green-600/80 border border-green-700 rounded-lg text-sm transition-colors text-white font-medium"
           >
-            <Download size={14} />Excel
+            <Download size={14} />{t('fleetintel.header.excel')}
           </button>
           <button
             onClick={handlePdfExport}
             className="flex items-center gap-2 px-3 py-2 bg-blue-700/80 hover:bg-blue-600/80 border border-blue-700 rounded-lg text-sm transition-colors text-white font-medium"
           >
-            <FileText size={14} />PDF
+            <FileText size={14} />{t('fleetintel.header.pdf')}
           </button>
           <button
             onClick={() => setEmailModalOpen(true)}
             className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm transition-colors text-gray-300 font-medium"
           >
-            <Mail size={14} />Email Report
+            <Mail size={14} />{t('fleetintel.header.emailReport')}
           </button>
         </>}
       />
@@ -1039,25 +1039,25 @@ export default function FleetIntelligence() {
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-3">
           <Filter size={14} className="text-gray-400" />
-          <span className="text-sm font-medium text-gray-300">Filters</span>
+          <span className="text-sm font-medium text-gray-300">{t('fleetintel.filters.heading')}</span>
         </div>
         <div className="flex flex-wrap gap-3 items-end">
           {/* Period */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Period</label>
+            <label className="text-xs text-gray-500">{t('fleetintel.filters.period')}</label>
             <PeriodFilter records={records} value={period} onChange={setPeriod} />
           </div>
 
           {/* Site */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Site</label>
+            <label className="text-xs text-gray-500">{t('fleetintel.filters.site')}</label>
             <select
               value={siteFilter}
               onChange={e => setSiteFilter(e.target.value)}
               className="bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 min-w-32"
             >
               {allSites.map(s => (
-                <option key={s} value={s}>{s === 'all' ? 'All Sites' : s}</option>
+                <option key={s} value={s}>{s === 'all' ? t('fleetintel.filters.allSites') : s}</option>
               ))}
             </select>
           </div>
@@ -1065,14 +1065,14 @@ export default function FleetIntelligence() {
           {/* Vehicle type */}
           {allVehicleTypes.length > 1 && (
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-500">Vehicle Type</label>
+              <label className="text-xs text-gray-500">{t('fleetintel.filters.vehicleType')}</label>
               <select
                 value={typeFilter}
                 onChange={e => setTypeFilter(e.target.value)}
                 className="bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 min-w-32"
               >
-                {allVehicleTypes.map(t => (
-                  <option key={t} value={t}>{t === 'all' ? 'All Types' : t}</option>
+                {allVehicleTypes.map(vt => (
+                  <option key={vt} value={vt}>{vt === 'all' ? t('fleetintel.filters.allTypes') : vt}</option>
                 ))}
               </select>
             </div>
@@ -1080,21 +1080,21 @@ export default function FleetIntelligence() {
 
           {/* Availability */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Availability</label>
+            <label className="text-xs text-gray-500">{t('fleetintel.filters.availability')}</label>
             <select
               value={availFilter}
               onChange={e => setAvailFilter(e.target.value)}
               className="bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
             >
-              <option value="all">All</option>
-              <option value="Available">Available</option>
-              <option value="Critical">Critical</option>
+              <option value="all">{t('fleetintel.filters.all')}</option>
+              <option value="Available">{t('fleetintel.filters.available')}</option>
+              <option value="Critical">{t('fleetintel.filters.critical')}</option>
             </select>
           </div>
 
           {/* Result count */}
           <div className="flex flex-col gap-1 ml-auto">
-            <p className="text-xs text-gray-500 text-right">Assets</p>
+            <p className="text-xs text-gray-500 text-right">{t('fleetintel.filters.assets')}</p>
             <p className="text-sm font-bold text-gray-200 text-right">{fmt(fleetAggs.fleet_size)}</p>
           </div>
         </div>
@@ -1104,44 +1104,44 @@ export default function FleetIntelligence() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <KpiCard
           icon={Shield}
-          label="Fleet Availability"
+          label={t('fleetintel.kpi.fleetAvailability')}
           value={`${fleetAggs.availability_pct.toFixed(1)}%`}
-          sub={`${fleetAggs.available_count} of ${fleetAggs.fleet_size} vehicles`}
+          sub={t('fleetintel.kpi.fleetAvailabilitySub', { available: fleetAggs.available_count, total: fleetAggs.fleet_size })}
           color={availColor}
         />
         <KpiCard
           icon={AlertTriangle}
-          label="Vehicles with Critical Tyres"
+          label={t('fleetintel.kpi.criticalVehicles')}
           value={fmt(fleetAggs.fleet_size - fleetAggs.available_count)}
-          sub="critical tyre in last 30 days"
+          sub={t('fleetintel.kpi.criticalVehiclesSub')}
           color={fleetAggs.fleet_size - fleetAggs.available_count > 0 ? 'red' : 'green'}
         />
         <KpiCard
           icon={Clock}
-          label="Total Downtime Hours"
+          label={t('fleetintel.kpi.totalDowntime')}
           value={`${fmt(fleetAggs.total_downtime_hours)} hrs`}
-          sub={`${HOURS_PER_CHANGE}h est. per tyre change`}
+          sub={t('fleetintel.kpi.totalDowntimeSub', { hours: HOURS_PER_CHANGE })}
           color="amber"
         />
         <KpiCard
           icon={DollarSign}
-          label="Monthly Fleet Tyre Cost"
+          label={t('fleetintel.kpi.monthlyCost')}
           value={fmtCurrency(fleetAggs.monthly_fleet_cost, activeCurrency)}
-          sub="rolling average"
+          sub={t('fleetintel.kpi.monthlyCostSub')}
           color="blue"
         />
         <KpiCard
           icon={Activity}
-          label="Fleet Avg CPK"
+          label={t('fleetintel.kpi.fleetAvgCpk')}
           value={fleetAggs.fleetAvgCpk != null ? fmtCpk(fleetAggs.fleetAvgCpk) : '-'}
-          sub={activeCurrency + '/km'}
+          sub={t('fleetintel.kpi.fleetAvgCpkSub', { currency: activeCurrency })}
           color="purple"
         />
         <KpiCard
           icon={Truck}
-          label="Avg Cost per Vehicle"
+          label={t('fleetintel.kpi.avgCostPerVehicle')}
           value={fmtCurrency(fleetAggs.avg_cost_per_vehicle, activeCurrency)}
-          sub={`across ${fleetAggs.fleet_size} assets`}
+          sub={t('fleetintel.kpi.avgCostPerVehicleSub', { count: fleetAggs.fleet_size })}
           color="cyan"
         />
       </div>
@@ -1149,8 +1149,8 @@ export default function FleetIntelligence() {
       {/* ── 4. Availability Timeline ─────────────────────────────────────────── */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
         <div className="mb-3">
-          <h2 className="text-sm font-semibold text-white">Fleet Availability Timeline</h2>
-          <p className="text-xs text-gray-500">Monthly % of vehicles with no Critical/High risk tyre - 95% target dashed</p>
+          <h2 className="text-sm font-semibold text-white">{t('fleetintel.availability.title')}</h2>
+          <p className="text-xs text-gray-500">{t('fleetintel.availability.subtitle')}</p>
         </div>
         <div style={{ height: 240 }}>
           <Line data={availabilityChartData} options={makeLineOpts(activeCurrency, 'pct')} />
@@ -1162,11 +1162,11 @@ export default function FleetIntelligence() {
         {/* Downtime */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <div className="mb-3">
-            <h2 className="text-sm font-semibold text-white">Downtime Impact - Top 15 Vehicles</h2>
-            <p className="text-xs text-gray-500">Estimated tyre-change downtime hours · red = &gt;20 hrs</p>
+            <h2 className="text-sm font-semibold text-white">{t('fleetintel.downtime.title')}</h2>
+            <p className="text-xs text-gray-500">{t('fleetintel.downtime.subtitle')}</p>
           </div>
           {downtimeTop15.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-gray-600 text-sm">No data available</div>
+            <div className="flex items-center justify-center h-40 text-gray-600 text-sm">{t('fleetintel.downtime.noData')}</div>
           ) : (
             <div style={{ height: 280 }}>
               <Bar data={downtimeChartData} options={makeBarOpts(activeCurrency)} />
@@ -1177,13 +1177,13 @@ export default function FleetIntelligence() {
         {/* Site Cost */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <div className="mb-3">
-            <h2 className="text-sm font-semibold text-white">Operating Cost by Site</h2>
+            <h2 className="text-sm font-semibold text-white">{t('fleetintel.siteCost.title')}</h2>
             <p className="text-xs text-gray-500">
-              Total tyre cost per site{fleetMasterAvail ? ' · stacked by vehicle type' : ''}
+              {t('fleetintel.siteCost.subtitle')}{fleetMasterAvail ? t('fleetintel.siteCost.stackedSuffix') : ''}
             </p>
           </div>
           {costBySite.sites.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-gray-600 text-sm">No data available</div>
+            <div className="flex items-center justify-center h-40 text-gray-600 text-sm">{t('fleetintel.siteCost.noData')}</div>
           ) : (
             <div style={{ height: 280 }}>
               <Bar
@@ -1199,23 +1199,23 @@ export default function FleetIntelligence() {
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
         <div className="flex items-start justify-between mb-3">
           <div>
-            <h2 className="text-sm font-semibold text-white">Monthly Fleet Cost Trend - Last 13 Months</h2>
-            <p className="text-xs text-gray-500">Actual spend + linear regression trend · forecast dot for next month</p>
+            <h2 className="text-sm font-semibold text-white">{t('fleetintel.costTrend.title')}</h2>
+            <p className="text-xs text-gray-500">{t('fleetintel.costTrend.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2 text-xs">
             {costTrendData.slope > 50 ? (
               <span className="flex items-center gap-1 text-red-400 border border-red-800/40 bg-red-900/20 px-2 py-1 rounded-lg">
-                <TrendingUp size={11} /> Worsening
+                <TrendingUp size={11} /> {t('fleetintel.costTrend.worsening')}
               </span>
             ) : costTrendData.slope < -50 ? (
               <span className="flex items-center gap-1 text-green-400 border border-green-800/40 bg-green-900/20 px-2 py-1 rounded-lg">
-                <TrendingDown size={11} /> Improving
+                <TrendingDown size={11} /> {t('fleetintel.costTrend.improving')}
               </span>
             ) : (
-              <span className="text-gray-500 border border-gray-700 px-2 py-1 rounded-lg">Stable</span>
+              <span className="text-gray-500 border border-gray-700 px-2 py-1 rounded-lg">{t('fleetintel.costTrend.stable')}</span>
             )}
             <span className="text-gray-500">
-              Forecast: {fmtCurrency(costTrendData.forecastCost, activeCurrency)}
+              {t('fleetintel.costTrend.forecast', { value: fmtCurrency(costTrendData.forecastCost, activeCurrency) })}
             </span>
           </div>
         </div>

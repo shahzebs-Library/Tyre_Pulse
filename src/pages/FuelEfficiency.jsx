@@ -18,6 +18,7 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { formatMonthYear } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
@@ -112,6 +113,7 @@ function deriveMonthlyKm(records) {
 export default function FuelEfficiency() {
   const { activeCurrency, activeCountry, appSettings } = useSettings()
   const { branding } = useTenant()
+  const { t } = useLanguage()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
   // ── Config state ──────────────────────────────────────────────────────────
@@ -336,7 +338,7 @@ export default function FuelEfficiency() {
       const intercept = (sy - slope * sx) / n
       const xs = [1, 4, 8, 12]
       datasets.push({
-        label: 'Trend',
+        label: t('fuel.charts.trendSeries'),
         data: xs.map(x => ({ x, y: Math.max(0, slope * x + intercept) })),
         borderColor: '#f59e0b',
         backgroundColor: 'transparent',
@@ -348,7 +350,7 @@ export default function FuelEfficiency() {
     }
 
     return { datasets }
-  }, [enriched])
+  }, [enriched, t])
 
   // ── Monthly trend (12 months) ─────────────────────────────────────────────
   const monthlyTrend = useMemo(() => {
@@ -381,14 +383,14 @@ export default function FuelEfficiency() {
   const complianceDoughnut = useMemo(() => {
     const comp = kpis?.currentCompliancePct ?? 0
     return {
-      labels: ['Compliant', 'Non-compliant'],
+      labels: [t('fuel.compliance.compliant'), t('fuel.compliance.nonCompliant')],
       datasets: [{
         data: [+comp.toFixed(1), +(100 - comp).toFixed(1)],
         backgroundColor: ['#10b981', '#ef4444'],
         borderWidth: 0,
       }],
     }
-  }, [kpis])
+  }, [kpis, t])
 
   // ── Recommendations ───────────────────────────────────────────────────────
   const recommendations = useMemo(() => {
@@ -402,7 +404,7 @@ export default function FuelEfficiency() {
         recs.push({
           icon: Fuel,
           color: 'text-amber-400',
-          text: `Improving pressure compliance at ${worst.site} from ${worst.compliancePct}% to 95% would save ~${fmtCur(saving, activeCurrency)}/month`,
+          text: t('fuel.recommendations.siteCompliance', { site: worst.site, from: worst.compliancePct, value: fmtCur(saving, activeCurrency) }),
           impact: 'High',
         })
       }
@@ -411,14 +413,14 @@ export default function FuelEfficiency() {
     recs.push({
       icon: TrendingDown,
       color: 'text-green-400',
-      text: `Fleet-wide 1% improvement in rolling resistance = ${fmtCur(fleetRRSaving, activeCurrency)} annual saving`,
+      text: t('fuel.recommendations.fleetRR', { value: fmtCur(fleetRRSaving, activeCurrency) }),
       impact: 'High',
     })
     const rotationSaving = 0.025 * (fleetConsumption / 100) * monthlyKm * fleetSize * fuelCostPerLiter * 12
     recs.push({
       icon: Activity,
       color: 'text-blue-400',
-      text: `Full tyre rotation program compliance could reduce rolling resistance by ~2.5% = ${fmtCur(rotationSaving, activeCurrency)}/year`,
+      text: t('fuel.recommendations.rotation', { value: fmtCur(rotationSaving, activeCurrency) }),
       impact: 'Medium',
     })
     const worn = enriched.filter(r => parseFloat(r.tread_depth) <= TREAD_WORN_MM).length
@@ -427,7 +429,7 @@ export default function FuelEfficiency() {
       recs.push({
         icon: AlertTriangle,
         color: 'text-red-400',
-        text: `${worn} tyres at ≤3mm tread depth are costing ~${fmtCur(wornCost, activeCurrency)}/month in excess fuel - replace immediately`,
+        text: t('fuel.recommendations.wornTread', { count: worn, value: fmtCur(wornCost, activeCurrency) }),
         impact: 'Critical',
       })
     }
@@ -435,12 +437,12 @@ export default function FuelEfficiency() {
       recs.push({
         icon: Wind,
         color: 'text-purple-400',
-        text: `Fleet average pressure deviation of ${kpis.avgDevPct.toFixed(1)}% exceeds 10% threshold - systematic inflation audit required`,
+        text: t('fuel.recommendations.pressureAudit', { pct: kpis.avgDevPct.toFixed(1) }),
         impact: 'High',
       })
     }
     return recs
-  }, [kpis, siteMetrics, enriched, fleetSize, fleetConsumption, monthlyKm, fuelCostPerLiter, activeCurrency])
+  }, [kpis, siteMetrics, enriched, fleetSize, fleetConsumption, monthlyKm, fuelCostPerLiter, activeCurrency, t])
 
   // ── Environmental ─────────────────────────────────────────────────────────
   const envMetrics = useMemo(() => {
@@ -553,13 +555,13 @@ export default function FuelEfficiency() {
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <PageHeader
-        title="Tyre & Fuel Efficiency Intelligence"
-        subtitle="Quantify fuel loss from tyre condition · scientific impact modelling · savings calculator"
+        title={t('fuel.title')}
+        subtitle={t('fuel.subtitle')}
         icon={Fuel}
         actions={<>
           {lastRefresh && (
             <span className="text-xs text-muted">
-              Updated {lastRefresh.toLocaleTimeString()}
+              {t('fuel.actions.updated', { time: lastRefresh.toLocaleTimeString() })}
             </span>
           )}
           <button
@@ -568,21 +570,21 @@ export default function FuelEfficiency() {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Refresh
+            {t('fuel.actions.refresh')}
           </button>
           <button
             onClick={exportPDF}
             className="btn-secondary gap-1.5"
           >
             <FileText className="w-4 h-4" />
-            PDF
+            {t('fuel.actions.pdf')}
           </button>
           <button
             onClick={exportExcel}
             className="btn-secondary gap-1.5"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            Excel
+            {t('fuel.actions.excel')}
           </button>
         </>}
       />
@@ -591,12 +593,8 @@ export default function FuelEfficiency() {
       <div className="bg-amber-900/20 border border-amber-700/50 text-amber-200 rounded-xl p-4 flex items-start gap-3">
         <Info className="w-5 h-5 mt-0.5 shrink-0 text-amber-400" />
         <div className="text-sm leading-relaxed">
-          <span className="font-semibold">Modelled estimates - not measured fuel consumption.</span>{' '}
-          Figures are derived from tyre pressure and tread condition using
-          rolling-resistance assumptions ({fmtCur(fuelCostPerLiter, activeCurrency)}/L,
-          {' '}{fleetConsumption} L/100km baseline). They indicate the <em>direction and
-          relative scale</em> of tyre-related fuel impact, not actual litres burned.
-          Adjust the assumptions below to match your fleet.
+          <span className="font-semibold">{t('fuel.disclosure.title')}</span>{' '}
+          {t('fuel.disclosure.body', { rate: fmtCur(fuelCostPerLiter, activeCurrency), consumption: fleetConsumption })}
         </div>
       </div>
 
@@ -629,7 +627,7 @@ export default function FuelEfficiency() {
             >
               <span className="flex items-center gap-2 font-semibold text-white">
                 <Settings2 className="w-5 h-5 text-amber-400" />
-                Configuration Panel
+                {t('fuel.config.heading')}
               </span>
               {configOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
             </button>
@@ -645,28 +643,28 @@ export default function FuelEfficiency() {
                 >
                   <div className="px-5 pb-5 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-800">
                     <ConfigField
-                      label={`Fuel Cost / Liter (${activeCurrency})`}
+                      label={t('fuel.config.fuelCostPerLiter', { currency: activeCurrency })}
                       value={fuelCostPerLiter}
                       onChange={v => setFuelCostPerLiter(+v)}
                       step={0.5}
                       min={1}
                     />
                     <ConfigField
-                      label="Fleet Consumption (L/100km)"
+                      label={t('fuel.config.fleetConsumption')}
                       value={fleetConsumption}
                       onChange={v => setFleetConsumption(+v)}
                       step={1}
                       min={5}
                     />
                     <ConfigField
-                      label={`Fleet Size (derived: ${uniqueAssets.length})`}
+                      label={t('fuel.config.fleetSize', { count: uniqueAssets.length })}
                       value={fleetSizeOverride ?? uniqueAssets.length}
                       onChange={v => setFleetSizeOverride(+v || null)}
                       step={1}
                       min={1}
                     />
                     <ConfigField
-                      label={`Monthly KM/Vehicle (derived: ${derivedMonthlyKm})`}
+                      label={t('fuel.config.monthlyKm', { km: derivedMonthlyKm })}
                       value={monthlyKmOverride ?? derivedMonthlyKm}
                       onChange={v => setMonthlyKmOverride(+v || null)}
                       step={500}
@@ -682,39 +680,39 @@ export default function FuelEfficiency() {
           {kpis && (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <KpiCard
-                label="Monthly Fuel Loss Cost"
+                label={t('fuel.kpi.monthlyLoss')}
                 value={fmtCur(kpis.totalExtraCostMonth, activeCurrency)}
-                sub={`${fmt(kpis.totalExtraFuelMonth)} L wasted / month`}
+                sub={t('fuel.kpi.monthlyLossSub', { liters: fmt(kpis.totalExtraFuelMonth) })}
                 icon={Fuel}
                 color="amber"
                 trend="down"
               />
               <KpiCard
-                label="Rolling Resistance Score"
+                label={t('fuel.kpi.rrScore')}
                 value={`${kpis.rrScore}/10`}
-                sub="0 = optimal, 10 = critical"
+                sub={t('fuel.kpi.rrScoreSub')}
                 icon={Activity}
                 color={kpis.rrScore < 3 ? 'green' : kpis.rrScore < 6 ? 'amber' : 'red'}
               />
               <KpiCard
-                label="Potential Annual Savings"
+                label={t('fuel.kpi.potentialSavings')}
                 value={fmtCur(kpis.potentialCostSavingAnnual, activeCurrency)}
-                sub="Achieving 95% pressure compliance"
+                sub={t('fuel.kpi.potentialSavingsSub')}
                 icon={TrendingDown}
                 color="green"
                 trend="up"
               />
               <KpiCard
-                label="Avg Pressure Deviation"
+                label={t('fuel.kpi.avgDeviation')}
                 value={`${kpis.avgDevPct}%`}
-                sub={`${kpis.currentCompliancePct}% fleet compliance`}
+                sub={t('fuel.kpi.avgDeviationSub', { pct: kpis.currentCompliancePct })}
                 icon={Wind}
                 color={kpis.avgDevPct < 5 ? 'green' : kpis.avgDevPct < 10 ? 'amber' : 'red'}
               />
               <KpiCard
-                label="CO₂ Impact"
+                label={t('fuel.kpi.co2Impact')}
                 value={`${kpis.co2Tonnes}t`}
-                sub="Excess CO₂ per month"
+                sub={t('fuel.kpi.co2ImpactSub')}
                 icon={Leaf}
                 color="blue"
               />
@@ -732,7 +730,7 @@ export default function FuelEfficiency() {
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                 <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
                   <BarChart2 className="w-5 h-5 text-blue-400" />
-                  Current Fleet Pressure Compliance
+                  {t('fuel.compliance.heading')}
                 </h3>
                 <div className="flex items-center gap-6">
                   <div className="w-40 h-40 shrink-0">
@@ -751,15 +749,15 @@ export default function FuelEfficiency() {
                   </div>
                   <div className="space-y-2">
                     <div>
-                      <p className="text-gray-400 text-xs">Compliant Tyres</p>
+                      <p className="text-gray-400 text-xs">{t('fuel.compliance.compliantTyres')}</p>
                       <p className="text-2xl font-bold text-green-400">{kpis.currentCompliancePct}%</p>
                     </div>
                     <div>
-                      <p className="text-gray-400 text-xs">Avg Deviation from Nominal</p>
+                      <p className="text-gray-400 text-xs">{t('fuel.compliance.avgDeviationFromNominal')}</p>
                       <p className="text-2xl font-bold text-amber-400">{kpis.avgDevPct}%</p>
                     </div>
                     <div>
-                      <p className="text-gray-400 text-xs">Nominal Pressure (PSI)</p>
+                      <p className="text-gray-400 text-xs">{t('fuel.compliance.nominalPressure')}</p>
                       <p className="text-lg font-semibold text-gray-300">{NOMINAL_PRESSURE_PSI}</p>
                     </div>
                   </div>
@@ -770,13 +768,13 @@ export default function FuelEfficiency() {
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                 <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
                   <Zap className="w-5 h-5 text-amber-400" />
-                  Compliance Improvement Savings Calculator
+                  {t('fuel.calculator.heading')}
                 </h3>
                 <div className="space-y-5">
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-400">Current: <span className="text-white font-medium">{kpis.currentCompliancePct}%</span></span>
-                      <span className="text-gray-400">Target: <span className="text-amber-400 font-medium">{complianceSlider}%</span></span>
+                      <span className="text-gray-400">{t('fuel.calculator.current', { pct: kpis.currentCompliancePct })}</span>
+                      <span className="text-gray-400">{t('fuel.calculator.target', { pct: complianceSlider })}</span>
                     </div>
                     <input
                       type="range"
@@ -789,18 +787,18 @@ export default function FuelEfficiency() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-gray-800 rounded-xl p-4">
-                      <p className="text-gray-400 text-xs mb-1">Monthly Fuel Saving</p>
+                      <p className="text-gray-400 text-xs mb-1">{t('fuel.calculator.monthlySaving')}</p>
                       <p className="text-xl font-bold text-green-400">{fmtCur(sliderSavings.monthly, activeCurrency)}</p>
-                      <p className="text-xs text-gray-500 mt-1">{fmt(fuelCostPerLiter > 0 ? sliderSavings.monthly / fuelCostPerLiter : 0, 0)} L saved</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('fuel.calculator.litersSaved', { liters: fmt(fuelCostPerLiter > 0 ? sliderSavings.monthly / fuelCostPerLiter : 0, 0) })}</p>
                     </div>
                     <div className="bg-gray-800 rounded-xl p-4">
-                      <p className="text-gray-400 text-xs mb-1">Annual Fuel Saving</p>
+                      <p className="text-gray-400 text-xs mb-1">{t('fuel.calculator.annualSaving')}</p>
                       <p className="text-xl font-bold text-green-400">{fmtCur(sliderSavings.annual, activeCurrency)}</p>
-                      <p className="text-xs text-gray-500 mt-1">{fmt(sliderSavings.annual / fuelCostPerLiter, 0)} L saved</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('fuel.calculator.litersSaved', { liters: fmt(sliderSavings.annual / fuelCostPerLiter, 0) })}</p>
                     </div>
                   </div>
                   <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-3 text-xs text-blue-300">
-                    Formula: improvement × 2% fuel per 10% under-inflation × {fmt(kpis.baseMonthlyFuelPerVehicle, 0)} L/vehicle/month × {fleetSize} vehicles
+                    {t('fuel.calculator.formula', { liters: fmt(kpis.baseMonthlyFuelPerVehicle, 0), fleetSize })}
                   </div>
                 </div>
               </div>
@@ -809,13 +807,13 @@ export default function FuelEfficiency() {
 
           {/* ── 4. Rolling Resistance by Vehicle ───────────────────────── */}
           {vehicleMetrics.length > 0 && (
-            <ChartCard title="Rolling Resistance Impact by Vehicle" subtitle="Top 20 vehicles - estimated monthly extra fuel cost from under-inflation" icon={BarChart2}>
+            <ChartCard title={t('fuel.charts.rrByVehicle')} subtitle={t('fuel.charts.rrByVehicleSub')} icon={BarChart2}>
               <div className="h-72">
                 <Bar
                   data={{
                     labels: vehicleMetrics.slice(0, 20).map(v => v.asset_no),
                     datasets: [{
-                      label: `Est. Monthly Extra Cost (${activeCurrency})`,
+                      label: t('fuel.charts.extraCostSeries', { currency: activeCurrency }),
                       data: vehicleMetrics.slice(0, 20).map(v => v.totalExtraCostMonth),
                       backgroundColor: vehicleMetrics.slice(0, 20).map(v =>
                         v.totalExtraCostMonth > 500 ? '#ef4444cc' : v.totalExtraCostMonth > 200 ? '#f59e0bcc' : '#3b82f6cc'
@@ -834,12 +832,12 @@ export default function FuelEfficiency() {
                             const v = vehicleMetrics[ctx.dataIndex]
                             if (!v) return ''
                             return [
-                              `Avg Pressure Dev: ${v.avgDevPct}%`,
-                              `Avg Tread: ${v.avgTread ?? 'N/A'} mm`,
-                              `Compliance: ${v.compliancePct}%`,
+                              t('fuel.charts.tooltipPressureDev', { pct: v.avgDevPct }),
+                              t('fuel.charts.tooltipAvgTread', { value: v.avgTread ?? t('fuel.na') }),
+                              t('fuel.charts.tooltipCompliance', { pct: v.compliancePct }),
                             ]
                           },
-                          label: ctx => `${activeCurrency} ${fmt(ctx.raw, 2)}/month extra`,
+                          label: ctx => t('fuel.charts.tooltipExtraMonth', { currency: activeCurrency, value: fmt(ctx.raw, 2) }),
                         },
                       },
                     },

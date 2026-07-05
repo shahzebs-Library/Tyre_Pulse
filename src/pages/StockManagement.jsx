@@ -10,6 +10,7 @@ import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
 import { exportToExcel, exportToPdf, resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
+import { useLanguage } from '../contexts/LanguageContext'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 } from 'chart.js'
@@ -45,6 +46,7 @@ function firstOfMonth() {
 }
 
 export default function StockManagement() {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { appSettings, activeCountry } = useSettings()
@@ -113,7 +115,7 @@ export default function StockManagement() {
       setVelocityMap(vMap)
     } catch (err) {
       // A thrown fetch previously left the spinner stuck forever with no message.
-      setError(err?.message || 'Failed to load stock records.')
+      setError(err?.message || t('stock.errors.loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -229,17 +231,17 @@ export default function StockManagement() {
     const { fromSite, toSite, qty, notes } = transferForm
     const transferQty = +qty
 
-    if (!fromSite || !toSite) { setTransferError('Select both From and To sites.'); return }
-    if (fromSite === toSite)  { setTransferError('From and To sites must be different.'); return }
-    if (transferQty < 1)      { setTransferError('Quantity must be at least 1.'); return }
+    if (!fromSite || !toSite) { setTransferError(t('stock.transfer.errors.selectBoth')); return }
+    if (fromSite === toSite)  { setTransferError(t('stock.transfer.errors.sameSite')); return }
+    if (transferQty < 1)      { setTransferError(t('stock.transfer.errors.minQty')); return }
 
     const fromRecord = records.find(r => r.site === fromSite)
     const toRecord   = records.find(r => r.site === toSite)
 
-    if (!fromRecord) { setTransferError(`No stock record found for site: ${fromSite}`); return }
-    if (!toRecord)   { setTransferError(`No stock record found for site: ${toSite}`); return }
+    if (!fromRecord) { setTransferError(t('stock.transfer.errors.noRecordForSite', { site: fromSite })); return }
+    if (!toRecord)   { setTransferError(t('stock.transfer.errors.noRecordForSite', { site: toSite })); return }
     if (transferQty > fromRecord.stock_qty) {
-      setTransferError(`Insufficient stock at ${fromSite}. Available: ${fromRecord.stock_qty}`)
+      setTransferError(t('stock.transfer.errors.insufficientStock', { site: fromSite, qty: fromRecord.stock_qty }))
       return
     }
 
@@ -255,11 +257,11 @@ export default function StockManagement() {
     try {
       await stock.postStockMovement({ stockId: toRecord.id, type: 'transfer_in', qty: transferQty, reason: reasonIn, reference: notes })
     } catch (inErr) {
-      setTransferError('Outbound posted but inbound failed: ' + inErr.message)
+      setTransferError(t('stock.transfer.errors.inboundFailed', { message: inErr.message }))
       setTransferring(false); await load(); return
     }
 
-    setTransferMsg(`Successfully transferred ${transferQty} units from ${fromSite} to ${toSite}.`)
+    setTransferMsg(t('stock.transfer.successMsg', { qty: transferQty, fromSite, toSite }))
     setTransferForm({ fromSite: '', toSite: '', qty: 1, notes: '' })
     setTransferring(false)
     await load()
@@ -378,16 +380,16 @@ export default function StockManagement() {
 
   // Tabs: show Transfer only if >= 2 sites
   const tabs = useMemo(() => {
-    const base = [['stock', 'Stock Levels'], ['timeline', 'Timeline']]
-    if (sites.length >= 2) return [['stock', 'Stock Levels'], ['transfer', 'Transfer'], ['timeline', 'Timeline']]
+    const base = [['stock', t('stock.tabs.stock')], ['timeline', t('stock.tabs.timeline')]]
+    if (sites.length >= 2) return [['stock', t('stock.tabs.stock')], ['transfer', t('stock.tabs.transfer')], ['timeline', t('stock.tabs.timeline')]]
     return base
-  }, [sites])
+  }, [sites, t])
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Stock Management"
-        subtitle={`${records.length} sites tracked`}
+        title={t('stock.title')}
+        subtitle={t('stock.subtitle', { count: records.length })}
         icon={Package}
       />
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -397,29 +399,29 @@ export default function StockManagement() {
             onClick={() => navigate('/data-intake?module=stock')}
             className="btn-primary flex items-center gap-2 text-sm"
           >
-            <Upload size={15} /> Import via Data Intake Center
+            <Upload size={15} /> {t('stock.actions.import')}
           </button>
           <button onClick={exportExcel} className="btn-secondary text-xs flex items-center gap-1.5">
-            <Download size={14} /> Excel
+            <Download size={14} /> {t('stock.actions.excel')}
           </button>
           <button onClick={exportPdf} className="btn-secondary text-xs flex items-center gap-1.5">
-            <FileText size={14} /> PDF
+            <FileText size={14} /> {t('stock.actions.pdf')}
           </button>
           <button onClick={startAdd} className="btn-secondary flex items-center gap-2 text-sm">
-            <Plus size={16} /> Add Stock
+            <Plus size={16} /> {t('stock.actions.addStock')}
           </button>
         </div>
       </div>
       <p className="text-xs text-gray-500 -mt-1">
-        New: use the controlled{' '}
+        {t('stock.intakeNote.prefix')}{' '}
         <button
           type="button"
           onClick={() => navigate('/data-intake?module=stock')}
           className="text-green-400 hover:text-green-300 underline underline-offset-2"
         >
-          Data Intake Center
+          {t('stock.intakeNote.linkText')}
         </button>{' '}
-        for validated, audited, multi-country imports with duplicate detection and rollback.
+        {t('stock.intakeNote.suffix')}
       </p>
 
       {/* Tabs */}
@@ -444,7 +446,7 @@ export default function StockManagement() {
           <div className="flex gap-3">
             {Object.entries(counts).map(([s, cnt]) => (
               <span key={s} className={`text-xs px-3 py-1.5 rounded-full border font-medium ${STATUS_BADGE[s]}`}>
-                {cnt} {s}
+                {cnt} {t(`stock.statuses.${s}`)}
               </span>
             ))}
           </div>
@@ -455,7 +457,12 @@ export default function StockManagement() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    {['Site', 'Description', 'Stock', 'Min', 'Critical', 'Reorder Qty', 'Status', 'Velocity', 'Days Left', 'Action', ''].map(h => (
+                    {[
+                      t('stock.table.columns.site'), t('stock.table.columns.description'), t('stock.table.columns.stock'),
+                      t('stock.table.columns.min'), t('stock.table.columns.critical'), t('stock.table.columns.reorderQty'),
+                      t('stock.table.columns.status'), t('stock.table.columns.velocity'), t('stock.table.columns.daysLeft'),
+                      t('stock.table.columns.action'), '',
+                    ].map(h => (
                       <th key={h} className="table-header">{h}</th>
                     ))}
                   </tr>
@@ -466,7 +473,7 @@ export default function StockManagement() {
                       <tr key={i}><td colSpan={11} className="px-3.5 py-3"><Skeleton className="h-4 w-full" /></td></tr>
                     ))
                   ) : records.length === 0 ? (
-                    <tr><td colSpan={11} className="text-center py-12 text-gray-500">No stock records yet</td></tr>
+                    <tr><td colSpan={11} className="text-center py-12 text-gray-500">{t('stock.table.emptyTitle')}</td></tr>
                   ) : records.map(r => {
                     const status = deriveStatus(r)
                     const vel    = velocityMap[r.id]
@@ -499,7 +506,7 @@ export default function StockManagement() {
                         <td className="table-cell text-gray-400">{r.critical_level}</td>
                         <td className="table-cell text-gray-400">{r.reorder_qty ?? 0}</td>
                         <td className="table-cell">
-                          <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BADGE[status]}`}>{status}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BADGE[status]}`}>{t(`stock.statuses.${status}`)}</span>
                         </td>
                         <td className="table-cell">
                           <span className={avg > 0 ? 'text-gray-300 text-xs' : 'text-gray-600 text-xs'}>
@@ -518,25 +525,25 @@ export default function StockManagement() {
                             ) : <span className="text-gray-600">-</span>}
                             {reorderSuggestion !== null && (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-900/40 text-amber-300 border border-amber-700/50 whitespace-nowrap">
-                                Reorder: {reorderSuggestion}
+                                {t('stock.table.reorderBadge', { qty: reorderSuggestion })}
                               </span>
                             )}
                           </div>
                         </td>
                         <td className="table-cell">
                           <div className="flex items-center gap-1.5">
-                            <button onClick={() => startEdit(r)} className="text-gray-400 hover:text-blue-400 text-xs transition-colors">Edit</button>
+                            <button onClick={() => startEdit(r)} className="text-gray-400 hover:text-blue-400 text-xs transition-colors">{t('stock.table.edit')}</button>
                             <button
                               onClick={() => { openHistory(r); setAdjForm({ qty_change: 0, reason: '', movement_type: 'adjustment_up', reference_no: '' }) }}
                               className="text-gray-400 hover:text-purple-400 text-xs transition-colors"
-                              title="Movement history"
+                              title={t('stock.table.movementHistoryTooltip')}
                             >
                               <History size={14} />
                             </button>
                             {status === 'Critical' && (
                               <button
                                 onClick={() => generateReorderPdf(r)}
-                                title="Generate reorder PDF"
+                                title={t('stock.table.generateReorderPdfTooltip')}
                                 className="text-gray-400 hover:text-orange-400 text-xs transition-colors"
                               >
                                 <FileText size={14} />
@@ -560,9 +567,9 @@ export default function StockManagement() {
           <div className="card space-y-5">
             <div className="flex items-center gap-2 mb-1">
               <ArrowLeftRight size={18} className="text-blue-400" />
-              <h2 className="text-base font-semibold text-white">Inter-Site Stock Transfer</h2>
+              <h2 className="text-base font-semibold text-white">{t('stock.transfer.heading')}</h2>
             </div>
-            <p className="text-gray-400 text-sm -mt-3">Move stock between sites. Both movement records and stock quantities will be updated.</p>
+            <p className="text-gray-400 text-sm -mt-3">{t('stock.transfer.subtitle')}</p>
 
             {transferMsg && (
               <div className="bg-green-900/30 border border-green-700 text-green-300 rounded-lg px-4 py-3 text-sm">
@@ -578,7 +585,7 @@ export default function StockManagement() {
             <form onSubmit={submitTransfer} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">From Site *</label>
+                  <label className="label">{t('stock.transfer.fromSite')}</label>
                   <select
                     className="input"
                     value={transferForm.fromSite}
@@ -597,7 +604,7 @@ export default function StockManagement() {
                     }}
                     required
                   >
-                    <option value="">- Select -</option>
+                    <option value="">{t('stock.transfer.selectOption')}</option>
                     {sites.map(s => (
                       <option key={s} value={s}>{s}</option>
                     ))}
@@ -605,12 +612,12 @@ export default function StockManagement() {
                   {transferForm.fromSite && (() => {
                     const rec = records.find(r => r.site === transferForm.fromSite)
                     return rec ? (
-                      <p className="text-xs text-gray-500 mt-1">Available: <span className="text-gray-300 font-medium">{rec.stock_qty}</span> units</p>
+                      <p className="text-xs text-gray-500 mt-1">{t('stock.transfer.availablePrefix')} <span className="text-gray-300 font-medium">{rec.stock_qty}</span> {t('stock.transfer.unitsSuffix')}</p>
                     ) : null
                   })()}
                 </div>
                 <div>
-                  <label className="label">To Site *</label>
+                  <label className="label">{t('stock.transfer.toSite')}</label>
                   <select
                     className="input"
                     value={transferForm.toSite}

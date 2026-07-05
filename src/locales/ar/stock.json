@@ -1,0 +1,148 @@
+{
+  "errors": {
+    "loadFailed": "فشل تحميل سجلات المخزون."
+  },
+  "title": "إدارة المخزون",
+  "subtitle": "{count} موقع مُتابَع",
+  "actions": {
+    "import": "استيراد عبر مركز إدخال البيانات",
+    "excel": "إكسل",
+    "pdf": "PDF",
+    "addStock": "إضافة مخزون"
+  },
+  "intakeNote": {
+    "prefix": "جديد: استخدم",
+    "linkText": "مركز إدخال البيانات",
+    "suffix": "الخاضع للتحكم للاستيرادات متعددة الدول الموثقة والمدققة مع كشف التكرار والتراجع."
+  },
+  "tabs": {
+    "stock": "مستويات المخزون",
+    "transfer": "النقل",
+    "timeline": "المخطط الزمني"
+  },
+  "statuses": {
+    "OK": "جيد",
+    "Low": "منخفض",
+    "Critical": "حرج"
+  },
+  "table": {
+    "columns": {
+      "site": "الموقع",
+      "description": "الوصف",
+      "stock": "المخزون",
+      "min": "الحد الأدنى",
+      "critical": "الحرج",
+      "reorderQty": "كمية إعادة الطلب",
+      "status": "الحالة",
+      "velocity": "معدل الاستهلاك",
+      "daysLeft": "الأيام المتبقية",
+      "action": "الإجراء"
+    },
+    "emptyTitle": "لا توجد سجلات مخزون بعد",
+    "reorderBadge": "إعادة طلب: {qty}",
+    "edit": "تعديل",
+    "movementHistoryTooltip": "سجل الحركة",
+    "generateReorderPdfTooltip": "إنشاء PDF لإعادة الطلب"
+  },
+  "transfer": {
+    "heading": "نقل المخزون بين المواقع",
+    "subtitle": "نقل المخزون بين المواقع. سيتم تحديث سجلات الحركة وكميات المخزون معًا.",
+    "successMsg": "تم نقل {qty} وحدة بنجاح من {fromSite} إلى {toSite}.",
+    "errors": {
+      "selectBoth": "اختر موقع المصدر والوجهة كليهما.",
+      "sameSite": "يجب أن يكون موقع المصدر والوجهة مختلفين.",
+      "minQty": "يجب أن تكون الكمية 1 على الأقل.",
+      "noRecordForSite": "لم يتم العثور على سجل مخزون للموقع: {site}",
+      "insufficientStock": "المخزون غير كافٍ في {site}. المتاح: {qty}",
+      "inboundFailed": "تم تسجيل الصادر لكن فشل الوارد: {message}"
+    },
+    "fromSite": "من الموقع *",
+    "toSite": "إلى الموقع *",
+    "quantity": "الكمية *",
+    "notes": "ملاحظات",
+    "selectOption": "- اختر -",
+    "availablePrefix": "المتاح:",
+    "currentPrefix": "الحالي:",
+    "unitsSuffix": "وحدة",
+    "notesPlaceholder": "سبب النقل أو المرجع (اختياري)",
+    "previewTitle": "معاينة النقل",
+    "transferring": "جارٍ النقل...",
+    "transferStock": "نقل المخزون"
+  },
+  "timeline": {
+    "today": "اليوم:",
+    "yesterday": "أمس:",
+    "issues": "صرفيات",
+    "change": "التغير: ",
+    "na": "غير متاح",
+    "from": "من",
+    "to": "إلى",
+    "chips": {
+      "today": "اليوم",
+      "yesterday": "أمس",
+      "last7Days": "آخر 7 أيام",
+      "last30Days": "آخر 30 يومًا",
+      "thisMonth": "هذا الشهر"
+    },
+    "chartTitle": "الصرفيات اليومية (صافي)",
+    "netChangeLabel": "صافي التغير (صادر)",
+    "columns": {
+      "date": "التاريخ",
+      "itemsIn": "الوارد",
+      "itemsOut": "الصادر",
+      "netChange": "صافي التغير"
+    },
+    "loading": "جارٍ التحميل...",
+    "emptyPeriod": "لا توجد سجلات في هذه الفترة"
+  },
+  "historyModal": {
+    "title": "سجل الحركة · {site}",
+    "subtitle": "{description} · الحالي: {qty}",
+    "logMovement": "تسجيل حركة مخزون",
+    "type": "النوع",
+    "qtyChange": "تغير الكمية",
+    "qtyChangePlaceholder": "مثال: -4 أو +10",
+    "reason": "السبب",
+    "reasonPlaceholder": "لماذا؟",
+    "refNo": "الرقم المرجعي",
+    "refNoPlaceholder": "أمر شراء / بطاقة عمل",
+    "saving": "جارٍ الحفظ...",
+    "logMovementBtn": "تسجيل الحركة",
+    "newQty": "الكمية الجديدة: {qty}",
+    "loading": "جارٍ التحميل...",
+    "emptyHistory": "لا يوجد سجل حركة بعد",
+    "columns": {
+      "date": "التاريخ",
+      "type": "النوع",
+      "before": "قبل",
+      "change": "التغير",
+      "after": "بعد",
+      "reason": "السبب",
+      "ref": "المرجع"
+    }
+  },
+  "movementTypes": {
+    "receipt": "استلام",
+    "return": "إرجاع",
+    "transfer_in": "نقل وارد",
+    "adjustment_up": "تسوية بالزيادة",
+    "issue": "صرف",
+    "transfer_out": "نقل صادر",
+    "scrap": "خردة",
+    "adjustment_down": "تسوية بالنقصان"
+  },
+  "form": {
+    "editTitle": "تعديل سجل المخزون",
+    "addTitle": "إضافة سجل مخزون",
+    "site": "الموقع *",
+    "description": "الوصف",
+    "descriptionPlaceholder": "مثال: 12.00R24 Bridgestone",
+    "stockQty": "كمية المخزون",
+    "minLevel": "الحد الأدنى",
+    "criticalLevel": "المستوى الحرج",
+    "managementAction": "إجراء الإدارة",
+    "saving": "جارٍ الحفظ...",
+    "save": "حفظ",
+    "cancel": "إلغاء"
+  }
+}

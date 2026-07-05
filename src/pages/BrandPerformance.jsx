@@ -11,6 +11,7 @@ import { Maximize2, X, BarChart2, Download, FileText, Search, Award, TrendingUp,
 import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
 import { ChartModal } from '../components/ChartModal'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
@@ -39,8 +40,7 @@ export default function BrandPerformance() {
   const [tableSearch, setTableSearch] = useState('')
 
   // Filters
-  const [dateFrom, setDateFrom]         = useState('')
-  const [dateTo, setDateTo]             = useState('')
+  const [period, setPeriod]             = useState({ mode: 'all' })
   const [selectedSites, setSelectedSites] = useState([])
   const [riskLevels, setRiskLevels]     = useState([])
 
@@ -77,9 +77,7 @@ export default function BrandPerformance() {
   }, [records])
 
   const filtered = useMemo(() => {
-    return records.filter(r => {
-      if (dateFrom && r.issue_date && r.issue_date < dateFrom) return false
-      if (dateTo && r.issue_date && r.issue_date > dateTo) return false
+    return filterByPeriodValue(records, period, 'issue_date').filter(r => {
       if (selectedSites.length > 0 && !selectedSites.includes(r.site)) return false
       if (riskLevels.length > 0) {
         const level = (r.risk_level || '').toLowerCase()
@@ -87,7 +85,7 @@ export default function BrandPerformance() {
       }
       return true
     })
-  }, [records, dateFrom, dateTo, selectedSites, riskLevels])
+  }, [records, period, selectedSites, riskLevels])
 
   const metrics = useMemo(() => computeBrandMetrics(filtered), [filtered])
   const selectedData = useMemo(() =>
@@ -95,7 +93,7 @@ export default function BrandPerformance() {
     [filtered, selected]
   )
 
-  const hasActiveFilter = dateFrom !== '' || dateTo !== '' || selectedSites.length > 0 || riskLevels.length > 0
+  const hasActiveFilter = period.mode !== 'all' || selectedSites.length > 0 || riskLevels.length > 0
 
   function toggleSite(site) {
     setSelectedSites(prev => prev.includes(site) ? prev.filter(s => s !== site) : [...prev, site])
@@ -106,8 +104,7 @@ export default function BrandPerformance() {
   }
 
   function clearFilters() {
-    setDateFrom('')
-    setDateTo('')
+    setPeriod({ mode: 'all' })
     setSelectedSites([])
     setRiskLevels([])
   }
@@ -224,14 +221,10 @@ export default function BrandPerformance() {
       {/* Filter bar */}
       <div className="card space-y-3">
         <div className="flex flex-wrap gap-3 items-end">
-          {/* Date range */}
+          {/* Period */}
           <div className="flex flex-col gap-1">
-            <label className="label text-xs">Date From</label>
-            <input type="date" className="input py-1.5 text-sm w-36" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="label text-xs">Date To</label>
-            <input type="date" className="input py-1.5 text-sm w-36" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            <label className="label text-xs">Period</label>
+            <PeriodFilter records={records} value={period} onChange={setPeriod} />
           </div>
 
           {/* Clear */}

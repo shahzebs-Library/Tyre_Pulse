@@ -423,7 +423,7 @@ serve(async (req) => {
 
   const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
   const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'reports@tyrepulse.app'
-  const APP_URL = Deno.env.get('APP_URL') || 'https://tyre-pulse-peach.vercel.app'
+  const APP_URL = Deno.env.get('APP_URL') || 'https://tyrepulse.app'
 
   // System currency (best-effort; blank if unset - never blocks a send).
   let currency = ''

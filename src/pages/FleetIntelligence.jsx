@@ -19,6 +19,7 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { applyCountry } from '../lib/countryFilter'
 import PageHeader from '../components/ui/PageHeader'
+import PeriodFilter, { filterByPeriodValue, periodLabel } from '../components/ui/PeriodFilter'
 import {
   computeFleetAvailability,
   computeVehicleDowntimeImpact,
@@ -49,14 +50,6 @@ const CHART_THEME = {
   tooltipTitle: '#f9fafb',
   tooltipBody: '#9ca3af',
 }
-
-const DATE_PRESETS = [
-  { label: '30d', days: 30 },
-  { label: '90d', days: 90 },
-  { label: '6mo', days: 180 },
-  { label: '1yr', days: 365 },
-  { label: 'All', days: null },
-]
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 function fmt(n, dec = 0) {
@@ -96,21 +89,26 @@ function monthLabel(key) {
   return formatMonthYear(new Date(Number(y), Number(m) - 1, 1))
 }
 
-function getLast12MonthKeys() {
+function getLast12MonthKeys(anchor = new Date()) {
   const keys = []
-  const now = new Date()
   for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const d = new Date(anchor.getFullYear(), anchor.getMonth() - i, 1)
     keys.push(monthKey(d))
   }
   return keys
 }
 
-function presetCutoff(days) {
-  if (!days) return null
-  const d = new Date()
-  d.setDate(d.getDate() - days)
-  return d
+// Data-anchored window: latest issue_date in the (period-filtered) records,
+// so historic selections still render populated monthly charts.
+function dataAnchorDate(records) {
+  let max = null
+  for (const r of records) {
+    if (!r?.issue_date) continue
+    const iso = String(r.issue_date).slice(0, 10)
+    if (!max || iso > max) max = iso
+  }
+  const d = max ? new Date(max) : new Date()
+  return isNaN(d.getTime()) ? new Date() : d
 }
 
 // ── Linear regression ─────────────────────────────────────────────────────────
@@ -364,7 +362,7 @@ export default function FleetIntelligence() {
   const [error, setError]             = useState(null)
   const [fleetMasterAvail, setFleetMasterAvail] = useState(true)
 
-  const [datePreset, setDatePreset]   = useState('1yr')
+  const [period, setPeriod]           = useState({ mode: 'all' })
   const [emailModalOpen, setEmailModalOpen] = useState(false)
   const [siteFilter, setSiteFilter]   = useState('all')
   const [typeFilter, setTypeFilter]   = useState('all')
@@ -424,20 +422,11 @@ export default function FleetIntelligence() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // ── Date filter cutoff ────────────────────────────────────────────────────
-  const cutoff = useMemo(() => {
-    const preset = DATE_PRESETS.find(p => p.label === datePreset)
-    return preset ? presetCutoff(preset.days) : null
-  }, [datePreset])
-
-  // ── Filtered records by date ──────────────────────────────────────────────
-  const dateFilteredRecords = useMemo(() => {
-    if (!cutoff) return records
-    return records.filter(r => {
-      if (!r.issue_date) return false
-      return new Date(r.issue_date) >= cutoff
-    })
-  }, [records, cutoff])
+  // ── Period-filtered records (top of the derived-data chain) ──────────────
+  const periodRecords = useMemo(
+    () => filterByPeriodValue(records, period, 'issue_date'),
+    [records, period]
+  )
 
   // ── Unique sites & vehicle types ──────────────────────────────────────────
   const allSites = useMemo(() => {
@@ -459,10 +448,10 @@ export default function FleetIntelligence() {
     return m
   }, [fleetMaster])
 
-  // ── Per-vehicle metrics (full dataset - no date filter for register) ───────
+  // ── Per-vehicle metrics (period-filtered) ─────────────────────────────────
   const vehicleMetrics = useMemo(() => {
     const byAsset = {}
-    for (const r of records) {
+    for (const r of periodRecords) {
       if (!r.asset_no) continue
       if (!byAsset[r.asset_no]) byAsset[r.asset_no] = []
       byAsset[r.asset_no].push(r)
@@ -536,7 +525,7 @@ export default function FleetIntelligence() {
         availability_status,
       }
     })
-  }, [records, fleetMasterMap])
+  }, [periodRecords, fleetMasterMap])
 
   // ── Fleet aggregates ──────────────────────────────────────────────────────
   const fleetAggs = useMemo(() => {
@@ -547,7 +536,7 @@ export default function FleetIntelligence() {
     const total_fleet_cost = vehicleMetrics.reduce((s, v) => s + v.total_tyre_cost, 0)
 
     // Months span
-    const allDates = records.map(r => r.issue_date).filter(Boolean).sort()
+    const allDates = periodRecords.map(r => r.issue_date).filter(Boolean).sort()
     const monthsSpan = allDates.length >= 2
       ? Math.max(1, (new Date(allDates[allDates.length - 1]) - new Date(allDates[0])) / (1000 * 60 * 60 * 24 * 30.44))
       : 1
@@ -577,18 +566,18 @@ export default function FleetIntelligence() {
       best_vehicle_cpk,
       fleetAvgCpk,
     }
-  }, [vehicleMetrics, records])
+  }, [vehicleMetrics, periodRecords])
 
-  // ── Availability timeline - last 12 months ────────────────────────────────
+  // ── Availability timeline - last 12 months (anchored to filtered data) ────
   const availabilityTimeline = useMemo(() => {
-    const keys = getLast12MonthKeys()
+    const keys = getLast12MonthKeys(dataAnchorDate(periodRecords))
     return keys.map(mk => {
       if (!mk) return { month: mk, label: '', pct: 0 }
       const [y, m] = mk.split('-').map(Number)
       const start = new Date(y, m - 1, 1)
       const end = new Date(y, m, 0, 23, 59, 59)
 
-      const monthRecords = records.filter(r => {
+      const monthRecords = periodRecords.filter(r => {
         if (!r.issue_date) return false
         const d = new Date(r.issue_date)
         return d >= start && d <= end
@@ -612,7 +601,7 @@ export default function FleetIntelligence() {
         pct: Math.max(0, Math.min(100, pct)),
       }
     })
-  }, [records])
+  }, [periodRecords])
 
   // ── Downtime impact - top 15 vehicles ────────────────────────────────────
   const downtimeTop15 = useMemo(() => {
@@ -624,7 +613,7 @@ export default function FleetIntelligence() {
   // ── Cost by site ──────────────────────────────────────────────────────────
   const costBySite = useMemo(() => {
     const siteMap = {}
-    for (const r of records) {
+    for (const r of periodRecords) {
       const site = r.site || 'Unknown'
       if (!siteMap[site]) siteMap[site] = {}
       const vtype = fleetMasterMap[r.asset_no]?.vehicle_type || 'Unknown'
@@ -648,11 +637,11 @@ export default function FleetIntelligence() {
     )
 
     return { sites, vtypes }
-  }, [records, fleetMasterMap])
+  }, [periodRecords, fleetMasterMap])
 
-  // ── Cost trend - last 13 months with regression ───────────────────────────
+  // ── Cost trend - last 13 months with regression (anchored to data) ────────
   const costTrendData = useMemo(() => {
-    const now = new Date()
+    const now = dataAnchorDate(periodRecords)
     const start = new Date(now.getFullYear(), now.getMonth() - 12, 1)
     const keys = []
     for (let i = 12; i >= 0; i--) {
@@ -661,7 +650,7 @@ export default function FleetIntelligence() {
     }
 
     const monthMap = {}
-    for (const r of records) {
+    for (const r of periodRecords) {
       if (!r.issue_date) continue
       const d = new Date(r.issue_date)
       if (d < start) continue
@@ -690,7 +679,7 @@ export default function FleetIntelligence() {
       forecastCost,
       slope,
     }
-  }, [records])
+  }, [periodRecords])
 
   // ── Filtered + sorted vehicle register ───────────────────────────────────
   const filteredRegister = useMemo(() => {
@@ -726,7 +715,7 @@ export default function FleetIntelligence() {
 
     // Gather latest critical/high risk per vehicle
     const byAsset = {}
-    for (const r of records) {
+    for (const r of periodRecords) {
       if (!r.asset_no) continue
       if (r.risk_level !== 'Critical' && r.risk_level !== 'High') continue
       if (!r.issue_date || new Date(r.issue_date) < thirtyDaysAgo) continue
@@ -751,7 +740,7 @@ export default function FleetIntelligence() {
         const order = { Critical: 0, High: 1 }
         return (order[a.risk_level] ?? 2) - (order[b.risk_level] ?? 2)
       })
-  }, [records])
+  }, [periodRecords])
 
   // ── Fleet efficiency benchmarks ───────────────────────────────────────────
   const benchmarks = useMemo(() => {
@@ -1049,24 +1038,10 @@ export default function FleetIntelligence() {
           <span className="text-sm font-medium text-gray-300">Filters</span>
         </div>
         <div className="flex flex-wrap gap-3 items-end">
-          {/* Date preset */}
+          {/* Period */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Date Range</label>
-            <div className="flex gap-1">
-              {DATE_PRESETS.map(p => (
-                <button
-                  key={p.label}
-                  onClick={() => setDatePreset(p.label)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                    datePreset === p.label
-                      ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <label className="text-xs text-gray-500">Period</label>
+            <PeriodFilter records={records} value={period} onChange={setPeriod} />
           </div>
 
           {/* Site */}
@@ -1532,7 +1507,7 @@ export default function FleetIntelligence() {
           'Avg Cost per Vehicle': fmtCurrency(fleetAggs.avg_cost_per_vehicle, activeCurrency),
           'Potential Annual Savings': fmtCurrency(benchmarks.annualSavings, activeCurrency),
         }}
-        period={`Date Range: ${datePreset}`}
+        period={`Period: ${periodLabel(period)}`}
       />
     </div>
   )

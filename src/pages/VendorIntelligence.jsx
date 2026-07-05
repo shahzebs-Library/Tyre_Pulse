@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import EmailReportModal from '../components/EmailReportModal'
 import PageHeader from '../components/ui/PageHeader'
+import PeriodFilter, { filterByPeriodValue, periodLabel } from '../components/ui/PeriodFilter'
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement, PointElement,
@@ -34,13 +35,6 @@ ChartJS.register(
 )
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const DATE_PRESETS = [
-  { label: '3mo', days: 90 },
-  { label: '6mo', days: 180 },
-  { label: '1yr', days: 365 },
-  { label: 'All', days: null },
-]
-
 const POSITIONS = ['All', 'Steer', 'Drive', 'Trailer', 'Other']
 
 const CHART_THEME = {
@@ -55,14 +49,6 @@ const BRAND_PALETTE = [
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-function applyDatePreset(days) {
-  if (!days) return { from: '', to: '' }
-  const to = new Date()
-  const from = new Date()
-  from.setDate(from.getDate() - days)
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
-}
-
 function fmtCpk(v, currency) {
   if (v == null || !isFinite(v)) return 'N/A'
   return `${currency} ${v.toFixed(4)}`
@@ -199,9 +185,7 @@ export default function VendorIntelligence() {
   const [error, setError] = useState(null)
 
   // Filters
-  const [datePreset, setDatePreset] = useState('1yr')
-  const [dateFrom, setDateFrom] = useState(() => applyDatePreset(365).from)
-  const [dateTo, setDateTo] = useState(() => applyDatePreset(365).to)
+  const [period, setPeriod] = useState({ mode: 'all' })
   const [siteFilter, setSiteFilter] = useState('all')
   const [positionFilter, setPositionFilter] = useState('all')
   const [minRecords, setMinRecords] = useState(3)
@@ -250,9 +234,7 @@ export default function VendorIntelligence() {
 
   // ── Filtered records ───────────────────────────────────────────────────────
   const filteredRecords = useMemo(() => {
-    return records.filter(r => {
-      if (dateFrom && r.issue_date && r.issue_date < dateFrom) return false
-      if (dateTo && r.issue_date && r.issue_date > dateTo) return false
+    return filterByPeriodValue(records, period, 'issue_date').filter(r => {
       if (siteFilter !== 'all' && r.site !== siteFilter) return false
       if (positionFilter !== 'all') {
         const norm = normalizePosition(r.position)
@@ -260,7 +242,7 @@ export default function VendorIntelligence() {
       }
       return true
     })
-  }, [records, dateFrom, dateTo, siteFilter, positionFilter])
+  }, [records, period, siteFilter, positionFilter])
 
   const filteredActions = useMemo(() => {
     return actions.filter(a => {
@@ -735,27 +717,8 @@ export default function VendorIntelligence() {
 
       {/* ─── Filters ─────────────────────────────────────────────────────────── */}
       <div className="card flex flex-wrap items-center gap-3">
-        {/* Date presets */}
-        <div className="flex items-center gap-1">
-          {DATE_PRESETS.map(p => (
-            <button
-              key={p.label}
-              onClick={() => {
-                setDatePreset(p.label)
-                const { from, to } = applyDatePreset(p.days)
-                setDateFrom(from)
-                setDateTo(to)
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                datePreset === p.label
-                  ? 'bg-green-600 text-white shadow-sm'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        {/* Period selection */}
+        <PeriodFilter records={records} value={period} onChange={setPeriod} />
 
         {/* Divider */}
         <div className="h-4 w-px bg-gray-700" />
@@ -1706,7 +1669,7 @@ export default function VendorIntelligence() {
           'Best Performing Site': execSummary.bestSite?.site ?? '-',
           'Total Records Analysed': String(filteredRecords.length),
         }}
-        period={`Period: ${datePreset}`}
+        period={`Period: ${periodLabel(period)}`}
       />
     </div>
   )

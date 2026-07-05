@@ -16,6 +16,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { exportToPdf, exportToExcel } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, ArcElement,
@@ -103,8 +104,7 @@ export default function TyreLifecycle() {
   const [filterBrand, setFilterBrand]     = useState('')
   const [filterSite, setFilterSite]       = useState('')
   const [filterCategory, setFilterCategory] = useState('')
-  const [dateFrom, setDateFrom]     = useState('')
-  const [dateTo, setDateTo]         = useState('')
+  const [period, setPeriod]         = useState({ mode: 'all' })
   const [page, setPage]             = useState(1)
 
   const fetchData = useCallback(async () => {
@@ -128,7 +128,7 @@ export default function TyreLifecycle() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    return records.filter(r => {
+    return filterByPeriodValue(records, period, 'issue_date').filter(r => {
       if (search && !(
         (r.serial_number || '').toLowerCase().includes(q) ||
         (r.asset_no || '').toLowerCase().includes(q)
@@ -136,17 +136,15 @@ export default function TyreLifecycle() {
       if (filterBrand && r.brand !== filterBrand) return false
       if (filterSite && r.site !== filterSite) return false
       if (filterCategory && r.category !== filterCategory) return false
-      if (dateFrom && r.issue_date && r.issue_date < dateFrom) return false
-      if (dateTo && r.issue_date && r.issue_date > dateTo) return false
       return true
     })
-  }, [records, search, filterBrand, filterSite, filterCategory, dateFrom, dateTo])
+  }, [records, search, filterBrand, filterSite, filterCategory, period])
 
-  const hasFilter = search || filterBrand || filterSite || filterCategory || dateFrom || dateTo
+  const hasFilter = search || filterBrand || filterSite || filterCategory || period.mode !== 'all'
 
   function clearFilters() {
     setSearch(''); setFilterBrand(''); setFilterSite('')
-    setFilterCategory(''); setDateFrom(''); setDateTo('')
+    setFilterCategory(''); setPeriod({ mode: 'all' })
     setPage(1)
   }
 
@@ -302,7 +300,7 @@ export default function TyreLifecycle() {
     [filtered, page]
   )
 
-  useEffect(() => { setPage(1) }, [search, filterBrand, filterSite, filterCategory, dateFrom, dateTo])
+  useEffect(() => { setPage(1) }, [search, filterBrand, filterSite, filterCategory, period])
 
   // ── Expand row - fetch all records for that serial ────────────────────────
   const [serialHistory, setSerialHistory] = useState({})
@@ -463,17 +461,11 @@ export default function TyreLifecycle() {
             {['New', 'Retread', 'Repaired', 'Scrap'].map(c => <option key={c} value={c}>{c}</option>)}
           </select>
 
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={e => setDateFrom(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={e => setDateTo(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+          <PeriodFilter
+            records={records}
+            value={period}
+            onChange={setPeriod}
+            className="col-span-2"
           />
         </div>
       </div>

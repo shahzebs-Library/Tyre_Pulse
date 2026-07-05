@@ -8,6 +8,7 @@ import { formatCurrencyCompact } from '../lib/formatters'
 import { Download, FileText, Maximize2, GitMerge, AlertTriangle, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import {
   Chart as ChartJS, RadialLinearScale, PointElement, LineElement,
@@ -112,8 +113,7 @@ export default function SiteComparison() {
   const [error, setError]     = useState(null)
   const [selectedSites, setSelectedSites] = useState([])
 
-  const [dateFrom, setDateFrom]       = useState('')
-  const [dateTo, setDateTo]           = useState('')
+  const [period, setPeriod]           = useState({ mode: 'all' })
   const [granularity, setGranularity] = useState('Monthly')
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -147,13 +147,10 @@ export default function SiteComparison() {
 
   useEffect(() => { load() }, [load])
 
-  const filteredRecords = useMemo(() => {
-    return records.filter(r => {
-      if (dateFrom && r.issue_date && r.issue_date < dateFrom) return false
-      if (dateTo && r.issue_date && r.issue_date > dateTo) return false
-      return true
-    })
-  }, [records, dateFrom, dateTo])
+  const filteredRecords = useMemo(
+    () => filterByPeriodValue(records, period, 'issue_date'),
+    [records, period]
+  )
 
   const allMetrics = useMemo(() => computeSiteMetrics(filteredRecords), [filteredRecords])
   const allSites   = useMemo(() => allMetrics.map(s => s.site), [allMetrics])
@@ -274,12 +271,8 @@ export default function SiteComparison() {
           <div className="card space-y-4">
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex flex-col gap-1">
-                <label className="label text-xs">Date From</label>
-                <input type="date" className="input py-1.5 text-sm w-36" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="label text-xs">Date To</label>
-                <input type="date" className="input py-1.5 text-sm w-36" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                <label className="label text-xs">Period</label>
+                <PeriodFilter records={records} value={period} onChange={setPeriod} />
               </div>
             </div>
           </div>
@@ -295,12 +288,8 @@ export default function SiteComparison() {
           <div className="card space-y-4">
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex flex-col gap-1">
-                <label className="label text-xs">Date From</label>
-                <input type="date" className="input py-1.5 text-sm w-36" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="label text-xs">Date To</label>
-                <input type="date" className="input py-1.5 text-sm w-36" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                <label className="label text-xs">Period</label>
+                <PeriodFilter records={records} value={period} onChange={setPeriod} />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="label text-xs">Granularity</label>

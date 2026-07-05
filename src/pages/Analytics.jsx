@@ -16,6 +16,7 @@ import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import { Maximize2, X, BarChart2, AlertTriangle, RefreshCw } from 'lucide-react'
 import { ChartModal } from '../components/ChartModal'
 import PageHeader from '../components/ui/PageHeader'
+import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Title, Tooltip, Legend, Filler)
@@ -51,9 +52,7 @@ export default function Analytics() {
   const [activeTab, setActiveTab] = useState(0)
 
   // Filter state
-  const [yearFilter, setYearFilter]   = useState('')
-  const [dateFrom, setDateFrom]       = useState('')
-  const [dateTo, setDateTo]           = useState('')
+  const [period, setPeriod]           = useState({ mode: 'all' })
   const [siteFilter, setSiteFilter]   = useState('')
   const [brandFilter, setBrandFilter] = useState('')
   const [riskLevels, setRiskLevels]   = useState([]) // empty = all
@@ -100,17 +99,10 @@ export default function Analytics() {
     return [...b].sort()
   }, [records])
 
-  const hasActiveFilter = yearFilter !== '' || dateFrom !== '' || dateTo !== '' || siteFilter !== '' || brandFilter !== '' || riskLevels.length > 0
+  const hasActiveFilter = period.mode !== 'all' || siteFilter !== '' || brandFilter !== '' || riskLevels.length > 0
 
   const filtered = useMemo(() => {
-    return records.filter(r => {
-      // Year filter
-      if (yearFilter !== '' && r.issue_date) {
-        if (new Date(r.issue_date).getFullYear() !== Number(yearFilter)) return false
-      }
-      // Date range
-      if (dateFrom && r.issue_date && r.issue_date < dateFrom) return false
-      if (dateTo && r.issue_date && r.issue_date > dateTo) return false
+    return filterByPeriodValue(records, period, 'issue_date').filter(r => {
       // Site
       if (siteFilter && r.site !== siteFilter) return false
       // Brand
@@ -122,7 +114,7 @@ export default function Analytics() {
       }
       return true
     })
-  }, [records, yearFilter, dateFrom, dateTo, siteFilter, brandFilter, riskLevels])
+  }, [records, period, siteFilter, brandFilter, riskLevels])
 
   const siteMetrics  = useMemo(() => computeSiteMetrics(filtered),  [filtered])
   const brandMetrics = useMemo(() => computeBrandMetrics(filtered), [filtered])
@@ -139,15 +131,13 @@ export default function Analytics() {
   }
 
   function clearFilters() {
-    setYearFilter('')
-    setDateFrom('')
-    setDateTo('')
+    setPeriod({ mode: 'all' })
     setSiteFilter('')
     setBrandFilter('')
     setRiskLevels([])
   }
 
-  const modalFilters = { year: yearFilter !== '' ? Number(yearFilter) : undefined }
+  const modalFilters = { year: period.mode === 'year' ? period.year : undefined }
   const filterOptions = { sites: uniqueSites, brands: uniqueBrands, years }
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
@@ -212,14 +202,10 @@ export default function Analytics() {
       {/* Filter bar */}
       <div className="card space-y-3">
         <div className="flex flex-wrap gap-3 items-end">
-          {/* Date range */}
+          {/* Period */}
           <div className="flex flex-col gap-1">
-            <label className="label text-xs">Date From</label>
-            <input type="date" className="input py-1.5 text-sm w-36" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="label text-xs">Date To</label>
-            <input type="date" className="input py-1.5 text-sm w-36" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            <label className="label text-xs">Period</label>
+            <PeriodFilter records={records} value={period} onChange={setPeriod} />
           </div>
 
           {/* Site */}
@@ -237,15 +223,6 @@ export default function Analytics() {
             <select className="input py-1.5 text-sm w-40" value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
               <option value="">All Brands</option>
               {uniqueBrands.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-          </div>
-
-          {/* Year */}
-          <div className="flex flex-col gap-1">
-            <label className="label text-xs">Year</label>
-            <select className="input py-1.5 text-sm w-28" value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
-              <option value="">All Years</option>
-              {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
 
@@ -368,7 +345,7 @@ export default function Analytics() {
         title={modalChart || ''}
         chartRef={chartRef}
         filters={modalFilters}
-        onFilterChange={(key, val) => { if (key === 'year') setYearFilter(val !== undefined ? String(val) : '') }}
+        onFilterChange={(key, val) => { if (key === 'year') setPeriod(val !== undefined ? { mode: 'year', year: Number(val) } : { mode: 'all' }) }}
         filterOptions={filterOptions}
         showSite={false}
         showBrand={false}

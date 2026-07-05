@@ -966,10 +966,10 @@ export default function WarrantyTracker() {
         <div className="space-y-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
-              <BarChart3 size={16} className="text-blue-400" /> Brand Warranty Performance
+              <BarChart3 size={16} className="text-blue-400" /> {t('warranty.brandAnalysis.chartTitle')}
             </h3>
             {brandPerf.length === 0 ? (
-              <div className="flex items-center justify-center h-48 text-gray-500 text-sm">No data available</div>
+              <div className="flex items-center justify-center h-48 text-gray-500 text-sm">{t('warranty.brandAnalysis.noData')}</div>
             ) : (
               <div className="h-64">
                 <Bar data={brandChartData} options={CHART_OPTS} />
@@ -980,7 +980,11 @@ export default function WarrantyTracker() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-800 bg-gray-800/50">
-                  {['Brand','Total Claims','Approval Rate','Avg Credit per Claim','Avg km at Failure'].map(h => (
+                  {[
+                    t('warranty.brandAnalysis.columns.brand'), t('warranty.brandAnalysis.columns.totalClaims'),
+                    t('warranty.brandAnalysis.columns.approvalRate'), t('warranty.brandAnalysis.columns.avgCreditPerClaim'),
+                    t('warranty.brandAnalysis.columns.avgKmAtFailure'),
+                  ].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-400">{h}</th>
                   ))}
                 </tr>
@@ -1003,7 +1007,7 @@ export default function WarrantyTracker() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-emerald-400 font-semibold text-sm">{b.avgCredit > 0 ? fmt(b.avgCredit) : '-'}</td>
-                    <td className="px-4 py-3 text-gray-300 text-sm">{b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() + ' km' : '-'}</td>
+                    <td className="px-4 py-3 text-gray-300 text-sm">{b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() + ' ' + t('warranty.brandAnalysis.kmSuffix') : '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1011,8 +1015,8 @@ export default function WarrantyTracker() {
             {brandPerf.length === 0 && (
               <EmptyState
                 icon={BarChart3}
-                title="No brand data yet"
-                description="Brand warranty performance will appear once claims are recorded."
+                title={t('warranty.brandAnalysis.emptyTitle')}
+                description={t('warranty.brandAnalysis.emptyDesc')}
                 compact
               />
             )}

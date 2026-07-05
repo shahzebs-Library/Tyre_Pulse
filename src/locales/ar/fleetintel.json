@@ -1,0 +1,129 @@
+{
+  "header": {
+    "title": "ذكاء إدارة الأسطول",
+    "subtitle": "ذكاء توافر الأسطول، وقت التعطل، استغلال الأصول وتكلفة التشغيل",
+    "fleetMasterUnavailable": "إدارة الأسطول غير متاحة",
+    "refresh": "تحديث",
+    "excel": "إكسل",
+    "pdf": "PDF",
+    "emailReport": "إرسال التقرير بالبريد"
+  },
+  "states": {
+    "loading": "جارٍ تحميل بيانات ذكاء الأسطول...",
+    "errorTitle": "تعذّر تحميل ذكاء الأسطول",
+    "retry": "إعادة المحاولة",
+    "noRecordsTitle": "لا توجد سجلات إطارات",
+    "noRecordsDesc": "ارفع بيانات الإطارات لإنشاء ذكاء إدارة الأسطول"
+  },
+  "filters": {
+    "heading": "المرشحات",
+    "period": "الفترة",
+    "site": "الموقع",
+    "allSites": "جميع المواقع",
+    "vehicleType": "نوع المركبة",
+    "allTypes": "جميع الأنواع",
+    "availability": "التوافر",
+    "all": "الكل",
+    "available": "متاح",
+    "critical": "حرج",
+    "assets": "الأصول"
+  },
+  "avail": {
+    "critical": "حرج",
+    "available": "متاح"
+  },
+  "kpi": {
+    "fleetAvailability": "توافر الأسطول",
+    "fleetAvailabilitySub": "{available} من {total} مركبة",
+    "criticalVehicles": "مركبات بإطارات حرجة",
+    "criticalVehiclesSub": "إطار حرج خلال آخر 30 يومًا",
+    "totalDowntime": "إجمالي ساعات التعطل",
+    "totalDowntimeSub": "{hours} ساعة تقديرية لكل تغيير إطار",
+    "monthlyCost": "التكلفة الشهرية لإطارات الأسطول",
+    "monthlyCostSub": "متوسط متجدد",
+    "fleetAvgCpk": "متوسط التكلفة/كم للأسطول",
+    "fleetAvgCpkSub": "{currency}/كم",
+    "avgCostPerVehicle": "متوسط التكلفة لكل مركبة",
+    "avgCostPerVehicleSub": "عبر {count} أصل"
+  },
+  "availability": {
+    "title": "الجدول الزمني لتوافر الأسطول",
+    "subtitle": "النسبة المئوية الشهرية للمركبات بدون إطار عالي/حرج الخطورة - الهدف 95% متقطع",
+    "seriesLabel": "توافر الأسطول %",
+    "targetSeriesLabel": "الهدف 95%"
+  },
+  "downtime": {
+    "title": "تأثير التعطل - أعلى 15 مركبة",
+    "subtitle": "ساعات التعطل التقديرية لتغيير الإطارات · الأحمر = أكثر من 20 ساعة",
+    "noData": "لا توجد بيانات متاحة",
+    "seriesLabel": "ساعات التعطل"
+  },
+  "siteCost": {
+    "title": "تكلفة التشغيل حسب الموقع",
+    "subtitle": "إجمالي تكلفة الإطارات لكل موقع",
+    "stackedSuffix": " · مكدّس حسب نوع المركبة",
+    "noData": "لا توجد بيانات متاحة",
+    "totalSeriesLabel": "إجمالي تكلفة الإطارات"
+  },
+  "costTrend": {
+    "title": "اتجاه التكلفة الشهرية للأسطول - آخر 13 شهرًا",
+    "subtitle": "الإنفاق الفعلي + اتجاه الانحدار الخطي · نقطة التوقع للشهر القادم",
+    "worsening": "تدهور",
+    "improving": "تحسّن",
+    "stable": "مستقر",
+    "forecast": "التوقع: {value}",
+    "seriesLabel": "التكلفة الشهرية ({currency})",
+    "trendLineLabel": "خط الاتجاه"
+  },
+  "register": {
+    "title": "سجل أصول الأسطول",
+    "assetsSortedBy": "{count} أصل · مرتب حسب {sortCol}",
+    "searchPlaceholder": "ابحث برقم الأصل...",
+    "columns": {
+      "assetNo": "رقم الأصل",
+      "site": "الموقع",
+      "type": "النوع",
+      "changes": "التغييرات",
+      "totalCost": "التكلفة الإجمالية",
+      "avgCpk": "متوسط التكلفة/كم",
+      "highRisk": "خطورة عالية",
+      "status": "الحالة",
+      "monthlyCost": "التكلفة الشهرية",
+      "lastChange": "آخر تغيير",
+      "action": "إجراء"
+    },
+    "noMatch": "لا توجد أصول مطابقة للمرشحات الحالية",
+    "viewInHistory": "عرض في سجل تاريخ المركبات",
+    "history": "السجل",
+    "page": "صفحة {page} من {totalPages}"
+  },
+  "attention": {
+    "title": "مركبات تحتاج إلى اهتمام",
+    "subtitle": "{count} مركبة بإطارات عالية أو حرجة الخطورة خلال آخر 30 يومًا",
+    "columns": {
+      "hash": "#",
+      "assetNo": "رقم الأصل",
+      "site": "الموقع",
+      "riskLevel": "مستوى الخطورة",
+      "issueDate": "تاريخ الإصدار",
+      "position": "الموضع",
+      "brand": "العلامة التجارية",
+      "records": "السجلات"
+    }
+  },
+  "benchmarks": {
+    "bestCpkVehicle": "أفضل مركبة من حيث التكلفة/كم",
+    "perKm": "{currency}/كم",
+    "changesTotal": "{count} تغيير · {cost} إجمالي",
+    "bestDesc": "أقل تكلفة لكل كم - معيار مرجعي لتحسين الأسطول",
+    "insufficientBest": "بيانات تكلفة/كم غير كافية (يلزم 5 سجلات صالحة أو أكثر)",
+    "worstCpkVehicle": "أسوأ مركبة من حيث التكلفة/كم",
+    "worstDesc": "أعلى تكلفة لكل كم - أولوية للتحقيق في السبب الجذري",
+    "insufficientWorst": "بيانات غير كافية لتحديد أسوأ مركبة من حيث التكلفة/كم",
+    "improvementPotential": "إمكانية التحسين",
+    "estimatedSavings": "الوفورات السنوية المقدرة",
+    "fleetAvgCpkLabel": "متوسط التكلفة/كم للأسطول:",
+    "improvementDesc": "إذا طابقت أسوأ 10% من المركبات متوسط تكلفة/كم للأسطول، يمكن تحقيق الوفورات أعلاه سنويًا.",
+    "actionDesc": "عالج سلوك السائق، والمحاذاة، وجودة الصيانة للمركبات الأعلى تكلفة."
+  }
+}

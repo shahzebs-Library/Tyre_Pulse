@@ -1246,24 +1246,24 @@ export default function Procurement() {
 
                 {/* Cost summary */}
                 <div className="bg-gray-800 rounded-xl p-4 space-y-2">
-                  <p className="text-gray-400 text-xs mb-2 uppercase tracking-wide font-medium">Cost Summary</p>
+                  <p className="text-gray-400 text-xs mb-2 uppercase tracking-wide font-medium">{t('procurement.drawer.costSummary')}</p>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Subtotal</span>
+                    <span className="text-gray-400">{t('procurement.drawer.subtotal')}</span>
                     <span className="text-white">{fmtCur(viewPO.subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Tax</span>
+                    <span className="text-gray-400">{t('procurement.drawer.tax')}</span>
                     <span className="text-white">{fmtCur(viewPO.tax_amount)}</span>
                   </div>
                   <div className="flex justify-between text-base font-semibold border-t border-gray-700 pt-2 mt-2">
-                    <span className="text-white">Total</span>
+                    <span className="text-white">{t('procurement.drawer.total')}</span>
                     <span className="text-green-400 text-xl">{fmtCur(viewPO.total_amount)}</span>
                   </div>
                 </div>
 
                 {viewPO.notes && (
                   <div className="bg-gray-800 rounded-xl p-4">
-                    <p className="text-gray-400 text-xs mb-2">Notes</p>
+                    <p className="text-gray-400 text-xs mb-2">{t('procurement.drawer.notes')}</p>
                     <p className="text-gray-300 text-sm leading-relaxed">{viewPO.notes}</p>
                   </div>
                 )}
@@ -1272,11 +1272,11 @@ export default function Procurement() {
                 <div className="flex gap-3 pt-2">
                   <button onClick={() => { setViewPO(null); openEdit(viewPO) }}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-xl transition-colors">
-                    <Edit2 size={15} />Edit PO
+                    <Edit2 size={15} />{t('procurement.drawer.editPo')}
                   </button>
                   <button onClick={() => exportPDF(viewPO)}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-xl transition-colors">
-                    <FileText size={15} />Export PDF
+                    <FileText size={15} />{t('procurement.drawer.exportPdf')}
                   </button>
                 </div>
               </div>

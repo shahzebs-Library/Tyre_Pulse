@@ -30,6 +30,7 @@ import {
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatDate, formatMonthYear } from '../lib/formatters'
+import { useLanguage } from '../contexts/LanguageContext'
 
 // ── Chart.js global registration ─────────────────────────────────────────────
 ChartJS.register(
@@ -261,15 +262,16 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'blue', loading, trend
 
 // ── Availability Status Badge ─────────────────────────────────────────────────
 function AvailBadge({ status }) {
+  const { t } = useLanguage()
   if (status === 'Critical')
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-900/40 text-red-300 border border-red-800/50">
-        <span className="w-1.5 h-1.5 rounded-full bg-red-400" />Critical
+        <span className="w-1.5 h-1.5 rounded-full bg-red-400" />{t('fleetintel.avail.critical')}
       </span>
     )
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-900/20 text-green-400 border border-green-800/40">
-      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />Available
+      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />{t('fleetintel.avail.available')}
     </span>
   )
 }
@@ -297,6 +299,7 @@ function SortTh({ col, label, sortCol, sortDir, onSort, className = '' }) {
 
 // ── Pagination ────────────────────────────────────────────────────────────────
 function Pagination({ page, totalPages, onChange }) {
+  const { t } = useLanguage()
   if (totalPages <= 1) return null
   const pages = []
   if (totalPages <= 7) {
@@ -310,7 +313,7 @@ function Pagination({ page, totalPages, onChange }) {
   }
   return (
     <div className="flex items-center justify-between pt-3 border-t border-gray-800 mt-3">
-      <p className="text-xs text-gray-500">Page {page} of {totalPages}</p>
+      <p className="text-xs text-gray-500">{t('fleetintel.register.page', { page, totalPages })}</p>
       <div className="flex gap-1">
         <button
           onClick={() => onChange(Math.max(1, page - 1))}
@@ -352,6 +355,7 @@ function Pagination({ page, totalPages, onChange }) {
 // Main Component
 // ══════════════════════════════════════════════════════════════════════════════
 export default function FleetIntelligence() {
+  const { t } = useLanguage()
   const { activeCurrency, activeCountry } = useSettings()
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -948,7 +952,7 @@ export default function FleetIntelligence() {
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center space-y-3">
           <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-gray-400 text-sm">Loading fleet intelligence data...</p>
+          <p className="text-gray-400 text-sm">{t('fleetintel.states.loading')}</p>
         </div>
       </div>
     )

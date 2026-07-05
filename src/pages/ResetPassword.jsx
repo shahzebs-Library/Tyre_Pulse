@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useLanguage } from '../contexts/LanguageContext'
 
 export default function ResetPassword() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const [password, setPassword]   = useState('')
   const [confirm, setConfirm]     = useState('')
   const [showPw, setShowPw]       = useState(false)
@@ -29,8 +31,8 @@ export default function ResetPassword() {
   async function handleReset(e) {
     e.preventDefault()
     setError('')
-    if (password !== confirm) { setError('Passwords do not match'); return }
-    if (password.length < 6)  { setError('Password must be at least 6 characters'); return }
+    if (password !== confirm) { setError(t('resetpassword.errors.mismatch')); return }
+    if (password.length < 6)  { setError(t('resetpassword.errors.tooShort')); return }
     setLoading(true)
     const { error: updateErr } = await supabase.auth.updateUser({ password })
     if (updateErr) {
@@ -62,7 +64,7 @@ export default function ResetPassword() {
             <span style={{ fontSize: 38 }}>🔄</span>
           </div>
           <h1 className="text-4xl font-bold text-white tracking-tight">TyrePulse</h1>
-          <p className="text-gray-400 mt-2 text-sm">Tyre Intelligence Platform</p>
+          <p className="text-gray-400 mt-2 text-sm">{t('resetpassword.tagline')}</p>
         </div>
 
         <div className="login-card">
@@ -72,25 +74,25 @@ export default function ResetPassword() {
                 style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)' }}>
                 <span className="text-3xl">✅</span>
               </div>
-              <p className="text-white font-semibold text-lg">Password updated!</p>
-              <p className="text-gray-400 text-sm mt-2">Redirecting you to sign in...</p>
+              <p className="text-white font-semibold text-lg">{t('resetpassword.success.title')}</p>
+              <p className="text-gray-400 text-sm mt-2">{t('resetpassword.success.subtitle')}</p>
             </div>
           ) : !ready ? (
             <div className="text-center py-8">
-              <p className="text-gray-400 text-sm">Verifying reset link...</p>
+              <p className="text-gray-400 text-sm">{t('resetpassword.verifying.message')}</p>
               <p className="text-gray-600 text-xs mt-2">
-                If nothing happens,{' '}
+                {t('resetpassword.verifying.hintBefore')}{' '}
                 <button onClick={() => navigate('/login')} className="text-green-400 hover:underline">
-                  return to sign in
+                  {t('resetpassword.verifying.hintLink')}
                 </button>
-                {' '}and request a new link.
+                {' '}{t('resetpassword.verifying.hintAfter')}
               </p>
             </div>
           ) : (
             <form onSubmit={handleReset} className="space-y-4">
               <div className="mb-2">
-                <h3 className="text-white font-semibold text-lg">Set a new password</h3>
-                <p className="text-gray-400 text-sm mt-1">Choose a strong password for your account.</p>
+                <h3 className="text-white font-semibold text-lg">{t('resetpassword.form.heading')}</h3>
+                <p className="text-gray-400 text-sm mt-1">{t('resetpassword.form.subheading')}</p>
               </div>
 
               {error && (
@@ -101,9 +103,9 @@ export default function ResetPassword() {
               )}
 
               <div className="relative">
-                <label className="label">New password</label>
+                <label className="label">{t('resetpassword.form.newPassword')}</label>
                 <input type={showPw ? 'text' : 'password'} className="input pr-10"
-                  placeholder="Min. 6 characters"
+                  placeholder={t('resetpassword.form.newPasswordPlaceholder')}
                   value={password} onChange={e => setPassword(e.target.value)} required autoFocus />
                 <button type="button"
                   onClick={() => setShowPw(v => !v)}
@@ -114,7 +116,7 @@ export default function ResetPassword() {
               </div>
 
               <div className="relative">
-                <label className="label">Confirm new password</label>
+                <label className="label">{t('resetpassword.form.confirmPassword')}</label>
                 <input type={showConfirm ? 'text' : 'password'} className="input pr-10"
                   placeholder="••••••••"
                   value={confirm} onChange={e => setConfirm(e.target.value)} required />
@@ -127,14 +129,14 @@ export default function ResetPassword() {
               </div>
 
               <button type="submit" disabled={loading} className="btn-primary w-full">
-                {loading ? 'Updating...' : 'Set New Password →'}
+                {loading ? t('resetpassword.form.updating') : t('resetpassword.form.submit')}
               </button>
             </form>
           )}
         </div>
 
         <p className="text-center text-xs text-gray-700 mt-6">
-          Built by Shahzeb Rahman © 2026
+          {t('resetpassword.footer')}
         </p>
       </div>
     </div>

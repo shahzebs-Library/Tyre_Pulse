@@ -1,0 +1,9 @@
+-- V89: cost accuracy controls.
+-- cost_budget_overview() now DETECTS a suspicious flat rate: if one exact cost
+-- value covers >=90% of costed tyre records (live today: 1200 on 100% of 2,383
+-- records — the old placeholder default, not real market cost), the Cost Control
+-- panel warns and offers the clear command.
+-- cost_clear_value(p_value): admin-only, audited — NULLs cost_per_tyre where it
+-- equals the flat value, so pages show 0/— honestly instead of fake spend. Real
+-- costs return via a re-upload with a cost column (Enrich existing records).
+-- Full bodies applied via the v89 migration (DB is source of truth).

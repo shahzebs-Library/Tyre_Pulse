@@ -679,6 +679,17 @@ export async function costApplyActualBudgets() {
 }
 
 /**
+ * Admin: NULL every tyre cost equal to a suspicious flat value (a
+ * default/placeholder, not real market cost) so pages show —/0 instead of a
+ * fake number. Audited. Real costs return via re-upload or enrichment.
+ */
+export async function costClearValue(value) {
+  const { data, error } = await supabase.rpc('cost_clear_value', { p_value: value })
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
+}
+
+/**
  * Every saved mapping profile for the org (active AND inactive, all modules),
  * newest-used first, with a column-rule count — powers the Saved Mappings
  * manager so users can browse and manage their remembered formats without

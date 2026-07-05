@@ -55,6 +55,22 @@ export default function CostControlPanel({ isElevated = false }) {
     } catch (e) { setError(e?.message || 'Override failed.') } finally { setBusy(false) }
   }
 
+  async function clearFlatRate() {
+    const fr = ov?.flat_rate
+    if (!fr) return
+    if (!window.confirm(
+      `${Number(fr.records).toLocaleString('en-US')} record(s) carry the SAME cost of ${money(fr.value)} (${fr.pct}% of all costed tyres).\n\n` +
+      'A single identical value across all records is a default/placeholder, not real market cost — it makes every cost KPI wrong.\n\n' +
+      'Clear these costs? (They become blank — pages show 0/— honestly. Real costs return when you upload a file with a cost column, using "Enrich existing records".)',
+    )) return
+    setBusy(true); setError(''); setMsg('')
+    try {
+      const res = await imports.costClearValue(fr.value)
+      setMsg(`Cleared the flat ${money(fr.value)} placeholder from ${res?.cleared ?? 0} record(s). Costs are now honest — upload a file with real costs to fill them.`)
+      await load()
+    } catch (e) { setError(e?.message || 'Clear failed.') } finally { setBusy(false) }
+  }
+
   async function applyActuals() {
     if (!window.confirm(
       'Set EVERY vehicle\'s monthly tyre budget to its own actual average monthly spend (computed from its real tyre history)?\n\n' +
@@ -125,6 +141,26 @@ export default function CostControlPanel({ isElevated = false }) {
                   <p className="text-lg font-bold text-[var(--text-primary)]">{Number(ov.with_budget ?? 0).toLocaleString('en-US')} <span className="text-xs text-gray-500 font-normal">of {Number(ov.vehicles ?? 0).toLocaleString('en-US')}</span></p>
                 </div>
               </div>
+
+              {ov.flat_rate && (
+                <div className="bg-red-900/15 border border-red-700/40 rounded-xl p-4 space-y-2">
+                  <p className="text-sm text-red-300 flex items-center gap-2">
+                    <AlertCircle size={15} />
+                    Cost data looks wrong: {Number(ov.flat_rate.records).toLocaleString('en-US')} record(s) ({ov.flat_rate.pct}%) share the SAME cost of {money(ov.flat_rate.value)}.
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    One identical value across everything is a default/placeholder, not real market cost — it inflates every cost KPI, report, and forecast.
+                    Clear it so figures are honest, then upload a file that has a real cost column (with <span className="text-gray-200">Enrich existing records</span> on) to fill true costs.
+                  </p>
+                  {isElevated && (
+                    <button onClick={clearFlatRate} disabled={busy}
+                      className="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs flex items-center gap-1.5 disabled:opacity-50">
+                      {busy ? <Loader2 size={13} className="animate-spin" /> : <AlertCircle size={13} />}
+                      Clear the flat {money(ov.flat_rate.value)} placeholder costs
+                    </button>
+                  )}
+                </div>
+              )}
 
               {isElevated ? (
                 <>

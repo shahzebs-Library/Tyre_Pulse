@@ -1,0 +1,6 @@
+-- V92: per-field data-completeness stats for the Data Intake Center scorecard.
+-- data_completeness() returns, org-scoped, the fill counts for the fields that
+-- power the analytics pages: tyre_records brand/site/position/km/cost/serial/
+-- removal(+reason) and vehicle_fleet type/make/site/km/budget — so "which pages
+-- are starving and which file fills them" stays visible until solved.
+-- Full body applied via the v92 migration.

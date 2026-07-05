@@ -695,6 +695,13 @@ export async function costClearValue(value) {
  * (cost_per_tyre := cost / qty), so all qty-aware maths show the file's real
  * totals. Audited. Returns { converted, total_spend }.
  */
+/** Per-field data-completeness stats (V92) for the intake scorecard. */
+export async function dataCompleteness() {
+  const { data, error } = await supabase.rpc('data_completeness')
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
+}
+
 export async function costConvertLineTotals() {
   const { data, error } = await supabase.rpc('cost_convert_line_totals')
   if (error) throw new ServiceError(error.message, error.code, error)

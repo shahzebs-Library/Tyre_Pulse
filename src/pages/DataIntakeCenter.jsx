@@ -19,6 +19,7 @@ import * as imports from '../lib/api/imports'
 import MappingProfilesManager from '../components/intake/MappingProfilesManager'
 import DataLinkPanel from '../components/intake/DataLinkPanel'
 import CostControlPanel from '../components/intake/CostControlPanel'
+import DataCompletenessPanel from '../components/intake/DataCompletenessPanel'
 
 const MODULES = [
   { key: 'fleet', label: 'Fleet / Assets' },
@@ -624,6 +625,9 @@ export default function DataIntakeCenter() {
 
           {/* Budget override commands: set / derive monthly tyre budgets. */}
           <CostControlPanel isElevated={isElevated} />
+
+          {/* Per-field fill scorecard: which analytics are starving + how to fix. */}
+          <DataCompletenessPanel />
         </div>
       )}
 

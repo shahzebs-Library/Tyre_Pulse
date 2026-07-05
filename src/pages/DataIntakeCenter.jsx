@@ -17,6 +17,7 @@ import {
 } from '../lib/import'
 import * as imports from '../lib/api/imports'
 import MappingProfilesManager from '../components/intake/MappingProfilesManager'
+import DataLinkPanel from '../components/intake/DataLinkPanel'
 
 const MODULES = [
   { key: 'fleet', label: 'Fleet / Assets' },
@@ -616,6 +617,9 @@ export default function DataIntakeCenter() {
 
           {/* Browse & manage the reusable column mappings you've saved. */}
           <MappingProfilesManager moduleLabels={MODULE_LABELS} />
+
+          {/* Cross-table link health (asset_no → vehicles) + one-click repair. */}
+          <DataLinkPanel isElevated={isElevated} />
         </div>
       )}
 

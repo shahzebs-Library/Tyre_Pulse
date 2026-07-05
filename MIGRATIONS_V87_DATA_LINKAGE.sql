@@ -1,0 +1,16 @@
+-- V87: data-linkage audit + repair for the Data Intake Center.
+--
+-- TyrePulse links business tables to vehicles by natural key (asset_no), not FKs.
+-- Audit found 2,383 tyre records referencing 162 assets with vehicle_fleet EMPTY
+-- (100% orphaned) — every fleet-joined page showed nothing for them.
+--
+-- data_link_audit(): per-table link health (total / orphans / blank asset) for
+-- tyre_records, work_orders, inspections, corrective_actions, accidents, plus the
+-- distinct missing assets (top 25 by record count). Org-scoped via app_current_org.
+--
+-- data_link_create_missing_assets() (admin only): creates one skeleton
+-- vehicle_fleet row per orphan asset found in tyre_records (country + site copied
+-- from its latest tyre record, status Active, note marks it auto-created), so all
+-- child records resolve. Audited to import_audit_events ('link_repair').
+-- Sandbox-verified: orphans 2,383 -> 0 after creating 162 vehicles (rolled back).
+-- Full function bodies applied via the v87 migration (DB is source of truth).

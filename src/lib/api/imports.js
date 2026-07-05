@@ -629,6 +629,28 @@ export async function touchProfile(profileId) {
     .update({ last_used_at: new Date().toISOString() }).eq('id', profileId)
 }
 
+// ── Data linkage (V87) ────────────────────────────────────────────────────────
+/**
+ * Cross-table link health: for each business table, how many rows link to a real
+ * vehicle by asset_no vs orphaned vs blank, plus the distinct missing assets.
+ */
+export async function linkAudit() {
+  const { data, error } = await supabase.rpc('data_link_audit')
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
+}
+
+/**
+ * Linkage repair (admin only): create a skeleton vehicle_fleet row for every
+ * orphan asset_no found in tyre_records, so tyres/work-orders/inspections link
+ * to a real vehicle. Org-scoped, audited. Returns { created }.
+ */
+export async function linkCreateMissingAssets() {
+  const { data, error } = await supabase.rpc('data_link_create_missing_assets')
+  if (error) throw new ServiceError(error.message, error.code, error)
+  return data
+}
+
 /**
  * Every saved mapping profile for the org (active AND inactive, all modules),
  * newest-used first, with a column-rule count — powers the Saved Mappings

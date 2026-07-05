@@ -3,7 +3,7 @@
 **Branch:** dev `claude/mobile-app-ui-features-tdfxy0` (Session 8 work); `main` auto-deploys to Vercel
 **Web build status:** ✅ Clean - builds, **875/875 tests passing**, auto-deploys to Vercel
 **Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5**, auto-builds on push to `main`
-**DB migrations applied to live Supabase:** through **V83**, plus **V75** now applied (project `jhssdmeruxtrlqnwfksc`) — `auth_rls_initplan` advisory cleared (83 policies, 166 refs → 0). No migration files remain unapplied.
+**DB migrations applied to live Supabase:** through **V86** (project `jhssdmeruxtrlqnwfksc`). V75 applied — `auth_rls_initplan` advisory cleared (83 policies → 0). V84 `system_config`, V85 `report_exec_digest` (server-side executive-digest aggregate), **V86** deepens that digest (6-month trend, forecast, worst assets, position/category/country splits, brand reliability). No migration files remain unapplied. ⚠️ The richer scheduled-report email ships only when the `send-scheduled-reports` **edge function is redeployed** (`supabase functions deploy send-scheduled-reports --project-ref jhssdmeruxtrlqnwfksc`); until then the previous digest still sends.
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
 

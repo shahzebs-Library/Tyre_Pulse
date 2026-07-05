@@ -423,3 +423,13 @@ untouched). Confirmed fixes landed:
   Staging was already size-chunked (earlier fix); no client-side row cap exists
   (stripFooterRows only prunes sparse footer rows). Very large files (50k+) may
   still want a future chunked commit.
+
+## 2026-07-05 — Deeper executive scheduled-report digest (V86)
+- Extended `report_exec_digest` (additive to V85) with 7 new sections: 6-month
+  cost trend, projected annual spend (run-rate) vs annual budget, highest-cost
+  assets, removals by tyre position, spend by category (new/retread), spend by
+  country, and brand reliability (High/Critical risk % per brand). Org-scoped;
+  no schema change. Email renderer (`send-scheduled-reports`) gained the matching
+  sections + a spend-bar trend + brand-reliability list + 2 new recommendations
+  (budget overrun, worst-reliability brand). Takes effect on edge-function
+  redeploy. Live DB → V86.

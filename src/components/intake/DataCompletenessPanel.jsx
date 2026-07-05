@@ -52,7 +52,7 @@ export default function DataCompletenessPanel() {
   const tyre = stats?.tyres
   const fleet = stats?.fleet
   const worst = tyre?.total
-    ? TYRE_FIELDS.filter(([k]) => ((tyre[k] ?? 0) / tyre.total) < 0.4).length
+    ? TYRE_FIELD_KEYS.filter((k) => ((tyre[k] ?? 0) / tyre.total) < 0.4).length
     : 0
 
   return (

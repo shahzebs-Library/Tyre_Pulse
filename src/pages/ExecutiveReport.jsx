@@ -1340,7 +1340,7 @@ export default function ExecutiveReport() {
             {/* Top stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               {[
-                { label: 'Total Period Spend', value: fmtCurrency(totalSpend, currency), sub: PERIODS.find(p => p.key === period)?.label, color: 'text-white' },
+                { label: 'Total Period Spend', value: fmtCurrency(totalSpend, currency), sub: periodValueLabel(period), color: 'text-white' },
                 { label: 'Projected Annual', value: fmtCurrency(projectedAnnual, currency), sub: 'at current rate', color: 'text-amber-400' },
                 { label: 'Budget vs Actual', value: totalBudget > 0 ? fmtPct(((totalSpend / totalBudget) * 100)) : 'N/A', sub: totalBudget > 0 ? `Budget: ${fmtCurrency(totalBudget, currency)}` : 'No budget data', color: totalBudget > 0 && totalSpend > totalBudget ? 'text-red-400' : 'text-emerald-400' },
                 { label: 'Savings Opportunity', value: fmtCurrency(savingsOpportunity, currency), sub: 'if CPK reached fleet best', color: 'text-emerald-400' },
@@ -1751,7 +1751,7 @@ export default function ExecutiveReport() {
           'Scrap Rate':             fmtPct(kpis.scrapRate.scrapRate * 100),
           'Savings Opportunity':    fmtCurrency(savingsOpportunity, currency),
         }}
-        period={PERIODS.find(p => p.key === period)?.label || 'Quarter'}
+        period={periodValueLabel(period) || 'Quarter'}
       />
     </div>
   )

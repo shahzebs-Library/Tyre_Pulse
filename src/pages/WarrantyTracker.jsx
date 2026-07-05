@@ -782,7 +782,7 @@ export default function WarrantyTracker() {
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input
                   type="text"
-                  placeholder="Search claim, serial, brand, asset..."
+                  placeholder={t('warranty.claims.searchPlaceholder')}
                   value={search}
                   onChange={e => { setSearch(e.target.value); setPage(1) }}
                   className="w-full pl-8 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
@@ -819,15 +819,15 @@ export default function WarrantyTracker() {
                 <AlertTriangle size={40} className="text-red-500" />
                 <p className="text-red-400">{claimsError}</p>
                 <button onClick={() => loadClaims()} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-white">
-                  Retry
+                  {t('warranty.claims.retry')}
                 </button>
               </div>
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <ShieldCheck size={40} className="text-gray-600" />
-                <p className="text-gray-400">No warranty claims found.</p>
+                <p className="text-gray-400">{t('warranty.claims.emptyTitle')}</p>
                 <button onClick={() => openForm()} className="btn-primary">
-                  Add First Claim
+                  {t('warranty.claims.addFirst')}
                 </button>
               </div>
             ) : (
@@ -836,7 +836,13 @@ export default function WarrantyTracker() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-800 bg-gray-800/50">
-                        {['Claim No','Serial','Brand','Size','Asset','Site','Failure Type','Status','km Run','Exp km','% Life','Credit','Date',''].map(h => (
+                        {[
+                          t('warranty.claims.columns.claimNo'), t('warranty.claims.columns.serial'), t('warranty.claims.columns.brand'),
+                          t('warranty.claims.columns.size'), t('warranty.claims.columns.asset'), t('warranty.claims.columns.site'),
+                          t('warranty.claims.columns.failureType'), t('warranty.claims.columns.status'), t('warranty.claims.columns.kmRun'),
+                          t('warranty.claims.columns.expKm'), t('warranty.claims.columns.pctLife'), t('warranty.claims.columns.credit'),
+                          t('warranty.claims.columns.date'), '',
+                        ].map(h => (
                           <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-400 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -878,7 +884,7 @@ export default function WarrantyTracker() {
                                   <button
                                     onClick={e => { e.stopPropagation(); exportClaimLetter(c) }}
                                     className="p-1 text-gray-500 hover:text-emerald-400 hover:bg-gray-800 rounded transition-colors"
-                                    title="Export claim letter"
+                                    title={t('warranty.claims.exportClaimLetterTooltip')}
                                   ><FileText size={12} /></button>
                                 </div>
                               </td>
@@ -888,27 +894,27 @@ export default function WarrantyTracker() {
                                 <td colSpan={14} className="px-4 py-4">
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                                     <div>
-                                      <p className="text-gray-500 mb-1">Country</p>
+                                      <p className="text-gray-500 mb-1">{t('warranty.claims.expanded.country')}</p>
                                       <p className="text-gray-200">{c.country || '-'}</p>
                                     </div>
                                     <div>
-                                      <p className="text-gray-500 mb-1">Fitment Date</p>
+                                      <p className="text-gray-500 mb-1">{t('warranty.claims.expanded.fitmentDate')}</p>
                                       <p className="text-gray-200">{fmtDate(c.fitment_date)}</p>
                                     </div>
                                     <div>
-                                      <p className="text-gray-500 mb-1">Removal Date</p>
+                                      <p className="text-gray-500 mb-1">{t('warranty.claims.expanded.removalDate')}</p>
                                       <p className="text-gray-200">{fmtDate(c.removal_date)}</p>
                                     </div>
                                     <div>
-                                      <p className="text-gray-500 mb-1">Supplier</p>
+                                      <p className="text-gray-500 mb-1">{t('warranty.claims.expanded.supplier')}</p>
                                       <p className="text-gray-200">{c.supplier || '-'}</p>
                                     </div>
                                     <div>
-                                      <p className="text-gray-500 mb-1">Credit Date</p>
+                                      <p className="text-gray-500 mb-1">{t('warranty.claims.expanded.creditDate')}</p>
                                       <p className="text-gray-200">{fmtDate(c.credit_date)}</p>
                                     </div>
                                     <div className="col-span-2">
-                                      <p className="text-gray-500 mb-1">Notes</p>
+                                      <p className="text-gray-500 mb-1">{t('warranty.claims.expanded.notes')}</p>
                                       <p className="text-gray-300">{c.notes || '-'}</p>
                                     </div>
                                     <div className="flex items-end gap-2">
@@ -916,13 +922,13 @@ export default function WarrantyTracker() {
                                         onClick={() => exportClaimLetter(c)}
                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-800/40 hover:bg-emerald-700/50 border border-emerald-700/50 rounded-lg text-emerald-400 transition-colors"
                                       >
-                                        <FileText size={12} /> Claim Letter
+                                        <FileText size={12} /> {t('warranty.claims.claimLetter')}
                                       </button>
                                       <button
                                         onClick={() => handleDelete(c.id)}
                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-red-900/30 hover:bg-red-800/40 border border-red-800/50 rounded-lg text-red-400 transition-colors"
                                       >
-                                        <XCircle size={12} /> Delete
+                                        <XCircle size={12} /> {t('warranty.claims.delete')}
                                       </button>
                                     </div>
                                   </div>
@@ -936,7 +942,7 @@ export default function WarrantyTracker() {
                   </table>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-                  <p className="text-gray-500 text-xs">{filtered.length} claims · page {page} of {totalPages}</p>
+                  <p className="text-gray-500 text-xs">{t('warranty.claims.pageSummary', { count: filtered.length, page, total: totalPages })}</p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setPage(p => Math.max(1, p - 1))}

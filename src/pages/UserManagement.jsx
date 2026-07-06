@@ -22,7 +22,7 @@ const ROLE_BADGE = {
   Manager:    'bg-orange-900/50 text-orange-300 border border-orange-700/40',
   Inspector:  'bg-purple-900/50 text-purple-300 border border-purple-700/40',
   Director:   'bg-blue-900/50 text-blue-300 border border-blue-700/40',
-  Reporter:   'bg-gray-800 text-gray-400 border border-gray-700/40',
+  Reporter:   'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
   'Tyre Man': 'bg-teal-900/50 text-teal-300 border border-teal-700/40',
 }
 
@@ -99,7 +99,7 @@ function formatDateTime(iso, na = 'n/a') {
 }
 
 function PermCell({ value }) {
-  if (!value) return <span className="text-gray-600 text-sm">-</span>
+  if (!value) return <span className="text-[var(--text-dim)] text-sm">-</span>
   const map = {
     Full:      'bg-green-900/40 text-green-400',
     Read:      'bg-blue-900/40 text-blue-400',
@@ -120,7 +120,7 @@ function SkeletonRow() {
     <tr>
       {[...Array(6)].map((_, i) => (
         <td key={i} className="table-cell">
-          <div className="h-4 bg-gray-700/50 rounded animate-pulse" style={{ width: `${60 + (i * 13) % 40}%` }} />
+          <div className="h-4 bg-[var(--input-bg)]/50 rounded animate-pulse" style={{ width: `${60 + (i * 13) % 40}%` }} />
         </td>
       ))}
     </tr>
@@ -136,12 +136,12 @@ function Modal({ title, onClose, children, maxWidth = 'max-w-lg' }) {
       onClick={onClose}
     >
       <div
-        className={`bg-gray-900 border border-gray-700 rounded-xl w-full ${maxWidth} p-6 max-h-[90vh] overflow-y-auto`}
+        className={`bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full ${maxWidth} p-6 max-h-[90vh] overflow-y-auto`}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
             <X size={18} />
           </button>
         </div>
@@ -259,15 +259,15 @@ function RlsBlockedCard() {
         <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-yellow-300 font-semibold text-sm">{t('usermgmt.rlsBlocked.title')}</p>
-          <p className="text-gray-400 text-sm mt-1">
-            {t('usermgmt.rlsBlocked.descPrefix')} <code className="bg-gray-800 text-yellow-200 px-1.5 py-0.5 rounded text-xs">profiles_admin_update</code> {t('usermgmt.rlsBlocked.descSuffix')}
+          <p className="text-[var(--text-muted)] text-sm mt-1">
+            {t('usermgmt.rlsBlocked.descPrefix')} <code className="bg-[var(--input-bg)] text-yellow-200 px-1.5 py-0.5 rounded text-xs">profiles_admin_update</code> {t('usermgmt.rlsBlocked.descSuffix')}
           </p>
         </div>
       </div>
 
-      <div className="rounded-lg overflow-hidden border border-gray-700/60">
-        <div className="flex items-center justify-between bg-gray-800/70 px-4 py-2 border-b border-gray-700/60">
-          <span className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="rounded-lg overflow-hidden border border-[var(--input-border)]/60">
+        <div className="flex items-center justify-between bg-[var(--input-bg)]/70 px-4 py-2 border-b border-[var(--input-border)]/60">
+          <span className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
             <Terminal size={13} />
             MIGRATION_ADMIN_PROFILES.sql
           </span>
@@ -276,20 +276,20 @@ function RlsBlockedCard() {
             className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded transition-colors ${
               copied
                 ? 'bg-green-800/60 text-green-300 border border-green-700/40'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white border border-gray-600/40'
+                : 'bg-[var(--input-bg)] text-[var(--text-secondary)] hover:bg-[var(--input-bg-hover)] hover:text-[var(--text-primary)] border border-[var(--input-border)]'
             }`}
           >
             {copied ? <CheckCircle size={12} /> : <Copy size={12} />}
             {copied ? t('usermgmt.rlsBlocked.copied') : t('usermgmt.rlsBlocked.copySql')}
           </button>
         </div>
-        <pre className="text-[11px] leading-relaxed text-gray-300 bg-gray-900/60 p-4 overflow-x-auto whitespace-pre-wrap max-h-56 font-mono">
+        <pre className="text-[11px] leading-relaxed text-[var(--text-secondary)] bg-[var(--surface-1)]/60 p-4 overflow-x-auto whitespace-pre-wrap max-h-56 font-mono">
           {MIGRATION_SQL}
         </pre>
       </div>
 
-      <p className="text-xs text-gray-500 flex items-center gap-1.5">
-        <Info size={12} className="text-gray-600 flex-shrink-0" />
+      <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5">
+        <Info size={12} className="text-[var(--text-dim)] flex-shrink-0" />
         {t('usermgmt.rlsBlocked.footerNote')}
       </p>
     </div>
@@ -694,8 +694,8 @@ export default function UserManagement() {
     return (
       <div className="flex flex-col items-center justify-center min-h-64 space-y-4 py-20">
         <Shield size={52} className="text-red-400" />
-        <h1 className="text-xl font-bold text-white">{t('usermgmt.accessDenied.title')}</h1>
-        <p className="text-gray-400 text-sm text-center max-w-sm">
+        <h1 className="text-xl font-bold text-[var(--text-primary)]">{t('usermgmt.accessDenied.title')}</h1>
+        <p className="text-[var(--text-muted)] text-sm text-center max-w-sm">
           {t('usermgmt.accessDenied.message')}
         </p>
       </div>
@@ -724,9 +724,9 @@ export default function UserManagement() {
           { label: t('usermgmt.stats.admins'),           value: stats.admins,  color: 'text-green-400' },
         ].map(({ label, value, color }) => (
           <div key={label} className="card">
-            <p className="text-xs text-gray-500 mb-1">{label}</p>
+            <p className="text-xs text-[var(--text-muted)] mb-1">{label}</p>
             {loading
-              ? <div className="h-8 w-10 bg-gray-700 rounded animate-pulse mt-1" />
+              ? <div className="h-8 w-10 bg-[var(--input-bg)] rounded animate-pulse mt-1" />
               : <p className={`text-2xl font-bold ${color}`}>{value}</p>
             }
           </div>
@@ -743,7 +743,7 @@ export default function UserManagement() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-700/60">
+      <div className="flex gap-1 border-b border-[var(--input-border)]/60">
         {[
           { id: 'users',    label: t('usermgmt.tabs.users'),        icon: Users    },
           { id: 'matrix',   label: t('usermgmt.tabs.matrix'), icon: LayoutGrid  },
@@ -755,8 +755,8 @@ export default function UserManagement() {
             onClick={() => setActiveTab(id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t transition-colors ${
               activeTab === id
-                ? 'text-green-400 border-b-2 border-green-400 bg-gray-800/30'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800/20'
+                ? 'text-green-400 border-b-2 border-green-400 bg-[var(--input-bg)]/30'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]/20'
             }`}
           >
             <Icon size={15} />
@@ -773,7 +773,7 @@ export default function UserManagement() {
           <div className="card space-y-3">
             <div className="flex flex-wrap gap-3">
               <div className="relative flex-1 min-w-52">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   className="input pl-9 w-full"
                   placeholder={t('usermgmt.filters.searchPlaceholder')}
@@ -783,7 +783,7 @@ export default function UserManagement() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-xs text-gray-500 mr-1">{t('usermgmt.filters.role')}</span>
+              <span className="text-xs text-[var(--text-muted)] mr-1">{t('usermgmt.filters.role')}</span>
               {['', ...ROLES].map(r => (
                 <button
                   key={r || '__all__'}
@@ -791,13 +791,13 @@ export default function UserManagement() {
                   className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
                     roleFilter === r
                       ? 'bg-green-700 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+                      : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:bg-[var(--input-bg-hover)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   {r ? t(`roles.${r}`) : t('usermgmt.filters.all')}
                 </button>
               ))}
-              <span className="text-xs text-gray-500 ml-3 mr-1">{t('usermgmt.filters.status')}</span>
+              <span className="text-xs text-[var(--text-muted)] ml-3 mr-1">{t('usermgmt.filters.status')}</span>
               {[
                 { value: '',        label: t('usermgmt.filters.all')     },
                 { value: 'active',  label: t('usermgmt.filters.activeStatus')  },
@@ -809,7 +809,7 @@ export default function UserManagement() {
                   className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
                     statusFilter === value
                       ? 'bg-green-700 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+                      : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:bg-[var(--input-bg-hover)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   {label}

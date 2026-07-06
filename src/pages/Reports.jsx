@@ -382,7 +382,7 @@ export default function Reports() {
                   <FileText size={16} className="text-green-400" />
                 </div>
                 <div>
-                  <p className="text-white font-semibold group-hover:text-green-400 transition-colors">{t(`reports.reportTypes.${rt.key}.label`)}</p>
+                  <p className="text-[var(--text-primary)] font-semibold group-hover:text-green-400 transition-colors">{t(`reports.reportTypes.${rt.key}.label`)}</p>
                   <p className="text-gray-400 text-sm mt-0.5">{t(`reports.reportTypes.${rt.key}.desc`)}</p>
                   <p className="text-gray-600 text-xs mt-1">{t('reports.source', { table: rt.table })}</p>
                 </div>
@@ -410,7 +410,7 @@ export default function Reports() {
           )}
 
           <div className="card space-y-4">
-            <h2 className="text-base font-semibold text-white">
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">
               {t('reports.config.filtersTitle', { reportType: reportTypeKeyFor(reportType) ? t(`reports.reportTypes.${reportTypeKeyFor(reportType)}.label`) : reportType })}
             </h2>
 
@@ -514,7 +514,7 @@ export default function Reports() {
 
           {/* Column picker */}
           <div className="card space-y-3">
-            <h2 className="text-base font-semibold text-white">{t('reports.config.columnsTitle')}</h2>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">{t('reports.config.columnsTitle')}</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {(REPORT_COLUMNS[reportType] ?? []).map(col => (
                 <label key={col} className="flex items-center gap-2 cursor-pointer">

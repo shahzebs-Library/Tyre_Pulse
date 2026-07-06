@@ -276,7 +276,7 @@ function heatIntensity(count, max) {
 
 function StatCard({ icon: Icon, label, value, sub, color = 'text-blue-400' }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start gap-3">
+    <div className="card p-4 flex items-start gap-3">
       <div className={`mt-0.5 ${color}`}>
         <Icon size={20} />
       </div>
@@ -633,7 +633,7 @@ export default function RootCauseEngine() {
   if (records.length === 0) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center max-w-md">
+        <div className="card p-8 text-center max-w-md">
           <Layers size={32} className="text-gray-600 mx-auto mb-3" />
           <p className="text-gray-400 font-semibold mb-1">No tyre records found</p>
           <p className="text-gray-600 text-sm">Upload tyre change records to enable root cause analysis.</p>
@@ -673,7 +673,7 @@ export default function RootCauseEngine() {
       />
 
       {/* ── Filters ── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="card p-4">
         <div className="flex items-center gap-2 mb-3">
           <Filter size={14} className="text-gray-500" />
           <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Filters</span>
@@ -784,10 +784,10 @@ export default function RootCauseEngine() {
       {/* ── Charts row ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {/* Frequency chart */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div className="card p-4">
           <div className="flex items-center gap-2 mb-4">
             <BarChart2 size={16} className="text-indigo-400" />
-            <h2 className="text-sm font-semibold text-white">Root Cause Frequency</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Root Cause Frequency</h2>
           </div>
           {sortedCauses.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-gray-600 text-sm">
@@ -831,10 +831,10 @@ export default function RootCauseEngine() {
         </div>
 
         {/* Financial impact chart */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div className="card p-4">
           <div className="flex items-center gap-2 mb-4">
             <DollarSign size={16} className="text-amber-400" />
-            <h2 className="text-sm font-semibold text-white">Financial Impact by Root Cause</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Financial Impact by Root Cause</h2>
             <span className="text-xs text-gray-600 ml-1">({currency})</span>
           </div>
           {sortedCauses.length === 0 ? (
@@ -882,7 +882,7 @@ export default function RootCauseEngine() {
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
         <div className="flex items-center gap-2 mb-4">
           <Layers size={16} className="text-purple-400" />
-          <h2 className="text-sm font-semibold text-white">Site × Root Cause Heat Map</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Site × Root Cause Heat Map</h2>
           <span className="text-xs text-gray-600 ml-1">(top {TOP_CAUSES_HEATMAP} causes)</span>
         </div>
         {heatMapData.activeSites.length === 0 ? (
@@ -946,7 +946,7 @@ export default function RootCauseEngine() {
         <div className="p-4 border-b border-gray-800">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle size={16} className="text-amber-400" />
-            <h2 className="text-sm font-semibold text-white">Root Cause Deep Dive</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Root Cause Deep Dive</h2>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {ROOT_CAUSES.map(cause => {
@@ -1179,10 +1179,10 @@ export default function RootCauseEngine() {
       </div>
 
       {/* ── Worst Vehicles Table ── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="card p-4">
         <div className="flex items-center gap-2 mb-4">
           <AlertOctagon size={16} className="text-red-400" />
-          <h2 className="text-sm font-semibold text-white">Worst Vehicles by Root Cause Incidents</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">Worst Vehicles by Root Cause Incidents</h2>
           <span className="text-xs text-gray-600 ml-1">(top 15)</span>
         </div>
         {worstVehicles.length === 0 ? (

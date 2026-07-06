@@ -965,7 +965,7 @@ export default function PressureIntelligence() {
                 <div className="card">
                   <div className="flex items-center gap-2 mb-3">
                     <BarChart3 size={14} className="text-blue-400" />
-                    <h3 className="text-sm font-semibold text-white">Pressure Distribution</h3>
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Pressure Distribution</h3>
                     <span className="ml-auto text-xs text-gray-500">All readings by PSI band</span>
                   </div>
                   <div className="h-56">
@@ -990,7 +990,7 @@ export default function PressureIntelligence() {
                 <div className="card">
                   <div className="flex items-center gap-2 mb-3">
                     <Building2 size={14} className="text-purple-400" />
-                    <h3 className="text-sm font-semibold text-white">Compliance by Site</h3>
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Compliance by Site</h3>
                     <span className="ml-auto text-xs text-gray-500">Ranked best → worst</span>
                   </div>
                   {siteCompliance.length === 0 ? (
@@ -1020,7 +1020,7 @@ export default function PressureIntelligence() {
               <div className="card">
                 <div className="flex items-center gap-2 mb-3">
                   <TrendingUp size={14} className="text-green-400" />
-                  <h3 className="text-sm font-semibold text-white">Pressure Trend by Position</h3>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Pressure Trend by Position</h3>
                   <span className="ml-auto text-xs text-gray-500">12-month monthly averages</span>
                 </div>
                 <div className="h-64">
@@ -1048,7 +1048,7 @@ export default function PressureIntelligence() {
               <div className="card">
                 <div className="flex items-center gap-2 mb-3">
                   <Thermometer size={14} className="text-amber-400" />
-                  <h3 className="text-sm font-semibold text-white">Seasonal Pressure Analysis</h3>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Seasonal Pressure Analysis</h3>
                   <span className="ml-auto text-xs text-gray-500">Monthly avg + non-compliance rate</span>
                 </div>
                 <div className="h-64">
@@ -1070,7 +1070,7 @@ export default function PressureIntelligence() {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
                   <div className="flex items-center gap-2">
                     <AlertTriangle size={14} className="text-red-400" />
-                    <h3 className="text-sm font-semibold text-white">Pressure Anomalies</h3>
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)]">Pressure Anomalies</h3>
                     <span className="text-xs px-2 py-0.5 bg-red-900/30 text-red-300 border border-red-700/40 rounded-full">
                       {anomalies.length}
                     </span>
@@ -1183,7 +1183,7 @@ export default function PressureIntelligence() {
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Eye size={14} className="text-blue-400" />
-                        <span className="text-sm font-semibold text-white">Pressure History - {assetDrilldown}</span>
+                        <span className="text-sm font-semibold text-[var(--text-primary)]">Pressure History - {assetDrilldown}</span>
                         <span className="text-xs text-gray-500">{assetHistory.length} readings</span>
                       </div>
                       <button onClick={() => setAssetDrilldown(null)} className="text-gray-500 hover:text-white">
@@ -1226,7 +1226,7 @@ export default function PressureIntelligence() {
               <div className="card">
                 <div className="flex items-center gap-2 mb-4">
                   <Users size={14} className="text-indigo-400" />
-                  <h3 className="text-sm font-semibold text-white">Inspector Quality Analysis</h3>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Inspector Quality Analysis</h3>
                   <span className="ml-auto text-xs text-gray-500">{inspectorStats.length} inspectors</span>
                 </div>
                 {inspectorStats.length === 0 ? (
@@ -1281,7 +1281,7 @@ export default function PressureIntelligence() {
               <div className="card">
                 <div className="flex items-center gap-2 mb-4">
                   <Info size={14} className="text-cyan-400" />
-                  <h3 className="text-sm font-semibold text-white">Under-Inflation Root Cause Analysis</h3>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Under-Inflation Root Cause Analysis</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {rootCauses.map(rc => (
@@ -1304,7 +1304,7 @@ export default function PressureIntelligence() {
               <div className="card">
                 <div className="flex items-center gap-2 mb-3">
                   <Gauge size={14} className="text-blue-400" />
-                  <h3 className="text-sm font-semibold text-white">Pressure Intelligence Summary</h3>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Pressure Intelligence Summary</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {[

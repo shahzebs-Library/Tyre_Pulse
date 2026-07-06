@@ -131,7 +131,7 @@ export default function DataIntakeHistory() {
     <div className="p-6 max-w-[1800px] mx-auto text-gray-200">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Database size={22} /> {t('intakehistory.title')}</h1>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2"><Database size={22} /> {t('intakehistory.title')}</h1>
           <p className="text-sm text-gray-400">{t('intakehistory.subtitle', { country: activeCountry })}</p>
         </div>
         <Link to="/data-intake" className="text-sm px-3 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white">{t('intakehistory.newImport')}</Link>
@@ -141,7 +141,7 @@ export default function DataIntakeHistory() {
         {TABS.map((tabDef) => {
           const I = tabDef.icon
           return (
-            <button key={tabDef.key} onClick={() => { setTab(tabDef.key); setDrill(null) }} className={`px-3 py-2 text-sm flex items-center gap-2 border-b-2 -mb-px ${tab === tabDef.key ? 'border-green-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
+            <button key={tabDef.key} onClick={() => { setTab(tabDef.key); setDrill(null) }} className={`px-3 py-2 text-sm flex items-center gap-2 border-b-2 -mb-px ${tab === tabDef.key ? 'border-green-500 text-[var(--text-primary)]' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
               <I size={15} /> {t(`intakehistory.tabs.${tabDef.key}`)}
             </button>
           )
@@ -249,41 +249,41 @@ export default function DataIntakeHistory() {
           {tab === 'quality' && quality && (
             <div className="space-y-5">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[['imports', quality.total, 'text-white'], ['pendingApproval', quality.pendingApproval, 'text-amber-400'], ['errorRows', quality.errorRows, 'text-red-400'], ['importedRows', quality.importedRows, 'text-green-400']].map(([l, v, c]) => (
-                  <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">{t(`intakehistory.quality.stats.${l}`)}</p><p className={`text-2xl font-bold ${c}`}>{v}</p></div>
+                {[['imports', quality.total, 'text-[var(--text-primary)]'], ['pendingApproval', quality.pendingApproval, 'text-amber-400'], ['errorRows', quality.errorRows, 'text-red-400'], ['importedRows', quality.importedRows, 'text-green-400']].map(([l, v, c]) => (
+                  <div key={l} className="card p-4"><p className="text-xs text-gray-500">{t(`intakehistory.quality.stats.${l}`)}</p><p className={`text-2xl font-bold tabular-nums ${c}`}>{v}</p></div>
                 ))}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[['successRate', `${quality.successRate}%`, 'text-green-400'], ['validationErrorRate', `${quality.validationErrorRate}%`, 'text-red-400'], ['duplicateRate', `${quality.duplicateRate}%`, 'text-amber-400'], ['avgApprovalTime', quality.avgApprovalHours == null ? '-' : `${quality.avgApprovalHours}h`, 'text-white']].map(([l, v, c]) => (
-                  <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-4"><p className="text-xs text-gray-500">{t(`intakehistory.quality.stats.${l}`)}</p><p className={`text-2xl font-bold ${c}`}>{v}</p></div>
+                {[['successRate', `${quality.successRate}%`, 'text-green-400'], ['validationErrorRate', `${quality.validationErrorRate}%`, 'text-red-400'], ['duplicateRate', `${quality.duplicateRate}%`, 'text-amber-400'], ['avgApprovalTime', quality.avgApprovalHours == null ? '-' : `${quality.avgApprovalHours}h`, 'text-[var(--text-primary)]']].map(([l, v, c]) => (
+                  <div key={l} className="card p-4"><p className="text-xs text-gray-500">{t(`intakehistory.quality.stats.${l}`)}</p><p className={`text-2xl font-bold tabular-nums ${c}`}>{v}</p></div>
                 ))}
               </div>
               <div className="grid md:grid-cols-3 gap-4">
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="card p-4">
                   <p className="text-sm text-gray-400 mb-2">{t('intakehistory.quality.byCountry')}</p>
                   {Object.entries(quality.byCountry).map(([k, v]) => <div key={k} className="flex justify-between text-sm py-0.5"><span className="text-gray-300">{k}</span><span className="text-gray-500">{v}</span></div>)}
                 </div>
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="card p-4">
                   <p className="text-sm text-gray-400 mb-2">{t('intakehistory.quality.bySource')}</p>
                   {Object.entries(quality.bySource).map(([k, v]) => <div key={k} className="flex justify-between text-sm py-0.5"><span className="text-gray-300">{k}</span><span className="text-gray-500">{v}</span></div>)}
                 </div>
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="card p-4">
                   <p className="text-sm text-gray-400 mb-2">{t('intakehistory.quality.byModule')}</p>
                   {Object.entries(quality.byModule).map(([k, v]) => <div key={k} className="flex justify-between text-sm py-0.5"><span className="text-gray-300 capitalize">{k}</span><span className="text-gray-500">{v}</span></div>)}
                 </div>
               </div>
               <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="card p-4">
                   <p className="text-sm text-gray-400 mb-2">{t('intakehistory.quality.rowQuality.heading')}</p>
                   {[['warningRows', quality.warningRows], ['duplicateRows', quality.duplicateRows], ['conflictRows', quality.conflictRows], ['skippedRows', quality.skippedRows], ['failedRows', quality.failedRows]].map(([l, v]) => <div key={l} className="flex justify-between text-sm py-0.5"><span className="text-gray-300">{t(`intakehistory.quality.rowQuality.${l}`)}</span><span className="text-gray-500">{v}</span></div>)}
                 </div>
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="card p-4">
                   <p className="text-sm text-gray-400 mb-2">{t('intakehistory.quality.topUploaders.heading')}</p>
                   {quality.topUploaders.length === 0 && <p className="text-xs text-gray-600">{t('intakehistory.quality.topUploaders.empty')}</p>}
                   {quality.topUploaders.map((u) => <div key={u.uploader} className="flex justify-between text-sm py-0.5"><span className="text-gray-300 truncate max-w-[220px]" title={u.uploader}>{u.uploader}</span><span className="text-gray-500">{u.count}</span></div>)}
                 </div>
               </div>
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="card p-4">
                 <p className="text-sm text-gray-400 mb-2">{t('intakehistory.quality.latestImports.heading')}</p>
                 {quality.latest.length === 0 && <p className="text-xs text-gray-600">{t('intakehistory.quality.latestImports.empty')}</p>}
                 {quality.latest.map((i) => (
@@ -347,7 +347,7 @@ export default function DataIntakeHistory() {
             <div className="space-y-4">
               <p className="text-xs text-gray-500">{t('intakehistory.aliases.intro')}</p>
               {isElevated && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-wrap items-end gap-3">
+                <div className="card p-4 flex flex-wrap items-end gap-3">
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">{t('intakehistory.aliases.form.entity')}</label>
                     <select value={aliasForm.entityType} onChange={(e) => setAliasForm((f) => ({ ...f, entityType: e.target.value }))} className="bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm capitalize">
@@ -377,7 +377,7 @@ export default function DataIntakeHistory() {
                         <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 capitalize">{a.entity_type}</span></td>
                         <td className="px-3 py-2 text-gray-300">{a.raw_value}</td>
                         <td className="px-3 py-2 text-gray-600"><ChevronRight size={14} /></td>
-                        <td className="px-3 py-2 font-medium text-white">{a.canonical_value}</td>
+                        <td className="px-3 py-2 font-medium text-[var(--text-primary)]">{a.canonical_value}</td>
                         <td className="px-3 py-2 text-gray-400">{a.country || 'any'}</td>
                         <td className="px-3 py-2 text-gray-500 text-xs">{a.created_at ? formatDate(a.created_at) : '-'}</td>
                       </tr>
@@ -393,7 +393,7 @@ export default function DataIntakeHistory() {
             <div className="space-y-4">
               <p className="text-xs text-gray-500">{t('intakehistory.fx.introPart1')} <span className="text-gray-300">{t('intakehistory.fx.introOnly')}</span> {t('intakehistory.fx.introPart2')}</p>
               {isElevated && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-wrap items-end gap-3">
+                <div className="card p-4 flex flex-wrap items-end gap-3">
                   <div><label className="block text-xs text-gray-500 mb-1">{t('intakehistory.fx.form.base')}</label><input value={fxForm.baseCurrency} onChange={(e) => setFxForm((f) => ({ ...f, baseCurrency: e.target.value }))} placeholder="USD" maxLength={3} className="w-20 bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm uppercase" /></div>
                   <div><label className="block text-xs text-gray-500 mb-1">{t('intakehistory.fx.form.quote')}</label><input value={fxForm.quoteCurrency} onChange={(e) => setFxForm((f) => ({ ...f, quoteCurrency: e.target.value }))} placeholder="SAR" maxLength={3} className="w-20 bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm uppercase" /></div>
                   <div><label className="block text-xs text-gray-500 mb-1">{t('intakehistory.fx.form.rate')}</label><input type="number" step="0.00000001" value={fxForm.rate} onChange={(e) => setFxForm((f) => ({ ...f, rate: e.target.value }))} placeholder="0.2667" className="w-28 bg-gray-950 border border-gray-700 rounded-lg px-2 py-1.5 text-sm" /></div>

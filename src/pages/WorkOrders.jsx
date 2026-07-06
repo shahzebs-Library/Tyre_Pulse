@@ -553,20 +553,20 @@ export default function WorkOrders() {
           { label: t('workorders.kpi.avgDaysOpen'), value: stats.avgDaysOpen, color: 'purple', icon: Calendar },
           { label: t('workorders.kpi.totalCostAll'), value: `${activeCurrency} ${(stats.totalCost / 1000).toFixed(1)}k`, color: 'teal', icon: DollarSign },
         ].map(({ label, value, color, icon: Icon }) => (
-          <div key={label} className={`bg-gray-900 border border-gray-800 rounded-xl p-4`}>
+          <div key={label} className="card p-4">
             <div className={`flex items-center gap-2 mb-2`}>
               <Icon size={16} className={`text-${color}-400`} />
               <span className="text-gray-400 text-xs">{label}</span>
             </div>
-            <div className={`text-2xl font-bold text-${color}-400`}>{value}</div>
+            <div className={`text-2xl font-bold tabular-nums text-${color}-400`}>{value}</div>
           </div>
         ))}
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">{t('workorders.charts.byType')}</h3>
+        <div className="card p-5">
+          <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('workorders.charts.byType')}</h3>
           {typeChartData.labels.length > 0 ? (
             <div className="h-52">
               <Bar data={typeChartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
@@ -578,8 +578,8 @@ export default function WorkOrders() {
             </div>
           )}
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">{t('workorders.charts.statusDistribution')}</h3>
+        <div className="card p-5">
+          <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('workorders.charts.statusDistribution')}</h3>
           {statusChartData.labels.length > 0 ? (
             <div className="h-52">
               <Doughnut data={statusChartData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />
@@ -594,7 +594,7 @@ export default function WorkOrders() {
       </div>
 
       {/* Filters */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="card p-4">
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-48">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -647,7 +647,7 @@ export default function WorkOrders() {
         </div>
       )}
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="card p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

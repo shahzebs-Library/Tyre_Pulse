@@ -275,7 +275,7 @@ function ContractModal({ contract, onSave, onClose }) {
         className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl"
       >
         <div className="flex items-center justify-between p-5 border-b border-gray-800">
-          <h3 className="font-semibold text-white">{form.id ? t('suppliers.contractModal.editTitle') : t('suppliers.contractModal.addTitle')}</h3>
+          <h3 className="font-semibold text-[var(--text-primary)]">{form.id ? t('suppliers.contractModal.editTitle') : t('suppliers.contractModal.addTitle')}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="p-5 grid grid-cols-2 gap-3">
@@ -432,7 +432,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
             <Building2 size={18} className="text-blue-400" />
           </div>
           <div>
-            <h2 className="font-bold text-white text-lg leading-none">{supplier.brand}</h2>
+            <h2 className="font-bold text-[var(--text-primary)] text-lg leading-none">{supplier.brand}</h2>
             <div className="flex items-center gap-2 mt-1">
               <RatingBadge rating={supplier.rating} />
               <span className="text-xs text-gray-500">{supplier.count} {t('suppliers.drawer.tyresSuffix')}</span>
@@ -1165,7 +1165,7 @@ export default function SupplierManagement() {
                             {supplier.brand.slice(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <h3 className="font-semibold text-white text-sm leading-tight">{supplier.brand}</h3>
+                            <h3 className="font-semibold text-[var(--text-primary)] text-sm leading-tight">{supplier.brand}</h3>
                             <RatingBadge rating={supplier.rating} />
                           </div>
                         </div>
@@ -1230,7 +1230,7 @@ export default function SupplierManagement() {
           <motion.div key="perf" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
             <div className="card">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-white text-sm">{t('suppliers.performance.selectToCompare')}</h3>
+                <h3 className="font-semibold text-[var(--text-primary)] text-sm">{t('suppliers.performance.selectToCompare')}</h3>
                 {compareList.length > 0 && (
                   <button onClick={() => setCompareList([])} className="text-xs text-gray-500 hover:text-white flex items-center gap-1">
                     <X size={12} /> {t('suppliers.performance.clearSelection')}
@@ -1263,7 +1263,7 @@ export default function SupplierManagement() {
               <>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                   <div className="card">
-                    <h4 className="text-sm font-semibold text-white mb-4">{t('suppliers.performance.radarTitle')}</h4>
+                    <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-4">{t('suppliers.performance.radarTitle')}</h4>
                     <div className="h-72">
                       {compareData && (
                         <Radar data={compareData} options={{
@@ -1285,7 +1285,7 @@ export default function SupplierManagement() {
 
                   <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                     <div className="px-4 py-3 border-b border-gray-800">
-                      <h4 className="text-sm font-semibold text-white">{t('suppliers.performance.sideBySide')}</h4>
+                      <h4 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.performance.sideBySide')}</h4>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
@@ -1340,7 +1340,7 @@ export default function SupplierManagement() {
           <motion.div key="spend" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <div className="card">
-                <h4 className="text-sm font-semibold text-white mb-4">{t('suppliers.spend.shareTitle')}</h4>
+                <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-4">{t('suppliers.spend.shareTitle')}</h4>
                 <div className="h-64 flex items-center justify-center">
                   {spendAnalysis.doughnutData.datasets[0].data.some(v => v > 0) ? (
                     <Doughnut data={spendAnalysis.doughnutData} options={{
@@ -1361,7 +1361,7 @@ export default function SupplierManagement() {
               </div>
 
               <div className="card">
-                <h4 className="text-sm font-semibold text-white mb-4">{t('suppliers.spend.monthlyTitle')}</h4>
+                <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-4">{t('suppliers.spend.monthlyTitle')}</h4>
                 <div className="h-64">
                   <Bar data={spendAnalysis.stackedData} options={{
                     ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins },
@@ -1378,7 +1378,7 @@ export default function SupplierManagement() {
             {/* YoY Table */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-800">
-                <h4 className="text-sm font-semibold text-white">{t('suppliers.spend.yoyTitle')}</h4>
+                <h4 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.spend.yoyTitle')}</h4>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1527,7 +1527,7 @@ export default function SupplierManagement() {
           <motion.div key="recs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
             <div className="flex items-center gap-2 mb-1">
               <Zap size={16} className="text-blue-400" />
-              <h3 className="text-sm font-semibold text-white">{t('suppliers.recommendations.title')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.recommendations.title')}</h3>
               <span className="text-xs text-gray-600 ml-auto">{t('suppliers.recommendations.basedOn', { count: records.length })}</span>
             </div>
             {recommendations.length === 0 ? (
@@ -1575,7 +1575,7 @@ export default function SupplierManagement() {
             {/* Supplier performance summary for context */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mt-5">
               <div className="px-4 py-3 border-b border-gray-800">
-                <h4 className="text-sm font-semibold text-white">{t('suppliers.recommendations.summaryTitle')}</h4>
+                <h4 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.recommendations.summaryTitle')}</h4>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">

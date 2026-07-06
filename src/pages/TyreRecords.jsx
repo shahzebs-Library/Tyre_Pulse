@@ -23,12 +23,12 @@ import { cn } from '../lib/cn'
 
 const PAGE_SIZE = 25
 
-// WCAG AA-compliant on light (white/off-white) backgrounds
+// Semantic risk chip colours, aligned with the scale used across the app
 const RISK_STYLE = {
-  Critical: 'bg-red-100 text-red-700 border-red-200',
-  High:     'bg-orange-100 text-orange-700 border-orange-200',
-  Medium:   'bg-amber-100 text-amber-700 border-amber-200',
-  Low:      'bg-green-100 text-green-700 border-green-200',
+  Critical: 'bg-red-900/30 text-red-300 border-red-800/50',
+  High:     'bg-orange-900/30 text-orange-300 border-orange-800/50',
+  Medium:   'bg-amber-900/30 text-amber-300 border-amber-800/50',
+  Low:      'bg-green-900/30 text-green-300 border-green-800/50',
 }
 
 const EMPTY_FORM = (defaultCost = 1200, country = 'KSA') => ({

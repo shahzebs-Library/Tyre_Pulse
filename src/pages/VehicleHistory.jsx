@@ -641,7 +641,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="text-white font-bold text-xl font-mono">{row.assetNo}</h2>
+            <h2 className="text-[var(--text-primary)] font-bold text-xl font-mono">{row.assetNo}</h2>
             <span className={`text-xs px-2.5 py-1 rounded-full border font-bold ${misuseBadgeClass(row.misuseScore)}`}>
               {t('vehiclehistory.detail.misuseRisk', { score: row.misuseScore })}
             </span>

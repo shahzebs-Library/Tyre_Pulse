@@ -838,7 +838,7 @@ export default function AssetManagement() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="text-white space-y-6">
+    <div className="text-[var(--text-primary)] space-y-6">
       <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {/* Page Header */}

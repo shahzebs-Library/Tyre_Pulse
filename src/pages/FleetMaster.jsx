@@ -891,7 +891,7 @@ export default function FleetMaster() {
           <div className="flex gap-3 mb-4">
             <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-white font-medium">{t('fleetmaster.delete.question', { assetNo: deleteTarget.asset_no })}</p>
+              <p className="text-[var(--text-primary)] font-medium">{t('fleetmaster.delete.question', { assetNo: deleteTarget.asset_no })}</p>
               <p className="text-gray-400 text-sm mt-1">{t('fleetmaster.delete.warning')}</p>
             </div>
           </div>
@@ -913,7 +913,7 @@ export default function FleetMaster() {
           <div className="flex gap-3 mb-4">
             <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-white font-medium">{t('fleetmaster.bulkDelete.question', { count: selectedIds.size })}</p>
+              <p className="text-[var(--text-primary)] font-medium">{t('fleetmaster.bulkDelete.question', { count: selectedIds.size })}</p>
               <p className="text-gray-400 text-sm mt-1">{t('fleetmaster.bulkDelete.warning')}</p>
             </div>
           </div>
@@ -940,12 +940,12 @@ function Modal({ title, onClose, children, wide = false }) {
       onClick={onClose}
     >
       <div
-        className={`bg-gray-900 border border-gray-700 rounded-xl w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} p-6 my-4`}
+        className={`bg-surface-1 border border-[var(--border-dim)] rounded-xl w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} p-6 my-4 shadow-float`}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18} /></button>
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
+          <button onClick={onClose} className="text-muted hover:text-[var(--text-primary)] transition-colors"><X size={18} /></button>
         </div>
         {children}
       </div>

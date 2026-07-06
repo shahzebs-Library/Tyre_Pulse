@@ -969,12 +969,13 @@ export default function Settings() {
         )}
 
         {/* Info panel */}
-        <div className="flex items-start gap-3 bg-blue-950/40 border border-blue-800/40 rounded-lg px-4 py-3 mb-5">
-          <Calendar size={16} className="text-blue-400 mt-0.5 shrink-0" />
-          <p className="text-xs text-blue-300 leading-relaxed">
-            Schedules are stored locally. To enable automated delivery, connect a cron service or
-            Supabase Edge Function with <code className="font-mono bg-blue-900/40 px-1 rounded">pg_cron</code>.
-            Use <strong>Test Send</strong> to verify recipients immediately.
+        <div className="flex items-start gap-3 bg-emerald-950/30 border border-emerald-800/40 rounded-lg px-4 py-3 mb-5">
+          <ShieldCheck size={16} className="text-emerald-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-emerald-300 leading-relaxed">
+            <strong>Automated delivery is active.</strong> A scheduled job checks every 15 minutes and
+            emails each active schedule to its recipients at the set time (Riyadh timezone). Use
+            <strong> Test Send</strong> to receive one right now and confirm the address. If a report
+            doesn&apos;t arrive, check the recipient address here and your spam folder.
           </p>
         </div>
 

@@ -1101,7 +1101,7 @@ export default function DriverManagement() {
                   return (
                     <motion.tr
                       key={driver.name}
-                      className="border-t border-gray-800/40 hover:bg-white/[0.02] transition-colors group"
+                      className="border-t border-[var(--input-border)] hover:bg-white/[0.02] transition-colors group"
                       initial={{ opacity: 0, y: 4 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: Math.min(idx * 0.02, 0.3) }}
@@ -1144,7 +1144,7 @@ export default function DriverManagement() {
                       <td className="px-3 py-3">
                         <button
                           onClick={() => setSelectedDriver(driver)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                           style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.2)' }}
                         >
                           <Eye size={12} /> History
@@ -1160,9 +1160,9 @@ export default function DriverManagement() {
 
         {/* Table footer summary */}
         {visibleDrivers.length > 0 && (
-          <div className="px-5 py-3 border-t border-gray-800/40 flex flex-wrap gap-6 text-xs text-gray-600">
-            <span>Total Records: <span className="text-gray-400 font-medium">{filteredRecords.length.toLocaleString()}</span></span>
-            <span>Total Fleet Cost: <span className="text-gray-400 font-medium">
+          <div className="px-5 py-3 border-t border-[var(--input-border)] flex flex-wrap gap-6 text-xs text-[var(--text-dim)]">
+            <span>Total Records: <span className="text-[var(--text-muted)] font-medium">{filteredRecords.length.toLocaleString()}</span></span>
+            <span>Total Fleet Cost: <span className="text-[var(--text-muted)] font-medium">
               {fmtCurrency(visibleDrivers.reduce((s, d) => s + d.totalCost, 0), activeCurrency)}
             </span></span>
             <span>High Risk Drivers: <span className="text-red-400 font-medium">

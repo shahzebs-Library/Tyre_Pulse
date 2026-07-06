@@ -63,7 +63,7 @@ function FormattedResponse({ text }) {
     if (line.startsWith('## ') || line.startsWith('# ')) {
       const content = line.replace(/^#+ /, '')
       elements.push(
-        <h3 key={key++} className="text-sm font-semibold text-white mt-4 mb-1.5 first:mt-0">
+        <h3 key={key++} className="text-sm font-semibold text-[var(--text-primary)] mt-4 mb-1.5 first:mt-0">
           {content}
         </h3>
       )
@@ -72,10 +72,10 @@ function FormattedResponse({ text }) {
       const num = line.match(/^(\d+)/)[1]
       elements.push(
         <div key={key++} className="flex gap-2 my-1">
-          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-700 text-gray-300 text-xs flex items-center justify-center font-medium">
+          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)] text-xs flex items-center justify-center font-medium">
             {num}
           </span>
-          <span className="text-gray-300 text-sm leading-relaxed flex-1"
+          <span className="text-[var(--text-secondary)] text-sm leading-relaxed flex-1"
             dangerouslySetInnerHTML={{ __html: renderInline(content) }}
           />
         </div>
@@ -85,7 +85,7 @@ function FormattedResponse({ text }) {
       elements.push(
         <div key={key++} className="flex gap-2 my-0.5 ml-1">
           <span className="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          <span className="text-gray-300 text-sm leading-relaxed flex-1"
+          <span className="text-[var(--text-secondary)] text-sm leading-relaxed flex-1"
             dangerouslySetInnerHTML={{ __html: renderInline(content) }}
           />
         </div>
@@ -94,7 +94,7 @@ function FormattedResponse({ text }) {
       elements.push(<div key={key++} className="h-1.5" />)
     } else {
       elements.push(
-        <p key={key++} className="text-gray-300 text-sm leading-relaxed my-0.5"
+        <p key={key++} className="text-[var(--text-secondary)] text-sm leading-relaxed my-0.5"
           dangerouslySetInnerHTML={{ __html: renderInline(line) }}
         />
       )
@@ -117,9 +117,9 @@ function renderInline(text) {
   // Escape all HTML first - prevents XSS from AI-generated content
   const safe = escapeHtml(text)
   return safe
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em class="text-gray-200">$1</em>')
-    .replace(/`(.+?)`/g, '<code class="bg-gray-700 text-emerald-300 px-1 py-0.5 rounded text-xs font-mono">$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-[var(--text-primary)] font-semibold">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em class="text-[var(--text-secondary)]">$1</em>')
+    .replace(/`(.+?)`/g, '<code class="bg-[var(--input-bg)] text-emerald-300 px-1 py-0.5 rounded text-xs font-mono">$1</code>')
 }
 
 // ── KPI Summary Panel (shown for Analyst responses) ──────────────────────────
@@ -141,27 +141,27 @@ function KpiPanel({ kpis, costTrend, vendorRank }) {
   ]
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-700/50">
-      <p className="text-xs text-gray-500 mb-2 uppercase tracking-wider font-medium">KPI Snapshot</p>
+    <div className="mt-3 pt-3 border-t border-[var(--input-border)]/50">
+      <p className="text-xs text-[var(--text-muted)] mb-2 uppercase tracking-wider font-medium">KPI Snapshot</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         {metrics.map(m => (
-          <div key={m.label} className="bg-gray-800/60 rounded-lg p-2.5">
-            <p className="text-xs text-gray-500 mb-0.5">{m.label}</p>
+          <div key={m.label} className="bg-[var(--input-bg)]/60 rounded-lg p-2.5">
+            <p className="text-xs text-[var(--text-muted)] mb-0.5">{m.label}</p>
             <div className="flex items-center gap-1">
               {m.icon}
-              <span className="text-sm font-semibold text-white capitalize">{m.value}</span>
+              <span className="text-sm font-semibold text-[var(--text-primary)] capitalize">{m.value}</span>
             </div>
-            <p className="text-xs text-gray-600 mt-0.5">{m.sub}</p>
+            <p className="text-xs text-[var(--text-dim)] mt-0.5">{m.sub}</p>
           </div>
         ))}
       </div>
 
       {vendorRank?.length > 0 && (
         <div className="mt-2">
-          <p className="text-xs text-gray-500 mb-1.5">Brand Ranking (best CPK first)</p>
+          <p className="text-xs text-[var(--text-muted)] mb-1.5">Brand Ranking (best CPK first)</p>
           <div className="flex flex-wrap gap-1.5">
             {vendorRank.map((b, i) => (
-              <span key={b.brand} className={`text-xs px-2 py-1 rounded-full font-medium ${i === 0 ? 'bg-emerald-900/40 text-emerald-300' : i === vendorRank.length - 1 ? 'bg-red-900/40 text-red-300' : 'bg-gray-700/60 text-gray-300'}`}>
+              <span key={b.brand} className={`text-xs px-2 py-1 rounded-full font-medium ${i === 0 ? 'bg-emerald-900/40 text-emerald-300' : i === vendorRank.length - 1 ? 'bg-red-900/40 text-red-300' : 'bg-[var(--input-bg)]/60 text-[var(--text-secondary)]'}`}>
                 #{i + 1} {b.brand} ({b.avgCpk?.toFixed(3)})
               </span>
             ))}
@@ -192,11 +192,11 @@ function QaPanel({ checks, dataQualityScore, totalIssues }) {
   ].filter(i => i.count > 0)
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-700/50">
+    <div className="mt-3 pt-3 border-t border-[var(--input-border)]/50">
       <div className="flex items-center gap-3 mb-2">
-        <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Data Quality Score</p>
+        <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-medium">Data Quality Score</p>
         <span className={`text-lg font-bold ${scoreColor}`}>{dataQualityScore}%</span>
-        <span className="text-xs text-gray-500">({totalIssues} issues in {checks.totalRecords} records)</span>
+        <span className="text-xs text-[var(--text-muted)]">({totalIssues} issues in {checks.totalRecords} records)</span>
       </div>
       {issueItems.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -218,31 +218,31 @@ function PlannerPanel({ planningData }) {
   const { forecasts, annualForecast, replacementRate, avgLife } = planningData
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-700/50">
-      <p className="text-xs text-gray-500 mb-2 uppercase tracking-wider font-medium">Planning Forecast</p>
+    <div className="mt-3 pt-3 border-t border-[var(--input-border)]/50">
+      <p className="text-xs text-[var(--text-muted)] mb-2 uppercase tracking-wider font-medium">Planning Forecast</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="bg-gray-800/60 rounded-lg p-2.5">
-          <p className="text-xs text-gray-500 mb-0.5">Avg Replacements/Vehicle/Month</p>
-          <p className="text-sm font-semibold text-white">{replacementRate?.avgPerVehiclePerMonth?.toFixed(2) ?? 'N/A'}</p>
+        <div className="bg-[var(--input-bg)]/60 rounded-lg p-2.5">
+          <p className="text-xs text-[var(--text-muted)] mb-0.5">Avg Replacements/Vehicle/Month</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">{replacementRate?.avgPerVehiclePerMonth?.toFixed(2) ?? 'N/A'}</p>
         </div>
-        <div className="bg-gray-800/60 rounded-lg p-2.5">
-          <p className="text-xs text-gray-500 mb-0.5">Avg Tyre Life</p>
-          <p className="text-sm font-semibold text-white">{avgLife?.avgKm ? `${(avgLife.avgKm / 1000).toFixed(0)}k km` : 'N/A'}</p>
+        <div className="bg-[var(--input-bg)]/60 rounded-lg p-2.5">
+          <p className="text-xs text-[var(--text-muted)] mb-0.5">Avg Tyre Life</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">{avgLife?.avgKm ? `${(avgLife.avgKm / 1000).toFixed(0)}k km` : 'N/A'}</p>
         </div>
-        <div className="bg-gray-800/60 rounded-lg p-2.5">
-          <p className="text-xs text-gray-500 mb-0.5">Active Vehicles</p>
-          <p className="text-sm font-semibold text-white">{replacementRate?.activeVehicles ?? 'N/A'}</p>
+        <div className="bg-[var(--input-bg)]/60 rounded-lg p-2.5">
+          <p className="text-xs text-[var(--text-muted)] mb-0.5">Active Vehicles</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">{replacementRate?.activeVehicles ?? 'N/A'}</p>
         </div>
-        <div className="bg-gray-800/60 rounded-lg p-2.5">
-          <p className="text-xs text-gray-500 mb-0.5">Annual Budget Est.</p>
-          <p className="text-sm font-semibold text-white">{annualForecast ? annualForecast.toFixed(0) : 'N/A'}</p>
+        <div className="bg-[var(--input-bg)]/60 rounded-lg p-2.5">
+          <p className="text-xs text-[var(--text-muted)] mb-0.5">Annual Budget Est.</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">{annualForecast ? annualForecast.toFixed(0) : 'N/A'}</p>
         </div>
       </div>
       {forecasts?.length > 0 && (
         <div className="mt-2 flex gap-2">
           {forecasts.map(f => (
-            <div key={f.month} className="flex-1 bg-gray-800/40 rounded-lg p-2 text-center">
-              <p className="text-xs text-gray-500">{f.month}</p>
+            <div key={f.month} className="flex-1 bg-[var(--input-bg)]/40 rounded-lg p-2 text-center">
+              <p className="text-xs text-[var(--text-muted)]">{f.month}</p>
               <p className="text-sm font-semibold text-emerald-400">{f.forecastCost?.toFixed(0) ?? 'N/A'}</p>
             </div>
           ))}
@@ -277,9 +277,9 @@ function MessageBubble({ message, onCopy }) {
       >
         <div className="max-w-2xl">
           <div className="bg-blue-600/20 border border-blue-600/30 rounded-2xl rounded-tr-sm px-4 py-3">
-            <p className="text-sm text-gray-100 leading-relaxed">{message.content}</p>
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{message.content}</p>
           </div>
-          <p className="text-xs text-gray-600 text-right mt-1 pr-1">{message.timestamp}</p>
+          <p className="text-xs text-[var(--text-dim)] text-right mt-1 pr-1">{message.timestamp}</p>
         </div>
       </motion.div>
     )
@@ -292,8 +292,8 @@ function MessageBubble({ message, onCopy }) {
       className="flex gap-3"
     >
       {/* Agent avatar */}
-      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 ${agentColor?.bg ?? 'bg-gray-800'} border ${agentColor?.border ?? 'border-gray-700'}`}>
-        <AgentIcon className={`w-4 h-4 ${agentColor?.text ?? 'text-gray-400'}`} />
+      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 ${agentColor?.bg ?? 'bg-[var(--input-bg)]'} border ${agentColor?.border ?? 'border-[var(--input-border)]'}`}>
+        <AgentIcon className={`w-4 h-4 ${agentColor?.text ?? 'text-[var(--text-muted)]'}`} />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -313,11 +313,11 @@ function MessageBubble({ message, onCopy }) {
         )}
 
         {/* Response content */}
-        <div className="bg-gray-800/60 border border-gray-700/50 rounded-2xl rounded-tl-sm px-4 py-3">
+        <div className="bg-[var(--input-bg)]/60 border border-[var(--input-border)]/50 rounded-2xl rounded-tl-sm px-4 py-3">
           {expanded ? (
             <FormattedResponse text={message.content ?? message.response} />
           ) : (
-            <p className="text-gray-400 text-sm italic">Response collapsed</p>
+            <p className="text-[var(--text-muted)] text-sm italic">Response collapsed</p>
           )}
 
           {/* Agent-specific data panels */}
@@ -370,7 +370,7 @@ function TypingIndicator({ agentType }) {
       <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${agentColor.bg ?? 'bg-gray-800'} border ${agentColor.border ?? 'border-gray-700'}`}>
         <AgentIcon className={`w-4 h-4 ${agentColor.text ?? 'text-gray-400'}`} />
       </div>
-      <div className="bg-gray-800/60 border border-gray-700/50 rounded-2xl rounded-tl-sm px-4 py-3">
+      <div className="bg-[var(--input-bg)]/60 border border-[var(--input-border)]/50 rounded-2xl rounded-tl-sm px-4 py-3">
         <div className="flex items-center gap-1">
           <span className={`text-xs font-medium ${agentColor.text ?? 'text-gray-400'}`}>
             {AGENT_LABELS[agentType] ?? 'AI'} Agent is thinking

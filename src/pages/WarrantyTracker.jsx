@@ -48,7 +48,7 @@ const STATUS_CFG = {
   'Approved':      { text: 'text-green-400',   bg: 'bg-green-900/30',   border: 'border-green-700'   },
   'Rejected':      { text: 'text-red-400',     bg: 'bg-red-900/30',     border: 'border-red-700'     },
   'Credit Issued': { text: 'text-emerald-400', bg: 'bg-emerald-900/30', border: 'border-emerald-700' },
-  'Closed':        { text: 'text-gray-400',    bg: 'bg-gray-800',       border: 'border-gray-600'    },
+  'Closed':        { text: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)]', border: 'border-[var(--input-border)]' },
 }
 
 const CHART_OPTS = {
@@ -129,7 +129,7 @@ const EMPTY_FORM = {
 }
 
 function StatusBadge({ status }) {
-  const cfg = STATUS_CFG[status] ?? { text: 'text-gray-400', bg: 'bg-gray-800', border: 'border-gray-600' }
+  const cfg = STATUS_CFG[status] ?? { text: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)]', border: 'border-[var(--input-border)]' }
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-semibold ${cfg.text} ${cfg.bg} ${cfg.border}`}>
       {status}
@@ -142,15 +142,15 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', warn 
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`bg-gray-900 border ${warn ? 'border-red-700/60' : 'border-gray-800'} rounded-xl p-4 flex items-start gap-3`}
+      className={`bg-[var(--surface-1)] border ${warn ? 'border-red-700/60' : 'border-[var(--input-border)]'} rounded-xl p-4 flex items-start gap-3`}
     >
-      <div className={`p-2 rounded-lg bg-gray-800 ${color}`}>
+      <div className={`p-2 rounded-lg bg-[var(--input-bg)] ${color}`}>
         <Icon size={18} />
       </div>
       <div className="min-w-0">
-        <p className="text-gray-400 text-xs truncate">{label}</p>
+        <p className="text-[var(--text-muted)] text-xs truncate">{label}</p>
         <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
-        {sub && <p className="text-gray-500 text-xs mt-0.5">{sub}</p>}
+        {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5">{sub}</p>}
       </div>
     </motion.div>
   )
@@ -710,13 +710,13 @@ export default function WarrantyTracker() {
         <div className="flex gap-2">
           <button
             onClick={exportPDF}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] transition-colors"
           >
             <FileText size={14} /> PDF
           </button>
           <button
             onClick={exportExcel}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] transition-colors"
           >
             <FileSpreadsheet size={14} /> Excel
           </button>
@@ -735,7 +735,7 @@ export default function WarrantyTracker() {
         </div>
         }
       />
-      <p className="text-xs text-gray-500 -mt-3">
+      <p className="text-xs text-[var(--text-muted)] -mt-3">
         New: controlled, validated, audited warranty-claim import with Arabic/English header mapping, fitment/removal lifecycle checks, and duplicate detection.
       </p>
 
@@ -747,7 +747,7 @@ export default function WarrantyTracker() {
         <KpiCard icon={CreditCard} label="Avg Credit/Claim" value={fmt(kpis.avgCredit)} color="text-purple-400" />
       </div>
 
-      <div className="flex gap-1 flex-wrap bg-gray-900 border border-gray-800 rounded-xl p-1">
+      <div className="flex gap-1 flex-wrap bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1">
         {tabs.map(tab => (
           <button
             key={tab}
@@ -755,7 +755,7 @@ export default function WarrantyTracker() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === tab
                 ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
             }`}
           >
             {tab}
@@ -765,16 +765,16 @@ export default function WarrantyTracker() {
 
       {activeTab === 'Claims' && (
         <div className="space-y-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
             <div className="flex flex-col md:flex-row gap-3 flex-wrap">
               <div className="relative flex-1 min-w-[200px]">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   type="text"
                   placeholder="Search claim, serial, brand, asset..."
                   value={search}
                   onChange={e => { setSearch(e.target.value); setPage(1) }}
-                  className="w-full pl-8 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                  className="w-full pl-8 pr-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
                 />
               </div>
               <select value={filterBrand} onChange={e => { setFilterBrand(e.target.value); setPage(1) }}

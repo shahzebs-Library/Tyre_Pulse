@@ -187,7 +187,7 @@ function TagInput({ values = [], onChange, placeholder }) {
 
   return (
     <div
-      className="min-h-[40px] bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 flex flex-wrap gap-1 cursor-text focus-within:border-blue-500 transition-colors"
+      className="min-h-[40px] bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1 flex flex-wrap gap-1 cursor-text focus-within:border-blue-500 transition-colors"
       onClick={() => ref.current?.focus()}
     >
       {values.map(v => (
@@ -205,7 +205,7 @@ function TagInput({ values = [], onChange, placeholder }) {
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add() } }}
         onBlur={add}
         placeholder={values.length === 0 ? placeholder : ''}
-        className="flex-1 min-w-[80px] bg-transparent text-white text-sm outline-none placeholder-gray-600"
+        className="flex-1 min-w-[80px] bg-transparent text-[var(--text-primary)] text-sm outline-none placeholder-gray-600"
       />
     </div>
   )
@@ -229,7 +229,7 @@ function BrandTagInput({ values = [], onChange, placeholder }) {
 
   return (
     <div
-      className="min-h-[40px] bg-gray-900 border border-gray-700 rounded-lg px-2 py-1 flex flex-wrap gap-1 cursor-text focus-within:border-blue-500 transition-colors"
+      className="min-h-[40px] bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1 flex flex-wrap gap-1 cursor-text focus-within:border-blue-500 transition-colors"
       onClick={() => ref.current?.focus()}
     >
       {values.map(v => (
@@ -247,7 +247,7 @@ function BrandTagInput({ values = [], onChange, placeholder }) {
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add() } }}
         onBlur={add}
         placeholder={values.length === 0 ? placeholder : ''}
-        className="flex-1 min-w-[80px] bg-transparent text-white text-sm outline-none placeholder-gray-600"
+        className="flex-1 min-w-[80px] bg-transparent text-[var(--text-primary)] text-sm outline-none placeholder-gray-600"
       />
     </div>
   )
@@ -262,17 +262,17 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', loadi
       animate={{ opacity: 1, y: 0 }}
       className="card flex items-start gap-4"
     >
-      <div className={`p-2.5 rounded-lg bg-gray-800 ${color}`}>
+      <div className={`p-2.5 rounded-lg bg-[var(--input-bg)] ${color}`}>
         <Icon size={20} />
       </div>
       <div>
-        <p className="text-gray-400 text-xs mb-1">{label}</p>
+        <p className="text-[var(--text-muted)] text-xs mb-1">{label}</p>
         {loading ? (
-          <div className="h-7 w-16 bg-gray-800 rounded animate-pulse" />
+          <div className="h-7 w-16 bg-[var(--input-bg)] rounded animate-pulse" />
         ) : (
           <p className={`text-2xl font-bold ${color}`}>{value}</p>
         )}
-        {sub && <p className="text-gray-500 text-xs mt-0.5">{sub}</p>}
+        {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5">{sub}</p>}
       </div>
     </motion.div>
   )
@@ -326,13 +326,13 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         >
-          <div className="flex items-center justify-between p-6 border-b border-gray-800">
-            <h3 className="text-white font-semibold text-lg">
+          <div className="flex items-center justify-between p-6 border-b border-[var(--input-border)]">
+            <h3 className="text-[var(--text-primary)] font-semibold text-lg">
               {spec?.id ? 'Edit Specification' : 'Add Specification'}
             </h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
               <X size={20} />
             </button>
           </div>
@@ -346,14 +346,14 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-gray-400 text-xs mb-1.5 block">Vehicle Type *</label>
+                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Vehicle Type *</label>
                 <div className="relative">
                   <input
                     list="vehicle-types-list"
                     value={form.vehicle_type}
                     onChange={e => set('vehicle_type', e.target.value)}
                     placeholder="e.g. Rigid Truck"
-                    className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                    className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
                   />
                   <datalist id="vehicle-types-list">
                     {VEHICLE_TYPES_COMMON.map(v => <option key={v} value={v} />)}
@@ -361,11 +361,11 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
                 </div>
               </div>
               <div>
-                <label className="text-gray-400 text-xs mb-1.5 block">Position *</label>
+                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Position *</label>
                 <select
                   value={form.position}
                   onChange={e => set('position', e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
                 >
                   {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
@@ -373,8 +373,8 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
             </div>
 
             <div>
-              <label className="text-gray-400 text-xs mb-1.5 block">
-                Approved Sizes * <span className="text-gray-600">(press Enter or comma to add)</span>
+              <label className="text-[var(--text-muted)] text-xs mb-1.5 block">
+                Approved Sizes * <span className="text-[var(--text-dim)]">(press Enter or comma to add)</span>
               </label>
               <TagInput
                 values={form.approved_sizes}
@@ -384,8 +384,8 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
             </div>
 
             <div>
-              <label className="text-gray-400 text-xs mb-1.5 block">
-                Approved Brands * <span className="text-gray-600">(press Enter or comma to add)</span>
+              <label className="text-[var(--text-muted)] text-xs mb-1.5 block">
+                Approved Brands * <span className="text-[var(--text-dim)]">(press Enter or comma to add)</span>
               </label>
               <BrandTagInput
                 values={form.approved_brands}
@@ -396,62 +396,62 @@ function SpecFormModal({ spec, onClose, onSave, isAdmin, saving }) {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-gray-400 text-xs mb-1.5 block">Min Load Index</label>
+                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Min Load Index</label>
                 <input
                   type="number"
                   value={form.min_load_index}
                   onChange={e => set('min_load_index', e.target.value)}
                   placeholder="e.g. 154"
-                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
                 />
               </div>
               <div>
-                <label className="text-gray-400 text-xs mb-1.5 block">Min Speed Index</label>
+                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Min Speed Index</label>
                 <select
                   value={form.min_speed_index}
                   onChange={e => set('min_speed_index', e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
                 >
                   <option value="">Select...</option>
                   {SPEED_INDICES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-gray-400 text-xs mb-1.5 block">Recommended Pressure (PSI)</label>
+                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Recommended Pressure (PSI)</label>
                 <input
                   type="number"
                   value={form.recommended_pressure}
                   onChange={e => set('recommended_pressure', e.target.value)}
                   placeholder="e.g. 120"
-                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
                 />
               </div>
               <div>
-                <label className="text-gray-400 text-xs mb-1.5 block">Min Tread Depth (mm)</label>
+                <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Min Tread Depth (mm)</label>
                 <input
                   type="number"
                   step="0.5"
                   value={form.min_tread_depth}
                   onChange={e => set('min_tread_depth', e.target.value)}
                   placeholder="e.g. 3"
-                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-gray-400 text-xs mb-1.5 block">Notes</label>
+              <label className="text-[var(--text-muted)] text-xs mb-1.5 block">Notes</label>
               <textarea
                 value={form.notes}
                 onChange={e => set('notes', e.target.value)}
                 rows={3}
                 placeholder="Engineering notes, compliance requirements..."
-                className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none resize-none"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none resize-none"
               />
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-gray-400 hover:text-white disabled:opacity-50 text-sm transition-colors">
+              <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 text-sm transition-colors">
                 Cancel
               </button>
               <button
@@ -486,20 +486,20 @@ function DeleteConfirmModal({ spec, onClose, onConfirm }) {
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-gray-900 border border-red-800 rounded-2xl w-full max-w-md p-6"
+          className="bg-[var(--surface-1)] border border-red-800 rounded-2xl w-full max-w-md p-6"
         >
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-red-900/30 rounded-lg">
               <Trash2 size={18} className="text-red-400" />
             </div>
-            <h3 className="text-white font-semibold">Delete Specification</h3>
+            <h3 className="text-[var(--text-primary)] font-semibold">Delete Specification</h3>
           </div>
-          <p className="text-gray-400 text-sm mb-2">
-            Delete <span className="text-white font-medium">{spec?.vehicle_type} - {spec?.position}</span>?
+          <p className="text-[var(--text-muted)] text-sm mb-2">
+            Delete <span className="text-[var(--text-primary)] font-medium">{spec?.vehicle_type} - {spec?.position}</span>?
           </p>
-          <p className="text-gray-500 text-xs mb-6">This action cannot be undone. Compliance records will show "No Spec Defined" for affected vehicles.</p>
+          <p className="text-[var(--text-muted)] text-xs mb-6">This action cannot be undone. Compliance records will show "No Spec Defined" for affected vehicles.</p>
           <div className="flex justify-end gap-3">
-            <button onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors">Cancel</button>
+            <button onClick={onClose} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm transition-colors">Cancel</button>
             <button onClick={onConfirm} className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white text-sm px-4 py-2 rounded-lg transition-colors">
               <Trash2 size={14} /> Delete
             </button>
@@ -561,13 +561,13 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg p-6"
+          className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-lg p-6"
         >
           {done ? (
             <div className="text-center py-4">
               <CheckCircle size={40} className="text-green-400 mx-auto mb-3" />
-              <p className="text-white font-medium mb-1">Work Order Raised</p>
-              <p className="text-gray-400 text-sm">A high-priority work order has been created for {asset.asset_no}.</p>
+              <p className="text-[var(--text-primary)] font-medium mb-1">Work Order Raised</p>
+              <p className="text-[var(--text-muted)] text-sm">A high-priority work order has been created for {asset.asset_no}.</p>
               <button onClick={onClose} className="btn-secondary mt-4">Close</button>
             </div>
           ) : (
@@ -576,10 +576,10 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
                 <div className="p-2 bg-orange-900/30 rounded-lg">
                   <Wrench size={18} className="text-orange-400" />
                 </div>
-                <h3 className="text-white font-semibold">Raise Work Order</h3>
+                <h3 className="text-[var(--text-primary)] font-semibold">Raise Work Order</h3>
               </div>
-              <p className="text-gray-400 text-sm mb-2">Asset: <span className="text-white">{asset.asset_no}</span> - Site: <span className="text-white">{asset.site}</span></p>
-              <div className="bg-gray-800 rounded-lg p-3 mb-4 space-y-1">
+              <p className="text-[var(--text-muted)] text-sm mb-2">Asset: <span className="text-[var(--text-primary)]">{asset.asset_no}</span> - Site: <span className="text-[var(--text-primary)]">{asset.site}</span></p>
+              <div className="bg-[var(--input-bg)] rounded-lg p-3 mb-4 space-y-1">
                 {violations.map((v, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs text-orange-300">
                     <AlertTriangle size={11} /> {v}
@@ -592,7 +592,7 @@ function RaiseWorkOrderModal({ asset, violations, country, createdBy, onClose })
                 </div>
               )}
               <form onSubmit={submit} className="flex justify-end gap-3">
-                <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-gray-400 hover:text-white disabled:opacity-50 text-sm transition-colors">Cancel</button>
+                <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 text-sm transition-colors">Cancel</button>
                 <button type="submit" disabled={saving} className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm px-5 py-2 rounded-lg transition-colors">
                   {saving ? <RefreshCw size={14} className="animate-spin" /> : <Wrench size={14} />}
                   {saving ? 'Creating...' : 'Create Work Order'}
@@ -1049,27 +1049,27 @@ export default function TyreSpecifications() {
               onClick={() => importRef.current?.click()}
               disabled={!isAdmin}
               title={!isAdmin ? 'Admin access required' : ''}
-              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+              className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
             >
               <Upload size={14} /> Import
             </button>
             <input ref={importRef} type="file" accept=".xlsx,.xls" onChange={handleImportFile} className="hidden" />
             <button
               onClick={exportSpecsExcel}
-              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+              className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
             >
               <FileSpreadsheet size={14} /> Export
             </button>
             <button
               onClick={exportCompliancePdf}
-              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+              className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
             >
               <FileText size={14} /> PDF Report
             </button>
             <button
               onClick={() => { fetchSpecs(); fetchLiveData() }}
               disabled={loadingRecords || loadingSpecs}
-              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-2 rounded-lg border border-gray-700 transition-colors"
+              className="flex items-center gap-2 bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-3 py-2 rounded-lg border border-[var(--input-border)] transition-colors"
             >
               <RefreshCw size={14} className={(loadingRecords || loadingSpecs) ? 'animate-spin' : ''} />
             </button>
@@ -1087,7 +1087,7 @@ export default function TyreSpecifications() {
       {specsError && !loadingSpecs && (
         <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
           <AlertTriangle size={14} /> {specsError}
-          <button onClick={fetchSpecs} className="ml-auto flex items-center gap-1 text-red-200 hover:text-white"><RefreshCw size={13} /> Retry</button>
+          <button onClick={fetchSpecs} className="ml-auto flex items-center gap-1 text-red-200 hover:text-[var(--text-primary)]"><RefreshCw size={13} /> Retry</button>
           <button onClick={() => setSpecsError('')}><X size={14} /></button>
         </div>
       )}
@@ -1101,12 +1101,12 @@ export default function TyreSpecifications() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-900 rounded-xl p-1 border border-gray-800 overflow-x-auto">
+      <div className="flex gap-1 bg-[var(--surface-1)] rounded-xl p-1 border border-[var(--input-border)] overflow-x-auto">
         {TABS.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'}`}
           >
             <tab.icon size={14} />
             {tab.label}
@@ -1122,18 +1122,18 @@ export default function TyreSpecifications() {
             {/* Filters */}
             <div className="flex flex-wrap gap-3">
               <div className="relative flex-1 min-w-[200px]">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   value={libSearch}
                   onChange={e => setLibSearch(e.target.value)}
                   placeholder="Search specs..."
-                  className="w-full pl-9 pr-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none"
+                  className="w-full pl-9 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
                 />
               </div>
               <select
                 value={libTypeFilter}
                 onChange={e => setLibTypeFilter(e.target.value)}
-                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-blue-500 outline-none"
+                className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] text-sm focus:border-blue-500 outline-none"
               >
                 <option value="">All Vehicle Types</option>
                 {libTypeOptions.map(t => <option key={t} value={t}>{t}</option>)}
@@ -1141,7 +1141,7 @@ export default function TyreSpecifications() {
               <select
                 value={libPosFilter}
                 onChange={e => setLibPosFilter(e.target.value)}
-                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-blue-500 outline-none"
+                className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] text-sm focus:border-blue-500 outline-none"
               >
                 <option value="">All Positions</option>
                 {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
@@ -1151,23 +1151,23 @@ export default function TyreSpecifications() {
             {/* Spec Cards */}
             {loadingSpecs ? (
               <div className="card py-16 text-center">
-                <RefreshCw size={28} className="animate-spin text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm">Loading specifications...</p>
+                <RefreshCw size={28} className="animate-spin text-[var(--text-dim)] mx-auto mb-3" />
+                <p className="text-[var(--text-muted)] text-sm">Loading specifications...</p>
               </div>
             ) : specsError ? (
-              <div className="bg-gray-900 border border-red-800 rounded-xl py-16 text-center">
+              <div className="bg-[var(--surface-1)] border border-red-800 rounded-xl py-16 text-center">
                 <AlertOctagon size={40} className="text-red-500 mx-auto mb-3" />
                 <p className="text-red-300 font-medium mb-1">Failed to Load Specifications</p>
-                <p className="text-gray-500 text-sm mb-4 max-w-md mx-auto">{specsError}</p>
-                <button onClick={fetchSpecs} className="flex items-center gap-2 mx-auto bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-4 py-2 rounded-lg border border-gray-700 transition-colors">
+                <p className="text-[var(--text-muted)] text-sm mb-4 max-w-md mx-auto">{specsError}</p>
+                <button onClick={fetchSpecs} className="flex items-center gap-2 mx-auto bg-[var(--input-bg)] hover:bg-gray-700 text-[var(--text-secondary)] text-sm px-4 py-2 rounded-lg border border-[var(--input-border)] transition-colors">
                   <RefreshCw size={14} /> Retry
                 </button>
               </div>
             ) : filteredSpecs.length === 0 ? (
               <div className="card py-16 text-center">
-                <ClipboardList size={40} className="text-gray-700 mx-auto mb-3" />
-                <p className="text-gray-400 font-medium mb-1">No Specification Profiles</p>
-                <p className="text-gray-600 text-sm mb-4">
+                <ClipboardList size={40} className="text-[var(--text-dim)] mx-auto mb-3" />
+                <p className="text-[var(--text-muted)] font-medium mb-1">No Specification Profiles</p>
+                <p className="text-[var(--text-dim)] text-sm mb-4">
                   {specs.length === 0 ? 'Get started by adding your first tyre specification or using Quick Setup.' : 'No specs match the current filters.'}
                 </p>
                 {isAdmin && specs.length === 0 && (
@@ -1184,27 +1184,27 @@ export default function TyreSpecifications() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.03 }}
-                    className="card hover:border-gray-700 transition-colors"
+                    className="card hover:border-[var(--input-border)] transition-colors"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
                           <Truck size={13} className="text-blue-400" />
-                          <span className="text-white font-medium text-sm">{spec.vehicle_type}</span>
+                          <span className="text-[var(--text-primary)] font-medium text-sm">{spec.vehicle_type}</span>
                         </div>
-                        <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{spec.position}</span>
+                        <span className="text-xs text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">{spec.position}</span>
                       </div>
                       {isAdmin && (
                         <div className="flex gap-1">
                           <button
                             onClick={() => { setEditingSpec(spec); setShowSpecModal(true) }}
-                            className="p-1.5 text-gray-500 hover:text-blue-400 hover:bg-blue-900/20 rounded-lg transition-colors"
+                            className="p-1.5 text-[var(--text-muted)] hover:text-blue-400 hover:bg-blue-900/20 rounded-lg transition-colors"
                           >
                             <Edit2 size={13} />
                           </button>
                           <button
                             onClick={() => setDeletingSpec(spec)}
-                            className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                            className="p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -1214,7 +1214,7 @@ export default function TyreSpecifications() {
 
                     <div className="space-y-2.5">
                       <div>
-                        <p className="text-gray-500 text-xs mb-1 flex items-center gap-1"><Tag size={10} /> Approved Sizes</p>
+                        <p className="text-[var(--text-muted)] text-xs mb-1 flex items-center gap-1"><Tag size={10} /> Approved Sizes</p>
                         <div className="flex flex-wrap gap-1">
                           {spec.approved_sizes.map(s => (
                             <span key={s} className="text-xs bg-blue-900/30 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full">{s}</span>
@@ -1222,7 +1222,7 @@ export default function TyreSpecifications() {
                         </div>
                       </div>
                       <div>
-                        <p className="text-gray-500 text-xs mb-1 flex items-center gap-1"><Shield size={10} /> Approved Brands</p>
+                        <p className="text-[var(--text-muted)] text-xs mb-1 flex items-center gap-1"><Shield size={10} /> Approved Brands</p>
                         <div className="flex flex-wrap gap-1">
                           {spec.approved_brands.map(b => (
                             <span key={b} className="text-xs bg-purple-900/30 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full">{b}</span>
@@ -1230,29 +1230,29 @@ export default function TyreSpecifications() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-gray-800">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-[var(--input-border)]">
                         {spec.recommended_pressure ? (
                           <div className="text-center">
-                            <p className="text-gray-500 text-xs">PSI</p>
-                            <p className="text-white text-sm font-semibold">{spec.recommended_pressure}</p>
+                            <p className="text-[var(--text-muted)] text-xs">PSI</p>
+                            <p className="text-[var(--text-primary)] text-sm font-semibold">{spec.recommended_pressure}</p>
                           </div>
                         ) : null}
                         {spec.min_tread_depth ? (
                           <div className="text-center">
-                            <p className="text-gray-500 text-xs">Min Tread</p>
-                            <p className="text-white text-sm font-semibold">{spec.min_tread_depth}mm</p>
+                            <p className="text-[var(--text-muted)] text-xs">Min Tread</p>
+                            <p className="text-[var(--text-primary)] text-sm font-semibold">{spec.min_tread_depth}mm</p>
                           </div>
                         ) : null}
                         {spec.min_load_index ? (
                           <div className="text-center">
-                            <p className="text-gray-500 text-xs">Load Idx</p>
-                            <p className="text-white text-sm font-semibold">{spec.min_load_index}{spec.min_speed_index}</p>
+                            <p className="text-[var(--text-muted)] text-xs">Load Idx</p>
+                            <p className="text-[var(--text-primary)] text-sm font-semibold">{spec.min_load_index}{spec.min_speed_index}</p>
                           </div>
                         ) : null}
                       </div>
 
                       {spec.notes && (
-                        <p className="text-gray-500 text-xs border-t border-gray-800 pt-2 line-clamp-2">{spec.notes}</p>
+                        <p className="text-[var(--text-muted)] text-xs border-t border-[var(--input-border)] pt-2 line-clamp-2">{spec.notes}</p>
                       )}
                     </div>
                   </motion.div>
@@ -1269,12 +1269,12 @@ export default function TyreSpecifications() {
             {/* Chart + Summary */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="card flex flex-col">
-                <p className="text-gray-400 text-sm font-medium mb-3 flex items-center gap-2"><BarChart3 size={14} /> Compliance Breakdown</p>
+                <p className="text-[var(--text-muted)] text-sm font-medium mb-3 flex items-center gap-2"><BarChart3 size={14} /> Compliance Breakdown</p>
                 <div className="flex-1 min-h-[180px]">
                   {complianceData.length > 0 ? (
                     <Doughnut data={doughnutData} options={CHART_OPTS} />
                   ) : (
-                    <div className="h-full flex items-center justify-center text-gray-600 text-sm">No data</div>
+                    <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No data</div>
                   )}
                 </div>
               </div>
@@ -1291,13 +1291,13 @@ export default function TyreSpecifications() {
                   const Icon = cfg.icon
                   const pct = complianceData.length > 0 ? Math.round((count / complianceData.length) * 100) : 0
                   return (
-                    <div key={status} className={`bg-gray-900 border rounded-xl p-3 ${cfg.bg}`}>
+                    <div key={status} className={`bg-[var(--surface-1)] border rounded-xl p-3 ${cfg.bg}`}>
                       <div className={`flex items-center gap-1.5 mb-1 ${cfg.color}`}>
                         <Icon size={13} />
                         <span className="text-xs font-medium">{status}</span>
                       </div>
                       <p className={`text-2xl font-bold ${cfg.color}`}>{count}</p>
-                      <p className="text-gray-500 text-xs">{pct}% of fleet</p>
+                      <p className="text-[var(--text-muted)] text-xs">{pct}% of fleet</p>
                     </div>
                   )
                 })}
@@ -1307,50 +1307,50 @@ export default function TyreSpecifications() {
             {/* Compliance Table Filters */}
             <div className="flex flex-wrap gap-3">
               <div className="relative flex-1 min-w-[200px]">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   value={compSearch}
                   onChange={e => { setCompSearch(e.target.value); setCompPage(0) }}
                   placeholder="Search asset or vehicle type..."
-                  className="w-full pl-9 pr-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none"
+                  className="w-full pl-9 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-sm focus:border-blue-500 outline-none"
                 />
               </div>
-              <select value={compSiteFilter} onChange={e => { setCompSiteFilter(e.target.value); setCompPage(0) }} className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-blue-500 outline-none">
+              <select value={compSiteFilter} onChange={e => { setCompSiteFilter(e.target.value); setCompPage(0) }} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] text-sm focus:border-blue-500 outline-none">
                 <option value="">All Sites</option>
                 {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              <select value={compTypeFilter} onChange={e => { setCompTypeFilter(e.target.value); setCompPage(0) }} className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-blue-500 outline-none">
+              <select value={compTypeFilter} onChange={e => { setCompTypeFilter(e.target.value); setCompPage(0) }} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] text-sm focus:border-blue-500 outline-none">
                 <option value="">All Vehicle Types</option>
                 {typeOptions.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
-              <select value={compStatusFilter} onChange={e => { setCompStatusFilter(e.target.value); setCompPage(0) }} className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-blue-500 outline-none">
+              <select value={compStatusFilter} onChange={e => { setCompStatusFilter(e.target.value); setCompPage(0) }} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] text-sm focus:border-blue-500 outline-none">
                 <option value="">All Statuses</option>
                 {Object.keys(STATUS_CONFIG).map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
 
             {/* Compliance Table */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
               {loadingRecords ? (
                 <div className="py-16 text-center">
-                  <RefreshCw size={24} className="animate-spin text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm">Loading fleet data...</p>
+                  <RefreshCw size={24} className="animate-spin text-[var(--text-dim)] mx-auto mb-3" />
+                  <p className="text-[var(--text-muted)] text-sm">Loading fleet data...</p>
                 </div>
               ) : (
                 <>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b border-gray-800">
+                        <tr className="border-b border-[var(--input-border)]">
                           {['Asset No', 'Vehicle Type', 'Position', 'Fitted Size', 'Fitted Brand', 'Site', 'Spec Status', 'Action'].map(h => (
-                            <th key={h} className="px-4 py-3 text-left text-xs text-gray-500 font-medium">{h}</th>
+                            <th key={h} className="px-4 py-3 text-left text-xs text-[var(--text-muted)] font-medium">{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {compliancePage.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="px-4 py-12 text-center text-gray-500 text-sm">No records match filters</td>
+                            <td colSpan={8} className="px-4 py-12 text-center text-[var(--text-muted)] text-sm">No records match filters</td>
                           </tr>
                         ) : (
                           compliancePage.map((row, i) => {
@@ -1362,14 +1362,14 @@ export default function TyreSpecifications() {
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: i * 0.01 }}
-                                className="border-b border-gray-800 hover:bg-gray-800/40 transition-colors"
+                                className="border-b border-[var(--input-border)] hover:bg-gray-800/40 transition-colors"
                               >
-                                <td className="px-4 py-3 text-white text-sm font-mono">{row.asset_no || '-'}</td>
-                                <td className="px-4 py-3 text-gray-300 text-sm">{row.vehicleType || <span className="text-gray-600">Unknown</span>}</td>
-                                <td className="px-4 py-3 text-gray-300 text-sm">{normalizePosition(row.position) || '-'}</td>
-                                <td className="px-4 py-3 text-gray-300 text-sm font-mono">{row.size || '-'}</td>
-                                <td className="px-4 py-3 text-gray-300 text-sm">{row.brand || '-'}</td>
-                                <td className="px-4 py-3 text-gray-400 text-sm">{row.site || '-'}</td>
+                                <td className="px-4 py-3 text-[var(--text-primary)] text-sm font-mono">{row.asset_no || '-'}</td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)] text-sm">{row.vehicleType || <span className="text-[var(--text-dim)]">Unknown</span>}</td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)] text-sm">{normalizePosition(row.position) || '-'}</td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)] text-sm font-mono">{row.size || '-'}</td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)] text-sm">{row.brand || '-'}</td>
+                                <td className="px-4 py-3 text-[var(--text-muted)] text-sm">{row.site || '-'}</td>
                                 <td className="px-4 py-3">
                                   <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
                                     <Icon size={10} /> {cfg.label}
@@ -1395,21 +1395,21 @@ export default function TyreSpecifications() {
 
                   {/* Pagination */}
                   {complianceTotalPages > 1 && (
-                    <div className="px-4 py-3 border-t border-gray-800 flex items-center justify-between">
-                      <p className="text-gray-500 text-xs">
+                    <div className="px-4 py-3 border-t border-[var(--input-border)] flex items-center justify-between">
+                      <p className="text-[var(--text-muted)] text-xs">
                         Showing {compPage * PAGE_SIZE + 1}-{Math.min((compPage + 1) * PAGE_SIZE, filteredCompliance.length)} of {filteredCompliance.length}
                       </p>
                       <div className="flex gap-1">
-                        <button onClick={() => setCompPage(p => Math.max(0, p - 1))} disabled={compPage === 0} className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 transition-colors">
+                        <button onClick={() => setCompPage(p => Math.max(0, p - 1))} disabled={compPage === 0} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors">
                           <ChevronLeft size={15} />
                         </button>
                         {Array.from({ length: Math.min(complianceTotalPages, 7) }, (_, i) => {
                           const pg = complianceTotalPages <= 7 ? i : compPage <= 3 ? i : compPage >= complianceTotalPages - 4 ? complianceTotalPages - 7 + i : compPage - 3 + i
                           return (
-                            <button key={pg} onClick={() => setCompPage(pg)} className={`w-7 h-7 rounded text-xs transition-colors ${compPage === pg ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>{pg + 1}</button>
+                            <button key={pg} onClick={() => setCompPage(pg)} className={`w-7 h-7 rounded text-xs transition-colors ${compPage === pg ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'}`}>{pg + 1}</button>
                           )
                         })}
-                        <button onClick={() => setCompPage(p => Math.min(complianceTotalPages - 1, p + 1))} disabled={compPage >= complianceTotalPages - 1} className="p-1.5 text-gray-400 hover:text-white disabled:opacity-30 transition-colors">
+                        <button onClick={() => setCompPage(p => Math.min(complianceTotalPages - 1, p + 1))} disabled={compPage >= complianceTotalPages - 1} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 transition-colors">
                           <ChevronRight size={15} />
                         </button>
                       </div>
@@ -1425,19 +1425,19 @@ export default function TyreSpecifications() {
         {activeTab === 'violations' && (
           <motion.div key="violations" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
 
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-                <p className="text-white font-medium text-sm flex items-center gap-2">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center justify-between">
+                <p className="text-[var(--text-primary)] font-medium text-sm flex items-center gap-2">
                   <AlertOctagon size={15} className="text-red-400" />
                   Non-Conformance Report - Grouped by Asset
                 </p>
-                <span className="text-gray-500 text-xs">{nonConformanceByAsset.length} vehicles with violations</span>
+                <span className="text-[var(--text-muted)] text-xs">{nonConformanceByAsset.length} vehicles with violations</span>
               </div>
 
               {loadingRecords ? (
                 <div className="py-12 text-center">
-                  <RefreshCw size={24} className="animate-spin text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm">Analysing fleet...</p>
+                  <RefreshCw size={24} className="animate-spin text-[var(--text-dim)] mx-auto mb-3" />
+                  <p className="text-[var(--text-muted)] text-sm">Analysing fleet...</p>
                 </div>
               ) : nonConformanceByAsset.length === 0 ? (
                 <EmptyState
@@ -1449,9 +1449,9 @@ export default function TyreSpecifications() {
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-gray-800">
+                      <tr className="border-b border-[var(--input-border)]">
                         {['Rank', 'Asset No', 'Site', 'Vehicle Type', 'Violations', 'Violation Types', 'Recommended Action', 'Action'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-xs text-gray-500 font-medium">{h}</th>
+                          <th key={h} className="px-4 py-3 text-left text-xs text-[var(--text-muted)] font-medium">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1462,14 +1462,14 @@ export default function TyreSpecifications() {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: i * 0.02 }}
-                          className="border-b border-gray-800 hover:bg-gray-800/40 transition-colors"
+                          className="border-b border-[var(--input-border)] hover:bg-gray-800/40 transition-colors"
                         >
                           <td className="px-4 py-3">
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? 'bg-red-900 text-red-300' : 'bg-gray-800 text-gray-400'}`}>{i + 1}</span>
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? 'bg-red-900 text-red-300' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>{i + 1}</span>
                           </td>
-                          <td className="px-4 py-3 text-white font-mono text-sm">{a.asset_no}</td>
-                          <td className="px-4 py-3 text-gray-400 text-sm">{a.site || '-'}</td>
-                          <td className="px-4 py-3 text-gray-300 text-sm">{a.vehicleType || 'Unknown'}</td>
+                          <td className="px-4 py-3 text-[var(--text-primary)] font-mono text-sm">{a.asset_no}</td>
+                          <td className="px-4 py-3 text-[var(--text-muted)] text-sm">{a.site || '-'}</td>
+                          <td className="px-4 py-3 text-[var(--text-secondary)] text-sm">{a.vehicleType || 'Unknown'}</td>
                           <td className="px-4 py-3">
                             <span className={`text-sm font-bold ${a.violations.length >= 3 ? 'text-red-400' : 'text-orange-400'}`}>{a.violations.length}</span>
                           </td>
@@ -1480,7 +1480,7 @@ export default function TyreSpecifications() {
                               ))}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-gray-400 text-xs max-w-[180px]">
+                          <td className="px-4 py-3 text-[var(--text-muted)] text-xs max-w-[180px]">
                             Replace non-approved fitments with spec-compliant tyres during next scheduled change
                           </td>
                           <td className="px-4 py-3">
@@ -1509,7 +1509,7 @@ export default function TyreSpecifications() {
 
             <div className="card flex items-start gap-3">
               <Info size={16} className="text-blue-400 mt-0.5 shrink-0" />
-              <p className="text-gray-300 text-sm">
+              <p className="text-[var(--text-secondary)] text-sm">
                 Industry-standard tyre specification defaults. Click <strong>Import</strong> to add any profile to your specification library. Already-imported specs are greyed out.
               </p>
             </div>
@@ -1523,15 +1523,15 @@ export default function TyreSpecifications() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
-                    className={`bg-gray-900 border rounded-xl p-4 transition-colors ${alreadyImported ? 'border-gray-800 opacity-50' : 'border-gray-700 hover:border-blue-700'}`}
+                    className={`bg-[var(--surface-1)] border rounded-xl p-4 transition-colors ${alreadyImported ? 'border-[var(--input-border)] opacity-50' : 'border-[var(--input-border)] hover:border-blue-700'}`}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
                           <Zap size={13} className="text-yellow-400" />
-                          <span className="text-white font-medium text-sm">{def.vehicle_type}</span>
+                          <span className="text-[var(--text-primary)] font-medium text-sm">{def.vehicle_type}</span>
                         </div>
-                        <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{def.position}</span>
+                        <span className="text-xs text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">{def.position}</span>
                       </div>
                       {alreadyImported ? (
                         <span className="flex items-center gap-1 text-xs text-green-400 bg-green-900/20 border border-green-800 px-2 py-1 rounded-lg">
@@ -1550,32 +1550,32 @@ export default function TyreSpecifications() {
                     </div>
                     <div className="space-y-2">
                       <div>
-                        <p className="text-gray-500 text-xs mb-1">Approved Sizes</p>
+                        <p className="text-[var(--text-muted)] text-xs mb-1">Approved Sizes</p>
                         <div className="flex flex-wrap gap-1">
                           {def.approved_sizes.map(s => <span key={s} className="text-xs bg-blue-900/30 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full">{s}</span>)}
                         </div>
                       </div>
                       <div>
-                        <p className="text-gray-500 text-xs mb-1">Approved Brands</p>
+                        <p className="text-[var(--text-muted)] text-xs mb-1">Approved Brands</p>
                         <div className="flex flex-wrap gap-1">
                           {def.approved_brands.map(b => <span key={b} className="text-xs bg-purple-900/30 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full">{b}</span>)}
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-gray-800">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-[var(--input-border)]">
                         <div className="text-center">
-                          <p className="text-gray-500 text-xs">PSI</p>
-                          <p className="text-white text-sm font-semibold">{def.recommended_pressure}</p>
+                          <p className="text-[var(--text-muted)] text-xs">PSI</p>
+                          <p className="text-[var(--text-primary)] text-sm font-semibold">{def.recommended_pressure}</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-gray-500 text-xs">Min Tread</p>
-                          <p className="text-white text-sm font-semibold">{def.min_tread_depth}mm</p>
+                          <p className="text-[var(--text-muted)] text-xs">Min Tread</p>
+                          <p className="text-[var(--text-primary)] text-sm font-semibold">{def.min_tread_depth}mm</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-gray-500 text-xs">Load/Speed</p>
-                          <p className="text-white text-sm font-semibold">{def.min_load_index}{def.min_speed_index}</p>
+                          <p className="text-[var(--text-muted)] text-xs">Load/Speed</p>
+                          <p className="text-[var(--text-primary)] text-sm font-semibold">{def.min_load_index}{def.min_speed_index}</p>
                         </div>
                       </div>
-                      <p className="text-gray-600 text-xs pt-1">{def.notes}</p>
+                      <p className="text-[var(--text-dim)] text-xs pt-1">{def.notes}</p>
                     </div>
                   </motion.div>
                 )
@@ -1588,13 +1588,13 @@ export default function TyreSpecifications() {
         {activeTab === 'history' && (
           <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
 
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-                <p className="text-white font-medium text-sm flex items-center gap-2">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center justify-between">
+                <p className="text-[var(--text-primary)] font-medium text-sm flex items-center gap-2">
                   <History size={15} className="text-blue-400" />
                   Specification Change History
                 </p>
-                <span className="text-gray-500 text-xs">Last {Math.min(history.length, 100)} events</span>
+                <span className="text-[var(--text-muted)] text-xs">Last {Math.min(history.length, 100)} events</span>
               </div>
 
               {history.length === 0 ? (
@@ -1607,9 +1607,9 @@ export default function TyreSpecifications() {
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-gray-800">
+                      <tr className="border-b border-[var(--input-border)]">
                         {['Date', 'Action', 'User', 'Vehicle Type', 'Position', 'Changed Field', 'Old Value', 'New Value'].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-xs text-gray-500 font-medium">{h}</th>
+                          <th key={h} className="px-4 py-3 text-left text-xs text-[var(--text-muted)] font-medium">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1618,15 +1618,15 @@ export default function TyreSpecifications() {
                         const actionColor = event.action === 'Add' || event.action === 'Quick Setup Import' || event.action === 'Import' ? 'text-green-400' :
                           event.action === 'Edit' ? 'text-blue-400' : 'text-red-400'
                         return (
-                          <tr key={event.id} className="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
-                            <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap">{new Date(event.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                          <tr key={event.id} className="border-b border-[var(--input-border)] hover:bg-gray-800/30 transition-colors">
+                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs whitespace-nowrap">{new Date(event.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                             <td className="px-4 py-2.5"><span className={`text-xs font-medium ${actionColor}`}>{event.action}</span></td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs max-w-[120px] truncate">{event.user}</td>
-                            <td className="px-4 py-2.5 text-gray-300 text-xs">{event.vehicle_type}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">{event.position}</td>
-                            <td className="px-4 py-2.5 text-gray-500 text-xs">{event.changed_field || '-'}</td>
-                            <td className="px-4 py-2.5 text-gray-600 text-xs max-w-[120px] truncate">{event.old_value || '-'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs max-w-[120px] truncate">{event.new_value || '-'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs max-w-[120px] truncate">{event.user}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-secondary)] text-xs">{event.vehicle_type}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs">{event.position}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs">{event.changed_field || '-'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-dim)] text-xs max-w-[120px] truncate">{event.old_value || '-'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs max-w-[120px] truncate">{event.new_value || '-'}</td>
                           </tr>
                         )
                       })}

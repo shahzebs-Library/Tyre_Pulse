@@ -78,7 +78,7 @@ function nowStr() {
 }
 
 function Badge({ label, cfg, small }) {
-  const c = cfg ?? { text: 'text-gray-400', bg: 'bg-gray-800', border: 'border-gray-600' }
+  const c = cfg ?? { text: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)]', border: 'border-[var(--input-border)]' }
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold ${c.text} ${c.bg} ${c.border} ${small ? 'text-[10px]' : ''}`}>
       {c.dot && <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />}
@@ -92,15 +92,15 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', warn 
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`bg-gray-900 border ${warn ? 'border-red-700/60' : 'border-gray-800'} rounded-xl p-4 flex items-start gap-3`}
+      className={`bg-[var(--surface-1)] border ${warn ? 'border-red-700/60' : 'border-[var(--input-border)]'} rounded-xl p-4 flex items-start gap-3`}
     >
-      <div className={`p-2 rounded-lg bg-gray-800 ${color}`}>
+      <div className={`p-2 rounded-lg bg-[var(--input-bg)] ${color}`}>
         <Icon size={18} />
       </div>
       <div>
-        <p className="text-gray-400 text-xs">{label}</p>
+        <p className="text-[var(--text-muted)] text-xs">{label}</p>
         <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
-        {sub && <p className="text-gray-500 text-xs mt-0.5">{sub}</p>}
+        {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5">{sub}</p>}
       </div>
     </motion.div>
   )
@@ -579,13 +579,13 @@ export default function RecallTracker() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={exportPdf}
-              className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
+              className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] transition"
             >
               <FileText size={14} /> PDF
             </button>
             <button
               onClick={exportExcel}
-              className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
+              className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] transition"
             >
               <FileSpreadsheet size={14} /> Excel
             </button>
@@ -646,7 +646,7 @@ export default function RecallTracker() {
           label="Affected Fleet Tyres"
           value={kpis.affectedTyres.toLocaleString()}
           sub="matched to active recalls"
-          color={kpis.affectedTyres > 0 ? 'text-orange-400' : 'text-gray-400'}
+          color={kpis.affectedTyres > 0 ? 'text-orange-400' : 'text-[var(--text-muted)]'}
         />
         <KpiCard
           icon={CheckCircle}
@@ -665,7 +665,7 @@ export default function RecallTracker() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 overflow-x-auto">
         {TAB_OPTS.map(t => (
           <button
             key={t}
@@ -673,7 +673,7 @@ export default function RecallTracker() {
             className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
               activeTab === t
                 ? 'bg-gray-700 text-white'
-                : 'text-gray-400 hover:text-gray-200'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
             }`}
           >
             {t}
@@ -687,12 +687,12 @@ export default function RecallTracker() {
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search recall #, brand, size..."
-                className="w-full pl-8 pr-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-600"
+                className="w-full pl-8 pr-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-600"
               />
             </div>
             {[
@@ -704,7 +704,7 @@ export default function RecallTracker() {
                 key={label}
                 value={val}
                 onChange={e => set(e.target.value)}
-                className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-600"
+                className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-600"
               >
                 {opts.map(o => <option key={o}>{o}</option>)}
               </select>
@@ -712,11 +712,11 @@ export default function RecallTracker() {
           </div>
 
           {/* Table */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-800 text-gray-400 text-xs">
+                  <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
                     <th className="px-4 py-3 text-left">Recall #</th>
                     <th className="px-4 py-3 text-left">Brand</th>
                     <th className="px-4 py-3 text-left">Affected Sizes</th>
@@ -731,7 +731,7 @@ export default function RecallTracker() {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
+                      <td colSpan={9} className="px-4 py-10 text-center text-[var(--text-muted)]">
                         <Loader2 className="inline animate-spin mr-2" size={16} /> Loading tyre data...
                       </td>
                     </tr>
@@ -747,7 +747,7 @@ export default function RecallTracker() {
                   )}
                   {!loading && !recallsError && filtered.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-4 py-12 text-center text-gray-500">
+                      <td colSpan={9} className="px-4 py-12 text-center text-[var(--text-muted)]">
                         <ShieldCheck className="inline mb-2 text-green-600" size={32} />
                         <p className="mt-1">No recalls match current filters</p>
                       </td>
@@ -761,30 +761,30 @@ export default function RecallTracker() {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: i * 0.03 }}
-                        className="border-b border-gray-800/60 hover:bg-gray-800/40 transition"
+                        className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)] transition"
                       >
                         <td className="px-4 py-3 font-mono text-blue-300 text-xs">{r.recall_number}</td>
-                        <td className="px-4 py-3 font-medium text-gray-100">{r.brand}</td>
+                        <td className="px-4 py-3 font-medium text-[var(--text-secondary)]">{r.brand}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-1">
                             {(r.affected_sizes ?? []).slice(0, 3).map(s => (
-                              <span key={s} className="px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-[10px] text-gray-300 font-mono">{s}</span>
+                              <span key={s} className="px-1.5 py-0.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[10px] text-[var(--text-dim)] font-mono">{s}</span>
                             ))}
                             {(r.affected_sizes ?? []).length > 3 && (
-                              <span className="text-gray-500 text-[10px]">+{r.affected_sizes.length - 3}</span>
+                              <span className="text-[var(--text-muted)] text-[10px]">+{r.affected_sizes.length - 3}</span>
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.issue_date}</td>
+                        <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{r.issue_date}</td>
                         <td className="px-4 py-3">
                           <Badge label={r.severity} cfg={SEVERITY_CFG[r.severity]} />
                         </td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{r.source}</td>
+                        <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{r.source}</td>
                         <td className="px-4 py-3">
                           <Badge label={r.status} cfg={STATUS_CFG[r.status]} />
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <span className={`font-bold text-sm ${affectedCount > 0 ? 'text-orange-400' : 'text-gray-500'}`}>
+                          <span className={`font-bold text-sm ${affectedCount > 0 ? 'text-orange-400' : 'text-[var(--text-muted)]'}`}>
                             {affectedCount}
                           </span>
                         </td>
@@ -809,14 +809,14 @@ export default function RecallTracker() {
                               <>
                                 <button
                                   onClick={() => openEdit(r)}
-                                  className="p-1 text-gray-400 hover:text-gray-200 transition"
+                                  className="p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition"
                                   title="Edit"
                                 >
                                   <Activity size={12} />
                                 </button>
                                 <button
                                   onClick={() => handleDelete(r.id)}
-                                  className="p-1 text-gray-600 hover:text-red-400 transition"
+                                  className="p-1 text-[var(--text-dim)] hover:text-red-400 transition"
                                   title="Delete"
                                 >
                                   <XCircle size={12} />
@@ -831,7 +831,7 @@ export default function RecallTracker() {
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-2 border-t border-gray-800 text-xs text-gray-500">
+            <div className="px-4 py-2 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
               {filtered.length} of {recalls.length} recalls
             </div>
           </div>
@@ -841,12 +841,12 @@ export default function RecallTracker() {
       {/* ── Tab: Batch Detector ── */}
       {activeTab === 'Batch Detector' && (
         <div className="space-y-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
             <div className="flex items-center gap-2 mb-1">
               <Activity className="text-orange-400" size={18} />
-              <h2 className="font-semibold text-gray-200">Automatic Batch Failure Detection</h2>
+              <h2 className="font-semibold text-[var(--text-secondary)]">Automatic Batch Failure Detection</h2>
             </div>
-            <p className="text-gray-500 text-xs">
+            <p className="text-[var(--text-muted)] text-xs">
               Grouped by Brand + first 4 serial chars. Flagged if failure rate &gt; 30% and batch size ≥ 5.
             </p>
           </div>
@@ -854,10 +854,10 @@ export default function RecallTracker() {
           {loading && <SkeletonTable rows={8} cols={6} />}
 
           {!loading && batchAnalysis.length === 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-10 text-center">
               <ShieldCheck className="mx-auto text-green-500 mb-3" size={40} />
-              <p className="text-gray-300 font-medium">No suspicious batch failures detected</p>
-              <p className="text-gray-500 text-sm mt-1">All batches are within acceptable failure thresholds</p>
+              <p className="text-[var(--text-dim)] font-medium">No suspicious batch failures detected</p>
+              <p className="text-[var(--text-muted)] text-sm mt-1">All batches are within acceptable failure thresholds</p>
             </div>
           )}
 
@@ -868,7 +868,7 @@ export default function RecallTracker() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className={`bg-gray-900 border rounded-xl p-4 ${
+                className={`bg-[var(--surface-1)] border rounded-xl p-4 ${
                   b.rate >= 60 ? 'border-red-700/70' : 'border-orange-700/60'
                 }`}
               >
@@ -882,13 +882,13 @@ export default function RecallTracker() {
                       </span>
                       <Flag className={b.rate >= 60 ? 'text-red-400' : 'text-orange-400'} size={14} />
                     </div>
-                    <p className="font-semibold text-gray-100">
+                    <p className="font-semibold text-[var(--text-secondary)]">
                       {b.brand} - Batch <span className="font-mono text-yellow-300">{b.prefix}****</span>
                     </p>
                     <p className={`text-sm mt-0.5 ${b.rate >= 60 ? 'text-red-400' : 'text-orange-400'}`}>
                       {b.failed} of {b.total} tyres failed ({b.rate}% failure rate)
                     </p>
-                    <div className="flex flex-wrap gap-2 mt-2 text-xs text-gray-400">
+                    <div className="flex flex-wrap gap-2 mt-2 text-xs text-[var(--text-muted)]">
                       {b.positions.length > 0 && (
                         <span className="flex items-center gap-1"><Layers size={10} /> Positions: {b.positions.join(', ')}</span>
                       )}
@@ -900,11 +900,11 @@ export default function RecallTracker() {
                   <div className="flex items-center gap-2">
                     {/* Failure rate bar */}
                     <div className="w-24">
-                      <div className="flex justify-between text-xs text-gray-400 mb-1">
+                      <div className="flex justify-between text-xs text-[var(--text-muted)] mb-1">
                         <span>Failure</span>
                         <span className="font-bold text-red-400">{b.rate}%</span>
                       </div>
-                      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-2 bg-[var(--input-border)] rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${b.rate >= 60 ? 'bg-red-500' : 'bg-orange-500'}`}
                           style={{ width: `${b.rate}%` }}
@@ -943,8 +943,8 @@ export default function RecallTracker() {
 
       {/* ── Tab: Timeline ── */}
       {activeTab === 'Timeline' && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="font-semibold text-gray-200 mb-5 flex items-center gap-2">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+          <h2 className="font-semibold text-[var(--text-secondary)] mb-5 flex items-center gap-2">
             <GitBranch className="text-blue-400" size={16} /> Recall Timeline
           </h2>
           {timeline.length === 0 && (
@@ -965,26 +965,26 @@ export default function RecallTracker() {
               >
                 {/* Left: date + connector */}
                 <div className="flex flex-col items-center w-28 shrink-0">
-                  <span className="text-xs text-gray-400 font-mono text-right w-full pr-2">{r.issue_date}</span>
+                  <span className="text-xs text-[var(--text-muted)] font-mono text-right w-full pr-2">{r.issue_date}</span>
                   <div className="flex flex-col items-center mt-1">
-                    <div className={`w-3 h-3 rounded-full border-2 ${SEVERITY_CFG[r.severity]?.dot ?? 'bg-gray-500'} border-gray-900 z-10`} />
-                    {i < timeline.length - 1 && <div className="w-0.5 h-8 bg-gray-800" />}
+                    <div className={`w-3 h-3 rounded-full border-2 ${SEVERITY_CFG[r.severity]?.dot ?? 'bg-gray-500'} border-[var(--surface-1)] z-10`} />
+                    {i < timeline.length - 1 && <div className="w-0.5 h-8 bg-[var(--input-border)]" />}
                   </div>
                 </div>
                 {/* Right: content */}
                 <div className={`flex-1 pb-6 ${i < timeline.length - 1 ? '' : ''}`}>
-                  <div className="bg-gray-800 border border-gray-700/60 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className="font-mono text-blue-300 text-xs font-bold">{r.recall_number}</span>
-                        <span className="text-gray-300 font-medium text-sm">{r.brand}</span>
+                        <span className="text-[var(--text-dim)] font-medium text-sm">{r.brand}</span>
                         <Badge label={r.severity} cfg={SEVERITY_CFG[r.severity]} small />
                       </div>
-                      <p className="text-gray-400 text-xs line-clamp-1">{r.description}</p>
+                      <p className="text-[var(--text-muted)] text-xs line-clamp-1">{r.description}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge label={r.status} cfg={STATUS_CFG[r.status]} small />
-                      <span className="text-gray-600 text-xs">{r.source}</span>
+                      <span className="text-[var(--text-dim)] text-xs">{r.source}</span>
                     </div>
                   </div>
                 </div>
@@ -996,10 +996,10 @@ export default function RecallTracker() {
 
       {/* ── Tab: Brand History ── */}
       {activeTab === 'Brand History' && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
             <Star className="text-yellow-400" size={16} />
-            <h2 className="font-semibold text-gray-200">Brand Recall History &amp; Reliability Scores</h2>
+            <h2 className="font-semibold text-[var(--text-secondary)]">Brand Recall History &amp; Reliability Scores</h2>
           </div>
           {brandHistory.length === 0 && (
             <EmptyState
@@ -1011,7 +1011,7 @@ export default function RecallTracker() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-800 text-gray-400 text-xs">
+                <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
                   <th className="px-4 py-3 text-left">Brand</th>
                   <th className="px-4 py-3 text-center">Total Recalls</th>
                   <th className="px-4 py-3 text-center">Active</th>
@@ -1027,27 +1027,27 @@ export default function RecallTracker() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.04 }}
-                    className={`border-b border-gray-800/60 ${b.score < 60 ? 'bg-red-900/10' : ''}`}
+                    className={`border-b border-[var(--input-border)] ${b.score < 60 ? 'bg-red-900/10' : ''}`}
                   >
-                    <td className="px-4 py-3 font-medium text-gray-100">
+                    <td className="px-4 py-3 font-medium text-[var(--text-secondary)]">
                       <div className="flex items-center gap-2">
                         {b.score < 60 && <AlertTriangle className="text-red-400" size={13} />}
                         {b.brand}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center text-gray-300">{b.total}</td>
+                    <td className="px-4 py-3 text-center text-[var(--text-dim)]">{b.total}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={b.active > 0 ? 'text-red-400 font-bold' : 'text-gray-400'}>{b.active}</span>
+                      <span className={b.active > 0 ? 'text-red-400 font-bold' : 'text-[var(--text-muted)]'}>{b.active}</span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={b.critical > 0 ? 'text-orange-400 font-bold' : 'text-gray-400'}>{b.critical}</span>
+                      <span className={b.critical > 0 ? 'text-orange-400 font-bold' : 'text-[var(--text-muted)]'}>{b.critical}</span>
                     </td>
-                    <td className="px-4 py-3 text-center text-gray-400 text-xs">
+                    <td className="px-4 py-3 text-center text-[var(--text-muted)] text-xs">
                       {b.avgDaysToClose != null ? `${b.avgDaysToClose}d` : 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        <div className="w-20 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                        <div className="w-20 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${
                               b.score >= 80 ? 'bg-green-500' : b.score >= 60 ? 'bg-yellow-500' : 'bg-red-500'
@@ -1066,7 +1066,7 @@ export default function RecallTracker() {
               </tbody>
             </table>
           </div>
-          <div className="px-4 py-2 border-t border-gray-800 text-xs text-gray-500">
+          <div className="px-4 py-2 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
             Score = 100 - (active × 10 + total critical × 5) · Brands below 60 flagged
           </div>
         </div>
@@ -1076,32 +1076,32 @@ export default function RecallTracker() {
       {activeTab === 'Analytics' && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <p className="text-xs text-gray-400 mb-3 font-medium">Recalls by Severity</p>
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+              <p className="text-xs text-[var(--text-muted)] mb-3 font-medium">Recalls by Severity</p>
               <div className="h-44">
                 <Bar data={chartData.severity} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
               </div>
             </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <p className="text-xs text-gray-400 mb-3 font-medium">Recalls by Status</p>
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+              <p className="text-xs text-[var(--text-muted)] mb-3 font-medium">Recalls by Status</p>
               <div className="h-44">
                 <Bar data={chartData.status} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
               </div>
             </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <p className="text-xs text-gray-400 mb-3 font-medium">Monthly Recall Trend</p>
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+              <p className="text-xs text-[var(--text-muted)] mb-3 font-medium">Monthly Recall Trend</p>
               <div className="h-44">
                 {chartData.monthly.labels.length > 0
                   ? <Line data={chartData.monthly} options={CHART_OPTS} />
-                  : <div className="h-full flex items-center justify-center text-gray-600 text-xs">Insufficient data</div>
+                  : <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-xs">Insufficient data</div>
                 }
               </div>
             </div>
           </div>
 
           {/* Affected tyre summary by recall */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-400 mb-3 font-medium flex items-center gap-1">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+            <p className="text-xs text-[var(--text-muted)] mb-3 font-medium flex items-center gap-1">
               <BarChart3 size={13} /> Affected Fleet Tyres per Recall
             </p>
             <div className="space-y-2">
@@ -1111,7 +1111,7 @@ export default function RecallTracker() {
                 return (
                   <div key={r.id} className="flex items-center gap-3">
                     <span className="w-28 text-xs font-mono text-blue-300 truncate">{r.recall_number}</span>
-                    <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                    <div className="flex-1 h-2 bg-[var(--input-border)] rounded-full overflow-hidden">
                       <div
                         className="h-full bg-orange-500 rounded-full transition-all"
                         style={{ width: `${(cnt / maxCnt) * 100}%` }}
@@ -1122,7 +1122,7 @@ export default function RecallTracker() {
                 )
               })}
               {filtered.filter(r => r.status === 'Active').length === 0 && (
-                <p className="text-gray-500 text-xs text-center py-4">No active recalls to display</p>
+                <p className="text-[var(--text-muted)] text-xs text-center py-4">No active recalls to display</p>
               )}
             </div>
           </div>
@@ -1145,37 +1145,37 @@ export default function RecallTracker() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.25 }}
-              className="fixed right-0 top-0 h-full w-full max-w-2xl bg-gray-900 border-l border-gray-800 z-50 flex flex-col overflow-hidden"
+              className="fixed right-0 top-0 h-full w-full max-w-2xl bg-[var(--surface-1)] border-l border-[var(--input-border)] z-50 flex flex-col overflow-hidden"
             >
               {/* Drawer Header */}
-              <div className="p-4 border-b border-gray-800 flex items-start justify-between gap-3">
+              <div className="p-4 border-b border-[var(--input-border)] flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <ShieldAlert className="text-red-400" size={18} />
-                    <span className="font-bold text-gray-100">{drawer.recall_number}</span>
+                    <span className="font-bold text-[var(--text-secondary)]">{drawer.recall_number}</span>
                     <Badge label={drawer.severity} cfg={SEVERITY_CFG[drawer.severity]} small />
                     <Badge label={drawer.status} cfg={STATUS_CFG[drawer.status]} small />
                   </div>
-                  <p className="text-gray-400 text-sm">{drawer.brand} - {drawer.description}</p>
-                  <p className="text-xs text-gray-500 mt-1">{drawer.action_required}</p>
+                  <p className="text-[var(--text-muted)] text-sm">{drawer.brand} - {drawer.description}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{drawer.action_required}</p>
                 </div>
-                <button onClick={() => setDrawer(null)} className="text-gray-500 hover:text-gray-200 shrink-0">
+                <button onClick={() => setDrawer(null)} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] shrink-0">
                   <X size={20} />
                 </button>
               </div>
 
               {/* Drawer count */}
-              <div className="px-4 py-3 bg-gray-800/50 flex items-center justify-between">
+              <div className="px-4 py-3 bg-[var(--input-bg)] flex items-center justify-between">
                 <span className="font-bold text-orange-400 text-lg">
                   {matchTyresForRecall(drawer).length} affected fleet tyres
                 </span>
                 <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500" size={13} />
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={13} />
                   <input
                     value={drawerSearch}
                     onChange={e => setDrawerSearch(e.target.value)}
                     placeholder="Search serial, asset, site..."
-                    className="pl-7 pr-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-600 w-48"
+                    className="pl-7 pr-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-600 w-48"
                   />
                 </div>
               </div>
@@ -1183,8 +1183,8 @@ export default function RecallTracker() {
               {/* Drawer table */}
               <div className="flex-1 overflow-y-auto">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-gray-900 border-b border-gray-800">
-                    <tr className="text-gray-400">
+                  <thead className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--input-border)]">
+                    <tr className="text-[var(--text-muted)]">
                       <th className="px-3 py-2 text-left">Serial</th>
                       <th className="px-3 py-2 text-left">Asset</th>
                       <th className="px-3 py-2 text-left">Position</th>
@@ -1197,7 +1197,7 @@ export default function RecallTracker() {
                   <tbody>
                     {drawerTyres.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-3 py-10 text-center text-gray-500">
+                        <td colSpan={7} className="px-3 py-10 text-center text-[var(--text-muted)]">
                           {matchTyresForRecall(drawer).length === 0
                             ? 'No fleet tyres match this recall criteria'
                             : 'No results for current search'
@@ -1208,12 +1208,12 @@ export default function RecallTracker() {
                     {drawerTyres.map(t => {
                       const daysOn = t.issue_date ? daysBetween(t.issue_date, t.km_at_removal ? null : new Date().toISOString().slice(0, 10)) : null
                       return (
-                        <tr key={t.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                        <tr key={t.id} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]">
                           <td className="px-3 py-2 font-mono text-blue-300">{t.serial_number}</td>
-                          <td className="px-3 py-2 text-gray-300">{t.asset_no}</td>
-                          <td className="px-3 py-2 text-gray-400">{t.position}</td>
-                          <td className="px-3 py-2 text-gray-400">{t.site}</td>
-                          <td className="px-3 py-2 text-gray-400">{t.country}</td>
+                          <td className="px-3 py-2 text-[var(--text-dim)]">{t.asset_no}</td>
+                          <td className="px-3 py-2 text-[var(--text-muted)]">{t.position}</td>
+                          <td className="px-3 py-2 text-[var(--text-muted)]">{t.site}</td>
+                          <td className="px-3 py-2 text-[var(--text-muted)]">{t.country}</td>
                           <td className="px-3 py-2">
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                               t.km_at_removal
@@ -1223,7 +1223,7 @@ export default function RecallTracker() {
                               {t.km_at_removal ? 'Removed' : 'Fitted'}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-gray-400">{daysOn != null ? `${daysOn}d` : 'N/A'}</td>
+                          <td className="px-3 py-2 text-[var(--text-muted)]">{daysOn != null ? `${daysOn}d` : 'N/A'}</td>
                         </tr>
                       )
                     })}
@@ -1232,7 +1232,7 @@ export default function RecallTracker() {
               </div>
 
               {/* Drawer footer */}
-              <div className="p-3 border-t border-gray-800 flex justify-end">
+              <div className="p-3 border-t border-[var(--input-border)] flex justify-end">
                 <button
                   onClick={() => setDrawer(null)}
                   className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 transition"
@@ -1263,15 +1263,15 @@ export default function RecallTracker() {
               className="fixed inset-0 flex items-center justify-center z-50 p-4"
             >
               <div
-                className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
+                className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
                 onClick={e => e.stopPropagation()}
               >
-                <div className="p-5 border-b border-gray-800 flex items-center justify-between">
-                  <h2 className="font-bold text-gray-100 flex items-center gap-2">
+                <div className="p-5 border-b border-[var(--input-border)] flex items-center justify-between">
+                  <h2 className="font-bold text-[var(--text-secondary)] flex items-center gap-2">
                     <ShieldAlert className="text-red-400" size={18} />
                     {editRecall ? 'Edit Recall' : 'Add Recall'}
                   </h2>
-                  <button onClick={() => setShowAddModal(false)} className="text-gray-500 hover:text-gray-200">
+                  <button onClick={() => setShowAddModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
                     <X size={20} />
                   </button>
                 </div>
@@ -1285,58 +1285,58 @@ export default function RecallTracker() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Recall Number *</label>
+                      <label className="block text-xs text-[var(--text-muted)] mb-1">Recall Number *</label>
                       <input
                         value={form.recall_number}
                         onChange={e => setForm(f => ({ ...f, recall_number: e.target.value }))}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-600 font-mono"
+                        className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-600 font-mono"
                         placeholder="e.g. RCL-2024-001"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Brand *</label>
+                      <label className="block text-xs text-[var(--text-muted)] mb-1">Brand *</label>
                       <input
                         value={form.brand}
                         onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-600"
+                        className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-600"
                         placeholder="e.g. Michelin"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Issue Date *</label>
+                      <label className="block text-xs text-[var(--text-muted)] mb-1">Issue Date *</label>
                       <input
                         type="date"
                         value={form.issue_date}
                         onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-600"
+                        className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-600"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Severity</label>
+                      <label className="block text-xs text-[var(--text-muted)] mb-1">Severity</label>
                       <select
                         value={form.severity}
                         onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-600"
+                        className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-600"
                       >
                         {SEVERITY_OPTS.map(o => <option key={o}>{o}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Source</label>
+                      <label className="block text-xs text-[var(--text-muted)] mb-1">Source</label>
                       <select
                         value={form.source}
                         onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-600"
+                        className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-600"
                       >
                         {SOURCE_OPTS.map(o => <option key={o}>{o}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Status</label>
+                      <label className="block text-xs text-[var(--text-muted)] mb-1">Status</label>
                       <select
                         value={form.status}
                         onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-600"
+                        className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-600"
                       >
                         {STATUS_OPTS.map(o => <option key={o}>{o}</option>)}
                       </select>
@@ -1345,8 +1345,8 @@ export default function RecallTracker() {
 
                   {/* Affected Sizes tag input */}
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Affected Sizes * <span className="text-gray-500">(press Enter or comma to add)</span></label>
-                    <div className="flex flex-wrap gap-1.5 p-2 bg-gray-800 border border-gray-700 rounded-lg min-h-[42px]">
+                    <label className="block text-xs text-[var(--text-muted)] mb-1">Affected Sizes * <span className="text-[var(--text-muted)]">(press Enter or comma to add)</span></label>
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg min-h-[42px]">
                       {form.affected_sizes.map(s => (
                         <span key={s} className="flex items-center gap-1 px-2 py-0.5 bg-blue-900/40 border border-blue-700/50 rounded text-xs text-blue-300 font-mono">
                           {s}
@@ -1363,49 +1363,49 @@ export default function RecallTracker() {
                         }}
                         onBlur={addSize}
                         placeholder="e.g. 315/80R22.5"
-                        className="bg-transparent text-sm text-gray-100 placeholder-gray-500 focus:outline-none flex-1 min-w-[140px] font-mono"
+                        className="bg-transparent text-sm text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none flex-1 min-w-[140px] font-mono"
                       />
                     </div>
                   </div>
 
                   {/* Serial prefix */}
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Serial Prefix Pattern <span className="text-gray-500">(optional - first 4 chars, e.g. MH23)</span></label>
+                    <label className="block text-xs text-[var(--text-muted)] mb-1">Serial Prefix Pattern <span className="text-[var(--text-muted)]">(optional - first 4 chars, e.g. MH23)</span></label>
                     <input
                       value={form.affected_serial_prefix}
                       onChange={e => setForm(f => ({ ...f, affected_serial_prefix: e.target.value.toUpperCase().slice(0, 4) }))}
                       maxLength={4}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-600 font-mono uppercase"
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-600 font-mono uppercase"
                       placeholder="e.g. MH23"
                     />
                   </div>
 
                   {/* Description */}
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Description</label>
+                    <label className="block text-xs text-[var(--text-muted)] mb-1">Description</label>
                     <textarea
                       value={form.description}
                       onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                       rows={3}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-600 resize-none"
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-600 resize-none"
                       placeholder="Describe the recall issue..."
                     />
                   </div>
 
                   {/* Action Required */}
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Action Required</label>
+                    <label className="block text-xs text-[var(--text-muted)] mb-1">Action Required</label>
                     <textarea
                       value={form.action_required}
                       onChange={e => setForm(f => ({ ...f, action_required: e.target.value }))}
                       rows={2}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-600 resize-none"
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-600 resize-none"
                       placeholder="Immediate action to take..."
                     />
                   </div>
                 </div>
 
-                <div className="p-5 border-t border-gray-800 flex justify-end gap-3">
+                <div className="p-5 border-t border-[var(--input-border)] flex justify-end gap-3">
                   <button
                     onClick={() => setShowAddModal(false)}
                     className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 transition"

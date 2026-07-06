@@ -412,7 +412,7 @@ export default function StockManagement() {
           </button>
         </div>
       </div>
-      <p className="text-xs text-gray-500 -mt-1">
+      <p className="text-xs text-[var(--text-muted)] -mt-1">
         {t('stock.intakeNote.prefix')}{' '}
         <button
           type="button"
@@ -431,7 +431,7 @@ export default function StockManagement() {
             key={val}
             onClick={() => setActiveTab(val)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === val ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'
+              activeTab === val ? 'bg-blue-600 text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
             {label}
@@ -473,7 +473,7 @@ export default function StockManagement() {
                       <tr key={i}><td colSpan={11} className="px-3.5 py-3"><Skeleton className="h-4 w-full" /></td></tr>
                     ))
                   ) : records.length === 0 ? (
-                    <tr><td colSpan={11} className="text-center py-12 text-gray-500">{t('stock.table.emptyTitle')}</td></tr>
+                    <tr><td colSpan={11} className="text-center py-12 text-[var(--text-muted)]">{t('stock.table.emptyTitle')}</td></tr>
                   ) : records.map(r => {
                     const status = deriveStatus(r)
                     const vel    = velocityMap[r.id]
@@ -487,29 +487,29 @@ export default function StockManagement() {
                       : null
 
                     const daysColor = days === null
-                      ? 'text-gray-500'
+                      ? 'text-[var(--text-muted)]'
                       : days > 30 ? 'text-green-400 font-semibold'
                       : days >= 10 ? 'text-yellow-400 font-semibold'
                       : 'text-red-400 font-bold'
 
                     return (
-                      <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
-                        <td className="table-cell font-medium text-white">{r.site}</td>
-                        <td className="table-cell text-gray-300">{r.description ?? '-'}</td>
+                      <tr key={r.id} className="hover:bg-[var(--input-bg)]/30 transition-colors">
+                        <td className="table-cell font-medium text-[var(--text-primary)]">{r.site}</td>
+                        <td className="table-cell text-[var(--text-secondary)]">{r.description ?? '-'}</td>
                         <td className="table-cell">
                           <span className={
                             status === 'Critical' ? 'text-red-400 font-bold' :
                             status === 'Low' ? 'text-yellow-400 font-semibold' : 'text-green-400 font-semibold'
                           }>{r.stock_qty}</span>
                         </td>
-                        <td className="table-cell text-gray-400">{r.min_level}</td>
-                        <td className="table-cell text-gray-400">{r.critical_level}</td>
-                        <td className="table-cell text-gray-400">{r.reorder_qty ?? 0}</td>
+                        <td className="table-cell text-[var(--text-muted)]">{r.min_level}</td>
+                        <td className="table-cell text-[var(--text-muted)]">{r.critical_level}</td>
+                        <td className="table-cell text-[var(--text-muted)]">{r.reorder_qty ?? 0}</td>
                         <td className="table-cell">
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BADGE[status]}`}>{t(`stock.statuses.${status}`)}</span>
                         </td>
                         <td className="table-cell">
-                          <span className={avg > 0 ? 'text-gray-300 text-xs' : 'text-gray-600 text-xs'}>
+                          <span className={avg > 0 ? 'text-[var(--text-secondary)] text-xs' : 'text-[var(--text-dim)] text-xs'}>
                             {avg > 0 ? `${avg}/mo` : '-'}
                           </span>
                         </td>
@@ -518,11 +518,11 @@ export default function StockManagement() {
                             {days === null ? '∞' : `${days}d`}
                           </span>
                         </td>
-                        <td className="table-cell text-gray-400 text-xs max-w-xs">
+                        <td className="table-cell text-[var(--text-muted)] text-xs max-w-xs">
                           <div className="flex flex-col gap-1">
                             {r.management_action ? (
                               <span className="truncate">{r.management_action}</span>
-                            ) : <span className="text-gray-600">-</span>}
+                            ) : <span className="text-[var(--text-dim)]">-</span>}
                             {reorderSuggestion !== null && (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-900/40 text-amber-300 border border-amber-700/50 whitespace-nowrap">
                                 {t('stock.table.reorderBadge', { qty: reorderSuggestion })}
@@ -532,10 +532,10 @@ export default function StockManagement() {
                         </td>
                         <td className="table-cell">
                           <div className="flex items-center gap-1.5">
-                            <button onClick={() => startEdit(r)} className="text-gray-400 hover:text-blue-400 text-xs transition-colors">{t('stock.table.edit')}</button>
+                            <button onClick={() => startEdit(r)} className="text-[var(--text-muted)] hover:text-blue-400 text-xs transition-colors">{t('stock.table.edit')}</button>
                             <button
                               onClick={() => { openHistory(r); setAdjForm({ qty_change: 0, reason: '', movement_type: 'adjustment_up', reference_no: '' }) }}
-                              className="text-gray-400 hover:text-purple-400 text-xs transition-colors"
+                              className="text-[var(--text-muted)] hover:text-purple-400 text-xs transition-colors"
                               title={t('stock.table.movementHistoryTooltip')}
                             >
                               <History size={14} />
@@ -544,7 +544,7 @@ export default function StockManagement() {
                               <button
                                 onClick={() => generateReorderPdf(r)}
                                 title={t('stock.table.generateReorderPdfTooltip')}
-                                className="text-gray-400 hover:text-orange-400 text-xs transition-colors"
+                                className="text-[var(--text-muted)] hover:text-orange-400 text-xs transition-colors"
                               >
                                 <FileText size={14} />
                               </button>
@@ -567,9 +567,9 @@ export default function StockManagement() {
           <div className="card space-y-5">
             <div className="flex items-center gap-2 mb-1">
               <ArrowLeftRight size={18} className="text-blue-400" />
-              <h2 className="text-base font-semibold text-white">{t('stock.transfer.heading')}</h2>
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">{t('stock.transfer.heading')}</h2>
             </div>
-            <p className="text-gray-400 text-sm -mt-3">{t('stock.transfer.subtitle')}</p>
+            <p className="text-[var(--text-muted)] text-sm -mt-3">{t('stock.transfer.subtitle')}</p>
 
             {transferMsg && (
               <div className="bg-green-900/30 border border-green-700 text-green-300 rounded-lg px-4 py-3 text-sm">
@@ -612,7 +612,7 @@ export default function StockManagement() {
                   {transferForm.fromSite && (() => {
                     const rec = records.find(r => r.site === transferForm.fromSite)
                     return rec ? (
-                      <p className="text-xs text-gray-500 mt-1">{t('stock.transfer.availablePrefix')} <span className="text-gray-300 font-medium">{rec.stock_qty}</span> {t('stock.transfer.unitsSuffix')}</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">{t('stock.transfer.availablePrefix')} <span className="text-[var(--text-secondary)] font-medium">{rec.stock_qty}</span> {t('stock.transfer.unitsSuffix')}</p>
                     ) : null
                   })()}
                 </div>
@@ -636,7 +636,7 @@ export default function StockManagement() {
                   {transferForm.toSite && (() => {
                     const rec = records.find(r => r.site === transferForm.toSite)
                     return rec ? (
-                      <p className="text-xs text-gray-500 mt-1">{t('stock.transfer.currentPrefix')} <span className="text-gray-300 font-medium">{rec.stock_qty}</span> {t('stock.transfer.unitsSuffix')}</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">{t('stock.transfer.currentPrefix')} <span className="text-[var(--text-secondary)] font-medium">{rec.stock_qty}</span> {t('stock.transfer.unitsSuffix')}</p>
                     ) : null
                   })()}
                 </div>
@@ -671,8 +671,8 @@ export default function StockManagement() {
 
               {/* Transfer preview */}
               {transferForm.fromSite && transferForm.toSite && transferForm.qty > 0 && (
-                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-xs text-gray-400 space-y-1">
-                  <p className="text-gray-300 font-medium text-xs mb-2">{t('stock.transfer.previewTitle')}</p>
+                <div className="bg-[var(--input-bg)]/50 border border-[var(--input-border)] rounded-lg p-3 text-xs text-[var(--text-muted)] space-y-1">
+                  <p className="text-[var(--text-secondary)] font-medium text-xs mb-2">{t('stock.transfer.previewTitle')}</p>
                   {(() => {
                     const from = records.find(r => r.site === transferForm.fromSite)
                     const to   = records.find(r => r.site === transferForm.toSite)
@@ -682,8 +682,8 @@ export default function StockManagement() {
                         <div className="flex justify-between">
                           <span>{transferForm.fromSite}</span>
                           <span>
-                            <span className="text-gray-500">{from?.stock_qty ?? '?'}</span>
-                            <span className="text-gray-600 mx-1">→</span>
+                            <span className="text-[var(--text-muted)]">{from?.stock_qty ?? '?'}</span>
+                            <span className="text-[var(--text-dim)] mx-1">→</span>
                             <span className={from && from.stock_qty - qty < from.critical_level ? 'text-red-400' : 'text-green-400'}>
                               {from ? from.stock_qty - qty : '?'}
                             </span>
@@ -692,8 +692,8 @@ export default function StockManagement() {
                         <div className="flex justify-between">
                           <span>{transferForm.toSite}</span>
                           <span>
-                            <span className="text-gray-500">{to?.stock_qty ?? '?'}</span>
-                            <span className="text-gray-600 mx-1">→</span>
+                            <span className="text-[var(--text-muted)]">{to?.stock_qty ?? '?'}</span>
+                            <span className="text-[var(--text-dim)] mx-1">→</span>
                             <span className="text-green-400">{to ? to.stock_qty + qty : '?'}</span>
                           </span>
                         </div>
@@ -721,20 +721,20 @@ export default function StockManagement() {
         <div className="space-y-4">
           {/* Comparison stat */}
           <div className="card flex flex-wrap items-center gap-4">
-            <div className="text-sm text-gray-400">
-              <span className="font-medium text-white">{t('stock.timeline.today')}</span> {todayIssues} {t('stock.timeline.issues')}
+            <div className="text-sm text-[var(--text-muted)]">
+              <span className="font-medium text-[var(--text-primary)]">{t('stock.timeline.today')}</span> {todayIssues} {t('stock.timeline.issues')}
             </div>
-            <span className="text-gray-600">·</span>
-            <div className="text-sm text-gray-400">
-              <span className="font-medium text-white">{t('stock.timeline.yesterday')}</span> {yesterdayIssues} {t('stock.timeline.issues')}
+            <span className="text-[var(--text-dim)]">·</span>
+            <div className="text-sm text-[var(--text-muted)]">
+              <span className="font-medium text-[var(--text-primary)]">{t('stock.timeline.yesterday')}</span> {yesterdayIssues} {t('stock.timeline.issues')}
             </div>
-            <span className="text-gray-600">·</span>
+            <span className="text-[var(--text-dim)]">·</span>
             <div className="text-sm">
-              <span className="text-gray-400">{t('stock.timeline.change')}</span>
+              <span className="text-[var(--text-muted)]">{t('stock.timeline.change')}</span>
               {changePct === null ? (
-                <span className="text-gray-500">{t('stock.timeline.na')}</span>
+                <span className="text-[var(--text-muted)]">{t('stock.timeline.na')}</span>
               ) : (
-                <span className={+changePct > 0 ? 'text-red-400 font-medium' : +changePct < 0 ? 'text-green-400 font-medium' : 'text-gray-400'}>
+                <span className={+changePct > 0 ? 'text-red-400 font-medium' : +changePct < 0 ? 'text-green-400 font-medium' : 'text-[var(--text-muted)]'}>
                   {+changePct > 0 ? '+' : ''}{changePct}%
                 </span>
               )}
@@ -766,7 +766,7 @@ export default function StockManagement() {
                   className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                     tlFrom === from && tlTo === to
                       ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+                      : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   {label}
@@ -778,7 +778,7 @@ export default function StockManagement() {
           {/* Bar chart */}
           {tlByDate.length > 0 && (
             <div className="card">
-              <p className="text-sm text-gray-400 mb-3">{t('stock.timeline.chartTitle')}</p>
+              <p className="text-sm text-[var(--text-muted)] mb-3">{t('stock.timeline.chartTitle')}</p>
               <div style={{ height: 220 }}>
                 <Bar
                   data={tlChartData}
@@ -812,18 +812,18 @@ export default function StockManagement() {
                 </thead>
                 <tbody>
                   {tlLoading ? (
-                    <tr><td colSpan={4} className="text-center py-12 text-gray-500">{t('stock.timeline.loading')}</td></tr>
+                    <tr><td colSpan={4} className="text-center py-12 text-[var(--text-muted)]">{t('stock.timeline.loading')}</td></tr>
                   ) : tlByDate.length === 0 ? (
-                    <tr><td colSpan={4} className="text-center py-12 text-gray-500">{t('stock.timeline.emptyPeriod')}</td></tr>
+                    <tr><td colSpan={4} className="text-center py-12 text-[var(--text-muted)]">{t('stock.timeline.emptyPeriod')}</td></tr>
                   ) : tlByDate.map(([date, vals]) => {
                     const net = vals.in - vals.out
                     return (
-                      <tr key={date} className="hover:bg-gray-800/30 transition-colors">
-                        <td className="table-cell font-medium text-white">{date}</td>
+                      <tr key={date} className="hover:bg-[var(--input-bg)]/30 transition-colors">
+                        <td className="table-cell font-medium text-[var(--text-primary)]">{date}</td>
                         <td className="table-cell text-green-400">{vals.in}</td>
                         <td className="table-cell text-red-400">{vals.out}</td>
                         <td className="table-cell">
-                          <span className={`font-semibold ${net > 0 ? 'text-green-400' : net < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                          <span className={`font-semibold ${net > 0 ? 'text-green-400' : net < 0 ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
                             {net > 0 ? '+' : ''}{net}
                           </span>
                         </td>
@@ -840,19 +840,19 @@ export default function StockManagement() {
       {/* Movement History Modal */}
       {historyFor && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setHistoryFor(null)}>
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-gray-800">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-[var(--input-border)]">
               <div>
-                <h2 className="text-lg font-semibold text-white">{t('stock.historyModal.title', { site: historyFor.site })}</h2>
-                <p className="text-gray-400 text-xs mt-0.5">{t('stock.historyModal.subtitle', { description: historyFor.description || '', qty: historyFor.stock_qty })}</p>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('stock.historyModal.title', { site: historyFor.site })}</h2>
+                <p className="text-[var(--text-muted)] text-xs mt-0.5">{t('stock.historyModal.subtitle', { description: historyFor.description || '', qty: historyFor.stock_qty })}</p>
               </div>
-              <button onClick={() => setHistoryFor(null)} className="text-gray-400 hover:text-white"><X size={18} /></button>
+              <button onClick={() => setHistoryFor(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
             </div>
 
             {/* Quick adjustment form */}
             {adjForm && (
-              <div className="p-4 border-b border-gray-800 bg-gray-800/30">
-                <p className="text-xs text-gray-400 mb-3">{t('stock.historyModal.logMovement')}</p>
+              <div className="p-4 border-b border-[var(--input-border)] bg-[var(--input-bg)]/30">
+                <p className="text-xs text-[var(--text-muted)] mb-3">{t('stock.historyModal.logMovement')}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   <div>
                     <label className="label text-xs">{t('stock.historyModal.type')}</label>
@@ -890,7 +890,7 @@ export default function StockManagement() {
                   >
                     {saving ? t('stock.historyModal.saving') : t('stock.historyModal.logMovementBtn')}
                   </button>
-                  <span className="text-xs text-gray-500 self-center">
+                  <span className="text-xs text-[var(--text-muted)] self-center">
                     {t('stock.historyModal.newQty', { qty: historyFor.stock_qty + (adjForm.qty_change || 0) })}
                   </span>
                 </div>
@@ -900,13 +900,13 @@ export default function StockManagement() {
             {/* History table */}
             <div className="overflow-y-auto flex-1">
               {loadingMov ? (
-                <div className="text-center py-8 text-gray-500">{t('stock.historyModal.loading')}</div>
+                <div className="text-center py-8 text-[var(--text-muted)]">{t('stock.historyModal.loading')}</div>
               ) : movements.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">{t('stock.historyModal.emptyHistory')}</div>
+                <div className="text-center py-8 text-[var(--text-muted)]">{t('stock.historyModal.emptyHistory')}</div>
               ) : (
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-gray-900">
-                    <tr className="text-gray-400 border-b border-gray-800">
+                  <thead className="sticky top-0 bg-[var(--surface-1)]">
+                    <tr className="text-[var(--text-muted)] border-b border-[var(--input-border)]">
                       <th className="table-header py-2">{t('stock.historyModal.columns.date')}</th>
                       <th className="table-header py-2">{t('stock.historyModal.columns.type')}</th>
                       <th className="table-header py-2">{t('stock.historyModal.columns.before')}</th>
@@ -918,26 +918,26 @@ export default function StockManagement() {
                   </thead>
                   <tbody>
                     {movements.map(m => (
-                      <tr key={m.id} className="border-b border-gray-800/50">
-                        <td className="table-cell py-2 text-gray-400">{formatDate(m.created_at)}</td>
+                      <tr key={m.id} className="border-b border-[var(--input-border)]/50">
+                        <td className="table-cell py-2 text-[var(--text-muted)]">{formatDate(m.created_at)}</td>
                         <td className="table-cell py-2">
                           <span className={`px-1.5 py-0.5 rounded text-xs ${
                             ADD_TYPES.has(String(m.movement_type).toLowerCase()) ? 'bg-green-900/30 text-green-400' :
                             String(m.movement_type).toLowerCase() !== 'adjustment' ? 'bg-red-900/30 text-red-400' :
-                            'bg-gray-800 text-gray-400'
+                            'bg-[var(--input-bg)] text-[var(--text-muted)]'
                           }`}>
                             {m.movement_type}
                           </span>
                         </td>
-                        <td className="table-cell py-2 text-gray-400 text-center">{m.qty_before}</td>
+                        <td className="table-cell py-2 text-[var(--text-muted)] text-center">{m.qty_before}</td>
                         <td className="table-cell py-2 text-center font-medium">
                           <span className={m.qty_change > 0 ? 'text-green-400' : 'text-red-400'}>
                             {m.qty_change > 0 ? '+' : ''}{m.qty_change}
                           </span>
                         </td>
-                        <td className="table-cell py-2 text-white text-center font-semibold">{m.qty_after}</td>
-                        <td className="table-cell py-2 text-gray-400">{m.reason || '-'}</td>
-                        <td className="table-cell py-2 text-gray-500">{m.reference_no || '-'}</td>
+                        <td className="table-cell py-2 text-[var(--text-primary)] text-center font-semibold">{m.qty_after}</td>
+                        <td className="table-cell py-2 text-[var(--text-muted)]">{m.reason || '-'}</td>
+                        <td className="table-cell py-2 text-[var(--text-muted)]">{m.reference_no || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -951,10 +951,10 @@ export default function StockManagement() {
       {/* Add/Edit Form modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowForm(false)}>
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">{editId ? t('stock.form.editTitle') : t('stock.form.addTitle')}</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">{editId ? t('stock.form.editTitle') : t('stock.form.addTitle')}</h2>
+              <button onClick={() => setShowForm(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
             </div>
             {error && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">{error}</div>}
             <form onSubmit={save} className="space-y-3">

@@ -138,15 +138,15 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', trend
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start gap-3"
+      className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 flex items-start gap-3"
     >
-      <div className={`p-2 rounded-lg bg-gray-800 shrink-0 ${color}`}>
+      <div className={`p-2 rounded-lg bg-[var(--input-bg)] shrink-0 ${color}`}>
         <Icon size={18} />
       </div>
       <div className="min-w-0">
-        <p className="text-gray-400 text-xs leading-tight">{label}</p>
+        <p className="text-[var(--text-muted)] text-xs leading-tight">{label}</p>
         <p className={`text-xl font-bold mt-0.5 truncate ${color}`}>{value}</p>
-        {sub && <p className="text-gray-500 text-xs mt-0.5 leading-tight">{sub}</p>}
+        {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5 leading-tight">{sub}</p>}
       </div>
       {trend != null && (
         <div className={`ml-auto shrink-0 flex items-center gap-0.5 text-xs font-semibold ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -188,9 +188,9 @@ function ScoreBadge({ score }) {
 function EmptyState({ icon: Icon = Package, title, sub }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-      <Icon className="text-gray-700" size={48} />
-      <p className="text-gray-400 font-medium">{title}</p>
-      {sub && <p className="text-gray-600 text-sm">{sub}</p>}
+      <Icon className="text-[var(--text-dim)]" size={48} />
+      <p className="text-[var(--text-muted)] font-medium">{title}</p>
+      {sub && <p className="text-[var(--text-dim)] text-sm">{sub}</p>}
     </div>
   )
 }
@@ -632,19 +632,19 @@ export default function RetreadManagement() {
           <button
             onClick={loadData}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition disabled:opacity-50"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
           <button
             onClick={handleExportPdf}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition"
           >
             <FileText size={14} /> PDF
           </button>
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition"
           >
             <FileSpreadsheet size={14} /> Excel
           </button>
@@ -653,31 +653,31 @@ export default function RetreadManagement() {
       />
 
       {/* Country/Site filter bar */}
-      <div className="flex flex-wrap items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
-        <Filter size={14} className="text-gray-500 shrink-0" />
-        <span className="text-gray-500 text-xs shrink-0">Filter:</span>
+      <div className="flex flex-wrap items-center gap-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl px-4 py-3">
+        <Filter size={14} className="text-[var(--text-muted)] shrink-0" />
+        <span className="text-[var(--text-muted)] text-xs shrink-0">Filter:</span>
         <select
           value={filterSite}
           onChange={e => setFilterSite(e.target.value)}
-          className="px-2 py-1 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-purple-600"
+          className="px-2 py-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
         >
           {siteOptions.map(o => <option key={o}>{o}</option>)}
         </select>
         <select
           value={filterBrand}
           onChange={e => setFilterBrand(e.target.value)}
-          className="px-2 py-1 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-purple-600"
+          className="px-2 py-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
         >
           {brandOptions.map(o => <option key={o}>{o}</option>)}
         </select>
         <select
           value={filterRisk}
           onChange={e => setFilterRisk(e.target.value)}
-          className="px-2 py-1 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300 focus:outline-none focus:border-purple-600"
+          className="px-2 py-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
         >
           {riskOptions.map(o => <option key={o}>{o}</option>)}
         </select>
-        <span className="ml-auto text-gray-600 text-xs">
+        <span className="ml-auto text-[var(--text-dim)] text-xs">
           {enriched.length.toLocaleString()} retread records · {records.length.toLocaleString()} total
         </span>
       </div>
@@ -701,7 +701,7 @@ export default function RetreadManagement() {
       {loading && (
         <div className="flex items-center justify-center py-24">
           <Loader2 className="animate-spin text-purple-400 mr-3" size={28} />
-          <span className="text-gray-400">Loading retread data...</span>
+          <span className="text-[var(--text-muted)]">Loading retread data...</span>
         </div>
       )}
 
@@ -728,7 +728,7 @@ export default function RetreadManagement() {
               label="New Tyre CPK"
               value={fmtCpk(kpis.newCpk, activeCurrency)}
               sub="cost per kilometer"
-              color="text-gray-300"
+              color="text-[var(--text-secondary)]"
             />
             <KpiCard
               icon={CircleDollarSign}
@@ -747,7 +747,7 @@ export default function RetreadManagement() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 overflow-x-auto">
+          <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 overflow-x-auto">
             {TABS.map(t => (
               <button
                 key={t}
@@ -755,7 +755,7 @@ export default function RetreadManagement() {
                 className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
                   activeTab === t
                     ? 'bg-purple-700 text-white'
-                    : 'text-gray-400 hover:text-gray-200'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {t}
@@ -776,8 +776,8 @@ export default function RetreadManagement() {
                 <>
                   {/* Charts row */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-4">
-                      <p className="text-xs text-gray-400 mb-3 font-medium flex items-center gap-1.5">
+                    <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                      <p className="text-xs text-[var(--text-muted)] mb-3 font-medium flex items-center gap-1.5">
                         <BarChart3 size={13} className="text-purple-400" /> Retread Fitments - Last 12 Months
                       </p>
                       <div className="h-52">
@@ -790,8 +790,8 @@ export default function RetreadManagement() {
                         />
                       </div>
                     </div>
-                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                      <p className="text-xs text-gray-400 mb-3 font-medium flex items-center gap-1.5">
+                    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                      <p className="text-xs text-[var(--text-muted)] mb-3 font-medium flex items-center gap-1.5">
                         <Layers size={13} className="text-blue-400" /> Retread vs New Distribution
                       </p>
                       <div className="h-52">
@@ -801,18 +801,18 @@ export default function RetreadManagement() {
                   </div>
 
                   {/* Brand table */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Award className="text-yellow-400" size={16} />
-                        <h2 className="font-semibold text-gray-200 text-sm">Retread Performance by Brand</h2>
+                        <h2 className="font-semibold text-[var(--text-secondary)] text-sm">Retread Performance by Brand</h2>
                       </div>
-                      <span className="text-gray-600 text-xs">{brandSummary.length} brands</span>
+                      <span className="text-[var(--text-dim)] text-xs">{brandSummary.length} brands</span>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-gray-800 text-gray-400 text-xs">
+                          <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
                             <th className="px-4 py-3 text-left">Brand</th>
                             <th className="px-4 py-3 text-center">Count</th>
                             <th className="px-4 py-3 text-center">Avg CPK</th>
@@ -830,12 +830,12 @@ export default function RetreadManagement() {
                               transition={{ delay: i * 0.03 }}
                               className="border-b border-gray-800/60 hover:bg-gray-800/40 transition"
                             >
-                              <td className="px-4 py-3 font-medium text-gray-100">{b.brand}</td>
-                              <td className="px-4 py-3 text-center text-gray-300">{b.count}</td>
+                              <td className="px-4 py-3 font-medium text-[var(--text-secondary)]">{b.brand}</td>
+                              <td className="px-4 py-3 text-center text-[var(--text-secondary)]">{b.count}</td>
                               <td className="px-4 py-3 text-center text-purple-400 font-mono text-xs">
                                 {fmtCpk(b.avgCpk, activeCurrency)}
                               </td>
-                              <td className="px-4 py-3 text-center text-gray-300">
+                              <td className="px-4 py-3 text-center text-[var(--text-secondary)]">
                                 {b.avgLife != null ? b.avgLife.toLocaleString() : 'N/A'}
                               </td>
                               <td className="px-4 py-3 text-center">
@@ -843,7 +843,7 @@ export default function RetreadManagement() {
                                   <span className={`font-semibold text-sm ${b.successRate >= 80 ? 'text-green-400' : b.successRate >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
                                     {b.successRate}%
                                   </span>
-                                ) : <span className="text-gray-600">N/A</span>}
+                                ) : <span className="text-[var(--text-dim)]">N/A</span>}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <button
@@ -857,7 +857,7 @@ export default function RetreadManagement() {
                           ))}
                           {brandSummary.length === 0 && (
                             <tr>
-                              <td colSpan={6} className="px-4 py-10 text-center text-gray-500">No brand data available</td>
+                              <td colSpan={6} className="px-4 py-10 text-center text-[var(--text-muted)]">No brand data available</td>
                             </tr>
                           )}
                         </tbody>
@@ -865,7 +865,7 @@ export default function RetreadManagement() {
                     </div>
                     {/* Summary stats */}
                     {brandSummary.length > 0 && (
-                      <div className="px-4 py-3 border-t border-gray-800 flex flex-wrap gap-4 text-xs text-gray-500">
+                      <div className="px-4 py-3 border-t border-[var(--input-border)] flex flex-wrap gap-4 text-xs text-[var(--text-muted)]">
                         {(() => {
                           const topBrand = [...brandSummary].filter(b => b.successRate != null).sort((a, b) => (b.successRate ?? 0) - (a.successRate ?? 0))[0]
                           const bestSize = (() => {
@@ -883,8 +883,8 @@ export default function RetreadManagement() {
                           })()
                           return (
                             <>
-                              {topBrand && <span>Top retread brand: <span className="text-gray-300 font-semibold">{topBrand.brand}</span> ({topBrand.successRate}% success)</span>}
-                              {bestSize && <span>Best performing size: <span className="text-gray-300 font-mono font-semibold">{bestSize}</span></span>}
+                              {topBrand && <span>Top retread brand: <span className="text-[var(--text-secondary)] font-semibold">{topBrand.brand}</span> ({topBrand.successRate}% success)</span>}
+                              {bestSize && <span>Best performing size: <span className="text-[var(--text-secondary)] font-mono font-semibold">{bestSize}</span></span>}
                             </>
                           )
                         })()}
@@ -904,15 +904,15 @@ export default function RetreadManagement() {
               ) : (
                 <>
                   {/* Vendor table */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
+                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
                       <Star className="text-yellow-400" size={16} />
-                      <h2 className="font-semibold text-gray-200 text-sm">Retread Vendor / Brand Scorecard</h2>
+                      <h2 className="font-semibold text-[var(--text-secondary)] text-sm">Retread Vendor / Brand Scorecard</h2>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-gray-800 text-gray-400 text-xs">
+                          <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
                             <th className="px-4 py-3 text-left">Vendor / Brand</th>
                             <th className="px-4 py-3 text-center">Total Retreads</th>
                             <th className="px-4 py-3 text-center">Avg CPK</th>
@@ -932,23 +932,23 @@ export default function RetreadManagement() {
                               transition={{ delay: i * 0.03 }}
                               className={`border-b border-gray-800/60 hover:bg-gray-800/40 transition ${v.score < 40 ? 'bg-red-900/10' : ''}`}
                             >
-                              <td className="px-4 py-3 font-medium text-gray-100">
+                              <td className="px-4 py-3 font-medium text-[var(--text-secondary)]">
                                 <div className="flex items-center gap-2">
                                   {v.score < 40 && <AlertTriangle className="text-red-400" size={12} />}
                                   {v.brand}
                                 </div>
                               </td>
-                              <td className="px-4 py-3 text-center text-gray-300">{v.count}</td>
+                              <td className="px-4 py-3 text-center text-[var(--text-secondary)]">{v.count}</td>
                               <td className="px-4 py-3 text-center text-purple-400 font-mono text-xs">
                                 {fmtCpk(v.avgCpk, activeCurrency)}
                               </td>
-                              <td className="px-4 py-3 text-center text-gray-300">
+                              <td className="px-4 py-3 text-center text-[var(--text-secondary)]">
                                 {v.avgLife != null ? v.avgLife.toLocaleString() : 'N/A'}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 {v.successRate != null
                                   ? <span className={`font-semibold ${v.successRate >= 80 ? 'text-green-400' : v.successRate >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>{v.successRate}%</span>
-                                  : <span className="text-gray-600">N/A</span>}
+                                  : <span className="text-[var(--text-dim)]">N/A</span>}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <span className={`font-semibold ${v.failureRate > 30 ? 'text-red-400' : v.failureRate > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
@@ -960,7 +960,7 @@ export default function RetreadManagement() {
                                   <span className={`text-xs font-semibold ${v.savingsVsNew > 0 ? 'text-green-400' : 'text-red-400'}`}>
                                     {v.savingsVsNew > 0 ? '+' : ''}{fmtCurrency(v.savingsVsNew, activeCurrency)}
                                   </span>
-                                ) : <span className="text-gray-600 text-xs">N/A</span>}
+                                ) : <span className="text-[var(--text-dim)] text-xs">N/A</span>}
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <ScoreBadge score={v.score} />
@@ -970,15 +970,15 @@ export default function RetreadManagement() {
                         </tbody>
                       </table>
                     </div>
-                    <div className="px-4 py-2 border-t border-gray-800 text-xs text-gray-500">
+                    <div className="px-4 py-2 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
                       Score = CPK efficiency (40%) + success rate (40%) + avg life (20%) · below 40 flagged
                     </div>
                   </div>
 
                   {/* CPK Trend chart */}
                   {vendorData.trendChart.datasets.length > 0 && (
-                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                      <p className="text-xs text-gray-400 mb-3 font-medium flex items-center gap-1.5">
+                    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                      <p className="text-xs text-[var(--text-muted)] mb-3 font-medium flex items-center gap-1.5">
                         <Activity size={13} className="text-purple-400" /> CPK Trend - Top 3 Vendors (Last 12 Months)
                       </p>
                       <div className="h-64">
@@ -997,43 +997,43 @@ export default function RetreadManagement() {
               {/* Search + filters */}
               <div className="flex flex-col sm:flex-row gap-2">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
                   <input
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     placeholder="Search serial, brand, asset, size, site..."
-                    className="w-full pl-8 pr-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-purple-600"
+                    className="w-full pl-8 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-gray-500 focus:outline-none focus:border-purple-600"
                   />
                 </div>
                 <select
                   value={filterSite}
                   onChange={e => setFilterSite(e.target.value)}
-                  className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-purple-600"
+                  className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
                 >
                   {siteOptions.map(o => <option key={o}>{o}</option>)}
                 </select>
                 <select
                   value={filterBrand}
                   onChange={e => setFilterBrand(e.target.value)}
-                  className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-purple-600"
+                  className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
                 >
                   {brandOptions.map(o => <option key={o}>{o}</option>)}
                 </select>
                 <select
                   value={filterRisk}
                   onChange={e => setFilterRisk(e.target.value)}
-                  className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-purple-600"
+                  className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
                 >
                   {riskOptions.map(o => <option key={o}>{o}</option>)}
                 </select>
               </div>
 
               {/* Table */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-800 text-gray-400 text-xs">
+                      <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
                         <th className="px-4 py-3 text-left">Serial</th>
                         <th className="px-4 py-3 text-left">Brand</th>
                         <th className="px-4 py-3 text-left">Size</th>
@@ -1051,8 +1051,8 @@ export default function RetreadManagement() {
                     <tbody>
                       {filtered.length === 0 && (
                         <tr>
-                          <td colSpan={12} className="px-4 py-14 text-center text-gray-500">
-                            <Recycle className="inline mb-2 text-gray-700" size={36} />
+                          <td colSpan={12} className="px-4 py-14 text-center text-[var(--text-muted)]">
+                            <Recycle className="inline mb-2 text-[var(--text-dim)]" size={36} />
                             <p className="mt-1">No retread tyres match current filters</p>
                           </td>
                         </tr>
@@ -1067,12 +1067,12 @@ export default function RetreadManagement() {
                           onClick={() => setDrawer(t)}
                         >
                           <td className="px-4 py-3 font-mono text-purple-300 text-xs">{t.serial_number ?? '-'}</td>
-                          <td className="px-4 py-3 font-medium text-gray-100">{t.brand ?? '-'}</td>
-                          <td className="px-4 py-3 text-gray-400 font-mono text-xs">{t.size ?? '-'}</td>
-                          <td className="px-4 py-3 text-gray-400 text-xs">{t.position ?? '-'}</td>
-                          <td className="px-4 py-3 text-gray-400 text-xs">{t.asset_no ?? '-'}</td>
-                          <td className="px-4 py-3 text-gray-400 text-xs">{t.site ?? '-'}</td>
-                          <td className="px-4 py-3 text-center text-gray-300 text-xs">
+                          <td className="px-4 py-3 font-medium text-[var(--text-secondary)]">{t.brand ?? '-'}</td>
+                          <td className="px-4 py-3 text-[var(--text-muted)] font-mono text-xs">{t.size ?? '-'}</td>
+                          <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{t.position ?? '-'}</td>
+                          <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{t.asset_no ?? '-'}</td>
+                          <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{t.site ?? '-'}</td>
+                          <td className="px-4 py-3 text-center text-[var(--text-secondary)] text-xs">
                             {t.km_life != null ? t.km_life.toLocaleString() : '-'}
                           </td>
                           <td className="px-4 py-3 text-center font-mono text-purple-400 text-xs">
@@ -1080,13 +1080,13 @@ export default function RetreadManagement() {
                           </td>
                           <td className="px-4 py-3 text-center">{riskBadge(t.risk_level)}</td>
                           <td className="px-4 py-3 text-center">{statusBadge(t.status)}</td>
-                          <td className="px-4 py-3 text-center text-gray-400 text-xs">
+                          <td className="px-4 py-3 text-center text-[var(--text-muted)] text-xs">
                             {t.days_in_service != null ? `${t.days_in_service}d` : '-'}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <button
                               onClick={e => { e.stopPropagation(); setDrawer(t) }}
-                              className="p-1 text-gray-500 hover:text-purple-400 transition"
+                              className="p-1 text-[var(--text-muted)] hover:text-purple-400 transition"
                             >
                               <ChevronRight size={14} />
                             </button>
@@ -1096,7 +1096,7 @@ export default function RetreadManagement() {
                     </tbody>
                   </table>
                 </div>
-                <div className="px-4 py-2 border-t border-gray-800 text-xs text-gray-500">
+                <div className="px-4 py-2 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
                   {filtered.length} of {enriched.length} retread tyres
                 </div>
               </div>
@@ -1108,10 +1108,10 @@ export default function RetreadManagement() {
             <div className="space-y-5">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 {/* Input form */}
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
                   <div className="flex items-center gap-2 mb-5">
                     <Target className="text-purple-400" size={18} />
-                    <h2 className="font-semibold text-gray-200">ROI Calculator Inputs</h2>
+                    <h2 className="font-semibold text-[var(--text-secondary)]">ROI Calculator Inputs</h2>
                   </div>
                   <div className="space-y-4">
                     {[
@@ -1122,15 +1122,15 @@ export default function RetreadManagement() {
                       { label: 'Fleet Size (retread tyres)', key: 'fleetSize', help: 'Number of retread tyres in fleet for annual projection' },
                     ].map(({ label, key, help }) => (
                       <div key={key}>
-                        <label className="block text-xs text-gray-400 mb-1">{label}</label>
+                        <label className="block text-xs text-[var(--text-muted)] mb-1">{label}</label>
                         <input
                           type="number"
                           min={0}
                           value={roi[key]}
                           onChange={e => setRoi(r => ({ ...r, [key]: e.target.value }))}
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-purple-600"
+                          className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-purple-600"
                         />
-                        <p className="text-gray-600 text-xs mt-0.5">{help}</p>
+                        <p className="text-[var(--text-dim)] text-xs mt-0.5">{help}</p>
                       </div>
                     ))}
                   </div>
@@ -1138,10 +1138,10 @@ export default function RetreadManagement() {
 
                 {/* Results */}
                 <div className="space-y-4">
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
                     <div className="flex items-center gap-2 mb-4">
                       <Zap className="text-yellow-400" size={18} />
-                      <h2 className="font-semibold text-gray-200">Analysis Results</h2>
+                      <h2 className="font-semibold text-[var(--text-secondary)]">Analysis Results</h2>
                     </div>
                     <div className="space-y-3">
                       {[
@@ -1178,7 +1178,7 @@ export default function RetreadManagement() {
                         },
                       ].map(({ label, value, color, large }) => (
                         <div key={label} className={`flex items-center justify-between py-2 border-b border-gray-800/60 last:border-0 ${large ? 'bg-gray-800/50 px-3 rounded-lg -mx-3' : ''}`}>
-                          <span className="text-gray-400 text-sm">{label}</span>
+                          <span className="text-[var(--text-muted)] text-sm">{label}</span>
                           <span className={`font-bold ${large ? 'text-lg' : 'text-sm'} ${color}`}>{value}</span>
                         </div>
                       ))}
@@ -1206,8 +1206,8 @@ export default function RetreadManagement() {
               </div>
 
               {/* TCO Bar Chart */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <p className="text-xs text-gray-400 mb-4 font-medium flex items-center gap-1.5">
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+                <p className="text-xs text-[var(--text-muted)] mb-4 font-medium flex items-center gap-1.5">
                   <BarChart3 size={13} className="text-purple-400" /> Total Cost of Ownership Comparison
                 </p>
                 <div className="h-64">
@@ -1244,20 +1244,20 @@ export default function RetreadManagement() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.25 }}
-              className="fixed right-0 top-0 h-full w-full max-w-lg bg-gray-900 border-l border-gray-800 z-50 flex flex-col overflow-hidden"
+              className="fixed right-0 top-0 h-full w-full max-w-lg bg-[var(--surface-1)] border-l border-[var(--input-border)] z-50 flex flex-col overflow-hidden"
             >
               {/* Drawer header */}
-              <div className="p-4 border-b border-gray-800 flex items-start justify-between gap-3">
+              <div className="p-4 border-b border-[var(--input-border)] flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <Recycle className="text-purple-400" size={16} />
-                    <span className="font-bold text-gray-100 font-mono text-sm">{drawer.serial_number ?? 'No Serial'}</span>
+                    <span className="font-bold text-[var(--text-secondary)] font-mono text-sm">{drawer.serial_number ?? 'No Serial'}</span>
                     {riskBadge(drawer.risk_level)}
                     {statusBadge(drawer.status)}
                   </div>
-                  <p className="text-gray-400 text-sm">{drawer.brand} - {drawer.size}</p>
+                  <p className="text-[var(--text-muted)] text-sm">{drawer.brand} - {drawer.size}</p>
                 </div>
-                <button onClick={() => setDrawer(null)} className="text-gray-500 hover:text-gray-200 shrink-0">
+                <button onClick={() => setDrawer(null)} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] shrink-0">
                   <X size={20} />
                 </button>
               </div>
@@ -1265,8 +1265,8 @@ export default function RetreadManagement() {
               {/* Drawer body */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {/* Core info */}
-                <div className="bg-gray-800 rounded-xl p-4">
-                  <p className="text-xs text-gray-500 mb-3 font-semibold uppercase tracking-wider">Tyre Information</p>
+                <div className="bg-[var(--input-bg)] rounded-xl p-4">
+                  <p className="text-xs text-[var(--text-muted)] mb-3 font-semibold uppercase tracking-wider">Tyre Information</p>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     {[
                       { label: 'Brand', value: drawer.brand },
@@ -1279,16 +1279,16 @@ export default function RetreadManagement() {
                       { label: 'Tread Depth', value: drawer.tread_depth != null ? `${drawer.tread_depth} mm` : null },
                     ].map(({ label, value }) => (
                       <div key={label}>
-                        <p className="text-gray-500 text-xs">{label}</p>
-                        <p className="text-gray-200 font-medium text-sm mt-0.5">{value ?? '-'}</p>
+                        <p className="text-[var(--text-muted)] text-xs">{label}</p>
+                        <p className="text-[var(--text-secondary)] font-medium text-sm mt-0.5">{value ?? '-'}</p>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* Lifecycle */}
-                <div className="bg-gray-800 rounded-xl p-4">
-                  <p className="text-xs text-gray-500 mb-3 font-semibold uppercase tracking-wider">Lifecycle &amp; Cost</p>
+                <div className="bg-[var(--input-bg)] rounded-xl p-4">
+                  <p className="text-xs text-[var(--text-muted)] mb-3 font-semibold uppercase tracking-wider">Lifecycle &amp; Cost</p>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     {[
                       { label: 'Issue Date', value: drawer.issue_date },
@@ -1301,8 +1301,8 @@ export default function RetreadManagement() {
                       { label: 'CPK', value: fmtCpk(drawer.cpk, activeCurrency) },
                     ].map(({ label, value }) => (
                       <div key={label}>
-                        <p className="text-gray-500 text-xs">{label}</p>
-                        <p className="text-gray-200 font-medium text-sm mt-0.5">{value ?? '-'}</p>
+                        <p className="text-[var(--text-muted)] text-xs">{label}</p>
+                        <p className="text-[var(--text-secondary)] font-medium text-sm mt-0.5">{value ?? '-'}</p>
                       </div>
                     ))}
                   </div>
@@ -1311,7 +1311,7 @@ export default function RetreadManagement() {
                 {/* Cost comparison vs new */}
                 {kpis.newCpk != null && drawer.cpk != null && (
                   <div className="bg-purple-900/20 border border-purple-700/40 rounded-xl p-4">
-                    <p className="text-xs text-gray-500 mb-3 font-semibold uppercase tracking-wider">Cost Comparison vs New Tyre Avg</p>
+                    <p className="text-xs text-[var(--text-muted)] mb-3 font-semibold uppercase tracking-wider">Cost Comparison vs New Tyre Avg</p>
                     <div className="space-y-2">
                       {[
                         { label: 'This Retread CPK', value: fmtCpk(drawer.cpk, activeCurrency), color: 'text-purple-400' },
@@ -1325,7 +1325,7 @@ export default function RetreadManagement() {
                         },
                       ].map(({ label, value, color }) => (
                         <div key={label} className="flex justify-between items-center text-sm">
-                          <span className="text-gray-400">{label}</span>
+                          <span className="text-[var(--text-muted)]">{label}</span>
                           <span className={`font-bold ${color}`}>{value}</span>
                         </div>
                       ))}
@@ -1335,10 +1335,10 @@ export default function RetreadManagement() {
               </div>
 
               {/* Drawer footer */}
-              <div className="p-3 border-t border-gray-800 flex justify-end">
+              <div className="p-3 border-t border-[var(--input-border)] flex justify-end">
                 <button
                   onClick={() => setDrawer(null)}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 transition"
+                  className="px-4 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] rounded-lg text-sm text-[var(--text-secondary)] transition"
                 >
                   Close
                 </button>

@@ -337,13 +337,13 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'blue', delay = 0 }) {
       className={`rounded-xl border ${c.border} ${c.bg} p-5 flex flex-col gap-3`}
     >
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-400 uppercase tracking-wider">{label}</span>
-        <div className={`p-2 rounded-lg bg-gray-900`}>
+        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{label}</span>
+        <div className={`p-2 rounded-lg bg-[var(--surface-1)]`}>
           <Icon size={16} className={c.icon} />
         </div>
       </div>
-      <div className="text-2xl font-bold text-white">{value}</div>
-      {sub && <div className="text-xs text-gray-400">{sub}</div>}
+      <div className="text-2xl font-bold text-[var(--text-primary)]">{value}</div>
+      {sub && <div className="text-xs text-[var(--text-muted)]">{sub}</div>}
     </motion.div>
   )
 }
@@ -380,18 +380,18 @@ function RotationDrawer({ vehicle, onClose }) {
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-          className="w-full max-w-2xl h-full bg-gray-950 border-l border-gray-800 overflow-y-auto"
+          className="w-full max-w-2xl h-full bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between p-6 border-b border-gray-800 sticky top-0 bg-gray-950 z-10">
+          <div className="flex items-center justify-between p-6 border-b border-[var(--input-border)] sticky top-0 bg-[var(--surface-1)] z-10">
             <div>
-              <div className="flex items-center gap-2 text-white font-semibold text-lg">
+              <div className="flex items-center gap-2 text-[var(--text-primary)] font-semibold text-lg">
                 <Truck size={18} className="text-blue-400" />
                 {vehicle.asset}
               </div>
-              <div className="text-sm text-gray-400 mt-0.5">{vehicle.site} · Rotation History</div>
+              <div className="text-sm text-[var(--text-muted)] mt-0.5">{vehicle.site} · Rotation History</div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors">
+            <button onClick={onClose} className="p-2 hover:bg-[var(--input-bg)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
               <X size={18} />
             </button>
           </div>
@@ -399,7 +399,7 @@ function RotationDrawer({ vehicle, onClose }) {
           <div className="p-6 space-y-6">
             {/* Position tread depth visual */}
             <div className="card">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                 <Gauge size={15} className="text-blue-400" />
                 Tread Depth by Position
               </h3>
@@ -409,14 +409,14 @@ function RotationDrawer({ vehicle, onClose }) {
                   const avg    = depths ? depths.reduce((s, v) => s + v, 0) / depths.length : null
                   const isLow  = avg != null && avg < 4
                   return (
-                    <div key={pos} className="bg-gray-800 rounded-lg p-3">
-                      <div className="text-xs text-gray-400 mb-1">{pos}</div>
+                    <div key={pos} className="bg-[var(--input-bg)] rounded-lg p-3">
+                      <div className="text-xs text-[var(--text-muted)] mb-1">{pos}</div>
                       {avg != null ? (
                         <>
                           <div className={`text-lg font-bold ${isLow ? 'text-red-400' : 'text-green-400'}`}>
                             {avg.toFixed(1)} mm
                           </div>
-                          <div className="mt-2 h-1.5 rounded-full bg-gray-700">
+                          <div className="mt-2 h-1.5 rounded-full bg-[var(--input-border)]">
                             <div
                               className={`h-full rounded-full ${isLow ? 'bg-red-500' : 'bg-green-500'}`}
                               style={{ width: `${Math.min(100, (avg / 12) * 100)}%` }}
@@ -424,7 +424,7 @@ function RotationDrawer({ vehicle, onClose }) {
                           </div>
                         </>
                       ) : (
-                        <div className="text-sm text-gray-500">-</div>
+                        <div className="text-sm text-[var(--text-muted)]">-</div>
                       )}
                     </div>
                   )
@@ -440,12 +440,12 @@ function RotationDrawer({ vehicle, onClose }) {
 
             {/* Rotation events timeline */}
             <div className="card">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                 <RotateCcw size={15} className="text-green-400" />
                 Detected Rotation Events
               </h3>
               {vehicle.rotationEvents.length === 0 ? (
-                <div className="text-center py-6 text-gray-500 text-sm">No rotation history detected for this vehicle</div>
+                <div className="text-center py-6 text-[var(--text-muted)] text-sm">No rotation history detected for this vehicle</div>
               ) : (
                 <div className="space-y-3">
                   {vehicle.rotationEvents.map((ev, i) => (
@@ -455,8 +455,8 @@ function RotationDrawer({ vehicle, onClose }) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm text-white font-medium">{ev.serial}</span>
-                          <span className="text-xs text-gray-500">{fmtDate(ev.date)}</span>
+                          <span className="text-sm text-[var(--text-primary)] font-medium">{ev.serial}</span>
+                          <span className="text-xs text-[var(--text-muted)]">{fmtDate(ev.date)}</span>
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <span
@@ -465,7 +465,7 @@ function RotationDrawer({ vehicle, onClose }) {
                           >
                             {ev.from}
                           </span>
-                          <ArrowRight size={12} className="text-gray-500" />
+                          <ArrowRight size={12} className="text-[var(--text-muted)]" />
                           <span
                             className="text-xs px-2 py-0.5 rounded"
                             style={{ backgroundColor: `${posColors[ev.to] || '#6b7280'}30`, color: posColors[ev.to] || '#9ca3af', border: `1px solid ${posColors[ev.to] || '#6b7280'}50` }}
@@ -473,7 +473,7 @@ function RotationDrawer({ vehicle, onClose }) {
                             {ev.to}
                           </span>
                           {ev.km != null && (
-                            <span className="text-xs text-gray-500">@ {fmt(ev.km)} km</span>
+                            <span className="text-xs text-[var(--text-muted)]">@ {fmt(ev.km)} km</span>
                           )}
                         </div>
                       </div>
@@ -485,31 +485,31 @@ function RotationDrawer({ vehicle, onClose }) {
 
             {/* Active tyres table */}
             <div className="card">
-              <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                 <Layers size={15} className="text-purple-400" />
                 Active Tyres ({vehicle.activeTyreCount})
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-gray-800">
+                    <tr className="border-b border-[var(--input-border)]">
                       {['Serial', 'Position', 'Brand', 'Tread (mm)', 'Fitted km'].map(h => (
-                        <th key={h} className="text-left text-gray-500 pb-2 pr-4 font-medium">{h}</th>
+                        <th key={h} className="text-left text-[var(--text-muted)] pb-2 pr-4 font-medium">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800">
+                  <tbody className="divide-y divide-[var(--input-border)]">
                     {vehicle.activeTyres.map((t, i) => {
                       const td = parseFloat(t.tread_depth)
                       return (
                         <tr key={i} className="hover:bg-gray-800/50">
-                          <td className="py-2 pr-4 text-white font-mono">{t.serial_number || t.serial_no || '-'}</td>
-                          <td className="py-2 pr-4 text-gray-300">{normPos(t.position)}</td>
-                          <td className="py-2 pr-4 text-gray-300">{t.brand || '-'}</td>
+                          <td className="py-2 pr-4 text-[var(--text-primary)] font-mono">{t.serial_number || t.serial_no || '-'}</td>
+                          <td className="py-2 pr-4 text-[var(--text-secondary)]">{normPos(t.position)}</td>
+                          <td className="py-2 pr-4 text-[var(--text-secondary)]">{t.brand || '-'}</td>
                           <td className={`py-2 pr-4 font-medium ${!isNaN(td) && td < 4 ? 'text-red-400' : 'text-green-400'}`}>
                             {isNaN(td) ? '-' : `${td.toFixed(1)}`}
                           </td>
-                          <td className="py-2 pr-4 text-gray-300">{fmt(safeKm(t.km_at_fitment))}</td>
+                          <td className="py-2 pr-4 text-[var(--text-secondary)]">{fmt(safeKm(t.km_at_fitment))}</td>
                         </tr>
                       )
                     })}
@@ -570,36 +570,36 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md"
+          className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-md"
           onClick={e => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between p-5 border-b border-gray-800">
-            <div className="flex items-center gap-2 text-white font-semibold">
+          <div className="flex items-center justify-between p-5 border-b border-[var(--input-border)]">
+            <div className="flex items-center gap-2 text-[var(--text-primary)] font-semibold">
               <RotateCcw size={16} className="text-green-400" />
               Schedule Rotation - {vehicle?.asset}
             </div>
-            <button onClick={onClose} className="p-1.5 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors">
+            <button onClick={onClose} className="p-1.5 hover:bg-[var(--input-bg)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
               <X size={16} />
             </button>
           </div>
 
           <div className="p-5 space-y-4">
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Scheduled Date</label>
+              <label className="block text-xs text-[var(--text-muted)] mb-1.5">Scheduled Date</label>
               <input
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Priority</label>
+              <label className="block text-xs text-[var(--text-muted)] mb-1.5">Priority</label>
               <select
                 value={priority}
                 onChange={e => setPriority(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500"
               >
                 {['Critical', 'High', 'Medium', 'Low'].map(p => (
                   <option key={p} value={p}>{p}</option>
@@ -608,37 +608,37 @@ function ScheduleModal({ vehicle, onClose, onSave }) {
             </div>
 
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Notes</label>
+              <label className="block text-xs text-[var(--text-muted)] mb-1.5">Notes</label>
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
                 rows={3}
                 placeholder="Optional workshop notes..."
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm resize-none focus:outline-none focus:border-blue-500 placeholder-gray-600"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm resize-none focus:outline-none focus:border-blue-500 placeholder-gray-600"
               />
             </div>
 
-            <div className="bg-gray-800 rounded-lg p-3 grid grid-cols-2 gap-3 text-xs">
+            <div className="bg-[var(--input-bg)] rounded-lg p-3 grid grid-cols-2 gap-3 text-xs">
               <div>
-                <div className="text-gray-400">Current km</div>
-                <div className="text-white font-medium">{fmt(vehicle?.currentKm)}</div>
+                <div className="text-[var(--text-muted)]">Current km</div>
+                <div className="text-[var(--text-primary)] font-medium">{fmt(vehicle?.currentKm)}</div>
               </div>
               <div>
-                <div className="text-gray-400">Site</div>
-                <div className="text-white font-medium">{vehicle?.site}</div>
+                <div className="text-[var(--text-muted)]">Site</div>
+                <div className="text-[var(--text-primary)] font-medium">{vehicle?.site}</div>
               </div>
               <div>
-                <div className="text-gray-400">Status</div>
+                <div className="text-[var(--text-muted)]">Status</div>
                 <StatusBadge status={vehicle?.status} />
               </div>
               <div>
-                <div className="text-gray-400">Since Last Rotation</div>
-                <div className="text-white font-medium">{vehicle?.sinceLastKm != null ? `${fmt(vehicle.sinceLastKm)} km` : '-'}</div>
+                <div className="text-[var(--text-muted)]">Since Last Rotation</div>
+                <div className="text-[var(--text-primary)] font-medium">{vehicle?.sinceLastKm != null ? `${fmt(vehicle.sinceLastKm)} km` : '-'}</div>
               </div>
             </div>
           </div>
 
-          <div className="flex gap-3 p-5 border-t border-gray-800">
+          <div className="flex gap-3 p-5 border-t border-[var(--input-border)]">
             <button onClick={onClose} className="btn-secondary flex-1">
               Cancel
             </button>
@@ -978,16 +978,16 @@ export default function RotationSchedule() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+    <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
       <div className="text-center space-y-3">
         <RotateCcw size={36} className="text-green-400 animate-spin mx-auto" />
-        <p className="text-gray-400 text-sm">Loading rotation data...</p>
+        <p className="text-[var(--text-muted)] text-sm">Loading rotation data...</p>
       </div>
     </div>
   )
 
   if (error) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-8">
+    <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center p-8">
       <div className="bg-red-900/20 border border-red-800 rounded-2xl p-6 max-w-md text-center space-y-3">
         <AlertOctagon size={32} className="text-red-400 mx-auto" />
         <p className="text-red-300 font-medium">Failed to load rotation data</p>
@@ -1011,7 +1011,7 @@ export default function RotationSchedule() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={fetchData}
-              className="p-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-400 hover:text-white transition-colors"
+              className="p-2 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               title="Refresh"
             >
               <RefreshCw size={15} />
@@ -1019,7 +1019,7 @@ export default function RotationSchedule() {
             <button
               onClick={exportExcel}
               disabled={noData}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-gray-300 text-sm transition-colors disabled:opacity-40"
+              className="flex items-center gap-2 px-3 py-2 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] rounded-lg text-[var(--text-secondary)] text-sm transition-colors disabled:opacity-40"
             >
               <FileSpreadsheet size={14} /> Excel
             </button>
@@ -1037,7 +1037,7 @@ export default function RotationSchedule() {
         {/* ── Interval Config ──────────────────────────────────────────────── */}
         <div className="card">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-white min-w-max">
+            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)] min-w-max">
               <Settings2 size={15} className="text-blue-400" />
               Rotation Interval
             </div>
@@ -1061,11 +1061,11 @@ export default function RotationSchedule() {
                   const v = Math.max(MIN_INTERVAL, Math.min(MAX_INTERVAL, Number(e.target.value)))
                   setInterval(v); setPage(1)
                 }}
-                className="w-28 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm text-right focus:outline-none focus:border-blue-500"
+                className="w-28 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-1.5 text-[var(--text-primary)] text-sm text-right focus:outline-none focus:border-blue-500"
               />
-              <span className="text-sm text-gray-400 min-w-max">km</span>
+              <span className="text-sm text-[var(--text-muted)] min-w-max">km</span>
             </div>
-            <div className="flex items-center gap-1 text-xs text-gray-500">
+            <div className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
               <Info size={11} />
               <span>Recalculates all metrics in real-time</span>
             </div>
@@ -1119,7 +1119,7 @@ export default function RotationSchedule() {
             </div>
 
             {/* ── Tab Navigation ───────────────────────────────────────────── */}
-            <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1.5 w-fit">
+            <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1.5 w-fit">
               {[
                 { id: 'status',   label: 'Rotation Status',    icon: Truck      },
                 { id: 'charts',   label: 'Compliance Charts',  icon: BarChart3  },
@@ -1132,7 +1132,7 @@ export default function RotationSchedule() {
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     activeTab === t.id
                       ? 'bg-green-700 text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
                   }`}
                 >
                   <t.icon size={14} />
@@ -1151,39 +1151,39 @@ export default function RotationSchedule() {
                 {/* Filters */}
                 <div className="flex flex-col sm:flex-row gap-3">
                   <div className="relative flex-1 max-w-xs">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                     <input
                       value={search}
                       onChange={e => { setSearch(e.target.value); setPage(1) }}
                       placeholder="Search asset or site..."
-                      className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg pl-9 pr-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-600 focus:outline-none focus:border-blue-500"
                     />
                   </div>
                   <select
                     value={siteFilter}
                     onChange={e => { setSiteFilter(e.target.value); setPage(1) }}
-                    className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-blue-500"
+                    className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500"
                   >
                     {sites.map(s => <option key={s}>{s}</option>)}
                   </select>
                   <select
                     value={statusFilter}
                     onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
-                    className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-blue-500"
+                    className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500"
                   >
                     {['All', 'Overdue', 'Due Soon', 'On Schedule', 'No History'].map(s => <option key={s}>{s}</option>)}
                   </select>
-                  <div className="text-sm text-gray-500 flex items-center">
+                  <div className="text-sm text-[var(--text-muted)] flex items-center">
                     {filteredVehicles.length} vehicles
                   </div>
                 </div>
 
                 {/* Table */}
-                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-800 bg-gray-950">
+                        <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
                           {[
                             { key: 'asset', label: 'Asset' },
                             { key: 'site',  label: 'Site' },
@@ -1197,7 +1197,7 @@ export default function RotationSchedule() {
                             <th
                               key={col.label}
                               onClick={col.key ? () => toggleSort(col.key) : undefined}
-                              className={`text-left text-xs text-gray-500 font-medium px-4 py-3 select-none ${col.key ? 'cursor-pointer hover:text-gray-300' : ''}`}
+                              className={`text-left text-xs text-[var(--text-muted)] font-medium px-4 py-3 select-none ${col.key ? 'cursor-pointer hover:text-[var(--text-secondary)]' : ''}`}
                             >
                               <span className="flex items-center gap-1">
                                 {col.label}
@@ -1212,7 +1212,7 @@ export default function RotationSchedule() {
                       <tbody className="divide-y divide-gray-800/60">
                         {paginatedVehicles.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="text-center py-12 text-gray-500">No vehicles match the current filters</td>
+                            <td colSpan={8} className="text-center py-12 text-[var(--text-muted)]">No vehicles match the current filters</td>
                           </tr>
                         ) : paginatedVehicles.map((v, i) => (
                           <motion.tr
@@ -1233,26 +1233,26 @@ export default function RotationSchedule() {
                               </button>
                             </td>
                             <td className="px-4 py-3">
-                              <span className="flex items-center gap-1.5 text-gray-300">
-                                <MapPin size={12} className="text-gray-500" />
+                              <span className="flex items-center gap-1.5 text-[var(--text-secondary)]">
+                                <MapPin size={12} className="text-[var(--text-muted)]" />
                                 {v.site}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-gray-300 text-center">{v.activeTyreCount}</td>
-                            <td className="px-4 py-3 text-gray-300 text-xs">{fmtDate(v.lastRotationDate)}</td>
+                            <td className="px-4 py-3 text-[var(--text-secondary)] text-center">{v.activeTyreCount}</td>
+                            <td className="px-4 py-3 text-[var(--text-secondary)] text-xs">{fmtDate(v.lastRotationDate)}</td>
                             <td className="px-4 py-3">
                               {v.sinceLastKm != null ? (
-                                <span className={v.sinceLastKm >= interval ? 'text-red-400 font-medium' : 'text-gray-300'}>
+                                <span className={v.sinceLastKm >= interval ? 'text-red-400 font-medium' : 'text-[var(--text-secondary)]'}>
                                   {fmt(v.sinceLastKm)}
                                 </span>
-                              ) : <span className="text-gray-600">-</span>}
+                              ) : <span className="text-[var(--text-dim)]">-</span>}
                             </td>
                             <td className="px-4 py-3">
                               {v.dueInKm != null ? (
-                                <span className={v.dueInKm <= 0 ? 'text-red-400 font-medium' : v.dueInKm <= DUE_SOON_BUFFER ? 'text-yellow-400' : 'text-gray-300'}>
+                                <span className={v.dueInKm <= 0 ? 'text-red-400 font-medium' : v.dueInKm <= DUE_SOON_BUFFER ? 'text-yellow-400' : 'text-[var(--text-secondary)]'}>
                                   {v.dueInKm <= 0 ? `${fmt(Math.abs(v.dueInKm))} overdue` : fmt(v.dueInKm)}
                                 </span>
-                              ) : <span className="text-gray-600">-</span>}
+                              ) : <span className="text-[var(--text-dim)]">-</span>}
                             </td>
                             <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
                             <td className="px-4 py-3">
@@ -1272,15 +1272,15 @@ export default function RotationSchedule() {
 
                   {/* Pagination */}
                   {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800 bg-gray-950">
-                      <span className="text-xs text-gray-500">
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--input-border)] bg-[var(--input-bg)]">
+                      <span className="text-xs text-[var(--text-muted)]">
                         {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filteredVehicles.length)} of {filteredVehicles.length}
                       </span>
                       <div className="flex gap-2">
-                        <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="p-1.5 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 transition-colors">
+                        <button disabled={page === 1} onClick={() => setPage(p => p - 1)} className="p-1.5 rounded bg-[var(--input-bg)] hover:bg-gray-700 disabled:opacity-30 transition-colors">
                           <ChevronDown size={13} className="rotate-90" />
                         </button>
-                        <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} className="p-1.5 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 transition-colors">
+                        <button disabled={page === totalPages} onClick={() => setPage(p => p + 1)} className="p-1.5 rounded bg-[var(--input-bg)] hover:bg-gray-700 disabled:opacity-30 transition-colors">
                           <ChevronDown size={13} className="-rotate-90" />
                         </button>
                       </div>
@@ -1326,11 +1326,11 @@ export default function RotationSchedule() {
                   {/* Rotation Activity Trend */}
                   <div className="card">
                     <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                      <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                         <TrendingUp size={15} className="text-green-400" />
                         Monthly Rotation Activity
                       </h2>
-                      <span className="text-xs text-gray-500">Last 12 months · Detected rotations</span>
+                      <span className="text-xs text-[var(--text-muted)]">Last 12 months · Detected rotations</span>
                     </div>
                     {trendChartData ? (
                       <div className="h-64">
@@ -1346,14 +1346,14 @@ export default function RotationSchedule() {
                         />
                       </div>
                     ) : (
-                      <div className="h-64 flex items-center justify-center text-gray-500 text-sm">No rotation events detected in the last 12 months</div>
+                      <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">No rotation events detected in the last 12 months</div>
                     )}
                   </div>
 
                   {/* Site Compliance */}
                   <div className="card">
                     <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                      <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                         <Building2 size={15} className="text-blue-400" />
                         Site Compliance Comparison
                       </h2>
@@ -1374,14 +1374,14 @@ export default function RotationSchedule() {
                         />
                       </div>
                     ) : (
-                      <div className="h-64 flex items-center justify-center text-gray-500 text-sm">No site data available</div>
+                      <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">No site data available</div>
                     )}
                   </div>
                 </div>
 
                 {/* Status Distribution */}
                 <div className="card">
-                  <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                     <Layers size={15} className="text-purple-400" />
                     Fleet Status Distribution
                   </h2>
@@ -1392,11 +1392,11 @@ export default function RotationSchedule() {
                       return (
                         <div key={status} className={`rounded-xl border ${cfg.border} ${cfg.bg} p-4`}>
                           <div className={`text-2xl font-bold ${cfg.color}`}>{count}</div>
-                          <div className="text-xs text-gray-400 mt-1">{status}</div>
-                          <div className="mt-2 h-1.5 rounded-full bg-gray-700">
+                          <div className="text-xs text-[var(--text-muted)] mt-1">{status}</div>
+                          <div className="mt-2 h-1.5 rounded-full bg-[var(--input-border)]">
                             <div className={`h-full rounded-full ${cfg.dot}`} style={{ width: `${pct}%` }} />
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">{pct}%</div>
+                          <div className="text-xs text-[var(--text-muted)] mt-1">{pct}%</div>
                         </div>
                       )
                     })}
@@ -1413,7 +1413,7 @@ export default function RotationSchedule() {
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                   {/* Life comparison chart */}
                   <div className="card">
-                    <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                       <BarChart3 size={15} className="text-green-400" />
                       Tyre Life: Rotated vs Non-Rotated
                     </h2>
@@ -1432,13 +1432,13 @@ export default function RotationSchedule() {
                         />
                       </div>
                     ) : (
-                      <div className="h-64 flex items-center justify-center text-gray-500 text-sm">Insufficient removal records to compare tyre life</div>
+                      <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">Insufficient removal records to compare tyre life</div>
                     )}
                   </div>
 
                   {/* Impact metrics */}
                   <div className="card space-y-4">
-                    <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                       <DollarSign size={15} className="text-yellow-400" />
                       Rotation Impact Analysis
                     </h2>
@@ -1448,12 +1448,12 @@ export default function RotationSchedule() {
                           <div className="bg-green-900/20 border border-green-800 rounded-lg p-4">
                             <div className="text-xs text-green-400 mb-1">With Regular Rotation</div>
                             <div className="text-xl font-bold text-green-300">{fmt(analytics.avgLifeWith)} km</div>
-                            <div className="text-xs text-gray-400 mt-1">avg tyre life</div>
+                            <div className="text-xs text-[var(--text-muted)] mt-1">avg tyre life</div>
                           </div>
                           <div className="bg-red-900/20 border border-red-800 rounded-lg p-4">
                             <div className="text-xs text-red-400 mb-1">No Rotation Detected</div>
                             <div className="text-xl font-bold text-red-300">{fmt(analytics.avgLifeWithout)} km</div>
-                            <div className="text-xs text-gray-400 mt-1">avg tyre life</div>
+                            <div className="text-xs text-[var(--text-muted)] mt-1">avg tyre life</div>
                           </div>
                         </div>
                         {analytics.avgLifeWith > analytics.avgLifeWithout && (
@@ -1462,7 +1462,7 @@ export default function RotationSchedule() {
                               <TrendingUp size={14} />
                               {fmt(analytics.avgLifeWith - analytics.avgLifeWithout)} km longer life with rotation
                             </div>
-                            <div className="text-xs text-gray-400">
+                            <div className="text-xs text-[var(--text-muted)]">
                               +{Math.round(((analytics.avgLifeWith - analytics.avgLifeWithout) / analytics.avgLifeWithout) * 100)}% improvement ·
                               Saves approx {activeCurrency} {fmt(Math.round(((analytics.avgLifeWith - analytics.avgLifeWithout) / analytics.avgLifeWith) * analytics.effCost))} per tyre
                             </div>
@@ -1470,29 +1470,29 @@ export default function RotationSchedule() {
                         )}
                       </>
                     ) : (
-                      <div className="flex items-center gap-2 text-gray-500 text-sm py-6 justify-center">
+                      <div className="flex items-center gap-2 text-[var(--text-muted)] text-sm py-6 justify-center">
                         <Info size={14} />
                         Tyre removal (km_at_removal) data required for life comparison
                       </div>
                     )}
 
                     {/* Cost savings breakdown */}
-                    <div className="border-t border-gray-800 pt-4 space-y-2">
-                      <div className="text-xs text-gray-400 font-medium">Estimated Annual Savings</div>
+                    <div className="border-t border-[var(--input-border)] pt-4 space-y-2">
+                      <div className="text-xs text-[var(--text-muted)] font-medium">Estimated Annual Savings</div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-400">Fleet size</span>
-                        <span className="text-white">{analytics.total} vehicles</span>
+                        <span className="text-[var(--text-muted)]">Fleet size</span>
+                        <span className="text-[var(--text-primary)]">{analytics.total} vehicles</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-400">Avg tyre cost</span>
-                        <span className="text-white">{activeCurrency} {fmt(analytics.effCost)}</span>
+                        <span className="text-[var(--text-muted)]">Avg tyre cost</span>
+                        <span className="text-[var(--text-primary)]">{activeCurrency} {fmt(analytics.effCost)}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-400">Rotation benefit factor</span>
-                        <span className="text-white">30%</span>
+                        <span className="text-[var(--text-muted)]">Rotation benefit factor</span>
+                        <span className="text-[var(--text-primary)]">30%</span>
                       </div>
-                      <div className="flex items-center justify-between text-sm font-semibold border-t border-gray-800 pt-2">
-                        <span className="text-gray-300">Total est. savings</span>
+                      <div className="flex items-center justify-between text-sm font-semibold border-t border-[var(--input-border)] pt-2">
+                        <span className="text-[var(--text-secondary)]">Total est. savings</span>
                         <span className="text-green-400">{activeCurrency} {fmt(analytics.costSavings)}</span>
                       </div>
                     </div>
@@ -1501,10 +1501,10 @@ export default function RotationSchedule() {
 
                 {/* Position Wear Balance Analysis */}
                 <div className="card">
-                  <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                     <Gauge size={15} className="text-orange-400" />
                     Position Wear Balance Analysis
-                    <span className="text-xs text-gray-500 font-normal ml-2">Vehicles with &gt; {WEAR_IMBALANCE_MM}mm steer-drive imbalance</span>
+                    <span className="text-xs text-[var(--text-muted)] font-normal ml-2">Vehicles with &gt; {WEAR_IMBALANCE_MM}mm steer-drive imbalance</span>
                   </h2>
                   {(() => {
                     const imbalanced = analytics.vehicles.filter(v => v.wearImbalance != null && v.wearImbalance > WEAR_IMBALANCE_MM)
@@ -1520,13 +1520,13 @@ export default function RotationSchedule() {
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="border-b border-gray-800">
+                            <tr className="border-b border-[var(--input-border)]">
                               {['Asset', 'Site', 'Steer Tread', 'Drive Tread', 'Imbalance', 'Priority'].map(h => (
-                                <th key={h} className="text-left text-xs text-gray-500 font-medium pb-2 pr-4">{h}</th>
+                                <th key={h} className="text-left text-xs text-[var(--text-muted)] font-medium pb-2 pr-4">{h}</th>
                               ))}
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-800">
+                          <tbody className="divide-y divide-[var(--input-border)]">
                             {imbalanced.map(v => (
                               <tr key={v.asset} className="hover:bg-gray-800/30 transition-colors">
                                 <td className="py-2.5 pr-4">
@@ -1534,7 +1534,7 @@ export default function RotationSchedule() {
                                     <Truck size={12} /> {v.asset}
                                   </button>
                                 </td>
-                                <td className="py-2.5 pr-4 text-gray-300">{v.site}</td>
+                                <td className="py-2.5 pr-4 text-[var(--text-secondary)]">{v.site}</td>
                                 <td className="py-2.5 pr-4 text-blue-400">{v.steerTread?.toFixed(1) ?? '-'} mm</td>
                                 <td className="py-2.5 pr-4 text-red-400">{v.driveTread?.toFixed(1) ?? '-'} mm</td>
                                 <td className="py-2.5 pr-4">
@@ -1568,7 +1568,7 @@ export default function RotationSchedule() {
               <motion.div key="schedule" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
 
                 <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                     <Calendar size={15} className="text-blue-400" />
                     Scheduled Rotations ({schedules.length})
                   </h2>
@@ -1611,13 +1611,13 @@ export default function RotationSchedule() {
                 ) : schedLoading ? (
                   <div className="card p-12 text-center">
                     <RotateCcw size={32} className="text-blue-400 animate-spin mx-auto mb-3" />
-                    <p className="text-gray-400 text-sm">Loading scheduled rotations...</p>
+                    <p className="text-[var(--text-muted)] text-sm">Loading scheduled rotations...</p>
                   </div>
                 ) : schedules.length === 0 ? (
                   <div className="card p-12 text-center">
-                    <Calendar size={40} className="text-gray-600 mx-auto mb-3" />
-                    <p className="text-gray-400 font-medium">No rotations scheduled yet</p>
-                    <p className="text-gray-500 text-sm mt-1">Click "Schedule" on overdue vehicles or use auto-schedule above.</p>
+                    <Calendar size={40} className="text-[var(--text-dim)] mx-auto mb-3" />
+                    <p className="text-[var(--text-muted)] font-medium">No rotations scheduled yet</p>
+                    <p className="text-[var(--text-muted)] text-sm mt-1">Click "Schedule" on overdue vehicles or use auto-schedule above.</p>
                   </div>
                 ) : (
                   <>
@@ -1639,25 +1639,25 @@ export default function RotationSchedule() {
                           </div>
                           <div className="divide-y divide-gray-800/50">
                             {group.sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate)).map(s => (
-                              <div key={s.id} className="flex items-center gap-4 px-5 py-3 bg-gray-900 hover:bg-gray-800/50 transition-colors">
+                              <div key={s.id} className="flex items-center gap-4 px-5 py-3 bg-[var(--surface-1)] hover:bg-gray-800/50 transition-colors">
                                 <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                                   <div>
-                                    <div className="text-xs text-gray-500">Asset</div>
-                                    <div className="text-white font-medium flex items-center gap-1.5">
+                                    <div className="text-xs text-[var(--text-muted)]">Asset</div>
+                                    <div className="text-[var(--text-primary)] font-medium flex items-center gap-1.5">
                                       <Truck size={12} className="text-blue-400" /> {s.asset}
                                     </div>
                                   </div>
                                   <div>
-                                    <div className="text-xs text-gray-500">Site</div>
-                                    <div className="text-gray-300">{s.site}</div>
+                                    <div className="text-xs text-[var(--text-muted)]">Site</div>
+                                    <div className="text-[var(--text-secondary)]">{s.site}</div>
                                   </div>
                                   <div>
-                                    <div className="text-xs text-gray-500">Scheduled Date</div>
-                                    <div className="text-gray-300">{fmtDate(s.scheduledDate)}</div>
+                                    <div className="text-xs text-[var(--text-muted)]">Scheduled Date</div>
+                                    <div className="text-[var(--text-secondary)]">{fmtDate(s.scheduledDate)}</div>
                                   </div>
                                   <div>
-                                    <div className="text-xs text-gray-500">Notes</div>
-                                    <div className="text-gray-400 text-xs truncate max-w-xs">{s.notes || '-'}</div>
+                                    <div className="text-xs text-[var(--text-muted)]">Notes</div>
+                                    <div className="text-[var(--text-muted)] text-xs truncate max-w-xs">{s.notes || '-'}</div>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -1672,7 +1672,7 @@ export default function RotationSchedule() {
                                   <button
                                     onClick={() => removeSchedule(s.id)}
                                     disabled={schedBusy}
-                                    className="p-1.5 bg-gray-800 hover:bg-red-900/30 border border-gray-700 hover:border-red-700 text-gray-400 hover:text-red-400 rounded-lg transition-colors disabled:opacity-50"
+                                    className="p-1.5 bg-[var(--input-bg)] hover:bg-red-900/30 border border-[var(--input-border)] hover:border-red-700 text-[var(--text-muted)] hover:text-red-400 rounded-lg transition-colors disabled:opacity-50"
                                     title="Remove"
                                   >
                                     <X size={13} />
@@ -1687,8 +1687,8 @@ export default function RotationSchedule() {
 
                     {/* Completed */}
                     {schedules.filter(s => s.status === 'Completed').length > 0 && (
-                      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                        <div className="px-5 py-3 text-sm font-semibold text-gray-400 border-b border-gray-800 flex items-center gap-2">
+                      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                        <div className="px-5 py-3 text-sm font-semibold text-[var(--text-muted)] border-b border-[var(--input-border)] flex items-center gap-2">
                           <CheckCircle size={13} className="text-green-400" />
                           Completed ({schedules.filter(s => s.status === 'Completed').length})
                         </div>
@@ -1696,13 +1696,13 @@ export default function RotationSchedule() {
                           {schedules.filter(s => s.status === 'Completed').map(s => (
                             <div key={s.id} className="flex items-center gap-4 px-5 py-3 opacity-60">
                               <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                                <div className="flex items-center gap-1.5 text-gray-400">
+                                <div className="flex items-center gap-1.5 text-[var(--text-muted)]">
                                   <Truck size={12} /> {s.asset}
                                 </div>
-                                <div className="text-gray-500">{s.site}</div>
-                                <div className="text-gray-500">{fmtDate(s.scheduledDate)}</div>
+                                <div className="text-[var(--text-muted)]">{s.site}</div>
+                                <div className="text-[var(--text-muted)]">{fmtDate(s.scheduledDate)}</div>
                               </div>
-                              <button onClick={() => removeSchedule(s.id)} disabled={schedBusy} className="p-1.5 text-gray-600 hover:text-gray-400 transition-colors disabled:opacity-50">
+                              <button onClick={() => removeSchedule(s.id)} disabled={schedBusy} className="p-1.5 text-[var(--text-dim)] hover:text-[var(--text-muted)] transition-colors disabled:opacity-50">
                                 <X size={12} />
                               </button>
                             </div>

@@ -111,5 +111,12 @@
     "errorTitle": "Could not load dashboard",
     "errorDefault": "Failed to load dashboard data.",
     "retry": "Retry"
+  },
+  "attention": {
+    "title": "Needs attention",
+    "count": "{count} open",
+    "allClear": "All clear — no critical tyres in view.",
+    "highRisk": "High risk",
+    "spend": "spend"
   }
 }

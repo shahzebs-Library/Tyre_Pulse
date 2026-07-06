@@ -17,7 +17,7 @@ import {
   Title, Tooltip, Legend, ArcElement, LineElement, PointElement, Filler,
 } from 'chart.js'
 import {
-  CircleDot, Package, ClipboardList, AlertTriangle,
+  CircleDot, Package, ClipboardList, AlertTriangle, ShieldCheck,
   TrendingUp, TrendingDown, DollarSign, Presentation, Minus,
   FileSpreadsheet, FileText, Search, X, Calendar, Activity, Clock,
   Bell, Upload, ClipboardCheck, Maximize2, Zap, ChevronRight,
@@ -274,6 +274,21 @@ export default function Dashboard() {
     const crit = tyres.filter(isHigh).length
     return { tyres: tyres.length, stock: rawStock.length, actions: open, critical: crit, cost, vehicles: new Set(tyres.map(t => t.asset_no).filter(Boolean)).size }
   }, [tyres, rawActions, rawStock, summary, search])
+
+  // "Needs attention" — the highest-cost critical tyres, surfaced so the thing
+  // that needs action reads at a glance. Real data only; empty when clean.
+  const attentionItems = useMemo(() => {
+    return (tyres || [])
+      .filter(isHigh)
+      .map(r => ({
+        id: r.id ?? `${r.asset_no}-${r.serial_no}`,
+        asset: r.asset_no || '—',
+        detail: [r.brand, r.site].filter(Boolean).join(' · ') || (r.category || ''),
+        cost: recordCost(r),
+      }))
+      .sort((a, b) => b.cost - a.cost)
+      .slice(0, 5)
+  }, [tyres])
 
   const fleetHealthScore = useMemo(() => computeFleetHealthScore(tyres), [tyres])
   const seasonalTrends   = useMemo(() => computeSeasonalTrends(tyres), [tyres])
@@ -811,6 +826,42 @@ export default function Dashboard() {
         <StatTile index={4} to="/analytics" icon={DollarSign} tone="accent"
           label={t('dashboard.kpi.totalCost')} value={`${(stats.cost / 1000).toFixed(0)}K`}
           unit={activeCurrency} spark={sparkSeries.cost} />
+      </div>
+
+      {/* ── NEEDS ATTENTION ──────────────────────────────────────────────── */}
+      <div className="card !p-0 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--card-border,rgba(255,255,255,0.06))]">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={15} className="text-[#f26161]" />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.attention.title')}</h3>
+          </div>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+            {t('dashboard.attention.count', { count: attentionItems.length })}
+          </span>
+        </div>
+        {attentionItems.length === 0 ? (
+          <div className="px-4 py-6 text-sm text-[var(--text-muted)] flex items-center gap-2">
+            <ShieldCheck size={15} className="text-[var(--accent)]" /> {t('dashboard.attention.allClear')}
+          </div>
+        ) : (
+          <ul className="divide-y divide-[var(--card-border,rgba(255,255,255,0.05))]">
+            {attentionItems.map((it) => (
+              <li key={it.id}>
+                <Link to="/anomalies" className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--input-bg,rgba(255,255,255,0.03))] transition-colors">
+                  <span className="w-[3px] self-stretch rounded-full bg-[#f26161] shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{it.asset}</p>
+                    <p className="text-[11.5px] text-[var(--text-muted)] truncate">{it.detail || t('dashboard.attention.highRisk')}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[13px] font-bold tabular-nums text-[var(--text-primary)]">{activeCurrency} {Math.round(it.cost).toLocaleString()}</p>
+                    <p className="text-[10.5px] text-[var(--text-dim)]">{t('dashboard.attention.spend')}</p>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* ── COMMAND BAR (filters) ─────────────────────────────────────────── */}

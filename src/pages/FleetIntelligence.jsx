@@ -1036,7 +1036,7 @@ export default function FleetIntelligence() {
       />
 
       {/* ── 2. Filters ─────────────────────────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="card">
         <div className="flex items-center gap-2 mb-3">
           <Filter size={14} className="text-gray-400" />
           <span className="text-sm font-medium text-gray-300">{t('fleetintel.filters.heading')}</span>
@@ -1147,9 +1147,9 @@ export default function FleetIntelligence() {
       </div>
 
       {/* ── 4. Availability Timeline ─────────────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="card">
         <div className="mb-3">
-          <h2 className="text-sm font-semibold text-white">{t('fleetintel.availability.title')}</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('fleetintel.availability.title')}</h2>
           <p className="text-xs text-gray-500">{t('fleetintel.availability.subtitle')}</p>
         </div>
         <div style={{ height: 240 }}>
@@ -1160,9 +1160,9 @@ export default function FleetIntelligence() {
       {/* ── 5 & 6. Downtime + Site Cost ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {/* Downtime */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div className="card">
           <div className="mb-3">
-            <h2 className="text-sm font-semibold text-white">{t('fleetintel.downtime.title')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('fleetintel.downtime.title')}</h2>
             <p className="text-xs text-gray-500">{t('fleetintel.downtime.subtitle')}</p>
           </div>
           {downtimeTop15.length === 0 ? (
@@ -1175,9 +1175,9 @@ export default function FleetIntelligence() {
         </div>
 
         {/* Site Cost */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div className="card">
           <div className="mb-3">
-            <h2 className="text-sm font-semibold text-white">{t('fleetintel.siteCost.title')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('fleetintel.siteCost.title')}</h2>
             <p className="text-xs text-gray-500">
               {t('fleetintel.siteCost.subtitle')}{fleetMasterAvail ? t('fleetintel.siteCost.stackedSuffix') : ''}
             </p>
@@ -1196,10 +1196,10 @@ export default function FleetIntelligence() {
       </div>
 
       {/* ── 7. Cost Trend ────────────────────────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="card">
         <div className="flex items-start justify-between mb-3">
           <div>
-            <h2 className="text-sm font-semibold text-white">{t('fleetintel.costTrend.title')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('fleetintel.costTrend.title')}</h2>
             <p className="text-xs text-gray-500">{t('fleetintel.costTrend.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -1225,10 +1225,10 @@ export default function FleetIntelligence() {
       </div>
 
       {/* ── 8. Fleet Asset Register ──────────────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="card">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-sm font-semibold text-white">{t('fleetintel.register.title')}</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('fleetintel.register.title')}</h2>
             <p className="text-xs text-gray-500">
               {t('fleetintel.register.assetsSortedBy', { count: fmt(filteredRegister.length), sortCol: sortCol.replace(/_/g, ' ') })}
             </p>
@@ -1332,11 +1332,11 @@ export default function FleetIntelligence() {
 
       {/* ── 9. Vehicles Needing Attention ───────────────────────────────────── */}
       {attentionVehicles.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div className="card">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="text-red-400 shrink-0" size={16} />
             <div>
-              <h2 className="text-sm font-semibold text-white">{t('fleetintel.attention.title')}</h2>
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('fleetintel.attention.title')}</h2>
               <p className="text-xs text-gray-500">
                 {t('fleetintel.attention.subtitle', { count: attentionVehicles.length })}
               </p>

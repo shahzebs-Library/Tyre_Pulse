@@ -166,7 +166,7 @@ function addForecastMonthLabels(existing, count) {
 
 function Card({ children, className = '' }) {
   return (
-    <div className={`bg-gray-900 border border-gray-800 rounded-xl p-4 ${className}`}>
+    <div className={`card ${className}`}>
       {children}
     </div>
   )
@@ -208,7 +208,7 @@ function MetricTile({ label, value, sub }) {
   return (
     <Card className="flex flex-col gap-1">
       <span className="text-xs text-gray-500 uppercase tracking-wide">{label}</span>
-      <span className="text-xl font-bold text-white">{value}</span>
+      <span className="text-xl font-bold text-[var(--text-primary)]">{value}</span>
       {sub && <span className="text-xs text-gray-500">{sub}</span>}
     </Card>
   )
@@ -662,7 +662,7 @@ export default function AdvancedAnalytics() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="text-white space-y-6">
+    <div className="text-[var(--text-primary)] space-y-6">
       {/* Page Header */}
       <div className="px-6 pt-6 pb-4 border-b border-gray-800">
         <PageHeader

@@ -1141,14 +1141,13 @@ function KpiCard({ icon: Icon, label, value, sub, accent = 'green' }) {
     <motion.div
       className={`rounded-xl border p-4 ${styles.border}`}
       style={{ background: `linear-gradient(135deg, ${styles.glow} 0%, rgba(8,15,10,0.9) 100%)` }}
-      whileHover={{ scale: 1.02 }}
       transition={{ duration: 0.15 }}
     >
       <div className="flex items-center gap-2 mb-2">
         <Icon size={15} className={styles.icon} />
         <span className="text-xs text-gray-500 font-medium">{label}</span>
       </div>
-      <p className="text-xl font-bold text-white leading-none">{value}</p>
+      <p className="text-xl font-bold text-[var(--text-primary)] leading-none">{value}</p>
       {sub && <p className="text-xs text-gray-600 mt-1.5">{sub}</p>}
     </motion.div>
   )

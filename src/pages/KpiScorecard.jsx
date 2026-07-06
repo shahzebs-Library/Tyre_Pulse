@@ -538,7 +538,7 @@ export default function KpiScorecard() {
               {costTrend.reg && (
                 <div className="card">
                   <p className="text-xs text-gray-400 mb-1">{t('kpiscorecard.cards.forecastNextMonth')}</p>
-                  <p className="text-xl font-bold text-yellow-400">
+                  <p className="text-xl font-bold text-yellow-400 tabular-nums">
                     {fmtCurrency(Math.max(0, Math.round(costTrend.reg.predict(months.length))))}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
@@ -751,7 +751,7 @@ function KpiCard({ label, actual, target, format, invert, higherIsBad, prev, yoy
   return (
     <div className={`card border ${passing ? 'border-green-700/40' : 'border-red-700/50'}`}>
       <p className="text-xs text-gray-400">{label}</p>
-      <p className={`text-xl font-bold mt-1 ${passing ? 'text-green-400' : 'text-red-400'}`}>
+      <p className={`text-xl font-bold mt-1 tabular-nums ${passing ? 'text-green-400' : 'text-red-400'}`}>
         {format(actual)}
       </p>
       <div className="flex items-center justify-between mt-2">

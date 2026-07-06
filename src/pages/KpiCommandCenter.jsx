@@ -240,7 +240,7 @@ function FleetScoreGauge({ score }) {
           style={{ transition: 'stroke-dasharray 1.2s cubic-bezier(.4,0,.2,1)' }} />
       </svg>
       <div className="text-center z-10">
-        <div className={`text-4xl font-bold leading-none ${scoreTextColor(score)}`}>
+        <div className={`text-4xl font-bold leading-none tabular-nums ${scoreTextColor(score)}`}>
           {score.toFixed(0)}
         </div>
         <div className="text-gray-400 text-xs mt-1">/ 100</div>
@@ -324,7 +324,7 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
 
       <div className="flex items-end justify-between mb-3">
         <div>
-          <div className={`text-3xl font-bold ${rating.color}`}>
+          <div className={`text-3xl font-bold tabular-nums ${rating.color}`}>
             {value != null && !isNaN(value) ? b.format(value) : '-'}
           </div>
           {pctChange != null && (
@@ -353,7 +353,6 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
             style={{
               left: `${Math.min(progressPct, 99)}%`,
               backgroundColor: scoreColor(score),
-              boxShadow: `0 0 6px ${scoreColor(score)}`,
             }}
           />
         </div>
@@ -962,7 +961,7 @@ export default function KpiCommandCenter() {
           <div className="flex flex-col items-center gap-2">
             <FleetScoreGauge score={overallScore} />
             <div className="text-center">
-              <p className="text-white font-semibold">{t('kpicommand.panel.overallScore')}</p>
+              <p className="text-[var(--text-primary)] font-semibold">{t('kpicommand.panel.overallScore')}</p>
               <p className="text-gray-500 text-xs">{t('kpicommand.panel.overallScoreDesc')}</p>
             </div>
           </div>
@@ -975,12 +974,12 @@ export default function KpiCommandCenter() {
               const b = BENCHMARKS[key]
               const Icon = b.icon
               return (
-                <motion.div key={key} whileHover={{ scale: 1.03 }}
+                <motion.div key={key} whileHover={{ scale: 1.02 }}
                   onClick={() => setDrillKpi(key)}
                   className="bg-gray-800 rounded-xl p-3 text-center cursor-pointer hover:border-gray-600 border border-gray-800 transition-all">
                   <Icon size={14} className={`mx-auto mb-1 ${rating.color}`} />
                   <div className="text-gray-500 text-xs mb-1 truncate">{t(`kpicommand.benchmarks.${key}.short`)}</div>
-                  <div className={`text-lg font-bold ${rating.color}`}>
+                  <div className={`text-lg font-bold tabular-nums ${rating.color}`}>
                     {val != null && !isNaN(val) ? b.format(val) : '-'}
                   </div>
                   <div className={`text-xs mt-0.5 ${rating.color}`}>{t(`kpicommand.ratings.${rating.key}`)}</div>
@@ -1000,7 +999,7 @@ export default function KpiCommandCenter() {
 
       {/* KPI Scorecard Grid */}
       <div>
-        <h2 className="text-white font-semibold mb-3 flex items-center gap-2">
+        <h2 className="text-[var(--text-primary)] font-semibold mb-3 flex items-center gap-2">
           <Target size={16} className="text-blue-400" />
           {t('kpicommand.sections.kpiScorecard')}
         </h2>
@@ -1024,7 +1023,7 @@ export default function KpiCommandCenter() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Radar Chart */}
         <div className="card">
-          <h3 className="text-white font-semibold mb-1 flex items-center gap-2">
+          <h3 className="text-[var(--text-primary)] font-semibold mb-1 flex items-center gap-2">
             <Layers size={16} className="text-purple-400" />
             {t('kpicommand.sections.fleetVsBenchmark')}
           </h3>
@@ -1052,7 +1051,7 @@ export default function KpiCommandCenter() {
 
         {/* Period Comparison */}
         <div className="card">
-          <h3 className="text-white font-semibold mb-1 flex items-center gap-2">
+          <h3 className="text-[var(--text-primary)] font-semibold mb-1 flex items-center gap-2">
             <Calendar size={16} className="text-orange-400" />
             {t('kpicommand.sections.periodComparison')}
           </h3>
@@ -1101,7 +1100,7 @@ export default function KpiCommandCenter() {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
             <BarChart3 size={16} className="text-blue-400" />
-            <h3 className="text-white font-semibold">{t('kpicommand.sections.trendMatrix')}</h3>
+            <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.trendMatrix')}</h3>
             <span className="text-gray-500 text-xs ml-1">{t('kpicommand.sections.clickCellHint')}</span>
           </div>
           <div className="overflow-x-auto">
@@ -1148,7 +1147,7 @@ export default function KpiCommandCenter() {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
             <MapPin size={16} className="text-emerald-400" />
-            <h3 className="text-white font-semibold">{t('kpicommand.sections.siteComparison')}</h3>
+            <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.siteComparison')}</h3>
             <span className="text-gray-500 text-xs ml-1">{t('kpicommand.sections.colorLegendHint')}</span>
           </div>
           <div className="overflow-x-auto">
@@ -1204,7 +1203,7 @@ export default function KpiCommandCenter() {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
             <AlertTriangle size={16} className="text-yellow-400" />
-            <h3 className="text-white font-semibold">{t('kpicommand.sections.alerts')}</h3>
+            <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.alerts')}</h3>
             <span className="ml-auto text-xs bg-gray-800 px-2 py-0.5 rounded-full text-gray-400">{kpiAlerts.length}</span>
           </div>
           <div className="divide-y divide-gray-800 max-h-80 overflow-y-auto">
@@ -1247,7 +1246,7 @@ export default function KpiCommandCenter() {
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
             <Target size={16} className="text-blue-400" />
-            <h3 className="text-white font-semibold">{t('kpicommand.sections.targetVsActual')}</h3>
+            <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.targetVsActual')}</h3>
           </div>
           <div className="divide-y divide-gray-800">
             {KPI_KEYS.map(key => {
@@ -1294,7 +1293,7 @@ export default function KpiCommandCenter() {
           <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
               <Trophy size={16} className="text-yellow-400" />
-              <h3 className="text-white font-semibold">{t('kpicommand.sections.topVehicles')}</h3>
+              <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.topVehicles')}</h3>
             </div>
             <div className="divide-y divide-gray-800">
               {vehicleScores.best.map((v, i) => (
@@ -1322,7 +1321,7 @@ export default function KpiCommandCenter() {
           <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
               <AlertOctagon size={16} className="text-red-400" />
-              <h3 className="text-white font-semibold">{t('kpicommand.sections.bottomVehicles')}</h3>
+              <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.bottomVehicles')}</h3>
             </div>
             <div className="divide-y divide-gray-800">
               {vehicleScores.worst.map((v, i) => (

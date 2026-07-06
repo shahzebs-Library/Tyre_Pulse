@@ -86,11 +86,10 @@ function HealthRing({ score }) {
             initial={{ strokeDashoffset: circ }}
             animate={{ strokeDashoffset: circ - dash }}
             transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
-            style={{ filter: `drop-shadow(0 0 6px ${color})` }}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-xl font-bold text-white leading-none">{score}</span>
+          <span className="text-xl font-bold text-[var(--text-primary)] leading-none tabular-nums">{score}</span>
           <span className="text-[9px] text-gray-500 uppercase tracking-wider mt-0.5">/ 100</span>
         </div>
       </div>
@@ -113,7 +112,7 @@ function ChartPanel({ title, subtitle, icon: Icon, onExpand, children, className
             </div>
           )}
           <div>
-            <h3 className="text-sm font-semibold text-white leading-none">{title}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] leading-none">{title}</h3>
             {subtitle && <p className="text-[11px] text-gray-500 mt-0.5">{subtitle}</p>}
           </div>
         </div>
@@ -721,14 +720,11 @@ export default function Dashboard() {
         style={{
           background: 'linear-gradient(135deg, var(--hero-from) 0%, var(--hero-to) 100%)',
           border: '1px solid rgba(22,163,74,0.2)',
-          boxShadow: '0 0 80px rgba(22,163,74,0.06), 0 8px 32px rgba(0,0,0,0.5)',
+          boxShadow: 'var(--shadow-card)',
         }}>
         {/* Background glow */}
         <div className="absolute inset-0 pointer-events-none" style={{
-          background: 'radial-gradient(ellipse 60% 60% at 100% 0%, rgba(22,163,74,0.1) 0%, transparent 60%)',
-        }} />
-        <div className="absolute inset-0 pointer-events-none" style={{
-          background: 'radial-gradient(ellipse 40% 40% at 0% 100%, rgba(22,163,74,0.05) 0%, transparent 60%)',
+          background: 'radial-gradient(ellipse 60% 60% at 100% 0%, rgba(22,163,74,0.06) 0%, transparent 60%)',
         }} />
         {/* Top glow line */}
         <div className="absolute top-0 left-8 right-8 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(22,163,74,0.6) 30%, rgba(74,222,128,0.8) 50%, rgba(22,163,74,0.6) 70%, transparent)' }} />
@@ -890,7 +886,7 @@ export default function Dashboard() {
             <Clock size={16} className="text-blue-400" />
           </div>
           <p className="text-label">{t('dashboard.intel.avgTyreLife')}</p>
-          <p className="text-3xl font-extrabold text-blue-400 leading-none mt-1">
+          <p className="text-3xl font-extrabold text-blue-400 leading-none mt-1 tabular-nums">
             {tyreLife?.avgLifeDays != null ? tyreLife.avgLifeDays : '-'}
           </p>
           <p className="text-xs text-gray-600">{t('dashboard.intel.days')}</p>
@@ -936,7 +932,7 @@ export default function Dashboard() {
               <Zap size={14} className="text-blue-400" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white">{t('dashboard.forecast.title')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.forecast.title')}</h3>
               <p className="text-[11px] text-gray-500">{t('dashboard.forecast.subtitle')} <span className="text-blue-400">{forecastData.confidence}</span></p>
             </div>
           </div>
@@ -947,7 +943,7 @@ export default function Dashboard() {
             { label:t('dashboard.forecast.nextMonth'), value:`~${forecastData.forecastNextMonth}`, color:'text-blue-300' },
           ].map(({ label, value, color }) => (
             <div key={label} className="rounded-xl p-3 text-center" style={{ background:'rgba(59,130,246,0.06)', border:'1px solid rgba(59,130,246,0.14)' }}>
-              <p className={`text-2xl font-extrabold ${color} leading-none`}>{value}</p>
+              <p className={`text-2xl font-extrabold ${color} leading-none tabular-nums`}>{value}</p>
               <p className="text-label mt-1.5">{label}</p>
             </div>
           ))}
@@ -1018,7 +1014,7 @@ export default function Dashboard() {
               <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background:'rgba(22,163,74,0.1)', border:'1px solid rgba(22,163,74,0.2)' }}>
                 <CircleDot size={13} className="text-green-400" />
               </div>
-              <h3 className="text-sm font-semibold text-white">{t('dashboard.activity.recentTyreRecords')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.activity.recentTyreRecords')}</h3>
             </div>
             <Link to="/tyres" className="text-[11px] text-green-600 hover:text-green-400 font-medium flex items-center gap-1 transition-colors">
               {t('dashboard.activity.viewAll')} <ChevronRight size={11} />
@@ -1035,7 +1031,7 @@ export default function Dashboard() {
                     onMouseEnter={e => e.currentTarget.style.background='rgba(22,163,74,0.05)'}
                     onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,0.025)'}>
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: r.risk_level === 'Critical' ? '#ef4444' : r.risk_level === 'High' ? '#f97316' : r.risk_level === 'Low' ? '#22c55e' : '#f59e0b', boxShadow: `0 0 6px currentColor` }} />
+                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: r.risk_level === 'Critical' ? '#ef4444' : r.risk_level === 'High' ? '#f97316' : r.risk_level === 'Low' ? '#22c55e' : '#f59e0b' }} />
                       <div className="min-w-0">
                         <Link to={`/vehicle-history?asset=${r.asset_no}`} className="text-sm text-gray-200 font-medium hover:text-green-400 transition-colors truncate block">
                           {r.asset_no ?? 'N/A'}
@@ -1060,7 +1056,7 @@ export default function Dashboard() {
               <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background:'rgba(245,158,11,0.1)', border:'1px solid rgba(245,158,11,0.2)' }}>
                 <ClipboardList size={13} className="text-yellow-400" />
               </div>
-              <h3 className="text-sm font-semibold text-white">{t('dashboard.activity.openActions')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.activity.openActions')}</h3>
             </div>
             <Link to="/actions" className="text-[11px] text-yellow-600 hover:text-yellow-400 font-medium flex items-center gap-1 transition-colors">
               {t('dashboard.activity.viewAll')} <ChevronRight size={11} />

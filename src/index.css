@@ -185,6 +185,36 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
   }
 }
 
+/* ─── Appearance: density (Settings → Appearance) ─────────────────────────────
+   Compact trims the base type scale and card/table padding for power users who
+   want more on screen. Comfortable is the default. Driven by data-density on
+   <html> from ThemeContext. */
+html[data-density='compact'] { font-size: 15px; }              /* vs 16px default */
+html[data-density='compact'] .card { padding: 1rem; }
+html[data-density='compact'] table th,
+html[data-density='compact'] table td { padding-top: 0.4rem; padding-bottom: 0.4rem; }
+html[data-density='compact'] .stat-card,
+html[data-density='compact'] .kpi-card { padding: 0.85rem 1rem; }
+
+/* ─── Appearance: reduced motion (Settings → Appearance) ───────────────────────
+   Honour both the OS setting and the in-app toggle: kill non-essential
+   animation/transition so the UI stays calm and accessible. */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
 /* ─── Root ──────────────────────────────────────────────────────────────────── */
 #root {
   min-height: 100vh;

@@ -4,6 +4,7 @@ import * as settingsApi from '../lib/api/settings'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
+import AppearancePanel from '../components/settings/AppearancePanel'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Save, User, Settings2, Bell, Database, Info, Target, Clock, Mail, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -111,7 +112,6 @@ export default function Settings() {
   const [uploadHistory, setUploadHistory] = useState([])
 
   // Local preferences stored in localStorage
-  const [theme, setThemeState]         = useState(() => localStorage.getItem('theme') ?? 'dark')
   const [dateFormat, setDateFormatState] = useState(() => localStorage.getItem('dateFormat') ?? 'DD/MM/YYYY')
   const [prefCurrency, setPrefCurrency] = useState(() => localStorage.getItem('prefCurrency') ?? 'SAR')
   const [prefCountry, setPrefCountry]  = useState(() => activeCountry)
@@ -224,18 +224,6 @@ export default function Settings() {
     setProfileMsg(error ? error.message : 'Profile updated')
     setSavingProfile(false)
     setTimeout(() => setProfileMsg(''), 3000)
-  }
-
-  function applyTheme(val) {
-    setThemeState(val)
-    localStorage.setItem('theme', val)
-    if (val === 'dark') {
-      document.documentElement.classList.add('dark')
-      document.documentElement.classList.remove('light')
-    } else {
-      document.documentElement.classList.remove('dark')
-      document.documentElement.classList.add('light')
-    }
   }
 
   function saveDateFormat(val) {
@@ -657,30 +645,12 @@ export default function Settings() {
           </form>
         </div>
 
-        {/* Column 2 - App Preferences */}
+        {/* Column 2 - Appearance (personal theme/accent/density/motion) */}
+        <AppearancePanel />
+
+        {/* App Preferences */}
         <div className="card space-y-4">
           <h2 className="text-base font-semibold text-white flex items-center gap-2"><Settings2 size={16} /> App Preferences</h2>
-
-          {/* Theme toggle */}
-          <div>
-            <label className="label">Theme</label>
-            <div className="flex gap-2 mt-1">
-              {['dark', 'light'].map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => applyTheme(t)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors capitalize ${
-                    theme === t
-                      ? 'bg-green-700 text-white border-green-600'
-                      : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'
-                  }`}
-                >
-                  {t === 'dark' ? '🌙 Dark' : '☀ Light'}
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Language */}
           <div>

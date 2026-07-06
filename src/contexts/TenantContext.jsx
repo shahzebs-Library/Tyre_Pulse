@@ -65,6 +65,10 @@ export function TenantProvider({ children }) {
     if (primary) root.style.setProperty('--brand-primary', primary)
     if (accent)  root.style.setProperty('--brand-accent', accent)
 
+    // A personal accent (set in Settings → Appearance) always wins over the org
+    // brand for this user's own view — never override it here.
+    if (root.dataset.userAccent) return
+
     // Accent tokens: override only for a real custom brand colour; otherwise
     // clear any prior override so the CSS green defaults apply (e.g. on logout
     // or when switching back to a default-branded org).

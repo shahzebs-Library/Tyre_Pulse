@@ -87,7 +87,7 @@ function riskScoreColor(score) {
 }
 
 function cpkColor(cpk) {
-  if (cpk == null || !isFinite(cpk) || cpk <= 0) return 'text-gray-500'
+  if (cpk == null || !isFinite(cpk) || cpk <= 0) return 'text-[var(--text-muted)]'
   if (cpk <= 1.0) return 'text-green-400'
   if (cpk <= 2.0) return 'text-yellow-400'
   return 'text-red-400'
@@ -217,12 +217,12 @@ function KpiCard({ icon: Icon, label, value, sub, color = '#3b82f6', loading }) 
         <Icon size={16} style={{ color }} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-gray-500 mb-0.5">{label}</p>
+        <p className="text-xs text-[var(--text-muted)] mb-0.5">{label}</p>
         {loading
-          ? <div className="h-6 w-24 bg-gray-800 rounded animate-pulse" />
-          : <p className="text-lg font-bold text-white truncate">{value}</p>
+          ? <div className="h-6 w-24 bg-[var(--input-bg)] rounded animate-pulse" />
+          : <p className="text-lg font-bold text-[var(--text-primary)] truncate">{value}</p>
         }
-        {sub && <p className="text-[11px] text-gray-600 mt-0.5 truncate">{sub}</p>}
+        {sub && <p className="text-[11px] text-[var(--text-dim)] mt-0.5 truncate">{sub}</p>}
       </div>
       <div className="absolute bottom-0 left-0 right-0 h-0.5 opacity-30 rounded-b-xl"
         style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
@@ -235,7 +235,7 @@ function SortTh({ col, label, sortCol, sortDir, onSort, className = '' }) {
   const active = sortCol === col
   return (
     <th
-      className={`px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider cursor-pointer select-none hover:text-gray-300 transition-colors ${className}`}
+      className={`px-3 py-2.5 text-left text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider cursor-pointer select-none hover:text-[var(--text-dim)] transition-colors ${className}`}
       onClick={() => onSort(col)}
     >
       <span className="flex items-center gap-1">
@@ -256,7 +256,7 @@ function RiskBar({ score }) {
   const color = riskScoreColor(score)
   return (
     <div className="flex items-center gap-2 min-w-[80px]">
-      <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+      <div className="flex-1 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${score}%`, backgroundColor: color }}
@@ -350,7 +350,7 @@ function DriverDrawer({ driver, currency, onClose }) {
             className="fixed right-0 top-0 h-full z-50 flex flex-col overflow-hidden"
             style={{
               width: 'min(760px, 92vw)',
-              background: 'linear-gradient(165deg, #0d1117 0%, #0a0f0d 100%)',
+              background: 'linear-gradient(165deg, var(--panel) 0%, var(--panel-2) 100%)',
               borderLeft: '1px solid rgba(22,163,74,0.15)',
               boxShadow: '-24px 0 80px rgba(0,0,0,0.8)',
             }}
@@ -360,40 +360,40 @@ function DriverDrawer({ driver, currency, onClose }) {
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
           >
             {/* Drawer header */}
-            <div className="flex items-start justify-between p-5 border-b border-gray-800/60 flex-shrink-0">
+            <div className="flex items-start justify-between p-5 border-b border-[var(--input-border)] flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-base"
                   style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)', boxShadow: '0 0 14px rgba(22,163,74,0.4)' }}>
                   {driver.name[0]?.toUpperCase() ?? 'D'}
                 </div>
                 <div>
-                  <h2 className="text-base font-bold text-white">{driver.name}</h2>
+                  <h2 className="text-base font-bold text-[var(--text-primary)]">{driver.name}</h2>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${badge.cls}`}>
                       {badge.label}
                     </span>
-                    <span className="text-xs text-gray-500">Rank #{driver.rank}</span>
+                    <span className="text-xs text-[var(--text-muted)]">Rank #{driver.rank}</span>
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handlePdfExport}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                   style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
                 >
                   <FileText size={13} /> PDF
                 </button>
                 <button
                   onClick={handleExcelExport}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                   style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}
                 >
                   <FileSpreadsheet size={13} /> Excel
                 </button>
                 <button
                   onClick={onClose}
-                  className="p-1.5 rounded-lg text-gray-600 hover:text-white transition-colors hover:bg-gray-800"
+                  className="p-1.5 rounded-lg text-[var(--text-dim)] hover:text-[var(--text-primary)] transition-colors hover:bg-[var(--input-bg)]"
                 >
                   <X size={15} />
                 </button>
@@ -401,7 +401,7 @@ function DriverDrawer({ driver, currency, onClose }) {
             </div>
 
             {/* Driver stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-5 flex-shrink-0 border-b border-gray-800/40">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-5 flex-shrink-0 border-b border-[var(--input-border)]">
               {[
                 { label: 'Total Tyres', value: driver.totalTyres },
                 { label: 'Avg CPK', value: fmtCpk(driver.avgCpk, currency) },
@@ -415,8 +415,8 @@ function DriverDrawer({ driver, currency, onClose }) {
                 <div key={label}
                   className="rounded-lg p-3"
                   style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
-                  <p className="text-sm font-bold text-white truncate">{value}</p>
+                  <p className="text-[10px] text-[var(--text-dim)] mb-0.5">{label}</p>
+                  <p className="text-sm font-bold text-[var(--text-primary)] truncate">{value}</p>
                 </div>
               ))}
             </div>
@@ -424,7 +424,7 @@ function DriverDrawer({ driver, currency, onClose }) {
             {/* Records table */}
             <div className="flex-1 overflow-y-auto">
               <div className="p-5">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">
                   Tyre Records ({driver.records.length})
                 </p>
                 <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
@@ -443,7 +443,7 @@ function DriverDrawer({ driver, currency, onClose }) {
                         ].map(([col, lbl]) => (
                           <th
                             key={col}
-                            className="px-3 py-2 text-left text-[10px] font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:text-gray-400 transition-colors"
+                            className="px-3 py-2 text-left text-[10px] font-semibold text-[var(--text-dim)] uppercase tracking-wider cursor-pointer hover:text-[var(--text-muted)] transition-colors"
                             onClick={() => handleDrawerSort(col)}
                           >
                             {lbl}
@@ -462,26 +462,26 @@ function DriverDrawer({ driver, currency, onClose }) {
                           : riskLow === 'high'     ? 'text-orange-400'
                           : riskLow === 'medium'   ? 'text-yellow-400'
                           : riskLow === 'low'      ? 'text-green-400'
-                          : 'text-gray-500'
+                          : 'text-[var(--text-muted)]'
                         return (
                           <tr
                             key={r.id ?? i}
-                            className="border-t border-gray-800/40 hover:bg-white/[0.02] transition-colors"
+                            className="border-t border-[var(--input-border)] hover:bg-white/[0.02] transition-colors"
                           >
-                            <td className="px-3 py-2 text-gray-300 font-medium">{r.asset_no ?? r.asset_number ?? '-'}</td>
-                            <td className="px-3 py-2 text-gray-400">{r.brand ?? '-'}</td>
-                            <td className="px-3 py-2 text-gray-500">{r.issue_date ? r.issue_date.slice(0, 10) : '-'}</td>
-                            <td className="px-3 py-2 text-gray-300">{r.cost_per_tyre != null ? `${currency} ${r.cost_per_tyre}` : '-'}</td>
+                            <td className="px-3 py-2 text-[var(--text-dim)] font-medium">{r.asset_no ?? r.asset_number ?? '-'}</td>
+                            <td className="px-3 py-2 text-[var(--text-muted)]">{r.brand ?? '-'}</td>
+                            <td className="px-3 py-2 text-[var(--text-muted)]">{r.issue_date ? r.issue_date.slice(0, 10) : '-'}</td>
+                            <td className="px-3 py-2 text-[var(--text-dim)]">{r.cost_per_tyre != null ? `${currency} ${r.cost_per_tyre}` : '-'}</td>
                             <td className={`px-3 py-2 font-mono ${cpkColor(cpk)}`}>{fmtCpk(cpk, currency)}</td>
-                            <td className="px-3 py-2 text-gray-400">{life != null ? fmtKm(life) : '-'}</td>
+                            <td className="px-3 py-2 text-[var(--text-muted)]">{life != null ? fmtKm(life) : '-'}</td>
                             <td className={`px-3 py-2 font-semibold capitalize ${riskCls}`}>{r.risk_level ?? '-'}</td>
-                            <td className="px-3 py-2 text-gray-500 max-w-[120px] truncate">{r.removal_reason ?? '-'}</td>
+                            <td className="px-3 py-2 text-[var(--text-muted)] max-w-[120px] truncate">{r.removal_reason ?? '-'}</td>
                           </tr>
                         )
                       })}
                       {sortedRecords.length === 0 && (
                         <tr>
-                          <td colSpan={8} className="px-4 py-8 text-center text-gray-600 text-sm">No records found</td>
+                          <td colSpan={8} className="px-4 py-8 text-center text-[var(--text-dim)] text-sm">No records found</td>
                         </tr>
                       )}
                     </tbody>
@@ -734,7 +734,7 @@ export default function DriverManagement() {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
         <div className="w-10 h-10 rounded-full border-2 border-green-600/20 border-t-green-500 animate-spin" />
-        <p className="text-gray-500 text-sm">Loading driver intelligence...</p>
+        <p className="text-[var(--text-muted)] text-sm">Loading driver intelligence...</p>
       </div>
     )
   }
@@ -744,7 +744,7 @@ export default function DriverManagement() {
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
         <AlertTriangle size={32} className="text-red-500" />
         <p className="text-red-400 font-medium">Failed to load data</p>
-        <p className="text-gray-600 text-sm">{error}</p>
+        <p className="text-[var(--text-dim)] text-sm">{error}</p>
         <button
           onClick={load}
           className="mt-2 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-green-400 transition-colors hover:bg-green-400/10"
@@ -773,21 +773,21 @@ export default function DriverManagement() {
           </button>
           <button
             onClick={load}
-            className="p-2 rounded-lg text-gray-500 hover:text-green-400 transition-colors hover:bg-green-400/10"
+            className="p-2 rounded-lg text-[var(--text-muted)] hover:text-green-400 transition-colors hover:bg-green-400/10"
             title="Refresh"
           >
             <RefreshCw size={14} />
           </button>
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-400 hover:text-white transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)' }}
           >
             <FileSpreadsheet size={13} /> Excel
           </button>
           <button
             onClick={handleExportPdf}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-400 hover:text-white transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}
           >
             <FileText size={13} /> PDF
@@ -833,19 +833,19 @@ export default function DriverManagement() {
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
           <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-dim)]" />
             <input
               type="text"
               placeholder="Search driver..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none"
+              className="w-full pl-8 pr-3 py-2 rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-dim)] focus:outline-none"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-dim)] hover:text-[var(--text-muted)]"
               >
                 <X size={12} />
               </button>
@@ -861,7 +861,7 @@ export default function DriverManagement() {
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                   datePreset === p.label
                     ? 'text-white'
-                    : 'text-gray-600 hover:text-gray-400'
+                    : 'text-[var(--text-dim)] hover:text-[var(--text-muted)]'
                 }`}
                 style={datePreset === p.label ? { background: '#15803d' } : {}}
               >
@@ -874,7 +874,7 @@ export default function DriverManagement() {
           <button
             onClick={() => setShowFilters(v => !v)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-              showFilters ? 'text-green-400' : 'text-gray-500 hover:text-gray-300'
+              showFilters ? 'text-green-400' : 'text-[var(--text-muted)] hover:text-[var(--text-dim)]'
             }`}
             style={{
               background: showFilters ? 'rgba(22,163,74,0.1)' : 'rgba(255,255,255,0.04)',
@@ -884,7 +884,7 @@ export default function DriverManagement() {
             <Filter size={12} /> Filters {showFilters ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
           </button>
 
-          <p className="text-xs text-gray-600 ml-auto">
+          <p className="text-xs text-[var(--text-dim)] ml-auto">
             {visibleDrivers.length} driver{visibleDrivers.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -901,20 +901,20 @@ export default function DriverManagement() {
             >
               {/* Date range */}
               <div className="flex items-center gap-2">
-                <Calendar size={12} className="text-gray-600" />
+                <Calendar size={12} className="text-[var(--text-dim)]" />
                 <input
                   type="date"
                   value={dateFrom}
                   onChange={e => { setDateFrom(e.target.value); setDatePreset('') }}
-                  className="px-2 py-1.5 rounded-lg text-xs text-gray-300 focus:outline-none"
+                  className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                 />
-                <span className="text-gray-600 text-xs">to</span>
+                <span className="text-[var(--text-dim)] text-xs">to</span>
                 <input
                   type="date"
                   value={dateTo}
                   onChange={e => { setDateTo(e.target.value); setDatePreset('') }}
-                  className="px-2 py-1.5 rounded-lg text-xs text-gray-300 focus:outline-none"
+                  className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                 />
               </div>
@@ -924,7 +924,7 @@ export default function DriverManagement() {
                 <select
                   value={siteFilter}
                   onChange={e => setSiteFilter(e.target.value)}
-                  className="px-2 py-1.5 rounded-lg text-xs text-gray-300 focus:outline-none"
+                  className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                 >
                   <option value="all">All Sites</option>
@@ -939,7 +939,7 @@ export default function DriverManagement() {
                 <select
                   value={countryFilter}
                   onChange={e => setCountryFilter(e.target.value)}
-                  className="px-2 py-1.5 rounded-lg text-xs text-gray-300 focus:outline-none"
+                  className="px-2 py-1.5 rounded-lg text-xs text-[var(--text-dim)] focus:outline-none"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                 >
                   <option value="all">All Countries</option>
@@ -970,7 +970,7 @@ export default function DriverManagement() {
           style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp size={14} className="text-blue-400" />
-            <h3 className="text-sm font-semibold text-white">Driver Comparison - Avg CPK (Top 10)</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Driver Comparison - Avg CPK (Top 10)</h3>
           </div>
           {cpkChartData.labels.length > 0 ? (
             <div style={{ height: 220 }}>
@@ -1001,7 +1001,7 @@ export default function DriverManagement() {
               />
             </div>
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">
+            <div className="h-[220px] flex items-center justify-center text-[var(--text-dim)] text-sm">
               Insufficient CPK data
             </div>
           )}
@@ -1012,7 +1012,7 @@ export default function DriverManagement() {
           style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle size={14} className="text-orange-400" />
-            <h3 className="text-sm font-semibold text-white">Tyre Failure Rate by Driver</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Tyre Failure Rate by Driver</h3>
           </div>
           {failureChartData.labels.length > 0 ? (
             <div style={{ height: 220 }}>
@@ -1043,7 +1043,7 @@ export default function DriverManagement() {
               />
             </div>
           ) : (
-            <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">
+            <div className="h-[220px] flex items-center justify-center text-[var(--text-dim)] text-sm">
               No failure data available
             </div>
           )}
@@ -1057,7 +1057,7 @@ export default function DriverManagement() {
         <div className="px-5 py-4 border-b border-gray-800/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users size={14} className="text-green-400" />
-            <h3 className="text-sm font-semibold text-white">Driver Ranking</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Driver Ranking</h3>
             <span className="text-xs text-gray-600 ml-1">
               ({visibleDrivers.length} drivers)
             </span>

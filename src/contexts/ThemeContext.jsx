@@ -81,8 +81,9 @@ function readInitial(key, fallback, legacyKeys = []) {
 }
 
 export function ThemeProvider({ children }) {
-  // 'system' is now a first-class mode; migrate the two legacy keys.
-  const [mode, setMode] = useState(() => readInitial(KEY.mode, 'system', ['tyrepulse-theme', 'theme']))
+  // Light-first: a clean professional light theme is the default experience.
+  // Users can still pick Dark or System in Settings → Appearance.
+  const [mode, setMode] = useState(() => readInitial(KEY.mode, 'light', ['tyrepulse-theme', 'theme']))
   const [accent, setAccentRaw] = useState(() => normHex(readInitial(KEY.accent, '')))
   const [density, setDensity] = useState(() => readInitial(KEY.density, 'comfortable'))
   const [reducedMotion, setReducedMotion] = useState(() => readInitial(KEY.motion, '0') === '1')

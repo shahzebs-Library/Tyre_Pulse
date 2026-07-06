@@ -784,37 +784,39 @@ aside {
 /* ─── Light theme ────────────────────────────────────────────────────────────── */
 html.light {
   color-scheme: light;
-  --bg-base:        #f0f5f1;
+  /* Clean, neutral, minimal — slate greys, not green murk. Green is an accent
+     only (buttons, active nav, positive status), never ambient. */
+  --bg-base:        #f6f7f9;
   --surface-0:      #ffffff;
   --surface-1:      #ffffff;
-  --surface-2:      #f4f9f5;
-  --surface-3:      #edf5ef;
-  --border-brand:   rgba(22,163,74,0.15);
-  --border-bright:  rgba(22,163,74,0.35);
-  --border-dim:     #e2e8f0;
-  --text-primary:   #0f172a;
-  --text-secondary: #334155;
-  --text-muted:     #475569;
-  --text-dim:       #64748b;
+  --surface-2:      #f8fafc;
+  --surface-3:      #f1f5f9;
+  --border-brand:   #e6e9ee;
+  --border-bright:  #d3d9e2;
+  --border-dim:     #eaedf1;
+  --text-primary:   #101828;
+  --text-secondary: #344054;
+  --text-muted:     #667085;
+  --text-dim:       #98a2b3;
   /* Elegant, soft enterprise shadows (Stripe / Linear style) */
-  --shadow-card:    0 1px 2px rgba(16,24,40,0.05), 0 4px 12px rgba(16,24,40,0.06), 0 12px 32px rgba(16,24,40,0.05);
-  --shadow-glow:    0 0 0 1px rgba(22,163,74,0.08), 0 8px 28px rgba(16,24,40,0.08);
+  --shadow-card:    0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.06);
+  --shadow-glow:    0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.08);
 
   /* Semantic surfaces - clean whites + slate, no green murk */
   --card-from:        #ffffff;
   --card-to:          #ffffff;
-  --card-text:        #0f172a;
+  --card-text:        #101828;
   --input-bg:         #ffffff;
-  --input-bg-hover:   #f8fafc;
-  --input-border:     #dfe5ec;
-  --input-text:       #0f172a;
-  --table-head-bg:    #f8fafc;
-  --table-head-text:  #475569;
-  --table-cell-text:  #334155;
-  --table-cell-border:#eef1f5;
+  --input-bg-hover:   #f9fafb;
+  --input-border:     #d0d5dd;
+  --input-text:       #101828;
+  --table-head-bg:    #f9fafb;
+  --table-head-text:  #667085;
+  --table-cell-text:  #344054;
+  --table-cell-border:#eaecf0;
   --btn-2-bg:         #ffffff;
-  --btn-2-border:     #dfe5ec;
-  --glass-bg:         rgba(255,255,255,0.82);
+  --btn-2-border:     #d0d5dd;
+  --glass-bg:         rgba(255,255,255,0.85);
 
   /* Login - page background responds to the theme; the auth card stays a
      premium elevated panel (brand showcase) in both themes. */
@@ -833,15 +835,10 @@ html.light {
 }
 
 html.light body {
-  background-color: #f0f5f1;
-  background-image:
-    linear-gradient(rgba(22,163,74,0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(22,163,74,0.045) 1px, transparent 1px),
-    radial-gradient(ellipse 80% 55% at -5% -5%, rgba(22,163,74,0.1) 0%, transparent 52%),
-    radial-gradient(ellipse 50% 40% at 108% 108%, rgba(22,163,74,0.06) 0%, transparent 52%);
-  background-size: 48px 48px, 48px 48px, 100% 100%, 100% 100%;
-  background-attachment: fixed;
-  color: #0f172a;
+  /* Flat neutral ground — no grid, no green bloom. */
+  background-color: #f6f7f9;
+  background-image: none;
+  color: #101828;
 }
 
 html.light #root {
@@ -849,31 +846,31 @@ html.light #root {
 }
 
 html.light aside {
-  background: linear-gradient(180deg, #ffffff 0%, #f7fdf8 100%);
-  border-right-color: rgba(22,163,74,0.14);
-  box-shadow: 2px 0 20px rgba(0,0,0,0.06), inset -1px 0 0 rgba(22,163,74,0.08);
+  background: #ffffff;
+  border-right-color: #eaecf0;
+  box-shadow: none;
 }
 
 html.light .card {
-  background: linear-gradient(145deg, #ffffff 0%, #f8fdfb 100%);
-  border-color: rgba(22,163,74,0.14);
+  background: #ffffff;
+  border-color: #e6e9ee;
   box-shadow: var(--shadow-card);
-  color: #0f172a;
+  color: #101828;
 }
-html.light .card::before {
-  background: linear-gradient(90deg, transparent, rgba(22,163,74,0.32) 40%, rgba(22,163,74,0.45) 50%, rgba(22,163,74,0.32) 60%, transparent);
-}
+/* No accent hairline in light — keep it clean and flat. */
+html.light .card::before { background: transparent; }
+html.light .card-stat::before { background: transparent; }
 html.light .card:hover {
-  border-color: rgba(22,163,74,0.32);
-  box-shadow: var(--shadow-card), var(--shadow-glow);
+  border-color: #d3d9e2;
+  box-shadow: var(--shadow-glow);
 }
 
 html.light .card-stat {
-  background: linear-gradient(145deg, #ffffff 0%, #f3fcf6 100%);
-  border-color: rgba(22,163,74,0.16);
+  background: #ffffff;
+  border-color: #e6e9ee;
 }
 html.light .card-stat:hover {
-  box-shadow: var(--shadow-card), 0 0 50px rgba(22,163,74,0.1);
+  box-shadow: var(--shadow-glow);
 }
 
 html.light .input {

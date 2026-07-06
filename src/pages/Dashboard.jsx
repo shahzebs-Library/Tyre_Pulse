@@ -34,9 +34,11 @@ ChartJS.register(
   ArcElement, LineElement, PointElement, Filler,
 )
 
-const GRID   = { color:'var(--text-muted)' }
-const TICK   = { color: '#4b5563', font: { size: 11 } }
-const LEGEND = { labels: { color: '#6b7280', boxWidth: 10, font: { size: 11 } } }
+// Canvas can't read CSS vars — use theme-neutral real colours that read cleanly
+// on both white and dark grounds (subtle slate gridlines, legible slate labels).
+const GRID   = { color: 'rgba(148,163,184,0.18)', drawBorder: false }
+const TICK   = { color: '#64748b', font: { size: 11 } }
+const LEGEND = { labels: { color: '#64748b', boxWidth: 10, boxHeight: 10, font: { size: 11 }, usePointStyle: true } }
 
 const BASE_OPTS = {
   responsive: true, maintainAspectRatio: false,

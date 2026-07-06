@@ -1403,9 +1403,9 @@ export default function UserManagement() {
                   onChange={val => setEditForm(f => ({ ...f, approved: val }))}
                 />
               </div>
-              <div className={`flex items-center justify-between rounded-lg px-4 py-3 ${editForm.locked ? 'bg-red-900/20 border border-red-700/30' : 'bg-gray-800/40'}`}>
+              <div className={`flex items-center justify-between rounded-lg px-4 py-3 ${editForm.locked ? 'bg-red-900/20 border border-red-700/30' : 'bg-[var(--input-bg)]/40'}`}>
                 <div>
-                  <p className="text-sm text-white font-medium flex items-center gap-1.5">
+                  <p className="text-sm text-[var(--text-primary)] font-medium flex items-center gap-1.5">
                     <Lock size={13} className={editForm.locked ? 'text-red-400' : 'text-[var(--text-muted)]'} />
                     {t('usermgmt.editModal.lockedToggle')}
                   </p>

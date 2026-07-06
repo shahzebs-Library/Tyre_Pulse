@@ -118,5 +118,12 @@
     "allClear": "All clear — no critical tyres in view.",
     "highRisk": "High risk",
     "spend": "spend"
+  },
+  "gauges": {
+    "title": "Fleet health",
+    "sub": "live gauges",
+    "health": "Fleet health",
+    "critical": "Critical rate",
+    "lifeTarget": "Life vs target"
   }
 }

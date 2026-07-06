@@ -27,6 +27,7 @@ import { ChartModal } from '../components/ChartModal'
 import EmptyState from '../components/EmptyState'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import StatTile from '../components/ui/StatTile'
+import Gauge from '../components/ui/Gauge'
 import Skeleton, { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 
 ChartJS.register(
@@ -830,8 +831,25 @@ export default function Dashboard() {
           unit={activeCurrency} spark={sparkSeries.cost} />
       </div>
 
-      {/* ── NEEDS ATTENTION ──────────────────────────────────────────────── */}
-      <div className="card !p-0 overflow-hidden">
+      {/* ── FLEET GAUGES + NEEDS ATTENTION (instrument row) ──────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="card lg:col-span-3">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.gauges.title')}</h3>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{t('dashboard.gauges.sub')}</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 justify-items-center pt-3">
+            <Gauge index={0} value={fleetHealthScore} max={100} label={t('dashboard.gauges.health')} />
+            <Gauge index={1} value={stats.tyres ? (stats.critical / stats.tyres) * 100 : 0} max={100} unit="%"
+              label={t('dashboard.gauges.critical')} reverse format={(x) => x.toFixed(1)} />
+            <Gauge index={2}
+              value={Math.min(100, ((tyreLife?.avgLifeKm || 0) / ((appSettings?.expected_km_per_tyre) || 100000)) * 100)}
+              max={100} unit="%" label={t('dashboard.gauges.lifeTarget')} format={(x) => Math.round(x)} />
+          </div>
+        </div>
+
+        {/* NEEDS ATTENTION */}
+        <div className="card !p-0 overflow-hidden lg:col-span-2">
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--card-border,rgba(255,255,255,0.06))]">
           <div className="flex items-center gap-2">
             <AlertTriangle size={15} className="text-[#f26161]" />
@@ -864,6 +882,7 @@ export default function Dashboard() {
             ))}
           </ul>
         )}
+        </div>
       </div>
 
       {/* ── COMMAND BAR (filters) ─────────────────────────────────────────── */}

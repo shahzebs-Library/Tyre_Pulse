@@ -208,13 +208,13 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', trend
       className="card flex flex-col gap-1"
     >
       <div className="flex items-center gap-2 mb-1">
-        <div className={`p-1.5 rounded-lg bg-gray-800 ${color}`}>
+        <div className={`p-1.5 rounded-lg bg-[var(--input-bg)] ${color}`}>
           <Icon size={15} />
         </div>
-        <span className="text-xs text-gray-500 uppercase tracking-wider">{label}</span>
+        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{label}</span>
       </div>
       <div className={`text-2xl font-bold ${color}`}>{value}</div>
-      {sub && <div className="text-xs text-gray-500">{sub}</div>}
+      {sub && <div className="text-xs text-[var(--text-muted)]">{sub}</div>}
       {trend != null && (
         <div className={`flex items-center gap-1 text-xs ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
           {trend >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
@@ -239,7 +239,7 @@ function RatingBadge({ rating }) {
 
 function CpkBadge({ cpk, currency }) {
   const { t } = useLanguage()
-  if (cpk == null) return <span className="text-gray-500 text-xs">{t('suppliers.spend.na')}</span>
+  if (cpk == null) return <span className="text-[var(--text-muted)] text-xs">{t('suppliers.spend.na')}</span>
   const good = cpk <= CPK_BENCHMARK
   return (
     <span className={`text-xs font-mono font-semibold ${good ? 'text-emerald-400' : 'text-amber-400'}`}>
@@ -272,47 +272,47 @@ function ContractModal({ contract, onSave, onClose }) {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl"
+        className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-lg shadow-2xl"
       >
-        <div className="flex items-center justify-between p-5 border-b border-gray-800">
+        <div className="flex items-center justify-between p-5 border-b border-[var(--input-border)]">
           <h3 className="font-semibold text-[var(--text-primary)]">{form.id ? t('suppliers.contractModal.editTitle') : t('suppliers.contractModal.addTitle')}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X size={18} /></button>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)]"><X size={18} /></button>
         </div>
         <form onSubmit={submit} className="p-5 grid grid-cols-2 gap-3">
           <div className="col-span-2">
-            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.supplierName')}</label>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.supplierName')}</label>
             <input required value={form.supplier_name} onChange={e => set('supplier_name', e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.contractStart')}</label>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.contractStart')}</label>
             <input type="date" value={form.contract_start} onChange={e => set('contract_start', e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.contractEnd')}</label>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.contractEnd')}</label>
             <input type="date" value={form.contract_end} onChange={e => set('contract_end', e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.paymentTerms')}</label>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.paymentTerms')}</label>
             <input value={form.payment_terms} onChange={e => set('payment_terms', e.target.value)}
-              placeholder={t('suppliers.contractModal.paymentTermsPlaceholder')} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+              placeholder={t('suppliers.contractModal.paymentTermsPlaceholder')} className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.pricePerUnit')}</label>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.pricePerUnit')}</label>
             <input type="number" value={form.price_per_unit} onChange={e => set('price_per_unit', e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.minOrderQty')}</label>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.minOrderQty')}</label>
             <input type="number" value={form.min_order} onChange={e => set('min_order', e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
           </div>
           <div className="col-span-2">
-            <label className="block text-xs text-gray-400 mb-1">{t('suppliers.contractModal.notes')}</label>
+            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.notes')}</label>
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none" />
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 resize-none" />
           </div>
           {saveError && (
             <div className="col-span-2 flex items-center gap-2 text-xs text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
@@ -320,7 +320,7 @@ function ContractModal({ contract, onSave, onClose }) {
             </div>
           )}
           <div className="col-span-2 flex gap-2 justify-end pt-1">
-            <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-800 rounded-lg disabled:opacity-50">{t('suppliers.contractModal.cancel')}</button>
+            <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--input-bg)] rounded-lg disabled:opacity-50">{t('suppliers.contractModal.cancel')}</button>
             <button type="submit" disabled={saving} className="btn-primary gap-1.5 disabled:opacity-50">
               {saving && <Loader2 size={13} className="animate-spin" />}
               {saving ? t('suppliers.contractModal.saving') : t('suppliers.contractModal.save')}
@@ -423,10 +423,10 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-      className="fixed right-0 top-0 h-full w-full max-w-2xl bg-gray-950 border-l border-gray-800 z-40 flex flex-col shadow-2xl overflow-hidden"
+      className="fixed right-0 top-0 h-full w-full max-w-2xl bg-[var(--surface-1)] border-l border-[var(--input-border)] z-40 flex flex-col shadow-2xl overflow-hidden"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--input-border)] flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-900/40 border border-blue-700 flex items-center justify-center">
             <Building2 size={18} className="text-blue-400" />
@@ -435,11 +435,11 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
             <h2 className="font-bold text-[var(--text-primary)] text-lg leading-none">{supplier.brand}</h2>
             <div className="flex items-center gap-2 mt-1">
               <RatingBadge rating={supplier.rating} />
-              <span className="text-xs text-gray-500">{supplier.count} {t('suppliers.drawer.tyresSuffix')}</span>
+              <span className="text-xs text-[var(--text-muted)]">{supplier.count} {t('suppliers.drawer.tyresSuffix')}</span>
             </div>
           </div>
         </div>
-        <button onClick={onClose} className="text-gray-500 hover:text-white p-2 rounded-lg hover:bg-gray-800">
+        <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-2 rounded-lg hover:bg-[var(--input-bg)]">
           <X size={18} />
         </button>
       </div>
@@ -448,7 +448,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
         {/* Radar + Stats */}
         <div className="grid grid-cols-2 gap-4">
           <div className="card">
-            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">{t('suppliers.drawer.radarTitle')}</h4>
+            <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('suppliers.drawer.radarTitle')}</h4>
             <div className="h-48">
               <Radar key={radarKey} data={radarData} options={radarOpts} />
             </div>
@@ -462,10 +462,10 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
               { label: t('suppliers.drawer.stats.totalSpend'), value: fmtCurrency(supplier.totalSpend, currency), good: null },
               { label: t('suppliers.drawer.stats.sitesUsed'), value: supplier.sites.length, good: null },
             ].map(item => (
-              <div key={item.label} className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-lg px-3 py-2">
-                <span className="text-xs text-gray-400">{item.label}</span>
+              <div key={item.label} className="flex items-center justify-between bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-3 py-2">
+                <span className="text-xs text-[var(--text-muted)]">{item.label}</span>
                 <span className={`text-sm font-semibold ${
-                  item.good === true ? 'text-emerald-400' : item.good === false ? 'text-red-400' : 'text-white'
+                  item.good === true ? 'text-emerald-400' : item.good === false ? 'text-red-400' : 'text-[var(--text-primary)]'
                 }`}>{item.value}</span>
               </div>
             ))}
@@ -474,7 +474,7 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
 
         {/* Monthly Spend Trend */}
         <div className="card">
-          <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">{t('suppliers.drawer.monthlySpendTitle')}</h4>
+          <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('suppliers.drawer.monthlySpendTitle')}</h4>
           <div className="h-40">
             <Bar data={spendChartData} options={{ ...CHART_DEFAULTS, plugins: { ...CHART_DEFAULTS.plugins, legend: { display: false } } }} />
           </div>
@@ -483,31 +483,31 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
         {/* Size & Site Breakdown */}
         <div className="grid grid-cols-2 gap-4">
           <div className="card">
-            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">{t('suppliers.drawer.sizeDistribution')}</h4>
+            <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('suppliers.drawer.sizeDistribution')}</h4>
             <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {sizeBreakdown.length === 0 && <p className="text-xs text-gray-600">{t('suppliers.drawer.noSizeData')}</p>}
+              {sizeBreakdown.length === 0 && <p className="text-xs text-[var(--text-dim)]">{t('suppliers.drawer.noSizeData')}</p>}
               {sizeBreakdown.map(([size, count]) => (
                 <div key={size} className="flex items-center gap-2">
-                  <div className="flex-1 text-xs text-gray-300 truncate">{size}</div>
-                  <div className="w-20 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div className="flex-1 text-xs text-[var(--text-secondary)] truncate">{size}</div>
+                  <div className="w-20 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
                     <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(count / supplier.count) * 100}%` }} />
                   </div>
-                  <span className="text-xs text-gray-500 w-6 text-right">{count}</span>
+                  <span className="text-xs text-[var(--text-muted)] w-6 text-right">{count}</span>
                 </div>
               ))}
             </div>
           </div>
           <div className="card">
-            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">{t('suppliers.drawer.siteUsage')}</h4>
+            <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('suppliers.drawer.siteUsage')}</h4>
             <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {siteBreakdown.length === 0 && <p className="text-xs text-gray-600">{t('suppliers.drawer.noSiteData')}</p>}
+              {siteBreakdown.length === 0 && <p className="text-xs text-[var(--text-dim)]">{t('suppliers.drawer.noSiteData')}</p>}
               {siteBreakdown.map(([site, count]) => (
                 <div key={site} className="flex items-center gap-2">
-                  <div className="flex-1 text-xs text-gray-300 truncate">{site}</div>
-                  <div className="w-20 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div className="flex-1 text-xs text-[var(--text-secondary)] truncate">{site}</div>
+                  <div className="w-20 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
                     <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(count / supplier.count) * 100}%` }} />
                   </div>
-                  <span className="text-xs text-gray-500 w-6 text-right">{count}</span>
+                  <span className="text-xs text-[var(--text-muted)] w-6 text-right">{count}</span>
                 </div>
               ))}
             </div>
@@ -515,54 +515,54 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
         </div>
 
         {/* Tyre Records Table */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-            <h4 className="text-xs text-gray-400 uppercase tracking-wider">{t('suppliers.drawer.tyreRecords')}</h4>
-            <span className="text-xs text-gray-600">{t('suppliers.drawer.totalSuffix', { count: supplier.count })}</span>
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center justify-between">
+            <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{t('suppliers.drawer.tyreRecords')}</h4>
+            <span className="text-xs text-[var(--text-dim)]">{t('suppliers.drawer.totalSuffix', { count: supplier.count })}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-gray-800">
+                <tr className="border-b border-[var(--input-border)]">
                   {[
                     t('suppliers.drawer.columns.serial'), t('suppliers.drawer.columns.size'), t('suppliers.drawer.columns.asset'),
                     t('suppliers.drawer.columns.site'), t('suppliers.drawer.columns.cpk'), t('suppliers.drawer.columns.risk'), t('suppliers.drawer.columns.date'),
                   ].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-gray-500 font-medium">{h}</th>
+                    <th key={h} className="px-3 py-2 text-left text-[var(--text-muted)] font-medium">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {pagedRecs.map(r => {
                   const cpk = calcCpk(Number(r.cost_per_tyre), Number(r.km_at_fitment), Number(r.km_at_removal))
-                  const riskColor = { High: 'text-red-400', Critical: 'text-red-500', Medium: 'text-amber-400', Low: 'text-emerald-400' }[r.risk_level] || 'text-gray-500'
+                  const riskColor = { High: 'text-red-400', Critical: 'text-red-500', Medium: 'text-amber-400', Low: 'text-emerald-400' }[r.risk_level] || 'text-[var(--text-muted)]'
                   return (
-                    <tr key={r.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                      <td className="px-3 py-2 text-gray-300 font-mono truncate max-w-[80px]">{r.serial_number || '-'}</td>
-                      <td className="px-3 py-2 text-gray-300">{r.size || '-'}</td>
-                      <td className="px-3 py-2 text-gray-300">{r.asset_no || '-'}</td>
-                      <td className="px-3 py-2 text-gray-300">{r.site || '-'}</td>
+                    <tr key={r.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/30">
+                      <td className="px-3 py-2 text-[var(--text-secondary)] font-mono truncate max-w-[80px]">{r.serial_number || '-'}</td>
+                      <td className="px-3 py-2 text-[var(--text-secondary)]">{r.size || '-'}</td>
+                      <td className="px-3 py-2 text-[var(--text-secondary)]">{r.asset_no || '-'}</td>
+                      <td className="px-3 py-2 text-[var(--text-secondary)]">{r.site || '-'}</td>
                       <td className="px-3 py-2"><CpkBadge cpk={cpk} currency={currency} /></td>
                       <td className={`px-3 py-2 ${riskColor}`}>{r.risk_level || '-'}</td>
-                      <td className="px-3 py-2 text-gray-500">{r.issue_date ? formatDate(r.issue_date) : '-'}</td>
+                      <td className="px-3 py-2 text-[var(--text-muted)]">{r.issue_date ? formatDate(r.issue_date) : '-'}</td>
                     </tr>
                   )
                 })}
                 {pagedRecs.length === 0 && (
-                  <tr><td colSpan={7} className="px-3 py-4 text-center text-gray-600">{t('suppliers.drawer.noRecords')}</td></tr>
+                  <tr><td colSpan={7} className="px-3 py-4 text-center text-[var(--text-dim)]">{t('suppliers.drawer.noRecords')}</td></tr>
                 )}
               </tbody>
             </table>
           </div>
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-2 border-t border-gray-800">
+            <div className="flex items-center justify-between px-4 py-2 border-t border-[var(--input-border)]">
               <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-                className="text-xs text-gray-500 hover:text-white disabled:opacity-30 flex items-center gap-1">
+                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 flex items-center gap-1">
                 <ChevronLeft size={12} /> {t('suppliers.drawer.prev')}
               </button>
-              <span className="text-xs text-gray-600">{t('suppliers.drawer.pageOf', { page: page + 1, total: totalPages })}</span>
+              <span className="text-xs text-[var(--text-dim)]">{t('suppliers.drawer.pageOf', { page: page + 1, total: totalPages })}</span>
               <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
-                className="text-xs text-gray-500 hover:text-white disabled:opacity-30 flex items-center gap-1">
+                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 flex items-center gap-1">
                 {t('suppliers.drawer.next')} <ChevronRight size={12} />
               </button>
             </div>
@@ -572,12 +572,12 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
         {/* Admin Rating Override */}
         {isAdmin && (
           <div className="card">
-            <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-3">{t('suppliers.drawer.ratingOverride')}</h4>
+            <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">{t('suppliers.drawer.ratingOverride')}</h4>
             <div className="flex flex-wrap gap-2">
               {RATINGS.map(r => (
                 <button key={r} onClick={() => onRatingChange(supplier.brand, r)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                    supplier.rating === r ? `${RATING_CONFIG[r].bg} ${RATING_CONFIG[r].color} ${RATING_CONFIG[r].border}` : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                    supplier.rating === r ? `${RATING_CONFIG[r].bg} ${RATING_CONFIG[r].color} ${RATING_CONFIG[r].border}` : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:border-[var(--input-border)]'
                   }`}>
                   {t(`suppliers.ratings.${RATING_I18N_KEYS[r]}`)}
                 </button>
@@ -588,17 +588,17 @@ function SupplierDrawer({ supplier, allMetrics, records, currency, isAdmin, onCl
 
         {/* Notes */}
         <div className="card">
-          <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-2">{t('suppliers.drawer.notes')}</h4>
+          <h4 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">{t('suppliers.drawer.notes')}</h4>
           <textarea
             value={notes}
             onChange={e => setNotes(e.target.value)}
             rows={3}
             placeholder={t('suppliers.drawer.notesPlaceholder')}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
+            className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 resize-none"
           />
           <div className="flex items-center gap-2 mt-2">
             <button onClick={saveNotes} disabled={noteSaving}
-              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 ${noteSaved ? 'bg-emerald-700 text-emerald-200' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'}`}>
+              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 ${noteSaved ? 'bg-emerald-700 text-emerald-200' : 'bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-secondary)]'}`}>
               {noteSaving && <Loader2 size={11} className="animate-spin" />}
               {noteSaving ? t('suppliers.drawer.saving') : noteSaved ? t('suppliers.drawer.saved') : t('suppliers.drawer.saveNotes')}
             </button>
@@ -1041,7 +1041,7 @@ export default function SupplierManagement() {
       <div className="text-center">
         <AlertTriangle size={32} className="text-red-400 mx-auto mb-2" />
         <p className="text-red-400 font-medium">{t('suppliers.errors.loadFailed')}</p>
-        <p className="text-gray-500 text-sm mt-1">{error}</p>
+        <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
         <button onClick={fetchData} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">{t('suppliers.retry')}</button>
       </div>
     </div>
@@ -1058,7 +1058,7 @@ export default function SupplierManagement() {
             <button onClick={() => navigate('/data-intake?module=supplier')} className="btn-primary gap-1.5">
               <Upload size={13} /> {t('suppliers.actions.import')}
             </button>
-            <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm rounded-lg">
+            <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg">
               <RefreshCw size={13} /> {t('suppliers.actions.refresh')}
             </button>
             <button onClick={handleExcelExport} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-sm rounded-lg">
@@ -1097,9 +1097,9 @@ export default function SupplierManagement() {
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-center">
         <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-2.5 text-gray-500" />
+          <Search size={13} className="absolute left-2.5 top-2.5 text-[var(--text-muted)]" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('suppliers.searchPlaceholder')}
-            className="pl-7 pr-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 w-44" />
+            className="pl-7 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-44" />
         </div>
         {[
           { label: 'Country', allKey: 'allCountries', value: filterCountry, opts: countries, set: setFilterCountry },
@@ -1108,27 +1108,27 @@ export default function SupplierManagement() {
         ].map(f => (
           <div key={f.label} className="relative">
             <select value={f.value} onChange={e => f.set(e.target.value)}
-              className="appearance-none bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 px-3 py-2 pr-7 focus:outline-none focus:border-blue-500">
+              className="appearance-none bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] px-3 py-2 pr-7 focus:outline-none focus:border-blue-500">
               {f.opts.map(o => <option key={o} value={o}>{o === 'All' ? t(`suppliers.filters.${f.allKey}`) : (f.label === 'Rating' ? t(`suppliers.ratings.${RATING_I18N_KEYS[o]}`) : o)}</option>)}
             </select>
-            <ChevronDown size={12} className="absolute right-2 top-3 text-gray-500 pointer-events-none" />
+            <ChevronDown size={12} className="absolute right-2 top-3 text-[var(--text-muted)] pointer-events-none" />
           </div>
         ))}
         {(search || filterCountry !== 'All' || filterSite !== 'All' || filterRating !== 'All') && (
           <button onClick={() => { setSearch(''); setFilterCountry('All'); setFilterSite('All'); setFilterRating('All') }}
-            className="flex items-center gap-1 px-2 py-2 text-xs text-gray-400 hover:text-white bg-gray-800 rounded-lg">
+            className="flex items-center gap-1 px-2 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--input-bg)] rounded-lg">
             <X size={12} /> {t('suppliers.filters.clear')}
           </button>
         )}
-        <span className="text-xs text-gray-600 ml-auto">{t('suppliers.suppliersCount', { count: filteredSuppliers.length })}</span>
+        <span className="text-xs text-[var(--text-dim)] ml-auto">{t('suppliers.suppliersCount', { count: filteredSuppliers.length })}</span>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-full overflow-x-auto">
+      <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 w-full overflow-x-auto">
         {TABS.map((tabLabel, i) => (
           <button key={tabLabel} onClick={() => setActiveTab(i)}
             className={`flex-1 min-w-max px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-              activeTab === i ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              activeTab === i ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
             }`}>
             {t(`suppliers.tabs.${TAB_I18N_KEYS[i]}`)}
           </button>
@@ -1157,11 +1157,11 @@ export default function SupplierManagement() {
                       initial={{ opacity: 0, y: 16 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: idx * 0.03 }}
-                      className="card flex flex-col gap-3 hover:border-gray-700 transition-colors"
+                      className="card flex flex-col gap-3 hover:border-[var(--input-border)] transition-colors"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2">
-                          <div className="w-9 h-9 rounded-lg bg-gray-800 flex items-center justify-center text-gray-300 font-bold text-sm">
+                          <div className="w-9 h-9 rounded-lg bg-[var(--input-bg)] flex items-center justify-center text-[var(--text-secondary)] font-bold text-sm">
                             {supplier.brand.slice(0, 2).toUpperCase()}
                           </div>
                           <div>
@@ -1170,27 +1170,27 @@ export default function SupplierManagement() {
                           </div>
                         </div>
                         <button onClick={() => toggleCompare(supplier.brand)}
-                          className={`p-1.5 rounded-lg text-xs transition-colors ${inCompare ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500 hover:text-white'}`}
+                          className={`p-1.5 rounded-lg text-xs transition-colors ${inCompare ? 'bg-blue-600 text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                           title={inCompare ? t('suppliers.directory.removeFromCompare') : t('suppliers.directory.addToCompare')}>
                           <BarChart3 size={13} />
                         </button>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
-                          <div className="text-xs text-gray-500">{t('suppliers.directory.spendYtd')}</div>
-                          <div className="text-sm font-semibold text-white">{fmtCurrency(supplier.spendThisYear, activeCurrency)}</div>
+                        <div className="bg-[var(--input-bg)]/60 rounded-lg px-2.5 py-1.5">
+                          <div className="text-xs text-[var(--text-muted)]">{t('suppliers.directory.spendYtd')}</div>
+                          <div className="text-sm font-semibold text-[var(--text-primary)]">{fmtCurrency(supplier.spendThisYear, activeCurrency)}</div>
                         </div>
-                        <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
-                          <div className="text-xs text-gray-500">{t('suppliers.directory.tyres')}</div>
-                          <div className="text-sm font-semibold text-white">{supplier.count}</div>
+                        <div className="bg-[var(--input-bg)]/60 rounded-lg px-2.5 py-1.5">
+                          <div className="text-xs text-[var(--text-muted)]">{t('suppliers.directory.tyres')}</div>
+                          <div className="text-sm font-semibold text-[var(--text-primary)]">{supplier.count}</div>
                         </div>
-                        <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
-                          <div className="text-xs text-gray-500">{t('suppliers.directory.avgCpk')}</div>
+                        <div className="bg-[var(--input-bg)]/60 rounded-lg px-2.5 py-1.5">
+                          <div className="text-xs text-[var(--text-muted)]">{t('suppliers.directory.avgCpk')}</div>
                           <CpkBadge cpk={supplier.avgCpk} currency={activeCurrency} />
                         </div>
-                        <div className="bg-gray-800/60 rounded-lg px-2.5 py-1.5">
-                          <div className="text-xs text-gray-500">{t('suppliers.directory.failurePct')}</div>
+                        <div className="bg-[var(--input-bg)]/60 rounded-lg px-2.5 py-1.5">
+                          <div className="text-xs text-[var(--text-muted)]">{t('suppliers.directory.failurePct')}</div>
                           <div className={`text-sm font-semibold ${supplier.failureRate > FAILURE_THRESHOLD ? 'text-red-400' : 'text-emerald-400'}`}>
                             {fmtPct(supplier.failureRate)}
                           </div>
@@ -1199,22 +1199,22 @@ export default function SupplierManagement() {
 
                       <div className="flex items-center gap-1 flex-wrap">
                         {supplier.countries.slice(0, 2).map(c => (
-                          <span key={c} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-gray-800 rounded text-xs text-gray-400">
+                          <span key={c} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[var(--input-bg)] rounded text-xs text-[var(--text-muted)]">
                             <Globe size={9} />{c}
                           </span>
                         ))}
                         {supplier.sites.slice(0, 2).map(s => (
-                          <span key={s} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-gray-800 rounded text-xs text-gray-400">
+                          <span key={s} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[var(--input-bg)] rounded text-xs text-[var(--text-muted)]">
                             <MapPin size={9} />{s}
                           </span>
                         ))}
                         {(supplier.countries.length + supplier.sites.length) > 4 && (
-                          <span className="text-xs text-gray-600">+{supplier.countries.length + supplier.sites.length - 4} more</span>
+                          <span className="text-xs text-[var(--text-dim)]">+{supplier.countries.length + supplier.sites.length - 4} more</span>
                         )}
                       </div>
 
                       <button onClick={() => setSelectedSupplier(supplier)}
-                        className="w-full flex items-center justify-center gap-1.5 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 rounded-lg text-xs text-gray-300 hover:text-white transition-colors">
+                        className="w-full flex items-center justify-center gap-1.5 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] hover:border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
                         <Eye size={12} /> {t('suppliers.directory.viewDetails')}
                       </button>
                     </motion.div>
@@ -1232,7 +1232,7 @@ export default function SupplierManagement() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-[var(--text-primary)] text-sm">{t('suppliers.performance.selectToCompare')}</h3>
                 {compareList.length > 0 && (
-                  <button onClick={() => setCompareList([])} className="text-xs text-gray-500 hover:text-white flex items-center gap-1">
+                  <button onClick={() => setCompareList([])} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] flex items-center gap-1">
                     <X size={12} /> {t('suppliers.performance.clearSelection')}
                   </button>
                 )}
@@ -1243,7 +1243,7 @@ export default function SupplierManagement() {
                   return (
                     <button key={m.brand} onClick={() => toggleCompare(m.brand)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        sel ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                        sel ? 'bg-blue-600 border-blue-500 text-white' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:border-[var(--input-border)]'
                       } ${!sel && compareList.length >= 4 ? 'opacity-40 cursor-not-allowed' : ''}`}
                       disabled={!sel && compareList.length >= 4}>
                       {m.brand}
@@ -1283,17 +1283,17 @@ export default function SupplierManagement() {
                     </div>
                   </div>
 
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-800">
+                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-[var(--input-border)]">
                       <h4 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.performance.sideBySide')}</h4>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-gray-800">
-                            <th className="px-3 py-2.5 text-left text-gray-500 font-medium">{t('suppliers.performance.metric')}</th>
+                          <tr className="border-b border-[var(--input-border)]">
+                            <th className="px-3 py-2.5 text-left text-[var(--text-muted)] font-medium">{t('suppliers.performance.metric')}</th>
                             {compareStats.map(m => (
-                              <th key={m.brand} className="px-3 py-2.5 text-right text-gray-400 font-semibold">{m.brand}</th>
+                              <th key={m.brand} className="px-3 py-2.5 text-right text-[var(--text-muted)] font-semibold">{m.brand}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1311,13 +1311,13 @@ export default function SupplierManagement() {
                             const numVals = vals.filter(v => typeof v === 'number' && isFinite(v))
                             const best = numVals.length ? (row.lowerBetter ? Math.min(...numVals) : Math.max(...numVals)) : null
                             return (
-                              <tr key={row.label} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                                <td className="px-3 py-2.5 text-gray-400">{row.label}</td>
+                              <tr key={row.label} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
+                                <td className="px-3 py-2.5 text-[var(--text-muted)]">{row.label}</td>
                                 {compareStats.map(m => {
                                   const v = m[row.key]
                                   const isWinner = typeof v === 'number' && isFinite(v) && v === best
                                   return (
-                                    <td key={m.brand} className={`px-3 py-2.5 text-right font-mono ${isWinner ? 'text-emerald-400 font-semibold' : 'text-gray-300'}`}>
+                                    <td key={m.brand} className={`px-3 py-2.5 text-right font-mono ${isWinner ? 'text-emerald-400 font-semibold' : 'text-[var(--text-secondary)]'}`}>
                                       {row.fmt(v)}
                                     </td>
                                   )
@@ -1351,12 +1351,12 @@ export default function SupplierManagement() {
                       },
                     }} />
                   ) : (
-                    <p className="text-gray-600 text-sm">{t('suppliers.spend.noData')}</p>
+                    <p className="text-[var(--text-dim)] text-sm">{t('suppliers.spend.noData')}</p>
                   )}
                 </div>
                 <div className="mt-3 text-center">
-                  <span className="text-xs text-gray-500">{t('suppliers.spend.totalSpend')}</span>
-                  <span className="text-sm font-semibold text-white">{fmtCurrency(spendAnalysis.totalSpend, activeCurrency)}</span>
+                  <span className="text-xs text-[var(--text-muted)]">{t('suppliers.spend.totalSpend')}</span>
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">{fmtCurrency(spendAnalysis.totalSpend, activeCurrency)}</span>
                 </div>
               </div>
 
@@ -1376,32 +1376,32 @@ export default function SupplierManagement() {
             </div>
 
             {/* YoY Table */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-800">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--input-border)]">
                 <h4 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.spend.yoyTitle')}</h4>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="px-4 py-3 text-left text-gray-500 font-medium text-xs">{t('suppliers.spend.columns.supplier')}</th>
-                      <th className="px-4 py-3 text-right text-gray-500 font-medium text-xs">{t('suppliers.spend.columns.thisYear')}</th>
-                      <th className="px-4 py-3 text-right text-gray-500 font-medium text-xs">{t('suppliers.spend.columns.lastYear')}</th>
-                      <th className="px-4 py-3 text-right text-gray-500 font-medium text-xs">{t('suppliers.spend.columns.change')}</th>
+                    <tr className="border-b border-[var(--input-border)]">
+                      <th className="px-4 py-3 text-left text-[var(--text-muted)] font-medium text-xs">{t('suppliers.spend.columns.supplier')}</th>
+                      <th className="px-4 py-3 text-right text-[var(--text-muted)] font-medium text-xs">{t('suppliers.spend.columns.thisYear')}</th>
+                      <th className="px-4 py-3 text-right text-[var(--text-muted)] font-medium text-xs">{t('suppliers.spend.columns.lastYear')}</th>
+                      <th className="px-4 py-3 text-right text-[var(--text-muted)] font-medium text-xs">{t('suppliers.spend.columns.change')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {spendAnalysis.yoy.length === 0 && (
-                      <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-600">{t('suppliers.spend.noYoyData')}</td></tr>
+                      <tr><td colSpan={4} className="px-4 py-6 text-center text-[var(--text-dim)]">{t('suppliers.spend.noYoyData')}</td></tr>
                     )}
                     {spendAnalysis.yoy.map(row => (
-                      <tr key={row.brand} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                        <td className="px-4 py-2.5 text-white font-medium">{row.brand}</td>
-                        <td className="px-4 py-2.5 text-right text-gray-300">{fmtCurrency(row.thisYear, activeCurrency)}</td>
-                        <td className="px-4 py-2.5 text-right text-gray-400">{fmtCurrency(row.lastYear, activeCurrency)}</td>
+                      <tr key={row.brand} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
+                        <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{row.brand}</td>
+                        <td className="px-4 py-2.5 text-right text-[var(--text-secondary)]">{fmtCurrency(row.thisYear, activeCurrency)}</td>
+                        <td className="px-4 py-2.5 text-right text-[var(--text-muted)]">{fmtCurrency(row.lastYear, activeCurrency)}</td>
                         <td className="px-4 py-2.5 text-right">
                           {row.change == null ? (
-                            <span className="text-gray-600 text-xs">{t('suppliers.spend.na')}</span>
+                            <span className="text-[var(--text-dim)] text-xs">{t('suppliers.spend.na')}</span>
                           ) : (
                             <span className={`flex items-center justify-end gap-1 font-semibold ${row.change > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                               {row.change > 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
@@ -1423,10 +1423,10 @@ export default function SupplierManagement() {
           <motion.div key="contracts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div className="relative">
-                <Search size={13} className="absolute left-2.5 top-2.5 text-gray-500" />
+                <Search size={13} className="absolute left-2.5 top-2.5 text-[var(--text-muted)]" />
                 <input value={contractSearch} onChange={e => setContractSearch(e.target.value)}
                   placeholder={t('suppliers.contracts.searchPlaceholder')}
-                  className="pl-7 pr-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 w-52" />
+                  className="pl-7 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-52" />
               </div>
               <button onClick={() => setContractModal({})}
                 className="btn-primary gap-1.5">
@@ -1442,7 +1442,7 @@ export default function SupplierManagement() {
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <AlertTriangle size={32} className="text-red-400 mb-2" />
                 <p className="text-red-400 font-medium">{t('suppliers.contracts.loadError')}</p>
-                <p className="text-gray-500 text-sm mt-1">{contractsError}</p>
+                <p className="text-[var(--text-muted)] text-sm mt-1">{contractsError}</p>
                 <button onClick={fetchContracts} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">{t('suppliers.retry')}</button>
               </div>
             ) : filteredContracts.length === 0 ? (
@@ -1452,17 +1452,17 @@ export default function SupplierManagement() {
                 description={t('suppliers.contracts.emptyDesc')}
               />
             ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-800">
+                      <tr className="border-b border-[var(--input-border)]">
                         {[
                           t('suppliers.contracts.columns.supplier'), t('suppliers.contracts.columns.start'), t('suppliers.contracts.columns.end'),
                           t('suppliers.contracts.columns.paymentTerms'), t('suppliers.contracts.columns.pricePerUnit'), t('suppliers.contracts.columns.minOrder'),
                           t('suppliers.contracts.columns.status'), t('suppliers.contracts.columns.actions'),
                         ].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-gray-500 font-medium text-xs">{h}</th>
+                          <th key={h} className="px-4 py-3 text-left text-[var(--text-muted)] font-medium text-xs">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1475,13 +1475,13 @@ export default function SupplierManagement() {
                           Expired: { color: 'text-red-400', bg: 'bg-red-900/30', border: 'border-red-700' },
                         }[status]
                         return (
-                          <tr key={c.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                            <td className="px-4 py-3 text-white font-medium">{c.supplier_name}</td>
-                            <td className="px-4 py-3 text-gray-400 text-xs">{c.contract_start || '-'}</td>
-                            <td className="px-4 py-3 text-gray-400 text-xs">{c.contract_end || '-'}</td>
-                            <td className="px-4 py-3 text-gray-300">{c.payment_terms || '-'}</td>
-                            <td className="px-4 py-3 text-gray-300">{c.price_per_unit ? fmtCurrency(Number(c.price_per_unit), activeCurrency) : '-'}</td>
-                            <td className="px-4 py-3 text-gray-300">{c.min_order || '-'}</td>
+                          <tr key={c.id} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
+                            <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{c.supplier_name}</td>
+                            <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{c.contract_start || '-'}</td>
+                            <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{c.contract_end || '-'}</td>
+                            <td className="px-4 py-3 text-[var(--text-secondary)]">{c.payment_terms || '-'}</td>
+                            <td className="px-4 py-3 text-[var(--text-secondary)]">{c.price_per_unit ? fmtCurrency(Number(c.price_per_unit), activeCurrency) : '-'}</td>
+                            <td className="px-4 py-3 text-[var(--text-secondary)]">{c.min_order || '-'}</td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}>
                                 {status === 'Expiring Soon' && <AlertTriangle size={9} />}
@@ -1490,10 +1490,10 @@ export default function SupplierManagement() {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1">
-                                <button onClick={() => setContractModal(c)} className="p-1.5 text-gray-500 hover:text-blue-400 hover:bg-gray-800 rounded">
+                                <button onClick={() => setContractModal(c)} className="p-1.5 text-[var(--text-muted)] hover:text-blue-400 hover:bg-[var(--input-bg)] rounded">
                                   <Edit3 size={13} />
                                 </button>
-                                <button onClick={() => { setContractDeleteError(null); setContractDeleteTarget(c) }} className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded">
+                                <button onClick={() => { setContractDeleteError(null); setContractDeleteTarget(c) }} className="p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--input-bg)] rounded">
                                   <X size={13} />
                                 </button>
                               </div>
@@ -1528,7 +1528,7 @@ export default function SupplierManagement() {
             <div className="flex items-center gap-2 mb-1">
               <Zap size={16} className="text-blue-400" />
               <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.recommendations.title')}</h3>
-              <span className="text-xs text-gray-600 ml-auto">{t('suppliers.recommendations.basedOn', { count: records.length })}</span>
+              <span className="text-xs text-[var(--text-dim)] ml-auto">{t('suppliers.recommendations.basedOn', { count: records.length })}</span>
             </div>
             {recommendations.length === 0 ? (
               <EmptyState
@@ -1543,7 +1543,7 @@ export default function SupplierManagement() {
                     Critical: { color: 'text-red-400', bg: 'bg-red-900/20', border: 'border-red-800', icon: AlertTriangle },
                     High:     { color: 'text-amber-400', bg: 'bg-amber-900/20', border: 'border-amber-800', icon: TrendingUp },
                     Medium:   { color: 'text-blue-400', bg: 'bg-blue-900/20', border: 'border-blue-800', icon: Target },
-                  }[rec.impact] || { color: 'text-gray-400', bg: 'bg-gray-800', border: 'border-gray-700', icon: Zap }
+                  }[rec.impact] || { color: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)]', border: 'border-[var(--input-border)]', icon: Zap }
                   const IconComp = impactConfig.icon
                   const typeI18nKey = { increase: 'increase', review: 'review', saving: 'saving', consolidate: 'consolidate' }[rec.type] || 'action'
                   const typeLabel = t(`suppliers.recommendations.types.${typeI18nKey}`)
@@ -1555,16 +1555,16 @@ export default function SupplierManagement() {
                       transition={{ delay: i * 0.07 }}
                       className={`border rounded-xl p-4 flex items-start gap-3 ${impactConfig.bg} ${impactConfig.border}`}
                     >
-                      <div className={`p-2 rounded-lg bg-gray-900/50 ${impactConfig.color} flex-shrink-0`}>
+                      <div className={`p-2 rounded-lg bg-[var(--surface-1)]/50 ${impactConfig.color} flex-shrink-0`}>
                         <IconComp size={16} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className={`text-xs font-bold uppercase tracking-wider ${impactConfig.color}`}>{typeLabel}</span>
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${impactConfig.bg} ${impactConfig.color} ${impactConfig.border}`}>{t('suppliers.recommendations.impact', { impact: t(`suppliers.recommendations.impactLevels.${rec.impact}`) })}</span>
-                          <span className="text-xs text-gray-500 font-medium">{rec.brand}</span>
+                          <span className="text-xs text-[var(--text-muted)] font-medium">{rec.brand}</span>
                         </div>
-                        <p className="text-sm text-gray-300 leading-relaxed">{rec.msg}</p>
+                        <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{rec.msg}</p>
                       </div>
                     </motion.div>
                   )
@@ -1573,20 +1573,20 @@ export default function SupplierManagement() {
             )}
 
             {/* Supplier performance summary for context */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mt-5">
-              <div className="px-4 py-3 border-b border-gray-800">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden mt-5">
+              <div className="px-4 py-3 border-b border-[var(--input-border)]">
                 <h4 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.recommendations.summaryTitle')}</h4>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-gray-800">
+                    <tr className="border-b border-[var(--input-border)]">
                       {[
                         t('suppliers.recommendations.columns.supplier'), t('suppliers.recommendations.columns.rating'), t('suppliers.recommendations.columns.tyres'),
                         t('suppliers.recommendations.columns.avgCpk'), t('suppliers.recommendations.columns.avgLife'), t('suppliers.recommendations.columns.failurePct'),
                         t('suppliers.recommendations.columns.vsBenchmark'),
                       ].map(h => (
-                        <th key={h} className="px-3 py-2.5 text-left text-gray-500 font-medium">{h}</th>
+                        <th key={h} className="px-3 py-2.5 text-left text-[var(--text-muted)] font-medium">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1594,15 +1594,15 @@ export default function SupplierManagement() {
                     {[...allMetrics].sort((a, b) => (a.avgCpk ?? Infinity) - (b.avgCpk ?? Infinity)).map(m => {
                       const vsB = m.avgCpk != null ? ((m.avgCpk - CPK_BENCHMARK) / CPK_BENCHMARK) * 100 : null
                       return (
-                        <tr key={m.brand} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                          <td className="px-3 py-2.5 text-white font-medium">{m.brand}</td>
+                        <tr key={m.brand} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
+                          <td className="px-3 py-2.5 text-[var(--text-primary)] font-medium">{m.brand}</td>
                           <td className="px-3 py-2.5"><RatingBadge rating={m.rating} /></td>
-                          <td className="px-3 py-2.5 text-gray-300">{m.count}</td>
+                          <td className="px-3 py-2.5 text-[var(--text-secondary)]">{m.count}</td>
                           <td className="px-3 py-2.5"><CpkBadge cpk={m.avgCpk} currency={activeCurrency} /></td>
-                          <td className="px-3 py-2.5 text-gray-300">{fmtKm(m.avgLife)}</td>
+                          <td className="px-3 py-2.5 text-[var(--text-secondary)]">{fmtKm(m.avgLife)}</td>
                           <td className={`px-3 py-2.5 font-semibold ${m.failureRate > FAILURE_THRESHOLD ? 'text-red-400' : 'text-emerald-400'}`}>{fmtPct(m.failureRate)}</td>
                           <td className="px-3 py-2.5">
-                            {vsB == null ? <span className="text-gray-600">{t('suppliers.recommendations.na')}</span> : (
+                            {vsB == null ? <span className="text-[var(--text-dim)]">{t('suppliers.recommendations.na')}</span> : (
                               <span className={`flex items-center gap-1 font-semibold ${vsB <= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                 {vsB <= 0 ? <ArrowDownRight size={11} /> : <ArrowUpRight size={11} />}
                                 {Math.abs(vsB).toFixed(1)}%
@@ -1629,13 +1629,13 @@ export default function SupplierManagement() {
                 [t('suppliers.scorecard.cards.totalSpend'), fmtCurrency(scorecard.totals.totalSpend, activeCurrency)],
                 [t('suppliers.scorecard.cards.warrantyCredit'), fmtCurrency(scorecard.totals.totalWarrantyCredit, activeCurrency)],
               ].map(([l, v]) => (
-                <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-3"><p className="text-xs text-gray-500">{l}</p><p className="text-xl font-bold text-white">{v}</p></div>
+                <div key={l} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-3"><p className="text-xs text-[var(--text-muted)]">{l}</p><p className="text-xl font-bold text-[var(--text-primary)]">{v}</p></div>
               ))}
             </div>
-            <p className="text-xs text-gray-500">{t('suppliers.scorecard.description')}</p>
-            <div className="border border-gray-800 rounded-xl overflow-x-auto">
+            <p className="text-xs text-[var(--text-muted)]">{t('suppliers.scorecard.description')}</p>
+            <div className="border border-[var(--input-border)] rounded-xl overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-800/60 text-gray-400 text-xs">
+                <thead className="bg-[var(--input-bg)]/60 text-[var(--text-muted)] text-xs">
                   <tr>
                     <th className="text-left px-3 py-2">{t('suppliers.scorecard.columns.rank')}</th><th className="text-left px-3 py-2">{t('suppliers.scorecard.columns.supplier')}</th>
                     <th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.score')}</th><th className="text-right px-3 py-2">{t('suppliers.scorecard.columns.tyres')}</th>
@@ -1645,18 +1645,18 @@ export default function SupplierManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {scorecard.suppliers.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-600">{t('suppliers.scorecard.empty')}</td></tr>}
+                  {scorecard.suppliers.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-[var(--text-dim)]">{t('suppliers.scorecard.empty')}</td></tr>}
                   {scorecard.suppliers.map((s) => (
-                    <tr key={s.supplier} className="border-t border-gray-800">
-                      <td className="px-3 py-2 text-gray-500">{s.rank}</td>
-                      <td className="px-3 py-2 font-medium text-white">{s.supplier}</td>
+                    <tr key={s.supplier} className="border-t border-[var(--input-border)]">
+                      <td className="px-3 py-2 text-[var(--text-muted)]">{s.rank}</td>
+                      <td className="px-3 py-2 font-medium text-[var(--text-primary)]">{s.supplier}</td>
                       <td className="px-3 py-2 text-right"><span className={`px-2 py-0.5 rounded font-semibold ${s.score >= 70 ? 'bg-green-900/30 text-green-400' : s.score >= 40 ? 'bg-amber-900/30 text-amber-400' : 'bg-red-900/30 text-red-400'}`}>{s.score}</span></td>
-                      <td className="px-3 py-2 text-right text-gray-400">{s.tyreCount}</td>
-                      <td className="px-3 py-2 text-right text-gray-300">{fmtCurrency(s.totalSpend, activeCurrency)}</td>
-                      <td className="px-3 py-2 text-right text-gray-300">{s.avgCpk == null ? '-' : s.avgCpk.toFixed(3)}</td>
-                      <td className="px-3 py-2 text-right text-gray-300">{s.failureRate == null ? '-' : `${(s.failureRate * 100).toFixed(1)}%`}</td>
-                      <td className="px-3 py-2 text-right text-gray-300">{s.warrantyRecoveryRate == null ? '-' : fmtCurrency(s.warrantyRecoveryRate, activeCurrency)}</td>
-                      <td className="px-3 py-2 text-right text-gray-300">{s.onTimeRate == null ? '-' : `${(s.onTimeRate * 100).toFixed(0)}%`}</td>
+                      <td className="px-3 py-2 text-right text-[var(--text-muted)]">{s.tyreCount}</td>
+                      <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{fmtCurrency(s.totalSpend, activeCurrency)}</td>
+                      <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.avgCpk == null ? '-' : s.avgCpk.toFixed(3)}</td>
+                      <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.failureRate == null ? '-' : `${(s.failureRate * 100).toFixed(1)}%`}</td>
+                      <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.warrantyRecoveryRate == null ? '-' : fmtCurrency(s.warrantyRecoveryRate, activeCurrency)}</td>
+                      <td className="px-3 py-2 text-right text-[var(--text-secondary)]">{s.onTimeRate == null ? '-' : `${(s.onTimeRate * 100).toFixed(0)}%`}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1710,13 +1710,13 @@ export default function SupplierManagement() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl p-5"
+              className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-md shadow-2xl p-5"
             >
               <div className="flex gap-3 mb-4">
                 <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-white font-medium">{t('suppliers.deleteContract.confirmTitle', { name: contractDeleteTarget.supplier_name })}</p>
-                  <p className="text-gray-400 text-sm mt-1">{t('suppliers.deleteContract.warning')}</p>
+                  <p className="text-[var(--text-primary)] font-medium">{t('suppliers.deleteContract.confirmTitle', { name: contractDeleteTarget.supplier_name })}</p>
+                  <p className="text-[var(--text-muted)] text-sm mt-1">{t('suppliers.deleteContract.warning')}</p>
                 </div>
               </div>
               {contractDeleteError && (

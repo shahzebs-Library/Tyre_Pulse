@@ -243,7 +243,7 @@ function FleetScoreGauge({ score }) {
         <div className={`text-4xl font-bold leading-none tabular-nums ${scoreTextColor(score)}`}>
           {score.toFixed(0)}
         </div>
-        <div className="text-gray-400 text-xs mt-1">/ 100</div>
+        <div className="text-[var(--text-muted)] text-xs mt-1">/ 100</div>
         <div className={`text-xs font-semibold mt-1 ${scoreTextColor(score)}`}>
           {score >= 75 ? t('kpicommand.gauge.strong') : score >= 50 ? t('kpicommand.gauge.fair') : score >= 25 ? t('kpicommand.gauge.weak') : t('kpicommand.gauge.critical')}
         </div>
@@ -254,7 +254,7 @@ function FleetScoreGauge({ score }) {
 
 // ── Sparkline via inline SVG ──────────────────────────────────────────────────
 function Sparkline({ data, positive = true, height = 32, width = 100 }) {
-  if (!data || data.length < 2) return <div style={{ width, height }} className="opacity-30 bg-gray-800 rounded" />
+  if (!data || data.length < 2) return <div style={{ width, height }} className="opacity-30 bg-[var(--input-bg)] rounded" />
   const min = Math.min(...data)
   const max = Math.max(...data)
   const range = max - min || 1
@@ -304,7 +304,7 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.01 }}
       onClick={onClick}
-      className="card cursor-pointer hover:border-gray-700 transition-all group"
+      className="card cursor-pointer hover:border-[var(--input-border)] transition-all group"
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -312,8 +312,8 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
             <Icon size={15} className={rating.color} />
           </div>
           <div>
-            <p className="text-xs text-gray-400 leading-tight">{t(`kpicommand.benchmarks.${kpiKey}.label`)}</p>
-            <p className="text-xs text-gray-600">{t(`kpicommand.benchmarks.${kpiKey}.description`)}</p>
+            <p className="text-xs text-[var(--text-muted)] leading-tight">{t(`kpicommand.benchmarks.${kpiKey}.label`)}</p>
+            <p className="text-xs text-[var(--text-dim)]">{t(`kpicommand.benchmarks.${kpiKey}.description`)}</p>
           </div>
         </div>
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${rating.bg} ${rating.color}`}>
@@ -339,10 +339,10 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
 
       <div className="space-y-1.5 mb-3">
         <div className="flex justify-between text-xs">
-          <span className="text-gray-600">{t('kpicommand.bands.poor')}</span>
-          <span className="text-gray-600">{t('kpicommand.bands.worldClass')}</span>
+          <span className="text-[var(--text-dim)]">{t('kpicommand.bands.poor')}</span>
+          <span className="text-[var(--text-dim)]">{t('kpicommand.bands.worldClass')}</span>
         </div>
-        <div className="relative h-2 bg-gray-800 rounded-full overflow-hidden">
+        <div className="relative h-2 bg-[var(--input-bg)] rounded-full overflow-hidden">
           <div className="absolute inset-0 flex">
             <div className="h-full bg-red-900/60" style={{ width: `${poorPct}%` }} />
             <div className="h-full bg-yellow-900/40" style={{ width: `${goodPct - poorPct}%` }} />
@@ -356,9 +356,9 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
             }}
           />
         </div>
-        <div className="flex justify-between text-xs text-gray-500">
+        <div className="flex justify-between text-xs text-[var(--text-muted)]">
           <span>{b.format(b.poor)}</span>
-          <span className="text-gray-600">{t('kpicommand.card.target', { value: b.format(target) })}</span>
+          <span className="text-[var(--text-dim)]">{t('kpicommand.card.target', { value: b.format(target) })}</span>
           <span>{b.format(b.world_class)}</span>
         </div>
       </div>
@@ -369,10 +369,10 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
           { l: t('kpicommand.bands.avg'), v: b.average, c: 'text-yellow-400' },
           { l: t('kpicommand.bands.vsGood'), v: null, delta: true },
         ].map(({ l, v, c, delta }) => (
-          <div key={l} className="bg-gray-800/60 rounded-lg p-1.5 text-center">
-            <div className="text-gray-500 text-xs">{l}</div>
+          <div key={l} className="bg-[var(--input-bg)]/60 rounded-lg p-1.5 text-center">
+            <div className="text-[var(--text-muted)] text-xs">{l}</div>
             {delta ? (
-              <div className={`font-medium ${isImproving == null ? 'text-gray-400' : isImproving ? 'text-emerald-400' : 'text-orange-400'}`}>
+              <div className={`font-medium ${isImproving == null ? 'text-[var(--text-muted)]' : isImproving ? 'text-emerald-400' : 'text-orange-400'}`}>
                 {value != null && !isNaN(value) ? (
                   b.higherIsBetter
                     ? `${value >= b.good ? '+' : ''}${((value - b.good) / b.good * 100).toFixed(1)}%`
@@ -386,7 +386,7 @@ function KpiCard({ kpiKey, benchmark, value, prevValue, sparkData, targets, onCl
         ))}
       </div>
 
-      <div className="mt-3 text-xs text-gray-600 group-hover:text-gray-500 transition-colors text-center">
+      <div className="mt-3 text-xs text-[var(--text-dim)] group-hover:text-[var(--text-muted)] transition-colors text-center">
         {t('kpicommand.card.clickDrillDown')}
       </div>
     </motion.div>
@@ -455,14 +455,14 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={e => e.stopPropagation()}
-          className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-3xl"
+          className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl p-6 w-full max-w-3xl"
         >
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="text-white font-bold text-lg">{t('kpicommand.drilldown.title', { label: t(`kpicommand.benchmarks.${kpiKey}.label`) })}</h3>
-              <p className="text-gray-400 text-sm">{t(`kpicommand.benchmarks.${kpiKey}.description`)}</p>
+              <p className="text-[var(--text-muted)] text-sm">{t(`kpicommand.benchmarks.${kpiKey}.description`)}</p>
             </div>
-            <button onClick={onClose} className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors">
+            <button onClick={onClose} className="p-2 rounded-lg bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
               <X size={16} />
             </button>
           </div>
@@ -487,8 +487,8 @@ function DrillDownModal({ kpiKey, benchmark, monthlyData, onClose }) {
               { l: t('kpicommand.bands.average'), v: b.average, c: 'text-yellow-400' },
               { l: t('kpicommand.bands.poor'), v: b.poor, c: 'text-red-400' },
             ].map(({ l, v, c }) => (
-              <div key={l} className="bg-gray-800 rounded-lg p-3 text-center">
-                <div className="text-gray-500 text-xs mb-1">{l}</div>
+              <div key={l} className="bg-[var(--input-bg)] rounded-lg p-3 text-center">
+                <div className="text-[var(--text-muted)] text-xs mb-1">{l}</div>
                 <div className={`font-semibold ${c}`}>{b.format(v)}</div>
               </div>
             ))}
@@ -913,36 +913,36 @@ export default function KpiCommandCenter() {
           {period === 'custom' && (
             <div className="flex items-center gap-1">
               <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
-                className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-xs focus:outline-none" />
-              <span className="text-gray-500 text-xs">{t('kpicommand.filters.to')}</span>
+                className="px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-white text-xs focus:outline-none" />
+              <span className="text-[var(--text-muted)] text-xs">{t('kpicommand.filters.to')}</span>
               <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
-                className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-xs focus:outline-none" />
+                className="px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-white text-xs focus:outline-none" />
             </div>
           )}
 
           <select value={site} onChange={e => setSite(e.target.value)}
-            className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-xs focus:outline-none">
+            className="px-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-white text-xs focus:outline-none">
             {sites.map(s => <option key={s} value={s}>{s === 'All' ? t('kpicommand.filters.allSites') : s}</option>)}
           </select>
 
           <select value={country} onChange={e => setCountry(e.target.value)}
-            className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-xs focus:outline-none">
+            className="px-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-white text-xs focus:outline-none">
             <option value="All">{t('kpicommand.filters.allCountries')}</option>
             {COUNTRIES.map(c => <option key={c}>{c}</option>)}
           </select>
 
           <button onClick={load} disabled={loading}
-            className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors">
+            className="p-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
           </button>
 
           <button onClick={exportPdf}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-xs rounded-lg transition-colors">
+            className="flex items-center gap-2 px-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs rounded-lg transition-colors">
             <FileText size={14} />{t('kpicommand.actions.pdf')}
           </button>
 
           <button onClick={exportExcel}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-xs rounded-lg transition-colors">
+            className="flex items-center gap-2 px-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs rounded-lg transition-colors">
             <Download size={14} />{t('kpicommand.actions.excel')}
           </button>
         </>}
@@ -962,7 +962,7 @@ export default function KpiCommandCenter() {
             <FleetScoreGauge score={overallScore} />
             <div className="text-center">
               <p className="text-[var(--text-primary)] font-semibold">{t('kpicommand.panel.overallScore')}</p>
-              <p className="text-gray-500 text-xs">{t('kpicommand.panel.overallScoreDesc')}</p>
+              <p className="text-[var(--text-muted)] text-xs">{t('kpicommand.panel.overallScoreDesc')}</p>
             </div>
           </div>
 
@@ -976,20 +976,20 @@ export default function KpiCommandCenter() {
               return (
                 <motion.div key={key} whileHover={{ scale: 1.02 }}
                   onClick={() => setDrillKpi(key)}
-                  className="bg-gray-800 rounded-xl p-3 text-center cursor-pointer hover:border-gray-600 border border-gray-800 transition-all">
+                  className="bg-[var(--input-bg)] rounded-xl p-3 text-center cursor-pointer hover:border-gray-600 border border-[var(--input-border)] transition-all">
                   <Icon size={14} className={`mx-auto mb-1 ${rating.color}`} />
-                  <div className="text-gray-500 text-xs mb-1 truncate">{t(`kpicommand.benchmarks.${key}.short`)}</div>
+                  <div className="text-[var(--text-muted)] text-xs mb-1 truncate">{t(`kpicommand.benchmarks.${key}.short`)}</div>
                   <div className={`text-lg font-bold tabular-nums ${rating.color}`}>
                     {val != null && !isNaN(val) ? b.format(val) : '-'}
                   </div>
                   <div className={`text-xs mt-0.5 ${rating.color}`}>{t(`kpicommand.ratings.${rating.key}`)}</div>
-                  <div className="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div className="mt-2 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-1000"
                       style={{ width: `${score}%`, backgroundColor: scoreColor(score) }}
                     />
                   </div>
-                  <div className="text-xs text-gray-600 mt-1">{score.toFixed(0)}/100</div>
+                  <div className="text-xs text-[var(--text-dim)] mt-1">{score.toFixed(0)}/100</div>
                 </motion.div>
               )
             })}
@@ -1027,7 +1027,7 @@ export default function KpiCommandCenter() {
             <Layers size={16} className="text-purple-400" />
             {t('kpicommand.sections.fleetVsBenchmark')}
           </h3>
-          <p className="text-gray-500 text-xs mb-4">{t('kpicommand.sections.fleetVsBenchmarkDesc')}</p>
+          <p className="text-[var(--text-muted)] text-xs mb-4">{t('kpicommand.sections.fleetVsBenchmarkDesc')}</p>
           <div className="h-72">
             <Radar data={radarData} options={{
               responsive: true,
@@ -1055,7 +1055,7 @@ export default function KpiCommandCenter() {
             <Calendar size={16} className="text-orange-400" />
             {t('kpicommand.sections.periodComparison')}
           </h3>
-          <p className="text-gray-500 text-xs mb-4">{t('kpicommand.sections.periodComparisonDesc')}</p>
+          <p className="text-[var(--text-muted)] text-xs mb-4">{t('kpicommand.sections.periodComparisonDesc')}</p>
           <div className="h-72">
             {periodComparisonData && (
               <Bar data={periodComparisonData} options={{
@@ -1079,8 +1079,8 @@ export default function KpiCommandCenter() {
               const pct = prev && prev !== 0 ? ((curr - prev) / Math.abs(prev) * 100) : null
               const improving = pct != null ? (b.higherIsBetter ? pct >= 0 : pct <= 0) : null
               return (
-                <div key={key} className="bg-gray-800 rounded-lg p-2 text-center">
-                  <div className="text-gray-500 text-xs truncate">{t(`kpicommand.benchmarks.${key}.short`)}</div>
+                <div key={key} className="bg-[var(--input-bg)] rounded-lg p-2 text-center">
+                  <div className="text-[var(--text-muted)] text-xs truncate">{t(`kpicommand.benchmarks.${key}.short`)}</div>
                   <div className="text-white text-sm font-semibold">{b.format(curr)}</div>
                   {pct != null && (
                     <div className={`text-xs flex items-center justify-center gap-0.5 ${improving ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -1097,19 +1097,19 @@ export default function KpiCommandCenter() {
 
       {/* KPI Trend Matrix */}
       {monthlyKpiMatrix.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center gap-2">
             <BarChart3 size={16} className="text-blue-400" />
             <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.trendMatrix')}</h3>
-            <span className="text-gray-500 text-xs ml-1">{t('kpicommand.sections.clickCellHint')}</span>
+            <span className="text-[var(--text-muted)] text-xs ml-1">{t('kpicommand.sections.clickCellHint')}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="px-4 py-3 text-left text-gray-400 font-medium sticky left-0 bg-gray-900 min-w-40">{t('kpicommand.columns.kpi')}</th>
+                <tr className="border-b border-[var(--input-border)]">
+                  <th className="px-4 py-3 text-left text-[var(--text-muted)] font-medium sticky left-0 bg-[var(--surface-1)] min-w-40">{t('kpicommand.columns.kpi')}</th>
                   {monthlyKpiMatrix.map(m => (
-                    <th key={m.month} className="px-3 py-3 text-center text-gray-400 font-medium min-w-20">
+                    <th key={m.month} className="px-3 py-3 text-center text-[var(--text-muted)] font-medium min-w-20">
                       {monthLabel(m.month)}
                     </th>
                   ))}
@@ -1119,9 +1119,9 @@ export default function KpiCommandCenter() {
                 {KPI_KEYS.map(key => {
                   const b = BENCHMARKS[key]
                   return (
-                    <tr key={key} className="border-b border-gray-800 hover:bg-gray-800/30">
-                      <td className="px-4 py-2.5 sticky left-0 bg-gray-900">
-                        <div className="text-gray-300 font-medium">{t(`kpicommand.benchmarks.${key}.short`)}</div>
+                    <tr key={key} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]/30">
+                      <td className="px-4 py-2.5 sticky left-0 bg-[var(--surface-1)]">
+                        <div className="text-[var(--text-secondary)] font-medium">{t(`kpicommand.benchmarks.${key}.short`)}</div>
                       </td>
                       {monthlyKpiMatrix.map(m => {
                         const val = m[key]
@@ -1144,20 +1144,20 @@ export default function KpiCommandCenter() {
 
       {/* Site KPI Heatmap */}
       {siteKpiData.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center gap-2">
             <MapPin size={16} className="text-emerald-400" />
             <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.siteComparison')}</h3>
-            <span className="text-gray-500 text-xs ml-1">{t('kpicommand.sections.colorLegendHint')}</span>
+            <span className="text-[var(--text-muted)] text-xs ml-1">{t('kpicommand.sections.colorLegendHint')}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="px-4 py-3 text-left text-gray-400 font-medium sticky left-0 bg-gray-900 min-w-36">{t('kpicommand.columns.site')}</th>
-                  <th className="px-3 py-3 text-center text-gray-400 font-medium">{t('kpicommand.columns.score')}</th>
+                <tr className="border-b border-[var(--input-border)]">
+                  <th className="px-4 py-3 text-left text-[var(--text-muted)] font-medium sticky left-0 bg-[var(--surface-1)] min-w-36">{t('kpicommand.columns.site')}</th>
+                  <th className="px-3 py-3 text-center text-[var(--text-muted)] font-medium">{t('kpicommand.columns.score')}</th>
                   {KPI_KEYS.map(k => (
-                    <th key={k} className="px-3 py-3 text-center text-gray-400 font-medium min-w-24">
+                    <th key={k} className="px-3 py-3 text-center text-[var(--text-muted)] font-medium min-w-24">
                       {t(`kpicommand.benchmarks.${k}.short`)}
                     </th>
                   ))}
@@ -1165,8 +1165,8 @@ export default function KpiCommandCenter() {
               </thead>
               <tbody>
                 {siteKpiData.map((sd, i) => (
-                  <tr key={sd.site} className="border-b border-gray-800 hover:bg-gray-800/30">
-                    <td className="px-4 py-2.5 sticky left-0 bg-gray-900">
+                  <tr key={sd.site} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]/30">
+                    <td className="px-4 py-2.5 sticky left-0 bg-[var(--surface-1)]">
                       <div className="flex items-center gap-2">
                         {i === 0 && <Trophy size={12} className="text-yellow-400" />}
                         <span className="text-white font-medium">{sd.site}</span>
@@ -1200,13 +1200,13 @@ export default function KpiCommandCenter() {
       {/* KPI Alerts + Target vs Actual */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Alerts */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center gap-2">
             <AlertTriangle size={16} className="text-yellow-400" />
             <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.alerts')}</h3>
-            <span className="ml-auto text-xs bg-gray-800 px-2 py-0.5 rounded-full text-gray-400">{kpiAlerts.length}</span>
+            <span className="ml-auto text-xs bg-[var(--input-bg)] px-2 py-0.5 rounded-full text-[var(--text-muted)]">{kpiAlerts.length}</span>
           </div>
-          <div className="divide-y divide-gray-800 max-h-80 overflow-y-auto">
+          <div className="divide-y divide-[var(--input-border)] max-h-80 overflow-y-auto">
             {kpiAlerts.length === 0 && (
               <div className="px-5 py-8 text-center">
                 <CheckCircle size={32} className="mx-auto text-emerald-400 mb-2" />
@@ -1232,7 +1232,7 @@ export default function KpiCommandCenter() {
                         {a.type === 'achievement' ? t('kpicommand.alerts.type.achievement') : a.type === 'warning' ? t('kpicommand.alerts.type.warning') : t('kpicommand.alerts.type.deteriorating')}
                       </span>
                     </div>
-                    <p className="text-gray-400 text-xs mt-0.5">
+                    <p className="text-[var(--text-muted)] text-xs mt-0.5">
                       <span className={`font-medium ${typeConfig.color}`}>{a.value}</span> - {a.msg}
                     </p>
                   </div>
@@ -1243,12 +1243,12 @@ export default function KpiCommandCenter() {
         </div>
 
         {/* Target vs Actual */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center gap-2">
             <Target size={16} className="text-blue-400" />
             <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.targetVsActual')}</h3>
           </div>
-          <div className="divide-y divide-gray-800">
+          <div className="divide-y divide-[var(--input-border)]">
             {KPI_KEYS.map(key => {
               const b = BENCHMARKS[key]
               const val = kpiValues[key]
@@ -1266,9 +1266,9 @@ export default function KpiCommandCenter() {
                 <div key={key} className="px-5 py-3 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-sm font-medium truncate">{t(`kpicommand.benchmarks.${key}.label`)}</div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                      <span>{t('kpicommand.targetActual.target')} <span className="text-gray-300">{b.format(target)}</span></span>
-                      <span>{t('kpicommand.targetActual.actual')} <span className="text-gray-300">{val != null ? b.format(val) : '-'}</span></span>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)]">
+                      <span>{t('kpicommand.targetActual.target')} <span className="text-[var(--text-secondary)]">{b.format(target)}</span></span>
+                      <span>{t('kpicommand.targetActual.actual')} <span className="text-[var(--text-secondary)]">{val != null ? b.format(val) : '-'}</span></span>
                       {gap != null && (
                         <span>{t('kpicommand.targetActual.gap')} <span className={onTrack ? 'text-emerald-400' : 'text-red-400'}>
                           {b.higherIsBetter ? (gap >= 0 ? '+' : '') : (gap <= 0 ? '' : '+')}
@@ -1290,25 +1290,25 @@ export default function KpiCommandCenter() {
       {/* Top/Bottom Vehicles */}
       {(vehicleScores.best.length > 0 || vehicleScores.worst.length > 0) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center gap-2">
               <Trophy size={16} className="text-yellow-400" />
               <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.topVehicles')}</h3>
             </div>
-            <div className="divide-y divide-gray-800">
+            <div className="divide-y divide-[var(--input-border)]">
               {vehicleScores.best.map((v, i) => (
                 <div key={v.asset} className="px-5 py-3 flex items-center gap-3">
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
                     i === 0 ? 'bg-yellow-900/40 text-yellow-400 border border-yellow-700' :
-                    i === 1 ? 'bg-gray-700/40 text-gray-300 border border-gray-600' :
+                    i === 1 ? 'bg-[var(--input-border)]/40 text-[var(--text-secondary)] border border-gray-600' :
                     i === 2 ? 'bg-amber-900/40 text-amber-600 border border-amber-700' :
-                    'bg-gray-800 text-gray-500 border border-gray-700'
+                    'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]'
                   }`}>
                     {i === 0 ? <Star size={12} /> : `#${i + 1}`}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-sm font-semibold">{v.asset}</div>
-                    <div className="text-gray-500 text-xs">
+                    <div className="text-[var(--text-muted)] text-xs">
                       {t('kpicommand.vehicles.statsBest', { cpk: BENCHMARKS.cpk.format(v.cpk), life: (v.life / 1000).toFixed(0), count: v.count })}
                     </div>
                   </div>
@@ -1318,12 +1318,12 @@ export default function KpiCommandCenter() {
             </div>
           </div>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center gap-2">
               <AlertOctagon size={16} className="text-red-400" />
               <h3 className="text-[var(--text-primary)] font-semibold">{t('kpicommand.sections.bottomVehicles')}</h3>
             </div>
-            <div className="divide-y divide-gray-800">
+            <div className="divide-y divide-[var(--input-border)]">
               {vehicleScores.worst.map((v, i) => (
                 <div key={v.asset} className="px-5 py-3 flex items-center gap-3">
                   <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold bg-red-900/40 text-red-400 border border-red-700">
@@ -1331,7 +1331,7 @@ export default function KpiCommandCenter() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-sm font-semibold">{v.asset}</div>
-                    <div className="text-gray-500 text-xs">
+                    <div className="text-[var(--text-muted)] text-xs">
                       {t('kpicommand.vehicles.statsWorst', { cpk: BENCHMARKS.cpk.format(v.cpk), fail: v.fail.toFixed(1), count: v.count })}
                     </div>
                   </div>
@@ -1357,8 +1357,8 @@ export default function KpiCommandCenter() {
       {!loading && records.length === 0 && !error && (
         <div className="text-center py-16">
           <Command size={48} className="mx-auto text-gray-700 mb-4" />
-          <p className="text-gray-400 font-medium">{t('kpicommand.empty.title')}</p>
-          <p className="text-gray-600 text-sm mt-1">{t('kpicommand.empty.subtitle')}</p>
+          <p className="text-[var(--text-muted)] font-medium">{t('kpicommand.empty.title')}</p>
+          <p className="text-[var(--text-dim)] text-sm mt-1">{t('kpicommand.empty.subtitle')}</p>
         </div>
       )}
     </div>

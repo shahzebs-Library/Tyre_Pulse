@@ -663,7 +663,7 @@ export default function AiCommandCenter() {
         actions={
           <div className="flex items-center gap-2 flex-shrink-0">
             {dataLoading ? (
-              <span className="flex items-center gap-1.5 text-xs text-gray-500">
+              <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 Loading context...
               </span>
@@ -676,7 +676,7 @@ export default function AiCommandCenter() {
 
             <button
               onClick={() => setShowFilters(f => !f)}
-              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${showFilters ? 'bg-blue-600/20 border-blue-600/40 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'}`}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${showFilters ? 'bg-blue-600/20 border-blue-600/40 text-blue-300' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
             >
               <Filter className="w-3.5 h-3.5" />
               Context
@@ -686,14 +686,14 @@ export default function AiCommandCenter() {
               <>
                 <button
                   onClick={exportChatPdf}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Export PDF
                 </button>
                 <button
                   onClick={clearChat}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-red-400 transition-colors"
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-red-400 transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   Clear
@@ -713,13 +713,13 @@ export default function AiCommandCenter() {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="mt-4 pt-4 border-t border-[var(--input-border)] grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1.5 font-medium">Site Filter</label>
+                  <label className="block text-xs text-[var(--text-muted)] mb-1.5 font-medium">Site Filter</label>
                   <select
                     value={selectedSite}
                     onChange={e => { setSelectedSite(e.target.value); setSelectedAsset('') }}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
                   >
                     <option value="">All sites ({records.length} records)</option>
                     {sites.map(s => (
@@ -728,11 +728,11 @@ export default function AiCommandCenter() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1.5 font-medium">Vehicle Context (optional)</label>
+                  <label className="block text-xs text-[var(--text-muted)] mb-1.5 font-medium">Vehicle Context (optional)</label>
                   <select
                     value={selectedAsset}
                     onChange={e => setSelectedAsset(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
                   >
                     <option value="">No specific vehicle</option>
                     {filteredAssets.map(a => (
@@ -762,7 +762,7 @@ export default function AiCommandCenter() {
         </AnimatePresence>
 
       {/* ── Agent cards row ── */}
-      <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b border-gray-800/50">
+      <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b border-[var(--input-border)]/50">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {Object.values(AGENT_TYPES).map(type => {
             const AgentIcon = AGENT_ICONS[type]
@@ -771,17 +771,17 @@ export default function AiCommandCenter() {
             return (
               <div
                 key={type}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all ${isActive ? `${color.bg} ${color.border} border` : 'bg-gray-900/40 border-gray-800/60'}`}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all ${isActive ? `${color.bg} ${color.border} border` : 'bg-[var(--surface-1)]/40 border-[var(--input-border)]/60'}`}
               >
                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${color.bg} border ${color.border}`}>
                   <AgentIcon className={`w-3.5 h-3.5 ${color.text}`} />
                 </div>
                 <div className="min-w-0">
-                  <p className={`text-xs font-medium truncate ${isActive ? color.text : 'text-gray-300'}`}>
+                  <p className={`text-xs font-medium truncate ${isActive ? color.text : 'text-[var(--text-secondary)]'}`}>
                     {AGENT_LABELS[type]}
                     {isActive && <span className="ml-1 inline-block w-1.5 h-1.5 bg-current rounded-full animate-pulse" />}
                   </p>
-                  <p className="text-xs text-gray-600 truncate hidden sm:block">{AGENT_DESCRIPTIONS[type].split(',')[0]}</p>
+                  <p className="text-xs text-[var(--text-dim)] truncate hidden sm:block">{AGENT_DESCRIPTIONS[type].split(',')[0]}</p>
                 </div>
               </div>
             )
@@ -798,8 +798,8 @@ export default function AiCommandCenter() {
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600/20 to-indigo-700/20 border border-blue-600/20 flex items-center justify-center mx-auto mb-4">
               <Sparkles className="w-8 h-8 text-blue-400" />
             </div>
-            <h2 className="text-white font-semibold text-lg mb-2">TyrePulse AI Command Center</h2>
-            <p className="text-gray-400 text-sm mb-8 leading-relaxed">
+            <h2 className="text-[var(--text-primary)] font-semibold text-lg mb-2">TyrePulse AI Command Center</h2>
+            <p className="text-[var(--text-muted)] text-sm mb-8 leading-relaxed">
               Ask any question about your fleet - tyre costs, failure analysis, data quality, or maintenance planning.
               The AI router automatically dispatches to the best specialist agent.
             </p>
@@ -842,7 +842,7 @@ export default function AiCommandCenter() {
 
       {/* ── Quick action chips (shown when chat has messages) ── */}
       {messages.length > 0 && (
-        <div className="flex-shrink-0 px-4 sm:px-6 py-2 border-t border-gray-800/50 overflow-x-auto">
+        <div className="flex-shrink-0 px-4 sm:px-6 py-2 border-t border-[var(--input-border)]/50 overflow-x-auto">
           <div className="flex gap-2 min-w-max">
             {QUICK_ACTIONS.slice(0, 5).map(action => {
               const color = AGENT_COLORS[action.agent]
@@ -862,14 +862,14 @@ export default function AiCommandCenter() {
       )}
 
       {/* ── Input area ── */}
-      <div className="flex-shrink-0 border-t border-gray-800 bg-gray-900/50 backdrop-blur-sm px-4 sm:px-6 py-4">
+      <div className="flex-shrink-0 border-t border-[var(--input-border)] bg-[var(--surface-1)]/50 backdrop-blur-sm px-4 sm:px-6 py-4">
 
         {/* Agent preview */}
         {previewAgent && query.trim() && (
           <div className={`flex items-center gap-2 mb-2 text-xs ${AGENT_COLORS[previewAgent].text}`}>
             <Zap className="w-3 h-3" />
             Will route to: <span className="font-medium">{AGENT_LABELS[previewAgent]} Agent</span>
-            <span className="text-gray-600">- {AGENT_DESCRIPTIONS[previewAgent]}</span>
+            <span className="text-[var(--text-dim)]">- {AGENT_DESCRIPTIONS[previewAgent]}</span>
           </div>
         )}
 
@@ -883,14 +883,14 @@ export default function AiCommandCenter() {
               placeholder={dataLoading ? 'Loading fleet context...' : 'Ask about CPK, failures, root causes, planning, or data quality...'}
               disabled={loading || dataLoading}
               rows={1}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 pr-12 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none disabled:opacity-50 transition-colors leading-relaxed"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-4 py-3 pr-12 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none disabled:opacity-50 transition-colors leading-relaxed"
               style={{ minHeight: '48px', maxHeight: '120px' }}
               onInput={e => {
                 e.target.style.height = 'auto'
                 e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
               }}
             />
-            <div className="absolute right-3 bottom-2.5 text-xs text-gray-600">
+            <div className="absolute right-3 bottom-2.5 text-xs text-[var(--text-dim)]">
               {query.length > 0 && `${query.length}`}
             </div>
           </div>
@@ -907,7 +907,7 @@ export default function AiCommandCenter() {
           </button>
         </div>
 
-        <p className="text-xs text-gray-600 mt-2 text-center">
+        <p className="text-xs text-[var(--text-dim)] mt-2 text-center">
           AI responses are generated from your fleet data. Always validate critical decisions with your engineering team.
         </p>
       </div>

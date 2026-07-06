@@ -281,9 +281,9 @@ function StatCard({ icon: Icon, label, value, sub, color = 'text-blue-400' }) {
         <Icon size={20} />
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-gray-500 uppercase tracking-wide">{label}</p>
+        <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide">{label}</p>
         <p className={`text-xl font-bold mt-0.5 ${color}`}>{value}</p>
-        {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
+        {sub && <p className="text-xs text-[var(--text-muted)] mt-0.5">{sub}</p>}
       </div>
     </div>
   )
@@ -609,10 +609,10 @@ export default function RootCauseEngine() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
         <div className="text-center">
           <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">Loading classification engine...</p>
+          <p className="text-[var(--text-muted)] text-sm">Loading classification engine...</p>
         </div>
       </div>
     )
@@ -620,11 +620,11 @@ export default function RootCauseEngine() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="bg-gray-900 border border-red-900 rounded-xl p-8 text-center max-w-md">
+      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
+        <div className="bg-[var(--surface-1)] border border-red-900 rounded-xl p-8 text-center max-w-md">
           <AlertOctagon size={32} className="text-red-500 mx-auto mb-3" />
           <p className="text-red-400 font-semibold mb-1">Failed to load records</p>
-          <p className="text-gray-500 text-sm">{error}</p>
+          <p className="text-[var(--text-muted)] text-sm">{error}</p>
         </div>
       </div>
     )
@@ -632,11 +632,11 @@ export default function RootCauseEngine() {
 
   if (records.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
         <div className="card p-8 text-center max-w-md">
-          <Layers size={32} className="text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-400 font-semibold mb-1">No tyre records found</p>
-          <p className="text-gray-600 text-sm">Upload tyre change records to enable root cause analysis.</p>
+          <Layers size={32} className="text-[var(--text-dim)] mx-auto mb-3" />
+          <p className="text-[var(--text-muted)] font-semibold mb-1">No tyre records found</p>
+          <p className="text-[var(--text-dim)] text-sm">Upload tyre change records to enable root cause analysis.</p>
         </div>
       </div>
     )
@@ -675,13 +675,13 @@ export default function RootCauseEngine() {
       {/* ── Filters ── */}
       <div className="card p-4">
         <div className="flex items-center gap-2 mb-3">
-          <Filter size={14} className="text-gray-500" />
-          <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Filters</span>
+          <Filter size={14} className="text-[var(--text-muted)]" />
+          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wide font-medium">Filters</span>
         </div>
         <div className="flex flex-wrap gap-3 items-end">
           {/* Date presets */}
           <div>
-            <p className="text-xs text-gray-600 mb-1.5">Date Range</p>
+            <p className="text-xs text-[var(--text-dim)] mb-1.5">Date Range</p>
             <div className="flex gap-1.5 flex-wrap">
               {DATE_PRESETS.map(p => (
                 <button
@@ -690,7 +690,7 @@ export default function RootCauseEngine() {
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
                     datePreset === p.label
                       ? 'bg-indigo-600 border-indigo-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                      : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:bg-[var(--input-bg-hover)]'
                   }`}
                 >
                   {p.label}
@@ -701,11 +701,11 @@ export default function RootCauseEngine() {
 
           {/* Site filter */}
           <div>
-            <p className="text-xs text-gray-600 mb-1.5">Site</p>
+            <p className="text-xs text-[var(--text-dim)] mb-1.5">Site</p>
             <select
               value={siteFilter}
               onChange={e => setSiteFilter(e.target.value)}
-              className="bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
+              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
             >
               <option value="all">All Sites</option>
               {allSites.filter(s => s !== 'all').map(s => (
@@ -716,11 +716,11 @@ export default function RootCauseEngine() {
 
           {/* Risk filter */}
           <div>
-            <p className="text-xs text-gray-600 mb-1.5">Risk Level</p>
+            <p className="text-xs text-[var(--text-dim)] mb-1.5">Risk Level</p>
             <select
               value={riskFilter}
               onChange={e => setRiskFilter(e.target.value)}
-              className="bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
+              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500"
             >
               <option value="all">All Levels</option>
               <option value="Critical">Critical</option>
@@ -732,7 +732,7 @@ export default function RootCauseEngine() {
 
           {/* Min records */}
           <div>
-            <p className="text-xs text-gray-600 mb-1.5">Min Records: <span className="text-gray-400">{minRecords}</span></p>
+            <p className="text-xs text-[var(--text-dim)] mb-1.5">Min Records: <span className="text-[var(--text-muted)]">{minRecords}</span></p>
             <input
               type="range"
               min={1}
@@ -743,7 +743,7 @@ export default function RootCauseEngine() {
             />
           </div>
 
-          <div className="ml-auto text-xs text-gray-600">
+          <div className="ml-auto text-xs text-[var(--text-dim)]">
             {fmtNum(filtered.length)} records in view
           </div>
         </div>
@@ -790,7 +790,7 @@ export default function RootCauseEngine() {
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">Root Cause Frequency</h2>
           </div>
           {sortedCauses.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-gray-600 text-sm">
+            <div className="flex items-center justify-center h-48 text-[var(--text-dim)] text-sm">
               No causes meet the minimum records threshold
             </div>
           ) : (
@@ -823,7 +823,7 @@ export default function RootCauseEngine() {
               />
             </div>
           )}
-          <div className="flex gap-4 mt-3 text-xs text-gray-600">
+          <div className="flex gap-4 mt-3 text-xs text-[var(--text-dim)]">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-600 inline-block" /> &gt;20% of total</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-600 inline-block" /> 10-20%</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-700 inline-block" /> &lt;10%</span>
@@ -835,10 +835,10 @@ export default function RootCauseEngine() {
           <div className="flex items-center gap-2 mb-4">
             <DollarSign size={16} className="text-amber-400" />
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">Financial Impact by Root Cause</h2>
-            <span className="text-xs text-gray-600 ml-1">({currency})</span>
+            <span className="text-xs text-[var(--text-dim)] ml-1">({currency})</span>
           </div>
           {sortedCauses.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-gray-600 text-sm">
+            <div className="flex items-center justify-center h-48 text-[var(--text-dim)] text-sm">
               No data available
             </div>
           ) : (
@@ -879,23 +879,23 @@ export default function RootCauseEngine() {
       </div>
 
       {/* ── Heat Map ── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
+      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 overflow-x-auto">
         <div className="flex items-center gap-2 mb-4">
           <Layers size={16} className="text-purple-400" />
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Site × Root Cause Heat Map</h2>
-          <span className="text-xs text-gray-600 ml-1">(top {TOP_CAUSES_HEATMAP} causes)</span>
+          <span className="text-xs text-[var(--text-dim)] ml-1">(top {TOP_CAUSES_HEATMAP} causes)</span>
         </div>
         {heatMapData.activeSites.length === 0 ? (
-          <p className="text-gray-600 text-sm text-center py-8">No site data available</p>
+          <p className="text-[var(--text-dim)] text-sm text-center py-8">No site data available</p>
         ) : (
           <table className="min-w-full text-xs border-collapse">
             <thead>
               <tr>
-                <th className="text-left text-gray-500 font-medium py-2 pr-4 border-b border-gray-800 whitespace-nowrap">Site</th>
+                <th className="text-left text-[var(--text-muted)] font-medium py-2 pr-4 border-b border-[var(--input-border)] whitespace-nowrap">Site</th>
                 {heatMapData.topCauses.map(c => (
                   <th
                     key={c}
-                    className="text-gray-400 font-medium py-2 px-2 border-b border-gray-800 text-center whitespace-nowrap"
+                    className="text-[var(--text-muted)] font-medium py-2 px-2 border-b border-[var(--input-border)] text-center whitespace-nowrap"
                     style={{ maxWidth: 80 }}
                   >
                     <span
@@ -911,8 +911,8 @@ export default function RootCauseEngine() {
             </thead>
             <tbody>
               {heatMapData.activeSites.map(site => (
-                <tr key={site} className="border-b border-gray-800/50">
-                  <td className="py-2 pr-4 text-gray-300 font-medium whitespace-nowrap">{site}</td>
+                <tr key={site} className="border-b border-[var(--input-border)]/50">
+                  <td className="py-2 pr-4 text-[var(--text-secondary)] font-medium whitespace-nowrap">{site}</td>
                   {heatMapData.topCauses.map(cause => {
                     const count = heatMapData.matrix[site]?.[cause] || 0
                     const cls = heatIntensity(count, heatMapData.maxVal)
@@ -923,7 +923,7 @@ export default function RootCauseEngine() {
                             {count}
                           </span>
                         ) : (
-                          <span className="text-gray-800">-</span>
+                          <span className="text-[var(--text-dim)]">-</span>
                         )}
                       </td>
                     )
@@ -933,7 +933,7 @@ export default function RootCauseEngine() {
             </tbody>
           </table>
         )}
-        <div className="flex gap-4 mt-3 text-xs text-gray-600 flex-wrap">
+        <div className="flex gap-4 mt-3 text-xs text-[var(--text-dim)] flex-wrap">
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-red-700" /> High (&gt;75%)</span>
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-orange-700" /> Medium-High</span>
           <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-yellow-700" /> Medium</span>
@@ -942,8 +942,8 @@ export default function RootCauseEngine() {
       </div>
 
       {/* ── Deep Dive Tabs ── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-gray-800">
+      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+        <div className="p-4 border-b border-[var(--input-border)]">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle size={16} className="text-amber-400" />
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">Root Cause Deep Dive</h2>
@@ -959,13 +959,13 @@ export default function RootCauseEngine() {
                   className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors border flex items-center gap-1.5 ${
                     isActive
                       ? 'bg-indigo-600 border-indigo-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                      : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:bg-[var(--input-bg-hover)]'
                   }`}
                 >
                   {cause}
                   {count > 0 && (
                     <span className={`rounded-full px-1.5 py-0 text-[10px] font-bold ${
-                      isActive ? 'bg-indigo-500 text-white' : 'bg-gray-700 text-gray-400'
+                      isActive ? 'bg-indigo-500 text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'
                     }`}>
                       {count}
                     </span>
@@ -987,47 +987,47 @@ export default function RootCauseEngine() {
           >
             {/* KPI row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-gray-800/60 rounded-lg p-3">
-                <p className="text-xs text-gray-500 mb-1">Records</p>
-                <p className="text-lg font-bold text-white">{fmtNum(deepDiveData.count)}</p>
-                <p className="text-xs text-gray-600">{deepDiveData.pct}% of total</p>
+              <div className="bg-[var(--input-bg)]/60 rounded-lg p-3">
+                <p className="text-xs text-[var(--text-muted)] mb-1">Records</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{fmtNum(deepDiveData.count)}</p>
+                <p className="text-xs text-[var(--text-dim)]">{deepDiveData.pct}% of total</p>
               </div>
-              <div className="bg-gray-800/60 rounded-lg p-3">
-                <p className="text-xs text-gray-500 mb-1">Total Cost</p>
+              <div className="bg-[var(--input-bg)]/60 rounded-lg p-3">
+                <p className="text-xs text-[var(--text-muted)] mb-1">Total Cost</p>
                 <p className="text-lg font-bold text-amber-400">{fmtCost(deepDiveData.totalCost, currency)}</p>
               </div>
-              <div className="bg-gray-800/60 rounded-lg p-3">
-                <p className="text-xs text-gray-500 mb-1">Avg CPK</p>
+              <div className="bg-[var(--input-bg)]/60 rounded-lg p-3">
+                <p className="text-xs text-[var(--text-muted)] mb-1">Avg CPK</p>
                 <p className="text-lg font-bold text-indigo-400">
                   {deepDiveData.avgCPK != null
                     ? `${currency} ${deepDiveData.avgCPK.toFixed(4)}`
                     : '-'}
                 </p>
-                <p className="text-xs text-gray-600">Cost per km</p>
+                <p className="text-xs text-[var(--text-dim)]">Cost per km</p>
               </div>
-              <div className="bg-gray-800/60 rounded-lg p-3">
-                <p className="text-xs text-gray-500 mb-1">Coverage %</p>
+              <div className="bg-[var(--input-bg)]/60 rounded-lg p-3">
+                <p className="text-xs text-[var(--text-muted)] mb-1">Coverage %</p>
                 <p className="text-lg font-bold text-blue-400">{deepDiveData.pct}%</p>
-                <p className="text-xs text-gray-600">of filtered records</p>
+                <p className="text-xs text-[var(--text-dim)]">of filtered records</p>
               </div>
             </div>
 
             {/* Top lists */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {/* Top assets */}
-              <div className="bg-gray-800/50 rounded-lg p-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-2 font-medium">Top 5 Affected Assets</p>
+              <div className="bg-[var(--input-bg)]/50 rounded-lg p-3">
+                <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide mb-2 font-medium">Top 5 Affected Assets</p>
                 {deepDiveData.topAssets.length === 0 ? (
-                  <p className="text-gray-700 text-xs">No data</p>
+                  <p className="text-[var(--text-dim)] text-xs">No data</p>
                 ) : (
                   <ul className="space-y-1.5">
                     {deepDiveData.topAssets.map((a, i) => (
                       <li key={a.name} className="flex items-center justify-between">
                         <span className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-600 w-4">{i + 1}.</span>
-                          <span className="text-gray-300 text-xs font-mono">{a.name}</span>
+                          <span className="text-[10px] text-[var(--text-dim)] w-4">{i + 1}.</span>
+                          <span className="text-[var(--text-secondary)] text-xs font-mono">{a.name}</span>
                         </span>
-                        <span className="text-xs font-bold text-white bg-gray-700 px-2 py-0.5 rounded">
+                        <span className="text-xs font-bold text-[var(--text-primary)] bg-[var(--input-bg)] px-2 py-0.5 rounded">
                           {a.count}
                         </span>
                       </li>
@@ -1037,19 +1037,19 @@ export default function RootCauseEngine() {
               </div>
 
               {/* Top brands */}
-              <div className="bg-gray-800/50 rounded-lg p-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-2 font-medium">Top 5 Affected Brands</p>
+              <div className="bg-[var(--input-bg)]/50 rounded-lg p-3">
+                <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide mb-2 font-medium">Top 5 Affected Brands</p>
                 {deepDiveData.topBrands.length === 0 ? (
-                  <p className="text-gray-700 text-xs">No data</p>
+                  <p className="text-[var(--text-dim)] text-xs">No data</p>
                 ) : (
                   <ul className="space-y-1.5">
                     {deepDiveData.topBrands.map((b, i) => (
                       <li key={b.name} className="flex items-center justify-between">
                         <span className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-600 w-4">{i + 1}.</span>
-                          <span className="text-gray-300 text-xs">{b.name}</span>
+                          <span className="text-[10px] text-[var(--text-dim)] w-4">{i + 1}.</span>
+                          <span className="text-[var(--text-secondary)] text-xs">{b.name}</span>
                         </span>
-                        <span className="text-xs font-bold text-white bg-gray-700 px-2 py-0.5 rounded">
+                        <span className="text-xs font-bold text-[var(--text-primary)] bg-[var(--input-bg)] px-2 py-0.5 rounded">
                           {b.count}
                         </span>
                       </li>
@@ -1059,19 +1059,19 @@ export default function RootCauseEngine() {
               </div>
 
               {/* Top sites */}
-              <div className="bg-gray-800/50 rounded-lg p-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wide mb-2 font-medium">Top 5 Affected Sites</p>
+              <div className="bg-[var(--input-bg)]/50 rounded-lg p-3">
+                <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide mb-2 font-medium">Top 5 Affected Sites</p>
                 {deepDiveData.topSites.length === 0 ? (
-                  <p className="text-gray-700 text-xs">No data</p>
+                  <p className="text-[var(--text-dim)] text-xs">No data</p>
                 ) : (
                   <ul className="space-y-1.5">
                     {deepDiveData.topSites.map((s, i) => (
                       <li key={s.name} className="flex items-center justify-between">
                         <span className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-600 w-4">{i + 1}.</span>
-                          <span className="text-gray-300 text-xs">{s.name}</span>
+                          <span className="text-[10px] text-[var(--text-dim)] w-4">{i + 1}.</span>
+                          <span className="text-[var(--text-secondary)] text-xs">{s.name}</span>
                         </span>
-                        <span className="text-xs font-bold text-white bg-gray-700 px-2 py-0.5 rounded">
+                        <span className="text-xs font-bold text-[var(--text-primary)] bg-[var(--input-bg)] px-2 py-0.5 rounded">
                           {s.count}
                         </span>
                       </li>
@@ -1096,7 +1096,7 @@ export default function RootCauseEngine() {
             {deepDiveData.totalRecs > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-gray-500 font-medium">
+                  <p className="text-xs text-[var(--text-muted)] font-medium">
                     Affected Records - {fmtNum(deepDiveData.totalRecs)} total
                   </p>
                   {deepDiveData.totalPages > 1 && (
@@ -1104,27 +1104,27 @@ export default function RootCauseEngine() {
                       <button
                         onClick={() => setDeepDivePage(p => Math.max(1, p - 1))}
                         disabled={deepDivePage === 1}
-                        className="p-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 transition-colors"
+                        className="p-1 rounded bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] disabled:opacity-30 transition-colors"
                       >
                         <ChevronLeft size={14} />
                       </button>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-[var(--text-muted)]">
                         {deepDivePage} / {deepDiveData.totalPages}
                       </span>
                       <button
                         onClick={() => setDeepDivePage(p => Math.min(deepDiveData.totalPages, p + 1))}
                         disabled={deepDivePage === deepDiveData.totalPages}
-                        className="p-1 rounded bg-gray-800 hover:bg-gray-700 disabled:opacity-30 transition-colors"
+                        className="p-1 rounded bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] disabled:opacity-30 transition-colors"
                       >
                         <ChevronRight size={14} />
                       </button>
                     </div>
                   )}
                 </div>
-                <div className="overflow-x-auto rounded-lg border border-gray-800">
+                <div className="overflow-x-auto rounded-lg border border-[var(--input-border)]">
                   <table className="min-w-full text-xs">
                     <thead>
-                      <tr className="bg-gray-800/70 text-gray-400">
+                      <tr className="bg-[var(--input-bg)]/70 text-[var(--text-muted)]">
                         <th className="text-left py-2 px-3 font-medium">Asset No</th>
                         <th className="text-left py-2 px-3 font-medium">Site</th>
                         <th className="text-left py-2 px-3 font-medium">Brand</th>
@@ -1133,13 +1133,13 @@ export default function RootCauseEngine() {
                         <th className="text-left py-2 px-3 font-medium">Findings</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-800/50">
+                    <tbody className="divide-y divide-[var(--input-border)]/50">
                       {deepDiveData.paginated.map(r => (
-                        <tr key={r.id} className="hover:bg-gray-800/30 transition-colors">
-                          <td className="py-2 px-3 text-gray-200 font-mono">{r.asset_no || '-'}</td>
-                          <td className="py-2 px-3 text-gray-300">{r.site || '-'}</td>
-                          <td className="py-2 px-3 text-gray-300">{r.brand || '-'}</td>
-                          <td className="py-2 px-3 text-gray-400">{r.issue_date || '-'}</td>
+                        <tr key={r.id} className="hover:bg-[var(--input-bg)]/30 transition-colors">
+                          <td className="py-2 px-3 text-[var(--text-secondary)] font-mono">{r.asset_no || '-'}</td>
+                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.site || '-'}</td>
+                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.brand || '-'}</td>
+                          <td className="py-2 px-3 text-[var(--text-muted)]">{r.issue_date || '-'}</td>
                           <td className="py-2 px-3">
                             <span
                               className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
@@ -1152,7 +1152,7 @@ export default function RootCauseEngine() {
                               {r.risk_level || 'N/A'}
                             </span>
                           </td>
-                          <td className="py-2 px-3 text-gray-400 max-w-xs">
+                          <td className="py-2 px-3 text-[var(--text-muted)] max-w-xs">
                             <span
                               title={r.findings || r.description || r.remarks || ''}
                               className="block truncate"
@@ -1170,8 +1170,8 @@ export default function RootCauseEngine() {
             )}
 
             {deepDiveData.totalRecs === 0 && (
-              <div className="text-center py-10 text-gray-700 text-sm">
-                No records classified under <span className="text-gray-500 font-medium">{activeTab}</span> with current filters.
+              <div className="text-center py-10 text-[var(--text-dim)] text-sm">
+                No records classified under <span className="text-[var(--text-muted)] font-medium">{activeTab}</span> with current filters.
               </div>
             )}
           </motion.div>
@@ -1183,15 +1183,15 @@ export default function RootCauseEngine() {
         <div className="flex items-center gap-2 mb-4">
           <AlertOctagon size={16} className="text-red-400" />
           <h2 className="text-sm font-semibold text-[var(--text-primary)]">Worst Vehicles by Root Cause Incidents</h2>
-          <span className="text-xs text-gray-600 ml-1">(top 15)</span>
+          <span className="text-xs text-[var(--text-dim)] ml-1">(top 15)</span>
         </div>
         {worstVehicles.length === 0 ? (
-          <p className="text-gray-600 text-sm text-center py-8">No vehicle data available</p>
+          <p className="text-[var(--text-dim)] text-sm text-center py-8">No vehicle data available</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
               <thead>
-                <tr className="bg-gray-800/70 text-gray-400">
+                <tr className="bg-[var(--input-bg)]/70 text-[var(--text-muted)]">
                   <th className="text-left py-2 px-3 font-medium w-6">#</th>
                   <th className="text-left py-2 px-3 font-medium">Asset No</th>
                   <th className="text-left py-2 px-3 font-medium">Site</th>
@@ -1202,25 +1202,25 @@ export default function RootCauseEngine() {
                   <th className="text-center py-2 px-3 font-medium">History</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800/50">
+              <tbody className="divide-y divide-[var(--input-border)]/50">
                 {worstVehicles.map((v, i) => (
-                  <tr key={v.asset_no} className="hover:bg-gray-800/30 transition-colors">
-                    <td className="py-2 px-3 text-gray-600">{i + 1}</td>
-                    <td className="py-2 px-3 text-gray-200 font-mono font-semibold">{v.asset_no}</td>
-                    <td className="py-2 px-3 text-gray-300">{v.site}</td>
+                  <tr key={v.asset_no} className="hover:bg-[var(--input-bg)]/30 transition-colors">
+                    <td className="py-2 px-3 text-[var(--text-dim)]">{i + 1}</td>
+                    <td className="py-2 px-3 text-[var(--text-secondary)] font-mono font-semibold">{v.asset_no}</td>
+                    <td className="py-2 px-3 text-[var(--text-secondary)]">{v.site}</td>
                     <td className="py-2 px-3 text-right">
                       <span className={`font-bold ${
                         v.totalIncidents >= 10 ? 'text-red-400' :
-                        v.totalIncidents >= 5 ? 'text-amber-400' : 'text-gray-300'
+                        v.totalIncidents >= 5 ? 'text-amber-400' : 'text-[var(--text-secondary)]'
                       }`}>
                         {v.totalIncidents.toLocaleString()}
                       </span>
                     </td>
-                    <td className="py-2 px-3 text-gray-400">{v.topCause}</td>
+                    <td className="py-2 px-3 text-[var(--text-muted)]">{v.topCause}</td>
                     <td className="py-2 px-3 text-right text-amber-400 font-medium">
                       {fmtCost(v.totalCost, currency)}
                     </td>
-                    <td className="py-2 px-3 text-right text-gray-400">
+                    <td className="py-2 px-3 text-right text-[var(--text-muted)]">
                       {v.avgCPK != null ? `${currency} ${v.avgCPK.toFixed(4)}` : '-'}
                     </td>
                     <td className="py-2 px-3 text-center">

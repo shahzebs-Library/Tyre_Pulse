@@ -325,12 +325,12 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'blue', loading }) {
         <Icon size={20} />
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-gray-400 leading-tight">{label}</p>
+        <p className="text-xs text-[var(--text-muted)] leading-tight">{label}</p>
         {loading
-          ? <div className="h-6 w-24 bg-gray-700 rounded animate-pulse mt-1" />
+          ? <div className="h-6 w-24 bg-[var(--input-bg)] rounded animate-pulse mt-1" />
           : <p className={`text-lg font-bold leading-tight mt-0.5 ${c.val}`}>{value}</p>
         }
-        {sub && !loading && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
+        {sub && !loading && <p className="text-xs text-[var(--text-muted)] mt-0.5">{sub}</p>}
       </div>
     </div>
   )
@@ -620,10 +620,10 @@ export default function PredictiveMaintenance() {
   // ── Render ────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
         <div className="text-center space-y-3">
           <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-gray-400 text-sm">Loading predictive maintenance data...</p>
+          <p className="text-[var(--text-muted)] text-sm">Loading predictive maintenance data...</p>
         </div>
       </div>
     )
@@ -631,11 +631,11 @@ export default function PredictiveMaintenance() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="bg-gray-900 border border-red-800/50 rounded-xl p-8 max-w-md text-center space-y-3">
+      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
+        <div className="bg-[var(--surface-1)] border border-red-800/50 rounded-xl p-8 max-w-md text-center space-y-3">
           <AlertTriangle className="text-red-400 mx-auto" size={32} />
           <p className="text-red-300 font-semibold">Failed to load data</p>
-          <p className="text-gray-400 text-sm">{error}</p>
+          <p className="text-[var(--text-muted)] text-sm">{error}</p>
           <button onClick={loadData} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors">
             Retry
           </button>
@@ -671,10 +671,10 @@ export default function PredictiveMaintenance() {
 
       {/* ── Empty state ─────────────────────────────────────────────────────── */}
       {allPredictions.length === 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-          <CalendarClock className="text-gray-600 mx-auto mb-3" size={40} />
-          <p className="text-gray-300 font-semibold">No active tyre records found</p>
-          <p className="text-gray-500 text-sm mt-1">Upload tyre fitment data to generate replacement forecasts</p>
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-12 text-center">
+          <CalendarClock className="text-[var(--text-dim)] mx-auto mb-3" size={40} />
+          <p className="text-[var(--text-secondary)] font-semibold">No active tyre records found</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">Upload tyre fitment data to generate replacement forecasts</p>
         </div>
       )}
 
@@ -727,19 +727,19 @@ export default function PredictiveMaintenance() {
           </div>
 
           {/* ── Filters ────────────────────────────────────────────────────── */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
-              <Filter size={14} className="text-gray-400" />
-              <span className="text-sm font-medium text-gray-300">Filters</span>
+              <Filter size={14} className="text-[var(--text-muted)]" />
+              <span className="text-sm font-medium text-[var(--text-secondary)]">Filters</span>
             </div>
             <div className="flex flex-wrap gap-3">
               {/* Site */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-500">Site</label>
+                <label className="text-xs text-[var(--text-muted)]">Site</label>
                 <select
                   value={siteFilter}
                   onChange={e => setSiteFilter(e.target.value)}
-                  className="bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+                  className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
                 >
                   {uniqueSites.map(s => (
                     <option key={s} value={s}>{s === 'all' ? 'All Sites' : s}</option>
@@ -749,11 +749,11 @@ export default function PredictiveMaintenance() {
 
               {/* Urgency */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-500">Urgency</label>
+                <label className="text-xs text-[var(--text-muted)]">Urgency</label>
                 <select
                   value={urgencyFilter}
                   onChange={e => setUrgencyFilter(e.target.value)}
-                  className="bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+                  className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
                 >
                   <option value="all">All Urgencies</option>
                   <option value="Urgent">Urgent</option>
@@ -765,11 +765,11 @@ export default function PredictiveMaintenance() {
               {/* Vehicle type */}
               {uniqueVehicleTypes.length > 1 && (
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-gray-500">Vehicle Type</label>
+                  <label className="text-xs text-[var(--text-muted)]">Vehicle Type</label>
                   <select
                     value={vehicleTypeFilter}
                     onChange={e => setVehicleTypeFilter(e.target.value)}
-                    className="bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+                    className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
                   >
                     {uniqueVehicleTypes.map(t => (
                       <option key={t} value={t}>{t === 'all' ? 'All Types' : t}</option>
@@ -780,7 +780,7 @@ export default function PredictiveMaintenance() {
 
               {/* Horizon */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-500">Horizon</label>
+                <label className="text-xs text-[var(--text-muted)]">Horizon</label>
                 <div className="flex gap-1">
                   {['30d','90d','6mo','12mo'].map(h => (
                     <button
@@ -789,7 +789,7 @@ export default function PredictiveMaintenance() {
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
                         horizonFilter === h
                           ? 'bg-blue-600 border-blue-500 text-white'
-                          : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                          : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-[var(--input-bg-hover)]'
                       }`}
                     >
                       {h}
@@ -800,8 +800,8 @@ export default function PredictiveMaintenance() {
 
               {/* Result count */}
               <div className="flex flex-col gap-1 ml-auto justify-end">
-                <p className="text-xs text-gray-500 text-right">Showing</p>
-                <p className="text-sm font-semibold text-gray-200 text-right">{fmt(filteredPredictions.length)} replacements</p>
+                <p className="text-xs text-[var(--text-muted)] text-right">Showing</p>
+                <p className="text-sm font-semibold text-[var(--text-secondary)] text-right">{fmt(filteredPredictions.length)} replacements</p>
               </div>
             </div>
           </div>
@@ -809,10 +809,10 @@ export default function PredictiveMaintenance() {
           {/* ── Charts row ──────────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             {/* Budget forecast line chart */}
-            <div className="xl:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <div className="xl:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
               <div className="mb-3">
-                <h2 className="text-sm font-semibold text-white">12-Month Budget Forecast</h2>
-                <p className="text-xs text-gray-500">Forecasted tyre replacement spend by month</p>
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">12-Month Budget Forecast</h2>
+                <p className="text-xs text-[var(--text-muted)]">Forecasted tyre replacement spend by month</p>
               </div>
               <div style={{ height: 240 }}>
                 <Line data={lineChartData} options={lineOpts(activeCurrency)} />
@@ -820,10 +820,10 @@ export default function PredictiveMaintenance() {
             </div>
 
             {/* Urgency bar chart */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
               <div className="mb-3">
-                <h2 className="text-sm font-semibold text-white">Replacement Urgency Distribution</h2>
-                <p className="text-xs text-gray-500">Active tyres by urgency horizon</p>
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Replacement Urgency Distribution</h2>
+                <p className="text-xs text-[var(--text-muted)]">Active tyres by urgency horizon</p>
               </div>
               <div style={{ height: 240 }}>
                 <Bar data={urgencyBarData} options={barOpts(activeCurrency)} />
@@ -840,34 +840,34 @@ export default function PredictiveMaintenance() {
               { label: 'Annual Total',               value: quarterlyForecast.total, color: 'from-green-900/30 to-green-800/10 border-green-800/40' },
             ].map(card => (
               <div key={card.label} className={`bg-gradient-to-br ${card.color} border rounded-xl p-4`}>
-                <p className="text-xs text-gray-400">{card.label}</p>
-                <p className="text-lg font-bold text-white mt-1">{fmtCurrency(card.value, activeCurrency)}</p>
+                <p className="text-xs text-[var(--text-muted)]">{card.label}</p>
+                <p className="text-lg font-bold text-[var(--text-primary)] mt-1">{fmtCurrency(card.value, activeCurrency)}</p>
               </div>
             ))}
           </div>
 
           {/* ── Upcoming Replacements Table ────────────────────────────────── */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-sm font-semibold text-white">Upcoming Replacements Calendar</h2>
-                <p className="text-xs text-gray-500">{fmt(filteredPredictions.length)} records · sorted by due date</p>
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Upcoming Replacements Calendar</h2>
+                <p className="text-xs text-[var(--text-muted)]">{fmt(filteredPredictions.length)} records · sorted by due date</p>
               </div>
             </div>
 
             {filteredPredictions.length === 0 ? (
               <div className="text-center py-10">
                 <CheckCircle className="text-green-500 mx-auto mb-2" size={28} />
-                <p className="text-gray-400 text-sm">No replacements due within selected horizon and filters</p>
+                <p className="text-[var(--text-muted)] text-sm">No replacements due within selected horizon and filters</p>
               </div>
             ) : (
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-gray-800">
+                      <tr className="border-b border-[var(--input-border)]">
                         {['Asset No','Site','Type','Position','Brand','Tread (mm)','KM Remaining','Due Date','Urgency','Est. Cost','Days Away'].map(h => (
-                          <th key={h} className="text-left text-gray-500 font-medium py-2 px-2 whitespace-nowrap">{h}</th>
+                          <th key={h} className="text-left text-[var(--text-muted)] font-medium py-2 px-2 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -875,31 +875,31 @@ export default function PredictiveMaintenance() {
                       {pagedRows.map((p, i) => (
                         <tr
                           key={`${p.id}-${i}`}
-                          className={`border-b border-gray-800/50 transition-colors ${
+                          className={`border-b border-[var(--input-border)]/50 transition-colors ${
                             p.urgency === 'Urgent'
                               ? 'bg-red-900/10 hover:bg-red-900/20'
                               : p.urgency === 'Soon'
                                 ? 'bg-amber-900/5 hover:bg-amber-900/15'
-                                : 'hover:bg-gray-800/40'
+                                : 'hover:bg-[var(--input-bg)]/40'
                           }`}
                         >
                           <td className="py-2 px-2 font-mono font-semibold text-blue-300">{p.asset_no}</td>
-                          <td className="py-2 px-2 text-gray-300">{p.site}</td>
-                          <td className="py-2 px-2 text-gray-400">{p.vehicle_type}</td>
-                          <td className="py-2 px-2 text-gray-300">{p.position}</td>
-                          <td className="py-2 px-2 text-gray-300">{p.brand}</td>
+                          <td className="py-2 px-2 text-[var(--text-secondary)]">{p.site}</td>
+                          <td className="py-2 px-2 text-[var(--text-muted)]">{p.vehicle_type}</td>
+                          <td className="py-2 px-2 text-[var(--text-secondary)]">{p.position}</td>
+                          <td className="py-2 px-2 text-[var(--text-secondary)]">{p.brand}</td>
                           <td className="py-2 px-2 text-center">
                             {p.tread_depth != null
                               ? <span className={`font-semibold ${p.tread_depth < URGENT_TREAD_MM ? 'text-red-400' : p.tread_depth < SOON_TREAD_MM ? 'text-amber-400' : 'text-green-400'}`}>{p.tread_depth}</span>
-                              : <span className="text-gray-600">-</span>
+                              : <span className="text-[var(--text-dim)]">-</span>
                             }
                           </td>
-                          <td className="py-2 px-2 text-right text-gray-300">{fmt(p.km_remaining)}</td>
-                          <td className="py-2 px-2 text-gray-300 whitespace-nowrap">{fmtDate(p.due_date)}</td>
+                          <td className="py-2 px-2 text-right text-[var(--text-secondary)]">{fmt(p.km_remaining)}</td>
+                          <td className="py-2 px-2 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(p.due_date)}</td>
                           <td className="py-2 px-2"><UrgencyBadge urgency={p.urgency} /></td>
-                          <td className="py-2 px-2 text-right font-semibold text-gray-200">{fmtCurrency(p.estimated_cost, activeCurrency)}</td>
+                          <td className="py-2 px-2 text-right font-semibold text-[var(--text-secondary)]">{fmtCurrency(p.estimated_cost, activeCurrency)}</td>
                           <td className="py-2 px-2 text-right">
-                            <span className={`font-semibold ${p.days_away <= 30 ? 'text-red-400' : p.days_away <= 90 ? 'text-amber-400' : 'text-gray-400'}`}>
+                            <span className={`font-semibold ${p.days_away <= 30 ? 'text-red-400' : p.days_away <= 90 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>
                               {p.days_away}d
                             </span>
                           </td>
@@ -911,15 +911,15 @@ export default function PredictiveMaintenance() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-800">
-                    <p className="text-xs text-gray-500">
+                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--input-border)]">
+                    <p className="text-xs text-[var(--text-muted)]">
                       Page {currentPage} of {totalPages} · {fmt(filteredPredictions.length)} total
                     </p>
                     <div className="flex gap-1">
                       <button
                         onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
-                        className="p-1.5 rounded bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
                         <ChevronLeft size={14} />
                       </button>
@@ -943,7 +943,7 @@ export default function PredictiveMaintenance() {
                             className={`px-2.5 py-1 rounded text-xs border transition-colors ${
                               currentPage === page
                                 ? 'bg-blue-600 border-blue-500 text-white'
-                                : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
+                                : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg-hover)]'
                             }`}
                           >
                             {page}
@@ -953,7 +953,7 @@ export default function PredictiveMaintenance() {
                       <button
                         onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages}
-                        className="p-1.5 rounded bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
                         <ChevronRight size={14} />
                       </button>
@@ -966,41 +966,41 @@ export default function PredictiveMaintenance() {
 
           {/* ── Site Breakdown Table ────────────────────────────────────────── */}
           {siteBreakdown.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
               <div className="mb-4">
-                <h2 className="text-sm font-semibold text-white">Site Breakdown - 12-Month Forecast</h2>
-                <p className="text-xs text-gray-500">Replacement demand and budget allocation by site</p>
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Site Breakdown - 12-Month Forecast</h2>
+                <p className="text-xs text-[var(--text-muted)]">Replacement demand and budget allocation by site</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-gray-800">
+                    <tr className="border-b border-[var(--input-border)]">
                       {['Site','Due ≤30d','Due ≤90d','Due ≤12mo','Forecast Cost','% of Budget'].map(h => (
-                        <th key={h} className="text-left text-gray-500 font-medium py-2 px-3 whitespace-nowrap">{h}</th>
+                        <th key={h} className="text-left text-[var(--text-muted)] font-medium py-2 px-3 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {siteBreakdown.map((s, i) => (
-                      <tr key={s.site} className="border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors">
-                        <td className="py-2 px-3 font-semibold text-gray-200">{s.site}</td>
+                      <tr key={s.site} className="border-b border-[var(--input-border)]/40 hover:bg-[var(--input-bg)]/30 transition-colors">
+                        <td className="py-2 px-3 font-semibold text-[var(--text-secondary)]">{s.site}</td>
                         <td className="py-2 px-3 text-center">
-                          <span className={`font-semibold ${s.due30 > 0 ? 'text-red-400' : 'text-gray-500'}`}>{s.due30}</span>
+                          <span className={`font-semibold ${s.due30 > 0 ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>{s.due30}</span>
                         </td>
                         <td className="py-2 px-3 text-center">
-                          <span className={`font-semibold ${s.due90 > 0 ? 'text-amber-400' : 'text-gray-500'}`}>{s.due90}</span>
+                          <span className={`font-semibold ${s.due90 > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]'}`}>{s.due90}</span>
                         </td>
-                        <td className="py-2 px-3 text-center text-gray-300">{s.due12mo}</td>
-                        <td className="py-2 px-3 text-right font-semibold text-gray-200">{fmtCurrency(s.cost, activeCurrency)}</td>
+                        <td className="py-2 px-3 text-center text-[var(--text-secondary)]">{s.due12mo}</td>
+                        <td className="py-2 px-3 text-right font-semibold text-[var(--text-secondary)]">{fmtCurrency(s.cost, activeCurrency)}</td>
                         <td className="py-2 px-3">
                           <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-gray-800 rounded-full h-1.5">
+                            <div className="flex-1 bg-[var(--input-bg)] rounded-full h-1.5">
                               <div
                                 className="bg-blue-500 h-1.5 rounded-full"
                                 style={{ width: `${Math.min(100, parseFloat(s.pct_budget))}%` }}
                               />
                             </div>
-                            <span className="text-gray-400 w-10 text-right">{s.pct_budget}%</span>
+                            <span className="text-[var(--text-muted)] w-10 text-right">{s.pct_budget}%</span>
                           </div>
                         </td>
                       </tr>
@@ -1013,44 +1013,44 @@ export default function PredictiveMaintenance() {
 
           {/* ── Vehicles Needing Immediate Attention ───────────────────────── */}
           {urgentVehicles.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
               <div className="flex items-center gap-2 mb-4">
                 <AlertTriangle className="text-red-400" size={16} />
                 <div>
-                  <h2 className="text-sm font-semibold text-white">Vehicles Needing Immediate Attention</h2>
-                  <p className="text-xs text-gray-500">Top 10 vehicles with highest urgent replacement count</p>
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">Vehicles Needing Immediate Attention</h2>
+                  <p className="text-xs text-[var(--text-muted)]">Top 10 vehicles with highest urgent replacement count</p>
                 </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-gray-800">
+                    <tr className="border-b border-[var(--input-border)]">
                       {['#','Asset No','Site','Type','Urgent','Soon','Forecast Cost','Recommended Action'].map(h => (
-                        <th key={h} className="text-left text-gray-500 font-medium py-2 px-2 whitespace-nowrap">{h}</th>
+                        <th key={h} className="text-left text-[var(--text-muted)] font-medium py-2 px-2 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {urgentVehicles.map((v, i) => (
-                      <tr key={v.asset_no} className="border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors">
-                        <td className="py-2 px-2 text-gray-500">{i + 1}</td>
+                      <tr key={v.asset_no} className="border-b border-[var(--input-border)]/40 hover:bg-[var(--input-bg)]/30 transition-colors">
+                        <td className="py-2 px-2 text-[var(--text-muted)]">{i + 1}</td>
                         <td className="py-2 px-2 font-mono font-semibold text-blue-300">{v.asset_no}</td>
-                        <td className="py-2 px-2 text-gray-300">{v.site}</td>
-                        <td className="py-2 px-2 text-gray-400">{v.vehicle_type}</td>
+                        <td className="py-2 px-2 text-[var(--text-secondary)]">{v.site}</td>
+                        <td className="py-2 px-2 text-[var(--text-muted)]">{v.vehicle_type}</td>
                         <td className="py-2 px-2 text-center">
                           {v.urgent_count > 0
                             ? <span className="px-1.5 py-0.5 bg-red-900/40 text-red-300 rounded font-bold">{v.urgent_count}</span>
-                            : <span className="text-gray-600">0</span>
+                            : <span className="text-[var(--text-dim)]">0</span>
                           }
                         </td>
                         <td className="py-2 px-2 text-center">
                           {v.soon_count > 0
                             ? <span className="px-1.5 py-0.5 bg-amber-900/40 text-amber-300 rounded font-bold">{v.soon_count}</span>
-                            : <span className="text-gray-600">0</span>
+                            : <span className="text-[var(--text-dim)]">0</span>
                           }
                         </td>
-                        <td className="py-2 px-2 text-right font-semibold text-gray-200">{fmtCurrency(v.total_cost, activeCurrency)}</td>
-                        <td className="py-2 px-2 text-gray-400 italic">{v.recommended_action}</td>
+                        <td className="py-2 px-2 text-right font-semibold text-[var(--text-secondary)]">{fmtCurrency(v.total_cost, activeCurrency)}</td>
+                        <td className="py-2 px-2 text-[var(--text-muted)] italic">{v.recommended_action}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1060,19 +1060,19 @@ export default function PredictiveMaintenance() {
           )}
 
           {/* ── Assumptions & Methodology ───────────────────────────────────── */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
             <button
               onClick={() => setAssumptionsOpen(o => !o)}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-800/40 transition-colors"
+              className="w-full flex items-center justify-between p-4 hover:bg-[var(--input-bg)]/40 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <Info className="text-blue-400" size={16} />
-                <span className="text-sm font-medium text-gray-300">Prediction Model Assumptions & Methodology</span>
+                <span className="text-sm font-medium text-[var(--text-secondary)]">Prediction Model Assumptions & Methodology</span>
               </div>
-              {assumptionsOpen ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
+              {assumptionsOpen ? <ChevronUp size={16} className="text-[var(--text-muted)]" /> : <ChevronDown size={16} className="text-[var(--text-muted)]" />}
             </button>
             {assumptionsOpen && (
-              <div className="px-4 pb-4 border-t border-gray-800">
+              <div className="px-4 pb-4 border-t border-[var(--input-border)]">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   {[
                     {
@@ -1102,13 +1102,13 @@ export default function PredictiveMaintenance() {
                         : 'vehicle_fleet table not available. Predictions are based on tyre_records history only.',
                     },
                   ].map(item => (
-                    <div key={item.title} className="bg-gray-800/40 rounded-lg p-3">
+                    <div key={item.title} className="bg-[var(--input-bg)]/40 rounded-lg p-3">
                       <p className="text-xs font-semibold text-blue-300 mb-1">{item.title}</p>
-                      <p className="text-xs text-gray-400 leading-relaxed">{item.body}</p>
+                      <p className="text-xs text-[var(--text-muted)] leading-relaxed">{item.body}</p>
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-gray-600 mt-3">
+                <p className="text-xs text-[var(--text-dim)] mt-3">
                   All forecasts are statistical estimates based on historical patterns. Actual replacement dates may vary due to road conditions, load factors, driver behaviour, and maintenance quality.
                 </p>
               </div>

@@ -990,7 +990,7 @@ export default function UserManagement() {
                         </td>
 
                         {/* Joined column */}
-                        <td className="table-cell text-gray-400 text-xs">
+                        <td className="table-cell text-[var(--text-muted)] text-xs">
                           <span className="flex items-center gap-1">
                             <Calendar size={11} />
                             {formatDate(u.created_at, t('usermgmt.states.na'))}
@@ -1012,7 +1012,7 @@ export default function UserManagement() {
                             <button
                               onClick={() => openEdit(u)}
                               title={t('usermgmt.actions.edit')}
-                              className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+                              className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg-hover)] transition-colors"
                             >
                               <Edit2 size={15} />
                             </button>
@@ -1052,22 +1052,22 @@ export default function UserManagement() {
 
       {activeTab === '__legacy_matrix__' && (
         <div className="card p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-700/60">
-            <h2 className="text-base font-semibold text-white">Feature Permission Matrix</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+          <div className="px-5 py-4 border-b border-[var(--input-border)]/60">
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Feature Permission Matrix</h2>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
               Read-only reference. Shows what each role can access across the platform.
             </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-700/60">
-                  <th className="table-header sticky left-0 bg-gray-900 z-10 min-w-44 text-left">
+                <tr className="border-b border-[var(--input-border)]/60">
+                  <th className="table-header sticky left-0 bg-[var(--surface-1)] z-10 min-w-44 text-left">
                     Feature
                   </th>
                   {ROLES.map(r => (
                     <th key={r} className="table-header text-center min-w-28">
-                      <span className={`badge text-xs ${ROLE_BADGE[r] ?? 'bg-gray-800 text-gray-400'}`}>
+                      <span className={`badge text-xs ${ROLE_BADGE[r] ?? 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
                         {r}
                       </span>
                     </th>
@@ -1078,9 +1078,9 @@ export default function UserManagement() {
                 {MATRIX_FEATURES.map((feature, idx) => (
                   <tr
                     key={feature}
-                    className={`border-b border-gray-800/60 ${idx % 2 !== 0 ? 'bg-gray-800/20' : ''}`}
+                    className={`border-b border-[var(--input-border)]/60 ${idx % 2 !== 0 ? 'bg-[var(--input-bg)]/20' : ''}`}
                   >
-                    <td className="table-cell sticky left-0 bg-gray-900 font-medium text-gray-300 text-sm">
+                    <td className="table-cell sticky left-0 bg-[var(--surface-1)] font-medium text-[var(--text-secondary)] text-sm">
                       {feature}
                     </td>
                     {ROLES.map(r => (
@@ -1093,7 +1093,7 @@ export default function UserManagement() {
               </tbody>
             </table>
           </div>
-          <div className="px-5 py-3 border-t border-gray-700/60 flex flex-wrap gap-5 text-xs">
+          <div className="px-5 py-3 border-t border-[var(--input-border)]/60 flex flex-wrap gap-5 text-xs">
             {[
               { label: 'Full access', cls: 'bg-green-900/40 text-green-400'   },
               { label: 'Read only',   cls: 'bg-blue-900/40 text-blue-400'     },
@@ -1104,12 +1104,12 @@ export default function UserManagement() {
                 <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cls}`}>
                   {label.split(' ')[0]}
                 </span>
-                <span className="text-gray-400">{label}</span>
+                <span className="text-[var(--text-muted)]">{label}</span>
               </span>
             ))}
             <span className="flex items-center gap-2">
-              <span className="text-gray-600 text-sm font-medium">-</span>
-              <span className="text-gray-400">No access</span>
+              <span className="text-[var(--text-dim)] text-sm font-medium">-</span>
+              <span className="text-[var(--text-muted)]">No access</span>
             </span>
           </div>
         </div>
@@ -1118,10 +1118,10 @@ export default function UserManagement() {
       {/* ── ACTIVITY TAB ─────────────────────────────────────────────────────── */}
       {activeTab === 'activity' && (
         <div className="card p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-700/60 flex items-center justify-between">
+          <div className="px-5 py-4 border-b border-[var(--input-border)]/60 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-white">{t('usermgmt.activity.title')}</h2>
-              <p className="text-xs text-gray-500 mt-0.5">{t('usermgmt.activity.subtitle')}</p>
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">{t('usermgmt.activity.title')}</h2>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">{t('usermgmt.activity.subtitle')}</p>
             </div>
             <button
               onClick={loadAuditLog}
@@ -1131,12 +1131,12 @@ export default function UserManagement() {
             </button>
           </div>
           {auditLoading ? (
-            <div className="px-5 py-12 text-center text-gray-500 text-sm">{t('usermgmt.activity.loading')}</div>
+            <div className="px-5 py-12 text-center text-[var(--text-muted)] text-sm">{t('usermgmt.activity.loading')}</div>
           ) : auditLog.length === 0 ? (
             <div className="px-5 py-14 text-center">
-              <Activity size={36} className="text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">{t('usermgmt.activity.noData')}</p>
-              <p className="text-gray-600 text-xs mt-1">
+              <Activity size={36} className="text-[var(--text-dim)] mx-auto mb-3" />
+              <p className="text-[var(--text-muted)] text-sm">{t('usermgmt.activity.noData')}</p>
+              <p className="text-[var(--text-dim)] text-xs mt-1">
                 {t('usermgmt.activity.noDataHint')}
               </p>
             </div>
@@ -1162,12 +1162,12 @@ export default function UserManagement() {
                     const actionLower = (entry.action ?? '').toLowerCase()
 
                     return (
-                      <tr key={entry.id} className="hover:bg-gray-800/50 transition-colors">
-                        <td className="table-cell text-xs text-gray-400 whitespace-nowrap">
+                      <tr key={entry.id} className="hover:bg-[var(--input-bg)]/50 transition-colors">
+                        <td className="table-cell text-xs text-[var(--text-muted)] whitespace-nowrap">
                           {formatDateTime(entry.created_at, t('usermgmt.states.na'))}
                         </td>
                         <td className="table-cell">
-                          <span className="text-sm text-white">{actorName}</span>
+                          <span className="text-sm text-[var(--text-primary)]">{actorName}</span>
                         </td>
                         <td className="table-cell">
                           <span className={`badge text-xs ${
@@ -1180,17 +1180,17 @@ export default function UserManagement() {
                             {entry.action ?? t('usermgmt.states.na')}
                           </span>
                         </td>
-                        <td className="table-cell text-gray-400 text-xs">
+                        <td className="table-cell text-[var(--text-muted)] text-xs">
                           {entry.table_name ?? t('usermgmt.states.na')}
                         </td>
-                        <td className="table-cell text-gray-400 text-xs text-center">
+                        <td className="table-cell text-[var(--text-muted)] text-xs text-center">
                           {entry.record_count ?? entry.rows_affected ?? t('usermgmt.states.na')}
                         </td>
                         <td className="table-cell">
                           {entry.details ? (
                             <button
                               onClick={() => setExpandedRow(isExpanded ? null : entry.id)}
-                              className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
+                              className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                             >
                               <ChevronDown
                                 size={13}
@@ -1199,10 +1199,10 @@ export default function UserManagement() {
                               {isExpanded ? t('usermgmt.activity.hide') : t('usermgmt.activity.show')}
                             </button>
                           ) : (
-                            <span className="text-gray-700 text-xs">{t('usermgmt.states.na')}</span>
+                            <span className="text-[var(--text-dim)] text-xs">{t('usermgmt.states.na')}</span>
                           )}
                           {isExpanded && entry.details && (
-                            <pre className="mt-2 text-[10px] text-gray-400 bg-gray-800 rounded p-2 max-w-xs overflow-x-auto whitespace-pre-wrap break-all">
+                            <pre className="mt-2 text-[10px] text-[var(--text-muted)] bg-[var(--input-bg)] rounded p-2 max-w-xs overflow-x-auto whitespace-pre-wrap break-all">
                               {typeof entry.details === 'string'
                                 ? entry.details
                                 : JSON.stringify(entry.details, null, 2)}
@@ -1239,28 +1239,28 @@ export default function UserManagement() {
             )}
 
             {/* Meta row */}
-            <div className="flex flex-wrap gap-4 text-xs text-gray-500 pb-1 border-b border-gray-800">
+            <div className="flex flex-wrap gap-4 text-xs text-[var(--text-muted)] pb-1 border-b border-[var(--input-border)]">
               {editTarget.email && (
                 <span className="flex items-center gap-1.5">
-                  <Mail size={11} className="text-gray-600" />
+                  <Mail size={11} className="text-[var(--text-dim)]" />
                   {editTarget.email}
                 </span>
               )}
               {editTarget.updated_at && (
                 <span className="flex items-center gap-1.5">
-                  <Clock size={11} className="text-gray-600" />
+                  <Clock size={11} className="text-[var(--text-dim)]" />
                   {t('usermgmt.editModal.updatedPrefix')} {formatDateTime(editTarget.updated_at, t('usermgmt.states.na'))}
                 </span>
               )}
               {editTarget.last_login_at && (
                 <span className="flex items-center gap-1.5">
-                  <LogIn size={11} className="text-gray-600" />
+                  <LogIn size={11} className="text-[var(--text-dim)]" />
                   {t('usermgmt.editModal.lastLoginPrefix')} {formatDateTime(editTarget.last_login_at, t('usermgmt.states.na'))}
                 </span>
               )}
               {editTarget.login_count > 0 && (
                 <span className="flex items-center gap-1.5">
-                  <Activity size={11} className="text-gray-600" />
+                  <Activity size={11} className="text-[var(--text-dim)]" />
                   {t('usermgmt.editModal.logins', { count: editTarget.login_count })}
                 </span>
               )}
@@ -1300,7 +1300,7 @@ export default function UserManagement() {
               </div>
               <div>
                 <label className="label">
-                  <Phone size={11} className="inline mr-1 text-gray-500" />{t('usermgmt.editModal.phone')}
+                  <Phone size={11} className="inline mr-1 text-[var(--text-muted)]" />{t('usermgmt.editModal.phone')}
                 </label>
                 <input
                   className="input"
@@ -1311,7 +1311,7 @@ export default function UserManagement() {
               </div>
               <div>
                 <label className="label">
-                  <MapPin size={11} className="inline mr-1 text-gray-500" />{t('usermgmt.editModal.site')}
+                  <MapPin size={11} className="inline mr-1 text-[var(--text-muted)]" />{t('usermgmt.editModal.site')}
                 </label>
                 <input
                   className="input"
@@ -1343,7 +1343,7 @@ export default function UserManagement() {
                   {ROLES.map(r => <option key={r} value={r}>{t(`roles.${r}`)}</option>)}
                 </select>
                 {editTarget.id === currentProfile?.id && (
-                  <p className="text-xs text-gray-500 mt-1">{t('usermgmt.editModal.cannotChangeOwnRole')}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">{t('usermgmt.editModal.cannotChangeOwnRole')}</p>
                 )}
               </div>
             </div>
@@ -1358,7 +1358,7 @@ export default function UserManagement() {
                     className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer text-xs font-medium transition-colors ${
                       (editForm.country ?? []).includes(c)
                         ? 'bg-green-900/40 text-green-300 border border-green-700/50'
-                        : 'bg-gray-800/50 text-gray-400 border border-gray-700/30 hover:border-gray-600'
+                        : 'bg-[var(--input-bg)]/50 text-[var(--text-muted)] border border-[var(--input-border)] hover:border-[var(--text-dim)]'
                     }`}
                   >
                     <input
@@ -1371,7 +1371,7 @@ export default function UserManagement() {
                   </label>
                 ))}
               </div>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-[var(--text-muted)] mt-2">
                 {(editForm.country ?? []).length === 0
                   ? t('usermgmt.editModal.noRestriction')
                   : t('usermgmt.editModal.restrictedTo', { countries: editForm.country.join(', ') })}
@@ -1381,7 +1381,7 @@ export default function UserManagement() {
             {/* Notes */}
             <div>
               <label className="label">
-                <FileText size={11} className="inline mr-1 text-gray-500" />{t('usermgmt.editModal.adminNotes')}
+                <FileText size={11} className="inline mr-1 text-[var(--text-muted)]" />{t('usermgmt.editModal.adminNotes')}
               </label>
               <textarea
                 className="input min-h-[72px] resize-y text-sm"
@@ -1393,10 +1393,10 @@ export default function UserManagement() {
 
             {/* Toggles */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center justify-between bg-gray-800/40 rounded-lg px-4 py-3">
+              <div className="flex items-center justify-between bg-[var(--input-bg)]/40 rounded-lg px-4 py-3">
                 <div>
-                  <p className="text-sm text-white font-medium">{t('usermgmt.editModal.approvedToggle')}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{t('usermgmt.editModal.approvedHint')}</p>
+                  <p className="text-sm text-[var(--text-primary)] font-medium">{t('usermgmt.editModal.approvedToggle')}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">{t('usermgmt.editModal.approvedHint')}</p>
                 </div>
                 <Toggle
                   checked={editForm.approved ?? true}
@@ -1406,10 +1406,10 @@ export default function UserManagement() {
               <div className={`flex items-center justify-between rounded-lg px-4 py-3 ${editForm.locked ? 'bg-red-900/20 border border-red-700/30' : 'bg-gray-800/40'}`}>
                 <div>
                   <p className="text-sm text-white font-medium flex items-center gap-1.5">
-                    <Lock size={13} className={editForm.locked ? 'text-red-400' : 'text-gray-500'} />
+                    <Lock size={13} className={editForm.locked ? 'text-red-400' : 'text-[var(--text-muted)]'} />
                     {t('usermgmt.editModal.lockedToggle')}
                   </p>
-                  <p className="text-xs text-gray-500 mt-0.5">{t('usermgmt.editModal.lockedHint')}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">{t('usermgmt.editModal.lockedHint')}</p>
                 </div>
                 <Toggle
                   checked={editForm.locked ?? false}

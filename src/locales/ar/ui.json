@@ -15,11 +15,13 @@
     "brand": "بحث TyrePulse"
   },
   "command": {
-    "placeholder": "ابحث في الصفحات والإجراءات... ({key}K)",
+    "placeholder": "ابحث في الصفحات والإجراءات والسجلات... ({key}K)",
+    "searchError": "البحث في السجلات غير متاح حاليًا. تحقق من الاتصال وحاول مرة أخرى.",
     "groups": {
       "recent": "الأخيرة",
       "actions": "الإجراءات",
-      "navigation": "التنقل"
+      "navigation": "التنقل",
+      "commands": "الأوامر"
     }
   },
   "hints": {

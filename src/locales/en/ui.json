@@ -15,11 +15,13 @@
     "brand": "TyrePulse Search"
   },
   "command": {
-    "placeholder": "Search pages, actions... ({key}K)",
+    "placeholder": "Search pages, actions, records... ({key}K)",
+    "searchError": "Record search is unavailable right now. Check your connection and try again.",
     "groups": {
       "recent": "Recent",
       "actions": "Actions",
-      "navigation": "Navigation"
+      "navigation": "Navigation",
+      "commands": "Commands"
     }
   },
   "hints": {

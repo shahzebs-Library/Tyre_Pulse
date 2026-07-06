@@ -645,7 +645,7 @@ export default function Layout({ children }) {
               {/* Search */}
               <div className="px-2.5 pt-3 pb-1">
                 <button
-                  onClick={() => setGlobalSearchOpen(true)}
+                  onClick={() => setCmdOpen(true)}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-gray-500 hover:text-green-400 transition-all duration-200 text-xs group"
                   style={{
                     background: 'rgba(22,163,74,0.04)',

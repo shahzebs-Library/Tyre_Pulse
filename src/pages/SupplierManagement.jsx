@@ -1,5 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { contractFormSchema } from '../lib/validation/schemas'
+import { FormField, FormDate, FormActions } from '../components/forms'
 import * as supplierApi from '../lib/api/supplierManagementApi'
 import { recordCost } from '../lib/analyticsEngine'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -251,21 +255,30 @@ function CpkBadge({ cpk, currency }) {
 // ── Contract Modal ─────────────────────────────────────────────────────────────
 function ContractModal({ contract, onSave, onClose }) {
   const { t } = useLanguage()
-  const [form, setForm] = useState(contract || {
-    supplier_name: '', contract_start: '', contract_end: '', payment_terms: '',
-    price_per_unit: '', min_order: '', notes: '',
-  })
-  const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
-  function set(k, v) { setForm(prev => ({ ...prev, [k]: v })) }
-  async function submit(e) {
-    e.preventDefault()
-    setSaving(true)
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(contractFormSchema),
+    defaultValues: {
+      supplier_name: contract?.supplier_name ?? '',
+      contract_start: contract?.contract_start ?? '',
+      contract_end: contract?.contract_end ?? '',
+      payment_terms: contract?.payment_terms ?? '',
+      price_per_unit: contract?.price_per_unit ?? '',
+      min_order: contract?.min_order ?? '',
+      notes: contract?.notes ?? '',
+    },
+  })
+
+  async function submit(values) {
     setSaveError(null)
-    const err = await onSave(form)
-    setSaving(false)
+    const err = await onSave(contract?.id ? { ...values, id: contract.id } : values)
     if (err) setSaveError(err)
   }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <motion.div
@@ -275,57 +288,66 @@ function ContractModal({ contract, onSave, onClose }) {
         className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-lg shadow-2xl"
       >
         <div className="flex items-center justify-between p-5 border-b border-[var(--input-border)]">
-          <h3 className="font-semibold text-[var(--text-primary)]">{form.id ? t('suppliers.contractModal.editTitle') : t('suppliers.contractModal.addTitle')}</h3>
+          <h3 className="font-semibold text-[var(--text-primary)]">{contract?.id ? t('suppliers.contractModal.editTitle') : t('suppliers.contractModal.addTitle')}</h3>
           <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)]"><X size={18} /></button>
         </div>
-        <form onSubmit={submit} className="p-5 grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.supplierName')}</label>
-            <input required value={form.supplier_name} onChange={e => set('supplier_name', e.target.value)}
-              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.contractStart')}</label>
-            <input type="date" value={form.contract_start} onChange={e => set('contract_start', e.target.value)}
-              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.contractEnd')}</label>
-            <input type="date" value={form.contract_end} onChange={e => set('contract_end', e.target.value)}
-              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.paymentTerms')}</label>
-            <input value={form.payment_terms} onChange={e => set('payment_terms', e.target.value)}
-              placeholder={t('suppliers.contractModal.paymentTermsPlaceholder')} className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.pricePerUnit')}</label>
-            <input type="number" value={form.price_per_unit} onChange={e => set('price_per_unit', e.target.value)}
-              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
-          </div>
-          <div>
-            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.minOrderQty')}</label>
-            <input type="number" value={form.min_order} onChange={e => set('min_order', e.target.value)}
-              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500" />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-xs text-[var(--text-muted)] mb-1">{t('suppliers.contractModal.notes')}</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
-              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 resize-none" />
-          </div>
+        <form onSubmit={handleSubmit(submit)} noValidate className="p-5 grid grid-cols-2 gap-3">
+          <FormField
+            label={t('suppliers.contractModal.supplierName')}
+            required
+            wrapperClassName="col-span-2"
+            error={errors.supplier_name}
+            {...register('supplier_name')}
+          />
+          <FormDate
+            label={t('suppliers.contractModal.contractStart')}
+            error={errors.contract_start}
+            {...register('contract_start')}
+          />
+          <FormDate
+            label={t('suppliers.contractModal.contractEnd')}
+            error={errors.contract_end}
+            {...register('contract_end')}
+          />
+          <FormField
+            label={t('suppliers.contractModal.paymentTerms')}
+            placeholder={t('suppliers.contractModal.paymentTermsPlaceholder')}
+            error={errors.payment_terms}
+            {...register('payment_terms')}
+          />
+          <FormField
+            label={t('suppliers.contractModal.pricePerUnit')}
+            type="number"
+            error={errors.price_per_unit}
+            {...register('price_per_unit')}
+          />
+          <FormField
+            label={t('suppliers.contractModal.minOrderQty')}
+            type="number"
+            error={errors.min_order}
+            {...register('min_order')}
+          />
+          <FormField
+            label={t('suppliers.contractModal.notes')}
+            multiline
+            rows={2}
+            wrapperClassName="col-span-2"
+            error={errors.notes}
+            {...register('notes')}
+          />
           {saveError && (
             <div className="col-span-2 flex items-center gap-2 text-xs text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
               <AlertTriangle size={13} className="flex-shrink-0" /> {saveError}
             </div>
           )}
-          <div className="col-span-2 flex gap-2 justify-end pt-1">
-            <button type="button" onClick={onClose} disabled={saving} className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--input-bg)] rounded-lg disabled:opacity-50">{t('suppliers.contractModal.cancel')}</button>
-            <button type="submit" disabled={saving} className="btn-primary gap-1.5 disabled:opacity-50">
-              {saving && <Loader2 size={13} className="animate-spin" />}
-              {saving ? t('suppliers.contractModal.saving') : t('suppliers.contractModal.save')}
-            </button>
-          </div>
+          <FormActions
+            className="col-span-2"
+            saving={isSubmitting}
+            onCancel={onClose}
+            submitLabel={t('suppliers.contractModal.save')}
+            savingLabel={t('suppliers.contractModal.saving')}
+            cancelLabel={t('suppliers.contractModal.cancel')}
+          />
         </form>
       </motion.div>
     </div>

@@ -24,9 +24,13 @@ installing. Approve the server when prompted (project-scoped servers require
 per-user approval before they run).
 
 ## Notes
-- The config uses the bare command name (`codebase-memory-mcp`), not an absolute
-  path, so it resolves per-machine via `PATH` rather than hardcoding one user's
-  home directory.
+- The config points at `${HOME}/.local/bin/codebase-memory-mcp` — the installer's
+  default location. Using the absolute path (Claude Code expands `${HOME}`) avoids
+  the most common failure: GUI-launched editors not having `~/.local/bin` on
+  `PATH`, which makes a bare-command config silently fail to start.
+  - **Windows:** the binary installs elsewhere — set this `command` to the path
+    printed by `install.ps1` (or override the `env`/path for your machine).
+  - **Custom install dir:** if you install with `--dir`, update this path to match.
 - Optional env vars (set in your shell or the `.mcp.json` `env` block if desired):
   `CBM_CACHE_DIR` (db location, default `~/.cache/codebase-memory-mcp`),
   `CBM_LOG_LEVEL`, `CBM_DIAGNOSTICS=1`.

@@ -8,7 +8,7 @@
       }
     },
     "codebase-memory": {
-      "command": "codebase-memory-mcp",
+      "command": "${HOME}/.local/bin/codebase-memory-mcp",
       "args": []
     }
   }

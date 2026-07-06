@@ -64,9 +64,9 @@ function IssueSection({ icon: Icon, title, count, color = 'text-yellow-400', bgC
       <div className="flex items-center justify-between cursor-pointer select-none" onClick={() => count > 0 && setExpanded(e => !e)}>
         <div className="flex items-center gap-3">
           <Icon size={18} className={color} />
-          <span className="font-medium text-white">{title}</span>
+          <span className="font-medium text-[var(--text-primary)]">{title}</span>
           {loading ? (
-            <span className="text-xs text-gray-500 animate-pulse">Checking...</span>
+            <span className="text-xs text-[var(--text-muted)] animate-pulse">Checking...</span>
           ) : (
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${count > 0 ? bgColor + ' ' + color : 'bg-green-900/20 border-green-700/40 text-green-400'}`}>
               {count > 0 ? `${count} issue${count !== 1 ? 's' : ''}` : 'Clean'}
@@ -75,11 +75,11 @@ function IssueSection({ icon: Icon, title, count, color = 'text-yellow-400', bgC
         </div>
         <div className="flex items-center gap-2">
           {action}
-          {count > 0 && (expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />)}
+          {count > 0 && (expanded ? <ChevronUp size={16} className="text-[var(--text-muted)]" /> : <ChevronDown size={16} className="text-[var(--text-muted)]" />)}
         </div>
       </div>
       {expanded && count > 0 && (
-        <div className="mt-3 border-t border-gray-800 pt-3">
+        <div className="mt-3 border-t border-[var(--card-border)] pt-3">
           {children}
         </div>
       )}
@@ -129,10 +129,10 @@ function Toast({ message, type = 'error', onClose }) {
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18} /></button>
+      <div className="bg-[var(--surface-1)] border border-[var(--card-border)] rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--card-border)]">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-6">{children}</div>
       </div>
@@ -762,16 +762,16 @@ export default function DataCleaning() {
         <div className="flex gap-3">
           <div className="card py-2 px-4 text-center">
             <p className="text-xl font-bold text-yellow-400">{stats.pending.toLocaleString()}</p>
-            <p className="text-xs text-gray-400">Pending</p>
+            <p className="text-xs text-[var(--text-muted)]">Pending</p>
           </div>
           <div className="card py-2 px-4 text-center">
             <p className="text-xl font-bold text-green-400">{stats.cleaned.toLocaleString()}</p>
-            <p className="text-xs text-gray-400">Cleaned</p>
+            <p className="text-xs text-[var(--text-muted)]">Cleaned</p>
           </div>
           {qualityScore !== null && (
             <div className={`card py-2 px-4 text-center border ${scoreBg(qualityScore)}`}>
               <p className={`text-xl font-bold ${scoreColor(qualityScore)}`}>{qualityScore}%</p>
-              <p className="text-xs text-gray-400">Quality</p>
+              <p className="text-xs text-[var(--text-muted)]">Quality</p>
             </div>
           )}
         </div>
@@ -786,14 +786,14 @@ export default function DataCleaning() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-0 border-b border-gray-800">
+      <div className="flex gap-0 border-b border-[var(--card-border)]">
         {[
           ['pending', 'Pending Classification'],
           ['cleaned', 'Already Cleaned'],
           ['quality', 'Quality Intelligence'],
         ].map(([val, label]) => (
           <button key={val} onClick={() => { setTab(val); setPage(0) }}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === val ? 'border-green-500 text-green-400' : 'border-transparent text-gray-400 hover:text-white'}`}>
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === val ? 'border-green-500 text-green-400' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
             {val === 'quality' && qualityScore !== null ? (
               <span className="flex items-center gap-1.5">
                 {label}
@@ -823,7 +823,7 @@ export default function DataCleaning() {
                 <CheckCheck size={15} className="text-green-400" /> Approve All {stats.pending.toLocaleString()}
               </button>
             )}
-            <span className="text-sm text-gray-400">{selected.size} selected</span>
+            <span className="text-sm text-[var(--text-muted)]">{selected.size} selected</span>
             <button onClick={() => allSelected ? setSelected(new Set()) : setSelected(new Set(classified.map(r => r.id)))}
               className="btn-secondary py-1.5 px-3 text-sm">
               {allSelected ? 'Clear' : 'Select All'}
@@ -836,18 +836,18 @@ export default function DataCleaning() {
 
           {approveAllProgress && (
             <div className="card">
-              <p className="text-white font-medium mb-2">Approving all pending records...</p>
+              <p className="text-[var(--text-primary)] font-medium mb-2">Approving all pending records...</p>
               <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
                 <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${(approveAllProgress.done / approveAllProgress.total) * 100}%` }} />
               </div>
-              <p className="text-gray-400 text-sm mt-1">{approveAllProgress.done.toLocaleString()} / {approveAllProgress.total.toLocaleString()}</p>
+              <p className="text-[var(--text-muted)] text-sm mt-1">{approveAllProgress.done.toLocaleString()} / {approveAllProgress.total.toLocaleString()}</p>
             </div>
           )}
 
           {loading ? (
-            <div className="text-center py-16 text-gray-500">Classifying records...</div>
+            <div className="text-center py-16 text-[var(--text-muted)]">Classifying records...</div>
           ) : classified.length === 0 ? (
-            <div className="text-center py-16 text-gray-500">
+            <div className="text-center py-16 text-[var(--text-muted)]">
               {totalPending === 0 ? '✅ All records have been classified!' : 'No records match the current filter.'}
             </div>
           ) : (
@@ -856,7 +856,7 @@ export default function DataCleaning() {
                 const result = getResult(r.id)
                 const isSel  = selected.has(r.id)
                 return (
-                  <div key={r.id} className={`card cursor-pointer transition-all ${isSel ? 'border-green-600/60 bg-green-950/20' : 'hover:border-gray-700'}`}
+                  <div key={r.id} className={`card cursor-pointer transition-all ${isSel ? 'border-green-600/60 bg-green-950/20' : 'hover:border-[var(--card-border)]'}`}
                     onClick={() => toggleSelect(r.id)}>
                     <div className="flex items-start gap-4">
                       <div className={`w-5 h-5 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors ${isSel ? 'bg-green-700 border-green-600' : 'border-gray-600'}`}>
@@ -864,12 +864,12 @@ export default function DataCleaning() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap gap-2 items-baseline">
-                          <span className="font-medium text-white">{r.original_description || '-'}</span>
+                          <span className="font-medium text-[var(--text-primary)]">{r.original_description || '-'}</span>
                           {r.original_remarks && r.original_remarks !== r.original_description && (
-                            <span className="text-gray-500 text-xs">"{r.original_remarks.slice(0, 80)}{r.original_remarks.length > 80 ? '...' : ''}"</span>
+                            <span className="text-[var(--text-muted)] text-xs">"{r.original_remarks.slice(0, 80)}{r.original_remarks.length > 80 ? '...' : ''}"</span>
                           )}
                         </div>
-                        <div className="flex gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+                        <div className="flex gap-3 mt-1 text-xs text-[var(--text-muted)] flex-wrap">
                           {r.site && <span>📍 {r.site}</span>}
                           {r.asset_no && <span>🚛 {r.asset_no}</span>}
                           {r.brand && <span>🏷 {r.brand}</span>}
@@ -877,26 +877,26 @@ export default function DataCleaning() {
                         </div>
                         {result?.matched_keywords?.length > 0 && (
                           <div className="flex gap-1 mt-2 flex-wrap">
-                            {result.matched_keywords.map((kw, i) => <span key={i} className="bg-gray-800 text-gray-400 text-xs px-1.5 py-0.5 rounded">{kw}</span>)}
+                            {result.matched_keywords.map((kw, i) => <span key={i} className="bg-[var(--input-bg)] text-[var(--text-muted)] text-xs px-1.5 py-0.5 rounded">{kw}</span>)}
                           </div>
                         )}
                         {result?.remarks_cleaned && (
-                          <div className="mt-2 text-xs text-gray-400 bg-gray-800/60 rounded px-3 py-1.5">
-                            <span className="text-gray-600 mr-1">Cleaned:</span>{result.remarks_cleaned}
+                          <div className="mt-2 text-xs text-[var(--text-muted)] bg-[var(--input-bg)]/60 rounded px-3 py-1.5">
+                            <span className="text-[var(--text-dim)] mr-1">Cleaned:</span>{result.remarks_cleaned}
                           </div>
                         )}
                       </div>
                       <div className="flex-shrink-0 flex flex-col gap-2 items-end" onClick={e => e.stopPropagation()}>
-                        <span className={`text-xs font-medium ${CONFIDENCE_COLOUR[result?.confidence] ?? 'text-gray-500'}`}>{result?.confidence ?? '-'} confidence</span>
-                        <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-600"
+                        <span className={`text-xs font-medium ${CONFIDENCE_COLOUR[result?.confidence] ?? 'text-[var(--text-muted)]'}`}>{result?.confidence ?? '-'} confidence</span>
+                        <select className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-primary)] text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-600"
                           value={result?.category ?? ''} onChange={e => setOverride(r.id, 'category', e.target.value)}>
                           {ALL_CATEGORY_LABELS.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
-                        <select className="bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-600"
+                        <select className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-primary)] text-xs rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-green-600"
                           value={result?.risk_level ?? ''} onChange={e => setOverride(r.id, 'risk_level', e.target.value)}>
                           {['Critical', 'High', 'Medium', 'Low'].map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
-                        <span className={`badge text-xs ${RISK_COLOUR[result?.risk_level] ?? 'bg-gray-800 text-gray-400'}`}>{result?.risk_level ?? '-'}</span>
+                        <span className={`badge text-xs ${RISK_COLOUR[result?.risk_level] ?? 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>{result?.risk_level ?? '-'}</span>
                       </div>
                     </div>
                   </div>
@@ -907,12 +907,12 @@ export default function DataCleaning() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-[var(--text-muted)]">
                 Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, totalPending)} of {totalPending.toLocaleString()} pending
               </p>
               <div className="flex items-center gap-2">
                 <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="btn-secondary py-1.5 px-3 disabled:opacity-40"><ChevronLeft size={16} /></button>
-                <span className="text-sm text-gray-400">Page {page + 1} of {totalPages}</span>
+                <span className="text-sm text-[var(--text-muted)]">Page {page + 1} of {totalPages}</span>
                 <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="btn-secondary py-1.5 px-3 disabled:opacity-40"><ChevronRight size={16} /></button>
               </div>
             </div>
@@ -933,34 +933,34 @@ export default function DataCleaning() {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm text-gray-400">{cleanedSelected.size} selected</span>
+            <span className="text-sm text-[var(--text-muted)]">{cleanedSelected.size} selected</span>
             {cleanedSelected.size > 0 && (
               <>
                 <button onClick={runReclassify} disabled={saving}
                   className="btn-secondary flex items-center gap-2 text-sm disabled:opacity-40">
                   <RefreshCw size={14} /> Re-classify {cleanedSelected.size} Selected
                 </button>
-                <button onClick={() => setCleanedSelected(new Set())} className="text-gray-400 hover:text-white text-sm">Clear</button>
+                <button onClick={() => setCleanedSelected(new Set())} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm">Clear</button>
               </>
             )}
           </div>
 
           {reclassifyProposed && (
             <div className="card">
-              <h3 className="font-semibold text-white mb-3">Proposed Re-classification</h3>
+              <h3 className="font-semibold text-[var(--text-primary)] mb-3">Proposed Re-classification</h3>
               <div className="space-y-2 mb-4">
                 {reclassifyProposed.map(r => (
-                  <div key={r.id} className={`flex items-center gap-4 px-3 py-2 rounded-lg text-sm ${r.changed ? 'bg-yellow-900/20 border border-yellow-700/40' : 'bg-gray-800/40'}`}>
-                    <span className="text-gray-300 flex-1">{r.original_description?.slice(0, 60) ?? '-'}</span>
+                  <div key={r.id} className={`flex items-center gap-4 px-3 py-2 rounded-lg text-sm ${r.changed ? 'bg-yellow-900/20 border border-yellow-700/40' : 'bg-[var(--input-bg)]/40'}`}>
+                    <span className="text-[var(--text-secondary)] flex-1">{r.original_description?.slice(0, 60) ?? '-'}</span>
                     {r.changed ? (
                       <>
-                        <span className="text-gray-500 line-through text-xs">{r.orig_category}</span>
+                        <span className="text-[var(--text-muted)] line-through text-xs">{r.orig_category}</span>
                         <span className="text-yellow-300 text-xs">→ {r.category}</span>
-                        <span className="text-gray-500 line-through text-xs">{r.orig_risk}</span>
+                        <span className="text-[var(--text-muted)] line-through text-xs">{r.orig_risk}</span>
                         <span className="text-yellow-300 text-xs">→ {r.risk_level}</span>
                       </>
                     ) : (
-                      <span className="text-gray-500 text-xs">No change</span>
+                      <span className="text-[var(--text-muted)] text-xs">No change</span>
                     )}
                   </div>
                 ))}
@@ -975,7 +975,7 @@ export default function DataCleaning() {
           )}
 
           {loading ? <SkeletonTable rows={8} cols={6} /> : cleanedRecords.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">No cleaned records yet</div>
+            <div className="text-center py-12 text-[var(--text-muted)]">No cleaned records yet</div>
           ) : (
             <div className="card p-0 overflow-hidden">
               <div className="overflow-x-auto">
@@ -995,21 +995,21 @@ export default function DataCleaning() {
                   </thead>
                   <tbody>
                     {cleanedPaged.map(r => (
-                      <tr key={r.id} className={`transition-colors ${cleanedSelected.has(r.id) ? 'bg-green-950/30' : 'hover:bg-gray-800/30'}`}>
+                      <tr key={r.id} className={`transition-colors ${cleanedSelected.has(r.id) ? 'bg-green-950/30' : 'hover:bg-[var(--input-bg)]/30'}`}>
                         <td className="table-cell">
                           <input type="checkbox" className="rounded border-gray-600 bg-gray-700"
                             checked={cleanedSelected.has(r.id)} onChange={() => setCleanedSelected(s => { const n = new Set(s); n.has(r.id) ? n.delete(r.id) : n.add(r.id); return n })} />
                         </td>
-                        <td className="table-cell font-medium text-white">{r.asset_no ?? '-'}</td>
+                        <td className="table-cell font-medium text-[var(--text-primary)]">{r.asset_no ?? '-'}</td>
                         <td className="table-cell">{r.brand ?? '-'}</td>
                         <td className="table-cell">{r.site ?? '-'}</td>
                         <td className="table-cell">{r.category ?? '-'}</td>
                         <td className="table-cell">{r.risk_level ? <span className={`badge ${RISK_COLOUR[r.risk_level]}`}>{r.risk_level}</span> : '-'}</td>
-                        <td className="table-cell text-gray-400 text-xs max-w-xs truncate">{r.remarks_cleaned ?? '-'}</td>
-                        <td className="py-2 pr-3 text-gray-500 text-xs max-w-48 truncate" title={r.remarks || r.description}>
+                        <td className="table-cell text-[var(--text-muted)] text-xs max-w-xs truncate">{r.remarks_cleaned ?? '-'}</td>
+                        <td className="py-2 pr-3 text-[var(--text-muted)] text-xs max-w-48 truncate" title={r.remarks || r.description}>
                           {(r.remarks || r.description || '-').slice(0, 60)}{(r.remarks || r.description || '').length > 60 ? '...' : ''}
                         </td>
-                        <td className="table-cell text-gray-500">{r.issue_date ?? '-'}</td>
+                        <td className="table-cell text-[var(--text-muted)]">{r.issue_date ?? '-'}</td>
                         <td className="table-cell">
                           <button
                             onClick={() => undoClassification(r)}
@@ -1025,18 +1025,18 @@ export default function DataCleaning() {
                 </table>
               </div>
               {cleanedFiltered.length > CLEANED_PAGE_SIZE && (
-                <div className="flex items-center justify-between mt-3 px-4 pb-3 text-sm text-gray-500">
+                <div className="flex items-center justify-between mt-3 px-4 pb-3 text-sm text-[var(--text-muted)]">
                   <span>{cleanedFiltered.length} records · page {cleanedPage} of {Math.ceil(cleanedFiltered.length / CLEANED_PAGE_SIZE)}</span>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setCleanedPage(p => Math.max(1, p - 1))}
                       disabled={cleanedPage === 1}
-                      className="px-3 py-1 rounded bg-gray-800 border border-gray-700 disabled:opacity-40 hover:bg-gray-700"
+                      className="px-3 py-1 rounded bg-[var(--input-bg)] border border-[var(--input-border)] disabled:opacity-40 hover:bg-[var(--input-bg-hover)]"
                     >← Prev</button>
                     <button
                       onClick={() => setCleanedPage(p => Math.min(Math.ceil(cleanedFiltered.length / CLEANED_PAGE_SIZE), p + 1))}
                       disabled={cleanedPage >= Math.ceil(cleanedFiltered.length / CLEANED_PAGE_SIZE)}
-                      className="px-3 py-1 rounded bg-gray-800 border border-gray-700 disabled:opacity-40 hover:bg-gray-700"
+                      className="px-3 py-1 rounded bg-[var(--input-bg)] border border-[var(--input-border)] disabled:opacity-40 hover:bg-[var(--input-bg-hover)]"
                     >Next →</button>
                   </div>
                 </div>
@@ -1050,7 +1050,7 @@ export default function DataCleaning() {
       {tab === 'quality' && (
         <div className="space-y-4">
           {/* Quality Score Dashboard */}
-          <div className={`card border ${qualityScore !== null ? scoreBg(qualityScore) : 'border-gray-700'}`}>
+          <div className={`card border ${qualityScore !== null ? scoreBg(qualityScore) : 'border-[var(--card-border)]'}`}>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="relative w-20 h-20 flex-shrink-0">
@@ -1070,13 +1070,13 @@ export default function DataCleaning() {
                     {qualityScore !== null ? (
                       <span className={`text-lg font-bold ${scoreColor(qualityScore)}`}>{qualityScore}%</span>
                     ) : (
-                      <span className="text-gray-500 text-sm animate-pulse">...</span>
+                      <span className="text-[var(--text-muted)] text-sm animate-pulse">...</span>
                     )}
                   </div>
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-white">Overall Data Quality Score</h2>
-                  <p className="text-gray-400 text-sm">
+                  <h2 className="text-lg font-bold text-[var(--text-primary)]">Overall Data Quality Score</h2>
+                  <p className="text-[var(--text-muted)] text-sm">
                     {qualityScore === null ? 'Computing across 7 quality checks...' :
                       qualityScore >= 85 ? 'Fleet data quality is healthy' :
                       qualityScore >= 70 ? 'Moderate quality issues detected - action recommended' :
@@ -1084,11 +1084,11 @@ export default function DataCleaning() {
                   </p>
                   {prevScore && qualityScore !== null && (
                     <div className="mt-1 flex items-center gap-2">
-                      <span className="text-xs text-gray-500">vs last cached:</span>
-                      <span className={`text-xs font-semibold ${qualityScore > prevScore.score ? 'text-green-400' : qualityScore < prevScore.score ? 'text-red-400' : 'text-gray-400'}`}>
+                      <span className="text-xs text-[var(--text-muted)]">vs last cached:</span>
+                      <span className={`text-xs font-semibold ${qualityScore > prevScore.score ? 'text-green-400' : qualityScore < prevScore.score ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
                         {qualityScore > prevScore.score ? `+${qualityScore - prevScore.score}` : qualityScore < prevScore.score ? `${qualityScore - prevScore.score}` : '0'} pts
                       </span>
-                      <span className="text-xs text-gray-600">({formatDate(prevScore.ts)})</span>
+                      <span className="text-xs text-[var(--text-dim)]">({formatDate(prevScore.ts)})</span>
                     </div>
                   )}
                 </div>
@@ -1101,9 +1101,9 @@ export default function DataCleaning() {
                   { label: 'Duplicates', value: duplicateSerial?.groupCount ?? '...', color: (duplicateSerial?.groupCount ?? 0) > 0 ? 'text-orange-400' : 'text-green-400' },
                   { label: 'Odometer Errors', value: odometerIssues?.count ?? '...', color: (odometerIssues?.count ?? 0) > 0 ? 'text-red-400' : 'text-green-400' },
                 ].map(s => (
-                  <div key={s.label} className="card py-2 px-3 text-center bg-gray-800/60 border-gray-700 min-w-[90px]">
+                  <div key={s.label} className="card py-2 px-3 text-center bg-[var(--input-bg)]/60 border-[var(--card-border)] min-w-[90px]">
                     <p className={`text-base font-bold ${s.color}`}>{s.value}</p>
-                    <p className="text-xs text-gray-500">{s.label}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{s.label}</p>
                   </div>
                 ))}
               </div>
@@ -1129,12 +1129,12 @@ export default function DataCleaning() {
                 { key: 'unrealisticLife', label: 'Tyre Life', weight: 10, count: unrealisticLife?.count },
                 { key: 'missingInspect', label: 'Inspections', weight: 5, count: missingInspect?.count },
               ].map(w => (
-                <div key={w.key} className="bg-gray-800/60 rounded-lg px-2 py-2 text-center">
+                <div key={w.key} className="bg-[var(--input-bg)]/60 rounded-lg px-2 py-2 text-center">
                   <p className={`text-sm font-semibold ${(w.count ?? 0) > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
-                    {w.count === null || w.count === undefined ? <span className="text-gray-600 animate-pulse">...</span> : w.count}
+                    {w.count === null || w.count === undefined ? <span className="text-[var(--text-dim)] animate-pulse">...</span> : w.count}
                   </p>
-                  <p className="text-xs text-gray-500">{w.label}</p>
-                  <p className="text-xs text-gray-700 mt-0.5">{w.weight}% weight</p>
+                  <p className="text-xs text-[var(--text-muted)]">{w.label}</p>
+                  <p className="text-xs text-[var(--text-dim)] mt-0.5">{w.weight}% weight</p>
                 </div>
               ))}
             </div>
@@ -1149,16 +1149,16 @@ export default function DataCleaning() {
             color="text-yellow-400"
             bgColor="bg-yellow-900/20 border-yellow-700/40"
           >
-            <p className="text-xs text-gray-500 mb-3">Flags: empty/null serials, fewer than 4 characters, non-alphanumeric patterns, serial reuse across vehicles.</p>
+            <p className="text-xs text-[var(--text-muted)] mb-3">Flags: empty/null serials, fewer than 4 characters, non-alphanumeric patterns, serial reuse across vehicles.</p>
             {serialIssues?.issues && (
               <ExpandableList
                 items={serialIssues.issues}
                 renderItem={(r) => (
-                  <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg text-xs">
-                    <span className="text-white font-mono">{r.tyre_serial || <span className="text-gray-600 italic">empty</span>}</span>
-                    <span className="text-gray-500">{r.asset_no ?? '-'}</span>
-                    <span className="text-gray-500">{r.site ?? '-'}</span>
-                    <span className="text-gray-600">{r.issue_date ?? ''}</span>
+                  <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs">
+                    <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || <span className="text-[var(--text-dim)] italic">empty</span>}</span>
+                    <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
+                    <span className="text-[var(--text-muted)]">{r.site ?? '-'}</span>
+                    <span className="text-[var(--text-dim)]">{r.issue_date ?? ''}</span>
                     <span className="ml-auto text-yellow-400 font-medium">{r.issue_type}</span>
                   </div>
                 )}
@@ -1175,19 +1175,19 @@ export default function DataCleaning() {
             color="text-orange-400"
             bgColor="bg-orange-900/20 border-orange-700/40"
             action={isAdmin && duplicateSerial?.groupCount > 0 && (
-              <span className="text-xs text-gray-500">{duplicateSerial.affectedCount} affected records</span>
+              <span className="text-xs text-[var(--text-muted)]">{duplicateSerial.affectedCount} affected records</span>
             )}
           >
-            <p className="text-xs text-gray-500 mb-3">Active records (km_at_removal is null) sharing the same serial number across multiple vehicles.</p>
+            <p className="text-xs text-[var(--text-muted)] mb-3">Active records (km_at_removal is null) sharing the same serial number across multiple vehicles.</p>
             {duplicateSerial?.groups && (
               <ExpandableList
                 items={duplicateSerial.groups}
                 renderItem={(g) => (
-                  <div className="px-3 py-2 bg-gray-800/50 rounded-lg text-xs border border-orange-900/30">
+                  <div className="px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs border border-orange-900/30">
                     <div className="flex flex-wrap items-center gap-3">
                       <span className="font-mono text-orange-300 font-semibold">{g.serial}</span>
-                      <span className="text-gray-500">{g.count} records</span>
-                      <span className="text-gray-500">Vehicles: {g.asset_nos.join(', ')}</span>
+                      <span className="text-[var(--text-muted)]">{g.count} records</span>
+                      <span className="text-[var(--text-muted)]">Vehicles: {g.asset_nos.join(', ')}</span>
                       {isAdmin && (
                         <button
                           onClick={() => setDupModal({ group: g })}
@@ -1199,7 +1199,7 @@ export default function DataCleaning() {
                     </div>
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {g.records.map(r => (
-                        <span key={r.id} className="bg-gray-700/50 px-2 py-0.5 rounded text-gray-400">
+                        <span key={r.id} className="bg-gray-700/50 px-2 py-0.5 rounded text-[var(--text-muted)]">
                           {r.asset_no ?? '-'} · {r.issue_date ?? 'no date'}
                         </span>
                       ))}
@@ -1220,18 +1220,18 @@ export default function DataCleaning() {
             bgColor="bg-red-900/20 border-red-700/40"
           >
             {invalidPressure?.notApplicable ? (
-              <p className="text-xs text-gray-500">pressure_reading column not found in tyre_records - not applicable for this dataset.</p>
+              <p className="text-xs text-[var(--text-muted)]">pressure_reading column not found in tyre_records - not applicable for this dataset.</p>
             ) : (
               <>
-                <p className="text-xs text-gray-500 mb-3">Pressure readings outside the valid range of 20-200 PSI.</p>
+                <p className="text-xs text-[var(--text-muted)] mb-3">Pressure readings outside the valid range of 20-200 PSI.</p>
                 {invalidPressure?.records && (
                   <ExpandableList
                     items={invalidPressure.records}
                     renderItem={(r) => (
-                      <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg text-xs">
-                        <span className="text-white font-mono">{r.tyre_serial || '-'}</span>
-                        <span className="text-gray-500">{r.asset_no ?? '-'}</span>
-                        <span className="text-gray-500">{r.site ?? '-'}</span>
+                      <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs">
+                        <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || '-'}</span>
+                        <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
+                        <span className="text-[var(--text-muted)]">{r.site ?? '-'}</span>
                         <span className="ml-auto text-red-400 font-semibold">{r.pressure_reading} PSI</span>
                       </div>
                     )}
@@ -1251,18 +1251,18 @@ export default function DataCleaning() {
             bgColor="bg-yellow-900/20 border-yellow-700/40"
           >
             {missingTread?.notApplicable ? (
-              <p className="text-xs text-gray-500">tread_depth column not found - not applicable for this dataset.</p>
+              <p className="text-xs text-[var(--text-muted)]">tread_depth column not found - not applicable for this dataset.</p>
             ) : (
               <>
                 <div className="flex items-center gap-4 mb-3">
-                  <p className="text-xs text-gray-500">Records where tread_depth is null or 0.</p>
+                  <p className="text-xs text-[var(--text-muted)]">Records where tread_depth is null or 0.</p>
                   {missingTread?.pct !== undefined && (
                     <span className="text-sm font-semibold text-yellow-400">{missingTread.pct}% missing</span>
                   )}
                 </div>
                 {missingTread?.bySite?.length > 0 && (
                   <div className="mb-3">
-                    <p className="text-xs text-gray-600 mb-1.5">By site:</p>
+                    <p className="text-xs text-[var(--text-dim)] mb-1.5">By site:</p>
                     <div className="flex flex-wrap gap-2">
                       {missingTread.bySite.map(s => (
                         <span key={s.site} className="px-2 py-1 bg-yellow-900/20 border border-yellow-800/40 rounded text-xs text-yellow-300">
@@ -1276,11 +1276,11 @@ export default function DataCleaning() {
                   <ExpandableList
                     items={missingTread.records}
                     renderItem={(r) => (
-                      <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg text-xs">
-                        <span className="text-white font-mono">{r.tyre_serial || '-'}</span>
-                        <span className="text-gray-500">{r.asset_no ?? '-'}</span>
-                        <span className="text-gray-500">{r.site ?? '-'}</span>
-                        <span className="text-gray-600">{r.issue_date ?? ''}</span>
+                      <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs">
+                        <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || '-'}</span>
+                        <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
+                        <span className="text-[var(--text-muted)]">{r.site ?? '-'}</span>
+                        <span className="text-[var(--text-dim)]">{r.issue_date ?? ''}</span>
                         <span className="ml-auto text-yellow-400">tread: {r.tread_depth ?? 'null'}</span>
                       </div>
                     )}
@@ -1300,17 +1300,17 @@ export default function DataCleaning() {
             bgColor="bg-blue-900/20 border-blue-700/40"
           >
             {missingInspect?.notApplicable ? (
-              <p className="text-xs text-gray-500">Inspections table not found - check not applicable for this database configuration.</p>
+              <p className="text-xs text-[var(--text-muted)]">Inspections table not found - check not applicable for this database configuration.</p>
             ) : (
               <>
-                <p className="text-xs text-gray-500 mb-3">Vehicles with active tyres that have no inspection record in the last 30 days.</p>
+                <p className="text-xs text-[var(--text-muted)] mb-3">Vehicles with active tyres that have no inspection record in the last 30 days.</p>
                 {missingInspect?.asset_nos && (
                   <ExpandableList
                     items={missingInspect.asset_nos}
                     renderItem={(a) => (
-                      <div className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg text-xs">
+                      <div className="flex items-center gap-3 px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs">
                         <Truck size={13} className="text-blue-400 flex-shrink-0" />
-                        <span className="text-white font-medium">{a}</span>
+                        <span className="text-[var(--text-primary)] font-medium">{a}</span>
                         <span className="ml-auto text-blue-400">No inspection in 30 days</span>
                       </div>
                     )}
@@ -1329,21 +1329,21 @@ export default function DataCleaning() {
             color="text-red-400"
             bgColor="bg-red-900/20 border-red-700/40"
           >
-            <p className="text-xs text-gray-500 mb-3">Covers: removal &lt; fitment (physically impossible), life &gt; 500,000 km, non-sequential fitment per vehicle.</p>
+            <p className="text-xs text-[var(--text-muted)] mb-3">Covers: removal &lt; fitment (physically impossible), life &gt; 500,000 km, non-sequential fitment per vehicle.</p>
             {odometerIssues?.issues && (
               <ExpandableList
                 items={odometerIssues.issues}
                 renderItem={(r) => (
-                  <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg text-xs border border-red-900/20">
-                    <span className="text-white font-mono">{r.tyre_serial || '-'}</span>
-                    <span className="text-gray-500">{r.asset_no ?? '-'}</span>
-                    <span className="text-gray-400">Fit: {parseFloat(r.km_at_fitment)?.toLocaleString() ?? '-'}</span>
-                    <span className="text-gray-400">Rem: {parseFloat(r.km_at_removal)?.toLocaleString() ?? '-'}</span>
+                  <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs border border-red-900/20">
+                    <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || '-'}</span>
+                    <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
+                    <span className="text-[var(--text-muted)]">Fit: {parseFloat(r.km_at_fitment)?.toLocaleString() ?? '-'}</span>
+                    <span className="text-[var(--text-muted)]">Rem: {parseFloat(r.km_at_removal)?.toLocaleString() ?? '-'}</span>
                     <span className={`ml-auto font-medium text-xs px-2 py-0.5 rounded border ${severityBadge(r.severity)}`}>{r.issue_type}</span>
                     {isAdmin && (
                       <button
                         onClick={() => { setOdomModal({ record: r }); setOdomEdits({ [r.id]: { km_at_fitment: r.km_at_fitment, km_at_removal: r.km_at_removal } }) }}
-                        className="flex items-center gap-1 px-2 py-1 rounded bg-gray-700/60 text-gray-300 border border-gray-600 hover:bg-gray-700 transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 rounded bg-gray-700/60 text-[var(--text-secondary)] border border-gray-600 hover:bg-gray-700 transition-colors"
                       >
                         <Edit2 size={11} /> Edit
                       </button>
@@ -1363,21 +1363,21 @@ export default function DataCleaning() {
             color="text-orange-400"
             bgColor="bg-orange-900/20 border-orange-700/40"
           >
-            <p className="text-xs text-gray-500 mb-3">Life &lt; 500 km or &gt; 400,000 km; cost outside 50-50,000 range (if column exists).</p>
+            <p className="text-xs text-[var(--text-muted)] mb-3">Life &lt; 500 km or &gt; 400,000 km; cost outside 50-50,000 range (if column exists).</p>
             {unrealisticLife?.issues && (
               <ExpandableList
                 items={unrealisticLife.issues}
                 renderItem={(r) => (
-                  <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg text-xs border border-orange-900/20">
-                    <span className="text-white font-mono">{r.tyre_serial || '-'}</span>
-                    <span className="text-gray-500">{r.asset_no ?? '-'}</span>
-                    {r.life !== undefined && <span className="text-gray-400">{r.life?.toLocaleString()} km life</span>}
-                    {r.cost_per_tyre && <span className="text-gray-400">Cost: {parseFloat(r.cost_per_tyre)?.toLocaleString()}</span>}
+                  <div className="flex flex-wrap items-center gap-3 px-3 py-2 bg-[var(--input-bg)]/50 rounded-lg text-xs border border-orange-900/20">
+                    <span className="text-[var(--text-primary)] font-mono">{r.tyre_serial || '-'}</span>
+                    <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
+                    {r.life !== undefined && <span className="text-[var(--text-muted)]">{r.life?.toLocaleString()} km life</span>}
+                    {r.cost_per_tyre && <span className="text-[var(--text-muted)]">Cost: {parseFloat(r.cost_per_tyre)?.toLocaleString()}</span>}
                     <span className="text-orange-400 font-medium ml-auto text-right">{r.issue_type}</span>
                     {isAdmin && (
                       <button
                         onClick={() => markNeedsReview(r)}
-                        className="flex items-center gap-1 px-2 py-1 rounded bg-gray-700/60 text-gray-300 border border-gray-600 hover:bg-gray-700 transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 rounded bg-gray-700/60 text-[var(--text-secondary)] border border-gray-600 hover:bg-gray-700 transition-colors"
                       >
                         <AlertTriangle size={11} /> Mark Review
                       </button>
@@ -1393,10 +1393,10 @@ export default function DataCleaning() {
       {/* ── Approve-all confirm modal ──────────────────────────────────────── */}
       {showApproveAllConfirm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowApproveAllConfirm(false)}>
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold text-white mb-2">Approve All Pending Records</h2>
-            <p className="text-gray-400 text-sm mb-4">
-              The classifier will run on all <strong className="text-white">{stats.pending.toLocaleString()}</strong> pending records and save the results automatically.
+          <div className="bg-[var(--surface-1)] border border-[var(--card-border)] rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Approve All Pending Records</h2>
+            <p className="text-[var(--text-muted)] text-sm mb-4">
+              The classifier will run on all <strong className="text-[var(--text-primary)]">{stats.pending.toLocaleString()}</strong> pending records and save the results automatically.
               {filterSite && ` Only records from "${filterSite}" will be processed.`}
             </p>
             <p className="text-yellow-300 text-sm mb-4">Low-confidence classifications will still be saved - no manual review step.</p>
@@ -1414,14 +1414,14 @@ export default function DataCleaning() {
       {dupModal && (
         <Modal title={`Fix Duplicate Serial: ${dupModal.group.serial}`} onClose={() => setDupModal(null)}>
           <div className="space-y-4">
-            <p className="text-sm text-gray-400">
-              This serial appears on <strong className="text-white">{dupModal.group.count}</strong> active records across vehicles: <strong className="text-white">{dupModal.group.asset_nos.join(', ')}</strong>.
+            <p className="text-sm text-[var(--text-muted)]">
+              This serial appears on <strong className="text-[var(--text-primary)]">{dupModal.group.count}</strong> active records across vehicles: <strong className="text-[var(--text-primary)]">{dupModal.group.asset_nos.join(', ')}</strong>.
             </p>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-[var(--text-muted)]">
               The first record keeps the original serial. All subsequent records will be assigned <code className="text-orange-300">{dupNewSerial}-02</code>, <code className="text-orange-300">{dupNewSerial}-03</code>, etc.
             </p>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Base Serial for Assignments</label>
+              <label className="block text-sm text-[var(--text-muted)] mb-1">Base Serial for Assignments</label>
               <input
                 className="input w-full"
                 value={dupNewSerial}
@@ -1429,12 +1429,12 @@ export default function DataCleaning() {
                 placeholder="Enter base serial..."
               />
             </div>
-            <div className="bg-gray-800/60 rounded-lg p-3 space-y-1">
+            <div className="bg-[var(--input-bg)]/60 rounded-lg p-3 space-y-1">
               {dupModal.group.records.map((r, i) => (
                 <div key={r.id} className="flex items-center gap-3 text-xs">
-                  <span className="text-gray-500 w-5">{i + 1}.</span>
-                  <span className="text-gray-400">{r.asset_no ?? '-'}</span>
-                  <span className="text-gray-600">{r.issue_date ?? ''}</span>
+                  <span className="text-[var(--text-muted)] w-5">{i + 1}.</span>
+                  <span className="text-[var(--text-muted)]">{r.asset_no ?? '-'}</span>
+                  <span className="text-[var(--text-dim)]">{r.issue_date ?? ''}</span>
                   <span className="ml-auto font-mono text-orange-300">
                     {i === 0 ? dupModal.group.serial : `${dupNewSerial}-${String(i + 1).padStart(2, '0')}`}
                   </span>
@@ -1459,15 +1459,15 @@ export default function DataCleaning() {
       {odomModal && (
         <Modal title="Edit Odometer Values" onClose={() => { setOdomModal(null); setOdomEdits({}) }}>
           <div className="space-y-4">
-            <div className="bg-gray-800/60 rounded-lg p-3 text-xs space-y-1">
-              <div className="flex justify-between"><span className="text-gray-500">Record ID</span><span className="text-white font-mono">{odomModal.record.id}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Serial</span><span className="text-white">{odomModal.record.tyre_serial || '-'}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Asset</span><span className="text-white">{odomModal.record.asset_no || '-'}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Issue</span><span className="text-red-400">{odomModal.record.issue_type}</span></div>
+            <div className="bg-[var(--input-bg)]/60 rounded-lg p-3 text-xs space-y-1">
+              <div className="flex justify-between"><span className="text-[var(--text-muted)]">Record ID</span><span className="text-[var(--text-primary)] font-mono">{odomModal.record.id}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--text-muted)]">Serial</span><span className="text-[var(--text-primary)]">{odomModal.record.tyre_serial || '-'}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--text-muted)]">Asset</span><span className="text-[var(--text-primary)]">{odomModal.record.asset_no || '-'}</span></div>
+              <div className="flex justify-between"><span className="text-[var(--text-muted)]">Issue</span><span className="text-red-400">{odomModal.record.issue_type}</span></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">km at Fitment</label>
+                <label className="block text-sm text-[var(--text-muted)] mb-1">km at Fitment</label>
                 <input
                   type="number"
                   className="input w-full"
@@ -1476,7 +1476,7 @@ export default function DataCleaning() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">km at Removal</label>
+                <label className="block text-sm text-[var(--text-muted)] mb-1">km at Removal</label>
                 <input
                   type="number"
                   className="input w-full"

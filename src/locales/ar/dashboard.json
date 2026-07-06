@@ -32,7 +32,8 @@
     "stockSites": "مواقع المخزون",
     "openActions": "الإجراءات المفتوحة",
     "highRisk": "خطورة عالية",
-    "totalCost": "التكلفة الإجمالية"
+    "totalCost": "التكلفة الإجمالية",
+    "recordsSub": "{count} مركبة"
   },
   "filters": {
     "searchPlaceholder": "ابحث عن أصل أو علامة تجارية أو موقع...",

@@ -32,7 +32,8 @@
     "stockSites": "Stock Sites",
     "openActions": "Open Actions",
     "highRisk": "High Risk",
-    "totalCost": "Total Cost"
+    "totalCost": "Total Cost",
+    "recordsSub": "{count} vehicles"
   },
   "filters": {
     "searchPlaceholder": "Search asset, brand, site...",

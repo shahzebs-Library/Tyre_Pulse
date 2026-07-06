@@ -6,7 +6,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import StatCard from '../components/StatCard'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import {
@@ -27,6 +26,7 @@ import {
 import { ChartModal } from '../components/ChartModal'
 import EmptyState from '../components/EmptyState'
 import SegmentedControl from '../components/ui/SegmentedControl'
+import StatTile from '../components/ui/StatTile'
 import Skeleton, { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 
 ChartJS.register(
@@ -794,21 +794,23 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── KPI METRICS ──────────────────────────────────────────────────── */}
+      {/* ── KPI METRICS (console stat-tiles) ─────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
-        {[
-          { to:'/tyres',    label:t('dashboard.kpi.tyreRecords'), value:stats.tyres,   icon:CircleDot,     color:'blue',   spark:sparkSeries.tyres },
-          { to:'/stock',    label:t('dashboard.kpi.stockSites'),  value:stats.stock,   icon:Package,       color:'green'  },
-          { to:'/actions',  label:t('dashboard.kpi.openActions'), value:stats.actions, icon:ClipboardList, color:'yellow' },
-          { to:'/anomalies',label:t('dashboard.kpi.highRisk'),    value:`${stats.critical} (${stats.tyres?((stats.critical/stats.tyres)*100).toFixed(1):0}%)`, icon:AlertTriangle, color:'red',    spark:sparkSeries.risk },
-          { to:'/analytics',label:t('dashboard.kpi.totalCost'),   value:`${activeCurrency} ${(stats.cost/1000).toFixed(0)}K`, icon:DollarSign, color:'purple', spark:sparkSeries.cost },
-        ].map(({ to, label, value, icon, color, spark }, i) => (
-          <motion.div key={to} initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }} transition={{ delay: i * 0.06, duration: 0.4, ease:[0.22,1,0.36,1] }}>
-            <Link to={to} className="block">
-              <StatCard label={label} value={value} icon={icon} color={color} spark={spark} />
-            </Link>
-          </motion.div>
-        ))}
+        <StatTile index={0} to="/tyres" icon={CircleDot} tone="info"
+          label={t('dashboard.kpi.tyreRecords')} value={Number(stats.tyres || 0).toLocaleString()}
+          sub={t('dashboard.kpi.recordsSub', { count: stats.vehicles || 0 })} spark={sparkSeries.tyres} />
+        <StatTile index={1} to="/stock" icon={Package} tone="accent"
+          label={t('dashboard.kpi.stockSites')} value={Number(stats.stock || 0).toLocaleString()} />
+        <StatTile index={2} to="/actions" icon={ClipboardList} tone="warn"
+          label={t('dashboard.kpi.openActions')} value={Number(stats.actions || 0).toLocaleString()} />
+        <StatTile index={3} to="/anomalies" icon={AlertTriangle} tone="crit"
+          label={t('dashboard.kpi.highRisk')} value={Number(stats.critical || 0).toLocaleString()}
+          unit={stats.tyres ? `(${((stats.critical / stats.tyres) * 100).toFixed(1)}%)` : ''}
+          delta={riskTrend?.delta} deltaSuffix="" deltaGood={(riskTrend?.delta ?? 0) <= 0}
+          spark={sparkSeries.risk} />
+        <StatTile index={4} to="/analytics" icon={DollarSign} tone="accent"
+          label={t('dashboard.kpi.totalCost')} value={`${(stats.cost / 1000).toFixed(0)}K`}
+          unit={activeCurrency} spark={sparkSeries.cost} />
       </div>
 
       {/* ── COMMAND BAR (filters) ─────────────────────────────────────────── */}

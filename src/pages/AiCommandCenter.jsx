@@ -304,7 +304,7 @@ function MessageBubble({ message, onCopy }) {
               {AGENT_LABELS[message.agentType]} Agent
             </span>
             {message.timestamp && (
-              <span className="text-xs text-gray-600 flex items-center gap-1">
+              <span className="text-xs text-[var(--text-dim)] flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 {message.timestamp}
               </span>
@@ -336,14 +336,14 @@ function MessageBubble({ message, onCopy }) {
         <div className="flex items-center gap-2 mt-1.5 pl-1">
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
           >
             {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
             {copied ? 'Copied' : 'Copy'}
           </button>
           <button
             onClick={() => setExpanded(e => !e)}
-            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
           >
             {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             {expanded ? 'Collapse' : 'Expand'}
@@ -367,19 +367,19 @@ function TypingIndicator({ agentType }) {
       exit={{ opacity: 0, y: -4 }}
       className="flex gap-3"
     >
-      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${agentColor.bg ?? 'bg-gray-800'} border ${agentColor.border ?? 'border-gray-700'}`}>
-        <AgentIcon className={`w-4 h-4 ${agentColor.text ?? 'text-gray-400'}`} />
+      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${agentColor.bg ?? 'bg-[var(--input-bg)]'} border ${agentColor.border ?? 'border-[var(--input-border)]'}`}>
+        <AgentIcon className={`w-4 h-4 ${agentColor.text ?? 'text-[var(--text-muted)]'}`} />
       </div>
       <div className="bg-[var(--input-bg)]/60 border border-[var(--input-border)]/50 rounded-2xl rounded-tl-sm px-4 py-3">
         <div className="flex items-center gap-1">
-          <span className={`text-xs font-medium ${agentColor.text ?? 'text-gray-400'}`}>
+          <span className={`text-xs font-medium ${agentColor.text ?? 'text-[var(--text-muted)]'}`}>
             {AGENT_LABELS[agentType] ?? 'AI'} Agent is thinking
           </span>
           <div className="flex gap-1 ml-2">
             {[0, 1, 2].map(i => (
               <motion.div
                 key={i}
-                className="w-1.5 h-1.5 bg-gray-500 rounded-full"
+                className="w-1.5 h-1.5 bg-[var(--text-muted)] rounded-full"
                 animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1, 0.8] }}
                 transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
               />

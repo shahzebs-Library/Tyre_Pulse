@@ -53,6 +53,7 @@ const VehicleHistory         = lazy(() => import('./pages/VehicleHistory'))
 const UserManagement         = lazy(() => import('./pages/UserManagement'))
 const AiAnalytics            = lazy(() => import('./pages/AiAnalytics'))
 const FleetMaster            = lazy(() => import('./pages/FleetMaster'))
+const Vehicle360             = lazy(() => import('./pages/Vehicle360'))
 const AuditTrail             = lazy(() => import('./pages/AuditTrail'))
 const ResetPassword          = lazy(() => import('./pages/ResetPassword'))
 const Accidents              = lazy(() => import('./pages/Accidents'))
@@ -173,6 +174,7 @@ function MainApp() {
                       <Route path="/inspections" element={<Safe><Inspections /></Safe>} />
                       <Route path="/alerts"      element={<Safe><Alerts /></Safe>} />
                       <Route path="/fleet-master"         element={<Safe><FleetMaster /></Safe>} />
+                      <Route path="/vehicle/:assetNo"     element={<Safe><Vehicle360 /></Safe>} />
                       <Route path="/reports"              element={<Safe><Reports /></Safe>} />
                       <Route path="/report-center"       element={<Safe><ReportCenter /></Safe>} />
                       <Route path="/scheduled-reports"   element={<Safe><ScheduledReports /></Safe>} />

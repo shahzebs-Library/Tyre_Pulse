@@ -1,0 +1,5 @@
+-- V94 — per-vehicle photo + GPS position (Vehicle 360 telematics page).
+-- vehicle_fleet gains image_path/latitude/longitude/location_updated_at/gps_source;
+-- the `vehicles` view is extended (new cols appended); a private `vehicle-photos`
+-- storage bucket is created with RLS (approved users read/write, admins delete).
+-- Applied live as migration v94_vehicle_photo_and_gps.

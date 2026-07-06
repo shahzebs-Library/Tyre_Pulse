@@ -609,6 +609,9 @@ export default function FleetMaster() {
                       </td>
                       <td className="table-cell">
                         <div className="flex items-center gap-2">
+                          <button onClick={() => navigate(`/vehicle/${encodeURIComponent(r.asset_no)}`)} className="text-gray-400 hover:text-[var(--accent)] transition-colors" title="Open Vehicle 360">
+                            <Truck size={15} />
+                          </button>
                           <button onClick={() => openEdit(r)} className="text-gray-400 hover:text-yellow-400 transition-colors" title={t('fleetmaster.table.edit')}>
                             <Edit2 size={15} />
                           </button>

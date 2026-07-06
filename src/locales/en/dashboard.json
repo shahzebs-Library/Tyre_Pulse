@@ -125,5 +125,11 @@
     "health": "Fleet health",
     "critical": "Critical rate",
     "lifeTarget": "Life vs target"
+  },
+  "topVehicles": {
+    "title": "Top vehicles by tyre cost",
+    "sub": "green under fleet avg · red over",
+    "empty": "No vehicle cost data in this view yet.",
+    "avgNote": "Fleet average: {avg} per vehicle"
   }
 }

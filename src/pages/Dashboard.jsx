@@ -293,6 +293,21 @@ export default function Dashboard() {
       .slice(0, 5)
   }, [tyres])
 
+  // Top vehicles by tyre spend — benchmark bars (green under fleet-avg, red over).
+  const topVehicles = useMemo(() => {
+    const byAsset = new Map()
+    for (const r of tyres) {
+      if (!r.asset_no) continue
+      byAsset.set(r.asset_no, (byAsset.get(r.asset_no) || 0) + recordCost(r))
+    }
+    const rows = [...byAsset.entries()].map(([asset, cost]) => ({ asset, cost }))
+    if (!rows.length) return { rows: [], avg: 0, max: 1 }
+    const avg = rows.reduce((s, r) => s + r.cost, 0) / rows.length
+    rows.sort((a, b) => b.cost - a.cost)
+    const top = rows.slice(0, 8)
+    return { rows: top, avg, max: top[0]?.cost || 1 }
+  }, [tyres])
+
   const fleetHealthScore = useMemo(() => computeFleetHealthScore(tyres), [tyres])
   const seasonalTrends   = useMemo(() => computeSeasonalTrends(tyres), [tyres])
   const tyreLife         = useMemo(() => computeTyreLifeAnalysis(tyres), [tyres])
@@ -989,6 +1004,36 @@ export default function Dashboard() {
               : <EmptyState compact icon="database" title={t('dashboard.charts.noBrandData')} description={t('dashboard.charts.noBrandDataDesc')} />}
           </div>
         </ChartPanel>
+      </div>
+
+      {/* ── TOP VEHICLES (benchmark bars) ────────────────────────────────── */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.topVehicles.title')}</h3>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{t('dashboard.topVehicles.sub')}</span>
+        </div>
+        {topVehicles.rows.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)] py-4">{t('dashboard.topVehicles.empty')}</p>
+        ) : (
+          <div className="space-y-1.5">
+            {topVehicles.rows.map((v) => {
+              const over = v.cost > topVehicles.avg
+              const pct = Math.max(3, Math.round((v.cost / topVehicles.max) * 100))
+              const color = over ? '#f26161' : 'var(--accent)'
+              return (
+                <Link key={v.asset} to={`/vehicle/${encodeURIComponent(v.asset)}`}
+                  className="grid grid-cols-[6rem_1fr_5.5rem] items-center gap-3 py-1 group">
+                  <span className="text-xs font-semibold text-[var(--text-secondary)] truncate group-hover:text-[var(--accent)]">{v.asset}</span>
+                  <span className="h-4 rounded bg-[var(--input-bg,rgba(148,163,184,0.12))] overflow-hidden">
+                    <span className="block h-full rounded" style={{ width: `${pct}%`, background: color }} />
+                  </span>
+                  <span className="text-xs font-bold tabular-nums text-right" style={{ color }}>{activeCurrency} {Math.round(v.cost).toLocaleString()}</span>
+                </Link>
+              )
+            })}
+            <p className="text-[11px] text-[var(--text-dim)] pt-1">{t('dashboard.topVehicles.avgNote', { avg: `${activeCurrency} ${Math.round(topVehicles.avg).toLocaleString()}` })}</p>
+          </div>
+        )}
       </div>
 
       {/* ── COST TREND ───────────────────────────────────────────────────── */}

@@ -841,15 +841,15 @@ export default function UserManagement() {
                     </>
                   ) : rlsBlocked ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-12 text-gray-600">
+                      <td colSpan={7} className="text-center py-12 text-[var(--text-dim)]">
                         {t('usermgmt.states.rlsUnavailable')}
                       </td>
                     </tr>
                   ) : filtered.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="text-center py-14">
-                        <div className="flex flex-col items-center gap-3 text-gray-500">
-                          <UserX size={32} className="text-gray-700" />
+                        <div className="flex flex-col items-center gap-3 text-[var(--text-muted)]">
+                          <UserX size={32} className="text-[var(--text-dim)]" />
                           <p className="text-sm">{t('usermgmt.states.noUsersMatch')}</p>
                           {(search || roleFilter || statusFilter) && (
                             <button
@@ -869,7 +869,7 @@ export default function UserManagement() {
                     const saveState   = roleSaveState[u.id]
 
                     return (
-                      <tr key={u.id} className="hover:bg-gray-800/50 transition-colors">
+                      <tr key={u.id} className="hover:bg-[var(--input-bg)]/50 transition-colors">
 
                         {/* User column */}
                         <td className="table-cell">
@@ -882,16 +882,16 @@ export default function UserManagement() {
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-white font-semibold text-sm truncate">{displayName}</span>
+                                <span className="text-[var(--text-primary)] font-semibold text-sm truncate">{displayName}</span>
                                 {isSelf && (
                                   <span className="text-[10px] font-semibold bg-green-900/40 text-green-400 border border-green-700/40 rounded px-1.5 py-0.5">
                                     {t('usermgmt.states.you')}
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-gray-500 truncate">{u.username ?? t('usermgmt.states.na')}</p>
+                              <p className="text-xs text-[var(--text-muted)] truncate">{u.username ?? t('usermgmt.states.na')}</p>
                               {u.employee_id && (
-                                <span className="inline-flex items-center gap-1 text-[10px] bg-gray-800 text-gray-500 border border-gray-700/40 rounded px-1.5 py-0.5 mt-0.5">
+                                <span className="inline-flex items-center gap-1 text-[10px] bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)] rounded px-1.5 py-0.5 mt-0.5">
                                   <Hash size={9} />
                                   {u.employee_id}
                                 </span>
@@ -904,7 +904,7 @@ export default function UserManagement() {
                         <td className="table-cell">
                           <div className="flex items-center gap-2">
                             {isSelf ? (
-                              <span className={`badge text-xs ${ROLE_BADGE[u.role] ?? 'bg-gray-800 text-gray-400'}`}>
+                              <span className={`badge text-xs ${ROLE_BADGE[u.role] ?? 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
                                 {u.role ? t(`roles.${u.role}`) : t('usermgmt.states.na')}
                               </span>
                             ) : (
@@ -917,7 +917,7 @@ export default function UserManagement() {
                                 >
                                   {ROLES.map(r => <option key={r} value={r}>{t(`roles.${r}`)}</option>)}
                                 </select>
-                                <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
                               </div>
                             )}
                             {saveState === 'saving' && (
@@ -943,7 +943,7 @@ export default function UserManagement() {
                                 <option value="">{t('usermgmt.org.noOrg')}</option>
                                 {organisations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                               </select>
-                              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
                             </div>
                             {orgSaveState[u.id] === 'saving' && (
                               <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
@@ -957,13 +957,13 @@ export default function UserManagement() {
                           {Array.isArray(u.country) && u.country.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
                               {u.country.map(c => (
-                                <span key={c} className="text-[10px] bg-gray-800 text-gray-400 border border-gray-700/40 rounded px-1.5 py-0.5">
+                                <span key={c} className="text-[10px] bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)] rounded px-1.5 py-0.5">
                                   {c}
                                 </span>
                               ))}
                             </div>
                           ) : (
-                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <span className="text-xs text-[var(--text-muted)] flex items-center gap-1">
                               <Globe size={11} /> {t('usermgmt.states.all')}
                             </span>
                           )}

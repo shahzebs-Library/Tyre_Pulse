@@ -1054,15 +1054,15 @@ export default function DriverManagement() {
       <div className="rounded-xl overflow-hidden"
         style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
 
-        <div className="px-5 py-4 border-b border-gray-800/50 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users size={14} className="text-green-400" />
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">Driver Ranking</h3>
-            <span className="text-xs text-gray-600 ml-1">
+            <span className="text-xs text-[var(--text-dim)] ml-1">
               ({visibleDrivers.length} drivers)
             </span>
           </div>
-          <p className="text-[11px] text-gray-600">Sorted by Risk Score (ascending = best)</p>
+          <p className="text-[11px] text-[var(--text-dim)]">Sorted by Risk Score (ascending = best)</p>
         </div>
 
         {visibleDrivers.length === 0 ? (
@@ -1076,7 +1076,7 @@ export default function DriverManagement() {
             <table className="w-full text-sm">
               <thead style={{ background: 'rgba(255,255,255,0.03)' }}>
                 <tr>
-                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-12">Rank</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider w-12">Rank</th>
                   <SortTh col="name"         label="Driver"        sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <SortTh col="totalTyres"   label="Tyres"         sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <SortTh col="avgCpk"       label="Avg CPK"       sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
@@ -1084,8 +1084,8 @@ export default function DriverManagement() {
                   <SortTh col="failureRate"  label="Failure Rate"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <SortTh col="avgTyreLife"  label="Avg Life"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <SortTh col="riskScore"    label="Risk Score"    sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <th className="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Performance</th>
-                  <th className="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Performance</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -1094,9 +1094,9 @@ export default function DriverManagement() {
                   const rankNum = driver.rank
                   const rankColor =
                     rankNum === 1 ? 'text-yellow-400' :
-                    rankNum === 2 ? 'text-gray-300'   :
+                    rankNum === 2 ? 'text-[var(--text-dim)]'   :
                     rankNum === 3 ? 'text-amber-600'  :
-                    'text-gray-600'
+                    'text-[var(--text-dim)]'
 
                   return (
                     <motion.tr
@@ -1115,14 +1115,14 @@ export default function DriverManagement() {
                             style={{ background: `${DRIVER_PALETTE[idx % DRIVER_PALETTE.length]}30`, border: `1px solid ${DRIVER_PALETTE[idx % DRIVER_PALETTE.length]}50` }}>
                             {driver.name[0]?.toUpperCase() ?? 'D'}
                           </div>
-                          <span className="text-gray-200 font-medium text-sm">{driver.name}</span>
+                          <span className="text-[var(--text-secondary)] font-medium text-sm">{driver.name}</span>
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-gray-400 text-sm">{driver.totalTyres}</td>
+                      <td className="px-3 py-3 text-[var(--text-muted)] text-sm">{driver.totalTyres}</td>
                       <td className={`px-3 py-3 font-mono text-sm font-semibold ${cpkColor(driver.avgCpk)}`}>
                         {fmtCpk(driver.avgCpk, activeCurrency)}
                       </td>
-                      <td className="px-3 py-3 text-gray-300 text-sm">{fmtCurrency(driver.totalCost, activeCurrency)}</td>
+                      <td className="px-3 py-3 text-[var(--text-dim)] text-sm">{fmtCurrency(driver.totalCost, activeCurrency)}</td>
                       <td className="px-3 py-3">
                         <span className={`text-sm font-medium ${
                           driver.failureRate >= 30 ? 'text-red-400' :
@@ -1132,7 +1132,7 @@ export default function DriverManagement() {
                           {fmtPct(driver.failureRate)}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-gray-400 text-sm">{fmtKm(driver.avgTyreLife)}</td>
+                      <td className="px-3 py-3 text-[var(--text-muted)] text-sm">{fmtKm(driver.avgTyreLife)}</td>
                       <td className="px-3 py-3 min-w-[110px]">
                         <RiskBar score={driver.riskScore} />
                       </td>

@@ -237,7 +237,7 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50"
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50"
             title="Delete"
           >
             {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
@@ -681,8 +681,8 @@ export default function AlertThresholds() {
         <>
           {visible.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <Filter className="w-8 h-8 text-gray-600" />
-              <p className="text-gray-400 text-sm">No thresholds match your filters.</p>
+              <Filter className="w-8 h-8 text-[var(--text-dim)]" />
+              <p className="text-[var(--text-muted)] text-sm">No thresholds match your filters.</p>
               <button onClick={() => { setSearch(''); setFilterMetric('all'); setFilterActive('all') }} className="text-orange-400 text-xs hover:text-orange-300 transition-colors">
                 Clear filters
               </button>
@@ -703,7 +703,7 @@ export default function AlertThresholds() {
 
           {/* Suggested presets (shown below existing cards) */}
           <div className="mt-10">
-            <p className="text-gray-500 text-xs font-semibold uppercase tracking-widest mb-3">Suggested presets</p>
+            <p className="text-[var(--text-muted)] text-xs font-semibold uppercase tracking-widest mb-3">Suggested presets</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {PRESETS.map(p => {
                 const meta = metaFor(p.metric)
@@ -712,14 +712,14 @@ export default function AlertThresholds() {
                   <button
                     key={p.name}
                     onClick={() => openPreset(p)}
-                    className="flex items-start gap-3 p-3.5 rounded-xl bg-gray-800/60 border border-gray-700 hover:border-orange-500/40 hover:bg-gray-800 transition-all text-left group"
+                    className="flex items-start gap-3 p-3.5 rounded-xl bg-[var(--input-bg)]/60 border border-[var(--input-border)] hover:border-orange-500/40 hover:bg-[var(--input-bg)] transition-all text-left group"
                   >
                     <div className={`shrink-0 mt-0.5 p-1.5 rounded-lg ${METRIC_BADGE[p.metric]}`}>
                       <Icon className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <p className="text-gray-300 text-xs font-medium group-hover:text-white transition-colors">{p.name}</p>
-                      <p className="text-gray-600 text-xs mt-0.5">{humanDescription(p)}</p>
+                      <p className="text-[var(--text-secondary)] text-xs font-medium group-hover:text-[var(--text-primary)] transition-colors">{p.name}</p>
+                      <p className="text-[var(--text-dim)] text-xs mt-0.5">{humanDescription(p)}</p>
                     </div>
                   </button>
                 )

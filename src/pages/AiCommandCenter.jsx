@@ -45,7 +45,7 @@ const AGENT_ICONS = {
 const TREND_ICON = (trend) => {
   if (trend === 'worsening')  return <TrendingUp className="w-3.5 h-3.5 text-red-400" />
   if (trend === 'improving')  return <TrendingDown className="w-3.5 h-3.5 text-emerald-400" />
-  return <Minus className="w-3.5 h-3.5 text-gray-400" />
+  return <Minus className="w-3.5 h-3.5 text-[var(--text-muted)]" />
 }
 
 // ── Helper: format response text with markdown-like rendering ─────────────────

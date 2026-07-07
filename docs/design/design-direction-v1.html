@@ -1,0 +1,448 @@
+<title>TyrePulse — Design Direction</title>
+<style>
+:root{
+  --ground:#F7F9F8; --surface:#FFFFFF; --raised:#FFFFFF; --sunken:#F1F4F2;
+  --ink:#0F1512; --ink-2:#48544D; --ink-3:#75817A; --ink-4:#9BA79F;
+  --line:rgba(15,25,20,.09); --line-2:rgba(15,25,20,.06);
+  --accent:#16A34A; --accent-ink:#0B5C2E; --accent-wash:rgba(22,163,74,.08);
+  --good:#16A34A; --good-wash:rgba(22,163,74,.10);
+  --warn:#B4740A; --warn-wash:rgba(245,165,36,.14);
+  --crit:#DC2626; --crit-wash:rgba(220,38,38,.10);
+  --info:#0E7490; --info-wash:rgba(56,189,248,.12);
+  --shadow:0 1px 2px rgba(12,20,16,.04),0 4px 16px rgba(12,20,16,.06);
+  --shadow-lg:0 1px 3px rgba(12,20,16,.06),0 12px 32px rgba(12,20,16,.10);
+  --r:14px; --r-sm:9px; --r-pill:999px;
+  --rail:236px;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,monospace;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Inter,system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --ground:#0B0F0E; --surface:#121815; --raised:#171F1B; --sunken:#0E1411;
+  --ink:#E9EFEA; --ink-2:#9BA8A0; --ink-3:#6B7871; --ink-4:#525E57;
+  --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.045);
+  --accent:#22C55E; --accent-ink:#8FE7AE; --accent-wash:rgba(34,197,94,.11);
+  --good:#22C55E; --good-wash:rgba(34,197,94,.13);
+  --warn:#F5A524; --warn-wash:rgba(245,165,36,.13);
+  --crit:#F26161; --crit-wash:rgba(242,97,97,.13);
+  --info:#38BDF8; --info-wash:rgba(56,189,248,.13);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 26px rgba(0,0,0,.34);
+  --shadow-lg:0 2px 4px rgba(0,0,0,.5),0 18px 46px rgba(0,0,0,.5);
+}}
+:root[data-theme="light"]{
+  --ground:#F7F9F8; --surface:#FFFFFF; --raised:#FFFFFF; --sunken:#F1F4F2;
+  --ink:#0F1512; --ink-2:#48544D; --ink-3:#75817A; --ink-4:#9BA79F;
+  --line:rgba(15,25,20,.09); --line-2:rgba(15,25,20,.06);
+  --accent:#16A34A; --accent-ink:#0B5C2E; --accent-wash:rgba(22,163,74,.08);
+  --good:#16A34A; --good-wash:rgba(22,163,74,.10); --warn:#B4740A; --warn-wash:rgba(245,165,36,.14);
+  --crit:#DC2626; --crit-wash:rgba(220,38,38,.10); --info:#0E7490; --info-wash:rgba(56,189,248,.12);
+  --shadow:0 1px 2px rgba(12,20,16,.04),0 4px 16px rgba(12,20,16,.06);
+  --shadow-lg:0 1px 3px rgba(12,20,16,.06),0 12px 32px rgba(12,20,16,.10);
+}
+:root[data-theme="dark"]{
+  --ground:#0B0F0E; --surface:#121815; --raised:#171F1B; --sunken:#0E1411;
+  --ink:#E9EFEA; --ink-2:#9BA8A0; --ink-3:#6B7871; --ink-4:#525E57;
+  --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.045);
+  --accent:#22C55E; --accent-ink:#8FE7AE; --accent-wash:rgba(34,197,94,.11);
+  --good:#22C55E; --good-wash:rgba(34,197,94,.13); --warn:#F5A524; --warn-wash:rgba(245,165,36,.13);
+  --crit:#F26161; --crit-wash:rgba(242,97,97,.13); --info:#38BDF8; --info-wash:rgba(56,189,248,.13);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 26px rgba(0,0,0,.34);
+  --shadow-lg:0 2px 4px rgba(0,0,0,.5),0 18px 46px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;letter-spacing:-.006em}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+h1,h2,h3{margin:0;letter-spacing:-.02em;text-wrap:balance;font-weight:600}
+a{color:inherit}
+button{font-family:inherit}
+
+/* page frame */
+.wrap{max-width:1280px;margin:0 auto;padding:26px 20px 72px}
+.topnote{display:flex;flex-wrap:wrap;align-items:center;gap:14px;justify-content:space-between;margin-bottom:22px}
+.brandline{display:flex;align-items:center;gap:11px}
+.logo{width:34px;height:34px;border-radius:10px;background:
+  radial-gradient(120% 120% at 30% 20%,var(--accent),color-mix(in srgb,var(--accent) 55%,#065f34)));
+  display:grid;place-items:center;box-shadow:var(--shadow)}
+.logo svg{width:19px;height:19px}
+.brandline .t{font-weight:600;font-size:15px;letter-spacing:-.02em}
+.brandline .s{color:var(--ink-3);font-size:12px;margin-top:1px}
+.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-3);font-weight:600}
+.toggle{display:inline-flex;gap:2px;background:var(--sunken);border:1px solid var(--line);
+  border-radius:var(--r-pill);padding:3px}
+.toggle button{border:0;background:transparent;color:var(--ink-3);font-size:12px;font-weight:600;
+  padding:6px 13px;border-radius:var(--r-pill);cursor:pointer;display:flex;align-items:center;gap:6px}
+.toggle button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.toggle svg{width:13px;height:13px}
+
+/* the console mock */
+.console{border:1px solid var(--line);border-radius:20px;overflow:hidden;background:var(--ground);
+  box-shadow:var(--shadow-lg)}
+.console-grid{display:grid;grid-template-columns:var(--rail) 1fr;min-height:640px}
+
+/* rail */
+.rail{background:var(--surface);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:3px}
+.rail .grp{font-size:10.5px;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-4);
+  font-weight:700;padding:14px 12px 6px}
+.rail .grp:first-child{padding-top:2px}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;color:var(--ink-2);
+  font-size:13px;font-weight:500;cursor:pointer;position:relative}
+.nav svg{width:16px;height:16px;flex:0 0 auto;color:var(--ink-3)}
+.nav:hover{background:var(--sunken);color:var(--ink)}
+.nav.on{background:var(--accent-wash);color:var(--accent-ink);font-weight:600}
+.nav.on svg{color:var(--accent)}
+.nav.on::before{content:"";position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+.nav .cnt{margin-left:auto;font-size:11px;font-weight:700;color:var(--crit);background:var(--crit-wash);
+  padding:1px 7px;border-radius:var(--r-pill)}
+
+/* main */
+.main{display:flex;flex-direction:column;min-width:0}
+.topbar{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);
+  background:var(--surface)}
+.crumb{font-size:13px;color:var(--ink-3)}.crumb b{color:var(--ink);font-weight:600}
+.search{flex:1;max-width:300px;margin-left:8px;display:flex;align-items:center;gap:8px;background:var(--sunken);
+  border:1px solid var(--line);border-radius:var(--r-pill);padding:7px 13px;color:var(--ink-4);font-size:12.5px}
+.search svg{width:14px;height:14px}
+.chip-ctx{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;
+  background:var(--sunken);border:1px solid var(--line);border-radius:var(--r-pill);padding:6px 13px;color:var(--ink)}
+.chip-ctx .dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#2a3a33,#0f1512);
+  display:grid;place-items:center;color:var(--ink);font-size:11px;font-weight:700;border:1px solid var(--line)}
+
+.content{padding:20px;display:flex;flex-direction:column;gap:16px;overflow:auto}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.pagehead h1{font-size:21px}
+.pagehead .sub{color:var(--ink-3);font-size:13px;margin-top:3px}
+.actions{display:flex;gap:8px}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:12.5px;font-weight:600;
+  padding:8px 14px;border-radius:var(--r-sm);cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+  transition:transform .12s ease,box-shadow .12s ease,background .12s ease}
+.btn svg{width:14px;height:14px}
+.btn:hover{box-shadow:var(--shadow);transform:translateY(-1px)}
+.btn.primary{background:var(--accent);border-color:transparent;color:#fff}
+.btn.primary:hover{filter:brightness(1.05)}
+:root[data-theme="dark"] .btn.primary,@media(prefers-color-scheme:dark){.btn.primary{color:#04140A}}
+
+/* KPI row */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 15px;
+  display:flex;flex-direction:column;gap:9px;min-width:0}
+.kpi .lab{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:600;
+  display:flex;align-items:center;gap:6px}
+.kpi .lab svg{width:13px;height:13px;color:var(--ink-4)}
+.kpi .val{font-size:25px;font-weight:650;letter-spacing:-.03em;line-height:1}
+.kpi .val small{font-size:13px;font-weight:600;color:var(--ink-3);letter-spacing:0}
+.kpi .foot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.delta{font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;gap:3px}
+.delta svg{width:11px;height:11px}
+.delta.up{color:var(--good)}.delta.down{color:var(--crit)}.delta.flat{color:var(--ink-3)}
+.spark{height:26px;width:74px}
+
+/* split */
+.split{display:grid;grid-template-columns:1fr 360px;gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.card-h h3{font-size:14px}
+.card-h .seg{display:inline-flex;background:var(--sunken);border:1px solid var(--line);border-radius:8px;padding:2px}
+.card-h .seg button{border:0;background:transparent;color:var(--ink-3);font-size:11.5px;font-weight:600;
+  padding:4px 10px;border-radius:6px;cursor:pointer}
+.card-h .seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.legend{display:flex;gap:14px;margin:10px 0 2px}
+.legend span{font-size:11.5px;color:var(--ink-3);display:inline-flex;align-items:center;gap:6px}
+.legend i{width:9px;height:9px;border-radius:3px;display:inline-block}
+
+/* attention list */
+.att{display:flex;flex-direction:column;gap:2px}
+.att-row{display:flex;align-items:center;gap:11px;padding:10px 8px;border-radius:9px;cursor:pointer}
+.att-row:hover{background:var(--sunken)}
+.sev{width:3px;align-self:stretch;border-radius:3px;flex:0 0 auto}
+.sev.c{background:var(--crit)}.sev.w{background:var(--warn)}.sev.i{background:var(--info)}
+.att-row .m{min-width:0;flex:1}
+.att-row .m .a{font-size:13px;font-weight:600;letter-spacing:-.01em}
+.att-row .m .b{font-size:11.5px;color:var(--ink-3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.att-row .r{text-align:right;flex:0 0 auto}
+.att-row .r .v{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.att-row .r .u{font-size:10.5px;color:var(--ink-4)}
+
+/* table */
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-3);
+  font-weight:700;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:11px 12px;border-bottom:1px solid var(--line-2);color:var(--ink-2);white-space:nowrap}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tr:hover td{background:var(--sunken)}
+.tbl td.k{color:var(--ink);font-weight:600}
+.tbl td.num,.tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:var(--r-pill)}
+.pill i{width:6px;height:6px;border-radius:50%}
+.pill.good{background:var(--good-wash);color:var(--good)} .pill.good i{background:var(--good)}
+.pill.warn{background:var(--warn-wash);color:var(--warn)} .pill.warn i{background:var(--warn)}
+.pill.crit{background:var(--crit-wash);color:var(--crit)} .pill.crit i{background:var(--crit)}
+
+/* spec section */
+.spec{margin-top:40px}
+.spec h2{font-size:16px;margin-bottom:3px}
+.spec .lead{color:var(--ink-3);font-size:13px;margin-bottom:18px;max-width:60ch}
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.panel .pt{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:700;margin-bottom:12px}
+.swatches{display:flex;flex-direction:column;gap:8px}
+.sw{display:flex;align-items:center;gap:10px;font-size:12px}
+.sw .b{width:34px;height:22px;border-radius:7px;border:1px solid var(--line)}
+.sw code{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-left:auto}
+.typerow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line-2)}
+.typerow:last-child{border-bottom:0}
+.typerow .n{color:var(--ink-3);font-size:11px;font-family:var(--mono)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.inp{width:100%;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:9px 12px;color:var(--ink);font-size:13px;margin-top:10px}
+.inp:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.foot-note{margin-top:34px;padding:16px 18px;border:1px dashed var(--line);border-radius:var(--r);
+  color:var(--ink-3);font-size:12.5px;background:var(--surface)}
+.foot-note b{color:var(--ink)}
+@media (max-width:900px){
+  .console-grid{grid-template-columns:1fr}.rail{display:none}
+  .kpis{grid-template-columns:repeat(2,1fr)}.split{grid-template-columns:1fr}
+  .search{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+  <div class="topnote">
+    <div class="brandline">
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.2" stroke="#fff" stroke-width="2.1"/><circle cx="12" cy="12" r="2.4" fill="#fff"/></svg></div>
+      <div><div class="t">TyrePulse · Design Direction</div><div class="s">Fleet intelligence console — proposed UI/UX refresh</div></div>
+    </div>
+    <div class="toggle" role="group" aria-label="Theme">
+      <button id="tl" aria-pressed="false" onclick="setT('light')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>Light</button>
+      <button id="td" aria-pressed="false" onclick="setT('dark')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>Dark</button>
+    </div>
+  </div>
+
+  <div class="console">
+    <div class="console-grid">
+      <!-- rail -->
+      <aside class="rail">
+        <div class="grp">Overview</div>
+        <div class="nav on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</div>
+        <div class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l2 5 4-12 2 7h6"/></svg>Executive Report</div>
+        <div class="grp">Fleet &amp; Tyres</div>
+        <div class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>Tyre Records</div>
+        <div class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M3 12h18"/></svg>Fleet Master</div>
+        <div class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M3 12h18"/></svg>Inspections</div>
+        <div class="grp">Intelligence</div>
+        <div class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z"/><path d="M9 21h6"/></svg>Root Cause</div>
+        <div class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 2.4 7.4H22l-6 4.5 2.3 7.1L12 16.9 5.7 21l2.3-7.1-6-4.5h7.6Z"/></svg>Alerts<span class="cnt">7</span></div>
+        <div class="grp">Data</div>
+        <div class="nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/></svg>Data Intake</div>
+      </aside>
+
+      <!-- main -->
+      <div class="main">
+        <div class="topbar">
+          <div class="crumb">Overview / <b>Dashboard</b></div>
+          <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>Search asset, serial, job card…</div>
+          <span class="chip-ctx"><span class="dot"></span>KSA · Last 90 days</span>
+          <div class="av">SR</div>
+        </div>
+
+        <div class="content">
+          <div class="pagehead">
+            <div>
+              <h1>Fleet Overview</h1>
+              <div class="sub">162 vehicles · 2,383 tyres tracked · updated 4 min ago</div>
+            </div>
+            <div class="actions">
+              <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>Export</button>
+              <button class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg>New record</button>
+            </div>
+          </div>
+
+          <!-- KPI row -->
+          <div class="kpis" id="kpis"></div>
+
+          <!-- split -->
+          <div class="split">
+            <div class="card">
+              <div class="card-h">
+                <h3>Tyre spend trend</h3>
+                <div class="seg"><button>Monthly</button><button class="on">Quarterly</button><button>Yearly</button></div>
+              </div>
+              <div class="legend"><span><i style="background:var(--accent)"></i>Spend (SAR)</span><span><i style="background:var(--info)"></i>CPK</span></div>
+              <svg id="chart" viewBox="0 0 640 210" width="100%" height="210" preserveAspectRatio="none" aria-label="Spend trend"></svg>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><h3>Needs attention</h3><span class="eyebrow">7 open</span></div>
+              <div class="att" id="att"></div>
+            </div>
+          </div>
+
+          <!-- table -->
+          <div class="card" style="padding:0">
+            <div class="card-h" style="padding:16px 16px 12px"><h3>Recent tyre records</h3>
+              <button class="btn" style="padding:6px 11px">View all</button></div>
+            <div style="overflow-x:auto"><table class="tbl" id="tbl"></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- design system specimen -->
+  <section class="spec">
+    <div class="eyebrow">The system behind it</div>
+    <h2>One language, applied everywhere</h2>
+    <p class="lead">Every screen is built from these tokens and primitives, so all 84 pages inherit the same rhythm, contrast, and states — in light and dark. Change a token, the whole app moves with it.</p>
+    <div class="spec-grid">
+      <div class="panel">
+        <div class="pt">Palette · semantic</div>
+        <div class="swatches">
+          <div class="sw"><span class="b" style="background:var(--accent)"></span>Accent · actions &amp; positive <code>green</code></div>
+          <div class="sw"><span class="b" style="background:var(--warn)"></span>Warning · watch <code>amber</code></div>
+          <div class="sw"><span class="b" style="background:var(--crit)"></span>Critical · act now <code>red</code></div>
+          <div class="sw"><span class="b" style="background:var(--info)"></span>Info · neutral signal <code>cyan</code></div>
+          <div class="sw"><span class="b" style="background:var(--surface)"></span>Surface <code>card</code></div>
+          <div class="sw"><span class="b" style="background:var(--ground)"></span>Ground <code>page</code></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="pt">Type scale</div>
+        <div class="typerow"><span style="font-size:21px;font-weight:600;letter-spacing:-.02em">Fleet Overview</span><span class="n">21 / 600</span></div>
+        <div class="typerow"><span style="font-size:16px;font-weight:600">Section title</span><span class="n">16 / 600</span></div>
+        <div class="typerow"><span style="font-size:14px">Body &amp; controls</span><span class="n">14 / 400</span></div>
+        <div class="typerow"><span style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:700">Micro label</span><span class="n">11 / 700</span></div>
+        <div class="typerow"><span class="num" style="font-size:22px;font-weight:650;letter-spacing:-.03em">2,859,598</span><span class="n">tabular</span></div>
+      </div>
+      <div class="panel">
+        <div class="pt">Controls &amp; status</div>
+        <div class="btns">
+          <button class="btn primary">Primary</button>
+          <button class="btn">Secondary</button>
+          <button class="btn" style="color:var(--crit);border-color:color-mix(in srgb,var(--crit) 30%,transparent)">Danger</button>
+        </div>
+        <div class="pills">
+          <span class="pill good"><i></i>Healthy</span>
+          <span class="pill warn"><i></i>Watch</span>
+          <span class="pill crit"><i></i>Critical</span>
+        </div>
+        <input class="inp" placeholder="Search asset or serial…" aria-label="demo input"/>
+      </div>
+    </div>
+    <div class="foot-note">
+      <b>What changes vs today:</b> the ambient glow, float and shimmer effects step back; green becomes a purposeful accent instead of atmosphere; semantic colors do the at-a-glance work; spacing, hierarchy and tabular numbers get tightened. The green brand, light/dark, Arabic RTL and per-tenant accent all stay. <b>This is a direction to react to</b> — tell me what to push further or pull back, then I roll it across the app on this branch.
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  window.setT=function(m){root.setAttribute('data-theme',m);sync();draw();};
+  function sync(){var m=root.getAttribute('data-theme')
+      ||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+    document.getElementById('tl').setAttribute('aria-pressed',m==='light');
+    document.getElementById('td').setAttribute('aria-pressed',m==='dark');}
+  function cvar(n){return getComputedStyle(root).getPropertyValue(n).trim();}
+
+  // KPI tiles
+  var kpis=[
+    {l:'Fleet CPK',v:'1.20',u:'SAR/km',d:-4.1,dir:'up',s:[7,6.6,6.2,5.9,5.4,5,4.6,4.2],good:true},
+    {l:'Avg tyre life',v:'48,200',u:'km',d:3.2,dir:'up',s:[3,3.4,3.6,3.9,4.1,4.3,4.6,4.8],good:true},
+    {l:'Pressure compliance',v:'86',u:'%',d:2.4,dir:'up',s:[6,6.2,6.4,6.9,7.1,7.5,7.8,8.2],good:true},
+    {l:'Fleet availability',v:'94.1',u:'%',d:-0.6,dir:'down',s:[8,7.9,8,7.7,7.6,7.7,7.5,7.4],good:false},
+    {l:'Open alerts',v:'7',u:'',d:2,dir:'down',s:[2,3,2,4,3,5,6,7],good:false},
+  ];
+  function spark(data,color){
+    var w=74,h=26,mn=Math.min.apply(0,data),mx=Math.max.apply(0,data),rg=(mx-mn)||1;
+    var pts=data.map(function(d,i){return [i/(data.length-1)*w,h-2-((d-mn)/rg)*(h-4)];});
+    var line=pts.map(function(p,i){return (i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1);}).join(' ');
+    var area=line+' L'+w+' '+h+' L0 '+h+' Z';
+    var id='g'+Math.random().toString(36).slice(2,7);
+    return '<svg class="spark" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'
+      +'<defs><linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1">'
+      +'<stop offset="0" stop-color="'+color+'" stop-opacity=".26"/>'
+      +'<stop offset="1" stop-color="'+color+'" stop-opacity="0"/></linearGradient></defs>'
+      +'<path d="'+area+'" fill="url(#'+id+')"/>'
+      +'<path d="'+line+'" fill="none" stroke="'+color+'" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
+      +'<circle cx="'+pts[pts.length-1][0].toFixed(1)+'" cy="'+pts[pts.length-1][1].toFixed(1)+'" r="2.1" fill="'+color+'"/></svg>';
+  }
+  function arrow(dir){return dir==='up'
+    ?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m6 15 6-6 6 6"/></svg>'
+    :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m6 9 6 6 6-6"/></svg>';}
+  function drawKpis(){
+    var acc=cvar('--accent'),info=cvar('--info');
+    document.getElementById('kpis').innerHTML=kpis.map(function(k){
+      var cls=k.good?'up':'down';var col=k.good?acc:info;
+      return '<div class="kpi"><div class="lab">'+k.l+'</div>'
+        +'<div class="val num">'+k.v+(k.u?' <small>'+k.u+'</small>':'')+'</div>'
+        +'<div class="foot"><span class="delta '+cls+'">'+arrow(k.dir)+Math.abs(k.d)+(k.l==='Open alerts'?'':'%')+'</span>'
+        +spark(k.s,col)+'</div></div>';
+    }).join('');
+  }
+
+  // main chart
+  function draw(){
+    drawKpis();
+    var acc=cvar('--accent'),info=cvar('--info'),line=cvar('--line'),ink=cvar('--ink-3');
+    var W=640,H=210,pl=6,pr=6,pt=10,pb=24;
+    var spend=[420,468,505,489,540,585,560,612,648,631,690,724].map(function(x){return x/1000;});
+    var cpk=[1.9,1.85,1.7,1.72,1.6,1.5,1.55,1.42,1.35,1.38,1.28,1.2];
+    var n=spend.length,iw=W-pl-pr,ih=H-pt-pb;
+    var smx=Math.max.apply(0,spend),cmx=Math.max.apply(0,cpk),cmn=Math.min.apply(0,cpk);
+    function sx(i){return pl+i/(n-1)*iw;}
+    function sy(v){return pt+ih-(v/smx)*ih;}
+    function cy(v){return pt+ih-((v-cmn)/((cmx-cmn)||1))*ih*.82;}
+    var g='';
+    for(var r=0;r<=3;r++){var yy=pt+r/3*ih;g+='<line x1="'+pl+'" y1="'+yy.toFixed(1)+'" x2="'+(W-pr)+'" y2="'+yy.toFixed(1)+'" stroke="'+line+'"/>';}
+    var months=['Q1','','','Q2','','','Q3','','','Q4','',''];
+    for(var m=0;m<n;m++){if(months[m])g+='<text x="'+sx(m).toFixed(1)+'" y="'+(H-7)+'" fill="'+ink+'" font-size="10" text-anchor="middle">'+months[m]+'</text>';}
+    var sl=spend.map(function(v,i){return (i?'L':'M')+sx(i).toFixed(1)+' '+sy(v).toFixed(1);}).join(' ');
+    var sa=sl+' L'+sx(n-1).toFixed(1)+' '+(pt+ih)+' L'+pl+' '+(pt+ih)+' Z';
+    var cl=cpk.map(function(v,i){return (i?'L':'M')+sx(i).toFixed(1)+' '+cy(v).toFixed(1);}).join(' ');
+    document.getElementById('chart').innerHTML=
+      '<defs><linearGradient id="sp" x1="0" y1="0" x2="0" y2="1">'
+      +'<stop offset="0" stop-color="'+acc+'" stop-opacity=".22"/><stop offset="1" stop-color="'+acc+'" stop-opacity="0"/></linearGradient></defs>'
+      +g+'<path d="'+sa+'" fill="url(#sp)"/>'
+      +'<path d="'+sl+'" fill="none" stroke="'+acc+'" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'
+      +'<path d="'+cl+'" fill="none" stroke="'+info+'" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round"/>'
+      +spend.map(function(v,i){return '<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(v).toFixed(1)+'" r="'+(i===n-1?3:0)+'" fill="'+acc+'"/>';}).join('');
+  }
+
+  // attention list
+  var att=[
+    {s:'c',a:'TRK-2201 · Drive-L1',b:'CPK 3.4 — 2.8× fleet avg',v:'3.40',u:'CPK'},
+    {s:'c',a:'TRK-1188 · Steer-R1',b:'Tread 2 mm — below legal',v:'2 mm',u:'tread'},
+    {s:'w',a:'LDR-044 · Trailer-L3',b:'Pressure 78 psi — 12% low',v:'78',u:'psi'},
+    {s:'w',a:'TRK-2210 · Drive-R2',b:'Removal at 21,400 km — early',v:'21.4k',u:'km'},
+    {s:'i',a:'Jeddah depot',b:'Inspection compliance 62%',v:'62%',u:'compliance'},
+  ];
+  function drawAtt(){
+    document.getElementById('att').innerHTML=att.map(function(x){
+      return '<div class="att-row"><span class="sev '+x.s+'"></span>'
+        +'<div class="m"><div class="a">'+x.a+'</div><div class="b">'+x.b+'</div></div>'
+        +'<div class="r"><div class="v">'+x.v+'</div><div class="u">'+x.u+'</div></div></div>';
+    }).join('');
+  }
+  // table
+  var rows=[
+    ['15 Mar','TRK-2201','SN-100045','Michelin','Riyadh','1.20',['good','Healthy']],
+    ['14 Mar','TRK-1188','SN-100031','Bridgestone','Riyadh','2.90',['crit','Critical']],
+    ['12 Mar','LDR-044','SN-100022','Goodyear','Jeddah','1.55',['warn','Watch']],
+    ['11 Mar','TRK-2210','SN-100019','Michelin','Dammam','1.05',['good','Healthy']],
+    ['09 Mar','TRK-2199','SN-100004','Continental','Riyadh','1.38',['good','Healthy']],
+  ];
+  function drawTbl(){
+    var head='<thead><tr><th>Date</th><th>Asset</th><th>Serial</th><th>Brand</th><th>Site</th><th class="num">CPK</th><th>Status</th></tr></thead>';
+    var body='<tbody>'+rows.map(function(r){
+      return '<tr><td>'+r[0]+'</td><td class="k">'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+r[4]
+        +'</td><td class="num">'+r[5]+'</td><td><span class="pill '+r[6][0]+'"><i></i>'+r[6][1]+'</span></td></tr>';
+    }).join('')+'</tbody>';
+    document.getElementById('tbl').innerHTML=head+body;
+  }
+  sync();draw();drawAtt();drawTbl();
+  matchMedia('(prefers-color-scheme:dark)').addEventListener('change',function(){if(!root.getAttribute('data-theme'))draw();});
+})();
+</script>

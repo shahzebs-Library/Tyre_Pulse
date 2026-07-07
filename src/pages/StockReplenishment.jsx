@@ -73,7 +73,7 @@ function computeUrgency(daysRemaining, leadTimeDays) {
 
 // ── Skeleton ───────────────────────────────────────────────────────────────────
 function Skeleton({ className = '' }) {
-  return <div className={`animate-pulse bg-gray-800 rounded ${className}`} />
+  return <div className={`animate-pulse bg-[var(--input-bg)] rounded ${className}`} />
 }
 
 // ── Urgency Badge ─────────────────────────────────────────────────────────────
@@ -378,7 +378,7 @@ export default function StockReplenishment() {
     else { setSortField(field); setSortDir('asc') }
   }
   function SortIcon({ field }) {
-    if (sortField !== field) return <ChevronDown size={12} className="text-gray-600" />
+    if (sortField !== field) return <ChevronDown size={12} className="text-[var(--text-dim)]" />
     return sortDir === 'asc'
       ? <ChevronUp size={12} className="text-emerald-400" />
       : <ChevronDown size={12} className="text-emerald-400" />
@@ -650,32 +650,32 @@ export default function StockReplenishment() {
                     value={leadTimeInput}
                     onChange={e => setLeadTimeInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && saveLeadTime()}
-                    className="w-16 px-2 py-1.5 bg-gray-800 border border-emerald-600 rounded-lg text-white text-sm focus:outline-none"
+                    className="w-16 px-2 py-1.5 bg-[var(--input-bg)] border border-emerald-600 rounded-lg text-[var(--text-primary)] text-sm focus:outline-none"
                     autoFocus
                   />
-                  <span className="text-gray-400 text-xs">days</span>
+                  <span className="text-[var(--text-muted)] text-xs">days</span>
                   <button onClick={saveLeadTime} className="px-2 py-1.5 bg-emerald-700 text-white text-xs rounded-lg">
                     <CheckCircle size={13} />
                   </button>
-                  <button onClick={() => setLeadTimeEdit(false)} className="px-2 py-1.5 bg-gray-700 text-gray-300 text-xs rounded-lg">
+                  <button onClick={() => setLeadTimeEdit(false)} className="px-2 py-1.5 bg-[var(--input-bg)] text-[var(--text-secondary)] text-xs rounded-lg">
                     <X size={13} />
                   </button>
                 </>
               ) : (
                 <button
                   onClick={() => { setLeadTimeEdit(true); setLeadTimeInput(leadTimeDays.toString()) }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg hover:border-emerald-600 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs rounded-lg hover:border-emerald-600 transition-colors"
                   title="Edit lead time"
                 >
                   <Clock size={13} className="text-emerald-400" />
                   Lead: {leadTimeDays}d
-                  <Edit2 size={11} className="text-gray-600" />
+                  <Edit2 size={11} className="text-[var(--text-dim)]" />
                 </button>
               )}
             </div>
             <button
               onClick={load}
-              className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors"
+              className="p-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               title="Refresh"
             >
               <RefreshCw size={16} />
@@ -744,22 +744,22 @@ export default function StockReplenishment() {
         ].map(({ label, value, color, icon: Icon, sub }) => (
           <motion.div
             key={label}
-            className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
             <div className="flex items-center gap-2 mb-2">
               <Icon size={15} className={`text-${color}-400`} />
-              <span className="text-gray-400 text-xs">{label}</span>
+              <span className="text-[var(--text-muted)] text-xs">{label}</span>
             </div>
             <div className={`text-2xl font-bold text-${color}-400`}>{value}</div>
-            {sub && <p className="text-gray-500 text-xs mt-1">{sub}</p>}
+            {sub && <p className="text-[var(--text-muted)] text-xs mt-1">{sub}</p>}
           </motion.div>
         ))}
       </div>
 
       {/* ── Tabs ─────────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 w-fit">
         {TABS.map((tab, idx) => (
           <button
             key={tab}
@@ -767,7 +767,7 @@ export default function StockReplenishment() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
               activeTab === idx
                 ? 'bg-emerald-700 text-white shadow'
-                : 'text-gray-400 hover:text-white'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
             {idx === 0 && <Layers size={14} />}
@@ -798,15 +798,15 @@ export default function StockReplenishment() {
             className="space-y-4"
           >
             {/* Filters */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
               <div className="flex flex-wrap gap-3">
                 <div className="relative flex-1 min-w-48">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                   <input
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     placeholder="Search brand, size, site..."
-                    className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                    className="w-full pl-9 pr-4 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500"
                   />
                 </div>
                 {/* Site filter pills */}
@@ -818,7 +818,7 @@ export default function StockReplenishment() {
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
                         siteFilter === site
                           ? 'bg-emerald-700 border-emerald-600 text-white'
-                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+                          : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                       }`}
                     >
                       {site}
@@ -833,7 +833,7 @@ export default function StockReplenishment() {
                     Clear
                   </button>
                 )}
-                <span className="ml-auto self-center text-gray-400 text-sm">
+                <span className="ml-auto self-center text-[var(--text-muted)] text-sm">
                   {filteredMatrix.length} items
                 </span>
               </div>
@@ -841,17 +841,17 @@ export default function StockReplenishment() {
 
             {/* Empty state */}
             {filteredMatrix.length === 0 ? (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-16 text-center">
-                <Package size={48} className="mx-auto mb-4 text-gray-700" />
-                <p className="text-gray-400 text-lg font-medium">No stock data found</p>
-                <p className="text-gray-600 text-sm mt-2">Add stock records to see replenishment recommendations</p>
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-16 text-center">
+                <Package size={48} className="mx-auto mb-4 text-[var(--text-dim)]" />
+                <p className="text-[var(--text-muted)] text-lg font-medium">No stock data found</p>
+                <p className="text-[var(--text-dim)] text-sm mt-2">Add stock records to see replenishment recommendations</p>
               </div>
             ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-800 bg-gray-900/80">
+                      <tr className="border-b border-[var(--input-border)] bg-[var(--surface-1)]/80">
                         {[
                           { label: 'Brand',        field: 'brand'         },
                           { label: 'Size',         field: 'size'          },
@@ -871,8 +871,8 @@ export default function StockReplenishment() {
                               if (field && field !== 'days_remaining') handleSort(field)
                               else if (field === 'days_remaining') handleSort('daysRemaining')
                             }}
-                            className={`px-4 py-3 text-left text-gray-400 font-medium text-xs uppercase tracking-wide whitespace-nowrap ${
-                              field ? 'cursor-pointer hover:text-white' : ''
+                            className={`px-4 py-3 text-left text-[var(--text-muted)] font-medium text-xs uppercase tracking-wide whitespace-nowrap ${
+                              field ? 'cursor-pointer hover:text-[var(--text-primary)]' : ''
                             }`}
                           >
                             <div className="flex items-center gap-1">
@@ -895,27 +895,27 @@ export default function StockReplenishment() {
                         return (
                           <tr
                             key={row._key}
-                            className={`border-b border-gray-800/60 hover:bg-gray-800/40 transition-colors ${cfg.row}`}
+                            className={`border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/40 transition-colors ${cfg.row}`}
                           >
-                            <td className="px-4 py-3 text-white font-medium">{row.brand || '-'}</td>
-                            <td className="px-4 py-3 text-gray-300 font-mono text-xs">{row.size || '-'}</td>
-                            <td className="px-4 py-3 text-gray-400">{row.site || '-'}</td>
+                            <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{row.brand || '-'}</td>
+                            <td className="px-4 py-3 text-[var(--text-secondary)] font-mono text-xs">{row.size || '-'}</td>
+                            <td className="px-4 py-3 text-[var(--text-muted)]">{row.site || '-'}</td>
                             <td className="px-4 py-3 text-center">
-                              <span className={row.qtyInStock <= 0 ? 'text-red-400 font-bold' : 'text-white'}>
+                              <span className={row.qtyInStock <= 0 ? 'text-red-400 font-bold' : 'text-[var(--text-primary)]'}>
                                 {row.qtyInStock ?? 0}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-center text-yellow-400">
                               {row.qtyOnOrder ?? 0}
                             </td>
-                            <td className="px-4 py-3 text-center text-gray-400">
+                            <td className="px-4 py-3 text-center text-[var(--text-muted)]">
                               {row.consumptionPerDay > 0
                                 ? row.consumptionPerDay.toFixed(2)
-                                : <span className="text-gray-600">-</span>}
+                                : <span className="text-[var(--text-dim)]">-</span>}
                             </td>
                             <td className="px-4 py-3 text-center">
                               <span className={
-                                row.daysRemaining === 9999 ? 'text-gray-500' :
+                                row.daysRemaining === 9999 ? 'text-[var(--text-muted)]' :
                                 row.daysRemaining < 30 ? 'text-red-400 font-bold' :
                                 row.daysRemaining < 60 ? 'text-yellow-400' :
                                 row.daysRemaining > 180 ? 'text-blue-400' :
@@ -934,11 +934,11 @@ export default function StockReplenishment() {
                                   ...prev,
                                   [row._key]: Math.max(0, parseInt(e.target.value) || 0),
                                 }))}
-                                className="w-16 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-white text-xs text-center focus:outline-none focus:border-emerald-500"
+                                className="w-16 px-2 py-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-xs text-center focus:outline-none focus:border-emerald-500"
                               />
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <span className={estCostDisplay > 0 ? 'text-emerald-400 text-xs' : 'text-gray-600 text-xs'}>
+                              <span className={estCostDisplay > 0 ? 'text-emerald-400 text-xs' : 'text-[var(--text-dim)] text-xs'}>
                                 {estCostDisplay > 0
                                   ? `${activeCurrency} ${estCostDisplay.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
                                   : '-'}
@@ -965,8 +965,8 @@ export default function StockReplenishment() {
                 </div>
 
                 {/* Urgency legend */}
-                <div className="flex items-center gap-4 px-4 py-3 border-t border-gray-800 text-xs text-gray-500">
-                  <span className="font-medium text-gray-400">Legend:</span>
+                <div className="flex items-center gap-4 px-4 py-3 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
+                  <span className="font-medium text-[var(--text-muted)]">Legend:</span>
                   {Object.entries(URGENCY_CONFIG).map(([k, v]) => (
                     <span key={k} className={`flex items-center gap-1 ${v.color}`}>
                       <span className={`w-2 h-2 rounded-full inline-block ${v.bg.replace('/20', '')} border ${v.border}`} />
@@ -999,8 +999,8 @@ export default function StockReplenishment() {
             )}
 
             {/* Bar chart: top 5 sizes */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h3 className="text-white font-semibold mb-4">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+              <h3 className="text-[var(--text-primary)] font-semibold mb-4">
                 Monthly Consumption by Top 5 Tyre Sizes (Last 6 Months)
               </h3>
               <div className="h-64">
@@ -1016,7 +1016,7 @@ export default function StockReplenishment() {
                     }}
                   />
                 ) : (
-                  <div className="h-full flex items-center justify-center text-gray-600 text-sm">
+                  <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">
                     No tyre issue records in last 90 days
                   </div>
                 )}
@@ -1024,14 +1024,14 @@ export default function StockReplenishment() {
             </div>
 
             {/* Line chart: single size trend */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-semibold">Consumption Trend by Size</h3>
+                <h3 className="text-[var(--text-primary)] font-semibold">Consumption Trend by Size</h3>
                 {allSizes.length > 0 && (
                   <select
                     value={selectedSize}
                     onChange={e => setSelectedSize(e.target.value)}
-                    className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500"
+                    className="px-3 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
                   >
                     {allSizes.map(s => <option key={s}>{s}</option>)}
                   </select>
@@ -1050,7 +1050,7 @@ export default function StockReplenishment() {
                     }}
                   />
                 ) : (
-                  <div className="h-full flex items-center justify-center text-gray-600 text-sm">
+                  <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">
                     No size data available
                   </div>
                 )}
@@ -1058,24 +1058,24 @@ export default function StockReplenishment() {
             </div>
 
             {/* Consumption matrix: size × site */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h3 className="text-white font-semibold mb-4">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+              <h3 className="text-[var(--text-primary)] font-semibold mb-4">
                 Size × Site Consumption Matrix (Last 30 Days)
               </h3>
               {consumptionMatrix.sizes.length === 0 ? (
-                <div className="py-8 text-center text-gray-600 text-sm">No issue records in last 30 days</div>
+                <div className="py-8 text-center text-[var(--text-dim)] text-sm">No issue records in last 30 days</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="text-xs">
                     <thead>
-                      <tr className="border-b border-gray-800">
-                        <th className="px-3 py-2 text-left text-gray-400 font-medium whitespace-nowrap">Size</th>
+                      <tr className="border-b border-[var(--input-border)]">
+                        <th className="px-3 py-2 text-left text-[var(--text-muted)] font-medium whitespace-nowrap">Size</th>
                         {consumptionMatrix.sites.map(site => (
-                          <th key={site} className="px-3 py-2 text-center text-gray-400 font-medium whitespace-nowrap">
+                          <th key={site} className="px-3 py-2 text-center text-[var(--text-muted)] font-medium whitespace-nowrap">
                             {site}
                           </th>
                         ))}
-                        <th className="px-3 py-2 text-center text-gray-300 font-semibold">Total</th>
+                        <th className="px-3 py-2 text-center text-[var(--text-secondary)] font-semibold">Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1084,8 +1084,8 @@ export default function StockReplenishment() {
                           (s, site) => s + (consumptionMatrix.grid[`${size}||${site}`] || 0), 0
                         )
                         return (
-                          <tr key={size} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                            <td className="px-3 py-2 text-white font-mono">{size}</td>
+                          <tr key={size} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/30 transition-colors">
+                            <td className="px-3 py-2 text-[var(--text-primary)] font-mono">{size}</td>
                             {consumptionMatrix.sites.map(site => {
                               const val = consumptionMatrix.grid[`${size}||${site}`] || 0
                               return (
@@ -1094,15 +1094,15 @@ export default function StockReplenishment() {
                                     <span className={`font-medium ${
                                       val >= 10 ? 'text-emerald-400' :
                                       val >= 5  ? 'text-yellow-400' :
-                                                  'text-gray-400'
+                                                  'text-[var(--text-muted)]'
                                     }`}>{val}</span>
                                   ) : (
-                                    <span className="text-gray-700">-</span>
+                                    <span className="text-[var(--text-dim)]">-</span>
                                   )}
                                 </td>
                               )
                             })}
-                            <td className="px-3 py-2 text-center text-white font-semibold">{rowTotal}</td>
+                            <td className="px-3 py-2 text-center text-[var(--text-primary)] font-semibold">{rowTotal}</td>
                           </tr>
                         )
                       })}
@@ -1127,33 +1127,33 @@ export default function StockReplenishment() {
           >
             {/* PO summary card */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Total PO Value</p>
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                <p className="text-[var(--text-muted)] text-xs mb-1">Total PO Value</p>
                 <p className="text-2xl font-bold text-emerald-400">
                   {fmtCurrency(orderTotal, activeCurrency)}
                 </p>
-                <p className="text-gray-500 text-xs mt-1">{orderLines.length} line items</p>
+                <p className="text-[var(--text-muted)] text-xs mt-1">{orderLines.length} line items</p>
               </div>
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Total Units</p>
-                <p className="text-2xl font-bold text-white">
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                <p className="text-[var(--text-muted)] text-xs mb-1">Total Units</p>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">
                   {orderLines.reduce((s, l) => s + (parseInt(l.qty) || 0), 0)}
                 </p>
-                <p className="text-gray-500 text-xs mt-1">tyres across all lines</p>
+                <p className="text-[var(--text-muted)] text-xs mt-1">tyres across all lines</p>
               </div>
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Sites Covered</p>
-                <p className="text-2xl font-bold text-white">
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                <p className="text-[var(--text-muted)] text-xs mb-1">Sites Covered</p>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">
                   {new Set(orderLines.map(l => l.site).filter(Boolean)).size}
                 </p>
-                <p className="text-gray-500 text-xs mt-1">unique sites</p>
+                <p className="text-[var(--text-muted)] text-xs mt-1">unique sites</p>
               </div>
             </div>
 
             {/* Order table */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-                <h3 className="text-white font-semibold flex items-center gap-2">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--input-border)]">
+                <h3 className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
                   <ShoppingCart size={16} className="text-emerald-400" />
                   Purchase Order Lines
                 </h3>
@@ -1167,9 +1167,9 @@ export default function StockReplenishment() {
 
               {orderLines.length === 0 ? (
                 <div className="py-16 text-center">
-                  <ShoppingCart size={48} className="mx-auto mb-4 text-gray-700" />
-                  <p className="text-gray-400 font-medium">No order lines yet</p>
-                  <p className="text-gray-600 text-sm mt-2">
+                  <ShoppingCart size={48} className="mx-auto mb-4 text-[var(--text-dim)]" />
+                  <p className="text-[var(--text-muted)] font-medium">No order lines yet</p>
+                  <p className="text-[var(--text-dim)] text-sm mt-2">
                     Click "Order" in the Replenishment Matrix or add lines manually
                   </p>
                   <button
@@ -1184,26 +1184,26 @@ export default function StockReplenishment() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-800 bg-gray-900/50">
-                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">Brand</th>
-                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">Size</th>
-                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">Site</th>
-                          <th className="px-4 py-3 text-center text-gray-400 text-xs font-medium uppercase tracking-wide">Qty</th>
-                          <th className="px-4 py-3 text-right text-gray-400 text-xs font-medium uppercase tracking-wide">Unit Cost</th>
-                          <th className="px-4 py-3 text-right text-gray-400 text-xs font-medium uppercase tracking-wide">Total</th>
-                          <th className="px-4 py-3 text-left text-gray-400 text-xs font-medium uppercase tracking-wide">Supplier</th>
+                        <tr className="border-b border-[var(--input-border)] bg-[var(--surface-1)]/50">
+                          <th className="px-4 py-3 text-left text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Brand</th>
+                          <th className="px-4 py-3 text-left text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Size</th>
+                          <th className="px-4 py-3 text-left text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Site</th>
+                          <th className="px-4 py-3 text-center text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Qty</th>
+                          <th className="px-4 py-3 text-right text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Unit Cost</th>
+                          <th className="px-4 py-3 text-right text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Total</th>
+                          <th className="px-4 py-3 text-left text-[var(--text-muted)] text-xs font-medium uppercase tracking-wide">Supplier</th>
                           <th className="px-4 py-3 w-8"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {orderLines.map((line, idx) => (
-                          <tr key={line._key} className="border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors">
+                          <tr key={line._key} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/30 transition-colors">
                             <td className="px-4 py-2">
                               <input
                                 value={line.brand}
                                 onChange={e => updateOrderLine(idx, 'brand', e.target.value)}
                                 placeholder="Brand"
-                                className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:border-emerald-500"
+                                className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
                               />
                             </td>
                             <td className="px-4 py-2">
@@ -1211,7 +1211,7 @@ export default function StockReplenishment() {
                                 value={line.size}
                                 onChange={e => updateOrderLine(idx, 'size', e.target.value)}
                                 placeholder="Size"
-                                className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+                                className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-xs font-mono focus:outline-none focus:border-emerald-500"
                               />
                             </td>
                             <td className="px-4 py-2">
@@ -1219,7 +1219,7 @@ export default function StockReplenishment() {
                                 value={line.site}
                                 onChange={e => updateOrderLine(idx, 'site', e.target.value)}
                                 placeholder="Site"
-                                className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:border-emerald-500"
+                                className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
                               />
                             </td>
                             <td className="px-4 py-2">
@@ -1228,7 +1228,7 @@ export default function StockReplenishment() {
                                 min="1"
                                 value={line.qty}
                                 onChange={e => updateOrderLine(idx, 'qty', parseInt(e.target.value) || 1)}
-                                className="w-16 px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm text-center focus:outline-none focus:border-emerald-500 mx-auto block"
+                                className="w-16 px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm text-center focus:outline-none focus:border-emerald-500 mx-auto block"
                               />
                             </td>
                             <td className="px-4 py-2">
@@ -1238,7 +1238,7 @@ export default function StockReplenishment() {
                                 step="0.01"
                                 value={line.unitCost}
                                 onChange={e => updateOrderLine(idx, 'unitCost', parseFloat(e.target.value) || 0)}
-                                className="w-28 px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm text-right focus:outline-none focus:border-emerald-500 ml-auto block"
+                                className="w-28 px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm text-right focus:outline-none focus:border-emerald-500 ml-auto block"
                               />
                             </td>
                             <td className="px-4 py-2 text-right">
@@ -1251,13 +1251,13 @@ export default function StockReplenishment() {
                                 value={line.supplier}
                                 onChange={e => updateOrderLine(idx, 'supplier', e.target.value)}
                                 placeholder="Supplier name"
-                                className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:border-emerald-500"
+                                className="w-full px-2 py-1.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm focus:outline-none focus:border-emerald-500"
                               />
                             </td>
                             <td className="px-4 py-2">
                               <button
                                 onClick={() => removeOrderLine(idx)}
-                                className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                                className="p-1 rounded text-[var(--text-muted)] hover:text-red-400 hover:bg-red-900/20 transition-colors"
                               >
                                 <X size={14} />
                               </button>
@@ -1269,13 +1269,13 @@ export default function StockReplenishment() {
                   </div>
 
                   {/* Total row */}
-                  <div className="flex items-center justify-between px-5 py-4 border-t border-gray-800 bg-gray-800/30">
-                    <span className="text-gray-400 text-sm font-medium">
+                  <div className="flex items-center justify-between px-5 py-4 border-t border-[var(--input-border)] bg-[var(--input-bg)]/30">
+                    <span className="text-[var(--text-muted)] text-sm font-medium">
                       {orderLines.length} line{orderLines.length !== 1 ? 's' : ''} ·{' '}
                       {orderLines.reduce((s, l) => s + (parseInt(l.qty) || 0), 0)} units total
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-400 text-sm">Total PO Value:</span>
+                      <span className="text-[var(--text-muted)] text-sm">Total PO Value:</span>
                       <span className="text-emerald-400 text-xl font-bold">
                         {fmtCurrency(orderTotal, activeCurrency)}
                       </span>
@@ -1301,7 +1301,7 @@ export default function StockReplenishment() {
                     <ExternalLink size={14} />Open Procurement
                   </a>
                 )}
-                <button onClick={() => setPoResult(null)} className="ml-auto text-gray-400 hover:text-white">
+                <button onClick={() => setPoResult(null)} className="ml-auto text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                   <X size={16} />
                 </button>
               </div>
@@ -1322,14 +1322,14 @@ export default function StockReplenishment() {
                 </button>
                 <button
                   onClick={exportOrderExcel}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm font-medium rounded-xl transition-colors"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm font-medium rounded-xl transition-colors"
                 >
                   <FileSpreadsheet size={16} className="text-emerald-400" />
                   Export PO to Excel
                 </button>
                 <button
                   onClick={exportOrderPDF}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm font-medium rounded-xl transition-colors"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm font-medium rounded-xl transition-colors"
                 >
                   <FileText size={16} className="text-red-400" />
                   Export PO to PDF

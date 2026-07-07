@@ -759,10 +759,10 @@ export default function BudgetPlanner() {
       'Complete': 'bg-blue-900/60 text-blue-400 border border-blue-800',
       'Active': 'bg-purple-900/60 text-purple-400 border border-purple-800',
       'Over': 'bg-red-900/60 text-red-400 border border-red-800',
-      'Pending': 'bg-gray-800 text-gray-400 border border-gray-700',
+      'Pending': 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
     }
     return (
-      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${map[status] ?? 'bg-gray-800 text-gray-400'}`}>
+      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${map[status] ?? 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
         {t(`budgetplanner.status.${STATUS_KEY_MAP[status] ?? 'pending'}`)}
       </span>
     )
@@ -776,7 +776,7 @@ export default function BudgetPlanner() {
   if (loading || budgetsLoading) return (
     <div className="flex items-center justify-center h-96">
       <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-      <span className="ml-3 text-gray-400">{t('budgetplanner.loading')}</span>
+      <span className="ml-3 text-[var(--text-muted)]">{t('budgetplanner.loading')}</span>
     </div>
   )
 
@@ -803,25 +803,25 @@ export default function BudgetPlanner() {
         subtitle={t('budgetplanner.subtitle')}
         icon={DollarSign}
         actions={<>
-          <div className="flex items-center gap-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5">
+          <div className="flex items-center gap-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-1.5">
             <Calendar className="w-4 h-4 text-blue-400" />
             <select
               value={selectedYear}
               onChange={e => setSelectedYear(Number(e.target.value))}
-              className="bg-transparent text-white text-sm focus:outline-none"
+              className="bg-transparent text-[var(--text-primary)] text-sm focus:outline-none"
             >
               {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2].map(y => (
-                <option key={y} value={y} className="bg-gray-900">{y}</option>
+                <option key={y} value={y} className="bg-[var(--surface-1)]">{y}</option>
               ))}
             </select>
           </div>
-          <button onClick={fetchRecords} className="p-2 bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded-lg text-gray-400 hover:text-white transition-colors">
+          <button onClick={fetchRecords} className="p-2 bg-[var(--input-bg)] border border-[var(--input-border)] hover:bg-[var(--input-bg-hover)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
             onClick={handleExportPdf}
             disabled={exporting}
-            className="flex items-center gap-2 px-3 py-2 bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg text-sm transition-colors"
+            className="flex items-center gap-2 px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] hover:bg-[var(--input-bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg text-sm transition-colors"
           >
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
             {t('budgetplanner.actions.pdf')}
@@ -840,17 +840,17 @@ export default function BudgetPlanner() {
       {/* ── Status Bar ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }}
         className="card px-5 py-3 flex flex-wrap items-center gap-4 text-sm">
-        <span className="text-gray-500 font-medium">{t('budgetplanner.statusBar.fy', { year: selectedYear })}</span>
-        <span className="text-gray-600">|</span>
-        <span className="text-gray-400">{t('budgetplanner.statusBar.budgetSet')} <span className="text-blue-400 font-semibold">{fmt(annualBudget, activeCurrency)}</span></span>
-        <span className="text-gray-600">|</span>
-        <span className="text-gray-400">{t('budgetplanner.statusBar.actualYtd')} <span className="text-white font-semibold">{fmt(ytdActual, activeCurrency)}</span></span>
-        <span className="text-gray-600">|</span>
-        <span className="text-gray-400">{t('budgetplanner.statusBar.variance')} <span className={`font-semibold ${varColor(variance)}`}>{fmt(variance, activeCurrency)}</span></span>
-        <span className="text-gray-600">|</span>
-        <span className="text-gray-400">{t('budgetplanner.statusBar.pctUsed')} <span className={`font-semibold ${pctUsed > 100 ? 'text-red-400' : pctUsed > 90 ? 'text-amber-400' : 'text-green-400'}`}>{fmtPct(pctUsed)}</span></span>
-        <span className="text-gray-600">|</span>
-        <span className="text-gray-400">{t('budgetplanner.statusBar.projectedYe')} <span className={`font-semibold ${projectedYearEnd > annualBudget ? 'text-red-400' : 'text-green-400'}`}>{fmt(projectedYearEnd, activeCurrency)}</span></span>
+        <span className="text-[var(--text-muted)] font-medium">{t('budgetplanner.statusBar.fy', { year: selectedYear })}</span>
+        <span className="text-[var(--text-dim)]">|</span>
+        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.budgetSet')} <span className="text-blue-400 font-semibold">{fmt(annualBudget, activeCurrency)}</span></span>
+        <span className="text-[var(--text-dim)]">|</span>
+        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.actualYtd')} <span className="text-[var(--text-primary)] font-semibold">{fmt(ytdActual, activeCurrency)}</span></span>
+        <span className="text-[var(--text-dim)]">|</span>
+        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.variance')} <span className={`font-semibold ${varColor(variance)}`}>{fmt(variance, activeCurrency)}</span></span>
+        <span className="text-[var(--text-dim)]">|</span>
+        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.pctUsed')} <span className={`font-semibold ${pctUsed > 100 ? 'text-red-400' : pctUsed > 90 ? 'text-amber-400' : 'text-green-400'}`}>{fmtPct(pctUsed)}</span></span>
+        <span className="text-[var(--text-dim)]">|</span>
+        <span className="text-[var(--text-muted)]">{t('budgetplanner.statusBar.projectedYe')} <span className={`font-semibold ${projectedYearEnd > annualBudget ? 'text-red-400' : 'text-green-400'}`}>{fmt(projectedYearEnd, activeCurrency)}</span></span>
       </motion.div>
 
       {/* ── Save Error Banner ── */}
@@ -915,33 +915,33 @@ export default function BudgetPlanner() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              className={`bg-gray-900 border ${borderCls} rounded-xl p-4 relative`}
+              className={`bg-[var(--surface-1)] border ${borderCls} rounded-xl p-4 relative`}
             >
               <div className={`inline-flex p-2 rounded-lg ${bgCls} mb-3`}>
                 <kpi.icon className={`w-5 h-5 ${textCls}`} />
               </div>
-              <p className="text-gray-400 text-xs mb-1">{kpi.label}</p>
+              <p className="text-[var(--text-muted)] text-xs mb-1">{kpi.label}</p>
               {kpi.editing ? (
                 <div className="flex items-center gap-1">
                   <input
                     type="number"
                     value={annualEditValue}
                     onChange={e => setAnnualEditValue(e.target.value)}
-                    className="w-full bg-gray-800 border border-blue-600 text-white rounded px-2 py-1 text-sm focus:outline-none"
+                    className="w-full bg-[var(--input-bg)] border border-blue-600 text-[var(--text-primary)] rounded px-2 py-1 text-sm focus:outline-none"
                     autoFocus
                     onKeyDown={e => { if (e.key === 'Enter') saveAnnualBudget(); if (e.key === 'Escape') setEditingAnnual(false) }}
                   />
                   <button onClick={saveAnnualBudget} disabled={saving} className="p-1 text-green-400 hover:text-green-300 disabled:opacity-50">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   </button>
-                  <button onClick={() => setEditingAnnual(false)} className="p-1 text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
+                  <button onClick={() => setEditingAnnual(false)} className="p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"><X className="w-4 h-4" /></button>
                 </div>
               ) : (
                 <p className={`text-xl font-bold ${textCls}`}>{kpi.value}</p>
               )}
-              {kpi.sub && <p className="text-gray-500 text-xs mt-1">{kpi.sub}</p>}
+              {kpi.sub && <p className="text-[var(--text-muted)] text-xs mt-1">{kpi.sub}</p>}
               {kpi.editable && !kpi.editing && (
-                <button onClick={kpi.onEdit} className="absolute top-3 right-3 p-1 text-gray-600 hover:text-gray-300 transition-colors">
+                <button onClick={kpi.onEdit} className="absolute top-3 right-3 p-1 text-[var(--text-dim)] hover:text-[var(--text-secondary)] transition-colors">
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -954,11 +954,11 @@ export default function BudgetPlanner() {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}
         className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-white font-semibold flex items-center gap-2">
+          <h2 className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-blue-400" />
             {t('budgetplanner.chart.budgetVsActual', { year: selectedYear })}
           </h2>
-          <span className="text-xs text-gray-500">{t('budgetplanner.chart.redBarsHint')}</span>
+          <span className="text-xs text-[var(--text-muted)]">{t('budgetplanner.chart.redBarsHint')}</span>
         </div>
         <div className="h-72">
           <Bar data={monthlyChartData} options={monthlyChartOptions} />
@@ -967,7 +967,7 @@ export default function BudgetPlanner() {
 
       {/* ── Quarterly Cards ── */}
       <div>
-        <h2 className="text-white font-semibold mb-3 flex items-center gap-2">
+        <h2 className="text-[var(--text-primary)] font-semibold mb-3 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-purple-400" />
           {t('budgetplanner.quarterly.heading')}
         </h2>
@@ -981,31 +981,31 @@ export default function BudgetPlanner() {
               className="card"
             >
               <div className="flex items-center justify-between mb-3">
-                <span className="text-white font-semibold">{q.label}</span>
+                <span className="text-[var(--text-primary)] font-semibold">{q.label}</span>
                 {statusBadge(q.status)}
               </div>
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">{t('budgetplanner.quarterly.budget')}</span>
+                  <span className="text-[var(--text-muted)]">{t('budgetplanner.quarterly.budget')}</span>
                   <span className="text-blue-400 font-medium">{fmt(q.budget, activeCurrency)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">{t('budgetplanner.quarterly.actual')}</span>
-                  <span className="text-white font-medium">{fmt(q.actual, activeCurrency)}</span>
+                  <span className="text-[var(--text-muted)]">{t('budgetplanner.quarterly.actual')}</span>
+                  <span className="text-[var(--text-primary)] font-medium">{fmt(q.actual, activeCurrency)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">{t('budgetplanner.quarterly.variance')}</span>
+                  <span className="text-[var(--text-muted)]">{t('budgetplanner.quarterly.variance')}</span>
                   <span className={`font-medium ${varColor(q.variance)}`}>{fmt(q.variance, activeCurrency)}</span>
                 </div>
               </div>
               <div className="mt-3">
-                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${q.pct > 100 ? 'bg-red-500' : q.pct >= 90 ? 'bg-amber-500' : 'bg-green-500'}`}
                     style={{ width: `${Math.min(100, q.pct)}%` }}
                   />
                 </div>
-                <p className="text-gray-500 text-xs mt-1">{t('budgetplanner.quarterly.usedPct', { pct: fmtPct(q.pct) })}</p>
+                <p className="text-[var(--text-muted)] text-xs mt-1">{t('budgetplanner.quarterly.usedPct', { pct: fmtPct(q.pct) })}</p>
               </div>
             </motion.div>
           ))}
@@ -1014,21 +1014,21 @@ export default function BudgetPlanner() {
 
       {/* ── Site Budget Allocation ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
-        className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="p-5 border-b border-gray-800 flex items-center justify-between">
-          <h2 className="text-white font-semibold flex items-center gap-2">
+        className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+        <div className="p-5 border-b border-[var(--input-border)] flex items-center justify-between">
+          <h2 className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
             <Target className="w-5 h-5 text-green-400" />
             {t('budgetplanner.site.heading')}
           </h2>
-          {isAdmin && <span className="text-xs text-gray-500 flex items-center gap-1"><Edit2 className="w-3 h-3" />{t('budgetplanner.site.editHint')}</span>}
+          {isAdmin && <span className="text-xs text-[var(--text-muted)] flex items-center gap-1"><Edit2 className="w-3 h-3" />{t('budgetplanner.site.editHint')}</span>}
         </div>
         {siteData.length === 0 ? (
-          <div className="p-10 text-center text-gray-500">{t('budgetplanner.site.empty', { year: selectedYear })}</div>
+          <div className="p-10 text-center text-[var(--text-muted)]">{t('budgetplanner.site.empty', { year: selectedYear })}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-800">
+                <tr className="border-b border-[var(--input-border)]">
                   {[
                     t('budgetplanner.site.columns.site'),
                     t('budgetplanner.site.columns.annualBudget'),
@@ -1042,7 +1042,7 @@ export default function BudgetPlanner() {
                   ]
                     .filter(Boolean)
                     .map(h => (
-                      <th key={h} className="text-left text-gray-500 font-medium px-4 py-3 whitespace-nowrap">{h}</th>
+                      <th key={h} className="text-left text-[var(--text-muted)] font-medium px-4 py-3 whitespace-nowrap">{h}</th>
                     ))}
                 </tr>
               </thead>
@@ -1053,9 +1053,9 @@ export default function BudgetPlanner() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: i * 0.03 }}
-                    className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors"
+                    className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/30 transition-colors"
                   >
-                    <td className="px-4 py-3 text-white font-medium">{s.site}</td>
+                    <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{s.site}</td>
                     <td className="px-4 py-3">
                       {editingSite === s.site ? (
                         <div className="flex items-center gap-1">
@@ -1063,14 +1063,14 @@ export default function BudgetPlanner() {
                             type="number"
                             value={editValue}
                             onChange={e => setEditValue(e.target.value)}
-                            className="w-32 bg-gray-800 border border-blue-600 text-white rounded px-2 py-1 text-sm focus:outline-none"
+                            className="w-32 bg-[var(--input-bg)] border border-blue-600 text-[var(--text-primary)] rounded px-2 py-1 text-sm focus:outline-none"
                             autoFocus
                             onKeyDown={e => { if (e.key === 'Enter') saveEditSite(s.site); if (e.key === 'Escape') cancelEditSite() }}
                           />
                           <button onClick={() => saveEditSite(s.site)} disabled={saving} className="p-1 text-green-400 hover:text-green-300 disabled:opacity-50">
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                           </button>
-                          <button onClick={cancelEditSite} className="p-1 text-gray-500 hover:text-gray-300">
+                          <button onClick={cancelEditSite} className="p-1 text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
                             <X className="w-4 h-4" />
                           </button>
                         </div>
@@ -1078,24 +1078,24 @@ export default function BudgetPlanner() {
                         <span className="text-blue-400 font-medium">{fmt(s.budget, activeCurrency)}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-white">{fmt(s.actual, activeCurrency)}</td>
+                    <td className="px-4 py-3 text-[var(--text-primary)]">{fmt(s.actual, activeCurrency)}</td>
                     <td className={`px-4 py-3 font-medium ${varColor(s.variance)}`}>{fmt(s.variance, activeCurrency)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="w-16 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
                           <div className={`h-full rounded-full ${s.pct > 100 ? 'bg-red-500' : s.pct >= 90 ? 'bg-amber-500' : 'bg-green-500'}`}
                             style={{ width: `${Math.min(100, s.pct)}%` }} />
                         </div>
                         <span className={s.pct > 100 ? 'text-red-400' : s.pct >= 90 ? 'text-amber-400' : 'text-green-400'}>{fmtPct(s.pct)}</span>
                       </div>
                     </td>
-                    <td className={`px-4 py-3 font-medium ${s.projection > s.budget ? 'text-red-400' : 'text-gray-300'}`}>{fmt(s.projection, activeCurrency)}</td>
-                    <td className="px-4 py-3 text-gray-300">{fmtCpk(s.cpk, activeCurrency)}</td>
+                    <td className={`px-4 py-3 font-medium ${s.projection > s.budget ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>{fmt(s.projection, activeCurrency)}</td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)]">{fmtCpk(s.cpk, activeCurrency)}</td>
                     <td className="px-4 py-3">{statusBadge(s.status)}</td>
                     {isAdmin && (
                       <td className="px-4 py-3">
                         {editingSite !== s.site && (
-                          <button onClick={() => startEditSite(s.site, s.budget)} className="p-1.5 text-gray-600 hover:text-gray-300 hover:bg-gray-800 rounded transition-colors">
+                          <button onClick={() => startEditSite(s.site, s.budget)} className="p-1.5 text-[var(--text-dim)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)] rounded transition-colors">
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                         )}
@@ -1112,8 +1112,8 @@ export default function BudgetPlanner() {
       {/* ── Budget vs CPK Efficiency ── */}
       {overBudgetSites.length > 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          className="bg-gray-900 border border-red-900/50 rounded-xl p-5">
-          <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
+          className="bg-[var(--surface-1)] border border-red-900/50 rounded-xl p-5">
+          <h2 className="text-[var(--text-primary)] font-semibold mb-4 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-red-400" />
             {t('budgetplanner.cpkEfficiency.heading')}
           </h2>
@@ -1124,38 +1124,38 @@ export default function BudgetPlanner() {
                 ? (s.actual / s.cpk) * (s.cpk - cpkImproved)
                 : null
               return (
-                <div key={s.site} className="bg-gray-800 rounded-xl p-4 border border-red-900/30">
+                <div key={s.site} className="bg-[var(--input-bg)] rounded-xl p-4 border border-red-900/30">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-white font-semibold">{s.site}</span>
+                    <span className="text-[var(--text-primary)] font-semibold">{s.site}</span>
                     {statusBadge('Over Budget')}
                   </div>
-                  <p className="text-gray-400 text-xs mb-3">
+                  <p className="text-[var(--text-muted)] text-xs mb-3">
                     {t('budgetplanner.cpkEfficiency.overBudgetBy', { value: fmt(Math.abs(s.variance), activeCurrency), pct: fmtPct(s.pct - 100) })}
                   </p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-500">{t('budgetplanner.cpkEfficiency.currentCpk')}</span>
+                      <span className="text-[var(--text-muted)]">{t('budgetplanner.cpkEfficiency.currentCpk')}</span>
                       <span className="text-red-400 font-medium">{fmtCpk(s.cpk, activeCurrency)}</span>
                     </div>
                     {s.prevCpk && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">{t('budgetplanner.cpkEfficiency.priorYearCpk')}</span>
-                        <span className="text-gray-300">{fmtCpk(s.prevCpk, activeCurrency)}</span>
+                        <span className="text-[var(--text-muted)]">{t('budgetplanner.cpkEfficiency.priorYearCpk')}</span>
+                        <span className="text-[var(--text-secondary)]">{fmtCpk(s.prevCpk, activeCurrency)}</span>
                       </div>
                     )}
                     {cpkImproved && (
                       <div className="flex justify-between">
-                        <span className="text-gray-500">{t('budgetplanner.cpkEfficiency.targetCpk')}</span>
+                        <span className="text-[var(--text-muted)]">{t('budgetplanner.cpkEfficiency.targetCpk')}</span>
                         <span className="text-green-400 font-medium">{fmtCpk(cpkImproved, activeCurrency)}</span>
                       </div>
                     )}
                   </div>
                   {saving > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-700 bg-green-900/20 -mx-4 -mb-4 px-4 pb-4 rounded-b-xl">
+                    <div className="mt-3 pt-3 border-t border-[var(--input-border)] bg-green-900/20 -mx-4 -mb-4 px-4 pb-4 rounded-b-xl">
                       <p className="text-green-400 text-sm font-medium">
                         {t('budgetplanner.cpkEfficiency.potentialSaving', { value: fmt(saving, activeCurrency) })}
                       </p>
-                      <p className="text-gray-500 text-xs mt-0.5">
+                      <p className="text-[var(--text-muted)] text-xs mt-0.5">
                         {t('budgetplanner.cpkEfficiency.improvedFromTo', { from: fmtCpk(s.cpk, activeCurrency), to: fmtCpk(cpkImproved, activeCurrency) })}
                       </p>
                     </div>
@@ -1170,7 +1170,7 @@ export default function BudgetPlanner() {
       {/* ── What-If Scenario Builder ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}
         className="card">
-        <h2 className="text-white font-semibold mb-5 flex items-center gap-2">
+        <h2 className="text-[var(--text-primary)] font-semibold mb-5 flex items-center gap-2">
           <Sliders className="w-5 h-5 text-purple-400" />
           {t('budgetplanner.whatIf.heading')}
         </h2>
@@ -1179,7 +1179,7 @@ export default function BudgetPlanner() {
             {/* CPK Target */}
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="text-gray-300 text-sm font-medium">{t('budgetplanner.whatIf.cpkTargetLabel')}</label>
+                <label className="text-[var(--text-secondary)] text-sm font-medium">{t('budgetplanner.whatIf.cpkTargetLabel')}</label>
                 <span className="text-blue-400 font-semibold text-sm">{activeCurrency} {cpkTarget.toFixed(2)}/km</span>
               </div>
               <input
@@ -1189,22 +1189,22 @@ export default function BudgetPlanner() {
                 step="0.05"
                 value={cpkTarget}
                 onChange={e => setCpkTarget(parseFloat(e.target.value))}
-                className="w-full h-2 bg-gray-800 rounded-full appearance-none cursor-pointer accent-blue-500"
+                className="w-full h-2 bg-[var(--input-bg)] rounded-full appearance-none cursor-pointer accent-blue-500"
               />
-              <div className="flex justify-between text-xs text-gray-600 mt-1">
+              <div className="flex justify-between text-xs text-[var(--text-dim)] mt-1">
                 <span>{activeCurrency} 0.50</span>
                 <span>{activeCurrency} 5.00</span>
               </div>
               {scenarioProjection?.currentAvgCpk && (
-                <p className="text-gray-500 text-xs mt-1">{t('budgetplanner.whatIf.currentFleetAvgCpk', { value: fmtCpk(scenarioProjection.currentAvgCpk, activeCurrency) })}</p>
+                <p className="text-[var(--text-muted)] text-xs mt-1">{t('budgetplanner.whatIf.currentFleetAvgCpk', { value: fmtCpk(scenarioProjection.currentAvgCpk, activeCurrency) })}</p>
               )}
             </div>
 
             {/* Volume change */}
             <div>
               <div className="flex justify-between items-center mb-2">
-                <label className="text-gray-300 text-sm font-medium">{t('budgetplanner.whatIf.volumeChangeLabel')}</label>
-                <span className={`font-semibold text-sm ${volumeChange > 0 ? 'text-red-400' : volumeChange < 0 ? 'text-green-400' : 'text-gray-400'}`}>
+                <label className="text-[var(--text-secondary)] text-sm font-medium">{t('budgetplanner.whatIf.volumeChangeLabel')}</label>
+                <span className={`font-semibold text-sm ${volumeChange > 0 ? 'text-red-400' : volumeChange < 0 ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
                   {volumeChange > 0 ? '+' : ''}{volumeChange}%
                 </span>
               </div>
@@ -1215,9 +1215,9 @@ export default function BudgetPlanner() {
                 step="1"
                 value={volumeChange}
                 onChange={e => setVolumeChange(Number(e.target.value))}
-                className="w-full h-2 bg-gray-800 rounded-full appearance-none cursor-pointer accent-purple-500"
+                className="w-full h-2 bg-[var(--input-bg)] rounded-full appearance-none cursor-pointer accent-purple-500"
               />
-              <div className="flex justify-between text-xs text-gray-600 mt-1">
+              <div className="flex justify-between text-xs text-[var(--text-dim)] mt-1">
                 <span>{t('budgetplanner.whatIf.rangeFewer')}</span>
                 <span>{t('budgetplanner.whatIf.rangeMore')}</span>
               </div>
@@ -1227,7 +1227,7 @@ export default function BudgetPlanner() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="text-gray-300 text-sm font-medium">{t('budgetplanner.whatIf.brandSwitchVolumeLabel')}</label>
+                  <label className="text-[var(--text-secondary)] text-sm font-medium">{t('budgetplanner.whatIf.brandSwitchVolumeLabel')}</label>
                   <span className="text-amber-400 font-semibold text-sm">{brandSwitchPct}%</span>
                 </div>
                 <input
@@ -1237,13 +1237,13 @@ export default function BudgetPlanner() {
                   step="5"
                   value={brandSwitchPct}
                   onChange={e => setBrandSwitchPct(Number(e.target.value))}
-                  className="w-full h-2 bg-gray-800 rounded-full appearance-none cursor-pointer accent-amber-500"
+                  className="w-full h-2 bg-[var(--input-bg)] rounded-full appearance-none cursor-pointer accent-amber-500"
                 />
-                <p className="text-xs text-gray-600 mt-1">{t('budgetplanner.whatIf.brandSwitchVolumeHint')}</p>
+                <p className="text-xs text-[var(--text-dim)] mt-1">{t('budgetplanner.whatIf.brandSwitchVolumeHint')}</p>
               </div>
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="text-gray-300 text-sm font-medium">{t('budgetplanner.whatIf.brandCostSavingLabel')}</label>
+                  <label className="text-[var(--text-secondary)] text-sm font-medium">{t('budgetplanner.whatIf.brandCostSavingLabel')}</label>
                   <span className="text-green-400 font-semibold text-sm">{brandSwitchSaving}%</span>
                 </div>
                 <input
@@ -1253,9 +1253,9 @@ export default function BudgetPlanner() {
                   step="1"
                   value={brandSwitchSaving}
                   onChange={e => setBrandSwitchSaving(Number(e.target.value))}
-                  className="w-full h-2 bg-gray-800 rounded-full appearance-none cursor-pointer accent-green-500"
+                  className="w-full h-2 bg-[var(--input-bg)] rounded-full appearance-none cursor-pointer accent-green-500"
                 />
-                <p className="text-xs text-gray-600 mt-1">{t('budgetplanner.whatIf.brandCostSavingHint')}</p>
+                <p className="text-xs text-[var(--text-dim)] mt-1">{t('budgetplanner.whatIf.brandCostSavingHint')}</p>
               </div>
             </div>
           </div>
@@ -1263,26 +1263,26 @@ export default function BudgetPlanner() {
           {/* Scenario output */}
           <div className="card flex flex-col justify-between">
             <div>
-              <p className="text-gray-400 text-sm mb-4">{t('budgetplanner.whatIf.scenarioProjection')}</p>
+              <p className="text-[var(--text-muted)] text-sm mb-4">{t('budgetplanner.whatIf.scenarioProjection')}</p>
               <div className="space-y-4">
                 <div>
-                  <p className="text-gray-500 text-xs">{t('budgetplanner.whatIf.currentTrajectory')}</p>
+                  <p className="text-[var(--text-muted)] text-xs">{t('budgetplanner.whatIf.currentTrajectory')}</p>
                   <p className="text-xl font-bold text-red-400">{fmt(projectedYearEnd, activeCurrency)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 text-xs">{t('budgetplanner.whatIf.underThisScenario')}</p>
+                  <p className="text-[var(--text-muted)] text-xs">{t('budgetplanner.whatIf.underThisScenario')}</p>
                   <p className="text-2xl font-bold text-green-400">{scenarioProjection ? fmt(scenarioProjection.projected, activeCurrency) : t('budgetplanner.na')}</p>
                 </div>
               </div>
             </div>
             {scenarioProjection && scenarioProjection.saving !== 0 && (
-              <div className={`mt-4 pt-4 border-t border-gray-700 rounded-lg p-3 ${scenarioProjection.saving > 0 ? 'bg-green-900/20' : 'bg-red-900/20'}`}>
+              <div className={`mt-4 pt-4 border-t border-[var(--input-border)] rounded-lg p-3 ${scenarioProjection.saving > 0 ? 'bg-green-900/20' : 'bg-red-900/20'}`}>
                 <p className={`font-bold text-lg ${scenarioProjection.saving > 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {scenarioProjection.saving > 0
                     ? t('budgetplanner.whatIf.savingLine', { value: fmt(Math.abs(scenarioProjection.saving), activeCurrency) })
                     : t('budgetplanner.whatIf.additionalCostLine', { value: fmt(Math.abs(scenarioProjection.saving), activeCurrency) })}
                 </p>
-                <p className="text-gray-500 text-xs mt-1">
+                <p className="text-[var(--text-muted)] text-xs mt-1">
                   {scenarioProjection.saving > 0
                     ? t('budgetplanner.whatIf.underScenarioSave', { value: fmt(Math.abs(scenarioProjection.saving), activeCurrency) })
                     : t('budgetplanner.whatIf.underScenarioSpend', { value: fmt(Math.abs(scenarioProjection.saving), activeCurrency) })}
@@ -1297,7 +1297,7 @@ export default function BudgetPlanner() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
           className="card">
-          <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
+          <h2 className="text-[var(--text-primary)] font-semibold mb-4 flex items-center gap-2">
             <PieIcon className="w-5 h-5 text-amber-400" />
             {t('budgetplanner.brand.distribution', { year: selectedYear })}
           </h2>
@@ -1313,14 +1313,14 @@ export default function BudgetPlanner() {
               />
             </div>
           ) : (
-            <div className="h-60 flex items-center justify-center text-gray-600">{t('budgetplanner.brand.noData', { year: selectedYear })}</div>
+            <div className="h-60 flex items-center justify-center text-[var(--text-dim)]">{t('budgetplanner.brand.noData', { year: selectedYear })}</div>
           )}
         </motion.div>
 
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
-          className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          <div className="p-5 border-b border-gray-800">
-            <h2 className="text-white font-semibold flex items-center gap-2">
+          className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+          <div className="p-5 border-b border-[var(--input-border)]">
+            <h2 className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-amber-400" />
               {t('budgetplanner.brand.analysis')}
             </h2>
@@ -1328,7 +1328,7 @@ export default function BudgetPlanner() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-800">
+                <tr className="border-b border-[var(--input-border)]">
                   {[
                     t('budgetplanner.brand.columns.brand'),
                     t('budgetplanner.brand.columns.thisYear'),
@@ -1337,27 +1337,27 @@ export default function BudgetPlanner() {
                     t('budgetplanner.brand.columns.cpk'),
                     t('budgetplanner.brand.columns.cpkDelta'),
                   ].map(h => (
-                    <th key={h} className="text-left text-gray-500 font-medium px-4 py-3 whitespace-nowrap">{h}</th>
+                    <th key={h} className="text-left text-[var(--text-muted)] font-medium px-4 py-3 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {brandData.slice(0, 10).map((b, i) => (
-                  <tr key={b.brand} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                    <td className="px-4 py-2.5 text-white font-medium">{b.brand}</td>
+                  <tr key={b.brand} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/30">
+                    <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{b.brand}</td>
                     <td className="px-4 py-2.5 text-blue-400">{fmt(b.thisYear, activeCurrency)}</td>
-                    <td className="px-4 py-2.5 text-gray-400">{fmt(b.lastYear, activeCurrency)}</td>
-                    <td className={`px-4 py-2.5 font-medium ${b.change == null ? 'text-gray-500' : b.change > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                    <td className="px-4 py-2.5 text-[var(--text-muted)]">{fmt(b.lastYear, activeCurrency)}</td>
+                    <td className={`px-4 py-2.5 font-medium ${b.change == null ? 'text-[var(--text-muted)]' : b.change > 0 ? 'text-red-400' : 'text-green-400'}`}>
                       {b.change != null ? (b.change > 0 ? '+' : '') + fmtPct(b.change) : t('budgetplanner.na')}
                     </td>
-                    <td className="px-4 py-2.5 text-gray-300">{fmtCpk(b.cpk, activeCurrency)}</td>
-                    <td className={`px-4 py-2.5 font-medium ${b.cpkChange == null ? 'text-gray-500' : b.cpkChange > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                    <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtCpk(b.cpk, activeCurrency)}</td>
+                    <td className={`px-4 py-2.5 font-medium ${b.cpkChange == null ? 'text-[var(--text-muted)]' : b.cpkChange > 0 ? 'text-red-400' : 'text-green-400'}`}>
                       {b.cpkChange != null ? (b.cpkChange > 0 ? '+' : '') + fmtPct(b.cpkChange) : t('budgetplanner.na')}
                     </td>
                   </tr>
                 ))}
                 {brandData.length === 0 && (
-                  <tr><td colSpan={6} className="text-center text-gray-600 py-8">{t('budgetplanner.brand.noDataAvailable')}</td></tr>
+                  <tr><td colSpan={6} className="text-center text-[var(--text-dim)] py-8">{t('budgetplanner.brand.noDataAvailable')}</td></tr>
                 )}
               </tbody>
             </table>
@@ -1369,7 +1369,7 @@ export default function BudgetPlanner() {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}
         className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-white font-semibold flex items-center gap-2">
+          <h2 className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-blue-400" />
             {t('budgetplanner.trend.heading')}
           </h2>
@@ -1394,23 +1394,23 @@ export default function BudgetPlanner() {
             />
           </div>
         ) : (
-          <div className="h-56 flex items-center justify-center text-gray-600">{t('budgetplanner.trend.insufficientData')}</div>
+          <div className="h-56 flex items-center justify-center text-[var(--text-dim)]">{t('budgetplanner.trend.insufficientData')}</div>
         )}
       </motion.div>
 
       {/* ── Recommendations ── */}
       {recommendations.length > 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}
-          className="bg-gray-900 border border-blue-900/40 rounded-xl p-5">
-          <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
+          className="bg-[var(--surface-1)] border border-blue-900/40 rounded-xl p-5">
+          <h2 className="text-[var(--text-primary)] font-semibold mb-4 flex items-center gap-2">
             <Zap className="w-5 h-5 text-yellow-400" />
             {t('budgetplanner.recommendations.heading')}
           </h2>
           <div className="space-y-2">
             {recommendations.map((r, i) => (
-              <div key={i} className="flex items-start gap-3 bg-gray-800/60 rounded-lg px-4 py-3 border border-gray-700/50">
+              <div key={i} className="flex items-start gap-3 bg-[var(--input-bg)]/60 rounded-lg px-4 py-3 border border-[var(--input-border)]/50">
                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-900 text-blue-300 text-xs flex items-center justify-center font-bold mt-0.5">{i + 1}</span>
-                <p className="text-gray-300 text-sm">{r}</p>
+                <p className="text-[var(--text-secondary)] text-sm">{r}</p>
               </div>
             ))}
           </div>

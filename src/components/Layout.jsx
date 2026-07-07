@@ -16,7 +16,7 @@ import {
   Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
   Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
-  Webhook, CheckSquare, FileBarChart2,
+  Webhook, CheckSquare,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -147,8 +147,12 @@ const NAV_GROUPS = [
     items: [
       { to: '/reports',           label: 'Reports',           icon: FileText },
       { to: '/report-center',     label: 'Report Center',     icon: Download },
+      { to: '/report-builder',    label: 'Report Builder',    icon: Wand2 },
+      { to: '/dashboard-builder', label: 'Dashboard Builder', icon: LayoutGrid },
       { to: '/scheduled-reports', label: 'Scheduled Reports', icon: CalendarCheck2 },
       { to: '/executive-report',  label: 'Executive Report',  icon: BookOpen, adminOnly: A },
+      { to: '/executive-analytics', label: 'Executive Analytics', icon: BarChartBig, adminOnly: A },
+      { to: '/display',           label: 'TV Display Mode',   icon: Radio, adminOnly: A },
       { to: '/ai-command-center', label: 'AI Command Center', icon: Bot, adminOnly: A },
       { to: '/knowledge-base',    label: 'Knowledge Base',    icon: Brain, adminOnly: A },
       { to: '/ai-cost-monitor',   label: 'AI Cost Monitor',   icon: BarChart, adminOnly: A },
@@ -163,8 +167,6 @@ const NAV_GROUPS = [
       { to: '/workflow-settings', label: 'Approval Workflows', icon: GitBranch, adminOnly: A },
       { to: '/automation-rules',  label: 'Automation Rules',   icon: Zap, adminOnly: A },
       { to: '/integrations',      label: 'API & Webhooks',     icon: Webhook, adminOnly: A },
-      { to: '/dashboard-builder', label: 'My Dashboards',      icon: LayoutDashboard, roles: ANALYTICS_ROLES },
-      { to: '/report-builder',    label: 'Report Builder',     icon: FileBarChart2, roles: ANALYTICS_ROLES },
     ],
   },
   {
@@ -176,6 +178,10 @@ const NAV_GROUPS = [
       { to: '/upload-approvals', label: 'Upload Approvals',   icon: ClipboardList, adminOnly: true },
       { to: '/custom-data',      label: 'Custom Data',        icon: Database },
       { to: '/audit',            label: 'Audit Trail',        icon: ClipboardList, adminOnly: true },
+      { to: '/security-center',  label: 'Security Center',    icon: ShieldCheck },
+      { to: '/permission-matrix', label: 'Permission Matrix', icon: ShieldCheck, adminOnly: true },
+      { to: '/system-health',    label: 'System Health',      icon: HeartPulse, adminOnly: true },
+      { to: '/tenant-health',    label: 'Usage & Adoption',   icon: BarChart, adminOnly: true },
       { to: '/settings',         label: 'Settings',           icon: Settings },
     ],
   },
@@ -658,7 +664,7 @@ export default function Layout({ children }) {
               {/* Search */}
               <div className="px-2.5 pt-3 pb-1">
                 <button
-                  onClick={() => setGlobalSearchOpen(true)}
+                  onClick={() => setCmdOpen(true)}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-gray-500 hover:text-green-400 transition-all duration-200 text-xs group"
                   style={{
                     background: 'rgba(22,163,74,0.04)',

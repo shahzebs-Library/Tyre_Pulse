@@ -140,8 +140,8 @@ function statusBadgeClass(status) {
     case 'in progress':     return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
     case 'awaiting parts':  return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
     case 'completed':       return 'bg-green-500/20 text-green-400 border-green-500/30'
-    case 'cancelled':       return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-    default:                return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+    case 'cancelled':       return 'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30'
+    default:                return 'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30'
   }
 }
 
@@ -150,8 +150,8 @@ function priorityBadgeClass(priority) {
     case 'critical': return 'bg-red-500/20 text-red-400 border-red-500/30'
     case 'high':     return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
     case 'medium':   return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-    case 'low':      return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-    default:         return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+    case 'low':      return 'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30'
+    default:         return 'bg-gray-500/20 text-[var(--text-muted)] border-gray-500/30'
   }
 }
 
@@ -185,18 +185,18 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'blue', delta }) {
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`bg-gray-900 border border-gray-800 rounded-xl p-5 ring-1 ${c.ring} flex flex-col gap-3`}
+      className={`bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5 ring-1 ${c.ring} flex flex-col gap-3`}
     >
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-500 uppercase tracking-wider font-medium">{label}</span>
+        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-medium">{label}</span>
         <div className={`${c.bg} p-2 rounded-lg`}>
           <Icon className={`w-4 h-4 ${c.text}`} />
         </div>
       </div>
-      <div className="text-2xl font-bold text-white">{value}</div>
+      <div className="text-2xl font-bold text-[var(--text-primary)]">{value}</div>
       {(sub || delta != null) && (
         <div className="flex items-center gap-2 text-xs">
-          {sub && <span className="text-gray-500">{sub}</span>}
+          {sub && <span className="text-[var(--text-muted)]">{sub}</span>}
           {delta != null && (
             <span className={delta >= 0 ? 'text-green-400 flex items-center gap-0.5' : 'text-red-400 flex items-center gap-0.5'}>
               {delta >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
@@ -212,11 +212,11 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'blue', delta }) {
 // ── Chart Card ─────────────────────────────────────────────────────────────────
 function ChartCard({ title, subtitle, children, height = 260, action }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+    <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-white">{title}</h3>
-          {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
+          {subtitle && <p className="text-xs text-[var(--text-muted)] mt-0.5">{subtitle}</p>}
         </div>
         {action}
       </div>
@@ -249,15 +249,15 @@ function JobDrawer({ job, onClose, currency }) {
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-        className="fixed right-0 top-0 h-full w-full max-w-xl z-50 bg-gray-950 border-l border-gray-800 overflow-y-auto"
+        className="fixed right-0 top-0 h-full w-full max-w-xl z-50 bg-[var(--surface-1)] border-l border-[var(--input-border)] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-gray-950 border-b border-gray-800 px-6 py-4 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--input-border)] px-6 py-4 flex items-center justify-between z-10">
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Work Order</p>
-            <h2 className="text-base font-bold text-white mt-0.5">{job.work_order_no || job.id}</h2>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Work Order</p>
+            <h2 className="text-base font-bold text-[var(--text-primary)] mt-0.5">{job.work_order_no || job.id}</h2>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -286,35 +286,35 @@ function JobDrawer({ job, onClose, currency }) {
               { label: 'Completed', value: job.completed_at ? formatDateTime(job.completed_at) : '-' },
               { label: 'Turnaround', value: fmtHours(ta) },
             ].map(({ label, value }) => (
-              <div key={label} className="bg-gray-900 rounded-lg p-3">
-                <p className="text-xs text-gray-500 mb-1">{label}</p>
-                <p className="text-sm text-white font-medium">{value || '-'}</p>
+              <div key={label} className="bg-[var(--surface-1)] rounded-lg p-3">
+                <p className="text-xs text-[var(--text-muted)] mb-1">{label}</p>
+                <p className="text-sm text-[var(--text-primary)] font-medium">{value || '-'}</p>
               </div>
             ))}
           </div>
 
           {/* Cost breakdown */}
           <div>
-            <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Cost Breakdown</h3>
-            <div className="bg-gray-900 rounded-xl overflow-hidden">
+            <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">Cost Breakdown</h3>
+            <div className="bg-[var(--surface-1)] rounded-xl overflow-hidden">
               {[
                 { label: 'Labour Cost', value: job.labour_cost, color: 'bg-blue-500' },
                 { label: 'Parts Cost', value: job.parts_cost, color: 'bg-purple-500' },
                 { label: 'Total Cost', value: job.total_cost, color: 'bg-green-500', bold: true },
               ].map(({ label, value, color, bold }) => (
-                <div key={label} className={`flex items-center justify-between px-4 py-3 ${bold ? 'border-t border-gray-800' : ''}`}>
+                <div key={label} className={`flex items-center justify-between px-4 py-3 ${bold ? 'border-t border-[var(--input-border)]' : ''}`}>
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${color}`} />
-                    <span className={`text-sm ${bold ? 'text-white font-semibold' : 'text-gray-400'}`}>{label}</span>
+                    <span className={`text-sm ${bold ? 'text-[var(--text-primary)] font-semibold' : 'text-[var(--text-muted)]'}`}>{label}</span>
                   </div>
-                  <span className={`text-sm font-medium ${bold ? 'text-white' : 'text-gray-300'}`}>
+                  <span className={`text-sm font-medium ${bold ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
                     {fmtCurrency(value, currency)}
                   </span>
                 </div>
               ))}
             </div>
             {job.total_cost > 0 && (
-              <div className="mt-2 bg-gray-900 rounded-lg p-3">
+              <div className="mt-2 bg-[var(--surface-1)] rounded-lg p-3">
                 <div className="flex gap-1 h-3 rounded overflow-hidden">
                   <div
                     className="bg-blue-500 rounded-l"
@@ -325,7 +325,7 @@ function JobDrawer({ job, onClose, currency }) {
                     style={{ width: `${((job.parts_cost || 0) / job.total_cost) * 100}%` }}
                   />
                 </div>
-                <div className="flex justify-between mt-1.5 text-xs text-gray-500">
+                <div className="flex justify-between mt-1.5 text-xs text-[var(--text-muted)]">
                   <span>Labour {job.total_cost > 0 ? fmtPct(((job.labour_cost || 0) / job.total_cost) * 100) : '-'}</span>
                   <span>Parts {job.total_cost > 0 ? fmtPct(((job.parts_cost || 0) / job.total_cost) * 100) : '-'}</span>
                 </div>
@@ -336,22 +336,22 @@ function JobDrawer({ job, onClose, currency }) {
           {/* Description */}
           {job.description && (
             <div>
-              <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-2">Description</h3>
-              <p className="text-sm text-gray-300 bg-gray-900 rounded-lg p-4 leading-relaxed">{job.description}</p>
+              <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">Description</h3>
+              <p className="text-sm text-[var(--text-secondary)] bg-[var(--surface-1)] rounded-lg p-4 leading-relaxed">{job.description}</p>
             </div>
           )}
 
           {/* Parts used */}
           {parts.length > 0 && (
             <div>
-              <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Parts Used</h3>
+              <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">Parts Used</h3>
               <div className="space-y-2">
                 {parts.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between bg-gray-900 rounded-lg px-4 py-2">
-                    <span className="text-sm text-gray-300">{p.name || p.part_name || p.description || `Part ${i + 1}`}</span>
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                  <div key={i} className="flex items-center justify-between bg-[var(--surface-1)] rounded-lg px-4 py-2">
+                    <span className="text-sm text-[var(--text-secondary)]">{p.name || p.part_name || p.description || `Part ${i + 1}`}</span>
+                    <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
                       {p.qty != null && <span>Qty: {p.qty}</span>}
-                      {p.cost != null && <span className="text-gray-300">{fmtCurrency(p.cost, currency)}</span>}
+                      {p.cost != null && <span className="text-[var(--text-secondary)]">{fmtCurrency(p.cost, currency)}</span>}
                     </div>
                   </div>
                 ))}
@@ -701,24 +701,24 @@ export default function WorkshopManagement() {
   // ── Render ────────────────────────────────────────────────────────────────────
   if (!tableExists) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-8">
+      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center p-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-lg w-full bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center"
+          className="max-w-lg w-full bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl p-8 text-center"
         >
           <div className="w-16 h-16 bg-orange-500/10 rounded-2xl flex items-center justify-center mx-auto mb-5">
             <Wrench className="w-8 h-8 text-orange-400" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-3">Work Orders Module Not Configured</h2>
-          <p className="text-gray-400 text-sm leading-relaxed mb-6">
-            The <code className="bg-gray-800 px-1.5 py-0.5 rounded text-orange-400 text-xs">work_orders</code> table does not exist in your database.
-            Apply <code className="bg-gray-800 px-1.5 py-0.5 rounded text-blue-400 text-xs">MIGRATIONS_V16.sql</code> in your Supabase SQL Editor to enable this module.
+          <h2 className="text-xl font-bold text-[var(--text-primary)] mb-3">Work Orders Module Not Configured</h2>
+          <p className="text-[var(--text-muted)] text-sm leading-relaxed mb-6">
+            The <code className="bg-[var(--input-bg)] px-1.5 py-0.5 rounded text-orange-400 text-xs">work_orders</code> table does not exist in your database.
+            Apply <code className="bg-[var(--input-bg)] px-1.5 py-0.5 rounded text-blue-400 text-xs">MIGRATIONS_V16.sql</code> in your Supabase SQL Editor to enable this module.
           </p>
-          <div className="bg-gray-800/60 rounded-xl p-4 text-left text-xs text-gray-400 font-mono space-y-1">
-            <p className="text-gray-500">-- Required table:</p>
+          <div className="bg-[var(--input-bg)]/60 rounded-xl p-4 text-left text-xs text-[var(--text-muted)] font-mono space-y-1">
+            <p className="text-[var(--text-muted)]">-- Required table:</p>
             <p className="text-green-400">CREATE TABLE work_orders (...</p>
-            <p className="text-gray-500">-- See MIGRATIONS_V16.sql</p>
+            <p className="text-[var(--text-muted)]">-- See MIGRATIONS_V16.sql</p>
           </div>
           <button
             onClick={fetchData}
@@ -743,21 +743,21 @@ export default function WorkshopManagement() {
             <button
               onClick={fetchData}
               disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-secondary)] text-sm transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <button
               onClick={handlePdfExport}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-secondary)] text-sm transition-colors"
             >
               <FileText className="w-4 h-4 text-red-400" />
               PDF
             </button>
             <button
               onClick={handleExcelExport}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-secondary)] text-sm transition-colors"
             >
               <FileSpreadsheet className="w-4 h-4 text-green-400" />
               Excel
@@ -768,16 +768,16 @@ export default function WorkshopManagement() {
 
       <div className="space-y-6">
         {/* Filters */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
           <div className="flex flex-wrap gap-3">
             {/* Search */}
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
               <input
                 value={search}
                 onChange={e => { setSearch(e.target.value); setPage(1) }}
                 placeholder="Search WO#, Asset, Site..."
-                className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                className="w-full pl-9 pr-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
               />
             </div>
 
@@ -785,7 +785,7 @@ export default function WorkshopManagement() {
             <select
               value={site}
               onChange={e => { setSite(e.target.value); setPage(1) }}
-              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 min-w-[130px]"
+              className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[130px]"
             >
               <option value="">All Sites</option>
               {siteOptions.map(s => <option key={s} value={s}>{s}</option>)}
@@ -795,7 +795,7 @@ export default function WorkshopManagement() {
             <select
               value={workType}
               onChange={e => { setWorkType(e.target.value); setPage(1) }}
-              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 min-w-[140px]"
+              className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[140px]"
             >
               <option value="">All Types</option>
               {WORK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -805,7 +805,7 @@ export default function WorkshopManagement() {
             <select
               value={status}
               onChange={e => { setStatus(e.target.value); setPage(1) }}
-              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 min-w-[140px]"
+              className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[140px]"
             >
               <option value="">All Statuses</option>
               {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -815,7 +815,7 @@ export default function WorkshopManagement() {
             <select
               value={priority}
               onChange={e => { setPriority(e.target.value); setPage(1) }}
-              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 min-w-[120px]"
+              className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 min-w-[120px]"
             >
               <option value="">All Priorities</option>
               {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
@@ -823,30 +823,30 @@ export default function WorkshopManagement() {
 
             {/* Technician search */}
             <div className="relative min-w-[160px]">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
               <input
                 value={techSearch}
                 onChange={e => { setTechSearch(e.target.value); setPage(1) }}
                 placeholder="Technician..."
-                className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                className="w-full pl-9 pr-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
               />
             </div>
 
             {/* Date range */}
             <div className="flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-gray-500" />
+              <Calendar className="w-4 h-4 text-[var(--text-muted)]" />
               <input
                 type="date"
                 value={dateFrom}
                 onChange={e => { setDateFrom(e.target.value); setPage(1) }}
-                className="px-2 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 w-36"
+                className="px-2 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-36"
               />
-              <span className="text-gray-600 text-xs">to</span>
+              <span className="text-[var(--text-dim)] text-xs">to</span>
               <input
                 type="date"
                 value={dateTo}
                 onChange={e => { setDateTo(e.target.value); setPage(1) }}
-                className="px-2 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 w-36"
+                className="px-2 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-36"
               />
             </div>
 
@@ -856,7 +856,7 @@ export default function WorkshopManagement() {
                 <button
                   key={p.label}
                   onClick={() => { const r = applyDatePreset(p.days); setDateFrom(r.from); setDateTo(r.to); setPage(1) }}
-                  className="px-2.5 py-1.5 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                  className="px-2.5 py-1.5 rounded-lg text-xs bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                 >
                   {p.label}
                 </button>
@@ -938,7 +938,7 @@ export default function WorkshopManagement() {
             </div>
 
             {/* Tab Navigation */}
-            <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit flex-wrap">
+            <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 w-fit flex-wrap">
               {[
                 { id: 'overview', label: 'Overview', icon: BarChart2 },
                 { id: 'jobs', label: 'Jobs Table', icon: ClipboardList },
@@ -952,7 +952,7 @@ export default function WorkshopManagement() {
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     activeTab === tab.id
                       ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
                   }`}
                 >
                   <tab.icon className="w-4 h-4" />
@@ -989,7 +989,7 @@ export default function WorkshopManagement() {
                         }}
                       />
                     ) : (
-                      <div className="h-full flex items-center justify-center text-gray-600 text-sm">No data available</div>
+                      <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No data available</div>
                     )}
                   </ChartCard>
 
@@ -1002,7 +1002,7 @@ export default function WorkshopManagement() {
                     {workTypeChart && workTypeChart.labels.length > 0 ? (
                       <Doughnut data={workTypeChart} options={NO_SCALE} />
                     ) : (
-                      <div className="h-full flex items-center justify-center text-gray-600 text-sm">No data available</div>
+                      <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No data available</div>
                     )}
                   </ChartCard>
 
@@ -1024,7 +1024,7 @@ export default function WorkshopManagement() {
                         }}
                       />
                     ) : (
-                      <div className="h-full flex items-center justify-center text-gray-600 text-sm">No data available</div>
+                      <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No data available</div>
                     )}
                   </ChartCard>
 
@@ -1051,7 +1051,7 @@ export default function WorkshopManagement() {
                         }}
                       />
                     ) : (
-                      <div className="h-full flex items-center justify-center text-gray-600 text-sm">No data available</div>
+                      <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No data available</div>
                     )}
                   </ChartCard>
                 </motion.div>
@@ -1067,25 +1067,25 @@ export default function WorkshopManagement() {
                   className="space-y-4"
                 >
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-[var(--text-muted)]">
                       {filteredOrders.length.toLocaleString()} jobs · page {page} of {totalPages}
                     </p>
                   </div>
 
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-gray-800 bg-gray-800/50">
+                          <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]/50">
                             {['WO No','Asset','Site','Type','Priority','Status','Assigned To','Created','Scheduled','Completed','Cost'].map(h => (
-                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-800">
+                        <tbody className="divide-y divide-[var(--input-border)]">
                           {paginatedJobs.length === 0 ? (
                             <tr>
-                              <td colSpan={11} className="px-4 py-12 text-center text-gray-600 text-sm">
+                              <td colSpan={11} className="px-4 py-12 text-center text-[var(--text-dim)] text-sm">
                                 No work orders found matching current filters.
                               </td>
                             </tr>
@@ -1097,14 +1097,14 @@ export default function WorkshopManagement() {
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: i * 0.02 }}
                                 onClick={() => setSelectedJob(job)}
-                                className="hover:bg-gray-800/50 cursor-pointer transition-colors group"
+                                className="hover:bg-[var(--input-bg)]/50 cursor-pointer transition-colors group"
                               >
                                 <td className="px-4 py-3 text-blue-400 font-mono text-xs whitespace-nowrap group-hover:text-blue-300">
                                   {job.work_order_no || job.id?.slice(0, 8)}
                                 </td>
-                                <td className="px-4 py-3 text-gray-300 font-medium whitespace-nowrap">{job.asset_no || '-'}</td>
-                                <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{job.site || '-'}</td>
-                                <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{job.work_type || '-'}</td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)] font-medium whitespace-nowrap">{job.asset_no || '-'}</td>
+                                <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">{job.site || '-'}</td>
+                                <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">{job.work_type || '-'}</td>
                                 <td className="px-4 py-3 whitespace-nowrap">
                                   {job.priority && (
                                     <span className={`px-2 py-0.5 rounded text-xs font-medium border ${priorityBadgeClass(job.priority)}`}>
@@ -1119,17 +1119,17 @@ export default function WorkshopManagement() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{job.assigned_to || '-'}</td>
-                                <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                                <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">{job.assigned_to || '-'}</td>
+                                <td className="px-4 py-3 text-[var(--text-muted)] text-xs whitespace-nowrap">
                                   {job.created_at ? formatDate(job.created_at) : '-'}
                                 </td>
-                                <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                                <td className="px-4 py-3 text-[var(--text-muted)] text-xs whitespace-nowrap">
                                   {job.scheduled_date ? formatDate(job.scheduled_date) : '-'}
                                 </td>
-                                <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                                <td className="px-4 py-3 text-[var(--text-muted)] text-xs whitespace-nowrap">
                                   {job.completed_at ? formatDate(job.completed_at) : '-'}
                                 </td>
-                                <td className="px-4 py-3 text-gray-300 whitespace-nowrap font-medium">
+                                <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap font-medium">
                                   {fmtCurrency(job.total_cost, activeCurrency)}
                                 </td>
                               </motion.tr>
@@ -1141,15 +1141,15 @@ export default function WorkshopManagement() {
 
                     {/* Pagination */}
                     {totalPages > 1 && (
-                      <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-                        <span className="text-xs text-gray-500">
+                      <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--input-border)]">
+                        <span className="text-xs text-[var(--text-muted)]">
                           Showing {((page - 1) * PAGE_SIZE) + 1}-{Math.min(page * PAGE_SIZE, filteredOrders.length)} of {filteredOrders.length}
                         </span>
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => setPage(p => Math.max(1, p - 1))}
                             disabled={page === 1}
-                            className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                           >
                             <ChevronLeft className="w-4 h-4" />
                           </button>
@@ -1165,7 +1165,7 @@ export default function WorkshopManagement() {
                                 key={p}
                                 onClick={() => setPage(p)}
                                 className={`px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                                  p === page ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800'
+                                  p === page ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:bg-[var(--input-bg)]'
                                 }`}
                               >
                                 {p}
@@ -1175,7 +1175,7 @@ export default function WorkshopManagement() {
                           <button
                             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                             disabled={page === totalPages}
-                            className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                           >
                             <ChevronRight className="w-4 h-4" />
                           </button>
@@ -1194,24 +1194,24 @@ export default function WorkshopManagement() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -12 }}
                 >
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-white">Workshop Performance by Site</h3>
-                      <span className="text-xs text-gray-500">{sitePerf.length} sites</span>
+                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-[var(--text-primary)]">Workshop Performance by Site</h3>
+                      <span className="text-xs text-[var(--text-muted)]">{sitePerf.length} sites</span>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-gray-800 bg-gray-800/40">
+                          <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
                             {['Site','Jobs (Month)','Avg Turnaround','Completion %','Total Cost','Open Jobs','Score'].map(h => (
-                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-800">
+                        <tbody className="divide-y divide-[var(--input-border)]">
                           {sitePerf.length === 0 ? (
                             <tr>
-                              <td colSpan={7} className="px-4 py-12 text-center text-gray-600 text-sm">No site data available.</td>
+                              <td colSpan={7} className="px-4 py-12 text-center text-[var(--text-dim)] text-sm">No site data available.</td>
                             </tr>
                           ) : (
                             sitePerf.map((s, i) => (
@@ -1220,30 +1220,30 @@ export default function WorkshopManagement() {
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: i * 0.04 }}
-                                className="hover:bg-gray-800/30 transition-colors"
+                                className="hover:bg-[var(--input-bg)] transition-colors"
                               >
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2">
-                                    <Building2 className="w-4 h-4 text-gray-600" />
-                                    <span className="text-white font-medium">{s.site}</span>
+                                    <Building2 className="w-4 h-4 text-[var(--text-dim)]" />
+                                    <span className="text-[var(--text-primary)] font-medium">{s.site}</span>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 text-gray-300">{s.thisMonth}</td>
-                                <td className="px-4 py-3 text-gray-400">{fmtHours(s.avgTA)}</td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)]">{s.thisMonth}</td>
+                                <td className="px-4 py-3 text-[var(--text-muted)]">{fmtHours(s.avgTA)}</td>
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2">
-                                    <div className="flex-1 bg-gray-800 rounded-full h-1.5 min-w-[60px]">
+                                    <div className="flex-1 bg-[var(--input-bg)] rounded-full h-1.5 min-w-[60px]">
                                       <div
                                         className={`h-1.5 rounded-full ${s.compRate >= 80 ? 'bg-green-500' : s.compRate >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
                                         style={{ width: `${Math.min(s.compRate, 100)}%` }}
                                       />
                                     </div>
-                                    <span className="text-gray-300 text-xs">{fmtPct(s.compRate)}</span>
+                                    <span className="text-[var(--text-secondary)] text-xs">{fmtPct(s.compRate)}</span>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 text-gray-300">{fmtCurrency(s.totalCost, activeCurrency)}</td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)]">{fmtCurrency(s.totalCost, activeCurrency)}</td>
                                 <td className="px-4 py-3">
-                                  <span className={`text-sm font-medium ${s.openJobs > 10 ? 'text-red-400' : s.openJobs > 5 ? 'text-yellow-400' : 'text-gray-300'}`}>
+                                  <span className={`text-sm font-medium ${s.openJobs > 10 ? 'text-red-400' : s.openJobs > 5 ? 'text-yellow-400' : 'text-[var(--text-secondary)]'}`}>
                                     {s.openJobs}
                                   </span>
                                 </td>
@@ -1270,24 +1270,24 @@ export default function WorkshopManagement() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -12 }}
                 >
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-white">Technician Performance</h3>
-                      <span className="text-xs text-gray-500">{techPerf.length} technicians</span>
+                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-[var(--input-border)] flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-[var(--text-primary)]">Technician Performance</h3>
+                      <span className="text-xs text-[var(--text-muted)]">{techPerf.length} technicians</span>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-gray-800 bg-gray-800/40">
+                          <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
                             {['Technician','Jobs Completed','Avg Turnaround','Total Labour Cost','Completion Rate','Rating'].map(h => (
-                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-800">
+                        <tbody className="divide-y divide-[var(--input-border)]">
                           {techPerf.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="px-4 py-12 text-center text-gray-600 text-sm">No technician data available.</td>
+                              <td colSpan={6} className="px-4 py-12 text-center text-[var(--text-dim)] text-sm">No technician data available.</td>
                             </tr>
                           ) : (
                             techPerf.map((t, i) => (
@@ -1296,28 +1296,28 @@ export default function WorkshopManagement() {
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: i * 0.04 }}
-                                className="hover:bg-gray-800/30 transition-colors"
+                                className="hover:bg-[var(--input-bg)] transition-colors"
                               >
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2">
-                                    <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300">
+                                    <div className="w-7 h-7 rounded-full bg-[var(--input-bg)] flex items-center justify-center text-xs font-bold text-[var(--text-secondary)]">
                                       {(t.tech || '?')[0].toUpperCase()}
                                     </div>
-                                    <span className="text-white font-medium">{t.tech}</span>
+                                    <span className="text-[var(--text-primary)] font-medium">{t.tech}</span>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 text-gray-300">{t.completed}</td>
-                                <td className="px-4 py-3 text-gray-400">{fmtHours(t.avgTA)}</td>
-                                <td className="px-4 py-3 text-gray-300">{fmtCurrency(t.labourCost, activeCurrency)}</td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)]">{t.completed}</td>
+                                <td className="px-4 py-3 text-[var(--text-muted)]">{fmtHours(t.avgTA)}</td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)]">{fmtCurrency(t.labourCost, activeCurrency)}</td>
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2">
-                                    <div className="flex-1 bg-gray-800 rounded-full h-1.5 min-w-[60px]">
+                                    <div className="flex-1 bg-[var(--input-bg)] rounded-full h-1.5 min-w-[60px]">
                                       <div
                                         className={`h-1.5 rounded-full ${t.compRate >= 85 ? 'bg-green-500' : t.compRate >= 70 ? 'bg-yellow-500' : 'bg-red-500'}`}
                                         style={{ width: `${Math.min(t.compRate, 100)}%` }}
                                       />
                                     </div>
-                                    <span className="text-gray-300 text-xs">{fmtPct(t.compRate)}</span>
+                                    <span className="text-[var(--text-secondary)] text-xs">{fmtPct(t.compRate)}</span>
                                   </div>
                                 </td>
                                 <td className="px-4 py-3">
@@ -1366,7 +1366,7 @@ export default function WorkshopManagement() {
                         }}
                       />
                     ) : (
-                      <div className="h-full flex items-center justify-center text-gray-600 text-sm">No cost data available</div>
+                      <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No cost data available</div>
                     )}
                   </ChartCard>
 
@@ -1402,38 +1402,38 @@ export default function WorkshopManagement() {
                         iconColor: 'text-green-400',
                       },
                     ].map(c => (
-                      <div key={c.label} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                      <div key={c.label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-xs text-gray-500 uppercase tracking-wider">{c.label}</span>
+                          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{c.label}</span>
                           <c.icon className={`w-4 h-4 ${c.iconColor}`} />
                         </div>
-                        <div className="text-2xl font-bold text-white mb-3">{c.value}</div>
-                        <div className="bg-gray-800 rounded-full h-1.5">
+                        <div className="text-2xl font-bold text-[var(--text-primary)] mb-3">{c.value}</div>
+                        <div className="bg-[var(--input-bg)] rounded-full h-1.5">
                           <div className={`h-1.5 rounded-full ${c.color}`} style={{ width: `${c.pct}%` }} />
                         </div>
-                        <p className="text-xs text-gray-500 mt-1.5">{c.pct.toFixed(1)}% of total</p>
+                        <p className="text-xs text-[var(--text-muted)] mt-1.5">{c.pct.toFixed(1)}% of total</p>
                       </div>
                     ))}
                   </div>
 
                   {/* Per-site cost breakdown */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-800">
-                      <h3 className="text-sm font-semibold text-white">Cost by Site</h3>
+                  <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-[var(--input-border)]">
+                      <h3 className="text-sm font-semibold text-[var(--text-primary)]">Cost by Site</h3>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-gray-800 bg-gray-800/40">
+                          <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
                             {['Site','Total Cost','Labour Cost','Parts Cost','Labour %','Avg Cost/Job'].map(h => (
-                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                              <th key={h} className="px-4 py-3 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-800">
+                        <tbody className="divide-y divide-[var(--input-border)]">
                           {sitePerf.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="px-4 py-10 text-center text-gray-600 text-sm">No data.</td>
+                              <td colSpan={6} className="px-4 py-10 text-center text-[var(--text-dim)] text-sm">No data.</td>
                             </tr>
                           ) : (
                             sitePerf.map((s, i) => {
@@ -1442,13 +1442,13 @@ export default function WorkshopManagement() {
                               const avgPerJob  = s.total > 0 ? s.totalCost / s.total : 0
                               const labourPct  = s.totalCost > 0 ? (labourCost / s.totalCost) * 100 : 0
                               return (
-                                <tr key={s.site} className="hover:bg-gray-800/30 transition-colors">
-                                  <td className="px-4 py-3 text-white font-medium">{s.site}</td>
-                                  <td className="px-4 py-3 text-gray-300 font-medium">{fmtCurrency(s.totalCost, activeCurrency)}</td>
+                                <tr key={s.site} className="hover:bg-[var(--input-bg)] transition-colors">
+                                  <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{s.site}</td>
+                                  <td className="px-4 py-3 text-[var(--text-secondary)] font-medium">{fmtCurrency(s.totalCost, activeCurrency)}</td>
                                   <td className="px-4 py-3 text-blue-400">{fmtCurrency(labourCost, activeCurrency)}</td>
                                   <td className="px-4 py-3 text-purple-400">{fmtCurrency(partsCost, activeCurrency)}</td>
-                                  <td className="px-4 py-3 text-gray-400">{fmtPct(labourPct)}</td>
-                                  <td className="px-4 py-3 text-gray-300">{fmtCurrency(avgPerJob, activeCurrency)}</td>
+                                  <td className="px-4 py-3 text-[var(--text-muted)]">{fmtPct(labourPct)}</td>
+                                  <td className="px-4 py-3 text-[var(--text-secondary)]">{fmtCurrency(avgPerJob, activeCurrency)}</td>
                                 </tr>
                               )
                             })

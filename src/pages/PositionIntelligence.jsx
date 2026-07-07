@@ -600,7 +600,7 @@ export default function PositionIntelligence() {
 
       {/* ── Section 1: Position Summary Cards ──────────────────────────────── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
           <Layers size={15} className="text-green-400" /> Position Summary
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -609,15 +609,15 @@ export default function PositionIntelligence() {
             const isWorst = worstPos && p.position === worstPos.position && p.count > 0
             const isBest = bestPos && p.position === bestPos.position && p.count > 0 && !isWorst
             const borderCls = isWorst
-              ? 'border-red-500/60 shadow-[0_0_18px_rgba(239,68,68,0.25)]'
+              ? 'border-red-500/60'
               : isBest
-              ? 'border-green-500/60 shadow-[0_0_18px_rgba(34,197,94,0.2)]'
+              ? 'border-green-500/60'
               : ''
 
             return (
               <div
                 key={p.position}
-                className={`card cursor-pointer transition-all hover:scale-[1.02] ${borderCls}`}
+                className={`card cursor-pointer transition-colors ${borderCls}`}
                 onClick={() => setActiveTab(p.position)}
               >
                 <div className="flex items-center justify-between mb-2">
@@ -675,14 +675,14 @@ export default function PositionIntelligence() {
 
       {/* ── Section 2: Charts 2×2 ──────────────────────────────────────────── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
           <BarChart3 size={15} className="text-green-400" /> Position Analytics
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* Chart 1: CPK by Position (horizontal bar) */}
           <div className="card">
-            <p className="text-xs font-semibold text-gray-300 mb-3">CPK by Position ({activeCurrency}/km)</p>
+            <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">CPK by Position ({activeCurrency}/km)</p>
             <div style={{ height: 260 }}>
               <Bar
                 data={cpkChartData}
@@ -716,7 +716,7 @@ export default function PositionIntelligence() {
 
           {/* Chart 2: Failure Rate by Position */}
           <div className="card">
-            <p className="text-xs font-semibold text-gray-300 mb-3">Failure Rate by Position (%)</p>
+            <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">Failure Rate by Position (%)</p>
             <div style={{ height: 260 }}>
               <Bar
                 data={failureChartData}
@@ -745,7 +745,7 @@ export default function PositionIntelligence() {
 
           {/* Chart 3: Avg KM Life by Position */}
           <div className="card">
-            <p className="text-xs font-semibold text-gray-300 mb-3">Average Tyre Life by Position (km)</p>
+            <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">Average Tyre Life by Position (km)</p>
             {kmLifeChartData.labels.length === 0 ? (
               <div className="flex items-center justify-center h-[260px] text-gray-600 text-xs">No km data available</div>
             ) : (
@@ -777,7 +777,7 @@ export default function PositionIntelligence() {
 
           {/* Chart 4: Cost Distribution (doughnut) */}
           <div className="card">
-            <p className="text-xs font-semibold text-gray-300 mb-3">Cost Distribution by Position</p>
+            <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">Cost Distribution by Position</p>
             {costDoughnutData.labels.length === 0 ? (
               <div className="flex items-center justify-center h-[260px] text-gray-600 text-xs">No cost data available</div>
             ) : (
@@ -810,7 +810,7 @@ export default function PositionIntelligence() {
       {/* ── Section 3: Site × Position Heat Map ────────────────────────────── */}
       {heatMapData.sites.length >= 2 && (
         <div>
-          <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
             <Activity size={15} className="text-green-400" /> Site × Position Failure Rate Heat Map
           </h2>
           <div className="card overflow-x-auto">
@@ -860,7 +860,7 @@ export default function PositionIntelligence() {
 
       {/* ── Section 4: Per-Position Deep Dive ──────────────────────────────── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
           <Target size={15} className="text-green-400" /> Position Deep Dive
         </h2>
 
@@ -937,7 +937,7 @@ export default function PositionIntelligence() {
 
               {/* Brands table */}
               <div className="card lg:col-span-2 overflow-x-auto">
-                <p className="text-xs font-semibold text-gray-300 mb-3">Brand Performance - {activeTab}</p>
+                <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">Brand Performance - {activeTab}</p>
                 {activeMetrics.brands.length === 0 ? (
                   <p className="text-xs text-gray-600 italic">No brand data</p>
                 ) : (
@@ -1015,7 +1015,7 @@ export default function PositionIntelligence() {
             {/* 4. Worst assets at this position */}
             {activeMetrics.worstAssets.length > 0 && (
               <div className="card overflow-x-auto">
-                <p className="text-xs font-semibold text-gray-300 mb-3">Worst Assets - {activeTab} (Top 5 by CPK)</p>
+                <p className="text-xs font-semibold text-[var(--text-primary)] mb-3">Worst Assets - {activeTab} (Top 5 by CPK)</p>
                 <table className="min-w-full text-xs">
                   <thead>
                     <tr>
@@ -1057,7 +1057,7 @@ export default function PositionIntelligence() {
 
       {/* ── Section 5: Corrective Action Recommendations ─────────────────── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
           <Settings2 size={15} className="text-green-400" /> Corrective Action Recommendations
         </h2>
 

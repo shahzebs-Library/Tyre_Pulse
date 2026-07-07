@@ -1198,7 +1198,7 @@ export default function ExecutiveReport() {
                ].map((h) => (
                  <div key={h.key} className="bg-gray-900/60 border border-gray-800 rounded-lg px-3 py-2.5 flex items-center justify-between">
                    <span className="text-xs text-gray-400">{h.label}</span>
-                   <span className={`text-base font-bold ${h.neutral ? 'text-white' : h.good ? 'text-emerald-400' : 'text-amber-400'}`}>{h.value}</span>
+                   <span className={`text-base font-bold tabular-nums ${h.neutral ? 'text-white' : h.good ? 'text-emerald-400' : 'text-amber-400'}`}>{h.value}</span>
                  </div>
                ))}
              </div>
@@ -1231,7 +1231,7 @@ export default function ExecutiveReport() {
                       <span className={`w-2 h-2 rounded-full ${sc.dot}`} />
                     </div>
                     <div>
-                      <p className={`text-lg font-bold leading-tight ${sc.text}`}>{card.value}</p>
+                      <p className={`text-lg font-bold leading-tight tabular-nums ${sc.text}`}>{card.value}</p>
                       <p className="text-xs text-gray-400 mt-0.5 leading-tight">{card.label}</p>
                     </div>
                     <p className="text-xs text-gray-600 leading-tight">Target: {card.target}</p>
@@ -1346,7 +1346,7 @@ export default function ExecutiveReport() {
                 { label: 'Savings Opportunity', value: fmtCurrency(savingsOpportunity, currency), sub: 'if CPK reached fleet best', color: 'text-emerald-400' },
               ].map(s => (
                 <div key={s.label} className="bg-gray-950 border border-gray-800 rounded-xl p-4">
-                  <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+                  <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
                   <p className="text-xs text-white font-medium mt-1">{s.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{s.sub}</p>
                 </div>
@@ -1428,7 +1428,7 @@ export default function ExecutiveReport() {
               {/* Fleet risk score */}
               <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col items-center justify-center text-center">
                 <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-3">Fleet Risk Score</p>
-                <div className={`text-5xl font-black mb-2 ${
+                <div className={`text-5xl font-black mb-2 tabular-nums ${
                   fleetRiskScore >= 3 ? 'text-red-400' : fleetRiskScore >= 2 ? 'text-amber-400' : 'text-emerald-400'
                 }`}>
                   {fleetRiskScore.toFixed(2)}

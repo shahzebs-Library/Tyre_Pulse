@@ -1,6 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { tyreRecordFormSchema, RISK_LEVELS } from '../lib/validation/schemas'
+import { FormField, FormSelect, FormDate, FormActions } from '../components/forms'
 import * as tyreRecordsApi from '../lib/api/tyreRecords'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
@@ -23,12 +27,12 @@ import { cn } from '../lib/cn'
 
 const PAGE_SIZE = 25
 
-// WCAG AA-compliant on light (white/off-white) backgrounds
+// Semantic risk chip colours, aligned with the scale used across the app
 const RISK_STYLE = {
-  Critical: 'bg-red-100 text-red-700 border-red-200',
-  High:     'bg-orange-100 text-orange-700 border-orange-200',
-  Medium:   'bg-amber-100 text-amber-700 border-amber-200',
-  Low:      'bg-green-100 text-green-700 border-green-200',
+  Critical: 'bg-red-900/30 text-red-300 border-red-800/50',
+  High:     'bg-orange-900/30 text-orange-300 border-orange-800/50',
+  Medium:   'bg-amber-900/30 text-amber-300 border-amber-800/50',
+  Low:      'bg-green-900/30 text-green-300 border-green-800/50',
 }
 
 const EMPTY_FORM = (defaultCost = 1200, country = 'KSA') => ({
@@ -56,7 +60,10 @@ export default function TyreRecords() {
   const [sites, setSites]             = useState([])
   const [brands, setBrands]           = useState([])
 
-  const [search, setSearch]           = useState('')
+  // Deep links (Scan Center, QR labels): /tyres?search=<serial> pre-filters.
+  const [search, setSearch]           = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('search') || '' } catch { return '' }
+  })
   const [siteFilter, setSiteFilter]   = useState('')
   const [brandFilter, setBrandFilter] = useState('')
   const [riskFilter, setRiskFilter]   = useState('')
@@ -68,8 +75,19 @@ export default function TyreRecords() {
   const [deleteError, setDeleteError]     = useState('')
   const [saving, setSaving]               = useState(false)
   const [formError, setFormError]         = useState('')
-  const [form, setForm]                   = useState(() => EMPTY_FORM())
   const [bulkForm, setBulkForm]           = useState(EMPTY_BULK)
+
+  // Add/Edit record form (react-hook-form + Zod). Values stay raw strings so
+  // the saveRecord() payload coercion below is byte-identical to before.
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors: formErrors },
+  } = useForm({
+    resolver: zodResolver(tyreRecordFormSchema),
+    defaultValues: EMPTY_FORM(),
+  })
 
   // Bulk selection - driven by the current page's records
   const {
@@ -130,13 +148,13 @@ export default function TyreRecords() {
   function openAdd() {
     // Cost is left blank so the user enters the ACTUAL cost - no settings default
     // is written into a record.
-    setForm(EMPTY_FORM('', activeCountry !== 'All' ? activeCountry : 'KSA'))
+    reset(EMPTY_FORM('', activeCountry !== 'All' ? activeCountry : 'KSA'))
     setEditRecord({})
     setFormError('')
   }
 
   function openEdit(r) {
-    setForm({
+    reset({
       sr: r.sr ?? '', issue_date: r.issue_date ?? '', description: r.description ?? '',
       brand: r.brand ?? '', serial_no: r.serial_no ?? '', qty: r.qty ?? 1,
       job_card: r.job_card ?? '', mis_number: r.mis_number ?? '', asset_no: r.asset_no ?? '',
@@ -149,8 +167,7 @@ export default function TyreRecords() {
     setFormError('')
   }
 
-  async function saveRecord(e) {
-    e.preventDefault()
+  async function saveRecord(form) {
     setSaving(true)
     setFormError('')
     const payload = {
@@ -294,8 +311,6 @@ export default function TyreRecords() {
     })
     return data ?? []
   }
-
-  function F(field) { return e => setForm(f => ({ ...f, [field]: e.target.value })) }
 
   // Shared column header style - mirrors the virtual row grid
   const headerGridStyle = {
@@ -605,70 +620,49 @@ export default function TyreRecords() {
               <AlertTriangle size={14} className="shrink-0" /> {formError}
             </div>
           )}
-          <form onSubmit={saveRecord} className="space-y-3">
+          <form onSubmit={handleSubmit(saveRecord)} noValidate className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="label">{t('records.form.issueDate')}</label><input type="date" className="input" value={form.issue_date} onChange={F('issue_date')} /></div>
-              <div><label className="label">{t('records.form.srRefNo')}</label><input className="input" value={form.sr} onChange={F('sr')} /></div>
+              <FormDate label={t('records.form.issueDate')} error={formErrors.issue_date} {...register('issue_date')} />
+              <FormField label={t('records.form.srRefNo')} error={formErrors.sr} {...register('sr')} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">{t('records.form.site')}</label>
-                <input className="input" list="site-list" value={form.site} onChange={F('site')} placeholder={t('records.form.selectOrType')} />
+              <FormField label={t('records.form.site')} list="site-list" placeholder={t('records.form.selectOrType')} error={formErrors.site} {...register('site')}>
                 <datalist id="site-list">{sites.map(s => <option key={s} value={s} />)}</datalist>
-              </div>
-              <div>
-                <label className="label">{t('records.form.brand')}</label>
-                <input className="input" list="brand-list" value={form.brand} onChange={F('brand')} placeholder={t('records.form.selectOrType')} />
+              </FormField>
+              <FormField label={t('records.form.brand')} list="brand-list" placeholder={t('records.form.selectOrType')} error={formErrors.brand} {...register('brand')}>
                 <datalist id="brand-list">{brands.map(b => <option key={b} value={b} />)}</datalist>
-              </div>
+              </FormField>
             </div>
-            <div><label className="label">{t('records.form.description')}</label><input className="input" value={form.description} onChange={F('description')} /></div>
+            <FormField label={t('records.form.description')} error={formErrors.description} {...register('description')} />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div><label className="label">{t('records.form.assetNo')}</label><input className="input" value={form.asset_no} onChange={F('asset_no')} /></div>
-              <div><label className="label">{t('records.form.serialNo')}</label><input className="input" value={form.serial_no} onChange={F('serial_no')} /></div>
-              <div><label className="label">{t('records.form.qty')}</label><input type="number" className="input" value={form.qty} onChange={F('qty')} min={1} /></div>
+              <FormField label={t('records.form.assetNo')} required error={formErrors.asset_no} {...register('asset_no')} />
+              <FormField label={t('records.form.serialNo')} error={formErrors.serial_no} {...register('serial_no')} />
+              <FormField label={t('records.form.qty')} type="number" min={1} error={formErrors.qty} {...register('qty')} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="label">{t('records.form.misNumber')}</label><input className="input" value={form.mis_number} onChange={F('mis_number')} /></div>
-              <div><label className="label">{t('records.form.jobCard')}</label><input className="input" value={form.job_card} onChange={F('job_card')} /></div>
+              <FormField label={t('records.form.misNumber')} error={formErrors.mis_number} {...register('mis_number')} />
+              <FormField label={t('records.form.jobCard')} error={formErrors.job_card} {...register('job_card')} />
             </div>
-            <div><label className="label">{t('records.form.remarks')}</label><textarea className="input" rows={2} value={form.remarks} onChange={F('remarks')} /></div>
+            <FormField label={t('records.form.remarks')} multiline rows={2} error={formErrors.remarks} {...register('remarks')} />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="label">{t('records.form.country')}</label>
-                <select className="input" value={form.country} onChange={F('country')}>
-                  <option value="KSA">KSA</option>
-                  <option value="UAE">UAE</option>
-                  <option value="Egypt">Egypt</option>
-                </select>
-              </div>
-              <div><label className="label">{t('records.form.kmAtFitment')}</label><input type="number" className="input" value={form.km_at_fitment} onChange={F('km_at_fitment')} placeholder={t('records.form.optional')} min={0} /></div>
-              <div><label className="label">{t('records.form.kmAtRemoval')}</label><input type="number" className="input" value={form.km_at_removal} onChange={F('km_at_removal')} placeholder={t('records.form.optional')} min={0} /></div>
+              <FormSelect label={t('records.form.country')} options={['KSA', 'UAE', 'Egypt']} error={formErrors.country} {...register('country')} />
+              <FormField label={t('records.form.kmAtFitment')} type="number" min={0} placeholder={t('records.form.optional')} error={formErrors.km_at_fitment} {...register('km_at_fitment')} />
+              <FormField label={t('records.form.kmAtRemoval')} type="number" min={0} placeholder={t('records.form.optional')} error={formErrors.km_at_removal} {...register('km_at_removal')} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div><label className="label">{t('records.form.cost')}</label><input type="number" className="input" value={form.cost_per_tyre} onChange={F('cost_per_tyre')} min={0} step={100} /></div>
-              <div>
-                <label className="label">{t('records.form.riskLevel')}</label>
-                <select className="input" value={form.risk_level} onChange={F('risk_level')}>
-                  <option value="">{t('records.form.none')}</option>
-                  {['Critical', 'High', 'Medium', 'Low'].map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">{t('records.form.category')}</label>
-                <select className="input" value={form.category} onChange={F('category')}>
-                  <option value="">{t('records.form.none')}</option>
-                  {ALL_CATEGORY_LABELS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+              <FormField label={t('records.form.cost')} type="number" min={0} step={100} error={formErrors.cost_per_tyre} {...register('cost_per_tyre')} />
+              <FormSelect label={t('records.form.riskLevel')} placeholder={t('records.form.none')} options={RISK_LEVELS} error={formErrors.risk_level} {...register('risk_level')} />
+              <FormSelect label={t('records.form.category')} placeholder={t('records.form.none')} options={ALL_CATEGORY_LABELS} error={formErrors.category} {...register('category')} />
             </div>
-            <div className="flex gap-3 pt-2">
-              <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {saving ? t('records.form.saving') : t('records.form.save')}
-              </button>
-              <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">{t('records.form.cancel')}</button>
-            </div>
+            <FormActions
+              align="start"
+              className="pt-2"
+              saving={saving}
+              onCancel={() => setEditRecord(null)}
+              submitLabel={t('records.form.save')}
+              savingLabel={t('records.form.saving')}
+              cancelLabel={t('records.form.cancel')}
+            />
           </form>
         </Modal>
       )}

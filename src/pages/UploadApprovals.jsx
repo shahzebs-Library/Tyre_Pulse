@@ -218,7 +218,7 @@ export default function UploadApprovals() {
         <div className="flex items-center gap-2 bg-gray-800/40 rounded-lg px-3 py-1.5 w-72 max-w-full">
           <Search size={15} className="text-gray-500" />
           <input
-            className="bg-transparent text-sm text-white placeholder-gray-500 outline-none flex-1"
+            className="bg-transparent text-sm text-[var(--text-primary)] placeholder-gray-500 outline-none flex-1"
             placeholder={t('uploadapprovals.search.placeholder')}
             value={search} onChange={e => setSearch(e.target.value)}
           />
@@ -246,7 +246,7 @@ export default function UploadApprovals() {
                         <Database size={18} style={{ color: '#7c3aed' }} />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-white font-semibold capitalize">{b.module} {t('uploadapprovals.intake.moduleImport')}{b.sheet ? ` · ${b.sheet}` : ''}</p>
+                        <p className="text-[var(--text-primary)] font-semibold capitalize">{b.module} {t('uploadapprovals.intake.moduleImport')}{b.sheet ? ` · ${b.sheet}` : ''}</p>
                         <div className="flex items-center gap-3 flex-wrap mt-1 text-xs text-gray-500">
                           <span className="flex items-center gap-1"><Package size={11} />{(b.total_rows || 0).toLocaleString()} {t('uploadapprovals.intake.rowsLabel')}</span>
                           <span className="text-green-400">{(b.ready_rows || 0).toLocaleString()} {t('uploadapprovals.intake.readySuffix')}</span>
@@ -300,7 +300,7 @@ export default function UploadApprovals() {
                       <Icon size={18} style={{ color: meta.color }} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-white font-semibold truncate">{p.file_name || t('uploadapprovals.legacy.untitledUpload')}</p>
+                      <p className="text-[var(--text-primary)] font-semibold truncate">{p.file_name || t('uploadapprovals.legacy.untitledUpload')}</p>
                       <div className="flex items-center gap-3 flex-wrap mt-1 text-xs text-gray-500">
                         <span className="flex items-center gap-1"><Package size={11} />{(p.row_count || 0).toLocaleString()} {t('uploadapprovals.legacy.rowsLabel')} · {t(`uploadapprovals.types.${TYPE_META[p.upload_type] ? p.upload_type : 'tyres'}`)}</span>
                         <span className="flex items-center gap-1"><User size={11} />{p.uploader_name || t('uploadapprovals.legacy.unknownUploader')}</span>
@@ -383,14 +383,14 @@ function IntakeRowsModal({ data, onClose }) {
       <div className="bg-[var(--panel,#0f1623)] border border-gray-700 rounded-xl max-w-6xl w-full max-h-[88vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
           <div>
-            <h3 className="text-white font-semibold capitalize">{batch.module} {t('uploadapprovals.intakeModal.titleSuffix')} · {(batch.total_rows || 0).toLocaleString()} {t('uploadapprovals.intakeModal.rowsLabel')}</h3>
+            <h3 className="text-[var(--text-primary)] font-semibold capitalize">{batch.module} {t('uploadapprovals.intakeModal.titleSuffix')} · {(batch.total_rows || 0).toLocaleString()} {t('uploadapprovals.intakeModal.rowsLabel')}</h3>
             <p className="text-xs text-gray-500">{t('uploadapprovals.intakeModal.subtitle')}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><XCircle size={20} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-[var(--text-primary)]"><XCircle size={20} /></button>
         </div>
         <div className="px-5 py-3 border-b border-gray-800 flex items-center gap-2 bg-gray-800/40">
           <Search size={14} className="text-gray-500" />
-          <input className="bg-transparent text-sm text-white placeholder-gray-500 outline-none flex-1"
+          <input className="bg-transparent text-sm text-[var(--text-primary)] placeholder-gray-500 outline-none flex-1"
             placeholder={t('uploadapprovals.intakeModal.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="overflow-auto p-4 flex-1">
@@ -483,17 +483,17 @@ function EditBatchModal({ batch, editable, onClose, onSaved }) {
       <div className="bg-[var(--panel,#0f1623)] border border-gray-700 rounded-xl max-w-6xl w-full max-h-[88vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800">
           <div>
-            <h3 className="text-white font-semibold">{batch.file_name || t('uploadapprovals.editModal.defaultFileName')} · {rows.length.toLocaleString()} {t('uploadapprovals.editModal.rowsLabel')}</h3>
+            <h3 className="text-[var(--text-primary)] font-semibold">{batch.file_name || t('uploadapprovals.editModal.defaultFileName')} · {rows.length.toLocaleString()} {t('uploadapprovals.editModal.rowsLabel')}</h3>
             <p className="text-xs text-gray-500">{editable ? t('uploadapprovals.editModal.editableSubtitle') : t('uploadapprovals.editModal.readOnlySubtitle')}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><XCircle size={20} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-[var(--text-primary)]"><XCircle size={20} /></button>
         </div>
 
         {editable && (
           <div className="px-5 py-3 border-b border-gray-800 flex flex-wrap items-end gap-3">
             <div className="flex items-center gap-2 bg-gray-800/40 rounded-lg px-3 py-1.5 flex-1 min-w-[180px]">
               <Search size={14} className="text-gray-500" />
-              <input className="bg-transparent text-sm text-white placeholder-gray-500 outline-none flex-1"
+              <input className="bg-transparent text-sm text-[var(--text-primary)] placeholder-gray-500 outline-none flex-1"
                 placeholder={t('uploadapprovals.editModal.searchPlaceholder')} value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div className="flex items-end gap-2">

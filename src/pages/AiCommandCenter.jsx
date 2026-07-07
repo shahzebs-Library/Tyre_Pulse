@@ -45,7 +45,7 @@ const AGENT_ICONS = {
 const TREND_ICON = (trend) => {
   if (trend === 'worsening')  return <TrendingUp className="w-3.5 h-3.5 text-red-400" />
   if (trend === 'improving')  return <TrendingDown className="w-3.5 h-3.5 text-emerald-400" />
-  return <Minus className="w-3.5 h-3.5 text-gray-400" />
+  return <Minus className="w-3.5 h-3.5 text-[var(--text-muted)]" />
 }
 
 // ── Helper: format response text with markdown-like rendering ─────────────────
@@ -63,7 +63,7 @@ function FormattedResponse({ text }) {
     if (line.startsWith('## ') || line.startsWith('# ')) {
       const content = line.replace(/^#+ /, '')
       elements.push(
-        <h3 key={key++} className="text-sm font-semibold text-white mt-4 mb-1.5 first:mt-0">
+        <h3 key={key++} className="text-sm font-semibold text-[var(--text-primary)] mt-4 mb-1.5 first:mt-0">
           {content}
         </h3>
       )
@@ -72,10 +72,10 @@ function FormattedResponse({ text }) {
       const num = line.match(/^(\d+)/)[1]
       elements.push(
         <div key={key++} className="flex gap-2 my-1">
-          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-700 text-gray-300 text-xs flex items-center justify-center font-medium">
+          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)] text-xs flex items-center justify-center font-medium">
             {num}
           </span>
-          <span className="text-gray-300 text-sm leading-relaxed flex-1"
+          <span className="text-[var(--text-secondary)] text-sm leading-relaxed flex-1"
             dangerouslySetInnerHTML={{ __html: renderInline(content) }}
           />
         </div>
@@ -85,7 +85,7 @@ function FormattedResponse({ text }) {
       elements.push(
         <div key={key++} className="flex gap-2 my-0.5 ml-1">
           <span className="flex-shrink-0 mt-2 w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          <span className="text-gray-300 text-sm leading-relaxed flex-1"
+          <span className="text-[var(--text-secondary)] text-sm leading-relaxed flex-1"
             dangerouslySetInnerHTML={{ __html: renderInline(content) }}
           />
         </div>
@@ -94,7 +94,7 @@ function FormattedResponse({ text }) {
       elements.push(<div key={key++} className="h-1.5" />)
     } else {
       elements.push(
-        <p key={key++} className="text-gray-300 text-sm leading-relaxed my-0.5"
+        <p key={key++} className="text-[var(--text-secondary)] text-sm leading-relaxed my-0.5"
           dangerouslySetInnerHTML={{ __html: renderInline(line) }}
         />
       )
@@ -117,9 +117,9 @@ function renderInline(text) {
   // Escape all HTML first - prevents XSS from AI-generated content
   const safe = escapeHtml(text)
   return safe
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em class="text-gray-200">$1</em>')
-    .replace(/`(.+?)`/g, '<code class="bg-gray-700 text-emerald-300 px-1 py-0.5 rounded text-xs font-mono">$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-[var(--text-primary)] font-semibold">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em class="text-[var(--text-secondary)]">$1</em>')
+    .replace(/`(.+?)`/g, '<code class="bg-[var(--input-bg)] text-emerald-300 px-1 py-0.5 rounded text-xs font-mono">$1</code>')
 }
 
 // ── KPI Summary Panel (shown for Analyst responses) ──────────────────────────
@@ -141,27 +141,27 @@ function KpiPanel({ kpis, costTrend, vendorRank }) {
   ]
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-700/50">
-      <p className="text-xs text-gray-500 mb-2 uppercase tracking-wider font-medium">KPI Snapshot</p>
+    <div className="mt-3 pt-3 border-t border-[var(--input-border)]/50">
+      <p className="text-xs text-[var(--text-muted)] mb-2 uppercase tracking-wider font-medium">KPI Snapshot</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         {metrics.map(m => (
-          <div key={m.label} className="bg-gray-800/60 rounded-lg p-2.5">
-            <p className="text-xs text-gray-500 mb-0.5">{m.label}</p>
+          <div key={m.label} className="bg-[var(--input-bg)]/60 rounded-lg p-2.5">
+            <p className="text-xs text-[var(--text-muted)] mb-0.5">{m.label}</p>
             <div className="flex items-center gap-1">
               {m.icon}
-              <span className="text-sm font-semibold text-white capitalize">{m.value}</span>
+              <span className="text-sm font-semibold text-[var(--text-primary)] capitalize">{m.value}</span>
             </div>
-            <p className="text-xs text-gray-600 mt-0.5">{m.sub}</p>
+            <p className="text-xs text-[var(--text-dim)] mt-0.5">{m.sub}</p>
           </div>
         ))}
       </div>
 
       {vendorRank?.length > 0 && (
         <div className="mt-2">
-          <p className="text-xs text-gray-500 mb-1.5">Brand Ranking (best CPK first)</p>
+          <p className="text-xs text-[var(--text-muted)] mb-1.5">Brand Ranking (best CPK first)</p>
           <div className="flex flex-wrap gap-1.5">
             {vendorRank.map((b, i) => (
-              <span key={b.brand} className={`text-xs px-2 py-1 rounded-full font-medium ${i === 0 ? 'bg-emerald-900/40 text-emerald-300' : i === vendorRank.length - 1 ? 'bg-red-900/40 text-red-300' : 'bg-gray-700/60 text-gray-300'}`}>
+              <span key={b.brand} className={`text-xs px-2 py-1 rounded-full font-medium ${i === 0 ? 'bg-emerald-900/40 text-emerald-300' : i === vendorRank.length - 1 ? 'bg-red-900/40 text-red-300' : 'bg-[var(--input-bg)]/60 text-[var(--text-secondary)]'}`}>
                 #{i + 1} {b.brand} ({b.avgCpk?.toFixed(3)})
               </span>
             ))}
@@ -192,11 +192,11 @@ function QaPanel({ checks, dataQualityScore, totalIssues }) {
   ].filter(i => i.count > 0)
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-700/50">
+    <div className="mt-3 pt-3 border-t border-[var(--input-border)]/50">
       <div className="flex items-center gap-3 mb-2">
-        <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Data Quality Score</p>
+        <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider font-medium">Data Quality Score</p>
         <span className={`text-lg font-bold ${scoreColor}`}>{dataQualityScore}%</span>
-        <span className="text-xs text-gray-500">({totalIssues} issues in {checks.totalRecords} records)</span>
+        <span className="text-xs text-[var(--text-muted)]">({totalIssues} issues in {checks.totalRecords} records)</span>
       </div>
       {issueItems.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -218,31 +218,31 @@ function PlannerPanel({ planningData }) {
   const { forecasts, annualForecast, replacementRate, avgLife } = planningData
 
   return (
-    <div className="mt-3 pt-3 border-t border-gray-700/50">
-      <p className="text-xs text-gray-500 mb-2 uppercase tracking-wider font-medium">Planning Forecast</p>
+    <div className="mt-3 pt-3 border-t border-[var(--input-border)]/50">
+      <p className="text-xs text-[var(--text-muted)] mb-2 uppercase tracking-wider font-medium">Planning Forecast</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="bg-gray-800/60 rounded-lg p-2.5">
-          <p className="text-xs text-gray-500 mb-0.5">Avg Replacements/Vehicle/Month</p>
-          <p className="text-sm font-semibold text-white">{replacementRate?.avgPerVehiclePerMonth?.toFixed(2) ?? 'N/A'}</p>
+        <div className="bg-[var(--input-bg)]/60 rounded-lg p-2.5">
+          <p className="text-xs text-[var(--text-muted)] mb-0.5">Avg Replacements/Vehicle/Month</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">{replacementRate?.avgPerVehiclePerMonth?.toFixed(2) ?? 'N/A'}</p>
         </div>
-        <div className="bg-gray-800/60 rounded-lg p-2.5">
-          <p className="text-xs text-gray-500 mb-0.5">Avg Tyre Life</p>
-          <p className="text-sm font-semibold text-white">{avgLife?.avgKm ? `${(avgLife.avgKm / 1000).toFixed(0)}k km` : 'N/A'}</p>
+        <div className="bg-[var(--input-bg)]/60 rounded-lg p-2.5">
+          <p className="text-xs text-[var(--text-muted)] mb-0.5">Avg Tyre Life</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">{avgLife?.avgKm ? `${(avgLife.avgKm / 1000).toFixed(0)}k km` : 'N/A'}</p>
         </div>
-        <div className="bg-gray-800/60 rounded-lg p-2.5">
-          <p className="text-xs text-gray-500 mb-0.5">Active Vehicles</p>
-          <p className="text-sm font-semibold text-white">{replacementRate?.activeVehicles ?? 'N/A'}</p>
+        <div className="bg-[var(--input-bg)]/60 rounded-lg p-2.5">
+          <p className="text-xs text-[var(--text-muted)] mb-0.5">Active Vehicles</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">{replacementRate?.activeVehicles ?? 'N/A'}</p>
         </div>
-        <div className="bg-gray-800/60 rounded-lg p-2.5">
-          <p className="text-xs text-gray-500 mb-0.5">Annual Budget Est.</p>
-          <p className="text-sm font-semibold text-white">{annualForecast ? annualForecast.toFixed(0) : 'N/A'}</p>
+        <div className="bg-[var(--input-bg)]/60 rounded-lg p-2.5">
+          <p className="text-xs text-[var(--text-muted)] mb-0.5">Annual Budget Est.</p>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">{annualForecast ? annualForecast.toFixed(0) : 'N/A'}</p>
         </div>
       </div>
       {forecasts?.length > 0 && (
         <div className="mt-2 flex gap-2">
           {forecasts.map(f => (
-            <div key={f.month} className="flex-1 bg-gray-800/40 rounded-lg p-2 text-center">
-              <p className="text-xs text-gray-500">{f.month}</p>
+            <div key={f.month} className="flex-1 bg-[var(--input-bg)]/40 rounded-lg p-2 text-center">
+              <p className="text-xs text-[var(--text-muted)]">{f.month}</p>
               <p className="text-sm font-semibold text-emerald-400">{f.forecastCost?.toFixed(0) ?? 'N/A'}</p>
             </div>
           ))}
@@ -277,9 +277,9 @@ function MessageBubble({ message, onCopy }) {
       >
         <div className="max-w-2xl">
           <div className="bg-blue-600/20 border border-blue-600/30 rounded-2xl rounded-tr-sm px-4 py-3">
-            <p className="text-sm text-gray-100 leading-relaxed">{message.content}</p>
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{message.content}</p>
           </div>
-          <p className="text-xs text-gray-600 text-right mt-1 pr-1">{message.timestamp}</p>
+          <p className="text-xs text-[var(--text-dim)] text-right mt-1 pr-1">{message.timestamp}</p>
         </div>
       </motion.div>
     )
@@ -292,8 +292,8 @@ function MessageBubble({ message, onCopy }) {
       className="flex gap-3"
     >
       {/* Agent avatar */}
-      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 ${agentColor?.bg ?? 'bg-gray-800'} border ${agentColor?.border ?? 'border-gray-700'}`}>
-        <AgentIcon className={`w-4 h-4 ${agentColor?.text ?? 'text-gray-400'}`} />
+      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 ${agentColor?.bg ?? 'bg-[var(--input-bg)]'} border ${agentColor?.border ?? 'border-[var(--input-border)]'}`}>
+        <AgentIcon className={`w-4 h-4 ${agentColor?.text ?? 'text-[var(--text-muted)]'}`} />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -304,7 +304,7 @@ function MessageBubble({ message, onCopy }) {
               {AGENT_LABELS[message.agentType]} Agent
             </span>
             {message.timestamp && (
-              <span className="text-xs text-gray-600 flex items-center gap-1">
+              <span className="text-xs text-[var(--text-dim)] flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 {message.timestamp}
               </span>
@@ -313,11 +313,11 @@ function MessageBubble({ message, onCopy }) {
         )}
 
         {/* Response content */}
-        <div className="bg-gray-800/60 border border-gray-700/50 rounded-2xl rounded-tl-sm px-4 py-3">
+        <div className="bg-[var(--input-bg)]/60 border border-[var(--input-border)]/50 rounded-2xl rounded-tl-sm px-4 py-3">
           {expanded ? (
             <FormattedResponse text={message.content ?? message.response} />
           ) : (
-            <p className="text-gray-400 text-sm italic">Response collapsed</p>
+            <p className="text-[var(--text-muted)] text-sm italic">Response collapsed</p>
           )}
 
           {/* Agent-specific data panels */}
@@ -336,14 +336,14 @@ function MessageBubble({ message, onCopy }) {
         <div className="flex items-center gap-2 mt-1.5 pl-1">
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
           >
             {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
             {copied ? 'Copied' : 'Copy'}
           </button>
           <button
             onClick={() => setExpanded(e => !e)}
-            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
           >
             {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             {expanded ? 'Collapse' : 'Expand'}
@@ -367,19 +367,19 @@ function TypingIndicator({ agentType }) {
       exit={{ opacity: 0, y: -4 }}
       className="flex gap-3"
     >
-      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${agentColor.bg ?? 'bg-gray-800'} border ${agentColor.border ?? 'border-gray-700'}`}>
-        <AgentIcon className={`w-4 h-4 ${agentColor.text ?? 'text-gray-400'}`} />
+      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${agentColor.bg ?? 'bg-[var(--input-bg)]'} border ${agentColor.border ?? 'border-[var(--input-border)]'}`}>
+        <AgentIcon className={`w-4 h-4 ${agentColor.text ?? 'text-[var(--text-muted)]'}`} />
       </div>
-      <div className="bg-gray-800/60 border border-gray-700/50 rounded-2xl rounded-tl-sm px-4 py-3">
+      <div className="bg-[var(--input-bg)]/60 border border-[var(--input-border)]/50 rounded-2xl rounded-tl-sm px-4 py-3">
         <div className="flex items-center gap-1">
-          <span className={`text-xs font-medium ${agentColor.text ?? 'text-gray-400'}`}>
+          <span className={`text-xs font-medium ${agentColor.text ?? 'text-[var(--text-muted)]'}`}>
             {AGENT_LABELS[agentType] ?? 'AI'} Agent is thinking
           </span>
           <div className="flex gap-1 ml-2">
             {[0, 1, 2].map(i => (
               <motion.div
                 key={i}
-                className="w-1.5 h-1.5 bg-gray-500 rounded-full"
+                className="w-1.5 h-1.5 bg-[var(--text-muted)] rounded-full"
                 animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1, 0.8] }}
                 transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
               />
@@ -663,7 +663,7 @@ export default function AiCommandCenter() {
         actions={
           <div className="flex items-center gap-2 flex-shrink-0">
             {dataLoading ? (
-              <span className="flex items-center gap-1.5 text-xs text-gray-500">
+              <span className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                 Loading context...
               </span>
@@ -676,7 +676,7 @@ export default function AiCommandCenter() {
 
             <button
               onClick={() => setShowFilters(f => !f)}
-              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${showFilters ? 'bg-blue-600/20 border-blue-600/40 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'}`}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${showFilters ? 'bg-blue-600/20 border-blue-600/40 text-blue-300' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
             >
               <Filter className="w-3.5 h-3.5" />
               Context
@@ -686,14 +686,14 @@ export default function AiCommandCenter() {
               <>
                 <button
                   onClick={exportChatPdf}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Export PDF
                 </button>
                 <button
                   onClick={clearChat}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-red-400 transition-colors"
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-red-400 transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   Clear
@@ -713,13 +713,13 @@ export default function AiCommandCenter() {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
             >
-              <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="mt-4 pt-4 border-t border-[var(--input-border)] grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1.5 font-medium">Site Filter</label>
+                  <label className="block text-xs text-[var(--text-muted)] mb-1.5 font-medium">Site Filter</label>
                   <select
                     value={selectedSite}
                     onChange={e => { setSelectedSite(e.target.value); setSelectedAsset('') }}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
                   >
                     <option value="">All sites ({records.length} records)</option>
                     {sites.map(s => (
@@ -728,11 +728,11 @@ export default function AiCommandCenter() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1.5 font-medium">Vehicle Context (optional)</label>
+                  <label className="block text-xs text-[var(--text-muted)] mb-1.5 font-medium">Vehicle Context (optional)</label>
                   <select
                     value={selectedAsset}
                     onChange={e => setSelectedAsset(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
                   >
                     <option value="">No specific vehicle</option>
                     {filteredAssets.map(a => (
@@ -762,7 +762,7 @@ export default function AiCommandCenter() {
         </AnimatePresence>
 
       {/* ── Agent cards row ── */}
-      <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b border-gray-800/50">
+      <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-b border-[var(--input-border)]/50">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {Object.values(AGENT_TYPES).map(type => {
             const AgentIcon = AGENT_ICONS[type]
@@ -771,17 +771,17 @@ export default function AiCommandCenter() {
             return (
               <div
                 key={type}
-                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all ${isActive ? `${color.bg} ${color.border} border` : 'bg-gray-900/40 border-gray-800/60'}`}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all ${isActive ? `${color.bg} ${color.border} border` : 'bg-[var(--surface-1)]/40 border-[var(--input-border)]/60'}`}
               >
                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${color.bg} border ${color.border}`}>
                   <AgentIcon className={`w-3.5 h-3.5 ${color.text}`} />
                 </div>
                 <div className="min-w-0">
-                  <p className={`text-xs font-medium truncate ${isActive ? color.text : 'text-gray-300'}`}>
+                  <p className={`text-xs font-medium truncate ${isActive ? color.text : 'text-[var(--text-secondary)]'}`}>
                     {AGENT_LABELS[type]}
                     {isActive && <span className="ml-1 inline-block w-1.5 h-1.5 bg-current rounded-full animate-pulse" />}
                   </p>
-                  <p className="text-xs text-gray-600 truncate hidden sm:block">{AGENT_DESCRIPTIONS[type].split(',')[0]}</p>
+                  <p className="text-xs text-[var(--text-dim)] truncate hidden sm:block">{AGENT_DESCRIPTIONS[type].split(',')[0]}</p>
                 </div>
               </div>
             )
@@ -798,8 +798,8 @@ export default function AiCommandCenter() {
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600/20 to-indigo-700/20 border border-blue-600/20 flex items-center justify-center mx-auto mb-4">
               <Sparkles className="w-8 h-8 text-blue-400" />
             </div>
-            <h2 className="text-white font-semibold text-lg mb-2">TyrePulse AI Command Center</h2>
-            <p className="text-gray-400 text-sm mb-8 leading-relaxed">
+            <h2 className="text-[var(--text-primary)] font-semibold text-lg mb-2">TyrePulse AI Command Center</h2>
+            <p className="text-[var(--text-muted)] text-sm mb-8 leading-relaxed">
               Ask any question about your fleet - tyre costs, failure analysis, data quality, or maintenance planning.
               The AI router automatically dispatches to the best specialist agent.
             </p>
@@ -842,7 +842,7 @@ export default function AiCommandCenter() {
 
       {/* ── Quick action chips (shown when chat has messages) ── */}
       {messages.length > 0 && (
-        <div className="flex-shrink-0 px-4 sm:px-6 py-2 border-t border-gray-800/50 overflow-x-auto">
+        <div className="flex-shrink-0 px-4 sm:px-6 py-2 border-t border-[var(--input-border)]/50 overflow-x-auto">
           <div className="flex gap-2 min-w-max">
             {QUICK_ACTIONS.slice(0, 5).map(action => {
               const color = AGENT_COLORS[action.agent]
@@ -862,14 +862,14 @@ export default function AiCommandCenter() {
       )}
 
       {/* ── Input area ── */}
-      <div className="flex-shrink-0 border-t border-gray-800 bg-gray-900/50 backdrop-blur-sm px-4 sm:px-6 py-4">
+      <div className="flex-shrink-0 border-t border-[var(--input-border)] bg-[var(--surface-1)]/50 backdrop-blur-sm px-4 sm:px-6 py-4">
 
         {/* Agent preview */}
         {previewAgent && query.trim() && (
           <div className={`flex items-center gap-2 mb-2 text-xs ${AGENT_COLORS[previewAgent].text}`}>
             <Zap className="w-3 h-3" />
             Will route to: <span className="font-medium">{AGENT_LABELS[previewAgent]} Agent</span>
-            <span className="text-gray-600">- {AGENT_DESCRIPTIONS[previewAgent]}</span>
+            <span className="text-[var(--text-dim)]">- {AGENT_DESCRIPTIONS[previewAgent]}</span>
           </div>
         )}
 
@@ -883,14 +883,14 @@ export default function AiCommandCenter() {
               placeholder={dataLoading ? 'Loading fleet context...' : 'Ask about CPK, failures, root causes, planning, or data quality...'}
               disabled={loading || dataLoading}
               rows={1}
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 pr-12 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none disabled:opacity-50 transition-colors leading-relaxed"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-4 py-3 pr-12 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none disabled:opacity-50 transition-colors leading-relaxed"
               style={{ minHeight: '48px', maxHeight: '120px' }}
               onInput={e => {
                 e.target.style.height = 'auto'
                 e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
               }}
             />
-            <div className="absolute right-3 bottom-2.5 text-xs text-gray-600">
+            <div className="absolute right-3 bottom-2.5 text-xs text-[var(--text-dim)]">
               {query.length > 0 && `${query.length}`}
             </div>
           </div>
@@ -907,7 +907,7 @@ export default function AiCommandCenter() {
           </button>
         </div>
 
-        <p className="text-xs text-gray-600 mt-2 text-center">
+        <p className="text-xs text-[var(--text-dim)] mt-2 text-center">
           AI responses are generated from your fleet data. Always validate critical decisions with your engineering team.
         </p>
       </div>

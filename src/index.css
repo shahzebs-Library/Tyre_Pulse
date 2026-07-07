@@ -143,17 +143,12 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
   body {
     margin: 0;
     background-color: var(--bg-base);
+    /* Calm, professional ground: a single very-faint accent bloom instead of the
+       former multi-glow "HUD" backdrop. The micro-grid + heavy blooms are gone. */
     background-image:
-      /* noise-like micro-grid */
-      linear-gradient(rgba(22,163,74,0.028) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(22,163,74,0.028) 1px, transparent 1px),
-      /* top-left radial bloom */
-      radial-gradient(ellipse 90% 60% at -5% -5%, rgba(22,163,74,0.16) 0%, transparent 52%),
-      /* bottom-right accent */
-      radial-gradient(ellipse 55% 45% at 110% 110%, rgba(22,163,74,0.07) 0%, transparent 52%),
-      /* center depth */
-      radial-gradient(ellipse 70% 50% at 50% 50%, rgba(0,0,0,0.3) 0%, transparent 70%);
-    background-size: 48px 48px, 48px 48px, 100% 100%, 100% 100%, 100% 100%;
+      radial-gradient(ellipse 80% 55% at 0% 0%, rgba(22,163,74,0.05) 0%, transparent 55%),
+      radial-gradient(ellipse 60% 50% at 100% 100%, rgba(22,163,74,0.025) 0%, transparent 55%);
+    background-size: 100% 100%, 100% 100%;
     background-attachment: fixed;
     color: var(--text-primary);
     min-height: 100vh;
@@ -185,6 +180,36 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
   }
 }
 
+/* ─── Appearance: density (Settings → Appearance) ─────────────────────────────
+   Compact trims the base type scale and card/table padding for power users who
+   want more on screen. Comfortable is the default. Driven by data-density on
+   <html> from ThemeContext. */
+html[data-density='compact'] { font-size: 15px; }              /* vs 16px default */
+html[data-density='compact'] .card { padding: 1rem; }
+html[data-density='compact'] table th,
+html[data-density='compact'] table td { padding-top: 0.4rem; padding-bottom: 0.4rem; }
+html[data-density='compact'] .stat-card,
+html[data-density='compact'] .kpi-card { padding: 0.85rem 1rem; }
+
+/* ─── Appearance: reduced motion (Settings → Appearance) ───────────────────────
+   Honour both the OS setting and the in-app toggle: kill non-essential
+   animation/transition so the UI stays calm and accessible. */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
 /* ─── Root ──────────────────────────────────────────────────────────────────── */
 #root {
   min-height: 100vh;
@@ -212,7 +237,7 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
     will-change: transform;
   }
 
-  /* top-edge prismatic glow */
+  /* top-edge hairline — a whisper of accent, not a glow */
   .card::before {
     content: '';
     position: absolute;
@@ -221,42 +246,22 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(22,163,74,0.5) 40%,
-      rgba(74,222,128,0.7) 50%,
-      rgba(22,163,74,0.5) 60%,
+      rgba(22,163,74,0.18) 40%,
+      rgba(22,163,74,0.24) 50%,
+      rgba(22,163,74,0.18) 60%,
       transparent 100%
     );
     pointer-events: none;
-    opacity: 0.7;
-    transition: opacity 0.3s;
+    opacity: 0.6;
+    transition: opacity 0.25s;
   }
 
-  /* shine sweep on hover */
-  .card::after {
-    content: '';
-    position: absolute;
-    top: -60%; left: -80%;
-    width: 40%; height: 220%;
-    background: linear-gradient(
-      108deg,
-      transparent   35%,
-      rgba(255,255,255,0.038) 50%,
-      transparent   65%
-    );
-    transform: skewX(-16deg);
-    transition: left 0.6s var(--ease-smooth);
-    pointer-events: none;
-  }
-  .card:hover::after { left: 140%; }
-  .card:hover::before { opacity: 1; }
-
+  /* Calm hover: gentle border + lift, no shine sweep, no coloured glow. */
+  .card:hover::before { opacity: 0.9; }
   .card:hover {
-    border-color: rgba(22,163,74,0.42);
-    box-shadow:
-      var(--shadow-card),
-      0 0 0 1px rgba(22,163,74,0.06) inset,
-      var(--shadow-glow);
-    transform: translateY(-2px);
+    border-color: var(--border-bright);
+    box-shadow: var(--shadow-card);
+    transform: translateY(-1px);
   }
 
   /* accent card - vivid top border */
@@ -265,10 +270,10 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
     background: linear-gradient(145deg, var(--card-from) 0%, var(--card-to) 100%);
     color: var(--card-text);
     border: 1px solid rgba(22,163,74,0.24);
-    border-top: 2px solid rgba(22,163,74,0.85);
+    border-top: 2px solid rgba(22,163,74,0.7);
     border-radius: var(--radius-card);
     padding: 1.35rem;
-    box-shadow: var(--shadow-card), 0 0 50px rgba(22,163,74,0.1);
+    box-shadow: var(--shadow-card);
     backdrop-filter: blur(20px);
   }
 
@@ -293,21 +298,18 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
     background: linear-gradient(
       90deg,
       transparent,
-      rgba(22,163,74,0.55) 40%,
-      rgba(74,222,128,0.75) 50%,
-      rgba(22,163,74,0.55) 60%,
+      rgba(22,163,74,0.2) 40%,
+      rgba(22,163,74,0.26) 50%,
+      rgba(22,163,74,0.2) 60%,
       transparent
     );
     pointer-events: none;
-    transition: opacity 0.3s;
+    transition: opacity 0.25s;
   }
   .card-stat:hover {
-    border-color: rgba(22,163,74,0.44);
-    box-shadow:
-      var(--shadow-card),
-      0 0 50px rgba(22,163,74,0.14),
-      0 0 0 1px rgba(22,163,74,0.05) inset;
-    transform: translateY(-3px);
+    border-color: var(--border-bright);
+    box-shadow: var(--shadow-card);
+    transform: translateY(-1px);
   }
 
   /* ── Buttons ───────────────────────────────────────────────────────────── */
@@ -318,11 +320,10 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
            focus-visible:outline-none
            disabled:opacity-40 disabled:cursor-not-allowed;
     letter-spacing: 0.012em;
-    background: linear-gradient(135deg, #16a34a 0%, #15803d 55%, #14532d 100%);
+    /* Token-driven so it follows the tenant brand + the user's personal accent. */
+    background: linear-gradient(135deg, var(--brand-bright) 0%, var(--brand) 100%);
     box-shadow:
-      0 0 0 1px rgba(22,163,74,0.5),
-      0 0 24px rgba(22,163,74,0.3),
-      0 2px 10px rgba(0,0,0,0.4),
+      0 1px 2px rgba(0,0,0,0.35),
       inset 0 1px 0 rgba(255,255,255,0.14);
     position: relative;
     overflow: hidden;
@@ -339,11 +340,9 @@ html.rtl .rtl-flip { transform: scaleX(-1); }
   }
   .btn-primary:hover:not(:disabled)::before { opacity: 1; }
   .btn-primary:hover:not(:disabled) {
-    background: linear-gradient(135deg, #22c55e 0%, #16a34a 55%, #15803d 100%);
+    filter: brightness(1.06);
     box-shadow:
-      0 0 0 1px rgba(22,163,74,0.65),
-      0 0 40px rgba(22,163,74,0.55),
-      0 4px 16px rgba(0,0,0,0.35),
+      0 2px 8px rgba(0,0,0,0.3),
       inset 0 1px 0 rgba(255,255,255,0.2);
     transform: translateY(-1px);
   }
@@ -785,37 +784,39 @@ aside {
 /* ─── Light theme ────────────────────────────────────────────────────────────── */
 html.light {
   color-scheme: light;
-  --bg-base:        #f0f5f1;
+  /* Clean, neutral, minimal — slate greys, not green murk. Green is an accent
+     only (buttons, active nav, positive status), never ambient. */
+  --bg-base:        #f6f7f9;
   --surface-0:      #ffffff;
   --surface-1:      #ffffff;
-  --surface-2:      #f4f9f5;
-  --surface-3:      #edf5ef;
-  --border-brand:   rgba(22,163,74,0.15);
-  --border-bright:  rgba(22,163,74,0.35);
-  --border-dim:     #e2e8f0;
-  --text-primary:   #0f172a;
-  --text-secondary: #334155;
-  --text-muted:     #475569;
-  --text-dim:       #64748b;
+  --surface-2:      #f8fafc;
+  --surface-3:      #f1f5f9;
+  --border-brand:   #e6e9ee;
+  --border-bright:  #d3d9e2;
+  --border-dim:     #eaedf1;
+  --text-primary:   #101828;
+  --text-secondary: #344054;
+  --text-muted:     #667085;
+  --text-dim:       #98a2b3;
   /* Elegant, soft enterprise shadows (Stripe / Linear style) */
-  --shadow-card:    0 1px 2px rgba(16,24,40,0.05), 0 4px 12px rgba(16,24,40,0.06), 0 12px 32px rgba(16,24,40,0.05);
-  --shadow-glow:    0 0 0 1px rgba(22,163,74,0.08), 0 8px 28px rgba(16,24,40,0.08);
+  --shadow-card:    0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.06);
+  --shadow-glow:    0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.08);
 
   /* Semantic surfaces - clean whites + slate, no green murk */
   --card-from:        #ffffff;
   --card-to:          #ffffff;
-  --card-text:        #0f172a;
+  --card-text:        #101828;
   --input-bg:         #ffffff;
-  --input-bg-hover:   #f8fafc;
-  --input-border:     #dfe5ec;
-  --input-text:       #0f172a;
-  --table-head-bg:    #f8fafc;
-  --table-head-text:  #475569;
-  --table-cell-text:  #334155;
-  --table-cell-border:#eef1f5;
+  --input-bg-hover:   #f9fafb;
+  --input-border:     #d0d5dd;
+  --input-text:       #101828;
+  --table-head-bg:    #f9fafb;
+  --table-head-text:  #667085;
+  --table-cell-text:  #344054;
+  --table-cell-border:#eaecf0;
   --btn-2-bg:         #ffffff;
-  --btn-2-border:     #dfe5ec;
-  --glass-bg:         rgba(255,255,255,0.82);
+  --btn-2-border:     #d0d5dd;
+  --glass-bg:         rgba(255,255,255,0.85);
 
   /* Login - page background responds to the theme; the auth card stays a
      premium elevated panel (brand showcase) in both themes. */
@@ -834,15 +835,10 @@ html.light {
 }
 
 html.light body {
-  background-color: #f0f5f1;
-  background-image:
-    linear-gradient(rgba(22,163,74,0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(22,163,74,0.045) 1px, transparent 1px),
-    radial-gradient(ellipse 80% 55% at -5% -5%, rgba(22,163,74,0.1) 0%, transparent 52%),
-    radial-gradient(ellipse 50% 40% at 108% 108%, rgba(22,163,74,0.06) 0%, transparent 52%);
-  background-size: 48px 48px, 48px 48px, 100% 100%, 100% 100%;
-  background-attachment: fixed;
-  color: #0f172a;
+  /* Flat neutral ground — no grid, no green bloom. */
+  background-color: #f6f7f9;
+  background-image: none;
+  color: #101828;
 }
 
 html.light #root {
@@ -850,31 +846,31 @@ html.light #root {
 }
 
 html.light aside {
-  background: linear-gradient(180deg, #ffffff 0%, #f7fdf8 100%);
-  border-right-color: rgba(22,163,74,0.14);
-  box-shadow: 2px 0 20px rgba(0,0,0,0.06), inset -1px 0 0 rgba(22,163,74,0.08);
+  background: #ffffff;
+  border-right-color: #eaecf0;
+  box-shadow: none;
 }
 
 html.light .card {
-  background: linear-gradient(145deg, #ffffff 0%, #f8fdfb 100%);
-  border-color: rgba(22,163,74,0.14);
+  background: #ffffff;
+  border-color: #e6e9ee;
   box-shadow: var(--shadow-card);
-  color: #0f172a;
+  color: #101828;
 }
-html.light .card::before {
-  background: linear-gradient(90deg, transparent, rgba(22,163,74,0.32) 40%, rgba(22,163,74,0.45) 50%, rgba(22,163,74,0.32) 60%, transparent);
-}
+/* No accent hairline in light — keep it clean and flat. */
+html.light .card::before { background: transparent; }
+html.light .card-stat::before { background: transparent; }
 html.light .card:hover {
-  border-color: rgba(22,163,74,0.32);
-  box-shadow: var(--shadow-card), var(--shadow-glow);
+  border-color: #d3d9e2;
+  box-shadow: var(--shadow-glow);
 }
 
 html.light .card-stat {
-  background: linear-gradient(145deg, #ffffff 0%, #f3fcf6 100%);
-  border-color: rgba(22,163,74,0.16);
+  background: #ffffff;
+  border-color: #e6e9ee;
 }
 html.light .card-stat:hover {
-  box-shadow: var(--shadow-card), 0 0 50px rgba(22,163,74,0.1);
+  box-shadow: var(--shadow-glow);
 }
 
 html.light .input {

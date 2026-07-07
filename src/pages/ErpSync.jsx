@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import { useLanguage } from '../contexts/LanguageContext'
+import ErpConnectionPanel from '../components/erp/ErpConnectionPanel'
+import WebhooksPanel from '../components/integrations/WebhooksPanel'
 
 // ── Honest state ──────────────────────────────────────────────────────────────
 // No ERP connector is provisioned for this project yet. Rather than fabricate
@@ -92,6 +94,12 @@ export default function ErpSync() {
           <Upload size={15} /> {t('erpsync.banner.cta')} <ArrowRight size={14} />
         </Link>
       </div>
+
+      {/* ERP connection config */}
+      <ErpConnectionPanel />
+
+      {/* Outbound webhooks (event-driven integrations) */}
+      <WebhooksPanel />
 
       {/* Integration targets */}
       <section>

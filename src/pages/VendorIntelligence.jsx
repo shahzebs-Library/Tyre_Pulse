@@ -814,7 +814,7 @@ export default function VendorIntelligence() {
           >
             {/* ─── 3a: Vendor Leaderboard ──────────────────────────────────── */}
             <div>
-              <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                 <Award size={15} className="text-yellow-400" /> {t('vendorintel.vendor.leaderboard')}
               </h2>
 
@@ -963,14 +963,14 @@ export default function VendorIntelligence() {
             {/* ─── 3b-3e: Brand Charts 2×2 ─────────────────────────────────── */}
             {hasVendorData && (
               <div>
-                <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                   <BarChart3 size={15} className="text-green-400" /> {t('vendorintel.vendor.analyticsTitle')}
                 </h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
                   {/* Radar chart */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.vendor.radarTitle')}</p>
+                    <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.vendor.radarTitle')}</p>
                     <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.radarSub')}</p>
                     {radarData ? (
                       <div style={{ height: 300 }}>
@@ -985,7 +985,7 @@ export default function VendorIntelligence() {
 
                   {/* CPK bar chart */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.vendor.cpkChartTitle', { currency: activeCurrency })}</p>
+                    <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.vendor.cpkChartTitle', { currency: activeCurrency })}</p>
                     <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.cpkChartSub')}</p>
                     {cpkBarData.labels.length > 0 ? (
                       <div style={{ height: 280 }}>
@@ -1018,7 +1018,7 @@ export default function VendorIntelligence() {
 
                   {/* Tyre Life bar chart */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.vendor.lifeChartTitle')}</p>
+                    <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.vendor.lifeChartTitle')}</p>
                     <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.lifeChartSub')}</p>
                     {lifeBarData.labels.length > 0 ? (
                       <div style={{ height: 280 }}>
@@ -1065,7 +1065,7 @@ export default function VendorIntelligence() {
 
                   {/* Failure Rate bar chart */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.vendor.failureChartTitle')}</p>
+                    <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.vendor.failureChartTitle')}</p>
                     <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.vendor.failureChartSub')}</p>
                     {failureBarData.labels.length > 0 ? (
                       <div style={{ height: 280 }}>
@@ -1116,7 +1116,7 @@ export default function VendorIntelligence() {
             {/* ─── 3f: Brand Performance Table ─────────────────────────────── */}
             {hasVendorData && (
               <div>
-                <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                   <Target size={15} className="text-green-400" /> {t('vendorintel.vendor.fullTableTitle')}
                 </h2>
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
@@ -1198,7 +1198,7 @@ export default function VendorIntelligence() {
           >
             {/* ─── 4a: Workshop Rankings ───────────────────────────────────── */}
             <div>
-              <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                 <Building2 size={15} className="text-green-400" /> {t('vendorintel.workshop.rankings')}
               </h2>
 
@@ -1333,14 +1333,14 @@ export default function VendorIntelligence() {
             {/* ─── 4b-4c: Workshop Charts ──────────────────────────────────── */}
             {hasWorkshopData && (
               <div>
-                <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                   <BarChart3 size={15} className="text-green-400" /> {t('vendorintel.workshop.analyticsTitle')}
                 </h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
                   {/* High Risk % by Site */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.workshop.riskChartTitle')}</p>
+                    <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.workshop.riskChartTitle')}</p>
                     <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.workshop.riskChartSub')}</p>
                     <div style={{ height: 260 }}>
                       <Bar
@@ -1369,7 +1369,7 @@ export default function VendorIntelligence() {
 
                   {/* Avg CPK by Site */}
                   <div className="card">
-                    <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.workshop.cpkChartTitle', { currency: activeCurrency })}</p>
+                    <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.workshop.cpkChartTitle', { currency: activeCurrency })}</p>
                     <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.workshop.cpkChartSub')}</p>
                     <div style={{ height: 260 }}>
                       <Bar
@@ -1399,7 +1399,7 @@ export default function VendorIntelligence() {
 
                 {/* Action Close Rate */}
                 <div className="card">
-                  <p className="text-xs font-semibold text-gray-300 mb-1">{t('vendorintel.workshop.closeChartTitle')}</p>
+                  <p className="text-xs font-semibold text-[var(--text-primary)] mb-1">{t('vendorintel.workshop.closeChartTitle')}</p>
                   <p className="text-[10px] text-gray-600 mb-3">{t('vendorintel.workshop.closeChartSub')}</p>
                   <div style={{ height: 220 }}>
                     <Bar
@@ -1436,7 +1436,7 @@ export default function VendorIntelligence() {
             {/* ─── 4d: Workshop Performance Table ─────────────────────────── */}
             {hasWorkshopData && (
               <div>
-                <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                   <Target size={15} className="text-green-400" /> {t('vendorintel.workshop.tableTitle')}
                 </h2>
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 overflow-x-auto">
@@ -1500,7 +1500,7 @@ export default function VendorIntelligence() {
 
       {/* ─── Section 5: Procurement Recommendations ─────────────────────────── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
           <Zap size={15} className="text-amber-400" /> {t('vendorintel.recommendations.title')}
         </h2>
 
@@ -1549,7 +1549,7 @@ export default function VendorIntelligence() {
 
       {/* ─── Section 6: Executive Summary Card ──────────────────────────────── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
           <Star size={15} className="text-yellow-400" /> {t('vendorintel.execSummary.title')}
         </h2>
         <div className="bg-gray-900 border border-gray-700/50 rounded-xl p-5">

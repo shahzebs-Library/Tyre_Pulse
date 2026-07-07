@@ -1,0 +1,4 @@
+-- V95 — ERP connection config table (org-scoped, RLS, admin-write).
+-- NOTE: not applied live this session (MCP migration perms were gated); the app
+-- currently persists ERP config in app_settings.erp_connection instead. Apply
+-- this table + migrate the setting when moving to a dedicated table.

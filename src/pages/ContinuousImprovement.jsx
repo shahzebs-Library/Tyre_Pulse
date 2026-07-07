@@ -128,18 +128,18 @@ function OpportunityRow({ opp, onCreateAction, alreadyCreated, creating }) {
   return (
     <motion.div
       layout
-      className="border border-gray-800 rounded-lg overflow-hidden"
+      className="border border-[var(--input-border)] rounded-lg overflow-hidden"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
     >
       <button
         onClick={() => setExpanded(v => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 bg-gray-900 hover:bg-gray-800/60 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-4 py-3 bg-[var(--surface-1)] hover:bg-[var(--input-bg)]/60 transition-colors text-left"
       >
         <span className={`px-2 py-0.5 rounded text-xs font-semibold ${PRIORITY_BADGE[opp.priority] ?? PRIORITY_BADGE.Medium}`}>
           {opp.priority}
         </span>
-        <span className="flex-1 text-sm text-gray-200">{opp.title}</span>
+        <span className="flex-1 text-sm text-[var(--text-secondary)]">{opp.title}</span>
         {opp.saving > 0 && (
           <span className="flex items-center gap-1 text-xs text-green-400 font-medium">
             <ImpactIcon size={12} />
@@ -149,7 +149,7 @@ function OpportunityRow({ opp, onCreateAction, alreadyCreated, creating }) {
         {opp.impactPct > 0 && (
           <span className="text-xs text-emerald-400 font-medium ml-2">{fmt(opp.impactPct, 1)}% improvement</span>
         )}
-        {expanded ? <ChevronDown size={14} className="text-gray-500 shrink-0" /> : <ChevronRight size={14} className="text-gray-500 shrink-0" />}
+        {expanded ? <ChevronDown size={14} className="text-[var(--text-muted)] shrink-0" /> : <ChevronRight size={14} className="text-[var(--text-muted)] shrink-0" />}
       </button>
 
       <AnimatePresence>
@@ -161,13 +161,13 @@ function OpportunityRow({ opp, onCreateAction, alreadyCreated, creating }) {
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-4 pb-4 pt-2 bg-gray-950/60 border-t border-gray-800 space-y-3">
-              <p className="text-sm text-gray-400">{opp.description}</p>
+            <div className="px-4 pb-4 pt-2 bg-[var(--input-bg)]/60 border-t border-[var(--input-border)] space-y-3">
+              <p className="text-sm text-[var(--text-muted)]">{opp.description}</p>
               {opp.details && (
                 <ul className="space-y-1">
                   {opp.details.map((d, i) => (
-                    <li key={i} className="flex items-start gap-2 text-xs text-gray-500">
-                      <span className="text-gray-600 mt-0.5">•</span>
+                    <li key={i} className="flex items-start gap-2 text-xs text-[var(--text-muted)]">
+                      <span className="text-[var(--text-dim)] mt-0.5">•</span>
                       {d}
                     </li>
                   ))}
@@ -189,7 +189,7 @@ function OpportunityRow({ opp, onCreateAction, alreadyCreated, creating }) {
                   </button>
                 )}
                 {opp.site && (
-                  <span className="text-xs text-gray-600">Site: {opp.site}</span>
+                  <span className="text-xs text-[var(--text-dim)]">Site: {opp.site}</span>
                 )}
               </div>
             </div>
@@ -208,18 +208,18 @@ function CategoryAccordion({ categoryKey, opportunities, onCreateAction, created
   const Icon = meta.icon
 
   return (
-    <div className={`bg-gray-900 border border-gray-800 rounded-xl overflow-hidden`}>
+    <div className={`bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden`}>
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-800/40 transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--input-bg)]/40 transition-colors"
       >
         <span className="flex items-center justify-center w-7 h-7 rounded-lg" style={{ background: `${meta.color}20` }}>
           <Icon size={14} style={{ color: meta.color }} />
         </span>
-        <span className="font-semibold text-sm text-gray-100">{meta.label} Opportunities</span>
+        <span className="font-semibold text-sm text-[var(--text-secondary)]">{meta.label} Opportunities</span>
         <span className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-gray-500">{opportunities.length} found</span>
-          {open ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
+          <span className="text-xs text-[var(--text-muted)]">{opportunities.length} found</span>
+          {open ? <ChevronDown size={14} className="text-[var(--text-muted)]" /> : <ChevronRight size={14} className="text-[var(--text-muted)]" />}
         </span>
       </button>
 
@@ -232,9 +232,9 @@ function CategoryAccordion({ categoryKey, opportunities, onCreateAction, created
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-3 pb-3 space-y-2 border-t border-gray-800">
+            <div className="px-3 pb-3 space-y-2 border-t border-[var(--input-border)]">
               {opportunities.length === 0 ? (
-                <p className="text-xs text-gray-600 py-3 text-center">No improvement opportunities detected - performing well in this area.</p>
+                <p className="text-xs text-[var(--text-dim)] py-3 text-center">No improvement opportunities detected - performing well in this area.</p>
               ) : (
                 opportunities.map((opp, i) => (
                   <OpportunityRow
@@ -1097,10 +1097,10 @@ export default function ContinuousImprovement() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--surface-1)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <RefreshCw size={32} className="text-blue-400 animate-spin" />
-          <p className="text-gray-400 text-sm">Loading continuous improvement data...</p>
+          <p className="text-[var(--text-muted)] text-sm">Loading continuous improvement data...</p>
         </div>
       </div>
     )
@@ -1109,7 +1109,7 @@ export default function ContinuousImprovement() {
   const totalOpps = Object.values(opportunities).reduce((s, arr) => s + arr.length, 0)
 
   return (
-    <div className="text-gray-100 space-y-6">
+    <div className="text-[var(--text-secondary)] space-y-6">
 
       {/* ── Header ── */}
       <PageHeader
@@ -1153,17 +1153,17 @@ export default function ContinuousImprovement() {
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`bg-gray-900 border rounded-xl p-5 ${scoreBg(improvementScore.total)}`}
+        className={`bg-[var(--surface-1)] border rounded-xl p-5 ${scoreBg(improvementScore.total)}`}
       >
         <div className="flex flex-col lg:flex-row lg:items-center gap-6">
           {/* Main score */}
           <div className="flex flex-col items-center lg:items-start gap-1 min-w-[140px]">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Improvement Programme Score</p>
+            <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">Improvement Programme Score</p>
             <div className="flex items-end gap-2">
               <span className={`text-6xl font-black tabular-nums ${scoreColor(improvementScore.total)}`}>
                 {improvementScore.total}
               </span>
-              <span className="text-gray-600 text-xl mb-2">/100</span>
+              <span className="text-[var(--text-dim)] text-xl mb-2">/100</span>
             </div>
             {improvementScore.delta != null && (
               <span className={`flex items-center gap-1 text-xs font-medium ${improvementScore.delta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -1181,13 +1181,13 @@ export default function ContinuousImprovement() {
               { label: 'Insp. Compliance',     pts: improvementScore.inspPts,  max: 25, color: '#8b5cf6' },
               { label: 'Action Close Rate',    pts: improvementScore.closePts, max: 25, color: '#f59e0b' },
             ].map(item => (
-              <div key={item.label} className="bg-gray-950/60 rounded-lg p-3">
-                <p className="text-xs text-gray-500 mb-1">{item.label}</p>
+              <div key={item.label} className="bg-[var(--input-bg)]/60 rounded-lg p-3">
+                <p className="text-xs text-[var(--text-muted)] mb-1">{item.label}</p>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-lg font-bold" style={{ color: item.color }}>{item.pts}</span>
-                  <span className="text-xs text-gray-600">/{item.max}</span>
+                  <span className="text-xs text-[var(--text-dim)]">/{item.max}</span>
                 </div>
-                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all"
                     style={{ width: `${(item.pts / item.max) * 100}%`, background: item.color }}
@@ -1209,13 +1209,13 @@ export default function ContinuousImprovement() {
         ].map(card => {
           const Icon = card.icon
           return (
-            <div key={card.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <div key={card.label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Icon size={15} className={card.color} />
-                <span className="text-xs text-gray-500">{card.label}</span>
+                <span className="text-xs text-[var(--text-muted)]">{card.label}</span>
               </div>
               <p className={`text-xl font-bold tabular-nums ${card.color}`}>{card.value}</p>
-              <p className="text-xs text-gray-600 mt-0.5">{card.desc}</p>
+              <p className="text-xs text-[var(--text-dim)] mt-0.5">{card.desc}</p>
             </div>
           )
         })}
@@ -1233,11 +1233,11 @@ export default function ContinuousImprovement() {
 
       {/* ── Section 3: Opportunity Finder ── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
           <Star size={14} className="text-yellow-400" />
           Improvement Opportunity Finder
-          <span className="text-xs text-gray-600 font-normal">- auto-generated from fleet data</span>
-          <span className="ml-auto text-xs text-gray-500">{totalOpps} opportunities across 6 categories</span>
+          <span className="text-xs text-[var(--text-dim)] font-normal">- auto-generated from fleet data</span>
+          <span className="ml-auto text-xs text-[var(--text-muted)]">{totalOpps} opportunities across 6 categories</span>
         </h2>
         <div className="space-y-3">
           {Object.keys(CATEGORY_META).map(cat => (
@@ -1255,13 +1255,13 @@ export default function ContinuousImprovement() {
 
       {/* ── Section 4: Progress Tracking Charts ── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
           <BarChart2 size={14} className="text-blue-400" />
           Progress Tracking - Last 12 Months
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs font-semibold text-gray-400 mb-3">CPK Trend vs Target</p>
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+            <p className="text-xs font-semibold text-[var(--text-muted)] mb-3">CPK Trend vs Target</p>
             <div className="h-52">
               {cpkTrendData.datasets[0].data.some(v => v != null) ? (
                 <Line
@@ -1275,13 +1275,13 @@ export default function ContinuousImprovement() {
                   }}
                 />
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-600 text-sm">Insufficient CPK data for trend</div>
+                <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">Insufficient CPK data for trend</div>
               )}
             </div>
           </div>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs font-semibold text-gray-400 mb-3">Failure Rate Trend vs Target</p>
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+            <p className="text-xs font-semibold text-[var(--text-muted)] mb-3">Failure Rate Trend vs Target</p>
             <div className="h-52">
               {failureRateTrendData.datasets[0].data.some(v => v != null) ? (
                 <Line
@@ -1295,7 +1295,7 @@ export default function ContinuousImprovement() {
                   }}
                 />
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-600 text-sm">Insufficient failure rate data</div>
+                <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">Insufficient failure rate data</div>
               )}
             </div>
           </div>
@@ -1304,7 +1304,7 @@ export default function ContinuousImprovement() {
 
       {/* ── Section 5: Corrective Action Programme ── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
           <Wrench size={14} className="text-orange-400" />
           Corrective Action Programme
         </h2>
@@ -1319,11 +1319,11 @@ export default function ContinuousImprovement() {
           ].map(s => {
             const Icon = s.icon
             return (
-              <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center gap-3">
+              <div key={s.label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-3 flex items-center gap-3">
                 <Icon size={18} className={s.color} />
                 <div>
                   <p className={`text-2xl font-bold tabular-nums ${s.color}`}>{s.count}</p>
-                  <p className="text-xs text-gray-500">{s.label}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{s.label}</p>
                 </div>
               </div>
             )
@@ -1332,8 +1332,8 @@ export default function ContinuousImprovement() {
 
         {/* Close rate trend + open actions table */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 lg:col-span-2">
-            <p className="text-xs font-semibold text-gray-400 mb-3">Action Close Rate Trend</p>
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 lg:col-span-2">
+            <p className="text-xs font-semibold text-[var(--text-muted)] mb-3">Action Close Rate Trend</p>
             <div className="h-44">
               {actionCloseTrend.datasets[0].data.some(v => v != null) ? (
                 <Line
@@ -1351,18 +1351,18 @@ export default function ContinuousImprovement() {
                   }}
                 />
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-600 text-sm">No action data available</div>
+                <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No action data available</div>
               )}
             </div>
           </div>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 lg:col-span-3 overflow-hidden">
-            <p className="text-xs font-semibold text-gray-400 mb-3">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 lg:col-span-3 overflow-hidden">
+            <p className="text-xs font-semibold text-[var(--text-muted)] mb-3">
               Open & Overdue Actions
-              <span className="ml-2 text-gray-600 font-normal">({actionStats.openTable.length} total)</span>
+              <span className="ml-2 text-[var(--text-dim)] font-normal">({actionStats.openTable.length} total)</span>
             </p>
             {actionStats.openTable.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-36 gap-2 text-gray-600">
+              <div className="flex flex-col items-center justify-center h-36 gap-2 text-[var(--text-dim)]">
                 <CheckCircle size={24} className="text-green-600" />
                 <p className="text-sm">All corrective actions are closed</p>
               </div>
@@ -1370,7 +1370,7 @@ export default function ContinuousImprovement() {
               <div className="overflow-auto max-h-52">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-gray-500 border-b border-gray-800">
+                    <tr className="text-[var(--text-muted)] border-b border-[var(--input-border)]">
                       <th className="text-left pb-2 pr-2 font-medium">Title</th>
                       <th className="text-left pb-2 pr-2 font-medium">Site</th>
                       <th className="text-left pb-2 pr-2 font-medium">Priority</th>
@@ -1384,15 +1384,15 @@ export default function ContinuousImprovement() {
                       const days = daysOpen(a.created_at)
                       const isOverdue = days > 14
                       return (
-                        <tr key={a.id} className="border-b border-gray-800/60 hover:bg-gray-800/30">
-                          <td className="py-1.5 pr-2 max-w-[180px] truncate text-gray-300">{a.title}</td>
-                          <td className="py-1.5 pr-2 text-gray-500">{a.site ?? '-'}</td>
+                        <tr key={a.id} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/30">
+                          <td className="py-1.5 pr-2 max-w-[180px] truncate text-[var(--text-secondary)]">{a.title}</td>
+                          <td className="py-1.5 pr-2 text-[var(--text-muted)]">{a.site ?? '-'}</td>
                           <td className="py-1.5 pr-2">
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${PRIORITY_BADGE[a.priority] ?? PRIORITY_BADGE.Medium}`}>
                               {a.priority}
                             </span>
                           </td>
-                          <td className={`py-1.5 pr-2 font-medium tabular-nums ${isOverdue ? 'text-orange-400' : 'text-gray-400'}`}>
+                          <td className={`py-1.5 pr-2 font-medium tabular-nums ${isOverdue ? 'text-orange-400' : 'text-[var(--text-muted)]'}`}>
                             {days}d {isOverdue && <span className="text-orange-500 text-[10px]">OVERDUE</span>}
                           </td>
                           <td className="py-1.5 pr-2">
@@ -1415,7 +1415,7 @@ export default function ContinuousImprovement() {
                   </tbody>
                 </table>
                 {actionStats.openTable.length > 30 && (
-                  <p className="text-xs text-gray-600 text-center pt-2">{actionStats.openTable.length - 30} more actions not shown</p>
+                  <p className="text-xs text-[var(--text-dim)] text-center pt-2">{actionStats.openTable.length - 30} more actions not shown</p>
                 )}
               </div>
             )}
@@ -1425,27 +1425,27 @@ export default function ContinuousImprovement() {
 
       {/* ── Section 6: KPI vs Target Scorecard ── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
           <Target size={14} className="text-purple-400" />
           KPI vs Target Scorecard
           {kpiScorecard.length === 0 && (
-            <span className="ml-2 text-xs text-gray-600 font-normal">- configure targets in KPI Scorecard settings</span>
+            <span className="ml-2 text-xs text-[var(--text-dim)] font-normal">- configure targets in KPI Scorecard settings</span>
           )}
         </h2>
 
         {kpiScorecard.length === 0 ? (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-            <Info size={24} className="text-gray-600 mx-auto mb-2" />
-            <p className="text-gray-500 text-sm">No KPI targets configured.</p>
-            <p className="text-gray-600 text-xs mt-1">Set targets in the KPI Scorecard page to enable gap analysis.</p>
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-8 text-center">
+            <Info size={24} className="text-[var(--text-dim)] mx-auto mb-2" />
+            <p className="text-[var(--text-muted)] text-sm">No KPI targets configured.</p>
+            <p className="text-[var(--text-dim)] text-xs mt-1">Set targets in the KPI Scorecard page to enable gap analysis.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             {/* Table */}
-            <div className="lg:col-span-3 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+            <div className="lg:col-span-3 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-xs text-gray-500 border-b border-gray-800 bg-gray-950/40">
+                  <tr className="text-xs text-[var(--text-muted)] border-b border-[var(--input-border)] bg-[var(--input-bg)]/40">
                     <th className="text-left px-4 py-2.5 font-medium">Metric</th>
                     <th className="text-right px-4 py-2.5 font-medium">Current</th>
                     <th className="text-right px-4 py-2.5 font-medium">Target</th>
@@ -1455,10 +1455,10 @@ export default function ContinuousImprovement() {
                 </thead>
                 <tbody>
                   {kpiScorecard.map(k => (
-                    <tr key={k.metric} className="border-b border-gray-800/60 hover:bg-gray-800/20">
-                      <td className="px-4 py-2.5 text-gray-300">{k.label}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-gray-200">{k.fmt(k.current)}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-gray-500">{k.fmt(k.target)}</td>
+                    <tr key={k.metric} className="border-b border-[var(--input-border)]/60 hover:bg-[var(--input-bg)]/20">
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{k.label}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-[var(--text-secondary)]">{k.fmt(k.current)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-[var(--text-muted)]">{k.fmt(k.target)}</td>
                       <td className={`px-4 py-2.5 text-right font-mono text-xs ${
                         k.status === 'Met' ? 'text-green-400' :
                         k.status === 'Close' ? 'text-yellow-400' :
@@ -1482,8 +1482,8 @@ export default function ContinuousImprovement() {
             </div>
 
             {/* Bar chart */}
-            <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <p className="text-xs font-semibold text-gray-400 mb-3">Actual vs Target (Normalised)</p>
+            <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+              <p className="text-xs font-semibold text-[var(--text-muted)] mb-3">Actual vs Target (Normalised)</p>
               <div className="h-52">
                 {kpiBarData ? (
                   <Bar
@@ -1501,7 +1501,7 @@ export default function ContinuousImprovement() {
                     }}
                   />
                 ) : (
-                  <div className="h-full flex items-center justify-center text-gray-600 text-sm">No target data</div>
+                  <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No target data</div>
                 )}
               </div>
             </div>
@@ -1510,15 +1510,15 @@ export default function ContinuousImprovement() {
       </div>
 
       {/* ── Improvement score legend ── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-        <p className="text-xs font-semibold text-gray-400 mb-3 flex items-center gap-2">
+      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+        <p className="text-xs font-semibold text-[var(--text-muted)] mb-3 flex items-center gap-2">
           <Info size={13} /> Score Methodology
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-gray-500">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-[var(--text-muted)]">
           <div className="flex gap-2"><span className="text-green-400 font-semibold">≥75</span> - Excellent: sustain & extend programme</div>
           <div className="flex gap-2"><span className="text-yellow-400 font-semibold">50-74</span> - Progressing: intensify action tracking</div>
           <div className="flex gap-2"><span className="text-red-400 font-semibold">&lt;50</span> - Critical: immediate escalation required</div>
-          <div className="flex gap-2"><span className="text-gray-400 font-semibold">Score</span> = Cost (25) + Reliability (25) + Compliance (25) + Close Rate (25)</div>
+          <div className="flex gap-2"><span className="text-[var(--text-muted)] font-semibold">Score</span> = Cost (25) + Reliability (25) + Compliance (25) + Close Rate (25)</div>
         </div>
       </div>
 

@@ -383,7 +383,7 @@ export default function MaintenanceCalendar() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
           <Loader2 className="animate-spin text-green-400 mx-auto mb-3" size={36} />
-          <p className="text-gray-400 text-sm">Loading maintenance calendar...</p>
+          <p className="text-[var(--text-muted)] text-sm">Loading maintenance calendar...</p>
         </div>
       </div>
     )
@@ -402,7 +402,7 @@ export default function MaintenanceCalendar() {
           <button
             onClick={() => setShowFilters(v => !v)}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
-              showFilters ? 'bg-green-900/30 border-green-700 text-green-300' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+              showFilters ? 'bg-green-900/30 border-green-700 text-green-300' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
             <Filter size={15} />Filters
@@ -412,7 +412,7 @@ export default function MaintenanceCalendar() {
           </button>
           <button
             onClick={load}
-            className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors"
+            className="p-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
             title="Refresh"
           >
             <RefreshCw size={16} />
@@ -439,9 +439,9 @@ export default function MaintenanceCalendar() {
             transition={{ duration: 0.2 }}
             style={{ overflow: 'hidden' }}
           >
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-wrap gap-3 items-center">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 flex flex-wrap gap-3 items-center">
               <div className="flex items-center gap-2">
-                <span className="text-gray-400 text-xs font-medium">Type:</span>
+                <span className="text-[var(--text-muted)] text-xs font-medium">Type:</span>
                 {['All', 'Work Orders', 'Tyre Alerts'].map(opt => (
                   <button
                     key={opt}
@@ -449,13 +449,13 @@ export default function MaintenanceCalendar() {
                     className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
                       typeFilter === opt
                         ? 'bg-green-900/40 border-green-700 text-green-300'
-                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+                        : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                     }`}
                   >{opt}</button>
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-gray-400 text-xs font-medium">Priority:</span>
+                <span className="text-[var(--text-muted)] text-xs font-medium">Priority:</span>
                 {['All', 'Critical', 'High', 'Medium', 'Low'].map(opt => (
                   <button
                     key={opt}
@@ -463,7 +463,7 @@ export default function MaintenanceCalendar() {
                     className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
                       priorityFilter === opt
                         ? 'bg-green-900/40 border-green-700 text-green-300'
-                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+                        : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                     }`}
                   >{opt}</button>
                 ))}
@@ -476,7 +476,7 @@ export default function MaintenanceCalendar() {
                   Clear Filters
                 </button>
               )}
-              <span className="ml-auto text-gray-500 text-xs">{filteredEvents.length} matching events</span>
+              <span className="ml-auto text-[var(--text-muted)] text-xs">{filteredEvents.length} matching events</span>
             </div>
           </motion.div>
         )}
@@ -521,16 +521,16 @@ export default function MaintenanceCalendar() {
           <motion.div
             key={label}
             whileHover={{ y: -2 }}
-            className="bg-gray-900 border border-gray-800 rounded-xl p-4 relative overflow-hidden"
+            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 relative overflow-hidden"
           >
             <div className={`absolute top-0 right-0 w-24 h-24 rounded-full opacity-5 ${dotColor}`}
               style={{ transform: 'translate(30%, -30%)' }} />
             <div className="flex items-center gap-2 mb-3">
               <Icon size={16} className={`text-${color}-400`} />
-              <span className="text-gray-400 text-xs font-medium">{label}</span>
+              <span className="text-[var(--text-muted)] text-xs font-medium">{label}</span>
             </div>
             <div className={`text-3xl font-bold text-${color}-400 mb-1`}>{value}</div>
-            <div className="text-gray-600 text-xs">{desc}</div>
+            <div className="text-[var(--text-dim)] text-xs">{desc}</div>
           </motion.div>
         ))}
       </div>
@@ -539,33 +539,33 @@ export default function MaintenanceCalendar() {
       <div className="flex gap-5 items-start">
 
         {/* ── Calendar panel ─────────────────────────────────────────────────── */}
-        <div className="flex-1 min-w-0 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+        <div className="flex-1 min-w-0 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl overflow-hidden">
 
           {/* Calendar toolbar */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-800">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--input-border)]">
             <div className="flex items-center gap-2">
               <button
                 onClick={navPrev}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] transition-colors"
               >
                 <ChevronLeft size={18} />
               </button>
               <button
                 onClick={navNext}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] transition-colors"
               >
                 <ChevronRight size={18} />
               </button>
               <button
                 onClick={goToday}
-                className="px-3 py-1 text-xs font-semibold rounded-lg border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 transition-colors ml-1"
+                className="px-3 py-1 text-xs font-semibold rounded-lg border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-gray-500 transition-colors ml-1"
               >
                 Today
               </button>
-              <h2 className="text-white font-semibold text-base ml-2 min-w-[180px]">{periodLabel}</h2>
+              <h2 className="text-[var(--text-primary)] font-semibold text-base ml-2 min-w-[180px]">{periodLabel}</h2>
             </div>
             {/* View switcher */}
-            <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-[var(--input-bg)] rounded-lg p-1">
               {['month', 'week', 'day'].map(v => (
                 <button
                   key={v}
@@ -573,7 +573,7 @@ export default function MaintenanceCalendar() {
                   className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
                     view === v
                       ? 'bg-green-700 text-white shadow'
-                      : 'text-gray-400 hover:text-white'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   {v.charAt(0).toUpperCase() + v.slice(1)}
@@ -586,9 +586,9 @@ export default function MaintenanceCalendar() {
           {view === 'month' && (
             <div>
               {/* Day headers */}
-              <div className="grid grid-cols-7 border-b border-gray-800">
+              <div className="grid grid-cols-7 border-b border-[var(--input-border)]">
                 {DAY_NAMES.map(d => (
-                  <div key={d} className="px-2 py-2 text-center text-gray-500 text-[11px] font-semibold uppercase tracking-wider">
+                  <div key={d} className="px-2 py-2 text-center text-[var(--text-muted)] text-[11px] font-semibold uppercase tracking-wider">
                     {d}
                   </div>
                 ))}
@@ -606,9 +606,9 @@ export default function MaintenanceCalendar() {
                     <div
                       key={idx}
                       onClick={() => { setSelectedDay(cell.date); if (view !== 'day') {} }}
-                      className={`min-h-[100px] p-1.5 border-b border-r border-gray-800 cursor-pointer transition-colors ${
-                        cell.inMonth ? 'bg-gray-900' : 'bg-gray-950/50'
-                      } ${isSelected ? 'ring-1 ring-inset ring-green-600' : 'hover:bg-gray-800/40'}`}
+                      className={`min-h-[100px] p-1.5 border-b border-r border-[var(--input-border)] cursor-pointer transition-colors ${
+                        cell.inMonth ? 'bg-[var(--surface-1)]' : 'bg-[var(--input-bg)]/50'
+                      } ${isSelected ? 'ring-1 ring-inset ring-green-600' : 'hover:bg-[var(--input-bg)]/40'}`}
                     >
                       {/* Day number */}
                       <div className="flex items-center justify-between mb-1">
@@ -616,13 +616,13 @@ export default function MaintenanceCalendar() {
                           isToday
                             ? 'bg-green-600 text-white'
                             : cell.inMonth
-                            ? 'text-gray-300'
-                            : 'text-gray-700'
+                            ? 'text-[var(--text-secondary)]'
+                            : 'text-[var(--text-dim)]'
                         }`}>
                           {cell.date.getDate()}
                         </span>
                         {dayEvents.length > 0 && (
-                          <span className="text-[9px] text-gray-600 font-medium">
+                          <span className="text-[9px] text-[var(--text-dim)] font-medium">
                             {dayEvents.length}
                           </span>
                         )}
@@ -635,7 +635,7 @@ export default function MaintenanceCalendar() {
                         {dayEvents.length > MAX_CHIPS && (
                           <button
                             onClick={e => { e.stopPropagation(); setSelectedDay(cell.date); setView('day') }}
-                            className="w-full text-left px-1.5 py-0.5 text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+                            className="w-full text-left px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
                           >
                             +{dayEvents.length - MAX_CHIPS} more
                           </button>
@@ -652,7 +652,7 @@ export default function MaintenanceCalendar() {
           {view === 'week' && (
             <div>
               {/* Column headers */}
-              <div className="grid grid-cols-7 border-b border-gray-800">
+              <div className="grid grid-cols-7 border-b border-[var(--input-border)]">
                 {weekDays.map((d, i) => {
                   const ds = toDateStr(d)
                   const count = (eventsByDate[ds] || []).length
@@ -660,18 +660,18 @@ export default function MaintenanceCalendar() {
                   return (
                     <div
                       key={i}
-                      className={`px-2 py-3 text-center border-r border-gray-800 last:border-r-0 ${
+                      className={`px-2 py-3 text-center border-r border-[var(--input-border)] last:border-r-0 ${
                         isTod ? 'bg-green-900/10' : ''
                       }`}
                     >
-                      <div className="text-gray-500 text-[11px] font-semibold uppercase mb-1">{DAY_NAMES[d.getDay()]}</div>
+                      <div className="text-[var(--text-muted)] text-[11px] font-semibold uppercase mb-1">{DAY_NAMES[d.getDay()]}</div>
                       <div className={`mx-auto w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold ${
-                        isTod ? 'bg-green-600 text-white' : 'text-white'
+                        isTod ? 'bg-green-600 text-white' : 'text-[var(--text-primary)]'
                       }`}>
                         {d.getDate()}
                       </div>
                       {count > 0 && (
-                        <div className="text-[10px] text-gray-500 mt-0.5">{count} event{count > 1 ? 's' : ''}</div>
+                        <div className="text-[10px] text-[var(--text-muted)] mt-0.5">{count} event{count > 1 ? 's' : ''}</div>
                       )}
                     </div>
                   )
@@ -687,13 +687,13 @@ export default function MaintenanceCalendar() {
                     <div
                       key={i}
                       onClick={() => { setSelectedDay(d) }}
-                      className={`p-2 border-r border-gray-800 last:border-r-0 cursor-pointer transition-colors hover:bg-gray-800/30 ${
+                      className={`p-2 border-r border-[var(--input-border)] last:border-r-0 cursor-pointer transition-colors hover:bg-[var(--input-bg)]/30 ${
                         isTod ? 'bg-green-900/5' : ''
                       }`}
                     >
                       {dayEvs.length === 0 && (
                         <div className="h-full flex items-center justify-center">
-                          <span className="text-gray-800 text-xs">-</span>
+                          <span className="text-[var(--text-dim)] text-xs">-</span>
                         </div>
                       )}
                       <div className="space-y-1">
@@ -714,20 +714,20 @@ export default function MaintenanceCalendar() {
               {/* Day header */}
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <h3 className="text-white font-semibold text-lg">
+                  <h3 className="text-[var(--text-primary)] font-semibold text-lg">
                     {(selectedDay || currentDate).toLocaleDateString('en-US', {
                       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
                     })}
                   </h3>
-                  <p className="text-gray-400 text-sm">{dayEvents.length} event{dayEvents.length !== 1 ? 's' : ''} scheduled</p>
+                  <p className="text-[var(--text-muted)] text-sm">{dayEvents.length} event{dayEvents.length !== 1 ? 's' : ''} scheduled</p>
                 </div>
               </div>
 
               {dayEvents.length === 0 ? (
                 <div className="text-center py-16">
                   <CheckCircle size={40} className="mx-auto mb-3 text-green-800 opacity-40" />
-                  <p className="text-gray-500">No events scheduled for this day</p>
-                  <p className="text-gray-700 text-sm mt-1">Navigate to a day with events or select from the calendar</p>
+                  <p className="text-[var(--text-muted)]">No events scheduled for this day</p>
+                  <p className="text-[var(--text-dim)] text-sm mt-1">Navigate to a day with events or select from the calendar</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -768,31 +768,31 @@ export default function MaintenanceCalendar() {
           )}
 
           {/* Legend */}
-          <div className="px-5 py-3 border-t border-gray-800 flex flex-wrap gap-4">
+          <div className="px-5 py-3 border-t border-[var(--input-border)] flex flex-wrap gap-4">
             {Object.entries(EVENT_COLORS).map(([key, cfg]) => (
               <div key={key} className="flex items-center gap-1.5">
                 <span className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`} />
-                <span className="text-gray-500 text-[11px]">{cfg.label}</span>
+                <span className="text-[var(--text-muted)] text-[11px]">{cfg.label}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* ── Upcoming Events Sidebar ─────────────────────────────────────────── */}
-        <div className="w-80 flex-shrink-0 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3.5 border-b border-gray-800 flex items-center justify-between">
+        <div className="w-80 flex-shrink-0 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl overflow-hidden">
+          <div className="px-4 py-3.5 border-b border-[var(--input-border)] flex items-center justify-between">
             <div>
-              <h3 className="text-white font-semibold text-sm">Upcoming Events</h3>
-              <p className="text-gray-500 text-xs">Next 14 days · {upcomingEvents.length} events</p>
+              <h3 className="text-[var(--text-primary)] font-semibold text-sm">Upcoming Events</h3>
+              <p className="text-[var(--text-muted)] text-xs">Next 14 days · {upcomingEvents.length} events</p>
             </div>
-            <Clock size={16} className="text-gray-600" />
+            <Clock size={16} className="text-[var(--text-dim)]" />
           </div>
 
           <div className="overflow-y-auto max-h-[640px]">
             {upcomingEvents.length === 0 ? (
               <div className="text-center py-12">
                 <CheckCircle size={32} className="mx-auto mb-2 text-green-800 opacity-40" />
-                <p className="text-gray-500 text-sm">No upcoming events</p>
+                <p className="text-[var(--text-muted)] text-sm">No upcoming events</p>
               </div>
             ) : (
               <div>
@@ -810,7 +810,7 @@ export default function MaintenanceCalendar() {
                         <div className={`px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider sticky top-0 z-10 ${
                           isToday
                             ? 'bg-green-900/30 text-green-400 border-b border-green-900'
-                            : 'bg-gray-900/95 text-gray-500 border-b border-gray-800'
+                            : 'bg-[var(--surface-1)]/95 text-[var(--text-muted)] border-b border-[var(--input-border)]'
                         }`}>
                           {isToday ? '📅 Today' : fmtDisplay(date)}
                         </div>
@@ -821,15 +821,15 @@ export default function MaintenanceCalendar() {
                             <button
                               key={ev.id}
                               onClick={() => setSelectedEvent(ev)}
-                              className="w-full text-left px-4 py-2.5 border-b border-gray-800 hover:bg-gray-800/50 transition-colors flex items-start gap-2.5"
+                              className="w-full text-left px-4 py-2.5 border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]/50 transition-colors flex items-start gap-2.5"
                             >
                               <span className={`flex-shrink-0 w-2.5 h-2.5 rounded-full mt-1 ${cfg.dot}`} />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-white text-xs font-medium truncate">{ev.title}</span>
+                                  <span className="text-[var(--text-primary)] text-xs font-medium truncate">{ev.title}</span>
                                   <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${pbadge}`}>{ev.priority}</span>
                                 </div>
-                                <p className="text-gray-500 text-[11px] truncate mt-0.5">{ev.subtitle}</p>
+                                <p className="text-[var(--text-muted)] text-[11px] truncate mt-0.5">{ev.subtitle}</p>
                               </div>
                               {ev.isOverdue && (
                                 <span className="flex-shrink-0 text-[9px] text-red-400 font-bold">OVR</span>
@@ -863,7 +863,7 @@ export default function MaintenanceCalendar() {
               exit={{ scale: 0.94, y: 16 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               onClick={e => e.stopPropagation()}
-              className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
+              className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
             >
               {/* Modal header */}
               <div className={`px-5 py-4 border-b border-gray-800 flex items-start justify-between ${
@@ -893,7 +893,7 @@ export default function MaintenanceCalendar() {
                   <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${PRIORITY_BADGE[selectedEvent.priority] || PRIORITY_BADGE.Medium}`}>
                     {selectedEvent.priority} Priority
                   </span>
-                  <span className="text-xs px-2.5 py-1 rounded-full border border-gray-700 bg-gray-800 text-gray-300">
+                  <span className="text-xs px-2.5 py-1 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-secondary)]">
                     {selectedEvent.status}
                   </span>
                   {selectedEvent.isOverdue && (
@@ -934,9 +934,9 @@ export default function MaintenanceCalendar() {
                       ? ['Site', selectedEvent.raw.site]
                       : null,
                   ].filter(Boolean).map(([label, value]) => (
-                    <div key={label} className="flex justify-between py-2 border-b border-gray-800">
-                      <span className="text-gray-500 text-sm">{label}</span>
-                      <span className="text-white text-sm font-medium text-right max-w-[220px] truncate">{value || '-'}</span>
+                    <div key={label} className="flex justify-between py-2 border-b border-[var(--input-border)]">
+                      <span className="text-[var(--text-muted)] text-sm">{label}</span>
+                      <span className="text-[var(--text-primary)] text-sm font-medium text-right max-w-[220px] truncate">{value || '-'}</span>
                     </div>
                   ))}
                 </div>

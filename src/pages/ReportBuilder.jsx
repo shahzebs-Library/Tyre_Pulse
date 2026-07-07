@@ -1,637 +1,792 @@
-/**
- * ReportBuilder - roadmap item 12. Users compose reports themselves instead of
- * waiting for hardcoded pages: pick a module, columns, filters, sort and an
- * optional chart; run it (allowlist-validated in reportDefinitions.runReport),
- * save it (private or org-shared via V100 RLS) and export results to CSV/Excel.
- */
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  FileBarChart, Plus, Play, Save, Trash2, Loader2, AlertTriangle, RefreshCw,
-  Search, Share2, Lock, Download, FileSpreadsheet, X, BarChart3,
+  ArrowDown, ArrowUp, BookMarked, Check, Database, FileSpreadsheet, FileText,
+  FolderOpen, Layers, Pencil, Play, Plus, Save, SlidersHorizontal, Trash2, X,
 } from 'lucide-react'
-import {
-  Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement, LineElement, PointElement,
-  ArcElement, Title, Tooltip, Legend,
-} from 'chart.js'
-import { Bar, Line, Doughnut } from 'react-chartjs-2'
-import * as XLSX from 'xlsx'
-import {
-  MODULE_TABLES, MODULE_COLUMNS, FILTER_OPERATORS,
-  listReportDefinitions, createReportDefinition, updateReportDefinition,
-  deleteReportDefinition, runReport,
-} from '../lib/api/reportDefinitions'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import PageHeader from '../components/ui/PageHeader'
+import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { exportToExcel, exportToPdf } from '../lib/exportUtils'
+import {
+  AGG_FNS, DATASETS, DATASET_LIST, DEFAULT_LIMIT, LIST_OPS, MAX_LIMIT,
+  OPERATORS, OPERATOR_LABELS, RANGE_OPS, VALUELESS_OPS,
+  applyAggregations, buildQuery, fetchSavedReports, makeSavedReport,
+  persistSavedReports, validateConfig,
+} from '../lib/reportBuilder'
 
-ChartJS.register(
-  CategoryScale, LinearScale, BarElement, LineElement, PointElement,
-  ArcElement, Title, Tooltip, Legend,
-)
+/**
+ * Report Builder — self-service reporting. Users pick a dataset, choose and
+ * order columns, add typed filters, sort/limit, optionally group + aggregate,
+ * then run, save and export the report (Excel/PDF here, CSV via the table).
+ *
+ * Designed for the `/report-builder` route (wired by App.jsx/Layout.jsx).
+ * RBAC: Admin/Manager/Director build + manage saved reports; other roles get a
+ * read-only experience (run saved reports, export) — writes are additionally
+ * enforced server-side by app_settings RLS.
+ */
 
-const MODULE_LABELS = {
-  tyres: 'Tyres', inspections: 'Inspections', work_orders: 'Work Orders',
-  accidents: 'Accidents', stock: 'Stock', fleet: 'Fleet', purchase_orders: 'Purchase Orders',
-}
-const CHART_TYPES = [
-  { value: '',     label: 'No chart' },
-  { value: 'bar',  label: 'Bar' },
-  { value: 'line', label: 'Line' },
-  { value: 'doughnut', label: 'Doughnut' },
-]
-const RESULT_LIMIT = 1000
+const BUILDER_ROLES = ['Admin', 'Manager', 'Director']
+const LIMIT_OPTIONS = [100, 250, 500, 1000, 2500, MAX_LIMIT]
 
-const emptyDraft = () => ({
-  id: null, name: '', description: '', module: 'tyres',
-  columns: ['asset_no', 'site', 'brand', 'cost_per_tyre', 'issue_date'],
-  filters: [], sort: null, chart: null, shared: false,
-})
+const EMPTY_FILTER = () => ({ col: '', op: '', value: '', value2: '' })
 
-/** Client-side aggregation for the chart preview: count or sum per group. */
-export function aggregateForChart(rows, chart) {
-  if (!chart?.groupBy) return []
-  const groups = new Map()
-  for (const row of rows) {
-    const key = String(row[chart.groupBy] ?? '—')
-    const prev = groups.get(key) ?? 0
-    if (chart.aggregate === 'sum') {
-      const n = Number(row[chart.field])
-      groups.set(key, prev + (Number.isFinite(n) ? n : 0))
-    } else {
-      groups.set(key, prev + 1)
-    }
-  }
-  return [...groups.entries()]
-    .map(([label, value]) => ({ label, value: Math.round(value * 100) / 100 }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 20)
+function defaultColumnsFor(datasetKey) {
+  const ds = DATASETS[datasetKey]
+  return ds ? ds.columns.slice(0, 6).map(c => c.key) : []
 }
 
-/** Build a CSV string from result rows honouring the column order. */
-export function buildCsv(rows, columns) {
-  const esc = v => {
-    const s = v == null ? '' : String(v)
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-  }
-  return [columns.join(','), ...rows.map(r => columns.map(c => esc(r[c])).join(','))].join('\n')
+/** UI filter row -> reportBuilder filter shape. Incomplete rows are dropped. */
+function toConfigFilters(uiFilters) {
+  return uiFilters
+    .filter(f => f.col && f.op)
+    .map(f => {
+      if (VALUELESS_OPS.includes(f.op)) return { col: f.col, op: f.op }
+      if (RANGE_OPS.includes(f.op)) return { col: f.col, op: f.op, value: [f.value, f.value2] }
+      return { col: f.col, op: f.op, value: f.value }
+    })
 }
 
-const PALETTE = ['#f97316', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#ef4444', '#14b8a6', '#f43f5e', '#8b5cf6', '#84cc16']
+/** Saved config -> UI filter rows. */
+function fromConfigFilters(filters = []) {
+  return filters.map(f => ({
+    col: f.col,
+    op: f.op,
+    value: RANGE_OPS.includes(f.op) ? (f.value?.[0] ?? '')
+      : LIST_OPS.includes(f.op) ? (Array.isArray(f.value) ? f.value.join(', ') : String(f.value ?? ''))
+      : String(f.value ?? ''),
+    value2: RANGE_OPS.includes(f.op) ? (f.value?.[1] ?? '') : '',
+  }))
+}
 
 export default function ReportBuilder() {
-  const { user } = useAuth()
-  const [reports, setReports] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState(null)
-  const [search, setSearch] = useState('')
-  const [draft, setDraft] = useState(emptyDraft)
-  const [dirty, setDirty] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const { user, profile } = useAuth()
+  const canBuild = BUILDER_ROLES.includes(profile?.role)
+
+  // ── builder state ───────────────────────────────────────────────────────
+  const [datasetKey, setDatasetKey] = useState('tyres')
+  const [selectedCols, setSelectedCols] = useState(() => defaultColumnsFor('tyres'))
+  const [filters, setFilters] = useState([])
+  const [sortCol, setSortCol] = useState('')
+  const [sortDir, setSortDir] = useState('desc')
+  const [limit, setLimit] = useState(DEFAULT_LIMIT)
+  const [groupBy, setGroupBy] = useState('')
+  const [metrics, setMetrics] = useState([]) // [{ col, fn }]
+
+  // ── results state ───────────────────────────────────────────────────────
+  const [rows, setRows] = useState([])
   const [running, setRunning] = useState(false)
   const [runError, setRunError] = useState(null)
-  const [results, setResults] = useState(null)
-  const [notice, setNotice] = useState(null)
+  const [hasRun, setHasRun] = useState(false)
+  const [validationErrors, setValidationErrors] = useState([])
 
-  const moduleColumns = MODULE_COLUMNS[draft.module] ?? []
-  const columnLabel = useCallback(
-    name => moduleColumns.find(c => c.name === name)?.label ?? name,
-    [moduleColumns],
-  )
+  // ── saved reports state ─────────────────────────────────────────────────
+  const [saved, setSaved] = useState([])
+  const [savedLoading, setSavedLoading] = useState(true)
+  const [savedError, setSavedError] = useState(null)
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [showLibrary, setShowLibrary] = useState(false)
+  const [saveName, setSaveName] = useState('')
+  const [saveDesc, setSaveDesc] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+  const [renamingId, setRenamingId] = useState(null)
+  const [renameText, setRenameText] = useState('')
+  const [activeReportName, setActiveReportName] = useState(null)
+  const [exporting, setExporting] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setLoadError(null)
+  const dataset = DATASETS[datasetKey]
+  const numericCols = useMemo(() => dataset.columns.filter(c => c.type === 'number'), [dataset])
+
+  // ── current config ──────────────────────────────────────────────────────
+  const config = useMemo(() => ({
+    dataset: datasetKey,
+    columns: selectedCols,
+    filters: toConfigFilters(filters),
+    sort: sortCol ? { col: sortCol, dir: sortDir } : null,
+    limit,
+    group: groupBy ? { by: groupBy, metrics } : null,
+  }), [datasetKey, selectedCols, filters, sortCol, sortDir, limit, groupBy, metrics])
+
+  // ── load saved reports ──────────────────────────────────────────────────
+  const loadSaved = useCallback(async () => {
+    setSavedLoading(true)
+    setSavedError(null)
     try {
-      setReports(await listReportDefinitions())
+      setSaved(await fetchSavedReports(supabase))
     } catch (e) {
-      setLoadError(e.message || 'Could not load reports')
+      setSavedError(e.message)
     } finally {
-      setLoading(false)
+      setSavedLoading(false)
     }
   }, [])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { loadSaved() }, [loadSaved])
 
-  const patchDraft = patch => { setDraft(d => ({ ...d, ...patch })); setDirty(true) }
-
-  const selectReport = r => {
-    setDraft({
-      id: r.id, name: r.name, description: r.description ?? '', module: r.module,
-      columns: r.columns ?? [], filters: r.filters ?? [], sort: r.sort ?? null,
-      chart: r.chart ?? null, shared: !!r.shared,
-    })
-    setDirty(false)
-    setResults(null)
+  // ── dataset change resets dependent state ───────────────────────────────
+  function changeDataset(key) {
+    setDatasetKey(key)
+    setSelectedCols(defaultColumnsFor(key))
+    setFilters([])
+    setSortCol('')
+    setSortDir('desc')
+    setGroupBy('')
+    setMetrics([])
+    setRows([])
+    setHasRun(false)
     setRunError(null)
+    setValidationErrors([])
+    setActiveReportName(null)
   }
 
-  const changeModule = module => {
-    const cols = (MODULE_COLUMNS[module] ?? []).slice(0, 5).map(c => c.name)
-    setDraft(d => ({ ...d, module, columns: cols, filters: [], sort: null, chart: null }))
-    setDirty(true)
-    setResults(null)
+  // ── column selection / ordering ─────────────────────────────────────────
+  function toggleColumn(key) {
+    setSelectedCols(prev => prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key])
   }
-
-  const toggleColumn = name => {
-    setDraft(d => {
-      const has = d.columns.includes(name)
-      if (has && d.columns.length === 1) return d
-      return { ...d, columns: has ? d.columns.filter(c => c !== name) : [...d.columns, name] }
+  function moveColumn(key, delta) {
+    setSelectedCols(prev => {
+      const i = prev.indexOf(key)
+      const j = i + delta
+      if (i < 0 || j < 0 || j >= prev.length) return prev
+      const next = [...prev]
+      ;[next[i], next[j]] = [next[j], next[i]]
+      return next
     })
-    setDirty(true)
   }
 
-  const run = async () => {
+  // ── run ─────────────────────────────────────────────────────────────────
+  const runReport = useCallback(async () => {
+    const check = validateConfig(config)
+    if (!check.valid) { setValidationErrors(check.errors); return }
+    setValidationErrors([])
     setRunning(true)
     setRunError(null)
     try {
-      const rows = await runReport(draft, { limit: RESULT_LIMIT })
-      setResults({ rows, ranAt: new Date() })
+      const { data, error } = await buildQuery(supabase, config)
+      if (error) throw new Error(error.message || 'Query failed.')
+      setRows(Array.isArray(data) ? data : [])
+      setHasRun(true)
     } catch (e) {
-      setRunError(e.message || 'Report failed')
-      setResults(null)
+      setRunError(e.message)
+      setRows([])
+      setHasRun(true)
     } finally {
       setRunning(false)
     }
+  }, [config])
+
+  // ── result shape (raw or aggregated) ────────────────────────────────────
+  const aggregated = useMemo(
+    () => (groupBy ? applyAggregations(rows, config) : null),
+    [rows, config, groupBy],
+  )
+  const resultColumns = useMemo(() => {
+    if (aggregated) return aggregated.columns
+    return selectedCols
+      .map(k => dataset.columns.find(c => c.key === k))
+      .filter(Boolean)
+  }, [aggregated, selectedCols, dataset])
+  const resultRows = aggregated ? aggregated.rows : rows
+
+  const tableColumns = useMemo(() => resultColumns.map(c => ({
+    accessorKey: c.key,
+    header: c.label,
+    meta: c.type === 'number' ? { align: 'right' } : undefined,
+    cell: info => {
+      const v = info.getValue()
+      if (v == null || v === '') return <span className="text-muted">—</span>
+      return String(v)
+    },
+  })), [resultColumns])
+
+  // ── exports ─────────────────────────────────────────────────────────────
+  const exportBase = (activeReportName || `${dataset.label} Report`).replace(/[^\w\- ]+/g, '').trim()
+  const exportFile = `${exportBase.replace(/\s+/g, '_').toLowerCase() || 'custom_report'}_${new Date().toISOString().slice(0, 10)}`
+
+  async function handleExportExcel() {
+    if (!resultRows.length || exporting) return
+    setExporting(true)
+    try {
+      await exportToExcel(
+        resultRows,
+        resultColumns.map(c => c.key),
+        resultColumns.map(c => c.label),
+        exportFile,
+        'Report',
+        { title: exportBase, meta: { Dataset: dataset.label, Rows: resultRows.length } },
+      )
+    } catch (e) {
+      setRunError(e.message)
+    } finally {
+      setExporting(false)
+    }
+  }
+  async function handleExportPdf() {
+    if (!resultRows.length || exporting) return
+    setExporting(true)
+    try {
+      await exportToPdf(
+        resultRows,
+        resultColumns.map(c => ({ key: c.key, header: c.label })),
+        exportBase,
+        exportFile,
+        'landscape',
+        profile?.company_name || '',
+      )
+    } catch (e) {
+      setRunError(e.message)
+    } finally {
+      setExporting(false)
+    }
   }
 
-  const save = async (asCopy = false) => {
-    if (!draft.name.trim()) { setNotice({ tone: 'error', text: 'Give the report a name before saving.' }); return }
+  // ── save / library actions ──────────────────────────────────────────────
+  async function handleSave() {
+    const check = validateConfig(config)
+    if (!check.valid) { setSaveError(check.errors.join(' ')); return }
+    if (!saveName.trim()) { setSaveError('Give the report a name.'); return }
     setSaving(true)
+    setSaveError(null)
     try {
-      const values = {
-        name: draft.name.trim(), description: draft.description.trim() || null,
-        module: draft.module, columns: draft.columns, filters: draft.filters,
-        sort: draft.sort, chart: draft.chart, shared: draft.shared,
-      }
-      if (draft.id && !asCopy) {
-        await updateReportDefinition(draft.id, values)
-        setNotice({ tone: 'ok', text: 'Report saved.' })
-      } else {
-        const created = await createReportDefinition(values)
-        setDraft(d => ({ ...d, id: created.id }))
-        setNotice({ tone: 'ok', text: asCopy ? 'Saved as a copy.' : 'Report created.' })
-      }
-      setDirty(false)
-      await load()
+      const record = makeSavedReport({
+        name: saveName,
+        description: saveDesc,
+        config: check.config,
+        createdBy: profile?.id || user?.id || user?.email || null,
+      })
+      const next = await persistSavedReports(supabase, [record, ...saved])
+      setSaved(next)
+      setActiveReportName(record.name)
+      setShowSaveModal(false)
+      setSaveName('')
+      setSaveDesc('')
     } catch (e) {
-      setNotice({ tone: 'error', text: e.message || 'Save failed' })
+      setSaveError(e.message)
     } finally {
       setSaving(false)
     }
   }
 
-  const remove = async r => {
-    if (!window.confirm(`Delete report "${r.name}"? This cannot be undone.`)) return
+  function loadReport(r) {
+    const cfg = r.config || {}
+    if (!DATASETS[cfg.dataset]) return
+    setDatasetKey(cfg.dataset)
+    setSelectedCols(Array.isArray(cfg.columns) && cfg.columns.length ? cfg.columns : defaultColumnsFor(cfg.dataset))
+    setFilters(fromConfigFilters(cfg.filters))
+    setSortCol(cfg.sort?.col || '')
+    setSortDir(cfg.sort?.dir === 'asc' ? 'asc' : 'desc')
+    setLimit(cfg.limit || DEFAULT_LIMIT)
+    setGroupBy(cfg.group?.by || '')
+    setMetrics(Array.isArray(cfg.group?.metrics) ? cfg.group.metrics : [])
+    setRows([])
+    setHasRun(false)
+    setRunError(null)
+    setValidationErrors([])
+    setActiveReportName(r.name)
+    setShowLibrary(false)
+  }
+
+  async function renameReport(id) {
+    const name = renameText.trim()
+    if (!name) { setRenamingId(null); return }
     try {
-      await deleteReportDefinition(r.id)
-      if (draft.id === r.id) { setDraft(emptyDraft()); setResults(null) }
-      await load()
+      const next = await persistSavedReports(
+        supabase,
+        saved.map(r => r.id === id ? { ...r, name: name.slice(0, 120), updated_at: new Date().toISOString() } : r),
+      )
+      setSaved(next)
     } catch (e) {
-      setNotice({ tone: 'error', text: e.message || 'Delete failed' })
+      setSavedError(e.message)
+    } finally {
+      setRenamingId(null)
+      setRenameText('')
     }
   }
 
-  const exportCsv = () => {
-    const blob = new Blob([buildCsv(results.rows, draft.columns)], { type: 'text/csv;charset=utf-8' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `${draft.name || 'report'}.csv`
-    a.click()
-    URL.revokeObjectURL(a.href)
-  }
-
-  const exportXlsx = () => {
-    const data = results.rows.map(r => Object.fromEntries(draft.columns.map(c => [columnLabel(c), r[c]])))
-    const ws = XLSX.utils.json_to_sheet(data)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, MODULE_LABELS[draft.module] ?? 'Report')
-    XLSX.writeFile(wb, `${draft.name || 'report'}.xlsx`)
-  }
-
-  const chartData = useMemo(() => {
-    if (!results || !draft.chart?.type || !draft.chart?.groupBy) return null
-    const agg = aggregateForChart(results.rows, draft.chart)
-    if (!agg.length) return null
-    return {
-      labels: agg.map(a => a.label),
-      datasets: [{
-        label: draft.chart.aggregate === 'sum' ? `Sum of ${columnLabel(draft.chart.field)}` : 'Count',
-        data: agg.map(a => a.value),
-        backgroundColor: draft.chart.type === 'doughnut' ? PALETTE : 'rgba(249,115,22,0.7)',
-        borderColor: draft.chart.type === 'line' ? '#f97316' : undefined,
-        tension: 0.3,
-      }],
+  async function deleteReport(id) {
+    try {
+      const next = await persistSavedReports(supabase, saved.filter(r => r.id !== id))
+      setSaved(next)
+    } catch (e) {
+      setSavedError(e.message)
     }
-  }, [results, draft.chart, columnLabel])
+  }
 
-  const chartOptions = useMemo(() => ({
-    responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: draft.chart?.type === 'doughnut', labels: { color: '#9ca3af' } } },
-    scales: draft.chart?.type === 'doughnut' ? undefined : {
-      x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(75,85,99,0.3)' } },
-      y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(75,85,99,0.3)' } },
-    },
-  }), [draft.chart])
-
-  const visibleReports = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return q ? reports.filter(r => r.name.toLowerCase().includes(q)) : reports
-  }, [reports, search])
-
-  useEffect(() => {
-    if (!notice) return undefined
-    const t = setTimeout(() => setNotice(null), 4000)
-    return () => clearTimeout(t)
-  }, [notice])
-
+  // ── render ──────────────────────────────────────────────────────────────
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <FileBarChart className="w-6 h-6 text-orange-400" /> Report Builder
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Compose, run, save and export custom reports across every module.
-          </p>
-        </div>
-        <button
-          onClick={() => { setDraft(emptyDraft()); setResults(null); setDirty(false) }}
-          className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium"
-        >
-          <Plus className="w-4 h-4" /> New Report
-        </button>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Report Builder"
+        subtitle="Compose, save and export custom reports from any fleet dataset"
+        icon={Layers}
+        badge={activeReportName || undefined}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowLibrary(v => !v)}
+              className="btn-secondary text-sm flex items-center gap-1.5"
+            >
+              <FolderOpen size={15} /> My reports ({saved.length})
+            </button>
+            {canBuild && (
+              <button
+                type="button"
+                onClick={() => { setSaveError(null); setShowSaveModal(true) }}
+                className="btn-secondary text-sm flex items-center gap-1.5"
+              >
+                <Save size={15} /> Save
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={runReport}
+              disabled={running}
+              className="btn-primary text-sm flex items-center gap-1.5 text-white disabled:opacity-50"
+            >
+              <Play size={15} /> {running ? 'Running…' : 'Run report'}
+            </button>
+          </div>
+        }
+      />
 
-      {notice && (
-        <div className={`px-4 py-2 rounded-lg text-sm ${notice.tone === 'ok'
-          ? 'bg-green-500/10 border border-green-500/40 text-green-300'
-          : 'bg-red-500/10 border border-red-500/40 text-red-300'}`}>
-          {notice.text}
+      {/* Saved reports library */}
+      {showLibrary && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <BookMarked size={15} className="text-[var(--accent)]" /> Saved reports
+            </h2>
+            <button type="button" onClick={() => setShowLibrary(false)} className="text-muted hover:text-[var(--text-primary)]" aria-label="Close saved reports">
+              <X size={15} />
+            </button>
+          </div>
+          {savedError && <p className="text-xs text-red-400 mb-2">{savedError}</p>}
+          {savedLoading ? (
+            <p className="text-sm text-muted py-4 text-center">Loading saved reports…</p>
+          ) : saved.length === 0 ? (
+            <p className="text-sm text-muted py-4 text-center">
+              No saved reports yet.{canBuild ? ' Build one and press Save.' : ''}
+            </p>
+          ) : (
+            <ul className="divide-y divide-[var(--border-dim)]">
+              {saved.map(r => (
+                <li key={r.id} className="flex items-center gap-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    {renamingId === r.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          className="input py-1 px-2 text-sm"
+                          value={renameText}
+                          onChange={e => setRenameText(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') renameReport(r.id); if (e.key === 'Escape') setRenamingId(null) }}
+                          autoFocus
+                          aria-label="New report name"
+                        />
+                        <button type="button" onClick={() => renameReport(r.id)} className="btn-secondary py-1 px-2 text-xs" aria-label="Confirm rename">
+                          <Check size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">{r.name}</p>
+                        <p className="text-xs text-muted truncate">
+                          {DATASETS[r.config?.dataset]?.label || r.config?.dataset}
+                          {r.description ? ` · ${r.description}` : ''}
+                          {r.updated_at ? ` · ${String(r.updated_at).slice(0, 10)}` : ''}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  <button type="button" onClick={() => loadReport(r)} className="btn-secondary py-1 px-2.5 text-xs">
+                    Load
+                  </button>
+                  {canBuild && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => { setRenamingId(r.id); setRenameText(r.name) }}
+                        className="text-muted hover:text-[var(--text-primary)]"
+                        aria-label={`Rename ${r.name}`}
+                        title="Rename"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteReport(r.id)}
+                        className="text-muted hover:text-red-400"
+                        aria-label={`Delete ${r.name}`}
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* ── Saved reports ─────────────────────────────────────────────── */}
-        <div className="bg-gray-800 rounded-xl border border-gray-700 p-3 space-y-2 lg:col-span-1 self-start">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-500" />
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search reports…"
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 placeholder-gray-500"
-            />
+      {!canBuild && (
+        <div className="card py-3">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Read-only access: you can load and run saved reports and export the results.
+            Building and saving reports requires the Admin, Manager or Director role.
+          </p>
+        </div>
+      )}
+
+      {/* Three-panel builder */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Panel A — dataset + columns */}
+        <div className={`card ${canBuild ? '' : 'opacity-60 pointer-events-none'}`}>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2 mb-3">
+            <Database size={15} className="text-[var(--accent)]" /> Dataset &amp; columns
+          </h2>
+          <label className="block text-xs text-muted mb-1" htmlFor="rb-dataset">Dataset</label>
+          <select
+            id="rb-dataset"
+            className="input w-full text-sm mb-4"
+            value={datasetKey}
+            onChange={e => changeDataset(e.target.value)}
+          >
+            {DATASET_LIST.map(ds => (
+              <option key={ds.key} value={ds.key}>{ds.label}</option>
+            ))}
+          </select>
+
+          <p className="text-xs text-muted mb-2">
+            Columns — {selectedCols.length} of {dataset.columns.length} selected (order = report order)
+          </p>
+          <div className="max-h-80 overflow-y-auto pr-1 space-y-1">
+            {/* Selected first, in report order, with reorder controls */}
+            {selectedCols.map((key, i) => {
+              const col = dataset.columns.find(c => c.key === key)
+              if (!col) return null
+              return (
+                <div key={key} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-surface-2 border border-[var(--border-dim)]">
+                  <input
+                    type="checkbox"
+                    checked
+                    onChange={() => toggleColumn(key)}
+                    className="w-3.5 h-3.5 accent-[var(--accent)] cursor-pointer"
+                    aria-label={`Deselect ${col.label}`}
+                  />
+                  <span className="text-xs text-[var(--text-primary)] flex-1 truncate">{col.label}</span>
+                  <span className="text-[10px] uppercase text-muted">{col.type}</span>
+                  <button
+                    type="button"
+                    onClick={() => moveColumn(key, -1)}
+                    disabled={i === 0}
+                    className="text-muted hover:text-[var(--text-primary)] disabled:opacity-25"
+                    aria-label={`Move ${col.label} up`}
+                  >
+                    <ArrowUp size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveColumn(key, 1)}
+                    disabled={i === selectedCols.length - 1}
+                    className="text-muted hover:text-[var(--text-primary)] disabled:opacity-25"
+                    aria-label={`Move ${col.label} down`}
+                  >
+                    <ArrowDown size={13} />
+                  </button>
+                </div>
+              )
+            })}
+            {/* Unselected columns */}
+            {dataset.columns.filter(c => !selectedCols.includes(c.key)).map(col => (
+              <label key={col.key} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={false}
+                  onChange={() => toggleColumn(col.key)}
+                  className="w-3.5 h-3.5 accent-[var(--accent)] cursor-pointer"
+                  aria-label={`Select ${col.label}`}
+                />
+                <span className="text-xs text-[var(--text-secondary)] flex-1 truncate">{col.label}</span>
+                <span className="text-[10px] uppercase text-muted">{col.type}</span>
+              </label>
+            ))}
           </div>
-          {loading ? (
-            <div className="space-y-2 py-2">
-              {[0, 1, 2].map(i => <div key={i} className="h-12 bg-gray-700/50 rounded-lg animate-pulse" />)}
-            </div>
-          ) : loadError ? (
-            <div className="text-center py-6 space-y-2">
-              <AlertTriangle className="w-6 h-6 text-red-400 mx-auto" />
-              <p className="text-sm text-red-300">{loadError}</p>
-              <button onClick={load} className="inline-flex items-center gap-1 text-sm text-orange-400 hover:text-orange-300">
-                <RefreshCw className="w-3 h-3" /> Retry
-              </button>
-            </div>
-          ) : visibleReports.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-6">
-              {search ? 'No reports match your search.' : 'No saved reports yet — build one and hit Save.'}
-            </p>
-          ) : visibleReports.map(r => (
-            <div
-              key={r.id}
-              onClick={() => selectReport(r)}
-              className={`p-3 rounded-lg cursor-pointer border transition-colors ${draft.id === r.id
-                ? 'bg-orange-500/10 border-orange-500/50'
-                : 'bg-gray-900/60 border-gray-700 hover:border-gray-600'}`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-200 truncate">{r.name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {MODULE_LABELS[r.module] ?? r.module} · {(r.columns ?? []).length} columns
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {r.shared
-                    ? <Share2 className="w-3.5 h-3.5 text-blue-400" title="Shared with organisation" />
-                    : <Lock className="w-3.5 h-3.5 text-gray-500" title="Private" />}
-                  {r.user_id === user?.id && (
-                    <button
-                      onClick={e => { e.stopPropagation(); remove(r) }}
-                      className="text-gray-500 hover:text-red-400" title="Delete report"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
 
-        {/* ── Builder + results ─────────────────────────────────────────── */}
-        <div className="lg:col-span-3 space-y-4">
-          <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">Report name</label>
-                <input
-                  value={draft.name} onChange={e => patchDraft({ name: e.target.value })}
-                  placeholder="e.g. Monthly tyre spend by site"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">Module</label>
-                <select
-                  value={draft.module} onChange={e => changeModule(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200"
-                >
-                  {Object.keys(MODULE_TABLES).map(m => (
-                    <option key={m} value={m}>{MODULE_LABELS[m] ?? m}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">Description (optional)</label>
-                <input
-                  value={draft.description} onChange={e => patchDraft({ description: e.target.value })}
-                  placeholder="What this report answers"
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500"
-                />
-              </div>
-            </div>
+        {/* Panel B — filters, sort, limit, group */}
+        <div className={`card lg:col-span-2 ${canBuild ? '' : 'opacity-60 pointer-events-none'}`}>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <SlidersHorizontal size={15} className="text-[var(--accent)]" /> Filters &amp; shaping
+            </h2>
+            <button
+              type="button"
+              onClick={() => setFilters(prev => [...prev, EMPTY_FILTER()])}
+              className="btn-secondary py-1 px-2.5 text-xs flex items-center gap-1"
+            >
+              <Plus size={13} /> Add filter
+            </button>
+          </div>
 
-            <div>
-              <label className="text-xs text-gray-400 block mb-2">
-                Columns <span className="text-gray-600">({draft.columns.length} selected, order = click order)</span>
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {moduleColumns.map(c => {
-                  const on = draft.columns.includes(c.name)
-                  return (
-                    <button
-                      key={c.name} onClick={() => toggleColumn(c.name)}
-                      className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${on
-                        ? 'bg-orange-500/20 border-orange-500/60 text-orange-300'
-                        : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'}`}
-                    >
-                      {c.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs text-gray-400">Filters (all must match)</label>
-                <button
-                  onClick={() => patchDraft({ filters: [...draft.filters, { field: moduleColumns[0]?.name, operator: 'eq', value: '' }] })}
-                  className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" /> Add filter
-                </button>
-              </div>
-              {draft.filters.length === 0 ? (
-                <p className="text-xs text-gray-600">No filters — the report returns everything (capped at {RESULT_LIMIT} rows).</p>
-              ) : draft.filters.map((f, i) => {
-                const fieldType = moduleColumns.find(c => c.name === f.field)?.type ?? 'text'
-                const noValue = f.operator === 'is_null' || f.operator === 'not_null'
-                const setF = patch => patchDraft({
-                  filters: draft.filters.map((x, j) => (j === i ? { ...x, ...patch } : x)),
-                })
+          {/* Filter rows */}
+          {filters.length === 0 ? (
+            <p className="text-xs text-muted mb-4">No filters — the report returns all rows up to the limit.</p>
+          ) : (
+            <div className="space-y-2 mb-4">
+              {filters.map((f, i) => {
+                const col = dataset.columns.find(c => c.key === f.col)
+                const ops = col ? (OPERATORS[col.type] || OPERATORS.text) : []
+                const inputType = col?.type === 'number' ? 'number' : col?.type === 'date' ? 'date' : 'text'
                 return (
-                  <div key={i} className="flex items-center gap-2 mb-2">
+                  <div key={i} className="flex flex-wrap items-center gap-2">
                     <select
-                      value={f.field} onChange={e => setF({ field: e.target.value })}
-                      className="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200"
+                      className="input py-1.5 px-2 text-xs w-44"
+                      value={f.col}
+                      onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...EMPTY_FILTER(), col: e.target.value } : x))}
+                      aria-label="Filter column"
                     >
-                      {moduleColumns.map(c => <option key={c.name} value={c.name}>{c.label}</option>)}
+                      <option value="">Column…</option>
+                      {dataset.columns.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                     </select>
                     <select
-                      value={f.operator} onChange={e => setF({ operator: e.target.value })}
-                      className="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200"
+                      className="input py-1.5 px-2 text-xs w-40"
+                      value={f.op}
+                      onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, op: e.target.value, value: '', value2: '' } : x))}
+                      disabled={!col}
+                      aria-label="Filter operator"
                     >
-                      {FILTER_OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      <option value="">Operator…</option>
+                      {ops.map(op => <option key={op} value={op}>{OPERATOR_LABELS[op]}</option>)}
                     </select>
-                    {!noValue && (
+                    {f.op && !VALUELESS_OPS.includes(f.op) && (
                       <input
-                        type={fieldType === 'number' ? 'number' : fieldType === 'date' ? 'date' : 'text'}
-                        value={f.value ?? ''} onChange={e => setF({ value: e.target.value })}
-                        placeholder="Value"
-                        className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-600"
+                        type={LIST_OPS.includes(f.op) ? 'text' : inputType}
+                        className="input py-1.5 px-2 text-xs flex-1 min-w-32"
+                        value={f.value}
+                        placeholder={LIST_OPS.includes(f.op) ? 'value1, value2, …' : 'Value'}
+                        onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))}
+                        aria-label="Filter value"
+                      />
+                    )}
+                    {RANGE_OPS.includes(f.op) && (
+                      <input
+                        type={inputType}
+                        className="input py-1.5 px-2 text-xs flex-1 min-w-32"
+                        value={f.value2}
+                        placeholder="and…"
+                        onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value2: e.target.value } : x))}
+                        aria-label="Filter upper value"
                       />
                     )}
                     <button
-                      onClick={() => patchDraft({ filters: draft.filters.filter((_, j) => j !== i) })}
-                      className="text-gray-500 hover:text-red-400" title="Remove filter"
+                      type="button"
+                      onClick={() => setFilters(prev => prev.filter((_, j) => j !== i))}
+                      className="text-muted hover:text-red-400"
+                      aria-label="Remove filter"
                     >
-                      <X className="w-4 h-4" />
+                      <X size={15} />
                     </button>
                   </div>
                 )
               })}
             </div>
+          )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <label className="text-xs text-gray-400 block mb-1">Sort by</label>
-                  <select
-                    value={draft.sort?.field ?? ''}
-                    onChange={e => patchDraft({ sort: e.target.value ? { field: e.target.value, dir: draft.sort?.dir ?? 'desc' } : null })}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200"
-                  >
-                    <option value="">Default order</option>
-                    {moduleColumns.map(c => <option key={c.name} value={c.name}>{c.label}</option>)}
-                  </select>
-                </div>
-                {draft.sort?.field && (
-                  <select
-                    value={draft.sort.dir}
-                    onChange={e => patchDraft({ sort: { ...draft.sort, dir: e.target.value } })}
-                    className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200"
-                  >
-                    <option value="asc">Ascending</option>
-                    <option value="desc">Descending</option>
-                  </select>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="text-xs text-gray-400 block mb-1">Chart</label>
-                  <select
-                    value={draft.chart?.type ?? ''}
-                    onChange={e => patchDraft({
-                      chart: e.target.value
-                        ? { type: e.target.value, groupBy: draft.chart?.groupBy ?? moduleColumns[0]?.name, aggregate: draft.chart?.aggregate ?? 'count', field: draft.chart?.field ?? null }
-                        : null,
-                    })}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-2 text-sm text-gray-200"
-                  >
-                    {CHART_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                </div>
-                {draft.chart?.type && (
-                  <>
-                    <div>
-                      <label className="text-xs text-gray-400 block mb-1">Group by</label>
-                      <select
-                        value={draft.chart.groupBy}
-                        onChange={e => patchDraft({ chart: { ...draft.chart, groupBy: e.target.value } })}
-                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-2 text-sm text-gray-200"
-                      >
-                        {moduleColumns.map(c => <option key={c.name} value={c.name}>{c.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-400 block mb-1">Aggregate</label>
-                      <select
-                        value={draft.chart.aggregate === 'sum' ? `sum:${draft.chart.field ?? ''}` : 'count'}
-                        onChange={e => {
-                          const v = e.target.value
-                          patchDraft({
-                            chart: v === 'count'
-                              ? { ...draft.chart, aggregate: 'count', field: null }
-                              : { ...draft.chart, aggregate: 'sum', field: v.slice(4) },
-                          })
-                        }}
-                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-2 text-sm text-gray-200"
-                      >
-                        <option value="count">Count</option>
-                        {moduleColumns.filter(c => c.type === 'number').map(c => (
-                          <option key={c.name} value={`sum:${c.name}`}>Sum of {c.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </>
-                )}
-              </div>
+          {/* Sort / limit / group-by */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 pt-3 border-t border-[var(--border-dim)]">
+            <div>
+              <label className="block text-xs text-muted mb-1" htmlFor="rb-sort">Sort by</label>
+              <select id="rb-sort" className="input w-full py-1.5 px-2 text-xs" value={sortCol} onChange={e => setSortCol(e.target.value)}>
+                <option value="">Default ({dataset.defaultSort.col})</option>
+                {dataset.columns.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
             </div>
-
-            <div className="flex items-center justify-between flex-wrap gap-3 pt-2 border-t border-gray-700">
-              <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-                <input
-                  type="checkbox" checked={draft.shared}
-                  onChange={e => patchDraft({ shared: e.target.checked })}
-                  className="rounded border-gray-600 bg-gray-900 text-orange-500"
-                />
-                Share with organisation (read-only)
-              </label>
-              <div className="flex items-center gap-2">
-                {dirty && <span className="text-xs text-yellow-400">Unsaved changes</span>}
-                {draft.id && (
-                  <button
-                    onClick={() => save(true)} disabled={saving}
-                    className="px-3 py-2 text-sm text-gray-300 border border-gray-600 rounded-lg hover:border-gray-500 disabled:opacity-50"
-                  >
-                    Save as copy
-                  </button>
-                )}
-                <button
-                  onClick={() => save(false)} disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm disabled:opacity-50"
-                >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  {draft.id ? 'Save' : 'Save report'}
-                </button>
-                <button
-                  onClick={run} disabled={running || draft.columns.length === 0}
-                  className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-                >
-                  {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                  Run
-                </button>
-              </div>
+            <div>
+              <label className="block text-xs text-muted mb-1" htmlFor="rb-dir">Direction</label>
+              <select id="rb-dir" className="input w-full py-1.5 px-2 text-xs" value={sortDir} onChange={e => setSortDir(e.target.value)}>
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1" htmlFor="rb-limit">Row limit</label>
+              <select id="rb-limit" className="input w-full py-1.5 px-2 text-xs" value={limit} onChange={e => setLimit(Number(e.target.value))}>
+                {LIMIT_OPTIONS.map(n => <option key={n} value={n}>{n.toLocaleString()}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1" htmlFor="rb-group">Group by (optional)</label>
+              <select
+                id="rb-group"
+                className="input w-full py-1.5 px-2 text-xs"
+                value={groupBy}
+                onChange={e => { setGroupBy(e.target.value); if (!e.target.value) setMetrics([]) }}
+              >
+                <option value="">No grouping</option>
+                {dataset.columns.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
             </div>
           </div>
 
-          {/* ── Results ─────────────────────────────────────────────────── */}
-          {runError && (
-            <div className="bg-red-500/10 border border-red-500/40 rounded-xl p-4 flex items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
-              <p className="text-sm text-red-300">{runError}</p>
-              <button onClick={run} className="ml-auto text-sm text-orange-400 hover:text-orange-300 flex items-center gap-1">
-                <RefreshCw className="w-3 h-3" /> Retry
-              </button>
-            </div>
-          )}
-
-          {running && !results && (
-            <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 space-y-2">
-              {[0, 1, 2, 3, 4].map(i => <div key={i} className="h-8 bg-gray-700/50 rounded animate-pulse" />)}
-            </div>
-          )}
-
-          {results && (
-            <div className="bg-gray-800 rounded-xl border border-gray-700">
-              <div className="flex items-center justify-between flex-wrap gap-2 p-4 border-b border-gray-700">
-                <p className="text-sm text-gray-400">
-                  <span className="text-white font-semibold">{results.rows.length.toLocaleString()}</span> rows
-                  {results.rows.length >= RESULT_LIMIT && (
-                    <span className="text-yellow-400"> (capped at {RESULT_LIMIT} — add filters to narrow down)</span>
-                  )}
-                  <span className="text-gray-600"> · ran {results.ranAt.toLocaleTimeString()}</span>
-                </p>
-                <div className="flex items-center gap-2">
-                  <button onClick={exportCsv} disabled={!results.rows.length}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-300 border border-gray-600 rounded-lg hover:border-gray-500 disabled:opacity-50">
-                    <Download className="w-3.5 h-3.5" /> CSV
-                  </button>
-                  <button onClick={exportXlsx} disabled={!results.rows.length}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-300 border border-gray-600 rounded-lg hover:border-gray-500 disabled:opacity-50">
-                    <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
-                  </button>
-                </div>
+          {/* Aggregate metrics */}
+          {groupBy && (
+            <div className="mt-3 pt-3 border-t border-[var(--border-dim)]">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted">Aggregates (count is always included)</p>
+                <button
+                  type="button"
+                  onClick={() => numericCols.length && setMetrics(prev => [...prev, { col: numericCols[0].key, fn: 'sum' }])}
+                  disabled={numericCols.length === 0}
+                  className="btn-secondary py-1 px-2.5 text-xs flex items-center gap-1 disabled:opacity-40"
+                >
+                  <Plus size={13} /> Add metric
+                </button>
               </div>
-
-              {chartData && (
-                <div className="p-4 border-b border-gray-700">
-                  <div className="h-64">
-                    {draft.chart.type === 'bar' && <Bar data={chartData} options={chartOptions} />}
-                    {draft.chart.type === 'line' && <Line data={chartData} options={chartOptions} />}
-                    {draft.chart.type === 'doughnut' && <Doughnut data={chartData} options={chartOptions} />}
+              {numericCols.length === 0 && (
+                <p className="text-xs text-muted">This dataset has no numeric columns to aggregate.</p>
+              )}
+              <div className="space-y-2">
+                {metrics.map((m, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <select
+                      className="input py-1.5 px-2 text-xs w-28"
+                      value={m.fn}
+                      onChange={e => setMetrics(prev => prev.map((x, j) => j === i ? { ...x, fn: e.target.value } : x))}
+                      aria-label="Aggregate function"
+                    >
+                      {AGG_FNS.map(fn => <option key={fn} value={fn}>{fn.toUpperCase()}</option>)}
+                    </select>
+                    <select
+                      className="input py-1.5 px-2 text-xs flex-1"
+                      value={m.col}
+                      onChange={e => setMetrics(prev => prev.map((x, j) => j === i ? { ...x, col: e.target.value } : x))}
+                      aria-label="Aggregate column"
+                    >
+                      {numericCols.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setMetrics(prev => prev.filter((_, j) => j !== i))}
+                      className="text-muted hover:text-red-400"
+                      aria-label="Remove metric"
+                    >
+                      <X size={15} />
+                    </button>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
+            </div>
+          )}
 
-              {results.rows.length === 0 ? (
-                <div className="text-center py-10">
-                  <BarChart3 className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No rows matched — loosen the filters and run again.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto max-h-[32rem] overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead className="sticky top-0 bg-gray-800">
-                      <tr className="border-b border-gray-700">
-                        {draft.columns.map(c => (
-                          <th key={c} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">
-                            {columnLabel(c)}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {results.rows.map((r, i) => (
-                        <tr key={i} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                          {draft.columns.map(c => (
-                            <td key={c} className="px-4 py-2 text-gray-300 whitespace-nowrap max-w-xs truncate">
-                              {r[c] == null || r[c] === '' ? <span className="text-gray-600">—</span> : String(r[c])}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+          {validationErrors.length > 0 && (
+            <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+              {validationErrors.map((e, i) => <p key={i} className="text-xs text-red-400">{e}</p>)}
             </div>
           )}
         </div>
       </div>
+
+      {/* Panel C — results */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <p className="text-sm text-muted">
+            {hasRun && !running && !runError
+              ? <>
+                  {resultRows.length.toLocaleString()} {aggregated ? 'groups' : 'rows'}
+                  {!aggregated && rows.length >= limit ? ` (limit ${limit.toLocaleString()} reached)` : ''}
+                </>
+              : 'Results'}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={!resultRows.length || exporting}
+              className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 disabled:opacity-40"
+            >
+              <FileSpreadsheet size={13} /> Excel
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={!resultRows.length || exporting}
+              className="btn-secondary py-1.5 px-3 text-xs flex items-center gap-1.5 disabled:opacity-40"
+            >
+              <FileText size={13} /> PDF
+            </button>
+          </div>
+        </div>
+
+        {!hasRun && !running ? (
+          <div className="card flex flex-col items-center gap-3 py-14 text-center">
+            <Play size={26} className="text-muted opacity-50" />
+            <p className="text-sm text-[var(--text-secondary)] max-w-md">
+              {canBuild
+                ? 'Configure your report above, then press Run report to preview the results.'
+                : 'Open My reports, load a saved report and press Run report to view it.'}
+            </p>
+          </div>
+        ) : (
+          <EnterpriseTable
+            columns={tableColumns}
+            data={resultRows}
+            loading={running}
+            error={runError}
+            onRetry={runReport}
+            emptyMessage="No records match this report — adjust the filters and run again."
+            exportFileName={exportFile}
+            initialPageSize={25}
+          />
+        )}
+      </div>
+
+      {/* Save modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Save report">
+          <div className="card w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">Save report</h2>
+              <button type="button" onClick={() => setShowSaveModal(false)} className="text-muted hover:text-[var(--text-primary)]" aria-label="Close">
+                <X size={16} />
+              </button>
+            </div>
+            <label className="block text-xs text-muted mb-1" htmlFor="rb-save-name">Name</label>
+            <input
+              id="rb-save-name"
+              className="input w-full text-sm mb-3"
+              value={saveName}
+              onChange={e => setSaveName(e.target.value)}
+              placeholder="e.g. Monthly tyre spend by site"
+              maxLength={120}
+              autoFocus
+            />
+            <label className="block text-xs text-muted mb-1" htmlFor="rb-save-desc">Description (optional)</label>
+            <textarea
+              id="rb-save-desc"
+              className="input w-full text-sm mb-3"
+              rows={2}
+              value={saveDesc}
+              onChange={e => setSaveDesc(e.target.value)}
+              maxLength={500}
+            />
+            {saveError && <p className="text-xs text-red-400 mb-3">{saveError}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setShowSaveModal(false)} className="btn-secondary text-sm">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="btn-primary text-sm text-white disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Save size={14} /> {saving ? 'Saving…' : 'Save report'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

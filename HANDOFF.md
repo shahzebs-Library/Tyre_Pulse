@@ -3,7 +3,7 @@
 **Branch:** dev `claude/local-branch-visibility-aw3aw3` (Session 9 work, PR #26 → `main`); `main` auto-deploys to Vercel
 **Web build status:** ✅ Clean - builds, **964/964 tests passing**, auto-deploys to Vercel
 **Mobile build status:** ✅ EAS Android build green - **Expo SDK 54 / RN 0.81.5**, auto-builds on push to `main` (Session 9 touched no `mobile/` files)
-**DB migrations applied to live Supabase:** through **V86** (project `jhssdmeruxtrlqnwfksc`). ⚠️ **Session 9 authored V94–V101 but NONE are applied live yet** (the session had no access to the live project). They plus three new edge functions must be applied/deployed with the merge — see `docs/AUTOMATION_PLATFORM_DEPLOYMENT.md` for the runbook (apply order, `verify_jwt` flags, verification SQL). Earlier: V75 applied — `auth_rls_initplan` advisory cleared; V84 `system_config`, V85 `report_exec_digest`, V86 deepens that digest. The richer scheduled-report email ships only when the `send-scheduled-reports` **edge function is redeployed**.
+**DB migrations applied to live Supabase:** through **V86** (project `jhssdmeruxtrlqnwfksc`). ⚠️ **Session 9 authored V96–V103 but NONE are applied live yet** (the session had no access to the live project). They plus three new edge functions must be applied/deployed with the merge — see `docs/AUTOMATION_PLATFORM_DEPLOYMENT.md` for the runbook (apply order, `verify_jwt` flags, verification SQL). Earlier: V75 applied — `auth_rls_initplan` advisory cleared; V84 `system_config`, V85 `report_exec_digest`, V86 deepens that digest. The richer scheduled-report email ships only when the `send-scheduled-reports` **edge function is redeployed**.
 **Live URL under test:** tyre-pulse-peach.vercel.app
 **Active branches:** `main` · dev `claude/mobile-app-ui-features-tdfxy0` · frozen `claude/backend-step2-assets` (Go) · frozen `claude/mobile-kotlin-app` (Kotlin). All other feature branches consolidated into `main` (see `docs/BRANCH_CONSOLIDATION_2026-07-04.md`).
 
@@ -11,36 +11,33 @@
 
 ## Session 9 (7 July 2026) — Enterprise automation platform (roadmap priorities 20 → 1)
 
-**Theme:** implement the `Improvements road map.md` enterprise roadmap **bottom-up, from priority #20 toward #1**, entirely additively (new migrations V94–V101, new edge functions, new pages, new lib modules) so it never collides with in-flight local work. Multi-agent, disjoint directories, integrated + validated centrally. Delivered on PR #26.
+**Theme:** implement the `Improvements road map.md` enterprise roadmap **bottom-up (priority #20 → #1)** on a feature branch (PR #26). During the work, a **parallel roadmap implementation + UI redesign was merged to `main`** (the owner's local tranche: event bus, embedded AI copilot, Report/Dashboard Builder, Executive TV display, field-level audit, Sentry, TanStack Table + RHF/Zod, ECharts, ERP sync, System/Security/Tenant-Health, Permission Matrix). PR #26 was therefore **reconciled onto the new `main`**: main stays authoritative for everything it already has (incl. the redesign), and only this branch's **genuinely-unique, non-duplicated** pieces were grafted on. Migrations renumbered to sit after main's V95 (VEHICLE_PHOTO_GPS / ERP_CONNECTIONS).
 
-**Gate after this session:** web build ✅ · **964 web tests** ✅ · mobile typecheck untouched ✅. All SQL validated end-to-end on a local Postgres 16 harness (triggers → outbox → consumers → workflows/rules/webhooks/deliveries → display snapshot).
+**Gate after reconcile:** web build ✅ · **1338 web tests** ✅ (hermetic — passes with zero env vars) · mobile untouched. All new SQL validated end-to-end on a local Postgres 16 harness (triggers → outbox → consumers → workflows/rules/webhooks/deliveries → display snapshot).
 
-### Backend — migrations V94–V101 (⚠️ authored, NOT yet applied live)
-- **V94 Event-Driven Architecture** — `domain_events` transactional outbox, exception-safe emit triggers on 9 core tables, `event_consumers` registry, per-minute `process_domain_events()` cron with at-least-once retry.
-- **V95 Approval Workflow Engine** — `workflow_definitions` (validated steps jsonb) → durable `workflow_instances` with step snapshots, role-gated `workflow_act`/`start_workflow`/`my_pending_approvals` RPCs, event auto-start, hourly SLA escalation.
-- **V96 RAG completion** — `knowledge_documents` chunking columns + `embed-worker` edge function (cron auto-embedding of NULL-embedding rows).
-- **V97 API Platform + Webhooks** — `api_keys` (sha256-at-rest, per-minute rate limit via `api_key_authenticate`), `public-api` edge function (read-only REST, org-scoped, column allowlists), `webhook_subscriptions`/`webhook_deliveries` (HMAC-SHA256 signed, exponential backoff, auto-disable, pg_net delivery + reconciliation).
-- **V98 Business Rules Engine** — `business_rules` (event trigger, conditions/actions jsonb, loop-safe `rule.*` emission), `rule_executions` audit, event-consumer evaluator, hourly `evaluate_alert_thresholds()` that **finally evaluates the legacy `alert_thresholds` server-side** (tread/pressure/age/overdue).
-- **V99 AI copilot memory** — `ai_conversations`/`ai_messages` (owner-private RLS) backing the new `ai-orchestrator` edge function (Anthropic tool-use loop: digest, RAG, counts, events).
-- **V100 Audit + builders** — generic exception-safe row-change audit triggers → `audit_log_v2` across 16 tables (imports/RPCs/edge writes now leave a trail); `user_dashboards` + `report_definitions` persistence.
-- **V101 Executive TV Display** — `display_tokens` + anon-reachable, token-gated `get_display_snapshot(token,password)` returning **aggregate KPIs only** (no raw rows/PII), consistent with the V55 anon lockdown.
+### KEPT — unique backend, migrations V96–V103 (⚠️ authored, NOT yet applied live)
+- **V96 Event-Driven Architecture** — `domain_events` transactional outbox, exception-safe emit triggers on 9 core tables, `event_consumers` registry, per-minute `process_domain_events()` cron with at-least-once retry. (Distinct, deeper backend than main's client-side event bus.)
+- **V97 Approval Workflow Engine** — `workflow_definitions` (validated steps jsonb) → durable `workflow_instances` with step snapshots, role-gated `workflow_act`/`start_workflow`/`my_pending_approvals` RPCs, event auto-start, hourly SLA escalation. **(main had no workflow engine.)**
+- **V98 RAG auto-embed** — `knowledge_documents` chunking columns + `embed-worker` edge function (cron auto-embedding of NULL-embedding rows).
+- **V99 API Platform + Webhooks** — `api_keys` (sha256-at-rest, per-minute rate limit via `api_key_authenticate`), `public-api` edge function (read-only REST, org-scoped, column allowlists), `webhook_subscriptions`/`webhook_deliveries` (HMAC-SHA256 signed, backoff, auto-disable, pg_net delivery + reconciliation).
+- **V100 Business Rules Engine** — `business_rules` (event trigger, conditions/actions jsonb, loop-safe `rule.*` emission), `rule_executions` audit, event-consumer evaluator, hourly `evaluate_alert_thresholds()` that **finally evaluates the legacy `alert_thresholds` server-side**. **(main had no rules engine.)**
+- **V101 AI copilot memory** — `ai_conversations`/`ai_messages` (owner-private RLS) backing the `ai-orchestrator` edge function (Anthropic tool-use loop: digest, RAG, counts, events).
+- **V102 Audit triggers + builder tables** — generic exception-safe row-change audit triggers → `audit_log_v2` across 16 tables; `user_dashboards`/`report_definitions` tables (main's builders keep their own storage — these tables sit available/unused).
+- **V103 Executive TV Display tokens** — `display_tokens` + anon-reachable, token-gated `get_display_snapshot(token,password)` returning **aggregate KPIs only** (no raw rows/PII), per the V55 anon lockdown.
 
-### New edge functions (`supabase/functions/`) — NOT yet deployed
-- `public-api` (deploy `--no-verify-jwt`, API-key auth) · `embed-worker` (deploy `--no-verify-jwt`, cron-secret gated) · `ai-orchestrator` (JWT-verified).
+### KEPT — edge functions (NOT yet deployed) + frontend + service
+- Edge functions: `public-api` (`--no-verify-jwt`, API-key auth), `embed-worker` (`--no-verify-jwt`, cron-secret gated), `ai-orchestrator` (JWT-verified).
+- New pages (Automation nav group, wired into main's App.jsx/Layout.jsx): **Event Stream, Approvals, Approval Workflows, Automation Rules, API & Webhooks** + `src/lib/api/{domainEvents,workflows,businessRules,integrations}.js`, `src/lib/aiOrchestratorClient.js`, chunked KB indexing added to `embeddingService.js`.
+- `services/analytics/` — Python **FastAPI** microservice (tyre-life prediction, cost/demand forecast, anomaly detection), 63 pytest tests, Dockerfile. Deploy independently; browser must never hold the service key.
 
-### Frontend (additive)
-- New pages: **Event Stream, Approvals, Approval Workflows, API & Webhooks, Automation Rules** (Automation nav group) + **My Dashboards** (Dashboard Builder), **Report Builder** (Analytics Studio group) — all with full loading/error/empty/search/filter states, en/ar nav.
-- Foundations: enterprise **DataTable** (TanStack Table), **react-hook-form + Zod** form kit + domain validation schemas (`src/lib/validation/`), env-gated **Sentry + PostHog** (`src/lib/monitoring/`), lazy **ECharts** executive chart components (`src/components/charts/`).
-- Service layer: `src/lib/api/{domainEvents,workflows,integrations,businessRules,userDashboards,reportDefinitions}.js`, `src/lib/aiOrchestratorClient.js`, chunked KB indexing in `embeddingService.js`.
-
-### Separate service
-- `services/analytics/` — Python **FastAPI** microservice (tyre-life prediction, cost/demand forecast, anomaly detection), 63 pytest tests, Dockerfile. Deploy independently (Fly/Cloud Run); browser must never hold the service key.
+### DROPPED in reconcile (main's equivalents kept, to avoid duplication/redesign regression)
+- This branch's DashboardBuilder, ReportBuilder, `src/lib/monitoring/`, `src/components/charts/`, `src/lib/validation/` schemas, `src/components/ui/form/`, `src/components/ui/DataTable.jsx`, and their tests — **superseded by main's** builders / `monitoring.js` / charts / validation / `components/forms/` / EnterpriseTable.
 
 ### CI note
-- Fixed a **pre-existing** CI failure: `vitest run` had no Supabase env, so any test importing `src/lib/supabase.js` (e.g. `uploadMapping.test.js`, unchanged from main) threw `supabaseUrl is required`. Added dummy public vars to `vite.config.js` `test.env` → suite is now hermetic (passes with zero env vars).
+- Fixed a pre-existing CI failure: `vitest run` had no Supabase env, so tests importing `src/lib/supabase.js` (e.g. `uploadMapping.test.js`) threw `supabaseUrl is required`. Added dummy public vars to `vite.config.js` `test.env` → suite is hermetic.
 
-### Deployment follow-up (REQUIRED before the new UI works in prod)
-Apply V94→V101 and deploy the three edge functions per `docs/AUTOMATION_PLATFORM_DEPLOYMENT.md`. Until then the new pages will error (they're `Safe`-wrapped + lazy, so existing app is unaffected). Status matrix: `docs/ROADMAP_STATUS_2026-07-07.md`. New docs this session: `AUTOMATION_PLATFORM_DEPLOYMENT.md`, `ROADMAP_STATUS_2026-07-07.md`, `MONITORING.md`, `UI_FOUNDATIONS.md`.
+### Deployment follow-up (REQUIRED before the new Automation pages work in prod)
+Apply **V96→V103** and deploy the three edge functions per `docs/AUTOMATION_PLATFORM_DEPLOYMENT.md`. Until then the new Automation pages error (they're `Safe`-wrapped + lazy, so the rest of the app is unaffected). Docs: `AUTOMATION_PLATFORM_DEPLOYMENT.md`, `ROADMAP_STATUS_2026-07-07.md`.
 
 ---
 

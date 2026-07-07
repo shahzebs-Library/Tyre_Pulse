@@ -850,7 +850,7 @@ export default function Procurement() {
               ) : paginated.map(po => {
                 const pc = PRIORITY_CONFIG[po.priority] || PRIORITY_CONFIG.Normal
                 return (
-                  <tr key={po.id} className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+                  <tr key={po.id} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)] transition-colors">
                     <td className="px-4 py-3">
                       <span className="text-orange-400 font-mono text-xs font-semibold">{po.po_number}</span>
                     </td>
@@ -1006,7 +1006,7 @@ export default function Procurement() {
                         </thead>
                         <tbody>
                           {formData.items.map((it, idx) => (
-                            <tr key={idx} className="border-t border-gray-700/50">
+                            <tr key={idx} className="border-t border-[var(--input-border)]">
                               <td className="px-3 py-2 text-white">{it.brand}</td>
                               <td className="px-3 py-2 text-gray-300">{it.size}</td>
                               <td className="px-3 py-2 text-gray-300 text-right">{it.quantity}</td>

@@ -106,8 +106,8 @@ function TyrePositionDot({ tyre, position }) {
   return (
     <div className="relative flex items-center justify-center">
       <div
-        className="w-4 h-4 rounded-full cursor-pointer transition-transform hover:scale-125"
-        style={{ backgroundColor: color, opacity, boxShadow: tyre ? `0 0 6px ${color}66` : 'none' }}
+        className="w-4 h-4 rounded-full cursor-pointer transition-transform hover:scale-110"
+        style={{ backgroundColor: color, opacity }}
         onMouseEnter={() => setShowTip(true)}
         onMouseLeave={() => setShowTip(false)}
       />
@@ -731,7 +731,7 @@ export default function FleetHealthBoard() {
                             <td className="px-3 py-2.5 text-gray-300">{v.site ?? '-'}</td>
                             <td className="px-3 py-2.5 text-gray-400">{v.country ?? '-'}</td>
                             <td className="px-3 py-2.5">
-                              <span className="font-bold" style={{ color: scoreColor(v.score) }}>
+                              <span className="font-bold tabular-nums" style={{ color: scoreColor(v.score) }}>
                                 {v.score}%
                               </span>
                             </td>
@@ -773,7 +773,7 @@ export default function FleetHealthBoard() {
           <div className="card">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp size={16} className="text-green-400" />
-              <h2 className="text-base font-semibold text-white">{t('fleethealth.trend.title')}</h2>
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">{t('fleethealth.trend.title')}</h2>
             </div>
             <div className="h-48">
               <Line data={trendChartData} options={trendOpts} />
@@ -786,7 +786,7 @@ export default function FleetHealthBoard() {
           <div className="card flex-1 max-h-[calc(100vh-12rem)] overflow-y-auto">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle size={15} className="text-red-400" />
-              <h2 className="text-sm font-semibold text-white">{t('fleethealth.sidebar.criticalAlerts')}</h2>
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('fleethealth.sidebar.criticalAlerts')}</h2>
               {criticalList.length > 0 && (
                 <span className="ml-auto bg-red-900/50 text-red-300 text-xs px-2 py-0.5 rounded-full border border-red-800/50">
                   {criticalList.length}
@@ -982,7 +982,7 @@ function KpiCard({ label, value, sub, icon: Icon, color }) {
       <div className="flex items-start justify-between">
         <div>
           <p className="text-gray-400 text-xs uppercase tracking-wide font-medium">{label}</p>
-          <p className={`text-2xl font-bold mt-1 ${c.value}`}>{value}</p>
+          <p className={`text-2xl font-bold mt-1 tabular-nums ${c.value}`}>{value}</p>
           {sub && <p className="text-gray-600 text-xs mt-0.5">{sub}</p>}
         </div>
         <div className={`p-2 rounded-lg ${c.bg}`}>
@@ -1011,7 +1011,7 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
     <motion.div
       whileHover={{ y: -2 }}
       onClick={onClick}
-      className={`card cursor-pointer transition-all duration-200 ${scoreBorderClass(score)} ${isSelected ? 'ring-1 ring-green-500/50' : ''} hover:shadow-lg hover:shadow-green-900/10`}
+      className={`card cursor-pointer transition-all duration-200 ${scoreBorderClass(score)} ${isSelected ? 'ring-1 ring-green-500/50' : ''}`}
     >
       {/* Asset + location */}
       <div className="flex items-start justify-between mb-3">

@@ -166,14 +166,14 @@ function addForecastMonthLabels(existing, count) {
 
 function Card({ children, className = '' }) {
   return (
-    <div className={`bg-gray-900 border border-gray-800 rounded-xl p-4 ${className}`}>
+    <div className={`card ${className}`}>
       {children}
     </div>
   )
 }
 
 function SectionTitle({ children }) {
-  return <h3 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wide">{children}</h3>
+  return <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 uppercase tracking-wide">{children}</h3>
 }
 
 function LoadingOverlay() {
@@ -188,7 +188,7 @@ function LoadingOverlay() {
 function EmptyState({ message }) {
   const { t } = useLanguage()
   return (
-    <div className="flex flex-col items-center justify-center h-48 gap-2 text-gray-500">
+    <div className="flex flex-col items-center justify-center h-48 gap-2 text-[var(--text-muted)]">
       <BarChart2 size={32} className="opacity-30" />
       <p className="text-sm">{message || t('advancedanalytics.states.noData')}</p>
     </div>
@@ -207,9 +207,9 @@ function ChartBox({ title, height = 260, children }) {
 function MetricTile({ label, value, sub }) {
   return (
     <Card className="flex flex-col gap-1">
-      <span className="text-xs text-gray-500 uppercase tracking-wide">{label}</span>
-      <span className="text-xl font-bold text-white">{value}</span>
-      {sub && <span className="text-xs text-gray-500">{sub}</span>}
+      <span className="text-xs text-[var(--text-muted)] uppercase tracking-wide">{label}</span>
+      <span className="text-xl font-bold text-[var(--text-primary)]">{value}</span>
+      {sub && <span className="text-xs text-[var(--text-muted)]">{sub}</span>}
     </Card>
   )
 }
@@ -662,9 +662,9 @@ export default function AdvancedAnalytics() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="text-white space-y-6">
+    <div className="text-[var(--text-primary)] space-y-6">
       {/* Page Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-gray-800">
+      <div className="px-6 pt-6 pb-4 border-b border-[var(--input-border)]">
         <PageHeader
           title={t('advancedanalytics.title')}
           subtitle={t('advancedanalytics.subtitle', { records: fmt(filtered.length), sites: uniqueSites.length })}
@@ -672,14 +672,14 @@ export default function AdvancedAnalytics() {
           actions={<>
             <button
               onClick={handleExportExcel}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] transition-colors"
             >
               <FileSpreadsheet size={13} />
               {t('advancedanalytics.actions.excel')}
             </button>
             <button
               onClick={handleExportPdf}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-300 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-xs text-[var(--text-secondary)] transition-colors"
             >
               <Download size={13} />
               {t('advancedanalytics.actions.pdf')}
@@ -690,7 +690,7 @@ export default function AdvancedAnalytics() {
         {/* Global Filters */}
         <div className="flex flex-wrap items-center gap-2 mt-4">
           {/* Date presets */}
-          <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-lg p-0.5">
+          <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg p-0.5">
             {DATE_PRESETS.map(p => (
               <button
                 key={p.id}
@@ -698,7 +698,7 @@ export default function AdvancedAnalytics() {
                 className={`px-3 py-1 text-xs rounded-md transition-colors ${
                   datePreset === p.id
                     ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:text-gray-200'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {t(`advancedanalytics.datePresets.${p.id}`)}
@@ -710,7 +710,7 @@ export default function AdvancedAnalytics() {
           <select
             value={siteFilter}
             onChange={e => setSiteFilter(e.target.value)}
-            className="text-xs bg-gray-900 border border-gray-800 rounded-lg px-2 py-1.5 text-gray-300 focus:outline-none focus:border-blue-600"
+            className="text-xs bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)] focus:outline-none focus:border-blue-600"
           >
             <option value="all">{t('advancedanalytics.filters.allSites')}</option>
             {uniqueSites.map(s => (
@@ -722,7 +722,7 @@ export default function AdvancedAnalytics() {
           <select
             value={positionFilter}
             onChange={e => setPositionFilter(e.target.value)}
-            className="text-xs bg-gray-900 border border-gray-800 rounded-lg px-2 py-1.5 text-gray-300 focus:outline-none focus:border-blue-600"
+            className="text-xs bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-[var(--text-secondary)] focus:outline-none focus:border-blue-600"
           >
             {POSITIONS.map(p => (
               <option key={p} value={p === 'All' ? 'all' : p}>{t(`advancedanalytics.positions.${p.toLowerCase()}`)}</option>
@@ -733,7 +733,7 @@ export default function AdvancedAnalytics() {
 
       {/* Tab Navigation */}
       <div className="px-6 pt-4 pb-0 overflow-x-auto">
-        <div className="flex gap-1 border-b border-gray-800 min-w-max">
+        <div className="flex gap-1 border-b border-[var(--input-border)] min-w-max">
           {TABS.map(tab => {
             const Icon = tab.icon
             return (
@@ -743,7 +743,7 @@ export default function AdvancedAnalytics() {
                 className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'border-blue-500 text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-300'
+                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 <Icon size={13} />
@@ -896,7 +896,7 @@ function TrendTab({ data, currency }) {
         {[cpkTrend, failTrend, countTrend].map((t, i) => (
           <span key={i} className={`text-xs px-3 py-1 rounded-full font-medium ${t.cls}`}>{t.text}</span>
         ))}
-        <span className="text-xs px-3 py-1 rounded-full bg-gray-800 text-gray-400 border border-gray-700">
+        <span className="text-xs px-3 py-1 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]">
           {t('advancedanalytics.trend.forecastNote')}
         </span>
       </div>
@@ -1004,19 +1004,19 @@ function SeasonalTab({ data, currency }) {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-gray-800">
-                <th className="text-left py-2 pr-3 text-gray-500 font-medium w-16">{t('advancedanalytics.seasonal.month')}</th>
-                <th className="text-right py-2 px-2 text-gray-500 font-medium">{t('advancedanalytics.seasonal.count')}</th>
-                <th className="text-right py-2 px-2 text-gray-500 font-medium">{t('advancedanalytics.seasonal.failurePct')}</th>
-                <th className="text-right py-2 px-2 text-gray-500 font-medium">{t('advancedanalytics.seasonal.totalCost')}</th>
-                <th className="text-right py-2 px-2 text-gray-500 font-medium">{t('advancedanalytics.seasonal.avgCost')}</th>
-                <th className="text-right py-2 px-2 text-gray-500 font-medium">{t('advancedanalytics.seasonal.blowouts')}</th>
+              <tr className="border-b border-[var(--input-border)]">
+                <th className="text-left py-2 pr-3 text-[var(--text-muted)] font-medium w-16">{t('advancedanalytics.seasonal.month')}</th>
+                <th className="text-right py-2 px-2 text-[var(--text-muted)] font-medium">{t('advancedanalytics.seasonal.count')}</th>
+                <th className="text-right py-2 px-2 text-[var(--text-muted)] font-medium">{t('advancedanalytics.seasonal.failurePct')}</th>
+                <th className="text-right py-2 px-2 text-[var(--text-muted)] font-medium">{t('advancedanalytics.seasonal.totalCost')}</th>
+                <th className="text-right py-2 px-2 text-[var(--text-muted)] font-medium">{t('advancedanalytics.seasonal.avgCost')}</th>
+                <th className="text-right py-2 px-2 text-[var(--text-muted)] font-medium">{t('advancedanalytics.seasonal.blowouts')}</th>
               </tr>
             </thead>
             <tbody>
               {seasons.map((s, i) => (
-                <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                  <td className="py-1.5 pr-3 font-medium text-gray-200">{s.month}</td>
+                <tr key={i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
+                  <td className="py-1.5 pr-3 font-medium text-[var(--text-secondary)]">{s.month}</td>
                   <td className="py-1.5 px-2 text-right" style={{ backgroundColor: heatColor(s.count, heatMin, heatMax) }}>
                     {fmt(s.count)}
                   </td>
@@ -1026,10 +1026,10 @@ function SeasonalTab({ data, currency }) {
                   <td className="py-1.5 px-2 text-right" style={{ backgroundColor: heatColor(s.cost, heatMin, maxCost) }}>
                     {fmtCur(s.cost, currency)}
                   </td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">
                     {s.count ? fmtCur(s.cost / s.count, currency) : '-'}
                   </td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmt(s.blowouts)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmt(s.blowouts)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1106,25 +1106,25 @@ function GeoTab({ data, currency }) {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-gray-800">
+              <tr className="border-b border-[var(--input-border)]">
                 {['Site','Records','Total Cost','Avg Cost','High Risk %','Risk Score','Top Category','Top Brand'].map(h => (
-                  <th key={h} className="text-right first:text-left py-2 px-2 text-gray-500 font-medium whitespace-nowrap">{h}</th>
+                  <th key={h} className="text-right first:text-left py-2 px-2 text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {top15.map((s, i) => (
-                <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                  <td className="py-1.5 px-2 text-gray-200 font-medium">{s.site}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmt(s.count)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmtCur(s.totalCost, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmtCur(s.avgCost, currency)}</td>
+                <tr key={i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
+                  <td className="py-1.5 px-2 text-[var(--text-secondary)] font-medium">{s.site}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmt(s.count)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmtCur(s.totalCost, currency)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmtCur(s.avgCost, currency)}</td>
                   <td className={`py-1.5 px-2 text-right font-medium ${s.highRiskPct > 20 ? 'text-red-400' : s.highRiskPct > 10 ? 'text-yellow-400' : 'text-emerald-400'}`}>
                     {fmtPct(s.highRiskPct)}
                   </td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{fmt(s.riskScore, 2)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{s.topCategory}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{s.topBrand}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{fmt(s.riskScore, 2)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{s.topCategory}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{s.topBrand}</td>
                 </tr>
               ))}
             </tbody>
@@ -1139,21 +1139,21 @@ function GeoTab({ data, currency }) {
           <div className="overflow-x-auto">
             <table className="text-xs">
               <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="text-left py-2 pr-4 text-gray-500 font-medium min-w-[120px]">Site</th>
+                <tr className="border-b border-[var(--input-border)]">
+                  <th className="text-left py-2 pr-4 text-[var(--text-muted)] font-medium min-w-[120px]">Site</th>
                   {allMonths.map(m => (
-                    <th key={m} className="text-center py-2 px-1 text-gray-500 font-medium min-w-[52px]">{m.slice(5)}</th>
+                    <th key={m} className="text-center py-2 px-1 text-[var(--text-muted)] font-medium min-w-[52px]">{m.slice(5)}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {heatmap.map((row, i) => (
-                  <tr key={i} className="border-b border-gray-800/30">
-                    <td className="py-1.5 pr-4 text-gray-300 font-medium">{row.site}</td>
+                  <tr key={i} className="border-b border-[var(--input-border)]/30">
+                    <td className="py-1.5 pr-4 text-[var(--text-secondary)] font-medium">{row.site}</td>
                     {row.row.map((v, j) => (
                       <td
                         key={j}
-                        className="py-1.5 px-1 text-center text-gray-200"
+                        className="py-1.5 px-1 text-center text-[var(--text-secondary)]"
                         style={{ backgroundColor: v != null ? heatColor(v, heatMin, heatMax) : 'transparent' }}
                       >
                         {v != null ? `${v.toFixed(0)}%` : '-'}
@@ -1224,7 +1224,7 @@ function CountryTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-gray-800">
+              <tr className="border-b border-[var(--input-border)]">
                 {[
                   { label: 'Region', field: 'region' },
                   { label: 'Records', field: 'count' },
@@ -1235,7 +1235,7 @@ function CountryTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
                 ].map(h => (
                   <th
                     key={h.field}
-                    className="text-right first:text-left py-2 px-2 text-gray-500 font-medium cursor-pointer hover:text-gray-300 select-none whitespace-nowrap"
+                    className="text-right first:text-left py-2 px-2 text-[var(--text-muted)] font-medium cursor-pointer hover:text-[var(--text-secondary)] select-none whitespace-nowrap"
                     onClick={() => onSort(h.field)}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -1244,21 +1244,21 @@ function CountryTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
                     </span>
                   </th>
                 ))}
-                <th className="text-left py-2 px-2 text-gray-500 font-medium">Sites</th>
+                <th className="text-left py-2 px-2 text-[var(--text-muted)] font-medium">Sites</th>
               </tr>
             </thead>
             <tbody>
               {sorted.map((r, i) => (
-                <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                  <td className="py-1.5 px-2 font-medium text-gray-200">{r.region}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmt(r.count)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{fmt(r.siteCount)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmtCur(r.totalCost, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmtCpk(r.avgCpk, currency)}</td>
+                <tr key={i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
+                  <td className="py-1.5 px-2 font-medium text-[var(--text-secondary)]">{r.region}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmt(r.count)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{fmt(r.siteCount)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmtCur(r.totalCost, currency)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmtCpk(r.avgCpk, currency)}</td>
                   <td className={`py-1.5 px-2 text-right font-medium ${r.failRate > 20 ? 'text-red-400' : r.failRate > 10 ? 'text-yellow-400' : 'text-emerald-400'}`}>
                     {fmtPct(r.failRate)}
                   </td>
-                  <td className="py-1.5 px-2 text-gray-500 text-xs truncate max-w-[200px]">{r.sites}</td>
+                  <td className="py-1.5 px-2 text-[var(--text-muted)] text-xs truncate max-w-[200px]">{r.sites}</td>
                 </tr>
               ))}
             </tbody>
@@ -1279,7 +1279,7 @@ function BranchTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
   const sorted = sortedRows(branches, sortField === 'totalCost' ? 'compositeScore' : sortField, sortDir)
   const medals = [
     { icon: <Award size={16} className="text-yellow-400" />, label: 'Gold', cls: 'border-yellow-700 bg-yellow-900/20' },
-    { icon: <Award size={16} className="text-gray-300" />,   label: 'Silver', cls: 'border-gray-600 bg-gray-800/40' },
+    { icon: <Award size={16} className="text-[var(--text-secondary)]" />,   label: 'Silver', cls: 'border-gray-600 bg-[var(--input-bg)]/40' },
     { icon: <Award size={16} className="text-amber-700" />,  label: 'Bronze', cls: 'border-amber-800 bg-amber-900/20' },
   ]
 
@@ -1304,14 +1304,14 @@ function BranchTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
           <Card key={b.site} className={`border ${medals[i]?.cls ?? ''}`}>
             <div className="flex items-center gap-2 mb-2">
               {medals[i]?.icon}
-              <span className="text-xs text-gray-400">{medals[i]?.label} · Rank #{i + 1}</span>
+              <span className="text-xs text-[var(--text-muted)]">{medals[i]?.label} · Rank #{i + 1}</span>
             </div>
-            <div className="text-base font-bold text-white mb-1">{b.site}</div>
+            <div className="text-base font-bold text-[var(--text-primary)] mb-1">{b.site}</div>
             <div className="flex flex-wrap gap-3 mt-2">
-              <div><span className="text-xs text-gray-500">Score</span><div className="text-sm font-bold text-blue-400">{b.compositeScore}</div></div>
-              <div><span className="text-xs text-gray-500">Records</span><div className="text-sm font-semibold text-gray-200">{fmt(b.count)}</div></div>
-              <div><span className="text-xs text-gray-500">Fail %</span><div className={`text-sm font-semibold ${b.failRate > 15 ? 'text-red-400' : 'text-emerald-400'}`}>{fmtPct(b.failRate)}</div></div>
-              <div><span className="text-xs text-gray-500">Cost</span><div className="text-sm font-semibold text-gray-300">{fmtCur(b.totalCost, currency)}</div></div>
+              <div><span className="text-xs text-[var(--text-muted)]">Score</span><div className="text-sm font-bold text-blue-400">{b.compositeScore}</div></div>
+              <div><span className="text-xs text-[var(--text-muted)]">Records</span><div className="text-sm font-semibold text-[var(--text-secondary)]">{fmt(b.count)}</div></div>
+              <div><span className="text-xs text-[var(--text-muted)]">Fail %</span><div className={`text-sm font-semibold ${b.failRate > 15 ? 'text-red-400' : 'text-emerald-400'}`}>{fmtPct(b.failRate)}</div></div>
+              <div><span className="text-xs text-[var(--text-muted)]">Cost</span><div className="text-sm font-semibold text-[var(--text-secondary)]">{fmtCur(b.totalCost, currency)}</div></div>
             </div>
           </Card>
         ))}
@@ -1327,7 +1327,7 @@ function BranchTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-gray-800">
+              <tr className="border-b border-[var(--input-border)]">
                 {[
                   { label: '#',      field: '_rank' },
                   { label: 'Branch', field: 'site' },
@@ -1342,7 +1342,7 @@ function BranchTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
                 ].map(h => (
                   <th
                     key={h.field}
-                    className="text-right first:text-left py-2 px-2 text-gray-500 font-medium cursor-pointer hover:text-gray-300 select-none whitespace-nowrap"
+                    className="text-right first:text-left py-2 px-2 text-[var(--text-muted)] font-medium cursor-pointer hover:text-[var(--text-secondary)] select-none whitespace-nowrap"
                     onClick={() => h.field !== '_rank' && onSort(h.field)}
                   >
                     {h.field !== '_rank' ? (
@@ -1357,21 +1357,21 @@ function BranchTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
             </thead>
             <tbody>
               {sorted.map((b, i) => (
-                <tr key={b.site} className={`border-b border-gray-800/50 hover:bg-gray-800/20 ${i < 3 ? 'bg-blue-950/10' : ''}`}>
-                  <td className="py-1.5 px-2 text-gray-500">{i + 1}</td>
-                  <td className="py-1.5 px-2 font-medium text-gray-200">{b.site}</td>
+                <tr key={b.site} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20 ${i < 3 ? 'bg-blue-950/10' : ''}`}>
+                  <td className="py-1.5 px-2 text-[var(--text-muted)]">{i + 1}</td>
+                  <td className="py-1.5 px-2 font-medium text-[var(--text-secondary)]">{b.site}</td>
                   <td className="py-1.5 px-2 text-right">
                     <span className="px-1.5 py-0.5 bg-blue-900/40 text-blue-400 rounded text-xs font-bold">{b.compositeScore}</span>
                   </td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmt(b.count)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmtCur(b.totalCost, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{fmtCur(b.avgCost, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{fmtCpk(b.avgCpk, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{b.avgLife ? fmt(b.avgLife) : '-'}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmt(b.count)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmtCur(b.totalCost, currency)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{fmtCur(b.avgCost, currency)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{fmtCpk(b.avgCpk, currency)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{b.avgLife ? fmt(b.avgLife) : '-'}</td>
                   <td className={`py-1.5 px-2 text-right font-medium ${b.failRate > 20 ? 'text-red-400' : b.failRate > 10 ? 'text-yellow-400' : 'text-emerald-400'}`}>
                     {fmtPct(b.failRate)}
                   </td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{fmt(b.highRiskCount)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{fmt(b.highRiskCount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1464,7 +1464,7 @@ function VehicleTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-gray-800">
+              <tr className="border-b border-[var(--input-border)]">
                 {[
                   { label: 'Asset No', field: 'assetNo' },
                   { label: 'Records', field: 'count' },
@@ -1476,7 +1476,7 @@ function VehicleTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
                 ].map(h => (
                   <th
                     key={h.field}
-                    className="text-right first:text-left py-2 px-2 text-gray-500 font-medium cursor-pointer hover:text-gray-300 select-none whitespace-nowrap"
+                    className="text-right first:text-left py-2 px-2 text-[var(--text-muted)] font-medium cursor-pointer hover:text-[var(--text-secondary)] select-none whitespace-nowrap"
                     onClick={() => onSort(h.field)}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -1485,19 +1485,19 @@ function VehicleTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
                     </span>
                   </th>
                 ))}
-                <th className="py-2 px-2 text-gray-500 font-medium">Outlier</th>
+                <th className="py-2 px-2 text-[var(--text-muted)] font-medium">Outlier</th>
               </tr>
             </thead>
             <tbody>
               {sorted.slice(0, 100).map((v, i) => (
-                <tr key={i} className={`border-b border-gray-800/50 hover:bg-gray-800/20 ${v.isOutlier ? 'bg-red-950/20' : ''}`}>
-                  <td className="py-1.5 px-2 font-medium text-gray-200">{v.assetNo}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmt(v.count)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmtCur(v.totalCost, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{fmtCpk(v.avgCpk, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{v.avgLife ? fmt(v.avgLife) : '-'}</td>
-                  <td className={`py-1.5 px-2 text-right font-medium ${v.failCount > 3 ? 'text-red-400' : 'text-gray-300'}`}>{fmt(v.failCount)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-500">{v.lastSeen || '-'}</td>
+                <tr key={i} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20 ${v.isOutlier ? 'bg-red-950/20' : ''}`}>
+                  <td className="py-1.5 px-2 font-medium text-[var(--text-secondary)]">{v.assetNo}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmt(v.count)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmtCur(v.totalCost, currency)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{fmtCpk(v.avgCpk, currency)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{v.avgLife ? fmt(v.avgLife) : '-'}</td>
+                  <td className={`py-1.5 px-2 text-right font-medium ${v.failCount > 3 ? 'text-red-400' : 'text-[var(--text-secondary)]'}`}>{fmt(v.failCount)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{v.lastSeen || '-'}</td>
                   <td className="py-1.5 px-2 text-center">
                     {v.isOutlier && <span className="px-1.5 py-0.5 bg-red-900/50 text-red-400 rounded text-xs">⚠ High CPK</span>}
                   </td>
@@ -1506,7 +1506,7 @@ function VehicleTab({ data, currency, sortField, sortDir, onSort, sortedRows }) 
             </tbody>
           </table>
           {sorted.length > 100 && (
-            <p className="text-xs text-gray-600 mt-2 text-center">Showing top 100 of {sorted.length} vehicles</p>
+            <p className="text-xs text-[var(--text-dim)] mt-2 text-center">Showing top 100 of {sorted.length} vehicles</p>
           )}
         </div>
       </Card>
@@ -1564,7 +1564,7 @@ function DriverTab({ data, currency }) {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-            <span className="text-sm font-semibold text-gray-300">Top 10 Worst Performing Vehicles</span>
+            <span className="text-sm font-semibold text-[var(--text-secondary)]">Top 10 Worst Performing Vehicles</span>
           </div>
           <ChartBox height={260}>
             <Bar data={worstBar} options={H_BAR_OPTS} />
@@ -1573,7 +1573,7 @@ function DriverTab({ data, currency }) {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-            <span className="text-sm font-semibold text-gray-300">Top 10 Best Performing Vehicles</span>
+            <span className="text-sm font-semibold text-[var(--text-secondary)]">Top 10 Best Performing Vehicles</span>
           </div>
           <ChartBox height={260}>
             <Bar data={bestBar} options={H_BAR_OPTS} />
@@ -1586,22 +1586,22 @@ function DriverTab({ data, currency }) {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-gray-800">
+              <tr className="border-b border-[var(--input-border)]">
                 {['Rank','Asset No','Records','Total Cost','Fail Count','Sites','Categories'].map(h => (
-                  <th key={h} className="text-right first:text-left py-2 px-2 text-gray-500 font-medium whitespace-nowrap">{h}</th>
+                  <th key={h} className="text-right first:text-left py-2 px-2 text-[var(--text-muted)] font-medium whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {worst10.map((v, i) => (
-                <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/20">
+                <tr key={i} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
                   <td className="py-1.5 px-2 text-red-400 font-bold">{i + 1}</td>
-                  <td className="py-1.5 px-2 font-medium text-gray-200">{v.assetNo}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmt(v.count)}</td>
+                  <td className="py-1.5 px-2 font-medium text-[var(--text-secondary)]">{v.assetNo}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmt(v.count)}</td>
                   <td className="py-1.5 px-2 text-right font-semibold text-red-400">{fmtCur(v.totalCost, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{fmt(v.highRiskCount)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-500 truncate max-w-[120px]">{(v.sites || []).slice(0, 2).join(', ')}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-500 truncate max-w-[120px]">{(v.categories || []).slice(0, 2).join(', ')}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{fmt(v.highRiskCount)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)] truncate max-w-[120px]">{(v.sites || []).slice(0, 2).join(', ')}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)] truncate max-w-[120px]">{(v.categories || []).slice(0, 2).join(', ')}</td>
                 </tr>
               ))}
             </tbody>
@@ -1693,7 +1693,7 @@ function BrandTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-gray-800">
+              <tr className="border-b border-[var(--input-border)]">
                 {[
                   { label: 'Rank', field: '_rank' },
                   { label: 'Brand', field: 'brand' },
@@ -1708,7 +1708,7 @@ function BrandTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
                 ].map(h => (
                   <th
                     key={h.field}
-                    className="text-right first:text-left py-2 px-2 text-gray-500 font-medium cursor-pointer hover:text-gray-300 select-none whitespace-nowrap"
+                    className="text-right first:text-left py-2 px-2 text-[var(--text-muted)] font-medium cursor-pointer hover:text-[var(--text-secondary)] select-none whitespace-nowrap"
                     onClick={() => h.field !== '_rank' && onSort(h.field)}
                   >
                     {h.field !== '_rank' ? (
@@ -1723,25 +1723,25 @@ function BrandTab({ data, currency, sortField, sortDir, onSort, sortedRows }) {
             </thead>
             <tbody>
               {sorted.map((b, i) => (
-                <tr key={i} className={`border-b border-gray-800/50 hover:bg-gray-800/20 ${i === 0 ? 'bg-emerald-950/20' : ''}`}>
-                  <td className="py-1.5 px-2 text-gray-500">
+                <tr key={i} className={`border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20 ${i === 0 ? 'bg-emerald-950/20' : ''}`}>
+                  <td className="py-1.5 px-2 text-[var(--text-muted)]">
                     {i === 0 ? <Star size={12} className="text-yellow-400 inline" /> : i + 1}
                   </td>
-                  <td className="py-1.5 px-2 font-medium text-gray-200">{b.brand}</td>
+                  <td className="py-1.5 px-2 font-medium text-[var(--text-secondary)]">{b.brand}</td>
                   <td className="py-1.5 px-2 text-right">
                     <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${b.score >= 70 ? 'bg-emerald-900/50 text-emerald-400' : b.score >= 50 ? 'bg-yellow-900/50 text-yellow-400' : 'bg-red-900/50 text-red-400'}`}>
                       {b.score}
                     </span>
                   </td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmt(b.count)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{fmtCpk(b.avgCpk, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{b.avgLife ? fmt(b.avgLife) : '-'}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmt(b.count)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{fmtCpk(b.avgCpk, currency)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{b.avgLife ? fmt(b.avgLife) : '-'}</td>
                   <td className={`py-1.5 px-2 text-right font-medium ${b.failureRate > 20 ? 'text-red-400' : b.failureRate > 10 ? 'text-yellow-400' : 'text-emerald-400'}`}>
                     {fmtPct(b.failureRate)}
                   </td>
-                  <td className="py-1.5 px-2 text-right text-gray-400">{fmtPct(b.scrapRate)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-300">{fmtCur(b.totalCost, currency)}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-500">{b.topCategory}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{fmtPct(b.scrapRate)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-secondary)]">{fmtCur(b.totalCost, currency)}</td>
+                  <td className="py-1.5 px-2 text-right text-[var(--text-muted)]">{b.topCategory}</td>
                 </tr>
               ))}
             </tbody>
@@ -1869,21 +1869,21 @@ function FailureTab({ data, currency }) {
           <div className="overflow-x-auto">
             <table className="text-xs">
               <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="text-left py-2 pr-4 text-gray-500 font-medium min-w-[140px]">Category</th>
+                <tr className="border-b border-[var(--input-border)]">
+                  <th className="text-left py-2 pr-4 text-[var(--text-muted)] font-medium min-w-[140px]">Category</th>
                   {months.map(m => (
-                    <th key={m} className="text-center py-2 px-1 text-gray-500 font-medium min-w-[48px]">{m.slice(5)}</th>
+                    <th key={m} className="text-center py-2 px-1 text-[var(--text-muted)] font-medium min-w-[48px]">{m.slice(5)}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {heatmap.map((row, i) => (
-                  <tr key={i} className="border-b border-gray-800/30">
-                    <td className="py-1.5 pr-4 text-gray-300 font-medium">{row.cat}</td>
+                  <tr key={i} className="border-b border-[var(--input-border)]/30">
+                    <td className="py-1.5 pr-4 text-[var(--text-secondary)] font-medium">{row.cat}</td>
                     {row.row.map((v, j) => (
                       <td
                         key={j}
-                        className="py-1.5 px-1 text-center text-gray-200"
+                        className="py-1.5 px-1 text-center text-[var(--text-secondary)]"
                         style={{ backgroundColor: v > 0 ? heatColor(v, 0, heatMax) : 'transparent' }}
                       >
                         {v > 0 ? v : '-'}

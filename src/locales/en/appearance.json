@@ -1,0 +1,21 @@
+{
+  "title": "Appearance",
+  "subtitle": "Personalise how TyrePulse looks for you. Saved on this device.",
+  "reset": "Reset",
+  "theme": "Theme",
+  "modes": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "accent": "Accent colour",
+  "useOrgDefault": "Use organisation default",
+  "custom": "Custom colour",
+  "density": "Density",
+  "densities": {
+    "comfortable": "Comfortable",
+    "compact": "Compact"
+  },
+  "reduceMotion": "Reduce motion",
+  "reduceMotionHint": "Minimise animations and transitions."
+}

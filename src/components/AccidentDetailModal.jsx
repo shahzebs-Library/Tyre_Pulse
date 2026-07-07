@@ -17,6 +17,7 @@ import { formatCurrency } from '../lib/formatters'
 import { describeAuditRow } from '../lib/auditDiff'
 import { resolveStorageUrls } from '../lib/storageRefs'
 import CustomFieldsPanel from './CustomFieldsPanel'
+import CopilotCard from './ai/CopilotCard'
 
 const RECOVERY_SOURCES = ['none', 'insurer', 'third_party', 'driver', 'warranty']
 const RECOVERY_SOURCE_LABELS = { none: 'None', insurer: 'Insurer', third_party: 'Third Party', driver: 'Driver', warranty: 'Warranty' }
@@ -164,7 +165,12 @@ export default function AccidentDetailModal({ accidentId, onClose, onChanged }) 
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
-          {tab === 'overview'  && <OverviewTab acc={acc} />}
+          {tab === 'overview'  && (
+            <div className="space-y-4">
+              <CopilotCard task="summarize_accident" context={{ accident: acc, remarks, parts }} />
+              <OverviewTab acc={acc} />
+            </div>
+          )}
           {tab === 'tracker'   && <TrackerTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
           {tab === 'claim'     && <ClaimTab acc={acc} elevated={elevated} onSaved={() => { load(); onChanged?.() }} setErr={setErr} />}
           {tab === 'parts'     && <PartsTab acc={acc} parts={parts} partsTotal={partsTotal} elevated={elevated} profile={profile} reload={() => { load(); onChanged?.() }} setErr={setErr} />}

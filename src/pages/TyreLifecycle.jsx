@@ -412,7 +412,7 @@ export default function TyreLifecycle() {
       </div>
 
       {/* Filters */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+      <div className="card p-4 space-y-3">
         <div className="flex items-center gap-2 text-sm text-gray-400 font-medium">
           <Filter size={14} />
           <span>Filters</span>
@@ -471,8 +471,8 @@ export default function TyreLifecycle() {
       </div>
 
       {/* Lifecycle Funnel */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-gray-300 mb-5">Lifecycle Stage Funnel</h2>
+      <div className="card p-5">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-5">Lifecycle Stage Funnel</h2>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1">
           {funnel.map((stage, i) => {
             const colorMap = {
@@ -519,8 +519,8 @@ export default function TyreLifecycle() {
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Brand Lifecycle */}
-        <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-gray-300 mb-4">Brand Lifecycle Analysis (avg km: New vs Retread)</h2>
+        <div className="lg:col-span-2 card p-5">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Brand Lifecycle Analysis (avg km: New vs Retread)</h2>
           <div style={{ height: 280 }}>
             {brandChart.labels.length > 0 ? (
               <Bar data={brandChart} options={{ ...BASE_CHART_OPTS, plugins: { legend: LEGEND } }} />
@@ -533,8 +533,8 @@ export default function TyreLifecycle() {
         </div>
 
         {/* Cost Doughnut */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-gray-300 mb-4">Cost per Lifecycle Stage</h2>
+        <div className="card p-5">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Cost per Lifecycle Stage</h2>
           <div style={{ height: 280 }}>
             {costDonut.datasets[0].data.some(v => v > 0) ? (
               <Doughnut data={costDonut} options={DONUT_OPTS} />
@@ -548,8 +548,8 @@ export default function TyreLifecycle() {
       </div>
 
       {/* Age Distribution */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-gray-300 mb-4">Tyre Age Distribution (km bands)</h2>
+      <div className="card p-5">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Tyre Age Distribution (km bands)</h2>
         <div style={{ height: 220 }}>
           <Bar
             data={ageDistChart}
@@ -568,7 +568,7 @@ export default function TyreLifecycle() {
       {/* Lifecycle Table */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-300">
+          <h2 className="text-sm font-semibold text-[var(--text-primary)]">
             Tyre Lifecycle Table
             <span className="ml-2 text-gray-600 font-normal text-xs">
               {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}

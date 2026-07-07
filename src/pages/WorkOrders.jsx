@@ -19,6 +19,8 @@ import {
   FileSpreadsheet, Upload, Trash2,
 } from 'lucide-react'
 import { workOrders } from '../lib/api'
+import { logAudit } from '../lib/audit'
+import { publish } from '../lib/events'
 import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import { useSettings } from '../contexts/SettingsContext'
@@ -258,6 +260,8 @@ export default function WorkOrders() {
     setDeleteError('')
     try {
       await workOrders.deleteWorkOrder(deleteTarget.id)
+      logAudit({ action: 'DELETE', entity: 'work_orders', entityId: deleteTarget.id, before: deleteTarget })
+      publish('workorder.deleted', { id: deleteTarget.id, work_order_no: deleteTarget.work_order_no })
       setDeleteTarget(null)
       if (viewOrder?.id === deleteTarget.id) setViewOrder(null)
       await load()
@@ -293,6 +297,8 @@ export default function WorkOrders() {
     setDeleteError('')
     try {
       const n = await workOrders.deleteWorkOrders([...selectedIds])
+      logAudit({ action: 'DELETE', entity: 'work_orders', meta: { bulk: true, ids: [...selectedIds] } })
+      publish('workorder.deleted', { ids: [...selectedIds], bulk: true })
       setBulkDeleteOpen(false)
       setSelectedIds(new Set())
       if (viewOrder && selectedIds.has(viewOrder.id)) setViewOrder(null)
@@ -366,11 +372,14 @@ export default function WorkOrders() {
 
       if (editOrder) {
         await workOrders.updateWorkOrderById(editOrder.id, payload)
+        logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: editOrder.id, before: editOrder, after: payload })
       } else {
         // Generate work order number
         const woNo = await workOrders.generateWorkOrderNo()
         payload.work_order_no = woNo || `WO-${Date.now()}`
         await workOrders.insertWorkOrder(payload)
+        logAudit({ action: 'CREATE', entity: 'work_orders', entityId: payload.work_order_no, after: payload })
+        publish('workorder.created', { work_order_no: payload.work_order_no, asset_no: payload.asset_no, work_type: payload.work_type, priority: payload.priority })
       }
       await load()
       setShowForm(false)
@@ -388,6 +397,8 @@ export default function WorkOrders() {
     if (newStatus === 'Completed') patch.completed_at = new Date().toISOString()
     try {
       await workOrders.updateWorkOrderById(order.id, patch)
+      logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: order.id, before: order, after: patch })
+      publish('workorder.status_changed', { id: order.id, work_order_no: order.work_order_no, from_status: order.status, to_status: newStatus })
     } catch (err) { alert(t('workorders.form.updateFailed', { msg: err.message })); return }
     await load()
     if (viewOrder?.id === order.id) setViewOrder(o => ({ ...o, ...patch }))
@@ -553,20 +564,20 @@ export default function WorkOrders() {
           { label: t('workorders.kpi.avgDaysOpen'), value: stats.avgDaysOpen, color: 'purple', icon: Calendar },
           { label: t('workorders.kpi.totalCostAll'), value: `${activeCurrency} ${(stats.totalCost / 1000).toFixed(1)}k`, color: 'teal', icon: DollarSign },
         ].map(({ label, value, color, icon: Icon }) => (
-          <div key={label} className={`bg-gray-900 border border-gray-800 rounded-xl p-4`}>
+          <div key={label} className="card p-4">
             <div className={`flex items-center gap-2 mb-2`}>
               <Icon size={16} className={`text-${color}-400`} />
               <span className="text-gray-400 text-xs">{label}</span>
             </div>
-            <div className={`text-2xl font-bold text-${color}-400`}>{value}</div>
+            <div className={`text-2xl font-bold tabular-nums text-${color}-400`}>{value}</div>
           </div>
         ))}
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">{t('workorders.charts.byType')}</h3>
+        <div className="card p-5">
+          <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('workorders.charts.byType')}</h3>
           {typeChartData.labels.length > 0 ? (
             <div className="h-52">
               <Bar data={typeChartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
@@ -578,8 +589,8 @@ export default function WorkOrders() {
             </div>
           )}
         </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">{t('workorders.charts.statusDistribution')}</h3>
+        <div className="card p-5">
+          <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('workorders.charts.statusDistribution')}</h3>
           {statusChartData.labels.length > 0 ? (
             <div className="h-52">
               <Doughnut data={statusChartData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />
@@ -594,7 +605,7 @@ export default function WorkOrders() {
       </div>
 
       {/* Filters */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="card p-4">
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-48">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -647,7 +658,7 @@ export default function WorkOrders() {
         </div>
       )}
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="card p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

@@ -364,7 +364,7 @@ export default function DailyOps() {
     return (
       <div className="card p-4">
         <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">{label}</p>
-        <p className="text-2xl font-bold text-white">{prefix}{typeof curr === 'number' ? curr.toLocaleString() : curr}</p>
+        <p className="text-2xl font-bold text-[var(--text-primary)] tabular-nums">{prefix}{typeof curr === 'number' ? curr.toLocaleString() : curr}</p>
         <div className={`flex items-center gap-1 mt-1 text-xs font-semibold ${val > 0 ? 'text-red-400' : val < 0 ? 'text-green-400' : 'text-gray-500'}`}>
           {val > 0 ? <TrendingUp size={11} /> : val < 0 ? <TrendingDown size={11} /> : <Minus size={11} />}
           {val !== 0 ? t('dailyops.weekSummary.vsLastWeek', {
@@ -502,7 +502,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
             <div className="flex items-center gap-2 mb-3">
               <ShieldAlert size={16} className="text-red-400" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">{t('dailyops.priorityQueue.title')}</h2>
+              <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider">{t('dailyops.priorityQueue.title')}</h2>
               {priorityQueue.length > 0 && (
                 <div className="flex gap-1.5">
                   {critCount > 0 && <span className="px-1.5 py-0.5 rounded text-xs bg-red-900/50 text-red-300 border border-red-700/50">{t('dailyops.priorityQueue.criticalChip', { count: critCount })}</span>}
@@ -555,7 +555,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
 
           {/* Stat Cards */}
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+            <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 flex items-center gap-2">
               <Activity size={14} className="text-green-400" /> {t('dailyops.stats.title')}
             </h2>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -570,7 +570,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                     <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">{label}</p>
                     <Icon size={14} className={color} />
                   </div>
-                  <p className={`text-3xl font-bold ${color}`}>{value.toLocaleString()}</p>
+                  <p className={`text-3xl font-bold tabular-nums ${color}`}>{value.toLocaleString()}</p>
                 </motion.div>
               ))}
             </div>
@@ -582,7 +582,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
             {/* Activity Feed */}
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
               className="xl:col-span-2">
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Activity size={14} className="text-green-400" /> {t('dailyops.activityFeed.title')}
               </h2>
               <div className="card p-0 overflow-hidden">
@@ -612,7 +612,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
 
             {/* Fleet Status Snapshot */}
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Truck size={14} className="text-green-400" /> {t('dailyops.fleetStatus.title')}
               </h2>
               <div className="card p-4 space-y-4">
@@ -623,7 +623,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
                     { label: t('dailyops.fleetStatus.dormant30d'), value: vehiclesDormant, color: 'text-gray-400' },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="text-center p-2 rounded-lg bg-gray-800/40">
-                      <p className={`text-xl font-bold ${color}`}>{value}</p>
+                      <p className={`text-xl font-bold tabular-nums ${color}`}>{value}</p>
                       <p className="text-[10px] text-gray-500 uppercase tracking-wide mt-0.5">{label}</p>
                     </div>
                   ))}
@@ -638,7 +638,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
           {/* Site Activity + Cost Tracker */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Building2 size={14} className="text-green-400" /> {t('dailyops.siteActivity.title')}
               </h2>
               <div className="card p-4">
@@ -656,19 +656,19 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
             </motion.section>
 
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 flex items-center gap-2">
                 <DollarSign size={14} className="text-green-400" /> {t('dailyops.costTracker.title')}
               </h2>
               <div className="card p-4 flex flex-col gap-3">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t('dailyops.costTracker.todaysSpend')}</p>
-                    <p className="text-2xl font-bold text-green-400">{activeCurrency} {todayCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                    <p className="text-2xl font-bold text-green-400 tabular-nums">{activeCurrency} {todayCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                   </div>
                   {dailyBudget > 0 && (
                     <div className="text-right">
                       <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t('dailyops.costTracker.dailyBudget')}</p>
-                      <p className="text-lg font-semibold text-gray-300">{activeCurrency} {dailyBudget.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                      <p className="text-lg font-semibold text-gray-300 tabular-nums">{activeCurrency} {dailyBudget.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                       {todayCost > dailyBudget && <p className="text-xs text-red-400 font-medium mt-0.5">{t('dailyops.costTracker.overBudget', { currency: activeCurrency, amount: (todayCost - dailyBudget).toLocaleString(undefined, { maximumFractionDigits: 0 }) })}</p>}
                     </div>
                   )}
@@ -684,7 +684,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
           {/* This Week Summary (collapsible) */}
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <button onClick={() => setWeekOpen(p => !p)}
-              className="w-full flex items-center justify-between text-sm font-bold text-white uppercase tracking-wider mb-3 group">
+              className="w-full flex items-center justify-between text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 group">
               <span className="flex items-center gap-2">
                 <BarChart2 size={14} className="text-green-400" /> This Week Summary
                 <span className="text-xs text-gray-500 normal-case font-normal">({fmtShort(thisWeekStart)} - {fmtShort(thisWeekEnd)})</span>
@@ -707,7 +707,7 @@ ${siteActivity.map(([s, c]) => `<tr><td>${esc(s)}</td><td>${esc(c)}</td></tr>`).
 
           {/* Upcoming This Week */}
           <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+            <h2 className="text-sm font-bold text-[var(--text-primary)] uppercase tracking-wider mb-3 flex items-center gap-2">
               <Clock size={14} className="text-green-400" /> Upcoming This Week
               <span className="text-xs text-gray-500 normal-case font-normal">(next 7 days)</span>
             </h2>

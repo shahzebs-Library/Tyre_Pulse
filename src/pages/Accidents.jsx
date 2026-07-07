@@ -65,7 +65,7 @@ const STATUSES = [
 const SEVERITIES = ['Minor', 'Major', 'Total Loss']
 
 const SEVERITY_BADGE = {
-  Minor:        'bg-gray-800 text-gray-300 border border-gray-600',
+  Minor:        'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
   Major:        'bg-orange-900/50 text-orange-300 border border-orange-700/50',
   'Total Loss': 'bg-red-900/50 text-red-300 border border-red-700/50',
 }
@@ -823,7 +823,7 @@ export default function Accidents() {
           </button>
         </div>
       </div>
-      <p className="text-xs text-gray-500 -mt-1">
+      <p className="text-xs text-[var(--text-muted)] -mt-1">
         New: controlled, validated, audited accident &amp; insurance import with private evidence attachments and duplicate detection.
       </p>
 
@@ -832,13 +832,13 @@ export default function Accidents() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-800">
+      <div className="flex gap-1 border-b border-[var(--input-border)]">
         <button
           onClick={() => setTab('incidents')}
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
             tab === 'incidents'
               ? 'border-green-500 text-green-400'
-              : 'border-transparent text-gray-400 hover:text-white'
+              : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
           Incidents
@@ -848,7 +848,7 @@ export default function Accidents() {
           className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
             tab === 'analytics'
               ? 'border-green-500 text-green-400'
-              : 'border-transparent text-gray-400 hover:text-white'
+              : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
           <BarChart2 size={14} /> Analytics
@@ -883,33 +883,33 @@ export default function Accidents() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
               <div className="card text-center">
-                <p className="text-2xl font-bold text-white">{stats.total}</p>
-                <p className="text-xs text-gray-400 mt-1">Total Incidents</p>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Total Incidents</p>
               </div>
             </motion.div>
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
               <div className="card text-center">
                 <p className="text-2xl font-bold text-orange-400">{stats.open}</p>
-                <p className="text-xs text-gray-400 mt-1">Open</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Open</p>
               </div>
             </motion.div>
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 2 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
               <div className="card text-center">
                 <p className="text-2xl font-bold text-red-400">{stats.insur}</p>
-                <p className="text-xs text-gray-400 mt-1">Insurance Claims</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Insurance Claims</p>
               </div>
             </motion.div>
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 3 * 0.07, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
               <div className="card text-center">
                 <p className="text-2xl font-bold text-green-400">{fmtCurrency(stats.cost)}</p>
-                <p className="text-xs text-gray-400 mt-1">Total Repair Cost</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Total Repair Cost</p>
               </div>
             </motion.div>
           </div>
 
           {/* Bar chart */}
           <div className="card">
-            <p className="text-sm font-semibold text-gray-300 mb-3">Incidents per Month (last 12 months)</p>
+            <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Incidents per Month (last 12 months)</p>
             <div style={{ height: 160 }}>
               <Bar data={chartData} options={chartOpts} />
             </div>
@@ -924,14 +924,14 @@ export default function Accidents() {
                 className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                   statusFunnel === s
                     ? STATUS_BADGE[s] + ' ring-1 ring-white/20'
-                    : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white'
+                    : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 {s} <span className="ml-1 opacity-70">{statusCounts[s]}</span>
               </button>
             ))}
             {statusFunnel && (
-              <button onClick={() => setStatusFunnel('')} className="text-xs text-gray-500 hover:text-white px-2">
+              <button onClick={() => setStatusFunnel('')} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2">
                 <X size={12} className="inline" /> Clear
               </button>
             )}
@@ -940,7 +940,7 @@ export default function Accidents() {
           {/* Filters */}
           <div className="flex flex-wrap gap-2">
             <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
               <input
                 className="input pl-8 text-sm w-48"
                 placeholder="Search asset or description"
@@ -965,7 +965,7 @@ export default function Accidents() {
             {(search || filterSite || filterSeverity || filterStatus || filterFrom || filterTo) && (
               <button
                 onClick={() => { setSearch(''); setFilterSite(''); setFilterSeverity(''); setFilterStatus(''); setFilterFrom(''); setFilterTo('') }}
-                className="text-xs text-gray-500 hover:text-white px-2 flex items-center gap-1"
+                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
               >
                 <X size={12} /> Clear filters
               </button>
@@ -977,7 +977,7 @@ export default function Accidents() {
             <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
               <span className="text-sm text-blue-200">{selectedIds.size} selected</span>
               <div className="flex items-center gap-2">
-                <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-white px-2 py-1">Clear</button>
+                <button onClick={() => setSelectedIds(new Set())} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 py-1">Clear</button>
                 <button onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
                   <Trash2 size={14} /> Delete {selectedIds.size}
@@ -988,7 +988,7 @@ export default function Accidents() {
 
           {/* Table */}
           {loading ? (
-            <div className="text-center py-12 text-gray-500">Loading...</div>
+            <div className="text-center py-12 text-[var(--text-muted)]">Loading...</div>
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={AlertOctagon}
@@ -1004,7 +1004,7 @@ export default function Accidents() {
                       <th className="table-header w-10">
                         <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
                           title="Select all shown"
-                          className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                          className="w-4 h-4 rounded border-[var(--input-border)] bg-[var(--input-bg)] accent-blue-600 cursor-pointer" />
                       </th>
                     )}
                     <th className="table-header">Date</th>
@@ -1019,21 +1019,21 @@ export default function Accidents() {
                 </thead>
                 <tbody>
                   {filtered.map(row => (
-                    <tr key={row.id} className={`border-t border-gray-800 hover:bg-gray-800/30 transition-colors ${selectedIds.has(row.id) ? 'bg-blue-950/20' : ''}`}>
+                    <tr key={row.id} className={`border-t border-[var(--input-border)] hover:bg-[var(--input-bg)] transition-colors ${selectedIds.has(row.id) ? 'bg-blue-950/20' : ''}`}>
                       {isAdmin && (
                         <td className="table-cell">
                           <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => toggleSelect(row.id)}
-                            className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                            className="w-4 h-4 rounded border-[var(--input-border)] bg-[var(--input-bg)] accent-blue-600 cursor-pointer" />
                         </td>
                       )}
                       <td className="table-cell whitespace-nowrap">
                         {row.incident_date ? formatDate(row.incident_date, activeCountry) : '-'}
                       </td>
-                      <td className="table-cell font-medium text-white">{row.asset_no || '-'}</td>
+                      <td className="table-cell font-medium text-[var(--text-primary)]">{row.asset_no || '-'}</td>
                       <td className="table-cell">{row.site || '-'}</td>
                       <td className="table-cell">
                         {row.severity && (
-                          <span className={`badge text-xs ${SEVERITY_BADGE[canonSeverity(row.severity)] ?? 'bg-gray-800 text-gray-300'}`}>
+                          <span className={`badge text-xs ${SEVERITY_BADGE[canonSeverity(row.severity)] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>
                             {canonSeverity(row.severity)}
                           </span>
                         )}
@@ -1041,7 +1041,7 @@ export default function Accidents() {
                       <td className="table-cell">
                         <div className="flex flex-col gap-1 items-start">
                           {row.status && (
-                            <span className={`badge text-xs ${STATUS_BADGE[canonStatus(row.status)] ?? 'bg-gray-800 text-gray-300'}`}>
+                            <span className={`badge text-xs ${STATUS_BADGE[canonStatus(row.status)] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>
                               {canonStatus(row.status)}
                             </span>
                           )}
@@ -1056,12 +1056,12 @@ export default function Accidents() {
                       <td className="table-cell">{row.inspector || '-'}</td>
                       <td className="table-cell">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => setDetailId(row.id)} className="text-gray-400 hover:text-green-400 text-xs transition-colors flex items-center gap-1"><Eye size={12} /> Open</button>
-                          <button onClick={() => openEdit(row)} className="text-gray-400 hover:text-blue-400 text-xs transition-colors">Edit</button>
+                          <button onClick={() => setDetailId(row.id)} className="text-[var(--text-muted)] hover:text-green-400 text-xs transition-colors flex items-center gap-1"><Eye size={12} /> Open</button>
+                          <button onClick={() => openEdit(row)} className="text-[var(--text-muted)] hover:text-blue-400 text-xs transition-colors">Edit</button>
                           {row.status !== 'Closed' && (
-                            <button onClick={() => raiseAction(row)} className="text-gray-400 hover:text-orange-400 text-xs transition-colors whitespace-nowrap">Raise CA</button>
+                            <button onClick={() => raiseAction(row)} className="text-[var(--text-muted)] hover:text-orange-400 text-xs transition-colors whitespace-nowrap">Raise CA</button>
                           )}
-                          <button onClick={() => handleDelete(row.id)} className="text-gray-400 hover:text-red-400 text-xs transition-colors">Delete</button>
+                          <button onClick={() => handleDelete(row.id)} className="text-[var(--text-muted)] hover:text-red-400 text-xs transition-colors">Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -1079,33 +1079,33 @@ export default function Accidents() {
           {/* KPI row */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="card text-center">
-              <p className="text-2xl font-bold text-white">{stats.total}</p>
-              <p className="text-xs text-gray-400 mt-1">Total Incidents</p>
+              <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Total Incidents</p>
             </div>
             <div className="card text-center">
               <p className="text-2xl font-bold text-orange-400">{stats.open}</p>
-              <p className="text-xs text-gray-400 mt-1">Open</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Open</p>
             </div>
             <div className="card text-center">
               <p className="text-2xl font-bold text-blue-400">{stats.avgDays}</p>
-              <p className="text-xs text-gray-400 mt-1">Avg Days to Close</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Avg Days to Close</p>
             </div>
             <div className="card text-center">
               <p className="text-xl font-bold text-green-400">{fmtCurrency(stats.cost)}</p>
-              <p className="text-xs text-gray-400 mt-1">Total Repair Cost</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Total Repair Cost</p>
             </div>
             <div className="card text-center">
               <p className="text-2xl font-bold text-red-400">{stats.insur}</p>
-              <p className="text-xs text-gray-400 mt-1">Insurance Claims</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Insurance Claims</p>
             </div>
           </div>
 
           {/* Top 5 assets + by site */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="card">
-              <p className="text-sm font-semibold text-gray-300 mb-3">Top 5 Assets by Incidents</p>
+              <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Top 5 Assets by Incidents</p>
               {topAssetsChart.labels.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-6">No data</p>
+                <p className="text-[var(--text-muted)] text-sm text-center py-6">No data</p>
               ) : (
                 <div style={{ height: 200 }}>
                   <Bar data={topAssetsChart} options={CHART_OPTS_H} />
@@ -1113,9 +1113,9 @@ export default function Accidents() {
               )}
             </div>
             <div className="card">
-              <p className="text-sm font-semibold text-gray-300 mb-3">Incidents by Site</p>
+              <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Incidents by Site</p>
               {bySiteChart.labels.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-6">No data</p>
+                <p className="text-[var(--text-muted)] text-sm text-center py-6">No data</p>
               ) : (
                 <div style={{ height: 200 }}>
                   <Bar data={bySiteChart} options={CHART_OPTS_H} />
@@ -1126,7 +1126,7 @@ export default function Accidents() {
 
           {/* Monthly severity breakdown */}
           <div className="card">
-            <p className="text-sm font-semibold text-gray-300 mb-3">Monthly Severity Breakdown (last 12 months)</p>
+            <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Monthly Severity Breakdown (last 12 months)</p>
             <div style={{ height: 220 }}>
               <Bar data={severityMonthlyChart} options={CHART_OPTS_STACKED} />
             </div>
@@ -1134,41 +1134,41 @@ export default function Accidents() {
 
           {/* Claims & cost recovery */}
           <div className="card">
-            <p className="text-sm font-semibold text-gray-300 mb-3">Claims & Cost Recovery</p>
+            <p className="text-sm font-semibold text-[var(--text-dim)] mb-3">Claims & Cost Recovery</p>
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
               <div className="text-center">
-                <p className="text-lg font-bold text-white">{fmtCurrency(claimAnalytics.grossCost)}</p>
-                <p className="text-[11px] text-gray-400 mt-1">Gross Cost (repair + parts)</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{fmtCurrency(claimAnalytics.grossCost)}</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1">Gross Cost (repair + parts)</p>
               </div>
               <div className="text-center">
                 <p className="text-lg font-bold text-blue-400">{fmtCurrency(claimAnalytics.totalClaim)}</p>
-                <p className="text-[11px] text-gray-400 mt-1">Total Claimed</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1">Total Claimed</p>
               </div>
               <div className="text-center">
                 <p className="text-lg font-bold text-green-400">{fmtCurrency(claimAnalytics.totalRecovered)}</p>
-                <p className="text-[11px] text-gray-400 mt-1">Recovered</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1">Recovered</p>
               </div>
               <div className="text-center">
                 <p className="text-lg font-bold text-orange-400">{fmtCurrency(claimAnalytics.netExposure)}</p>
-                <p className="text-[11px] text-gray-400 mt-1">Net After Recovery</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1">Net After Recovery</p>
               </div>
               <div className="text-center">
                 <p className="text-lg font-bold text-purple-400">{fmtCurrency(claimAnalytics.totalParts)}</p>
-                <p className="text-[11px] text-gray-400 mt-1">Parts Cost</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1">Parts Cost</p>
               </div>
               <div className="text-center">
                 <p className="text-lg font-bold text-yellow-400">{claimAnalytics.pendingClosure}</p>
-                <p className="text-[11px] text-gray-400 mt-1">Pending Closures</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1">Pending Closures</p>
               </div>
             </div>
 
             {/* Recovery rate bar */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-400">Insurance recovery rate</span>
-                <span className="text-sm font-semibold text-gray-200">{claimAnalytics.recovery}%</span>
+                <span className="text-xs text-[var(--text-muted)]">Insurance recovery rate</span>
+                <span className="text-sm font-semibold text-[var(--text-secondary)]">{claimAnalytics.recovery}%</span>
               </div>
-              <div className="w-full bg-gray-800 rounded-full h-2.5">
+              <div className="w-full bg-[var(--input-border)] rounded-full h-2.5">
                 <div
                   className="h-2.5 rounded-full transition-all"
                   style={{
@@ -1181,13 +1181,13 @@ export default function Accidents() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-medium text-gray-400 mb-2">Claim Status Breakdown</p>
+                <p className="text-xs font-medium text-[var(--text-muted)] mb-2">Claim Status Breakdown</p>
                 <div style={{ height: 180 }}><Bar data={claimStatusChart} options={chartOpts} /></div>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-400 mb-2">Cost by Responsible Payer</p>
+                <p className="text-xs font-medium text-[var(--text-muted)] mb-2">Cost by Responsible Payer</p>
                 {payerCostChart.labels.length === 0
-                  ? <p className="text-gray-500 text-sm text-center py-12">No payer cost data</p>
+                  ? <p className="text-[var(--text-muted)] text-sm text-center py-12">No payer cost data</p>
                   : <div style={{ height: 180 }}><Bar data={payerCostChart} options={CHART_OPTS_H} /></div>}
               </div>
             </div>
@@ -1195,15 +1195,15 @@ export default function Accidents() {
 
           {/* Status funnel */}
           <div className="card">
-            <p className="text-sm font-semibold text-gray-300 mb-4">Status Funnel</p>
+            <p className="text-sm font-semibold text-[var(--text-dim)] mb-4">Status Funnel</p>
             <div className="space-y-3">
               {funnelData.map(({ status, count, pct }) => (
                 <div key={status}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className={`badge text-xs ${STATUS_BADGE[status] ?? 'bg-gray-800 text-gray-300'}`}>{status}</span>
-                    <span className="text-sm text-gray-300">{count} <span className="text-gray-500 text-xs">({pct}%)</span></span>
+                    <span className={`badge text-xs ${STATUS_BADGE[status] ?? 'bg-[var(--input-bg)] text-[var(--text-dim)]'}`}>{status}</span>
+                    <span className="text-sm text-[var(--text-dim)]">{count} <span className="text-[var(--text-muted)] text-xs">({pct}%)</span></span>
                   </div>
-                  <div className="w-full bg-gray-800 rounded-full h-2">
+                  <div className="w-full bg-[var(--input-border)] rounded-full h-2">
                     <div
                       className="h-2 rounded-full transition-all"
                       style={{
@@ -1230,14 +1230,14 @@ export default function Accidents() {
           onClick={() => setShowModal(false)}
         >
           <div
-            className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-2xl p-6 my-4"
+            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-2xl p-6 my-4"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">
                 {editId ? 'Edit Incident' : 'New Incident'}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setShowModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                 <X size={18} />
               </button>
             </div>
@@ -1271,19 +1271,19 @@ export default function Accidents() {
                       onFocus={() => setShowAssetDrop(true)}
                       autoComplete="off"
                     />
-                    <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                    <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
                   </div>
                   {showAssetDrop && assetSuggestions.length > 0 && (
-                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
                       {assetSuggestions.map(a => (
                         <button
                           key={a.asset_no}
                           type="button"
                           onMouseDown={() => selectAsset(a)}
-                          className="w-full text-left px-3 py-2 hover:bg-gray-700 transition-colors flex items-center justify-between gap-3"
+                          className="w-full text-left px-3 py-2 hover:bg-[var(--input-bg-hover)] transition-colors flex items-center justify-between gap-3"
                         >
-                          <span className="text-white font-mono text-sm">{a.asset_no}</span>
-                          <span className="text-gray-400 text-xs truncate">{[a.vehicle_type, a.site].filter(Boolean).join(' · ')}</span>
+                          <span className="text-[var(--text-primary)] font-mono text-sm">{a.asset_no}</span>
+                          <span className="text-[var(--text-muted)] text-xs truncate">{[a.vehicle_type, a.site].filter(Boolean).join(' · ')}</span>
                         </button>
                       ))}
                     </div>
@@ -1381,7 +1381,7 @@ export default function Accidents() {
                   <div className="flex flex-wrap gap-2 mt-2">
                     {form.photos.map((src, i) => (
                       <div key={i} className="relative">
-                        <PhotoPreview src={src} alt={`Photo ${i + 1}`} className="h-16 w-16 object-cover rounded border border-gray-700" />
+                        <PhotoPreview src={src} alt={`Photo ${i + 1}`} className="h-16 w-16 object-cover rounded border border-[var(--input-border)]" />
                         <button
                           type="button"
                           onClick={() => removePhoto(i)}
@@ -1419,12 +1419,12 @@ export default function Accidents() {
       {bulkDeleteOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }}>
-          <div className="bg-gray-900 border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-[var(--surface-1)] border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex gap-3 mb-4">
               <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-white font-semibold">Delete {selectedIds.size} incident{selectedIds.size !== 1 ? 's' : ''}?</p>
-                <p className="text-gray-400 text-sm mt-1">This permanently removes the selected incident records and their claim data. This cannot be undone.</p>
+                <p className="text-[var(--text-primary)] font-semibold">Delete {selectedIds.size} incident{selectedIds.size !== 1 ? 's' : ''}?</p>
+                <p className="text-[var(--text-muted)] text-sm mt-1">This permanently removes the selected incident records and their claim data. This cannot be undone.</p>
               </div>
             </div>
             {bulkError && (
@@ -1448,27 +1448,27 @@ export default function Accidents() {
           onClick={() => setShowBulk(false)}
         >
           <div
-            className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-3xl p-6 my-4 space-y-5"
+            className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl w-full max-w-3xl p-6 my-4 space-y-5"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
                   <Upload size={18} className="text-green-400" /> Bulk Upload Incidents
                 </h2>
-                <p className="text-xs text-gray-400 mt-1">Upload an Excel or CSV file to import multiple incidents at once.</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">Upload an Excel or CSV file to import multiple incidents at once.</p>
               </div>
-              <button onClick={() => setShowBulk(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
+              <button onClick={() => setShowBulk(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X size={18} /></button>
             </div>
 
             {/* Step 1 - download template */}
-            <div className="bg-gray-800/60 border border-gray-700/60 rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-gray-200">Step 1 - Download Template</p>
-              <p className="text-xs text-gray-400 leading-relaxed">
+            <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-[var(--text-secondary)]">Step 1 - Download Template</p>
+              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                 Use the official template to ensure correct column mapping. Required columns:
-                <span className="text-gray-300 font-mono"> incident_date</span>,
-                <span className="text-gray-300 font-mono"> asset_no</span>.
+                <span className="text-[var(--text-dim)] font-mono"> incident_date</span>,
+                <span className="text-[var(--text-dim)] font-mono"> asset_no</span>.
                 All other columns are optional.
               </p>
               <div className="flex flex-wrap gap-2">
@@ -1486,8 +1486,8 @@ export default function Accidents() {
             </div>
 
             {/* Step 2 - upload file */}
-            <div className="bg-gray-800/60 border border-gray-700/60 rounded-xl p-4 space-y-3">
-              <p className="text-sm font-semibold text-gray-200">Step 2 - Upload Your File</p>
+            <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-[var(--text-secondary)]">Step 2 - Upload Your File</p>
               <input
                 ref={bulkInputRef}
                 type="file"
@@ -1503,7 +1503,7 @@ export default function Accidents() {
                 <Upload size={14} /> {bulkFile ? bulkFile.name : 'Choose Excel / CSV file'}
               </button>
               {bulkFile && (
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[var(--text-muted)]">
                   {bulkRows.length} row{bulkRows.length !== 1 ? 's' : ''} parsed ·{' '}
                   <span className="text-green-400">{bulkRows.filter(r => r._valid).length} valid</span>
                   {bulkRows.filter(r => !r._valid).length > 0 && (
@@ -1515,10 +1515,10 @@ export default function Accidents() {
 
             {/* Preview table */}
             {bulkRows.length > 0 && (
-              <div className="overflow-x-auto rounded-xl border border-gray-700">
+              <div className="overflow-x-auto rounded-xl border border-[var(--input-border)]">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-gray-700 bg-gray-800/80">
+                    <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
                       <th className="table-header py-2 px-3">Row</th>
                       <th className="table-header py-2 px-3">Date</th>
                       <th className="table-header py-2 px-3">Asset</th>
@@ -1531,14 +1531,14 @@ export default function Accidents() {
                   </thead>
                   <tbody>
                     {bulkRows.slice(0, 50).map(r => (
-                      <tr key={r._row} className={`border-t border-gray-800 ${r._valid ? '' : 'bg-red-950/20'}`}>
-                        <td className="px-3 py-1.5 text-gray-500">{r._row}</td>
-                        <td className="px-3 py-1.5 text-gray-300 font-mono">{r.incident_date || '-'}</td>
-                        <td className="px-3 py-1.5 text-white font-medium">{r.asset_no || '-'}</td>
-                        <td className="px-3 py-1.5 text-gray-400">{r.site || '-'}</td>
-                        <td className="px-3 py-1.5 text-gray-400">{r.severity}</td>
-                        <td className="px-3 py-1.5 text-gray-400">{r.status}</td>
-                        <td className="px-3 py-1.5 text-gray-400">{r.repair_cost ?? '-'}</td>
+                      <tr key={r._row} className={`border-t border-[var(--input-border)] ${r._valid ? '' : 'bg-red-950/20'}`}>
+                        <td className="px-3 py-1.5 text-[var(--text-muted)]">{r._row}</td>
+                        <td className="px-3 py-1.5 text-[var(--text-dim)] font-mono">{r.incident_date || '-'}</td>
+                        <td className="px-3 py-1.5 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
+                        <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.site || '-'}</td>
+                        <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.severity}</td>
+                        <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.status}</td>
+                        <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.repair_cost ?? '-'}</td>
                         <td className="px-3 py-1.5 text-center">
                           {r._valid
                             ? <CheckCircle2 size={13} className="text-green-400 mx-auto" />
@@ -1549,7 +1549,7 @@ export default function Accidents() {
                   </tbody>
                 </table>
                 {bulkRows.length > 50 && (
-                  <p className="text-xs text-gray-500 text-center py-2">Showing first 50 of {bulkRows.length} rows</p>
+                  <p className="text-xs text-[var(--text-muted)] text-center py-2">Showing first 50 of {bulkRows.length} rows</p>
                 )}
               </div>
             )}
@@ -1605,7 +1605,7 @@ function PhotoPreview({ src, alt, className }) {
   }, [src])
 
   if (!resolved) {
-    return <div className={`${className} bg-gray-800 flex items-center justify-center text-[10px] text-gray-500`}>Photo</div>
+    return <div className={`${className} bg-[var(--input-bg)] flex items-center justify-center text-[10px] text-[var(--text-muted)]`}>Photo</div>
   }
 
   return <img src={resolved} alt={alt} className={className} />

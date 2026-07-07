@@ -1,273 +1,280 @@
 /**
- * Central zod schemas for Tyre Pulse forms.
+ * Domain validation schemas (Zod) for TyrePulse entities.
  *
- * Each schema mirrors real columns from MASTER_MIGRATION.sql (tyre_records,
- * inspections, vehicle_fleet, purchase_orders) and encodes the same validation
- * vocabulary as the import pipeline (src/lib/import/validate.js): plausible
- * ISO dates (1970-2100), non-negative quantities/costs, and controlled
- * vocabularies from DB CHECK constraints.
+ * Two families are exported:
  *
- * All field schemas are input-tolerant: they accept raw HTML form values
- * (strings) and coerce them, so they can back react-hook-form via
- * zodResolver (see src/components/ui/form/) or be used standalone through
- * the validate() helper.
+ * 1. ENTITY schemas (`supplierSchema`, `driverSchema`, `vehicleSchema`,
+ *    `tyreRecordSchema`, `inspectionSchema`, `supplierContractSchema`) -
+ *    validate TYPED payloads (numbers as numbers, ISO dates as strings).
+ *    Rules mirror src/lib/import/validate.js: natural-key fields required
+ *    (country + code), plausible dates (1970-2100), non-negative quantities,
+ *    removal km never before fitment km.
+ *
+ * 2. FORM schemas (`tyreRecordFormSchema`, `contractFormSchema`) - validate
+ *    the RAW STRING values held by react-hook-form inputs WITHOUT transforming
+ *    them, so the values object the resolver returns is byte-identical to what
+ *    the page's existing payload builders expect. Pages keep their own
+ *    coercion (`+form.qty || 1`, blank -> null) untouched.
  *
  * @module lib/validation/schemas
  */
 
 import { z } from 'zod'
 
-/* ── Controlled vocabularies (must match MASTER_MIGRATION.sql CHECKs) ──────── */
+/* ── Shared rules / constants ─────────────────────────────────────────────── */
 
-/** inspections.inspection_type CHECK list. */
-export const INSPECTION_TYPES = ['Routine', 'Pressure Check', 'Visual', 'Full Inspection', 'Pre-Trip']
+/** Cold-inflation pressure sanity window (PSI) for truck/OTR tyres. */
+export const PRESSURE_PSI = { min: 20, max: 200 }
 
-/** vehicle_fleet.status CHECK list (informational; status stays free text below). */
-export const VEHICLE_STATUSES = ['Active', 'Inactive', 'Under Maintenance', 'Decommissioned']
+/** Tread depth sanity window (mm); new drive tyres top out around 30 mm. */
+export const TREAD_DEPTH_MM = { min: 0, max: 30 }
 
-/* ── Patterns ──────────────────────────────────────────────────────────────── */
-
-/** Tyre serial: alphanumeric + dash, 3-32 chars. */
-export const SERIAL_NO_RE = /^[A-Za-z0-9-]{3,32}$/
-
-/** ISO 3779 VIN: 17 chars, excludes I/O/Q. */
-export const VIN_RE = /^[A-HJ-NPR-Za-hj-npr-z0-9]{17}$/
-
-/** Loose international phone: optional +, digits with spaces/dashes/parens, 7-20 chars. */
-export const PHONE_RE = /^\+?[0-9][0-9\s\-().]{5,18}[0-9)]$/
+/**
+ * Tyre size formats accepted:
+ *   metric        315/80R22.5, 385/65 R 22.5
+ *   wide base     12R22.5, 11R24.5, 24R21
+ *   flotation     445/95R25
+ */
+export const TYRE_SIZE_RE = /^(\d{2,3}(\/\d{2,3})?\s?[Rr]\s?\d{2}(\.\d)?)$/
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-/* ── Coercion helpers (HTML inputs deliver strings; blanks mean "not set") ─── */
-
-function blankToUndefined(v) {
-  if (v == null) return undefined
-  if (typeof v === 'string' && v.trim() === '') return undefined
-  return v
-}
-
-/** Local-timezone YYYY-MM-DD (fleet data is captured in local operating time). */
-function toLocalIso(d) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-/** Same plausibility window as the import pipeline (1970-2100, real calendar date). */
-function isPlausibleIsoDate(iso) {
-  if (!ISO_DATE_RE.test(iso)) return false
-  const d = new Date(`${iso}T00:00:00Z`)
+/** Same plausibility rule as import/validate.js: real calendar date, 1970-2100. */
+export function isPlausibleIsoDate(value) {
+  if (typeof value !== 'string' || !ISO_DATE_RE.test(value)) return false
+  const d = new Date(`${value}T00:00:00Z`)
   if (Number.isNaN(d.getTime())) return false
   const year = d.getUTCFullYear()
-  // Round-trip guard rejects impossible dates like 2024-02-31.
-  return year >= 1970 && year <= 2100 && d.toISOString().slice(0, 10) === iso
+  return year >= 1970 && year <= 2100
 }
 
-/** Required trimmed string with a clean "is required" message on blank/missing. */
-function requiredString(label, max = 120, { uppercase = false } = {}) {
-  return z.preprocess(
-    (v) => {
-      if (v == null) return ''
-      let s = typeof v === 'string' ? v.trim() : String(v).trim()
-      if (uppercase) s = s.toUpperCase()
-      return s
-    },
-    z
-      .string()
-      .min(1, `${label} is required`)
-      .max(max, `${label} must be at most ${max} characters`)
-  )
-}
+/** Required ISO date within the plausible window. */
+const isoDate = (label) =>
+  z.string()
+    .min(1, { message: `${label} is required.` })
+    .refine(isPlausibleIsoDate, { message: `${label} must be a valid date (YYYY-MM-DD, 1970-2100).` })
 
-/** Optional trimmed string; blank input becomes undefined. */
-function optionalString(label, max) {
-  return z.preprocess(
-    (v) => {
-      const val = blankToUndefined(v)
-      return typeof val === 'string' ? val.trim() : val
-    },
-    z.string().max(max, `${label} must be at most ${max} characters`).optional()
-  )
-}
+/** Optional ISO date: blank/null/missing allowed, non-blank must be plausible. */
+const isoDateOptional = (label) =>
+  z.union([z.literal(''),
+    z.string().refine(isPlausibleIsoDate, { message: `${label} must be a valid date (YYYY-MM-DD, 1970-2100).` })]).nullish()
 
-/** Number that tolerates numeric strings; blank becomes undefined. */
-function numberInput(label, inner) {
-  return z.preprocess((v) => {
-    const val = blankToUndefined(v)
-    if (typeof val === 'string') {
-      const n = Number(val.trim())
-      return Number.isNaN(n) ? val : n
-    }
-    return val
-  }, inner ?? z.number({ message: `${label} must be a number` }))
-}
+/** Optional string (blank/null/missing allowed). */
+const optionalStr = (max = 200) => z.string().max(max).nullish()
+
+/** Required natural-key string (non-blank after trim). */
+const requiredStr = (label, max = 120) =>
+  z.string({ message: `${label} is required.` })
+    .max(max, { message: `${label} must be at most ${max} characters.` })
+    .refine((v) => v.trim().length > 0, { message: `${label} is required.` })
+
+/** Optional email (blank/null/missing allowed, otherwise valid format). */
+const optionalEmail = z.union([z.literal(''),
+  z.email({ message: 'Invalid email address.' })]).nullish()
+
+/** Optional finite number with bounds; null/undefined/missing allowed. */
+const optionalNumber = (label, { min = null, max = null } = {}) =>
+  z.number({ message: `${label} must be a number.` })
+    .refine((v) => Number.isFinite(v), { message: `${label} must be a finite number.` })
+    .refine((v) => min == null || v >= min, { message: `${label} must be >= ${min}.` })
+    .refine((v) => max == null || v <= max, { message: `${label} must be <= ${max}.` })
+    .nullish()
+
+/** Optional tyre size: blank allowed, otherwise must match TYRE_SIZE_RE. */
+const optionalTyreSize = z.union([z.literal(''),
+  z.string().refine((v) => TYRE_SIZE_RE.test(v.trim()), {
+    message: 'Tyre size must look like 315/80R22.5 or 12R22.5.',
+  })]).nullish()
+
+export const RISK_LEVELS = ['Critical', 'High', 'Medium', 'Low']
+export const INSPECTION_STATUSES = ['Scheduled', 'In Progress', 'Done', 'Overdue', 'Cancelled']
+
+/* ── Entity schemas (typed payloads) ──────────────────────────────────────── */
 
 /**
- * ISO date field. Accepts Date instances or YYYY-MM-DD strings.
- *
- * @param {string} label
- * @param {{ required?: boolean, notFuture?: boolean }} [opts]
+ * Supplier master. Natural key (import/validate.js): country + (supplier_code
+ * || supplier_name) - so country and supplier_name are required; code optional.
  */
-function dateInput(label, { required = false, notFuture = false } = {}) {
-  let inner = required ? z.string().min(1, `${label} is required`) : z.string()
-  // Empty string only occurs in the required branch, where min(1) already
-  // reports "is required" - the guards below skip it to avoid double messages.
-  inner = inner.refine((iso) => iso === '' || isPlausibleIsoDate(iso), {
-    message: `${label} must be a valid date (YYYY-MM-DD)`,
-  })
-  if (notFuture) {
-    // ISO strings compare lexicographically; guard only valid dates.
-    inner = inner.refine((iso) => !isPlausibleIsoDate(iso) || iso <= toLocalIso(new Date()), {
-      message: `${label} cannot be in the future`,
+export const supplierSchema = z.object({
+  country: requiredStr('Country', 40),
+  supplier_name: requiredStr('Supplier name', 160),
+  supplier_code: optionalStr(60),
+  supplier_type: optionalStr(60),
+  phone: optionalStr(40),
+  email: optionalEmail,
+  rating: optionalNumber('Rating', { min: 0, max: 5 }),
+  notes: optionalStr(2000),
+}).passthrough()
+
+/** Driver master. Natural key: country + driver_id (both required). */
+export const driverSchema = z.object({
+  country: requiredStr('Country', 40),
+  driver_id: requiredStr('Driver ID', 60),
+  driver_name: requiredStr('Driver name', 160),
+  license_no: optionalStr(60),
+  license_expiry: isoDateOptional('License expiry'),
+  phone: optionalStr(40),
+  email: optionalEmail,
+  status: optionalStr(40),
+}).passthrough()
+
+/** Vehicle / fleet asset. Natural key: country + asset_no. Mileage >= 0. */
+export const vehicleSchema = z.object({
+  country: requiredStr('Country', 40),
+  asset_no: requiredStr('Asset number', 60),
+  make: optionalStr(80),
+  model: optionalStr(80),
+  vehicle_type: optionalStr(80),
+  registration_no: optionalStr(60),
+  tyre_size: optionalTyreSize,
+  current_km: optionalNumber('Mileage', { min: 0 }),
+}).passthrough()
+
+/**
+ * Tyre record (tyre_records row). Natural key: country + serial_no; asset_no
+ * required (import module marks it required). Removal km never before
+ * fitment km; all quantities non-negative; qty a positive integer.
+ */
+export const tyreRecordSchema = z.object({
+  country: requiredStr('Country', 40),
+  asset_no: requiredStr('Asset number', 60),
+  serial_no: optionalStr(80),
+  brand: optionalStr(80),
+  site: optionalStr(120),
+  size: optionalTyreSize,
+  issue_date: isoDateOptional('Issue date'),
+  qty: optionalNumber('Quantity', { min: 1 })
+    .refine((v) => v == null || Number.isInteger(v), { message: 'Quantity must be a whole number.' }),
+  cost_per_tyre: optionalNumber('Cost per tyre', { min: 0 }),
+  km_at_fitment: optionalNumber('KM at fitment', { min: 0 }),
+  km_at_removal: optionalNumber('KM at removal', { min: 0 }),
+  risk_level: z.union([z.literal(''), z.enum(RISK_LEVELS)]).nullish(),
+  remarks: optionalStr(4000),
+}).passthrough().superRefine((row, ctx) => {
+  if (typeof row.km_at_fitment === 'number' && typeof row.km_at_removal === 'number'
+      && row.km_at_removal < row.km_at_fitment) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['km_at_removal'],
+      message: `Removal KM (${row.km_at_removal}) is less than fitment KM (${row.km_at_fitment}).`,
     })
   }
-  return z.preprocess((v) => {
-    const val = blankToUndefined(v)
-    if (val instanceof Date) return Number.isNaN(val.getTime()) ? 'invalid-date' : toLocalIso(val)
-    if (typeof val === 'string') return val.trim()
-    return required && val == null ? '' : val
-  }, required ? inner : inner.optional())
-}
-
-/* ── Schemas ───────────────────────────────────────────────────────────────── */
-
-/** tyre_records: manual entry / edit form. */
-export const tyreRecordSchema = z.object({
-  asset_no: requiredString('Asset number', 60),
-  serial_no: z.preprocess(
-    (v) => {
-      const val = blankToUndefined(v)
-      return typeof val === 'string' ? val.trim() : val
-    },
-    z
-      .string()
-      .regex(SERIAL_NO_RE, 'Serial number must be 3-32 letters, digits or dashes')
-      .optional()
-  ),
-  brand: optionalString('Brand', 60),
-  position: optionalString('Position', 20),
-  qty: numberInput(
-    'Quantity',
-    z
-      .number({ message: 'Quantity must be a number' })
-      .int('Quantity must be a whole number')
-      .min(1, 'Quantity must be at least 1')
-      .max(100, 'Quantity must be at most 100')
-      .default(1)
-  ),
-  cost_per_tyre: numberInput(
-    'Cost per tyre',
-    z
-      .number({ message: 'Cost per tyre must be a number' })
-      .min(0, 'Cost per tyre cannot be negative')
-      .max(100000, 'Cost per tyre must be at most 100,000')
-      .optional()
-  ),
-  issue_date: dateInput('Issue date', { notFuture: true }),
-  site: optionalString('Site', 60),
-  country: optionalString('Country', 60),
 })
-
-/** inspections: schedule / capture form. */
-export const inspectionSchema = z.object({
-  asset_no: requiredString('Asset number', 60),
-  inspection_type: z.preprocess(
-    (v) => blankToUndefined(v),
-    z
-      .enum(INSPECTION_TYPES, {
-        message: `Inspection type must be one of: ${INSPECTION_TYPES.join(', ')}`,
-      })
-      .default('Routine')
-  ),
-  scheduled_date: dateInput('Scheduled date', { required: true }),
-  tread_depth: numberInput(
-    'Tread depth',
-    z
-      .number({ message: 'Tread depth must be a number' })
-      .min(0, 'Tread depth cannot be negative')
-      .max(30, 'Tread depth must be at most 30 mm')
-      .optional()
-  ),
-  pressure_reading: numberInput(
-    'Pressure reading',
-    z
-      .number({ message: 'Pressure reading must be a number' })
-      .min(0, 'Pressure reading cannot be negative')
-      .max(200, 'Pressure reading must be at most 200 PSI')
-      .optional()
-  ),
-  findings: optionalString('Findings', 2000),
-})
-
-/** vehicle_fleet: asset master form. */
-export const vehicleSchema = z.object({
-  asset_no: requiredString('Asset number', 60, { uppercase: true }),
-  vin: z.preprocess(
-    (v) => {
-      const val = blankToUndefined(v)
-      return typeof val === 'string' ? val.trim().toUpperCase() : val
-    },
-    z
-      .string()
-      .regex(VIN_RE, 'VIN must be 17 characters (letters/digits, excluding I, O, Q)')
-      .optional()
-  ),
-  make: optionalString('Make', 60),
-  model: optionalString('Model', 60),
-  status: optionalString('Status', 40),
-})
-
-/** Suppliers / vendors master form. */
-export const vendorSchema = z.object({
-  name: requiredString('Vendor name', 120),
-  email: z.preprocess(
-    (v) => {
-      const val = blankToUndefined(v)
-      return typeof val === 'string' ? val.trim() : val
-    },
-    z.email({ message: 'Enter a valid email address' }).max(120).optional()
-  ),
-  phone: z.preprocess(
-    (v) => {
-      const val = blankToUndefined(v)
-      return typeof val === 'string' ? val.trim() : val
-    },
-    z.string().regex(PHONE_RE, 'Enter a valid phone number (7-20 digits, may start with +)').optional()
-  ),
-})
-
-/** purchase_orders: header form. */
-export const purchaseOrderSchema = z.object({
-  po_no: requiredString('PO number', 30),
-  supplier: requiredString('Supplier', 100),
-  total: numberInput(
-    'Total',
-    z.number({ message: 'Total must be a number' }).min(0, 'Total cannot be negative')
-  ),
-})
-
-/* ── Standalone validation helper ──────────────────────────────────────────── */
 
 /**
- * Validate values against a schema outside react-hook-form (imports, API
- * payload guards, tests).
- *
- * @template T
- * @param {import('zod').ZodType<T>} schema
- * @param {unknown} values
- * @returns {{ ok: true, data: T } | { ok: false, fieldErrors: Record<string, string> }}
- *   fieldErrors is keyed by dot-joined field path ('_form' for root issues),
- *   first message per field.
+ * Inspection event. Natural key components (import/validate.js): country +
+ * asset_no + inspection_date; pressure/tread readings inside sane windows.
  */
-export function validate(schema, values) {
-  const result = schema.safeParse(values)
-  if (result.success) return { ok: true, data: result.data }
-  /** @type {Record<string, string>} */
-  const fieldErrors = {}
-  for (const issue of result.error.issues) {
-    const key = issue.path.length > 0 ? issue.path.join('.') : '_form'
-    if (!(key in fieldErrors)) fieldErrors[key] = issue.message
+export const inspectionSchema = z.object({
+  country: requiredStr('Country', 40),
+  asset_no: requiredStr('Asset number', 60),
+  inspection_date: isoDate('Inspection date'),
+  inspection_type: optionalStr(80),
+  inspector: optionalStr(120),
+  status: z.union([z.literal(''), z.enum(INSPECTION_STATUSES)]).nullish(),
+  pressure_reading: optionalNumber('Pressure', { min: PRESSURE_PSI.min, max: PRESSURE_PSI.max }),
+  tread_depth: optionalNumber('Tread depth', { min: TREAD_DEPTH_MM.min, max: TREAD_DEPTH_MM.max }),
+  findings: optionalStr(4000),
+}).passthrough()
+
+/** Supplier contract (supplier_contracts row): end never before start. */
+export const supplierContractSchema = z.object({
+  supplier_name: requiredStr('Supplier name', 160),
+  contract_start: isoDateOptional('Contract start'),
+  contract_end: isoDateOptional('Contract end'),
+  payment_terms: optionalStr(120),
+  price_per_unit: optionalNumber('Price per unit', { min: 0 }),
+  min_order: optionalNumber('Minimum order', { min: 0 })
+    .refine((v) => v == null || Number.isInteger(v), { message: 'Minimum order must be a whole number.' }),
+  notes: optionalStr(2000),
+}).passthrough().superRefine((c, ctx) => {
+  if (c.contract_start && c.contract_end
+      && isPlausibleIsoDate(c.contract_start) && isPlausibleIsoDate(c.contract_end)
+      && c.contract_end < c.contract_start) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['contract_end'],
+      message: 'Contract end date cannot be before the start date.',
+    })
   }
-  return { ok: false, fieldErrors }
-}
+})
+
+/* ── Form schemas (raw string inputs, no transforms) ──────────────────────── */
+
+/** Blank-or-numeric string within bounds; NEVER transforms the value. */
+const numericStr = (label, { min = null, max = null, integer = false } = {}) =>
+  z.string().superRefine((v, ctx) => {
+    if (v === '') return
+    const n = Number(v)
+    if (!Number.isFinite(n)) {
+      ctx.addIssue({ code: 'custom', message: `${label} must be a number.` })
+      return
+    }
+    if (integer && !Number.isInteger(n)) ctx.addIssue({ code: 'custom', message: `${label} must be a whole number.` })
+    if (min != null && n < min) ctx.addIssue({ code: 'custom', message: `${label} must be >= ${min}.` })
+    if (max != null && n > max) ctx.addIssue({ code: 'custom', message: `${label} must be <= ${max}.` })
+  })
+
+/** Blank-or-plausible-ISO-date string; never transforms. */
+const dateStr = (label) =>
+  z.string().refine((v) => v === '' || isPlausibleIsoDate(v), {
+    message: `${label} must be a valid date (1970-2100).`,
+  })
+
+/**
+ * TyreRecords add/edit form: field values are the exact strings the page's
+ * saveRecord() payload builder already coerces - output equals input.
+ */
+export const tyreRecordFormSchema = z.object({
+  sr: z.string(),
+  issue_date: dateStr('Issue date'),
+  description: z.string().max(500, { message: 'Description must be at most 500 characters.' }),
+  brand: z.string().max(80, { message: 'Brand must be at most 80 characters.' }),
+  serial_no: z.string().max(80, { message: 'Serial number must be at most 80 characters.' }),
+  qty: z.union([numericStr('Quantity', { min: 1, integer: true }), z.number().int().min(1)]),
+  job_card: z.string().max(60, { message: 'Job card must be at most 60 characters.' }),
+  mis_number: z.string().max(60, { message: 'MIS number must be at most 60 characters.' }),
+  asset_no: z.string().refine((v) => v.trim().length > 0, { message: 'Asset number is required.' }),
+  site: z.string().max(120, { message: 'Site must be at most 120 characters.' }),
+  country: z.string().refine((v) => v.trim().length > 0, { message: 'Country is required.' }),
+  remarks: z.string().max(4000, { message: 'Remarks must be at most 4000 characters.' }),
+  cost_per_tyre: z.union([numericStr('Cost per tyre', { min: 0 }), z.number().min(0)]),
+  risk_level: z.string().refine((v) => v === '' || RISK_LEVELS.includes(v), { message: 'Invalid risk level.' }),
+  category: z.string(),
+  km_at_fitment: z.union([numericStr('KM at fitment', { min: 0 }), z.number().min(0)]),
+  km_at_removal: z.union([numericStr('KM at removal', { min: 0 }), z.number().min(0)]),
+}).superRefine((f, ctx) => {
+  const fit = f.km_at_fitment === '' ? null : Number(f.km_at_fitment)
+  const rem = f.km_at_removal === '' ? null : Number(f.km_at_removal)
+  if (fit != null && rem != null && Number.isFinite(fit) && Number.isFinite(rem) && rem < fit) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['km_at_removal'],
+      message: 'Removal KM cannot be less than fitment KM.',
+    })
+  }
+})
+
+/**
+ * Supplier contract add/edit form (SupplierManagement ContractModal): string
+ * inputs validated in place; the page's saveContract() keeps its own coercion.
+ */
+export const contractFormSchema = z.object({
+  supplier_name: z.string().refine((v) => v.trim().length > 0, { message: 'Supplier name is required.' }),
+  contract_start: dateStr('Contract start'),
+  contract_end: dateStr('Contract end'),
+  payment_terms: z.string().max(120, { message: 'Payment terms must be at most 120 characters.' }),
+  price_per_unit: z.union([numericStr('Price per unit', { min: 0 }), z.number().min(0)]),
+  min_order: z.union([numericStr('Minimum order quantity', { min: 0, integer: true }), z.number().int().min(0)]),
+  notes: z.string().max(2000, { message: 'Notes must be at most 2000 characters.' }),
+}).superRefine((f, ctx) => {
+  if (f.contract_start && f.contract_end
+      && isPlausibleIsoDate(f.contract_start) && isPlausibleIsoDate(f.contract_end)
+      && f.contract_end < f.contract_start) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['contract_end'],
+      message: 'Contract end date cannot be before the start date.',
+    })
+  }
+})

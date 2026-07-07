@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchLatestAlerts, markNotificationRead, countUnread } from '../lib/notifications'
 
 const STORAGE_KEY = 'tp_realtime_notifications'
 const MAX_NOTIFICATIONS = 50
@@ -173,6 +174,8 @@ function mergeDb(existing, incoming) {
 
 export function useRealtimeAlerts() {
   const [notifications, setNotifications] = useState(() => loadPersisted())
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
   const channelRef = useRef(null)
 
   // Persist whenever notifications change
@@ -183,6 +186,25 @@ export function useRealtimeAlerts() {
   const addNotification = useCallback((notif) => {
     setNotifications(prev => ringBuffer(prev, notif))
   }, [])
+
+  // Initial feed: latest rows from public.alerts (newest first). Realtime only
+  // delivers events that happen while the app is open - this backfills history.
+  // mergeDb preserves read flags already persisted in localStorage.
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const latest = await fetchLatestAlerts()
+      setNotifications(prev => mergeDb(prev, latest))
+    } catch (err) {
+      console.warn('[useRealtimeAlerts] alerts backfill failed:', err?.message || err)
+      setError(err?.message || 'Failed to load notifications')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { refresh() }, [refresh])
 
   // Subscribe to Supabase Realtime
   useEffect(() => {
@@ -291,7 +313,7 @@ export function useRealtimeAlerts() {
     )
     // Persist read state for DB-backed notifications
     if (typeof id === 'string' && id.startsWith('db-')) {
-      supabase.rpc('mark_notification_read', { p_id: id.slice(3) }).then(() => {}, () => {})
+      markNotificationRead(id.slice(3))
     }
   }, [])
 
@@ -300,7 +322,7 @@ export function useRealtimeAlerts() {
     // (React StrictMode double-invokes them, which would double-fire the RPCs).
     notifications
       .filter(n => !n.read && typeof n.id === 'string' && n.id.startsWith('db-'))
-      .forEach(n => supabase.rpc('mark_notification_read', { p_id: n.id.slice(3) }).then(() => {}, () => {}))
+      .forEach(n => markNotificationRead(n.id.slice(3)))
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
   }, [notifications])
 
@@ -313,11 +335,14 @@ export function useRealtimeAlerts() {
     setNotifications(prev => prev.filter(n => n.id !== id))
   }, [])
 
-  const unreadCount = notifications.filter(n => !n.read).length
+  const unreadCount = countUnread(notifications)
 
   return {
     notifications,
     unreadCount,
+    loading,
+    error,
+    refresh,
     markRead,
     markAllRead,
     clearAll,

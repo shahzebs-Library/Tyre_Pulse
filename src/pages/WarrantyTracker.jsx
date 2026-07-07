@@ -48,7 +48,7 @@ const STATUS_CFG = {
   'Approved':      { text: 'text-green-400',   bg: 'bg-green-900/30',   border: 'border-green-700'   },
   'Rejected':      { text: 'text-red-400',     bg: 'bg-red-900/30',     border: 'border-red-700'     },
   'Credit Issued': { text: 'text-emerald-400', bg: 'bg-emerald-900/30', border: 'border-emerald-700' },
-  'Closed':        { text: 'text-gray-400',    bg: 'bg-gray-800',       border: 'border-gray-600'    },
+  'Closed':        { text: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)]', border: 'border-[var(--input-border)]' },
 }
 
 const CHART_OPTS = {
@@ -129,7 +129,7 @@ const EMPTY_FORM = {
 }
 
 function StatusBadge({ status }) {
-  const cfg = STATUS_CFG[status] ?? { text: 'text-gray-400', bg: 'bg-gray-800', border: 'border-gray-600' }
+  const cfg = STATUS_CFG[status] ?? { text: 'text-[var(--text-muted)]', bg: 'bg-[var(--input-bg)]', border: 'border-[var(--input-border)]' }
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-semibold ${cfg.text} ${cfg.bg} ${cfg.border}`}>
       {status}
@@ -142,15 +142,15 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', warn 
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`bg-gray-900 border ${warn ? 'border-red-700/60' : 'border-gray-800'} rounded-xl p-4 flex items-start gap-3`}
+      className={`bg-[var(--surface-1)] border ${warn ? 'border-red-700/60' : 'border-[var(--input-border)]'} rounded-xl p-4 flex items-start gap-3`}
     >
-      <div className={`p-2 rounded-lg bg-gray-800 ${color}`}>
+      <div className={`p-2 rounded-lg bg-[var(--input-bg)] ${color}`}>
         <Icon size={18} />
       </div>
       <div className="min-w-0">
-        <p className="text-gray-400 text-xs truncate">{label}</p>
+        <p className="text-[var(--text-muted)] text-xs truncate">{label}</p>
         <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
-        {sub && <p className="text-gray-500 text-xs mt-0.5">{sub}</p>}
+        {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5">{sub}</p>}
       </div>
     </motion.div>
   )
@@ -710,13 +710,13 @@ export default function WarrantyTracker() {
         <div className="flex gap-2">
           <button
             onClick={exportPDF}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] transition-colors"
           >
             <FileText size={14} /> PDF
           </button>
           <button
             onClick={exportExcel}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] transition-colors"
           >
             <FileSpreadsheet size={14} /> Excel
           </button>
@@ -735,7 +735,7 @@ export default function WarrantyTracker() {
         </div>
         }
       />
-      <p className="text-xs text-gray-500 -mt-3">
+      <p className="text-xs text-[var(--text-muted)] -mt-3">
         New: controlled, validated, audited warranty-claim import with Arabic/English header mapping, fitment/removal lifecycle checks, and duplicate detection.
       </p>
 
@@ -747,7 +747,7 @@ export default function WarrantyTracker() {
         <KpiCard icon={CreditCard} label="Avg Credit/Claim" value={fmt(kpis.avgCredit)} color="text-purple-400" />
       </div>
 
-      <div className="flex gap-1 flex-wrap bg-gray-900 border border-gray-800 rounded-xl p-1">
+      <div className="flex gap-1 flex-wrap bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1">
         {tabs.map(tab => (
           <button
             key={tab}
@@ -755,7 +755,7 @@ export default function WarrantyTracker() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === tab
                 ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
             }`}
           >
             {tab}
@@ -765,42 +765,42 @@ export default function WarrantyTracker() {
 
       {activeTab === 'Claims' && (
         <div className="space-y-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
             <div className="flex flex-col md:flex-row gap-3 flex-wrap">
               <div className="relative flex-1 min-w-[200px]">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   type="text"
                   placeholder="Search claim, serial, brand, asset..."
                   value={search}
                   onChange={e => { setSearch(e.target.value); setPage(1) }}
-                  className="w-full pl-8 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                  className="w-full pl-8 pr-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
                 />
               </div>
               <select value={filterBrand} onChange={e => { setFilterBrand(e.target.value); setPage(1) }}
-                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500">
+                className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                 {brands.map(b => <option key={b}>{b}</option>)}
               </select>
               <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1) }}
-                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500">
+                className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                 {['All', ...CLAIM_STATUSES].map(s => <option key={s}>{s}</option>)}
               </select>
               <select value={filterFailure} onChange={e => { setFilterFailure(e.target.value); setPage(1) }}
-                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500">
+                className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                 {['All', ...FAILURE_TYPES].map(f => <option key={f}>{f}</option>)}
               </select>
               <select value={filterSite} onChange={e => { setFilterSite(e.target.value); setPage(1) }}
-                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500">
+                className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                 {sites.map(s => <option key={s}>{s}</option>)}
               </select>
               <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }}
-                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500" />
+                className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500" />
               <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }}
-                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500" />
+                className="px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500" />
             </div>
           </div>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
             {loading ? (
               <SkeletonTable rows={8} cols={6} />
             ) : claimsError ? (
@@ -813,8 +813,8 @@ export default function WarrantyTracker() {
               </div>
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <ShieldCheck size={40} className="text-gray-600" />
-                <p className="text-gray-400">No warranty claims found.</p>
+                <ShieldCheck size={40} className="text-[var(--text-dim)]" />
+                <p className="text-[var(--text-muted)]">No warranty claims found.</p>
                 <button onClick={() => openForm()} className="btn-primary">
                   Add First Claim
                 </button>
@@ -824,9 +824,9 @@ export default function WarrantyTracker() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-800 bg-gray-800/50">
+                      <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
                         {['Claim No','Serial','Brand','Size','Asset','Site','Failure Type','Status','km Run','Exp km','% Life','Credit','Date',''].map(h => (
-                          <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-400 whitespace-nowrap">{h}</th>
+                          <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-[var(--text-muted)] whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -838,67 +838,67 @@ export default function WarrantyTracker() {
                           <>
                             <tr
                               key={c.id}
-                              className="border-b border-gray-800/50 hover:bg-gray-800/40 cursor-pointer transition-colors"
+                              className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)] cursor-pointer transition-colors"
                               onClick={() => setExpandedRow(expandedRow === c.id ? null : c.id)}
                             >
                               <td className="px-3 py-2.5 font-mono text-blue-400 text-xs whitespace-nowrap">{c.claim_no}</td>
-                              <td className="px-3 py-2.5 text-gray-300 text-xs whitespace-nowrap">{c.serial_number}</td>
-                              <td className="px-3 py-2.5 text-gray-200 font-medium text-xs whitespace-nowrap">{c.brand}</td>
-                              <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{c.size}</td>
-                              <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{c.asset_no}</td>
-                              <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{c.site}</td>
-                              <td className="px-3 py-2.5 text-gray-300 text-xs whitespace-nowrap">{c.failure_type}</td>
+                              <td className="px-3 py-2.5 text-[var(--text-dim)] text-xs whitespace-nowrap">{c.serial_number}</td>
+                              <td className="px-3 py-2.5 text-[var(--text-secondary)] font-medium text-xs whitespace-nowrap">{c.brand}</td>
+                              <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs whitespace-nowrap">{c.size}</td>
+                              <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs whitespace-nowrap">{c.asset_no}</td>
+                              <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs whitespace-nowrap">{c.site}</td>
+                              <td className="px-3 py-2.5 text-[var(--text-dim)] text-xs whitespace-nowrap">{c.failure_type}</td>
                               <td className="px-3 py-2.5 whitespace-nowrap"><StatusBadge status={c.claim_status} /></td>
-                              <td className="px-3 py-2.5 text-gray-300 text-xs text-right whitespace-nowrap">{(c.km_run || 0).toLocaleString()}</td>
-                              <td className="px-3 py-2.5 text-gray-400 text-xs text-right whitespace-nowrap">{(c.expected_life_km || 0).toLocaleString()}</td>
-                              <td className={`px-3 py-2.5 text-xs text-right font-semibold whitespace-nowrap ${lowLife ? 'text-red-400' : 'text-gray-300'}`}>
+                              <td className="px-3 py-2.5 text-[var(--text-dim)] text-xs text-right whitespace-nowrap">{(c.km_run || 0).toLocaleString()}</td>
+                              <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs text-right whitespace-nowrap">{(c.expected_life_km || 0).toLocaleString()}</td>
+                              <td className={`px-3 py-2.5 text-xs text-right font-semibold whitespace-nowrap ${lowLife ? 'text-red-400' : 'text-[var(--text-dim)]'}`}>
                                 {pctLife !== null ? `${pctLife.toFixed(1)}%` : '-'}
                               </td>
                               <td className="px-3 py-2.5 text-emerald-400 text-xs text-right whitespace-nowrap">
                                 {c.credit_amount ? fmt(c.credit_amount) : '-'}
                               </td>
-                              <td className="px-3 py-2.5 text-gray-500 text-xs whitespace-nowrap">{fmtDate(c.created_at)}</td>
+                              <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs whitespace-nowrap">{fmtDate(c.created_at)}</td>
                               <td className="px-3 py-2.5 whitespace-nowrap">
                                 <div className="flex gap-1">
                                   <button
                                     onClick={e => { e.stopPropagation(); openForm(c) }}
-                                    className="p-1 text-gray-500 hover:text-blue-400 hover:bg-gray-800 rounded transition-colors"
+                                    className="p-1 text-[var(--text-muted)] hover:text-blue-400 hover:bg-[var(--input-bg)] rounded transition-colors"
                                   ><Edit2 size={12} /></button>
                                   <button
                                     onClick={e => { e.stopPropagation(); exportClaimLetter(c) }}
-                                    className="p-1 text-gray-500 hover:text-emerald-400 hover:bg-gray-800 rounded transition-colors"
+                                    className="p-1 text-[var(--text-muted)] hover:text-emerald-400 hover:bg-[var(--input-bg)] rounded transition-colors"
                                     title="Export claim letter"
                                   ><FileText size={12} /></button>
                                 </div>
                               </td>
                             </tr>
                             {expandedRow === c.id && (
-                              <tr key={`${c.id}-exp`} className="bg-gray-800/30">
+                              <tr key={`${c.id}-exp`} className="bg-[var(--input-bg)]">
                                 <td colSpan={14} className="px-4 py-4">
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                                     <div>
-                                      <p className="text-gray-500 mb-1">Country</p>
-                                      <p className="text-gray-200">{c.country || '-'}</p>
+                                      <p className="text-[var(--text-muted)] mb-1">Country</p>
+                                      <p className="text-[var(--text-secondary)]">{c.country || '-'}</p>
                                     </div>
                                     <div>
-                                      <p className="text-gray-500 mb-1">Fitment Date</p>
-                                      <p className="text-gray-200">{fmtDate(c.fitment_date)}</p>
+                                      <p className="text-[var(--text-muted)] mb-1">Fitment Date</p>
+                                      <p className="text-[var(--text-secondary)]">{fmtDate(c.fitment_date)}</p>
                                     </div>
                                     <div>
-                                      <p className="text-gray-500 mb-1">Removal Date</p>
-                                      <p className="text-gray-200">{fmtDate(c.removal_date)}</p>
+                                      <p className="text-[var(--text-muted)] mb-1">Removal Date</p>
+                                      <p className="text-[var(--text-secondary)]">{fmtDate(c.removal_date)}</p>
                                     </div>
                                     <div>
-                                      <p className="text-gray-500 mb-1">Supplier</p>
-                                      <p className="text-gray-200">{c.supplier || '-'}</p>
+                                      <p className="text-[var(--text-muted)] mb-1">Supplier</p>
+                                      <p className="text-[var(--text-secondary)]">{c.supplier || '-'}</p>
                                     </div>
                                     <div>
-                                      <p className="text-gray-500 mb-1">Credit Date</p>
-                                      <p className="text-gray-200">{fmtDate(c.credit_date)}</p>
+                                      <p className="text-[var(--text-muted)] mb-1">Credit Date</p>
+                                      <p className="text-[var(--text-secondary)]">{fmtDate(c.credit_date)}</p>
                                     </div>
                                     <div className="col-span-2">
-                                      <p className="text-gray-500 mb-1">Notes</p>
-                                      <p className="text-gray-300">{c.notes || '-'}</p>
+                                      <p className="text-[var(--text-muted)] mb-1">Notes</p>
+                                      <p className="text-[var(--text-dim)]">{c.notes || '-'}</p>
                                     </div>
                                     <div className="flex items-end gap-2">
                                       <button
@@ -924,18 +924,18 @@ export default function WarrantyTracker() {
                     </tbody>
                   </table>
                 </div>
-                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-                  <p className="text-gray-500 text-xs">{filtered.length} claims · page {page} of {totalPages}</p>
+                <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--input-border)]">
+                  <p className="text-[var(--text-muted)] text-xs">{filtered.length} claims · page {page} of {totalPages}</p>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setPage(p => Math.max(1, p - 1))}
                       disabled={page === 1}
-                      className="p-1.5 rounded-lg bg-gray-800 text-gray-400 disabled:opacity-40 hover:bg-gray-700 transition-colors"
+                      className="p-1.5 rounded-lg bg-[var(--input-bg)] text-[var(--text-muted)] disabled:opacity-40 hover:bg-[var(--input-bg-hover)] transition-colors"
                     ><ChevronLeft size={14} /></button>
                     <button
                       onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                       disabled={page === totalPages}
-                      className="p-1.5 rounded-lg bg-gray-800 text-gray-400 disabled:opacity-40 hover:bg-gray-700 transition-colors"
+                      className="p-1.5 rounded-lg bg-[var(--input-bg)] text-[var(--text-muted)] disabled:opacity-40 hover:bg-[var(--input-bg-hover)] transition-colors"
                     ><ChevronRight size={14} /></button>
                   </div>
                 </div>
@@ -947,37 +947,37 @@ export default function WarrantyTracker() {
 
       {activeTab === 'Brand Analysis' && (
         <div className="space-y-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
               <BarChart3 size={16} className="text-blue-400" /> Brand Warranty Performance
             </h3>
             {brandPerf.length === 0 ? (
-              <div className="flex items-center justify-center h-48 text-gray-500 text-sm">No data available</div>
+              <div className="flex items-center justify-center h-48 text-[var(--text-muted)] text-sm">No data available</div>
             ) : (
               <div className="h-64">
                 <Bar data={brandChartData} options={CHART_OPTS} />
               </div>
             )}
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-800 bg-gray-800/50">
+                <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
                   {['Brand','Total Claims','Approval Rate','Avg Credit per Claim','Avg km at Failure'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-400">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-muted)]">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {brandPerf.map((b, i) => (
-                  <tr key={b.brand} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                    <td className="px-4 py-3 text-gray-200 font-medium">{b.brand}</td>
+                  <tr key={b.brand} className="border-b border-[var(--input-border)] hover:bg-[var(--input-bg)]">
+                    <td className="px-4 py-3 text-[var(--text-secondary)] font-medium">{b.brand}</td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-900/40 text-blue-400 font-bold text-xs">{b.total}</span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                        <div className="w-24 h-1.5 bg-[var(--input-border)] rounded-full overflow-hidden">
                           <div className="h-full bg-green-500 rounded-full" style={{ width: `${b.approvalRate}%` }} />
                         </div>
                         <span className={`text-xs font-semibold ${b.approvalRate >= 70 ? 'text-green-400' : b.approvalRate >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
@@ -986,7 +986,7 @@ export default function WarrantyTracker() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-emerald-400 font-semibold text-sm">{b.avgCredit > 0 ? fmt(b.avgCredit) : '-'}</td>
-                    <td className="px-4 py-3 text-gray-300 text-sm">{b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() + ' km' : '-'}</td>
+                    <td className="px-4 py-3 text-[var(--text-dim)] text-sm">{b.avgKm > 0 ? Math.round(b.avgKm).toLocaleString() + ' km' : '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1005,12 +1005,12 @@ export default function WarrantyTracker() {
 
       {activeTab === 'Failure Analysis' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
               <PieChart size={16} className="text-orange-400" /> Claims by Failure Type
             </h3>
             {claims.length === 0 ? (
-              <div className="flex items-center justify-center h-52 text-gray-500 text-sm">No data available</div>
+              <div className="flex items-center justify-center h-52 text-[var(--text-muted)] text-sm">No data available</div>
             ) : (
               <>
                 <div className="h-52">
@@ -1024,8 +1024,8 @@ export default function WarrantyTracker() {
               </>
             )}
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
               <Activity size={16} className="text-purple-400" /> Average km at Failure by Type
             </h3>
             <div className="space-y-3">
@@ -1034,10 +1034,10 @@ export default function WarrantyTracker() {
                 return (
                   <div key={f.type}>
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-gray-300">{f.type}</span>
-                      <span className="text-gray-400">{f.count} claims · {f.avgKm > 0 ? f.avgKm.toLocaleString() + ' km avg' : 'N/A'}</span>
+                      <span className="text-[var(--text-dim)]">{f.type}</span>
+                      <span className="text-[var(--text-muted)]">{f.count} claims · {f.avgKm > 0 ? f.avgKm.toLocaleString() + ' km avg' : 'N/A'}</span>
                     </div>
-                    <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div className="h-2 bg-[var(--input-border)] rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all"
                         style={{
@@ -1059,13 +1059,13 @@ export default function WarrantyTracker() {
               )}
             </div>
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 lg:col-span-2">
-            <h3 className="text-sm font-semibold text-gray-200 mb-4">Claim Status Distribution</h3>
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5 lg:col-span-2">
+            <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4">Claim Status Distribution</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {CLAIM_STATUSES.map((s, i) => (
                 <div key={s} className={`p-3 rounded-xl border ${STATUS_CFG[s]?.bg} ${STATUS_CFG[s]?.border}`}>
                   <p className={`text-2xl font-bold ${STATUS_CFG[s]?.text}`}>{statusCounts[s] || 0}</p>
-                  <p className="text-gray-400 text-xs mt-0.5">{s}</p>
+                  <p className="text-[var(--text-muted)] text-xs mt-0.5">{s}</p>
                 </div>
               ))}
             </div>
@@ -1076,32 +1076,32 @@ export default function WarrantyTracker() {
       {activeTab === 'Credit Recovery' && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-gray-400 text-xs mb-1">Total Credits Received</p>
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+              <p className="text-[var(--text-muted)] text-xs mb-1">Total Credits Received</p>
               <p className="text-3xl font-bold text-emerald-400">{fmt(creditAnalysis.totalCredits)}</p>
-              <p className="text-gray-500 text-xs mt-1">across {claims.filter(c => ['Credit Issued','Closed'].includes(c.claim_status)).length} claims</p>
+              <p className="text-[var(--text-muted)] text-xs mt-1">across {claims.filter(c => ['Credit Issued','Closed'].includes(c.claim_status)).length} claims</p>
             </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-gray-400 text-xs mb-1">Est. Unclaimed (Approved)</p>
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+              <p className="text-[var(--text-muted)] text-xs mb-1">Est. Unclaimed (Approved)</p>
               <p className="text-3xl font-bold text-yellow-400">{fmt(creditAnalysis.estimatedUnclaimed)}</p>
-              <p className="text-gray-500 text-xs mt-1">{creditAnalysis.openApprovedCount} approved claims pending credit</p>
+              <p className="text-[var(--text-muted)] text-xs mt-1">{creditAnalysis.openApprovedCount} approved claims pending credit</p>
             </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-gray-400 text-xs mb-1">Total Recovery Pipeline</p>
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+              <p className="text-[var(--text-muted)] text-xs mb-1">Total Recovery Pipeline</p>
               <p className="text-3xl font-bold text-blue-400">{fmt(creditAnalysis.totalCredits + creditAnalysis.estimatedUnclaimed)}</p>
-              <p className="text-gray-500 text-xs mt-1">received + unclaimed potential</p>
+              <p className="text-[var(--text-muted)] text-xs mt-1">received + unclaimed potential</p>
             </div>
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
               <TrendingUp size={16} className="text-emerald-400" /> Monthly Credits Received (12 months)
             </h3>
             <div className="h-64">
               <Bar data={creditTrendData} options={CHART_OPTS} />
             </div>
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
               <PieChart size={16} className="text-blue-400" /> Claim Status Funnel
             </h3>
             <div className="h-56">
@@ -1113,51 +1113,51 @@ export default function WarrantyTracker() {
 
       {activeTab === 'ROI Calculator' && (
         <div className="space-y-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h3 className="text-sm font-semibold text-gray-200 mb-5 flex items-center gap-2">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-6">
+            <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-5 flex items-center gap-2">
               <Target size={16} className="text-blue-400" /> Warranty ROI Calculator
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="text-xs text-gray-400 block mb-1.5">Annual Tyre Count (fleet)</label>
+                <label className="text-xs text-[var(--text-muted)] block mb-1.5">Annual Tyre Count (fleet)</label>
                 <input
                   type="number"
                   value={roiAnnualCount}
                   onChange={e => setRoiAnnualCount(e.target.value)}
                   placeholder="e.g. 500"
-                  className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1.5">Average Tyre Cost ({cur})</label>
+                <label className="text-xs text-[var(--text-muted)] block mb-1.5">Average Tyre Cost ({cur})</label>
                 <input
                   type="number"
                   value={roiAvgCost}
                   onChange={e => setRoiAvgCost(e.target.value)}
                   placeholder="e.g. 1200"
-                  className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Claims Filed (this year)</p>
+              <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4">
+                <p className="text-[var(--text-muted)] text-xs mb-1">Claims Filed (this year)</p>
                 <p className="text-2xl font-bold text-blue-400">{roiCalc.thisYearClaims}</p>
               </div>
-              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Amount Recovered</p>
+              <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4">
+                <p className="text-[var(--text-muted)] text-xs mb-1">Amount Recovered</p>
                 <p className="text-2xl font-bold text-emerald-400">{fmt(roiCalc.thisYearCredits)}</p>
               </div>
-              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Recovery Rate</p>
+              <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4">
+                <p className="text-[var(--text-muted)] text-xs mb-1">Recovery Rate</p>
                 <p className="text-2xl font-bold text-green-400">
                   {Number(roiAvgCost) > 0 && Number(roiAnnualCount) > 0
                     ? `${roiCalc.recoveryRate.toFixed(1)}%`
                     : '-'}
                 </p>
               </div>
-              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <p className="text-gray-400 text-xs mb-1">Est. Unclaimed Potential</p>
+              <div className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl p-4">
+                <p className="text-[var(--text-muted)] text-xs mb-1">Est. Unclaimed Potential</p>
                 <p className="text-2xl font-bold text-yellow-400">
                   {Number(roiAvgCost) > 0 && Number(roiAnnualCount) > 0 ? fmt(roiCalc.eligibleUnclaimed) : '-'}
                 </p>
@@ -1187,15 +1187,15 @@ export default function WarrantyTracker() {
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
-              className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+              className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
             >
-              <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between z-10">
-                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--input-border)] px-6 py-4 flex items-center justify-between z-10">
+                <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
                   <ShieldCheck size={20} className="text-blue-400" />
                   {editClaim ? 'Edit Warranty Claim' : 'New Warranty Claim'}
                 </h2>
                 <button onClick={() => { setShowAdd(false); setEditClaim(null) }}
-                  className="p-2 text-gray-500 hover:text-gray-200 hover:bg-gray-800 rounded-lg transition-colors">
+                  className="p-2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)] rounded-lg transition-colors">
                   <X size={18} />
                 </button>
               </div>
@@ -1207,13 +1207,13 @@ export default function WarrantyTracker() {
                 )}
 
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400">Serial Number *</label>
+                  <label className="text-xs text-[var(--text-muted)]">Serial Number *</label>
                   <div className="flex gap-2">
                     <input
                       value={form.serial_number}
                       onChange={e => setForm(p => ({ ...p, serial_number: e.target.value }))}
                       placeholder="Enter serial number"
-                      className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+                      className="flex-1 px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500"
                     />
                     <button
                       onClick={handleSerialLookup}
@@ -1228,54 +1228,54 @@ export default function WarrantyTracker() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">Brand *</label>
+                    <label className="text-xs text-[var(--text-muted)]">Brand *</label>
                     <input value={form.brand} onChange={e => setForm(p => ({ ...p, brand: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">Size</label>
+                    <label className="text-xs text-[var(--text-muted)]">Size</label>
                     <input value={form.size} onChange={e => setForm(p => ({ ...p, size: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">Asset No</label>
+                    <label className="text-xs text-[var(--text-muted)]">Asset No</label>
                     <input value={form.asset_no} onChange={e => setForm(p => ({ ...p, asset_no: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">Site</label>
+                    <label className="text-xs text-[var(--text-muted)]">Site</label>
                     <input value={form.site} onChange={e => setForm(p => ({ ...p, site: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">Country</label>
+                    <label className="text-xs text-[var(--text-muted)]">Country</label>
                     <input value={form.country} onChange={e => setForm(p => ({ ...p, country: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">Supplier</label>
+                    <label className="text-xs text-[var(--text-muted)]">Supplier</label>
                     <input value={form.supplier} onChange={e => setForm(p => ({ ...p, supplier: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">Fitment Date</label>
+                    <label className="text-xs text-[var(--text-muted)]">Fitment Date</label>
                     <input type="date" value={form.fitment_date} onChange={e => setForm(p => ({ ...p, fitment_date: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">Removal Date</label>
+                    <label className="text-xs text-[var(--text-muted)]">Removal Date</label>
                     <input type="date" value={form.removal_date} onChange={e => setForm(p => ({ ...p, removal_date: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">km at Fitment</label>
+                    <label className="text-xs text-[var(--text-muted)]">km at Fitment</label>
                     <input type="number" value={form.km_at_fitment} onChange={e => setForm(p => ({ ...p, km_at_fitment: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">km at Removal</label>
+                    <label className="text-xs text-[var(--text-muted)]">km at Removal</label>
                     <input type="number" value={form.km_at_removal} onChange={e => setForm(p => ({ ...p, km_at_removal: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                 </div>
 
@@ -1290,14 +1290,14 @@ export default function WarrantyTracker() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">Expected Life km</label>
+                    <label className="text-xs text-[var(--text-muted)]">Expected Life km</label>
                     <input type="number" value={form.expected_life_km} onChange={e => setForm(p => ({ ...p, expected_life_km: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-gray-400">Failure Type *</label>
+                    <label className="text-xs text-[var(--text-muted)]">Failure Type *</label>
                     <select value={form.failure_type} onChange={e => setForm(p => ({ ...p, failure_type: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500">
+                      className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                       {FAILURE_TYPES.map(f => <option key={f}>{f}</option>)}
                     </select>
                   </div>
@@ -1306,23 +1306,23 @@ export default function WarrantyTracker() {
                 {editClaim && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-xs text-gray-400">Status</label>
+                      <label className="text-xs text-[var(--text-muted)]">Status</label>
                       <select value={form.claim_status} onChange={e => setForm(p => ({ ...p, claim_status: e.target.value }))}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-blue-500">
+                        className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-dim)] focus:outline-none focus:border-blue-500">
                         {CLAIM_STATUSES.map(s => <option key={s}>{s}</option>)}
                       </select>
                     </div>
                     {form.claim_status === 'Credit Issued' && (
                       <>
                         <div className="space-y-1">
-                          <label className="text-xs text-gray-400">Credit Amount ({cur})</label>
+                          <label className="text-xs text-[var(--text-muted)]">Credit Amount ({cur})</label>
                           <input type="number" value={form.credit_amount} onChange={e => setForm(p => ({ ...p, credit_amount: e.target.value }))}
-                            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                            className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-xs text-gray-400">Credit Date</label>
+                          <label className="text-xs text-[var(--text-muted)]">Credit Date</label>
                           <input type="date" value={form.credit_date} onChange={e => setForm(p => ({ ...p, credit_date: e.target.value }))}
-                            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 focus:outline-none focus:border-blue-500" />
+                            className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-blue-500" />
                         </div>
                       </>
                     )}
@@ -1330,10 +1330,10 @@ export default function WarrantyTracker() {
                 )}
 
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-400">Notes / Failure Description</label>
+                  <label className="text-xs text-[var(--text-muted)]">Notes / Failure Description</label>
                   <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                     rows={3} placeholder="Describe the failure, location on tyre, etc."
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none" />
+                    className="w-full px-3 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 resize-none" />
                 </div>
 
                 <div className="flex justify-end gap-3 pt-2">

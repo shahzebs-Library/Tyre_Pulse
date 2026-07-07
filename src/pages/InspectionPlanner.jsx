@@ -116,11 +116,11 @@ function KpiCard({ icon: Icon, label, value, sub, trend, color = 'blue', loading
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">{label}</p>
           {loading
             ? <div className="h-8 w-20 bg-gray-700 animate-pulse rounded" />
-            : <p className="text-2xl font-bold text-white">{value}</p>
+            : <p className="text-2xl font-bold text-[var(--text-primary)]">{value}</p>
           }
           {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
         </div>
-        <div className={`p-2 rounded-lg bg-gray-800/60`}>
+        <div className={`p-2 rounded-lg bg-[var(--input-bg)]`}>
           <Icon size={18} className={colors[color].split(' ').find(c => c.startsWith('text-'))} />
         </div>
       </div>
@@ -144,7 +144,7 @@ function GapBadge({ status }) {
     'On Track':   'bg-green-900/40 text-green-300 border-green-700/50',
     'Due Soon':   'bg-yellow-900/40 text-yellow-300 border-yellow-700/50',
     'Overdue':    'bg-red-900/40 text-red-300 border-red-700/50',
-    'No History': 'bg-gray-800 text-gray-400 border-gray-700',
+    'No History': 'bg-[var(--input-bg)] text-gray-400 border-[var(--input-border)]',
   }
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${map[status] || map['No History']}`}>
@@ -190,14 +190,14 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg shadow-2xl"
+        className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-lg shadow-2xl"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h3 className="text-base font-semibold text-white flex items-center gap-2">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--input-border)]">
+          <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Calendar size={16} className="text-blue-400" />
             {prefill?.id ? 'Edit Inspection' : 'Schedule Inspection'}
           </h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-800 rounded-lg transition-colors">
+          <button onClick={onClose} className="p-1 hover:bg-[var(--input-bg)] rounded-lg transition-colors">
             <X size={16} className="text-gray-400" />
           </button>
         </div>
@@ -211,15 +211,15 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
               onChange={e => { setAssetSearch(e.target.value); setForm(f => ({ ...f, asset_no: e.target.value })); setAssetDropdown(true) }}
               onFocus={() => setAssetDropdown(true)}
               placeholder="Search or enter asset..."
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-blue-500"
             />
             {assetDropdown && filteredAssets.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-40 overflow-auto">
+              <div className="absolute z-10 w-full mt-1 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg shadow-xl max-h-40 overflow-auto">
                 {filteredAssets.map(a => (
                   <button
                     key={a.asset_no}
                     onClick={() => { setForm(f => ({ ...f, asset_no: a.asset_no, site: a.site || f.site })); setAssetSearch(a.asset_no); setAssetDropdown(false) }}
-                    className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-700 flex items-center justify-between"
+                    className="w-full text-left px-3 py-2 text-sm text-[var(--text-primary)] hover:bg-gray-700 flex items-center justify-between"
                   >
                     <span>{a.asset_no}</span>
                     {a.site && <span className="text-xs text-gray-400">{a.site}</span>}
@@ -237,7 +237,7 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
                 type="date"
                 value={form.inspection_date}
                 onChange={e => setForm(f => ({ ...f, inspection_date: e.target.value }))}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
               />
             </div>
             <div>
@@ -246,7 +246,7 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
                 type="time"
                 value={form.inspection_time}
                 onChange={e => setForm(f => ({ ...f, inspection_time: e.target.value }))}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
@@ -259,7 +259,7 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
               value={form.inspector_name}
               onChange={e => setForm(f => ({ ...f, inspector_name: e.target.value }))}
               placeholder="Inspector name..."
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-blue-500"
             />
             <datalist id="inspector-list">
               {inspectors.map(i => <option key={i} value={i} />)}
@@ -274,7 +274,7 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
                 value={form.site}
                 onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
                 placeholder="Site..."
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-blue-500"
               />
             </div>
             <div>
@@ -282,7 +282,7 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
               <select
                 value={form.type}
                 onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500"
               >
                 {['Routine', 'Pressure', 'Visual', 'Full', 'Pre-Trip'].map(t => (
                   <option key={t} value={t}>{t}</option>
@@ -299,13 +299,13 @@ function ScheduleModal({ onClose, onSave, prefill = null, assets = [], inspector
               value={form.notes}
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               placeholder="Additional notes..."
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-800">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">Cancel</button>
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--input-border)]">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-[var(--text-primary)] transition-colors">Cancel</button>
           <button
             onClick={handleSave}
             disabled={!form.asset_no || !form.inspection_date || !form.inspector_name || saving}
@@ -360,14 +360,14 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg shadow-2xl"
+        className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-lg shadow-2xl"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h3 className="text-base font-semibold text-white flex items-center gap-2">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--input-border)]">
+          <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Layers size={16} className="text-purple-400" />
             Bulk Schedule - {selected.length} vehicles
           </h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-800 rounded-lg transition-colors">
+          <button onClick={onClose} className="p-1 hover:bg-[var(--input-bg)] rounded-lg transition-colors">
             <X size={16} className="text-gray-400" />
           </button>
         </div>
@@ -380,7 +380,7 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
               value={inspector}
               onChange={e => setInspector(e.target.value)}
               placeholder="Assign inspector..."
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-purple-500"
             />
             <datalist id="bulk-inspector-list">
               {inspectors.map(i => <option key={i} value={i} />)}
@@ -394,7 +394,7 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
                 type="date"
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-purple-500"
               />
             </div>
             <div>
@@ -404,7 +404,7 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
                 min={startDate}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-purple-500"
               />
             </div>
           </div>
@@ -414,7 +414,7 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
             <select
               value={type}
               onChange={e => setType(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-purple-500"
             >
               {['Routine', 'Pressure', 'Visual', 'Full', 'Pre-Trip'].map(t => (
                 <option key={t} value={t}>{t}</option>
@@ -422,7 +422,7 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
             </select>
           </div>
 
-          <div className="bg-gray-800/60 rounded-lg p-3 text-xs text-gray-400">
+          <div className="bg-[var(--input-bg)] rounded-lg p-3 text-xs text-gray-400">
             {dates.length} working date{dates.length !== 1 ? 's' : ''} · {selected.length} vehicles distributed across dates
             {dates.length > 0 && selected.length > 0 && (
               <span className="ml-1">≈ {Math.ceil(selected.length / dates.length)} per day</span>
@@ -431,8 +431,8 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
 
           <div className="max-h-32 overflow-auto space-y-1">
             {selected.map((v, i) => (
-              <div key={v.asset_no} className="flex items-center justify-between text-xs px-2 py-1 bg-gray-800 rounded">
-                <span className="text-white font-medium">{v.asset_no}</span>
+              <div key={v.asset_no} className="flex items-center justify-between text-xs px-2 py-1 bg-[var(--input-bg)] rounded">
+                <span className="text-[var(--text-primary)] font-medium">{v.asset_no}</span>
                 <span className="text-gray-400">{v.site}</span>
                 <span className="text-blue-400">{dates[i % Math.max(dates.length, 1)] || startDate}</span>
               </div>
@@ -440,8 +440,8 @@ function BulkModal({ selected, inspectors, onClose, onSave }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-800">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">Cancel</button>
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--input-border)]">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-400 hover:text-[var(--text-primary)] transition-colors">Cancel</button>
           <button
             onClick={handleSave}
             disabled={!inspector || !startDate || !endDate || saving}
@@ -980,7 +980,7 @@ export default function InspectionPlanner() {
   const statusBadge = {
     Scheduled:  'bg-blue-900/40 text-blue-300 border-blue-700/50',
     Completed:  'bg-green-900/40 text-green-300 border-green-700/50',
-    Cancelled:  'bg-gray-800 text-gray-400 border-gray-700',
+    Cancelled:  'bg-[var(--input-bg)] text-gray-400 border-[var(--input-border)]',
     'In Progress': 'bg-yellow-900/40 text-yellow-300 border-yellow-700/50',
   }
 
@@ -989,7 +989,7 @@ export default function InspectionPlanner() {
     High:     'bg-orange-900/40 text-orange-300',
     Medium:   'bg-yellow-900/40 text-yellow-300',
     Low:      'bg-green-900/40 text-green-300',
-    Unknown:  'bg-gray-800 text-gray-400',
+    Unknown:  'bg-[var(--input-bg)] text-gray-400',
   }
 
   const chartOpts = {
@@ -1006,7 +1006,7 @@ export default function InspectionPlanner() {
   }
 
   return (
-    <div className="text-white space-y-6">
+    <div className="text-[var(--text-primary)] space-y-6">
       {/* Header */}
       <PageHeader
         title="Inspection Planner & Scheduler"
@@ -1016,7 +1016,7 @@ export default function InspectionPlanner() {
           <button
             onClick={fetchData}
             disabled={refreshing}
-            className="p-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors"
+            className="p-2 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] rounded-lg transition-colors"
             title="Refresh"
           >
             <RefreshCw size={15} className={refreshing ? 'animate-spin text-blue-400' : 'text-gray-400'} />
@@ -1024,14 +1024,14 @@ export default function InspectionPlanner() {
           <button
             onClick={exportExcel}
             disabled={exportLoading}
-            className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] rounded-lg text-sm text-gray-300 transition-colors"
           >
             <FileSpreadsheet size={14} className="text-green-400" />Excel
           </button>
           <button
             onClick={exportPdf}
             disabled={exportLoading}
-            className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] rounded-lg text-sm text-gray-300 transition-colors"
           >
             <FileText size={14} className="text-red-400" />PDF
           </button>
@@ -1053,7 +1053,7 @@ export default function InspectionPlanner() {
           </div>
           <button
             onClick={fetchSchedule}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg text-xs font-medium text-white transition-colors whitespace-nowrap self-start sm:self-auto"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg text-xs font-medium text-[var(--text-primary)] transition-colors whitespace-nowrap self-start sm:self-auto"
           >
             <RefreshCw size={12} className={scheduleLoading ? 'animate-spin' : ''} />Retry
           </button>
@@ -1066,7 +1066,7 @@ export default function InspectionPlanner() {
           <div className="flex items-center gap-2 text-sm text-gray-300 whitespace-nowrap">
             <Sliders size={14} className="text-blue-400" />
             <span>Inspection Interval:</span>
-            <span className="font-semibold text-white">{interval} days</span>
+            <span className="font-semibold text-[var(--text-primary)]">{interval} days</span>
           </div>
           <div className="flex items-center gap-2 w-full sm:w-auto">
             {INTERVAL_OPTIONS.map(opt => (
@@ -1075,8 +1075,8 @@ export default function InspectionPlanner() {
                 onClick={() => setIntervalDays(opt)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                   interval === opt
-                    ? 'bg-blue-600 border-blue-500 text-white'
-                    : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                    ? 'bg-blue-600 border-blue-500 text-[var(--text-primary)]'
+                    : 'bg-[var(--input-bg)] border-[var(--input-border)] text-gray-400 hover:border-gray-600'
                 }`}
               >
                 {opt}d
@@ -1143,21 +1143,21 @@ export default function InspectionPlanner() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-1 border-b border-gray-800">
+      <div className="flex items-center gap-1 overflow-x-auto pb-1 border-b border-[var(--input-border)]">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-t-lg text-sm font-medium whitespace-nowrap transition-colors ${
               tab === t.id
-                ? 'bg-gray-900 text-white border border-gray-700 border-b-gray-900 -mb-px'
+                ? 'bg-[var(--surface-1)] text-[var(--text-primary)] border border-[var(--input-border)] border-b-[var(--surface-1)] -mb-px'
                 : 'text-gray-400 hover:text-gray-200'
             }`}
           >
             <t.icon size={14} />
             {t.label}
             {t.id === 'overdue' && overdueQueue.length > 0 && (
-              <span className="ml-1 bg-red-600 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.2rem] text-center">
+              <span className="ml-1 bg-red-600 text-[var(--text-primary)] text-xs rounded-full px-1.5 py-0.5 min-w-[1.2rem] text-center">
                 {overdueQueue.length}
               </span>
             )}
@@ -1176,11 +1176,11 @@ export default function InspectionPlanner() {
         >
           {/* ── Overdue Queue ── */}
           {tab === 'overdue' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-b border-gray-800">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-b border-[var(--input-border)]">
                 <div className="flex items-center gap-2">
                   <AlertOctagon size={16} className="text-red-400" />
-                  <h2 className="text-sm font-semibold text-white">Overdue Inspection Queue</h2>
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">Overdue Inspection Queue</h2>
                   <span className="text-xs text-gray-400">({filteredOverdue.length} vehicles)</span>
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -1190,13 +1190,13 @@ export default function InspectionPlanner() {
                       value={overdueSearch}
                       onChange={e => setOverdueSearch(e.target.value)}
                       placeholder="Search assets..."
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-blue-500"
                     />
                   </div>
                   {selectedBulk.length > 0 && (
                     <button
                       onClick={() => setModal('bulk')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-medium text-white transition-colors whitespace-nowrap"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-medium text-[var(--text-primary)] transition-colors whitespace-nowrap"
                     >
                       <Layers size={12} />Schedule Bulk ({selectedBulk.length})
                     </button>
@@ -1220,7 +1220,7 @@ export default function InspectionPlanner() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-800 bg-gray-950/50">
+                      <tr className="border-b border-[var(--input-border)] bg-[var(--surface-1)]">
                         <th className="w-8 px-4 py-2">
                           <input
                             type="checkbox"
@@ -1234,7 +1234,7 @@ export default function InspectionPlanner() {
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-800/50">
+                    <tbody className="divide-y divide-[var(--input-border)]">
                       {filteredOverdue.map(row => {
                         const criticallyOverdue = row.days_overdue > interval * 2
                         const isSelected = selectedBulk.some(s => s.asset_no === row.asset_no)
@@ -1242,7 +1242,7 @@ export default function InspectionPlanner() {
                           <tr
                             key={row.asset_no}
                             className={`transition-colors ${
-                              criticallyOverdue ? 'bg-red-950/20 hover:bg-red-950/30' : 'hover:bg-gray-800/30'
+                              criticallyOverdue ? 'bg-red-950/20 hover:bg-red-950/30' : 'hover:bg-[var(--input-bg)]'
                             }`}
                           >
                             <td className="px-4 py-2.5">
@@ -1256,7 +1256,7 @@ export default function InspectionPlanner() {
                               />
                             </td>
                             <td className="px-3 py-2.5">
-                              <span className={`font-medium ${criticallyOverdue ? 'text-red-300' : 'text-white'}`}>
+                              <span className={`font-medium ${criticallyOverdue ? 'text-red-300' : 'text-[var(--text-primary)]'}`}>
                                 {row.asset_no}
                               </span>
                             </td>
@@ -1266,7 +1266,7 @@ export default function InspectionPlanner() {
                             </td>
                             <td className="px-3 py-2.5">
                               <span className={`font-semibold text-xs px-2 py-0.5 rounded ${
-                                criticallyOverdue ? 'bg-red-600 text-white' : 'bg-red-900/40 text-red-300'
+                                criticallyOverdue ? 'bg-red-600 text-[var(--text-primary)]' : 'bg-red-900/40 text-red-300'
                               }`}>
                                 {row.days_overdue}d
                               </span>
@@ -1297,16 +1297,16 @@ export default function InspectionPlanner() {
 
           {/* ── Calendar ── */}
           {tab === 'calendar' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--input-border)]">
                 <div className="flex items-center gap-2">
                   <Calendar size={16} className="text-blue-400" />
-                  <h2 className="text-sm font-semibold text-white">Upcoming Inspections - Next 30 Days</h2>
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">Upcoming Inspections - Next 30 Days</h2>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setCalendarPeriod(p => p - 1)}
-                    className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors"
+                    className="p-1.5 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] rounded-lg transition-colors"
                   >
                     <ChevronLeft size={14} className="text-gray-400" />
                   </button>
@@ -1315,13 +1315,13 @@ export default function InspectionPlanner() {
                   </span>
                   <button
                     onClick={() => setCalendarPeriod(p => p + 1)}
-                    className="p-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors"
+                    className="p-1.5 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] rounded-lg transition-colors"
                   >
                     <ChevronRight size={14} className="text-gray-400" />
                   </button>
                   <button
                     onClick={() => setCalendarPeriod(0)}
-                    className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-400 transition-colors"
+                    className="px-3 py-1.5 bg-[var(--input-bg)] hover:bg-gray-700 border border-[var(--input-border)] rounded-lg text-xs text-gray-400 transition-colors"
                   >
                     Today
                   </button>
@@ -1339,7 +1339,7 @@ export default function InspectionPlanner() {
                   <p className="text-sm text-gray-400 mb-3">{scheduleError}</p>
                   <button
                     onClick={fetchSchedule}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium text-white transition-colors inline-flex items-center gap-1.5"
+                    className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium text-[var(--text-primary)] transition-colors inline-flex items-center gap-1.5"
                   >
                     <RefreshCw size={13} />Retry
                   </button>
@@ -1356,7 +1356,7 @@ export default function InspectionPlanner() {
                   </button>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-800/50">
+                <div className="divide-y divide-[var(--input-border)]">
                   {calendarWeeks.map(week => (
                     <div key={week.weekStr} className="p-4">
                       <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -1368,16 +1368,16 @@ export default function InspectionPlanner() {
                         {week.items.map(item => (
                           <div
                             key={item.id}
-                            className="flex items-center justify-between gap-3 bg-gray-800/40 hover:bg-gray-800/70 rounded-lg px-3 py-2 transition-colors"
+                            className="flex items-center justify-between gap-3 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] rounded-lg px-3 py-2 transition-colors"
                           >
                             <div className="flex items-center gap-3 min-w-0">
                               <div className="text-center min-w-[48px]">
                                 <p className="text-xs text-gray-500">{formatDate(item.inspection_date + 'T00:00:00', 'All', { weekday: 'short' })}</p>
-                                <p className="text-sm font-semibold text-white">{new Date(item.inspection_date + 'T00:00:00').getDate()}</p>
+                                <p className="text-sm font-semibold text-[var(--text-primary)]">{new Date(item.inspection_date + 'T00:00:00').getDate()}</p>
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium text-white truncate">{item.asset_no}</span>
+                                  <span className="text-sm font-medium text-[var(--text-primary)] truncate">{item.asset_no}</span>
                                   <span className={`px-1.5 py-0.5 rounded text-xs border ${statusBadge[item._status] || statusBadge.Scheduled}`}>
                                     {item._status}
                                   </span>
@@ -1439,8 +1439,8 @@ export default function InspectionPlanner() {
                   {[...Array(6)].map((_, i) => (
                     <div key={i} className="card animate-pulse">
                       <div className="h-4 bg-gray-700 rounded w-32 mb-3" />
-                      <div className="h-3 bg-gray-800 rounded w-20 mb-2" />
-                      <div className="h-2 bg-gray-800 rounded w-full" />
+                      <div className="h-3 bg-[var(--input-bg)] rounded w-20 mb-2" />
+                      <div className="h-2 bg-[var(--input-bg)] rounded w-full" />
                     </div>
                   ))}
                 </div>
@@ -1464,11 +1464,11 @@ export default function InspectionPlanner() {
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: idx * 0.05 }}
-                        className="card hover:border-gray-700 transition-colors"
+                        className="card hover:border-[var(--input-border)] transition-colors"
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div>
-                            <p className="text-sm font-semibold text-white">{ins.name}</p>
+                            <p className="text-sm font-semibold text-[var(--text-primary)]">{ins.name}</p>
                             <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
                               <MapPin size={10} />{ins.topSite}
                             </p>
@@ -1479,16 +1479,16 @@ export default function InspectionPlanner() {
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-                          <div className="bg-gray-800/60 rounded-lg p-2 text-center">
-                            <p className="text-lg font-bold text-white">{ins.thisWeekCount}</p>
+                          <div className="bg-[var(--input-bg)] rounded-lg p-2 text-center">
+                            <p className="text-lg font-bold text-[var(--text-primary)]">{ins.thisWeekCount}</p>
                             <p className="text-xs text-gray-500">This Week</p>
                           </div>
-                          <div className="bg-gray-800/60 rounded-lg p-2 text-center">
-                            <p className="text-lg font-bold text-white">{ins.thisMonthCount}</p>
+                          <div className="bg-[var(--input-bg)] rounded-lg p-2 text-center">
+                            <p className="text-lg font-bold text-[var(--text-primary)]">{ins.thisMonthCount}</p>
                             <p className="text-xs text-gray-500">This Month</p>
                           </div>
-                          <div className="bg-gray-800/60 rounded-lg p-2 text-center">
-                            <p className="text-lg font-bold text-white">{ins.avgPerDay}</p>
+                          <div className="bg-[var(--input-bg)] rounded-lg p-2 text-center">
+                            <p className="text-lg font-bold text-[var(--text-primary)]">{ins.avgPerDay}</p>
                             <p className="text-xs text-gray-500">Avg/Day</p>
                           </div>
                         </div>
@@ -1498,7 +1498,7 @@ export default function InspectionPlanner() {
                             <span>Capacity</span>
                             <span>{pct}%</span>
                           </div>
-                          <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                          <div className="h-2 bg-[var(--input-bg)] rounded-full overflow-hidden">
                             <motion.div
                               initial={{ width: 0 }}
                               animate={{ width: `${pct}%` }}
@@ -1531,10 +1531,10 @@ export default function InspectionPlanner() {
             <div className="card">
               <div className="flex items-center gap-2 mb-5">
                 <BarChart2 size={16} className="text-blue-400" />
-                <h2 className="text-sm font-semibold text-white">Inspection Frequency by Site - Last 6 Months</h2>
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Inspection Frequency by Site - Last 6 Months</h2>
               </div>
               {loading ? (
-                <div className="h-72 bg-gray-800 animate-pulse rounded-lg" />
+                <div className="h-72 bg-[var(--input-bg)] animate-pulse rounded-lg" />
               ) : siteFrequencyData.datasets.length === 0 ? (
                 <div className="h-72 flex items-center justify-center text-gray-500 text-sm">
                   No site data available.
@@ -1550,21 +1550,21 @@ export default function InspectionPlanner() {
                 <div className="mt-5 overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-gray-800">
+                      <tr className="border-b border-[var(--input-border)]">
                         <th className="text-left py-2 px-3 text-gray-400 font-medium">Site</th>
                         <th className="text-right py-2 px-3 text-gray-400 font-medium">Total (6mo)</th>
                         <th className="text-right py-2 px-3 text-gray-400 font-medium">Avg/Month</th>
                         <th className="text-right py-2 px-3 text-gray-400 font-medium">Assets</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-800/40">
+                    <tbody className="divide-y divide-[var(--input-border)]">
                       {siteFrequencyData.datasets.map((ds, i) => {
                         const total = ds.data.reduce((a, b) => a + b, 0)
                         const avg = (total / 6).toFixed(1)
                         const assetCount = new Set(inspections.filter(r => r.site === ds.label).map(r => r.asset_no)).size
                         return (
-                          <tr key={ds.label} className="hover:bg-gray-800/30 transition-colors">
-                            <td className="py-2 px-3 text-white flex items-center gap-2">
+                          <tr key={ds.label} className="hover:bg-[var(--input-bg)] transition-colors">
+                            <td className="py-2 px-3 text-[var(--text-primary)] flex items-center gap-2">
                               <span
                                 className="w-2 h-2 rounded-full inline-block shrink-0"
                                 style={{ backgroundColor: ds.borderColor }}
@@ -1586,11 +1586,11 @@ export default function InspectionPlanner() {
 
           {/* ── Gap Analysis ── */}
           {tab === 'gap' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-b border-gray-800">
+            <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-b border-[var(--input-border)]">
                 <div className="flex items-center gap-2">
                   <Sliders size={16} className="text-yellow-400" />
-                  <h2 className="text-sm font-semibold text-white">Inspection Gap Analysis</h2>
+                  <h2 className="text-sm font-semibold text-[var(--text-primary)]">Inspection Gap Analysis</h2>
                   <span className="text-xs text-gray-400">({filteredGap.length} vehicles)</span>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -1600,8 +1600,8 @@ export default function InspectionPlanner() {
                       onClick={() => setGapFilter(f)}
                       className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                         gapFilter === f
-                          ? 'bg-yellow-600 border-yellow-500 text-white'
-                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                          ? 'bg-yellow-600 border-yellow-500 text-[var(--text-primary)]'
+                          : 'bg-[var(--input-bg)] border-[var(--input-border)] text-gray-400 hover:border-gray-600'
                       }`}
                     >
                       {f}
@@ -1613,21 +1613,21 @@ export default function InspectionPlanner() {
                       value={gapSearch}
                       onChange={e => setGapSearch(e.target.value)}
                       placeholder="Search..."
-                      className="bg-gray-800 border border-gray-700 rounded-lg pl-7 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500 w-36"
+                      className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg pl-7 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-yellow-500 w-36"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Summary badges */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 border-b border-gray-800/50">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 border-b border-[var(--input-border)]">
                 {['On Track', 'Due Soon', 'Overdue', 'No History'].map(s => {
                   const count = gapAnalysis.filter(r => r.status === s).length
                   const colors = {
                     'On Track':   'text-green-300 bg-green-900/20 border-green-800',
                     'Due Soon':   'text-yellow-300 bg-yellow-900/20 border-yellow-800',
                     'Overdue':    'text-red-300 bg-red-900/20 border-red-800',
-                    'No History': 'text-gray-400 bg-gray-800 border-gray-700',
+                    'No History': 'text-gray-400 bg-[var(--input-bg)] border-[var(--input-border)]',
                   }
                   return (
                     <button
@@ -1658,16 +1658,16 @@ export default function InspectionPlanner() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-800 bg-gray-950/50">
+                      <tr className="border-b border-[var(--input-border)] bg-[var(--surface-1)]">
                         {['Asset', 'Site', 'Days Since', 'Interval', 'Gap Status', 'Inspector'].map(h => (
                           <th key={h} className="text-left px-3 py-2 text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-800/40">
+                    <tbody className="divide-y divide-[var(--input-border)]">
                       {filteredGap.slice(0, 200).map(row => (
-                        <tr key={row.asset_no} className="hover:bg-gray-800/30 transition-colors">
-                          <td className="px-3 py-2.5 font-medium text-white">{row.asset_no}</td>
+                        <tr key={row.asset_no} className="hover:bg-[var(--input-bg)] transition-colors">
+                          <td className="px-3 py-2.5 font-medium text-[var(--text-primary)]">{row.asset_no}</td>
                           <td className="px-3 py-2.5 text-gray-300 text-xs">{row.site}</td>
                           <td className="px-3 py-2.5 text-gray-300 text-xs">
                             {row.days_since !== null ? `${row.days_since}d` : <span className="text-gray-500">Never</span>}
@@ -1726,16 +1726,16 @@ export default function InspectionPlanner() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg shadow-2xl"
+              className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl w-full max-w-lg shadow-2xl"
             >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-                <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--input-border)]">
+                <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
                   <Trash2 size={16} className="text-red-400" />
                   Delete Scheduled Inspection
                 </h3>
                 <button
                   onClick={() => { setDeleteTarget(null); setDeleteError('') }}
-                  className="p-1 hover:bg-gray-800 rounded-lg transition-colors"
+                  className="p-1 hover:bg-[var(--input-bg)] rounded-lg transition-colors"
                 >
                   <X size={16} className="text-gray-400" />
                 </button>
@@ -1744,7 +1744,7 @@ export default function InspectionPlanner() {
                 <div className="flex gap-3 mb-4">
                   <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-white font-medium">
+                    <p className="text-[var(--text-primary)] font-medium">
                       Delete inspection for <span className="font-mono text-blue-400">{deleteTarget.asset_no}</span>
                       {deleteTarget.inspection_date ? ` on ${deleteTarget.inspection_date}` : ''}?
                     </p>
@@ -1758,7 +1758,7 @@ export default function InspectionPlanner() {
                   <button
                     onClick={handleDeleteSchedule}
                     disabled={deleting}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium text-white transition-colors inline-flex items-center gap-2 disabled:opacity-50"
+                    className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-medium text-[var(--text-primary)] transition-colors inline-flex items-center gap-2 disabled:opacity-50"
                   >
                     <Trash2 size={14} /> {deleting ? 'Deleting...' : 'Delete Inspection'}
                   </button>

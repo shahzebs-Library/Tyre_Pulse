@@ -120,6 +120,11 @@ const DashboardBuilder       = lazy(() => import('./pages/DashboardBuilder'))
 const TenantHealth           = lazy(() => import('./pages/TenantHealth'))
 const ExecutiveAnalytics     = lazy(() => import('./pages/ExecutiveAnalytics'))
 const PermissionMatrix       = lazy(() => import('./pages/PermissionMatrix'))
+const EventStream            = lazy(() => import('./pages/EventStream'))
+const Approvals              = lazy(() => import('./pages/Approvals'))
+const WorkflowSettings       = lazy(() => import('./pages/WorkflowSettings'))
+const AutomationRules        = lazy(() => import('./pages/AutomationRules'))
+const Integrations           = lazy(() => import('./pages/Integrations'))
 
 // ── Per-page error boundary ───────────────────────────────────────────────
 function Safe({ children }) {
@@ -276,6 +281,12 @@ function MainApp() {
                       <Route path="/system-health"       element={<Safe><SystemHealth /></Safe>} />
                       <Route path="/tenant-health"       element={<Safe><TenantHealth /></Safe>} />
                       <Route path="/permission-matrix"   element={<Safe><PermissionMatrix /></Safe>} />
+                      {/* ── Automation platform (backend V96–V103) ── */}
+                      <Route path="/events"              element={<Safe><EventStream /></Safe>} />
+                      <Route path="/approvals"           element={<Safe><Approvals /></Safe>} />
+                      <Route path="/workflow-settings"   element={<Safe><WorkflowSettings /></Safe>} />
+                      <Route path="/automation-rules"    element={<Safe><AutomationRules /></Safe>} />
+                      <Route path="/integrations"        element={<Safe><Integrations /></Safe>} />
                       <Route path="*"            element={<Navigate to="/" replace />} />
                     </Routes>
                   </Layout>

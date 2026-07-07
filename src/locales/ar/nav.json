@@ -89,6 +89,8 @@
     "/workflow-settings": "مسارات الموافقة",
     "/automation-rules": "قواعد الأتمتة",
     "/integrations": "API والويب هوك",
+    "/dashboard-builder": "لوحاتي",
+    "/report-builder": "منشئ التقارير",
     "/cleaning": "تنظيف البيانات",
     "/data-intake": "مركز استقبال البيانات",
     "/upload": "رفع البيانات",

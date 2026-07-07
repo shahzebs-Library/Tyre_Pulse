@@ -16,7 +16,7 @@ import {
   Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
   Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
-  Webhook, CheckSquare,
+  Webhook, CheckSquare, FileBarChart2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -163,6 +163,8 @@ const NAV_GROUPS = [
       { to: '/workflow-settings', label: 'Approval Workflows', icon: GitBranch, adminOnly: A },
       { to: '/automation-rules',  label: 'Automation Rules',   icon: Zap, adminOnly: A },
       { to: '/integrations',      label: 'API & Webhooks',     icon: Webhook, adminOnly: A },
+      { to: '/dashboard-builder', label: 'My Dashboards',      icon: LayoutDashboard, roles: ANALYTICS_ROLES },
+      { to: '/report-builder',    label: 'Report Builder',     icon: FileBarChart2, roles: ANALYTICS_ROLES },
     ],
   },
   {

@@ -89,6 +89,8 @@
     "/workflow-settings": "Approval Workflows",
     "/automation-rules": "Automation Rules",
     "/integrations": "API & Webhooks",
+    "/dashboard-builder": "My Dashboards",
+    "/report-builder": "Report Builder",
     "/cleaning": "Data Cleaning",
     "/data-intake": "Data Intake Center",
     "/upload": "Upload Data",

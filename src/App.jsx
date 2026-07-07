@@ -115,6 +115,8 @@ const Approvals              = lazy(() => import('./pages/Approvals'))
 const WorkflowSettings       = lazy(() => import('./pages/WorkflowSettings'))
 const Integrations           = lazy(() => import('./pages/Integrations'))
 const AutomationRules        = lazy(() => import('./pages/AutomationRules'))
+const DashboardBuilder       = lazy(() => import('./pages/DashboardBuilder'))
+const ReportBuilder          = lazy(() => import('./pages/ReportBuilder'))
 
 // ── Per-page error boundary ───────────────────────────────────────────────
 function Safe({ children }) {
@@ -207,6 +209,9 @@ function MainApp() {
                       <Route path="/workflow-settings"    element={<Safe><WorkflowSettings /></Safe>} />
                       <Route path="/integrations"         element={<Safe><Integrations /></Safe>} />
                       <Route path="/automation-rules"     element={<Safe><AutomationRules /></Safe>} />
+                      {/* ── Analytics Studio ── */}
+                      <Route path="/dashboard-builder"    element={<Safe><DashboardBuilder /></Safe>} />
+                      <Route path="/report-builder"       element={<Safe><ReportBuilder /></Safe>} />
                       {/* ── Intelligence ── */}
                       <Route path="/kpi-engine"              element={<Safe><ModuleRoute moduleKey="kpi_scorecard"><EngineeringKpi /></ModuleRoute></Safe>} />
                       <Route path="/kpi-command"             element={<Safe><ModuleRoute moduleKey="kpi_scorecard"><KpiCommandCenter /></ModuleRoute></Safe>} />

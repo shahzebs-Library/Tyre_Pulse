@@ -5,15 +5,18 @@ Workflow Engine, RAG auto-embedding, API Platform + Webhooks, Business Rules
 Engine, AI conversation memory, server-side audit + builder persistence,
 Executive TV Display.
 
-> ⚠️ **Not yet applied to the live database or deployed to edge functions.**
-> The code shipped via **PR #26 (merged to `main`, commit a84cb64)** and
-> auto-deployed to Vercel, so the Automation admin pages are already live on
-> tyrepulse.app — **but they will error until the migrations below are applied**
-> (their `src/lib/api/*` calls hit tables/RPCs that don't exist yet). All eight
-> migrations were executed end-to-end on a local Postgres 16 cluster before
-> commit; the live-apply still needs a session/human with project access to
-> `jhssdmeruxtrlqnwfksc` (this session's Supabase MCP is permission-denied and
-> has no CLI).
+> ✅ **APPLIED LIVE on 2026-07-07** to project `jhssdmeruxtrlqnwfksc` via the
+> Supabase MCP: migrations V96–V103 plus the drift fix **V104**, and the three
+> edge functions (embed-worker + public-api = verify_jwt off, ai-orchestrator =
+> verify_jwt on). The `automation_platform` feature flag is ON. Kept for
+> re-provisioning / disaster recovery.
+>
+> **Drift caught during the apply:** the live `audit_log_v2` was the "SAFE"
+> variant (`old_data`/`new_data`, missing `user_role`/`org_id`/`old_values`/
+> `new_values`), which both V102's triggers and the app's own audit code expect.
+> `MIGRATIONS_V104_AUDIT_LOG_V2_ALIGN.sql` additively fixes it and **must run
+> before V102** on any DB with that drift; it is a harmless no-op on a fresh DB
+> from MASTER_MIGRATION.
 >
 > **Numbering note:** an earlier version of this runbook referenced V94–V99.
 > Those files were renumbered to **V96–V103** on merge (V94/V95 were taken by

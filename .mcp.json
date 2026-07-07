@@ -10,6 +10,10 @@
     "codebase-memory": {
       "command": "${HOME}/.local/bin/codebase-memory-mcp",
       "args": []
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=jhssdmeruxtrlqnwfksc"
     }
   }
 }

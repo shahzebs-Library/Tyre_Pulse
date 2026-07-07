@@ -50,7 +50,7 @@ const STATUS_CONFIG = {
   'In Progress':     { color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700', icon: Play },
   'Awaiting Parts':  { color: 'text-orange-400', bg: 'bg-orange-900/30', border: 'border-orange-700', icon: Package },
   'Completed':       { color: 'text-green-400',  bg: 'bg-green-900/30',  border: 'border-green-700',  icon: CheckCircle },
-  'Closed':          { color: 'text-gray-400',   bg: 'bg-gray-800',      border: 'border-gray-600',   icon: CheckCircle },
+  'Closed':          { color: 'text-[var(--text-secondary)]',   bg: 'bg-[var(--surface-2)]',      border: 'border-[var(--border-bright)]',   icon: CheckCircle },
   'Cancelled':       { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-700',    icon: XCircle },
 }
 
@@ -243,7 +243,7 @@ export default function WorkOrders() {
     else { setSortField(field); setSortDir('asc') }
   }
   function SortIcon({ field }) {
-    if (sortField !== field) return <ChevronDown size={14} className="text-gray-600" />
+    if (sortField !== field) return <ChevronDown size={14} className="text-[var(--text-dim)]" />
     return sortDir === 'asc' ? <ChevronUp size={14} className="text-blue-400" /> : <ChevronDown size={14} className="text-blue-400" />
   }
 
@@ -508,10 +508,10 @@ export default function WorkOrders() {
   // ─────────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-950">
+      <div className="flex items-center justify-center min-h-screen bg-[var(--surface-0)]">
         <div className="text-center">
           <Loader2 className="animate-spin text-blue-400 mx-auto mb-3" size={40} />
-          <p className="text-gray-400">{t('workorders.loading')}</p>
+          <p className="text-[var(--text-secondary)]">{t('workorders.loading')}</p>
         </div>
       </div>
     )
@@ -542,7 +542,7 @@ export default function WorkOrders() {
         }
       />
 
-      <p className="text-xs text-gray-500 -mt-3">
+      <p className="text-xs text-[var(--text-muted)] -mt-3">
         {t('workorders.importHint')}
       </p>
 
@@ -567,7 +567,7 @@ export default function WorkOrders() {
           <div key={label} className="card p-4">
             <div className={`flex items-center gap-2 mb-2`}>
               <Icon size={16} className={`text-${color}-400`} />
-              <span className="text-gray-400 text-xs">{label}</span>
+              <span className="text-[var(--text-secondary)] text-xs">{label}</span>
             </div>
             <div className={`text-2xl font-bold tabular-nums text-${color}-400`}>{value}</div>
           </div>
@@ -583,7 +583,7 @@ export default function WorkOrders() {
               <Bar data={typeChartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
             </div>
           ) : (
-            <div className="h-52 flex flex-col items-center justify-center gap-2 text-gray-500">
+            <div className="h-52 flex flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
               <Wrench size={28} className="opacity-30" />
               <p className="text-sm">{t('workorders.charts.noWorkOrders')}</p>
             </div>
@@ -596,7 +596,7 @@ export default function WorkOrders() {
               <Doughnut data={statusChartData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />
             </div>
           ) : (
-            <div className="h-52 flex flex-col items-center justify-center gap-2 text-gray-500">
+            <div className="h-52 flex flex-col items-center justify-center gap-2 text-[var(--text-muted)]">
               <CheckCircle size={28} className="opacity-30" />
               <p className="text-sm">{t('workorders.charts.noStatusData')}</p>
             </div>
@@ -608,12 +608,12 @@ export default function WorkOrders() {
       <div className="card p-4">
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-48">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder={t('workorders.filters.searchPlaceholder')}
-              className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              className="w-full pl-9 pr-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500"
             />
           </div>
           {[
@@ -625,22 +625,22 @@ export default function WorkOrders() {
               key={label}
               value={value}
               onChange={e => { setter(e.target.value); setPage(1) }}
-              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+              className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500"
             >
               {opts.map(o => <option key={o}>{o}</option>)}
             </select>
           ))}
           <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
           <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
           {(search || statusFilter !== 'All' || priorityFilter !== 'All' || typeFilter !== 'All' || dateFrom || dateTo) && (
             <button onClick={() => { setSearch(''); setStatus('All'); setPriority('All'); setType('All'); setDateFrom(''); setDateTo(''); setPage(1) }}
               className="px-3 py-2 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm hover:bg-red-900/50 transition-colors">
               {t('workorders.filters.clear')}
             </button>
           )}
-          <span className="ml-auto self-center text-gray-400 text-sm">{t('workorders.filters.results', { count: filtered.length })}</span>
+          <span className="ml-auto self-center text-[var(--text-secondary)] text-sm">{t('workorders.filters.results', { count: filtered.length })}</span>
         </div>
       </div>
 
@@ -649,7 +649,7 @@ export default function WorkOrders() {
         <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
           <span className="text-sm text-blue-200">{t('workorders.bulk.selected', { count: selectedIds.size })}</span>
           <div className="flex items-center gap-2">
-            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-white px-2 py-1">{t('workorders.bulk.clear')}</button>
+            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1">{t('workorders.bulk.clear')}</button>
             <button onClick={() => { setDeleteError(''); setBulkDeleteOpen(true) }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
               <Trash2 size={14} /> {t('workorders.bulk.delete', { count: selectedIds.size })}
@@ -662,12 +662,12 @@ export default function WorkOrders() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800">
+              <tr className="border-b border-[var(--border-dim)]">
                 {isAdmin && (
                   <th className="px-4 py-3 w-10">
                     <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
                       title={t('workorders.columns.selectAllTitle')}
-                      className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                      className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
                   </th>
                 )}
                 {[
@@ -683,7 +683,7 @@ export default function WorkOrders() {
                   { label: t('workorders.columns.actions'),     field: null             },
                 ].map(({ label, field }) => (
                   <th key={label}
-                    className={`px-4 py-3 text-left text-gray-400 font-medium ${field ? 'cursor-pointer hover:text-white' : ''}`}
+                    className={`px-4 py-3 text-left text-[var(--text-secondary)] font-medium ${field ? 'cursor-pointer hover:text-[var(--text-primary)]' : ''}`}
                     onClick={() => field && handleSort(field)}
                   >
                     <div className="flex items-center gap-1">
@@ -697,7 +697,7 @@ export default function WorkOrders() {
             <tbody>
               {paginated.length === 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 11 : 10} className="text-center py-16 text-gray-500">
+                  <td colSpan={isAdmin ? 11 : 10} className="text-center py-16 text-[var(--text-muted)]">
                     <Wrench size={40} className="mx-auto mb-3 opacity-30" />
                     <p>{t('workorders.states.empty')}</p>
                     <button onClick={openNew} className="mt-3 text-blue-400 hover:text-blue-300 text-sm">{t('workorders.states.createFirst')}</button>
@@ -709,19 +709,19 @@ export default function WorkOrders() {
                 const pc = PRIORITY_CONFIG[order.priority] || PRIORITY_CONFIG.Medium
                 const overdue = isOverdue(order)
                 return (
-                  <tr key={order.id} className={`border-b border-gray-800 hover:bg-gray-800/50 transition-colors ${selectedIds.has(order.id) ? 'bg-blue-950/20' : overdue ? 'bg-red-950/10' : ''}`}>
+                  <tr key={order.id} className={`border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors ${selectedIds.has(order.id) ? 'bg-blue-950/20' : overdue ? 'bg-red-950/10' : ''}`}>
                     {isAdmin && (
                       <td className="px-4 py-3">
                         <input type="checkbox" checked={selectedIds.has(order.id)} onChange={() => toggleSelect(order.id)}
-                          className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                          className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
                       </td>
                     )}
                     <td className="px-4 py-3">
                       <span className="text-blue-400 font-mono text-xs">{order.work_order_no}</span>
                       {overdue && <span className="ml-2 text-xs text-red-400 font-medium">{t('workorders.states.overdue')}</span>}
                     </td>
-                    <td className="px-4 py-3 text-white font-medium">{order.asset_no}</td>
-                    <td className="px-4 py-3 text-gray-300">{order.work_type}</td>
+                    <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{order.asset_no}</td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)]">{order.work_type}</td>
                     <td className="px-4 py-3">
                       <span className={`flex items-center gap-1.5 ${pc.color}`}>
                         <span className={`w-2 h-2 rounded-full ${pc.dot}`} />
@@ -733,19 +733,19 @@ export default function WorkOrders() {
                         {order.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-400">{order.technician_name || '-'}</td>
-                    <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{fmtDate(order.opened_at)}</td>
-                    <td className={`px-4 py-3 whitespace-nowrap ${overdue ? 'text-red-400 font-medium' : 'text-gray-400'}`}>{fmtDate(order.target_completion)}</td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)]">{order.technician_name || '-'}</td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(order.opened_at)}</td>
+                    <td className={`px-4 py-3 whitespace-nowrap ${overdue ? 'text-red-400 font-medium' : 'text-[var(--text-secondary)]'}`}>{fmtDate(order.target_completion)}</td>
                     <td className="px-4 py-3 text-green-400 font-medium">{fmtCurrency(order.total_cost)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => setViewOrder(order)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"><Eye size={14} /></button>
-                        <button onClick={() => openEdit(order)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"><Edit2 size={14} /></button>
+                        <button onClick={() => setViewOrder(order)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors"><Eye size={14} /></button>
+                        <button onClick={() => openEdit(order)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors"><Edit2 size={14} /></button>
                         {isAdmin && (
                           <button onClick={() => { setDeleteTarget(order); setDeleteError('') }} title="Delete work order (Admin only)"
-                            className="p-1.5 rounded text-gray-400 hover:text-red-400 hover:bg-gray-700 transition-colors"><Trash2 size={14} /></button>
+                            className="p-1.5 rounded text-[var(--text-secondary)] hover:text-red-400 hover:bg-[var(--surface-3)] transition-colors"><Trash2 size={14} /></button>
                         )}
-                        <button onClick={() => exportJobCard(order)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"><FileText size={14} /></button>
+                        <button onClick={() => exportJobCard(order)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors"><FileText size={14} /></button>
                       </div>
                     </td>
                   </tr>
@@ -757,13 +757,13 @@ export default function WorkOrders() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-            <span className="text-gray-400 text-sm">{t('workorders.pagination.summary', { page, totalPages, count: filtered.length })}</span>
+          <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-dim)]">
+            <span className="text-[var(--text-secondary)] text-sm">{t('workorders.pagination.summary', { page, totalPages, count: filtered.length })}</span>
             <div className="flex gap-2">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">{t('workorders.pagination.prev')}</button>
+                className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm rounded disabled:opacity-40">{t('workorders.pagination.prev')}</button>
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">{t('workorders.pagination.next')}</button>
+                className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm rounded disabled:opacity-40">{t('workorders.pagination.next')}</button>
             </div>
           </div>
         )}
@@ -775,23 +775,23 @@ export default function WorkOrders() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-              className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl">
-              <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between z-10">
-                <h2 className="text-white font-bold text-lg">{editOrder ? t('workorders.form.editTitle') : t('workorders.form.newTitle')}</h2>
-                <button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"><X size={18} /></button>
+              className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl">
+              <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--border-dim)] px-6 py-4 flex items-center justify-between z-10">
+                <h2 className="text-[var(--text-primary)] font-bold text-lg">{editOrder ? t('workorders.form.editTitle') : t('workorders.form.newTitle')}</h2>
+                <button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"><X size={18} /></button>
               </div>
               <div className="p-6 space-y-5">
                 {/* Row 1 */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.assetNo')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.assetNo')}</label>
                     <input value={formData.asset_no} onChange={e => setFormData(f => ({ ...f, asset_no: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.assetNo')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.assetNo')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.workType')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.workType')}</label>
                     <select value={formData.work_type} onChange={e => setFormData(f => ({ ...f, work_type: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500">
+                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500">
                       {WORK_TYPES.map(t => <option key={t}>{t}</option>)}
                     </select>
                   </div>
@@ -799,19 +799,19 @@ export default function WorkOrders() {
                 {/* Row 2 */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.tyreSerial')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.tyreSerial')}</label>
                     <input value={formData.tyre_serial} onChange={e => setFormData(f => ({ ...f, tyre_serial: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.tyreSerial')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.tyreSerial')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.position')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.position')}</label>
                     <input value={formData.tyre_position} onChange={e => setFormData(f => ({ ...f, tyre_position: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.position')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.position')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.priority')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.priority')}</label>
                     <select value={formData.priority} onChange={e => setFormData(f => ({ ...f, priority: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500">
+                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500">
                       {['Critical','High','Medium','Low'].map(p => <option key={p}>{p}</option>)}
                     </select>
                   </div>
@@ -819,98 +819,98 @@ export default function WorkOrders() {
                 {/* Row 3 */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.status')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.status')}</label>
                     <select value={formData.status} onChange={e => setFormData(f => ({ ...f, status: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500">
+                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500">
                       {Object.keys(STATUS_CONFIG).map(s => <option key={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.technician')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.technician')}</label>
                     <input value={formData.technician_name} onChange={e => setFormData(f => ({ ...f, technician_name: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.technician')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.technician')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.workshop')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.workshop')}</label>
                     <input value={formData.workshop_name} onChange={e => setFormData(f => ({ ...f, workshop_name: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.workshop')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.workshop')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                 </div>
                 {/* Row 4 */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.site')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.site')}</label>
                     <input value={formData.site} onChange={e => setFormData(f => ({ ...f, site: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.site')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.site')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.country')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.country')}</label>
                     <input value={formData.country} onChange={e => setFormData(f => ({ ...f, country: e.target.value }))}
-                      placeholder={t('workorders.form.placeholders.country')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      placeholder={t('workorders.form.placeholders.country')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                 </div>
                 {/* Row 5 */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.openedAt')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.openedAt')}</label>
                     <input type="datetime-local" value={formData.opened_at} onChange={e => setFormData(f => ({ ...f, opened_at: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.targetCompletion')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.targetCompletion')}</label>
                     <input type="datetime-local" value={formData.target_completion} onChange={e => setFormData(f => ({ ...f, target_completion: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                   </div>
                 </div>
                 {/* Description */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.description')}</label>
+                  <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.description')}</label>
                   <textarea value={formData.description} onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
                     rows={3} placeholder={t('workorders.form.placeholders.description')}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
+                    className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500 resize-none" />
                 </div>
                 {/* Labour */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-2 block">{t('workorders.form.labourCost')}</label>
+                  <label className="text-[var(--text-secondary)] text-xs mb-2 block">{t('workorders.form.labourCost')}</label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <input type="number" min="0" step="0.5" value={formData.labour_hours} onChange={e => setFormData(f => ({ ...f, labour_hours: e.target.value }))}
-                        placeholder={t('workorders.form.placeholders.hours')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
-                      <span className="text-gray-500 text-xs mt-1 block">{t('workorders.form.labourHours')}</span>
+                        placeholder={t('workorders.form.placeholders.hours')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
+                      <span className="text-[var(--text-muted)] text-xs mt-1 block">{t('workorders.form.labourHours')}</span>
                     </div>
                     <div>
                       <input type="number" min="0" step="0.01" value={formData.labour_rate} onChange={e => setFormData(f => ({ ...f, labour_rate: e.target.value }))}
-                        placeholder={t('workorders.form.placeholders.rate')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
-                      <span className="text-gray-500 text-xs mt-1 block">{t('workorders.form.ratePerHour')}</span>
+                        placeholder={t('workorders.form.placeholders.rate')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
+                      <span className="text-[var(--text-muted)] text-xs mt-1 block">{t('workorders.form.ratePerHour')}</span>
                     </div>
                     <div>
                       <input type="number" min="0" step="0.01" value={formData.labour_cost} onChange={e => setFormData(f => ({ ...f, labour_cost: e.target.value }))}
-                        placeholder={t('workorders.form.placeholders.override')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
-                      <span className="text-gray-500 text-xs mt-1 block">{t('workorders.form.labourCostOverride')}</span>
+                        placeholder={t('workorders.form.placeholders.override')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
+                      <span className="text-[var(--text-muted)] text-xs mt-1 block">{t('workorders.form.labourCostOverride')}</span>
                     </div>
                   </div>
                 </div>
                 {/* Parts */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-2 block">{t('workorders.form.partsUsed')}</label>
+                  <label className="text-[var(--text-secondary)] text-xs mb-2 block">{t('workorders.form.partsUsed')}</label>
                   <div className="space-y-2">
                     {(formData.parts_used || []).map((p, i) => (
-                      <div key={i} className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
-                        <span className="text-white text-sm flex-1">{p.part_name}</span>
-                        <span className="text-gray-400 text-sm">× {p.quantity}</span>
+                      <div key={i} className="flex items-center gap-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2">
+                        <span className="text-[var(--text-primary)] text-sm flex-1">{p.part_name}</span>
+                        <span className="text-[var(--text-secondary)] text-sm">× {p.quantity}</span>
                         <span className="text-green-400 text-sm">{fmtCurrency(p.unit_cost)}</span>
-                        <span className="text-gray-400 text-xs">= {fmtCurrency(p.unit_cost * p.quantity)}</span>
+                        <span className="text-[var(--text-secondary)] text-xs">= {fmtCurrency(p.unit_cost * p.quantity)}</span>
                         <button onClick={() => removePart(i)} className="text-red-400 hover:text-red-300"><X size={14} /></button>
                       </div>
                     ))}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <input value={partRow.part_name} onChange={e => setPartRow(r => ({ ...r, part_name: e.target.value }))}
-                        placeholder={t('workorders.form.placeholders.partName')} className="col-span-2 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                        placeholder={t('workorders.form.placeholders.partName')} className="col-span-2 px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                       <input type="number" min="1" value={partRow.quantity} onChange={e => setPartRow(r => ({ ...r, quantity: e.target.value }))}
-                        placeholder={t('workorders.form.placeholders.qty')} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                        placeholder={t('workorders.form.placeholders.qty')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                       <div className="flex gap-1">
                         <input type="number" min="0" step="0.01" value={partRow.unit_cost} onChange={e => setPartRow(r => ({ ...r, unit_cost: e.target.value }))}
-                          placeholder={t('workorders.form.placeholders.unitCost')} className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" />
+                          placeholder={t('workorders.form.placeholders.unitCost')} className="flex-1 px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500" />
                         <button onClick={addPart} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors"><Plus size={14} /></button>
                       </div>
                     </div>
@@ -921,14 +921,14 @@ export default function WorkOrders() {
                 </div>
                 {/* Notes */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">{t('workorders.form.notes')}</label>
+                  <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('workorders.form.notes')}</label>
                   <textarea value={formData.notes} onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))}
                     rows={2} placeholder={t('workorders.form.placeholders.notes')}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 resize-none" />
+                    className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500 resize-none" />
                 </div>
               </div>
-              <div className="sticky bottom-0 bg-gray-900 border-t border-gray-800 px-6 py-4 flex items-center justify-between">
-                <div className="text-gray-400 text-sm">
+              <div className="sticky bottom-0 bg-[var(--surface-1)] border-t border-[var(--border-dim)] px-6 py-4 flex items-center justify-between">
+                <div className="text-[var(--text-secondary)] text-sm">
                   {t('workorders.form.totalCost')}: <span className="text-green-400 font-bold">
                     {fmtCurrency((parseFloat(formData.labour_hours || 0) * parseFloat(formData.labour_rate || 0) || parseFloat(formData.labour_cost || 0)) + partsTotal(formData.parts_used))}
                   </span>
@@ -951,12 +951,12 @@ export default function WorkOrders() {
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={() => { setDeleteTarget(null); setDeleteError('') }}>
-          <div className="bg-gray-900 border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-[var(--surface-1)] border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex gap-3 mb-4">
               <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-white font-semibold">{t('workorders.delete.title', { no: deleteTarget.work_order_no })}</p>
-                <p className="text-gray-400 text-sm mt-1">{t('workorders.delete.warning')}</p>
+                <p className="text-[var(--text-primary)] font-semibold">{t('workorders.delete.title', { no: deleteTarget.work_order_no })}</p>
+                <p className="text-[var(--text-secondary)] text-sm mt-1">{t('workorders.delete.warning')}</p>
               </div>
             </div>
             {deleteError && (
@@ -978,12 +978,12 @@ export default function WorkOrders() {
       {bulkDeleteOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={() => { if (!saving) { setBulkDeleteOpen(false); setDeleteError('') } }}>
-          <div className="bg-gray-900 border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="bg-[var(--surface-1)] border border-red-800/50 rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
             <div className="flex gap-3 mb-4">
               <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-white font-semibold">{t('workorders.bulkDelete.question', { count: selectedIds.size })}</p>
-                <p className="text-gray-400 text-sm mt-1">{t('workorders.bulkDelete.warning')}</p>
+                <p className="text-[var(--text-primary)] font-semibold">{t('workorders.bulkDelete.question', { count: selectedIds.size })}</p>
+                <p className="text-[var(--text-secondary)] text-sm mt-1">{t('workorders.bulkDelete.warning')}</p>
               </div>
             </div>
             {deleteError && (
@@ -1008,13 +1008,13 @@ export default function WorkOrders() {
             className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:justify-end bg-black/60 backdrop-blur-sm">
             <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="w-full sm:w-[480px] h-full bg-gray-900 border-l border-gray-700 overflow-y-auto shadow-2xl">
-              <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between z-10">
+              className="w-full sm:w-[480px] h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] overflow-y-auto shadow-2xl">
+              <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--border-dim)] px-6 py-4 flex items-center justify-between z-10">
                 <div>
-                  <h2 className="text-white font-bold">{viewOrder.work_order_no}</h2>
-                  <p className="text-gray-400 text-sm">{viewOrder.work_type} · {viewOrder.asset_no}</p>
+                  <h2 className="text-[var(--text-primary)] font-bold">{viewOrder.work_order_no}</h2>
+                  <p className="text-[var(--text-secondary)] text-sm">{viewOrder.work_type} · {viewOrder.asset_no}</p>
                 </div>
-                <button onClick={() => setViewOrder(null)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"><X size={18} /></button>
+                <button onClick={() => setViewOrder(null)} className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"><X size={18} /></button>
               </div>
               <div className="p-6 space-y-5">
                 {/* Status + Priority */}
@@ -1030,7 +1030,7 @@ export default function WorkOrders() {
                 {/* Status transitions */}
                 {STATUS_FLOW[viewOrder.status]?.length > 0 && (
                   <div>
-                    <p className="text-gray-400 text-xs mb-2">{t('workorders.detail.transitionTo')}</p>
+                    <p className="text-[var(--text-secondary)] text-xs mb-2">{t('workorders.detail.transitionTo')}</p>
                     <div className="flex flex-wrap gap-2">
                       {STATUS_FLOW[viewOrder.status].map(ns => (
                         <button key={ns} onClick={() => transitionStatus(viewOrder, ns)}
@@ -1060,28 +1060,28 @@ export default function WorkOrders() {
                     [t('workorders.detail.target'), fmtDateTime(viewOrder.target_completion)],
                     [t('workorders.detail.daysOpen'), daysOpen(viewOrder)],
                   ].filter(([, v]) => v).map(([label, value]) => (
-                    <div key={label} className="flex justify-between py-2 border-b border-gray-800">
-                      <span className="text-gray-400 text-sm">{label}</span>
-                      <span className="text-white text-sm font-medium">{value}</span>
+                    <div key={label} className="flex justify-between py-2 border-b border-[var(--border-dim)]">
+                      <span className="text-[var(--text-secondary)] text-sm">{label}</span>
+                      <span className="text-[var(--text-primary)] text-sm font-medium">{value}</span>
                     </div>
                   ))}
                 </div>
 
                 {viewOrder.description && (
-                  <div className="bg-gray-800 rounded-xl p-4">
-                    <p className="text-gray-400 text-xs mb-2">{t('workorders.detail.description')}</p>
-                    <p className="text-white text-sm leading-relaxed">{viewOrder.description}</p>
+                  <div className="bg-[var(--surface-2)] rounded-xl p-4">
+                    <p className="text-[var(--text-secondary)] text-xs mb-2">{t('workorders.detail.description')}</p>
+                    <p className="text-[var(--text-primary)] text-sm leading-relaxed">{viewOrder.description}</p>
                   </div>
                 )}
 
                 {/* Parts */}
                 {viewOrder.parts_used?.length > 0 && (
                   <div>
-                    <p className="text-gray-400 text-xs mb-2">{t('workorders.detail.partsUsed')}</p>
+                    <p className="text-[var(--text-secondary)] text-xs mb-2">{t('workorders.detail.partsUsed')}</p>
                     <div className="space-y-2">
                       {viewOrder.parts_used.map((p, i) => (
-                        <div key={i} className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
-                          <span className="text-white text-sm">{p.part_name} × {p.quantity}</span>
+                        <div key={i} className="flex items-center justify-between bg-[var(--surface-2)] rounded-lg px-3 py-2">
+                          <span className="text-[var(--text-primary)] text-sm">{p.part_name} × {p.quantity}</span>
                           <span className="text-green-400 text-sm">{fmtCurrency(p.unit_cost * p.quantity)}</span>
                         </div>
                       ))}
@@ -1090,31 +1090,31 @@ export default function WorkOrders() {
                 )}
 
                 {/* Costs */}
-                <div className="bg-gray-800 rounded-xl p-4 space-y-2">
-                  <p className="text-gray-400 text-xs mb-3">{t('workorders.detail.costSummary')}</p>
-                  <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.labour')}</span><span className="text-white text-sm">{fmtCurrency(viewOrder.labour_cost)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.parts')}</span><span className="text-white text-sm">{fmtCurrency(viewOrder.parts_cost)}</span></div>
-                  {Number(viewOrder.lubricant_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.lubricants')}</span><span className="text-white text-sm">{fmtCurrency(viewOrder.lubricant_cost)}</span></div>}
-                  {Number(viewOrder.tyre_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.tyres')}</span><span className="text-white text-sm">{fmtCurrency(viewOrder.tyre_cost)}</span></div>}
-                  {Number(viewOrder.outside_repair_cost) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.outsideRepair')}</span><span className="text-white text-sm">{fmtCurrency(viewOrder.outside_repair_cost)}</span></div>}
-                  <div className="flex justify-between border-t border-gray-700 pt-2 mt-2"><span className="text-white font-semibold text-sm">{t('workorders.detail.total')}</span><span className="text-green-400 font-bold text-lg">{fmtCurrency(viewOrder.total_cost)}</span></div>
+                <div className="bg-[var(--surface-2)] rounded-xl p-4 space-y-2">
+                  <p className="text-[var(--text-secondary)] text-xs mb-3">{t('workorders.detail.costSummary')}</p>
+                  <div className="flex justify-between"><span className="text-[var(--text-secondary)] text-sm">{t('workorders.detail.labour')}</span><span className="text-[var(--text-primary)] text-sm">{fmtCurrency(viewOrder.labour_cost)}</span></div>
+                  <div className="flex justify-between"><span className="text-[var(--text-secondary)] text-sm">{t('workorders.detail.parts')}</span><span className="text-[var(--text-primary)] text-sm">{fmtCurrency(viewOrder.parts_cost)}</span></div>
+                  {Number(viewOrder.lubricant_cost) > 0 && <div className="flex justify-between"><span className="text-[var(--text-secondary)] text-sm">{t('workorders.detail.lubricants')}</span><span className="text-[var(--text-primary)] text-sm">{fmtCurrency(viewOrder.lubricant_cost)}</span></div>}
+                  {Number(viewOrder.tyre_cost) > 0 && <div className="flex justify-between"><span className="text-[var(--text-secondary)] text-sm">{t('workorders.detail.tyres')}</span><span className="text-[var(--text-primary)] text-sm">{fmtCurrency(viewOrder.tyre_cost)}</span></div>}
+                  {Number(viewOrder.outside_repair_cost) > 0 && <div className="flex justify-between"><span className="text-[var(--text-secondary)] text-sm">{t('workorders.detail.outsideRepair')}</span><span className="text-[var(--text-primary)] text-sm">{fmtCurrency(viewOrder.outside_repair_cost)}</span></div>}
+                  <div className="flex justify-between border-t border-[var(--border-bright)] pt-2 mt-2"><span className="text-[var(--text-primary)] font-semibold text-sm">{t('workorders.detail.total')}</span><span className="text-green-400 font-bold text-lg">{fmtCurrency(viewOrder.total_cost)}</span></div>
                 </div>
 
                 {/* Hours / meter */}
                 {(Number(viewOrder.labour_hours) > 0 || Number(viewOrder.standard_hours) > 0 || Number(viewOrder.breakdown_hours) > 0 || Number(viewOrder.odometer) > 0) && (
-                  <div className="bg-gray-800 rounded-xl p-4 grid grid-cols-2 gap-x-4 gap-y-2">
-                    <p className="text-gray-400 text-xs mb-1 col-span-2">{t('workorders.detail.hoursMeter')}</p>
-                    {Number(viewOrder.labour_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.labourHrs')}</span><span className="text-white text-sm">{viewOrder.labour_hours}</span></div>}
-                    {Number(viewOrder.standard_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.stdHrs')}</span><span className="text-white text-sm">{viewOrder.standard_hours}</span></div>}
-                    {Number(viewOrder.breakdown_hours) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.breakdownHrs')}</span><span className="text-white text-sm">{viewOrder.breakdown_hours}</span></div>}
-                    {Number(viewOrder.odometer) > 0 && <div className="flex justify-between"><span className="text-gray-400 text-sm">{t('workorders.detail.odometer')}</span><span className="text-white text-sm">{Number(viewOrder.odometer).toLocaleString()}</span></div>}
+                  <div className="bg-[var(--surface-2)] rounded-xl p-4 grid grid-cols-2 gap-x-4 gap-y-2">
+                    <p className="text-[var(--text-secondary)] text-xs mb-1 col-span-2">{t('workorders.detail.hoursMeter')}</p>
+                    {Number(viewOrder.labour_hours) > 0 && <div className="flex justify-between"><span className="text-[var(--text-secondary)] text-sm">{t('workorders.detail.labourHrs')}</span><span className="text-[var(--text-primary)] text-sm">{viewOrder.labour_hours}</span></div>}
+                    {Number(viewOrder.standard_hours) > 0 && <div className="flex justify-between"><span className="text-[var(--text-secondary)] text-sm">{t('workorders.detail.stdHrs')}</span><span className="text-[var(--text-primary)] text-sm">{viewOrder.standard_hours}</span></div>}
+                    {Number(viewOrder.breakdown_hours) > 0 && <div className="flex justify-between"><span className="text-[var(--text-secondary)] text-sm">{t('workorders.detail.breakdownHrs')}</span><span className="text-[var(--text-primary)] text-sm">{viewOrder.breakdown_hours}</span></div>}
+                    {Number(viewOrder.odometer) > 0 && <div className="flex justify-between"><span className="text-[var(--text-secondary)] text-sm">{t('workorders.detail.odometer')}</span><span className="text-[var(--text-primary)] text-sm">{Number(viewOrder.odometer).toLocaleString()}</span></div>}
                   </div>
                 )}
 
                 {viewOrder.notes && (
-                  <div className="bg-gray-800 rounded-xl p-4">
-                    <p className="text-gray-400 text-xs mb-2">{t('workorders.detail.notes')}</p>
-                    <p className="text-gray-300 text-sm leading-relaxed">{viewOrder.notes}</p>
+                  <div className="bg-[var(--surface-2)] rounded-xl p-4">
+                    <p className="text-[var(--text-secondary)] text-xs mb-2">{t('workorders.detail.notes')}</p>
+                    <p className="text-[var(--text-secondary)] text-sm leading-relaxed">{viewOrder.notes}</p>
                   </div>
                 )}
 
@@ -1127,7 +1127,7 @@ export default function WorkOrders() {
                     <Edit2 size={15} />{t('workorders.detail.edit')}
                   </button>
                   <button onClick={() => exportJobCard(viewOrder)}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-xl transition-colors">
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[var(--surface-3)] hover:bg-gray-600 text-[var(--text-primary)] text-sm font-medium rounded-xl transition-colors">
                     <FileText size={15} />{t('workorders.detail.jobCardPdf')}
                   </button>
                 </div>

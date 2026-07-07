@@ -26,7 +26,7 @@ const STATUS_CONFIG = {
   'In Progress':{ color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700/50' },
   Done:         { color: 'text-green-400',  bg: 'bg-green-900/30',  border: 'border-green-700/50' },
   Overdue:      { color: 'text-red-400',    bg: 'bg-red-900/30',    border: 'border-red-700/50' },
-  Cancelled:    { color: 'text-gray-400',   bg: 'bg-gray-800',      border: 'border-gray-700' },
+  Cancelled:    { color: 'text-[var(--text-secondary)]',   bg: 'bg-[var(--surface-2)]',      border: 'border-[var(--border-bright)]' },
 }
 
 const SEV_CONFIG = {
@@ -906,7 +906,7 @@ export default function Inspections() {
     }
   }
 
-  if (loading || authLoading) return <div className="flex items-center justify-center h-64 text-gray-400">{t('common.loading')}</div>
+  if (loading || authLoading) return <div className="flex items-center justify-center h-64 text-[var(--text-secondary)]">{t('common.loading')}</div>
 
   const tabConfig = [
     { key: 'all',          label: t('inspections.tabs.all'),          icon: null,            count: counts.all },
@@ -984,26 +984,26 @@ export default function Inspections() {
       />
 
       {!isTyreMan && (
-        <p className="text-xs text-gray-500 -mt-3">
+        <p className="text-xs text-[var(--text-muted)] -mt-3">
           {t('inspections.importHint')}
         </p>
       )}
 
       {/* Tabs - hidden for TyreMan (locked to checklist) */}
-      {!isTyreMan && <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg w-fit flex-wrap">
+      {!isTyreMan && <div className="flex gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit flex-wrap">
         {tabConfig.map(({ key, label, icon: Icon, count }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
               activeTab === key
-                ? 'bg-gray-700 text-white shadow'
-                : 'text-gray-400 hover:text-gray-200'
+                ? 'bg-[var(--surface-3)] text-[var(--text-primary)] shadow'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
             {Icon && <Icon className="w-4 h-4" />}
             {label}
-            <span className={`px-1.5 py-0.5 rounded-full text-xs ${activeTab === key ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+            <span className={`px-1.5 py-0.5 rounded-full text-xs ${activeTab === key ? 'bg-green-500/20 text-green-400' : 'bg-[var(--surface-3)] text-[var(--text-muted)]'}`}>
               {count}
             </span>
           </button>
@@ -1033,8 +1033,8 @@ export default function Inspections() {
                   {t('inspections.saved.offlineNote')}
                 </p>
               )}
-              <p className="text-gray-400 text-sm mb-4">
-                {t('inspections.saved.for')} <span className="text-white font-mono">{clSaved.asset_no}</span> {t('inspections.saved.on')} {clSaved.scheduled_date}{clOffline ? ` ${t('inspections.saved.queuedSuffix')}` : ` ${t('inspections.saved.doneSuffix')}`}
+              <p className="text-[var(--text-secondary)] text-sm mb-4">
+                {t('inspections.saved.for')} <span className="text-[var(--text-primary)] font-mono">{clSaved.asset_no}</span> {t('inspections.saved.on')} {clSaved.scheduled_date}{clOffline ? ` ${t('inspections.saved.queuedSuffix')}` : ` ${t('inspections.saved.doneSuffix')}`}
               </p>
               {/* Summary badges */}
               <div className="flex flex-wrap gap-2 mb-2">
@@ -1211,8 +1211,8 @@ export default function Inspections() {
 
               {/* Card header with language toggle */}
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-white">{CHECKLIST_LABELS[lang].title}</h3>
-                <div className="flex gap-1 p-0.5 bg-gray-800 rounded-lg">
+                <h3 className="text-lg font-semibold text-[var(--text-primary)]">{CHECKLIST_LABELS[lang].title}</h3>
+                <div className="flex gap-1 p-0.5 bg-[var(--surface-2)] rounded-lg">
                   {['en', 'ar'].map(l => (
                     <button
                       key={l}
@@ -1220,7 +1220,7 @@ export default function Inspections() {
                       className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
                         lang === l
                           ? 'bg-green-600 text-white shadow'
-                          : 'text-gray-400 hover:text-gray-200'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                       }`}
                     >
                       {l === 'en' ? 'EN' : 'AR'}
@@ -1393,7 +1393,7 @@ export default function Inspections() {
               })()}
 
               {clPositions.length === 0 && clAsset.trim() && (
-                <p className="text-gray-500 text-sm text-center py-4">
+                <p className="text-[var(--text-muted)] text-sm text-center py-4">
                   {CHECKLIST_LABELS[lang].no_asset}
                 </p>
               )}
@@ -1401,12 +1401,12 @@ export default function Inspections() {
               {/* Odometer + Hour Meter */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label flex items-center gap-1.5"><Gauge size={12} className="text-gray-400" /> {t('inspections.form.odometer')}</label>
+                  <label className="label flex items-center gap-1.5"><Gauge size={12} className="text-[var(--text-secondary)]" /> {t('inspections.form.odometer')}</label>
                   <input type="number" className="input" placeholder={t('inspections.form.odometerPlaceholder')} min="0"
                     value={clOdometer} onChange={e => setClOdometer(e.target.value)} />
                 </div>
                 <div>
-                  <label className="label flex items-center gap-1.5"><Clock size={12} className="text-gray-400" /> {t('inspections.form.hourMeter')}</label>
+                  <label className="label flex items-center gap-1.5"><Clock size={12} className="text-[var(--text-secondary)]" /> {t('inspections.form.hourMeter')}</label>
                   <input type="number" className="input" placeholder={t('inspections.form.hourMeterPlaceholder')} min="0"
                     value={clHourMeter} onChange={e => setClHourMeter(e.target.value)} />
                 </div>
@@ -1414,7 +1414,7 @@ export default function Inspections() {
 
               {/* Photo capture */}
               <div>
-                <label className="label flex items-center gap-1.5"><Camera size={12} className="text-gray-400" /> {t('inspections.form.photos')}</label>
+                <label className="label flex items-center gap-1.5"><Camera size={12} className="text-[var(--text-secondary)]" /> {t('inspections.form.photos')}</label>
                 <div className="flex gap-2 flex-wrap mb-2">
                   {clPhotos.map((src, i) => (
                     <div key={i} className="relative">
@@ -1498,7 +1498,7 @@ export default function Inspections() {
 
               {/* Inspector Signature */}
               <div>
-                <label className="label flex items-center gap-1.5"><PenLine size={12} className="text-gray-400" /> {t('inspections.form.inspectorSignature')}</label>
+                <label className="label flex items-center gap-1.5"><PenLine size={12} className="text-[var(--text-secondary)]" /> {t('inspections.form.inspectorSignature')}</label>
                 {clSignature ? (
                   <div className="flex items-center gap-3">
                     <img src={clSignature} alt="signature"
@@ -1506,7 +1506,7 @@ export default function Inspections() {
                     <div>
                       <p className="text-xs text-green-400 font-semibold">{t('inspections.form.signedAs', { name: clInspector })}</p>
                       <button onClick={() => setClSignature(null)}
-                        className="text-xs text-gray-500 hover:text-red-400 transition-colors mt-0.5">
+                        className="text-xs text-[var(--text-muted)] hover:text-red-400 transition-colors mt-0.5">
                         {t('inspections.form.clearSignature')}
                       </button>
                     </div>
@@ -1776,7 +1776,7 @@ export default function Inspections() {
       {/* Status filter pills, search, and table - hidden in checklist mode */}
       {activeTab !== 'checklist' && <>
       <div className="flex flex-wrap gap-2">
-        {[['all', t('inspections.filters.status.all'), 'bg-gray-800 text-gray-300 border-gray-700'],
+        {[['all', t('inspections.filters.status.all'), 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'],
           ['Overdue', t('inspections.filters.status.overdue'), 'bg-red-900/30 text-red-400 border-red-700/50'],
           ['Scheduled', t('inspections.filters.status.scheduled'), 'bg-blue-900/30 text-blue-400 border-blue-700/50'],
           ['In Progress', t('inspections.filters.status.inProgress'), 'bg-yellow-900/30 text-yellow-400 border-yellow-700/50'],
@@ -1807,7 +1807,7 @@ export default function Inspections() {
         <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
           <span className="text-sm text-blue-200">{selectedIds.size} selected</span>
           <div className="flex items-center gap-2">
-            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-white px-2 py-1">Clear</button>
+            <button onClick={() => setSelectedIds(new Set())} className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1">Clear</button>
             <button onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
               <Trash2 size={14} /> Delete {selectedIds.size}
@@ -1820,14 +1820,14 @@ export default function Inspections() {
       <div className="card overflow-x-auto p-0">
         {/* Sticky header */}
         <div
-          className="text-left text-gray-400 border-b border-gray-800 bg-gray-900/60"
+          className="text-left text-[var(--text-secondary)] border-b border-[var(--border-dim)] bg-[var(--surface-1)]"
           style={{ minWidth: `${INSP_COL_WIDTHS.reduce((a, b) => a + b, 0)}px` }}
         >
           <div style={inspGridStyle} className="px-0">
             {isAdmin && (
               <div className="pb-2 pt-3 px-3 flex items-center">
                 <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage} title="Select all shown"
-                  className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                  className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
               </div>
             )}
             <div className="pb-2 pt-3 px-3 text-xs font-semibold uppercase tracking-wider">{t('inspections.table.type')}</div>
@@ -1852,7 +1852,7 @@ export default function Inspections() {
           }}
         >
           {filtered.length === 0 ? (
-            <div className="py-12 text-center text-gray-500 text-sm">{t('inspections.states.noRecords')}</div>
+            <div className="py-12 text-center text-[var(--text-muted)] text-sm">{t('inspections.states.noRecords')}</div>
           ) : (
             <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
               {rowVirtualizer.getVirtualItems().map(virtualRow => {
@@ -1874,12 +1874,12 @@ export default function Inspections() {
                       height: `${virtualRow.size}px`,
                       ...inspGridStyle,
                     }}
-                    className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-950/20' : ''}`}
+                    className={`border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors ${selectedIds.has(r.id) ? 'bg-blue-950/20' : ''}`}
                   >
                     {isAdmin && (
                       <div className="px-3">
                         <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)}
-                          className="w-4 h-4 rounded border-gray-600 bg-gray-800 accent-blue-600 cursor-pointer" />
+                          className="w-4 h-4 rounded border-[var(--border-bright)] bg-[var(--surface-2)] accent-blue-600 cursor-pointer" />
                       </div>
                     )}
                     {/* Type */}
@@ -1887,27 +1887,27 @@ export default function Inspections() {
                       <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${
                         isObs ? 'bg-purple-900/20 text-purple-400 border-purple-700/40'
                         : isTrn ? 'bg-blue-900/20 text-blue-400 border-blue-700/40'
-                        : 'bg-gray-800 text-gray-400 border-gray-700'
+                        : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
                       }`}>
                         {r.inspection_type}
                       </span>
                     </div>
 
                     {/* Title */}
-                    <div className="px-3 text-white font-medium text-sm truncate" title={r.title}>
+                    <div className="px-3 text-[var(--text-primary)] font-medium text-sm truncate" title={r.title}>
                       {r.title}
-                      {r.photo_data && <Camera className="inline w-3 h-3 ml-1 text-gray-500" title={t('inspections.row.titleHasPhoto')} />}
+                      {r.photo_data && <Camera className="inline w-3 h-3 ml-1 text-[var(--text-muted)]" title={t('inspections.row.titleHasPhoto')} />}
                       {r.linked_action_id && <ClipboardList className="inline w-3 h-3 ml-1 text-yellow-400" title={t('inspections.row.titleActionRaised')} />}
                     </div>
 
                     {/* Site */}
-                    <div className="px-3 text-gray-300 text-sm truncate">{r.site}</div>
+                    <div className="px-3 text-[var(--text-secondary)] text-sm truncate">{r.site}</div>
 
                     {/* Asset */}
-                    <div className="px-3 font-mono text-xs text-gray-400 truncate">{r.asset_no || '-'}</div>
+                    <div className="px-3 font-mono text-xs text-[var(--text-secondary)] truncate">{r.asset_no || '-'}</div>
 
                     {/* Date */}
-                    <div className="px-3 text-gray-400 text-xs tabular-nums">{r.scheduled_date}</div>
+                    <div className="px-3 text-[var(--text-secondary)] text-xs tabular-nums">{r.scheduled_date}</div>
 
                     {/* Severity */}
                     <div className="px-3">
@@ -1926,7 +1926,7 @@ export default function Inspections() {
                     </div>
 
                     {/* Inspector */}
-                    <div className="px-3 text-gray-400 text-xs truncate">{r.inspector || r.attendees || '-'}</div>
+                    <div className="px-3 text-[var(--text-secondary)] text-xs truncate">{r.inspector || r.attendees || '-'}</div>
 
                     {/* Actions */}
                     <div className="px-3">
@@ -1944,16 +1944,16 @@ export default function Inspections() {
                           </button>
                         )}
                         {r.linked_action_id && (
-                          <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-500 border border-gray-700 whitespace-nowrap">
+                          <span className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-muted)] border border-[var(--border-bright)] whitespace-nowrap">
                             {t('inspections.row.actionRaised')}
                           </span>
                         )}
                         <button onClick={() => setForm({ ...r, tyre_conditions: r.tyre_conditions ?? {} })}
-                          className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors">
+                          className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors">
                           {t('inspections.row.edit')}
                         </button>
                         <button onClick={() => exportInspectionDetailPdf(r, { branding, company })}
-                          className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
+                          className="text-xs px-2 py-1 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] transition-colors"
                           title={t('inspections.row.titleExportPdf')}>
                           <FileText size={11} className="inline" />
                         </button>
@@ -1975,7 +1975,7 @@ export default function Inspections() {
       {/* Add / Edit Modal */}
       {form !== null && (
         <Modal onClose={() => setForm(null)}>
-          <h3 className="text-lg font-bold text-white mb-5">
+          <h3 className="text-lg font-bold text-[var(--text-primary)] mb-5">
             {form.id ? t('inspections.modal.editRecord') : t('inspections.modal.addRecord')}
           </h3>
           <div className="space-y-4">
@@ -2060,8 +2060,8 @@ export default function Inspections() {
                 </select>
 
                 {form.vehicle_type && (
-                  <div className="bg-gray-800/60 rounded-xl p-4 border border-gray-700/50">
-                    <p className="text-xs text-gray-400 mb-3">{t('inspections.modal.clickTyre')}</p>
+                  <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--border-bright)]">
+                    <p className="text-xs text-[var(--text-secondary)] mb-3">{t('inspections.modal.clickTyre')}</p>
                     <VehicleTyreDiagram
                       vehicleType={form.vehicle_type}
                       tyreData={form.tyre_conditions || {}}
@@ -2070,8 +2070,8 @@ export default function Inspections() {
                     />
 
                     {selectedTyre && (
-                      <div className="mt-4 p-3 bg-gray-900 rounded-lg border border-gray-700">
-                        <p className="text-xs font-semibold text-white mb-2">{t('inspections.modal.tyreLabel', { id: selectedTyre })}</p>
+                      <div className="mt-4 p-3 bg-[var(--surface-1)] rounded-lg border border-[var(--border-bright)]">
+                        <p className="text-xs font-semibold text-[var(--text-primary)] mb-2">{t('inspections.modal.tyreLabel', { id: selectedTyre })}</p>
                         <div className="flex gap-2 flex-wrap mb-2">
                           {RISK_LEVELS.map(r => (
                             <button
@@ -2089,8 +2089,8 @@ export default function Inspections() {
                                   ? r === 'good'     ? 'bg-green-600 border-green-500 text-white'
                                   : r === 'warning'  ? 'bg-yellow-600 border-yellow-500 text-white'
                                   : r === 'critical' ? 'bg-red-600 border-red-500 text-white'
-                                  :                    'bg-gray-600 border-gray-500 text-white'
-                                  : 'bg-gray-800 border-gray-600 text-gray-400 hover:text-white'
+                                  :                    'bg-gray-600 border-gray-500 text-[var(--text-primary)]'
+                                  : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                               }`}
                             >
                               {r === 'none' ? t('inspections.modal.noData') : r}
@@ -2163,7 +2163,7 @@ export default function Inspections() {
                   onChange={handlePhotoChange} />
               </div>
               {form.photo_data && (
-                <img src={form.photo_data} alt="Attached" className="mt-2 rounded-lg max-h-48 border border-gray-700 object-cover" />
+                <img src={form.photo_data} alt="Attached" className="mt-2 rounded-lg max-h-48 border border-[var(--border-bright)] object-cover" />
               )}
             </div>
 
@@ -2203,8 +2203,8 @@ export default function Inspections() {
       {/* Delete confirm */}
       {deleteId && (
         <Modal onClose={() => setDeleteId(null)}>
-          <p className="text-white font-semibold mb-2">{t('inspections.deleteModal.title')}</p>
-          <p className="text-gray-400 text-sm mb-5">{t('inspections.deleteModal.warning')}</p>
+          <p className="text-[var(--text-primary)] font-semibold mb-2">{t('inspections.deleteModal.title')}</p>
+          <p className="text-[var(--text-secondary)] text-sm mb-5">{t('inspections.deleteModal.warning')}</p>
           <div className="flex gap-3">
             <button onClick={() => setDeleteId(null)} className="btn-secondary flex-1">{t('common.cancel')}</button>
             <button onClick={confirmDelete} className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700">{t('common.delete')}</button>
@@ -2218,8 +2218,8 @@ export default function Inspections() {
           <div className="flex gap-3 mb-4">
             <AlertTriangle size={20} className="text-red-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-white font-semibold">Delete {selectedIds.size} record{selectedIds.size !== 1 ? 's' : ''}?</p>
-              <p className="text-gray-400 text-sm mt-1">This permanently removes the selected inspection records. This cannot be undone.</p>
+              <p className="text-[var(--text-primary)] font-semibold">Delete {selectedIds.size} record{selectedIds.size !== 1 ? 's' : ''}?</p>
+              <p className="text-[var(--text-secondary)] text-sm mt-1">This permanently removes the selected inspection records. This cannot be undone.</p>
             </div>
           </div>
           {bulkError && (
@@ -2399,7 +2399,7 @@ function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, l
             )}
             <button
               onClick={onNext}
-              className="flex-[2] py-3 rounded-2xl text-sm font-bold text-white"
+              className="flex-[2] py-3 rounded-2xl text-sm font-bold text-[var(--text-primary)]"
               style={{ background: nextBg }}
             >
               {nextLabel}
@@ -2416,19 +2416,19 @@ function RaiseActionModal({ row, onConfirm, onClose }) {
   const [title, setTitle] = useState(`Action: ${row.title}`)
   return (
     <Modal onClose={onClose}>
-      <h3 className="text-lg font-bold text-white mb-4">{t('inspections.raiseModal.title')}</h3>
-      <p className="text-gray-400 text-sm mb-4">
+      <h3 className="text-lg font-bold text-[var(--text-primary)] mb-4">{t('inspections.raiseModal.title')}</h3>
+      <p className="text-[var(--text-secondary)] text-sm mb-4">
         {t('inspections.raiseModal.desc')}
       </p>
       <div className="mb-4">
         <label className="label">{t('inspections.raiseModal.actionTitle')}</label>
         <input className="input" value={title} onChange={e => setTitle(e.target.value)} />
       </div>
-      <div className="bg-gray-800 rounded-lg p-3 text-xs text-gray-400 mb-4 space-y-1">
-        <p><span className="text-gray-500">{t('inspections.raiseModal.site')}</span> {row.site}</p>
-        <p><span className="text-gray-500">{t('inspections.raiseModal.asset')}</span> {row.asset_no || '-'}</p>
-        <p><span className="text-gray-500">{t('inspections.raiseModal.priority')}</span> {row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium'}</p>
-        {row.findings && <p><span className="text-gray-500">{t('inspections.raiseModal.findings')}</span> {row.findings.slice(0, 100)}{row.findings.length > 100 ? '...' : ''}</p>}
+      <div className="bg-[var(--surface-2)] rounded-lg p-3 text-xs text-[var(--text-secondary)] mb-4 space-y-1">
+        <p><span className="text-[var(--text-muted)]">{t('inspections.raiseModal.site')}</span> {row.site}</p>
+        <p><span className="text-[var(--text-muted)]">{t('inspections.raiseModal.asset')}</span> {row.asset_no || '-'}</p>
+        <p><span className="text-[var(--text-muted)]">{t('inspections.raiseModal.priority')}</span> {row.severity === 'Critical' ? 'Critical' : row.severity === 'High' ? 'High' : 'Medium'}</p>
+        {row.findings && <p><span className="text-[var(--text-muted)]">{t('inspections.raiseModal.findings')}</span> {row.findings.slice(0, 100)}{row.findings.length > 100 ? '...' : ''}</p>}
       </div>
       <div className="flex gap-3">
         <button onClick={onClose} className="btn-secondary flex-1">{t('common.cancel')}</button>
@@ -2441,7 +2441,7 @@ function RaiseActionModal({ row, onConfirm, onClose }) {
 function Modal({ children, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+      <div className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
         {children}
       </div>
     </div>

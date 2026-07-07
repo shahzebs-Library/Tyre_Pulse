@@ -37,7 +37,7 @@ const PAGE_SIZE = 20
 const BUDGET_KEY = 'tp_procurement_budget'
 
 const STATUS_CONFIG = {
-  'Draft':            { color: 'text-gray-400',   bg: 'bg-gray-800',        border: 'border-gray-600' },
+  'Draft':            { color: 'text-[var(--text-secondary)]',   bg: 'bg-[var(--surface-2)]',        border: 'border-[var(--border-bright)]' },
   'Submitted':        { color: 'text-blue-400',   bg: 'bg-blue-900/30',     border: 'border-blue-700' },
   'Approved':         { color: 'text-green-400',  bg: 'bg-green-900/30',    border: 'border-green-700' },
   'Ordered':          { color: 'text-yellow-400', bg: 'bg-yellow-900/30',   border: 'border-yellow-700' },
@@ -51,7 +51,7 @@ const PRIORITY_CONFIG = {
   Urgent: { color: 'text-red-400',    dot: 'bg-red-500' },
   High:   { color: 'text-orange-400', dot: 'bg-orange-500' },
   Normal: { color: 'text-blue-400',   dot: 'bg-blue-500' },
-  Low:    { color: 'text-gray-400',   dot: 'bg-gray-500' },
+  Low:    { color: 'text-[var(--text-secondary)]',   dot: 'bg-gray-500' },
 }
 
 const STATUS_TIMELINE = ['Draft','Submitted','Approved','Ordered','Delivered','Closed']
@@ -331,7 +331,7 @@ export default function Procurement() {
     else { setSortField(field); setSortDir('asc') }
   }
   function SortIcon({ field }) {
-    if (sortField !== field) return <ChevronDown size={13} className="text-gray-600" />
+    if (sortField !== field) return <ChevronDown size={13} className="text-[var(--text-dim)]" />
     return sortDir === 'asc'
       ? <ChevronUp size={13} className="text-blue-400" />
       : <ChevronDown size={13} className="text-blue-400" />
@@ -557,10 +557,10 @@ export default function Procurement() {
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-950">
+      <div className="flex items-center justify-center min-h-screen bg-[var(--surface-0)]">
         <div className="text-center">
           <Loader2 className="animate-spin text-orange-400 mx-auto mb-3" size={40} />
-          <p className="text-gray-400">{t('procurement.loading')}</p>
+          <p className="text-[var(--text-secondary)]">{t('procurement.loading')}</p>
         </div>
       </div>
     )
@@ -575,10 +575,10 @@ export default function Procurement() {
         icon={ShoppingCart}
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={load} className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white transition-colors" title={t('procurement.refresh')}>
+            <button onClick={load} className="p-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors" title={t('procurement.refresh')}>
               <RefreshCw size={16} />
             </button>
-            <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors">
+            <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm rounded-lg transition-colors">
               <FileSpreadsheet size={16} />{t('procurement.actions.excel')}
             </button>
             <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-lg transition-colors">
@@ -645,16 +645,16 @@ export default function Procurement() {
         ].map(({ label, value, color, icon: Icon, sub }) => (
           <motion.div
             key={label}
-            className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+            className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
             <div className="flex items-center gap-2 mb-2">
               <Icon size={16} className={`text-${color}-400`} />
-              <span className="text-gray-400 text-xs">{label}</span>
+              <span className="text-[var(--text-secondary)] text-xs">{label}</span>
             </div>
             <div className={`text-2xl font-bold text-${color}-400`}>{value}</div>
-            {sub && <p className="text-gray-500 text-xs mt-1">{sub}</p>}
+            {sub && <p className="text-[var(--text-muted)] text-xs mt-1">{sub}</p>}
           </motion.div>
         ))}
       </div>
@@ -662,23 +662,23 @@ export default function Procurement() {
       {/* ── Charts ─────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Monthly spend by vendor */}
-        <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">{t('procurement.charts.vendorSpendTitle')}</h3>
+        <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5">
+          <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('procurement.charts.vendorSpendTitle')}</h3>
           <div className="h-56">
             {vendorBarData.datasets.length > 0
               ? <Bar data={vendorBarData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { position: 'top', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 10 } } } } }} />
-              : <div className="h-full flex items-center justify-center text-gray-600 text-sm">{t('procurement.charts.noDeliveredOrders')}</div>
+              : <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">{t('procurement.charts.noDeliveredOrders')}</div>
             }
           </div>
         </div>
 
         {/* Status doughnut */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">{t('procurement.charts.ordersByStatus')}</h3>
+        <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5">
+          <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('procurement.charts.ordersByStatus')}</h3>
           <div className="h-56">
             {orders.length > 0
               ? <Doughnut data={statusDoughnutData} options={{ ...CHART_OPTS, scales: undefined, plugins: { ...CHART_OPTS.plugins, legend: { position: 'right', labels: { color: '#9ca3af', boxWidth: 10, font: { size: 10 } } } } }} />
-              : <div className="h-full flex items-center justify-center text-gray-600 text-sm">{t('procurement.charts.noOrders')}</div>
+              : <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">{t('procurement.charts.noOrders')}</div>
             }
           </div>
         </div>
@@ -687,9 +687,9 @@ export default function Procurement() {
       {/* ── Budget vs Actual Panel ──────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Budget panel */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-semibold">{t('procurement.budgetPanel.title')}</h3>
+            <h3 className="text-[var(--text-primary)] font-semibold">{t('procurement.budgetPanel.title')}</h3>
             <button
               onClick={() => { setEditBudget(!editBudget); setBudgetInput(budget > 0 ? budget.toString() : '') }}
               className="text-xs text-orange-400 hover:text-orange-300 px-2 py-1 rounded border border-orange-700/50 hover:border-orange-500 transition-colors"
@@ -705,7 +705,7 @@ export default function Procurement() {
                 value={budgetInput}
                 onChange={e => setBudgetInput(e.target.value)}
                 placeholder={t('procurement.budgetPanel.placeholder', { currency: activeCurrency })}
-                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                className="flex-1 px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500"
                 onKeyDown={e => e.key === 'Enter' && saveBudget()}
               />
               <button onClick={saveBudget} className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded-lg transition-colors">
@@ -719,31 +719,31 @@ export default function Procurement() {
 
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">{t('procurement.budgetPanel.annualBudget')}</span>
-              <span className="text-white font-medium">{budget > 0 ? fmtCur(budget) : t('procurement.budgetPanel.notSet')}</span>
+              <span className="text-[var(--text-secondary)]">{t('procurement.budgetPanel.annualBudget')}</span>
+              <span className="text-[var(--text-primary)] font-medium">{budget > 0 ? fmtCur(budget) : t('procurement.budgetPanel.notSet')}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">{t('procurement.budgetPanel.totalSpend')}</span>
+              <span className="text-[var(--text-secondary)]">{t('procurement.budgetPanel.totalSpend')}</span>
               <span className="text-green-400 font-medium">{fmtCur(kpis.spend)}</span>
             </div>
             {budget > 0 && (
               <>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">{t('procurement.budgetPanel.remaining')}</span>
+                  <span className="text-[var(--text-secondary)]">{t('procurement.budgetPanel.remaining')}</span>
                   <span className={`font-medium ${budget - kpis.spend < 0 ? 'text-red-400' : 'text-teal-400'}`}>
                     {fmtCur(budget - kpis.spend)}
                   </span>
                 </div>
                 {/* Gauge */}
                 <div className="mt-3">
-                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                  <div className="flex justify-between text-xs text-[var(--text-muted)] mb-1">
                     <span>0</span>
-                    <span className={kpis.budgetVariance > 100 ? 'text-red-400 font-semibold' : 'text-gray-400'}>
+                    <span className={kpis.budgetVariance > 100 ? 'text-red-400 font-semibold' : 'text-[var(--text-secondary)]'}>
                       {kpis.budgetVariance?.toFixed(1)}%
                     </span>
                     <span>{fmtCur(budget)}</span>
                   </div>
-                  <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
+                  <div className="h-3 bg-[var(--surface-2)] rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-700 ${
                         kpis.budgetVariance > 100 ? 'bg-red-500' :
@@ -759,8 +759,8 @@ export default function Procurement() {
         </div>
 
         {/* Cumulative line chart */}
-        <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h3 className="text-white font-semibold mb-4">{t('procurement.charts.cumulativeTitle', { year: new Date().getFullYear() })}</h3>
+        <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5">
+          <h3 className="text-[var(--text-primary)] font-semibold mb-4">{t('procurement.charts.cumulativeTitle', { year: new Date().getFullYear() })}</h3>
           <div className="h-52">
             <Line data={cumulativeLineData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { position: 'top', labels: { color: '#9ca3af', boxWidth: 12, font: { size: 11 } } } } }} />
           </div>
@@ -768,50 +768,50 @@ export default function Procurement() {
       </div>
 
       {/* ── Filters ────────────────────────────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4">
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-48">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder={t('procurement.filters.searchPlaceholder')}
-              className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500"
+              className="w-full pl-9 pr-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm placeholder-gray-500 focus:outline-none focus:border-orange-500"
             />
           </div>
           <select value={statusFilter} onChange={e => { setStatus(e.target.value); setPage(1) }}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500">
+            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
             <option value="All">{t('procurement.filters.allStatuses')}</option>
             {STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
           <select value={vendorFilter} onChange={e => { setVendor(e.target.value); setPage(1) }}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500">
+            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
             {vendors.map(v => <option key={v}>{v === 'All' ? t('procurement.filters.allVendors') : v}</option>)}
           </select>
           <select value={siteFilter} onChange={e => { setSite(e.target.value); setPage(1) }}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500">
+            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
             {sites.map(s => <option key={s}>{s === 'All' ? t('procurement.filters.allSites') : s}</option>)}
           </select>
           <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
           <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
           {(search || statusFilter !== 'All' || vendorFilter !== 'All' || siteFilter !== 'All' || dateFrom || dateTo) && (
             <button onClick={() => { setSearch(''); setStatus('All'); setVendor('All'); setSite('All'); setDateFrom(''); setDateTo(''); setPage(1) }}
               className="px-3 py-2 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm hover:bg-red-900/50 transition-colors">
               {t('procurement.filters.clear')}
             </button>
           )}
-          <span className="ml-auto self-center text-gray-400 text-sm">{t('procurement.filters.resultsCount', { count: filtered.length })}</span>
+          <span className="ml-auto self-center text-[var(--text-secondary)] text-sm">{t('procurement.filters.resultsCount', { count: filtered.length })}</span>
         </div>
       </div>
 
       {/* ── Table ──────────────────────────────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800">
+              <tr className="border-b border-[var(--border-dim)]">
                 {[
                   { label: t('procurement.table.columns.poNumber'),     field: 'po_number'    },
                   { label: t('procurement.table.columns.vendor'),       field: 'vendor_name'  },
@@ -825,7 +825,7 @@ export default function Procurement() {
                   { label: t('procurement.table.columns.actions'),     field: null           },
                 ].map(({ label, field }) => (
                   <th key={label}
-                    className={`px-4 py-3 text-left text-gray-400 font-medium text-xs uppercase tracking-wide ${field ? 'cursor-pointer hover:text-white' : ''}`}
+                    className={`px-4 py-3 text-left text-[var(--text-secondary)] font-medium text-xs uppercase tracking-wide ${field ? 'cursor-pointer hover:text-[var(--text-primary)]' : ''}`}
                     onClick={() => field && handleSort(field)}
                   >
                     <div className="flex items-center gap-1">
@@ -839,7 +839,7 @@ export default function Procurement() {
             <tbody>
               {paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-16 text-gray-500">
+                  <td colSpan={10} className="text-center py-16 text-[var(--text-muted)]">
                     <ShoppingCart size={40} className="mx-auto mb-3 opacity-30" />
                     <p>{t('procurement.table.emptyTitle')}</p>
                     <button onClick={openNew} className="mt-3 text-orange-400 hover:text-orange-300 text-sm">
@@ -854,9 +854,9 @@ export default function Procurement() {
                     <td className="px-4 py-3">
                       <span className="text-orange-400 font-mono text-xs font-semibold">{po.po_number}</span>
                     </td>
-                    <td className="px-4 py-3 text-white font-medium">{po.vendor_name}</td>
-                    <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{fmtDate(po.order_date)}</td>
-                    <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{fmtDate(po.expected_delivery)}</td>
+                    <td className="px-4 py-3 text-[var(--text-primary)] font-medium">{po.vendor_name}</td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(po.order_date)}</td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap">{fmtDate(po.expected_delivery)}</td>
                     <td className="px-4 py-3"><StatusBadge status={po.status} /></td>
                     <td className="px-4 py-3">
                       <span className={`flex items-center gap-1.5 ${pc.color} text-xs`}>
@@ -864,14 +864,14 @@ export default function Procurement() {
                         {po.priority}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-400 text-center">{(po.items || []).length}</td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)] text-center">{(po.items || []).length}</td>
                     <td className="px-4 py-3 text-green-400 font-medium whitespace-nowrap">{fmtCur(po.total_amount)}</td>
-                    <td className="px-4 py-3 text-gray-400">{po.site || '-'}</td>
+                    <td className="px-4 py-3 text-[var(--text-secondary)]">{po.site || '-'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => setViewPO(po)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title={t('procurement.table.viewTooltip')}><Eye size={13} /></button>
-                        <button onClick={() => openEdit(po)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title={t('procurement.table.editTooltip')}><Edit2 size={13} /></button>
-                        <button onClick={() => exportPDF(po)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 transition-colors" title={t('procurement.table.pdfTooltip')}><FileText size={13} /></button>
+                        <button onClick={() => setViewPO(po)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors" title={t('procurement.table.viewTooltip')}><Eye size={13} /></button>
+                        <button onClick={() => openEdit(po)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors" title={t('procurement.table.editTooltip')}><Edit2 size={13} /></button>
+                        <button onClick={() => exportPDF(po)} className="p-1.5 rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors" title={t('procurement.table.pdfTooltip')}><FileText size={13} /></button>
                       </div>
                     </td>
                   </tr>
@@ -882,13 +882,13 @@ export default function Procurement() {
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-800">
-            <span className="text-gray-400 text-sm">{t('procurement.table.pageSummary', { page, total: totalPages, count: filtered.length })}</span>
+          <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-dim)]">
+            <span className="text-[var(--text-secondary)] text-sm">{t('procurement.table.pageSummary', { page, total: totalPages, count: filtered.length })}</span>
             <div className="flex gap-2">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">{t('procurement.table.prev')}</button>
+                className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm rounded disabled:opacity-40">{t('procurement.table.prev')}</button>
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 text-sm rounded disabled:opacity-40">{t('procurement.table.next')}</button>
+                className="px-3 py-1.5 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm rounded disabled:opacity-40">{t('procurement.table.next')}</button>
             </div>
           </div>
         )}
@@ -902,52 +902,52 @@ export default function Procurement() {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-              className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl">
+              className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl">
 
               {/* Modal header */}
-              <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between z-10">
+              <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--border-dim)] px-6 py-4 flex items-center justify-between z-10">
                 <div className="flex items-center gap-3">
                   <ShoppingCart size={18} className="text-orange-400" />
-                  <h2 className="text-white font-bold text-lg">
+                  <h2 className="text-[var(--text-primary)] font-bold text-lg">
                     {editPO ? t('procurement.modal.editTitle', { poNumber: editPO.po_number }) : t('procurement.modal.newTitle')}
                   </h2>
                 </div>
-                <button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"><X size={18} /></button>
+                <button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"><X size={18} /></button>
               </div>
 
               <div className="p-6 space-y-5">
                 {/* Row 1: Vendor + Order Date */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.vendorName')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.vendorName')}</label>
                     <input value={formData.vendor_name} onChange={e => setFormData(f => ({ ...f, vendor_name: e.target.value }))}
-                      placeholder={t('procurement.modal.vendorNamePlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.vendorNamePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.orderDate')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.orderDate')}</label>
                     <input type="date" value={formData.order_date} onChange={e => setFormData(f => ({ ...f, order_date: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                 </div>
 
                 {/* Row 2: Expected Del + Status */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.expectedDelivery')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.expectedDelivery')}</label>
                     <input type="date" value={formData.expected_delivery} onChange={e => setFormData(f => ({ ...f, expected_delivery: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.priority')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.priority')}</label>
                     <select value={formData.priority} onChange={e => setFormData(f => ({ ...f, priority: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500">
+                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
                       {PRIORITIES.map(p => <option key={p}>{p}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.status')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.status')}</label>
                     <select value={formData.status} onChange={e => setFormData(f => ({ ...f, status: e.target.value }))}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500">
+                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
                       {STATUSES.map(s => <option key={s}>{s}</option>)}
                     </select>
                   </div>
@@ -956,46 +956,46 @@ export default function Procurement() {
                 {/* Row 3: Site + Country + Budget Code */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.site')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.site')}</label>
                     <input value={formData.site} onChange={e => setFormData(f => ({ ...f, site: e.target.value }))}
-                      placeholder={t('procurement.modal.sitePlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.sitePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.country')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.country')}</label>
                     <input value={formData.country} onChange={e => setFormData(f => ({ ...f, country: e.target.value }))}
-                      placeholder={t('procurement.modal.countryPlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.countryPlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.budgetCode')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.budgetCode')}</label>
                     <input value={formData.budget_code} onChange={e => setFormData(f => ({ ...f, budget_code: e.target.value }))}
-                      placeholder={t('procurement.modal.budgetCodePlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.budgetCodePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                 </div>
 
                 {/* Row 4: Requested By + Approved By */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.requestedBy')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.requestedBy')}</label>
                     <input value={formData.requested_by} onChange={e => setFormData(f => ({ ...f, requested_by: e.target.value }))}
-                      placeholder={t('procurement.modal.namePlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.namePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
-                    <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.approvedBy')}</label>
+                    <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.approvedBy')}</label>
                     <input value={formData.approved_by} onChange={e => setFormData(f => ({ ...f, approved_by: e.target.value }))}
-                      placeholder={t('procurement.modal.namePlaceholder')} className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.namePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                 </div>
 
                 {/* Line items */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-2 block font-medium uppercase tracking-wide">{t('procurement.modal.lineItems')}</label>
+                  <label className="text-[var(--text-secondary)] text-xs mb-2 block font-medium uppercase tracking-wide">{t('procurement.modal.lineItems')}</label>
 
                   {/* Existing items */}
                   {formData.items.length > 0 && (
-                    <div className="mb-3 rounded-lg overflow-hidden border border-gray-700">
+                    <div className="mb-3 rounded-lg overflow-hidden border border-[var(--border-bright)]">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="bg-gray-800 text-gray-400">
+                          <tr className="bg-[var(--surface-2)] text-[var(--text-secondary)]">
                             <th className="px-3 py-2 text-left">{t('procurement.modal.columns.brand')}</th>
                             <th className="px-3 py-2 text-left">{t('procurement.modal.columns.size')}</th>
                             <th className="px-3 py-2 text-right">{t('procurement.modal.columns.qty')}</th>
@@ -1007,10 +1007,10 @@ export default function Procurement() {
                         <tbody>
                           {formData.items.map((it, idx) => (
                             <tr key={idx} className="border-t border-[var(--input-border)]">
-                              <td className="px-3 py-2 text-white">{it.brand}</td>
-                              <td className="px-3 py-2 text-gray-300">{it.size}</td>
-                              <td className="px-3 py-2 text-gray-300 text-right">{it.quantity}</td>
-                              <td className="px-3 py-2 text-gray-300 text-right">{fmtCur(it.unit_price)}</td>
+                              <td className="px-3 py-2 text-[var(--text-primary)]">{it.brand}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)]">{it.size}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)] text-right">{it.quantity}</td>
+                              <td className="px-3 py-2 text-[var(--text-secondary)] text-right">{fmtCur(it.unit_price)}</td>
                               <td className="px-3 py-2 text-green-400 text-right font-medium">{fmtCur(calcItemTotal(it))}</td>
                               <td className="px-3 py-2">
                                 <button onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-400"><X size={13} /></button>
@@ -1025,13 +1025,13 @@ export default function Procurement() {
                   {/* Add item row */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
                     <input value={itemRow.brand} onChange={e => setItemRow(r => ({ ...r, brand: e.target.value }))}
-                      placeholder={t('procurement.modal.brandPlaceholder')} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.brandPlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                     <input value={itemRow.size} onChange={e => setItemRow(r => ({ ...r, size: e.target.value }))}
-                      placeholder={t('procurement.modal.sizePlaceholder')} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.sizePlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                     <input type="number" min="1" value={itemRow.quantity} onChange={e => setItemRow(r => ({ ...r, quantity: e.target.value }))}
-                      placeholder={t('procurement.modal.qtyPlaceholder')} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.qtyPlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
                     <input type="number" min="0" step="0.01" value={itemRow.unit_price} onChange={e => setItemRow(r => ({ ...r, unit_price: e.target.value }))}
-                      placeholder={t('procurement.modal.unitPricePlaceholder')} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                      placeholder={t('procurement.modal.unitPricePlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500"
                       onKeyDown={e => e.key === 'Enter' && addItem()} />
                     <button onClick={addItem} className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-1">
                       <Plus size={14} />{t('procurement.modal.add')}
@@ -1040,22 +1040,22 @@ export default function Procurement() {
 
                   {/* Totals */}
                   {formData.items.length > 0 && (
-                    <div className="mt-3 bg-gray-800 rounded-lg p-3 space-y-1.5">
+                    <div className="mt-3 bg-[var(--surface-2)] rounded-lg p-3 space-y-1.5">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">{t('procurement.modal.subtotal')}</span>
-                        <span className="text-white">{fmtCur(formSubtotal)}</span>
+                        <span className="text-[var(--text-secondary)]">{t('procurement.modal.subtotal')}</span>
+                        <span className="text-[var(--text-primary)]">{fmtCur(formSubtotal)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-400 flex items-center gap-2">
+                        <span className="text-[var(--text-secondary)] flex items-center gap-2">
                           {t('procurement.modal.tax')}
                           <input type="number" min="0" max="100" value={taxPct} onChange={e => setTaxPct(parseFloat(e.target.value) || 0)}
-                            className="w-14 px-2 py-0.5 bg-gray-700 border border-gray-600 rounded text-white text-xs focus:outline-none" />
+                            className="w-14 px-2 py-0.5 bg-[var(--surface-3)] border border-[var(--border-bright)] rounded text-[var(--text-primary)] text-xs focus:outline-none" />
                           %
                         </span>
-                        <span className="text-white">{fmtCur(formTax)}</span>
+                        <span className="text-[var(--text-primary)]">{fmtCur(formTax)}</span>
                       </div>
-                      <div className="flex justify-between text-base font-semibold border-t border-gray-700 pt-1.5 mt-1.5">
-                        <span className="text-white">{t('procurement.modal.total')}</span>
+                      <div className="flex justify-between text-base font-semibold border-t border-[var(--border-bright)] pt-1.5 mt-1.5">
+                        <span className="text-[var(--text-primary)]">{t('procurement.modal.total')}</span>
                         <span className="text-green-400">{fmtCur(formTotal)}</span>
                       </div>
                     </div>
@@ -1064,21 +1064,21 @@ export default function Procurement() {
 
                 {/* Notes */}
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">{t('procurement.modal.notes')}</label>
+                  <label className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.notes')}</label>
                   <textarea value={formData.notes} onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))}
                     rows={3} placeholder={t('procurement.modal.notesPlaceholder')}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                    className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500 resize-none" />
                 </div>
               </div>
 
               {/* Footer */}
-              <div className="sticky bottom-0 bg-gray-900 border-t border-gray-800 px-6 py-4 flex items-center justify-between">
-                <div className="text-gray-400 text-sm">
+              <div className="sticky bottom-0 bg-[var(--surface-1)] border-t border-[var(--border-dim)] px-6 py-4 flex items-center justify-between">
+                <div className="text-[var(--text-secondary)] text-sm">
                   {t('procurement.modal.totalLabel')} <span className="text-green-400 font-bold text-base">{fmtCur(formTotal)}</span>
-                  {formData.items.length > 0 && <span className="text-gray-500 ml-2">{t('procurement.modal.itemsCount', { count: formData.items.length })}</span>}
+                  {formData.items.length > 0 && <span className="text-[var(--text-muted)] ml-2">{t('procurement.modal.itemsCount', { count: formData.items.length })}</span>}
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white text-sm rounded-lg transition-colors">
+                  <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm rounded-lg transition-colors">
                     {t('procurement.modal.cancel')}
                   </button>
                   <button onClick={handleSave} disabled={saving}
@@ -1104,26 +1104,26 @@ export default function Procurement() {
             <motion.div
               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="w-full sm:w-[520px] h-full bg-gray-900 border-l border-gray-700 overflow-y-auto shadow-2xl"
+              className="w-full sm:w-[520px] h-full bg-[var(--surface-1)] border-l border-[var(--border-bright)] overflow-y-auto shadow-2xl"
               onClick={e => e.stopPropagation()}
             >
               {/* Drawer header */}
-              <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between z-10">
+              <div className="sticky top-0 bg-[var(--surface-1)] border-b border-[var(--border-dim)] px-6 py-4 flex items-center justify-between z-10">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-white font-bold text-base">{viewPO.po_number}</h2>
+                    <h2 className="text-[var(--text-primary)] font-bold text-base">{viewPO.po_number}</h2>
                     <StatusBadge status={viewPO.status} />
                   </div>
-                  <p className="text-gray-400 text-sm mt-0.5">{viewPO.vendor_name}</p>
+                  <p className="text-[var(--text-secondary)] text-sm mt-0.5">{viewPO.vendor_name}</p>
                 </div>
-                <button onClick={() => setViewPO(null)} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"><X size={18} /></button>
+                <button onClick={() => setViewPO(null)} className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors"><X size={18} /></button>
               </div>
 
               <div className="p-6 space-y-5">
 
                 {/* Status timeline */}
                 <div>
-                  <p className="text-gray-400 text-xs mb-3 uppercase tracking-wide font-medium">{t('procurement.drawer.statusTimeline')}</p>
+                  <p className="text-[var(--text-secondary)] text-xs mb-3 uppercase tracking-wide font-medium">{t('procurement.drawer.statusTimeline')}</p>
                   <div className="flex items-center gap-0">
                     {STATUS_TIMELINE.map((s, idx) => {
                       const currentIdx = STATUS_TIMELINE.indexOf(viewPO.status)
@@ -1137,16 +1137,16 @@ export default function Procurement() {
                               isCancelled ? 'bg-red-500' :
                               isCurrent   ? 'bg-orange-400 ring-2 ring-orange-400/30' :
                               isPast      ? 'bg-green-500' :
-                                            'bg-gray-700'
+                                            'bg-[var(--surface-3)]'
                             }`} />
                             <span className={`text-[10px] mt-1 leading-tight text-center ${
                               isCurrent ? 'text-orange-400 font-semibold' :
                               isPast    ? 'text-green-400' :
-                                          'text-gray-600'
+                                          'text-[var(--text-dim)]'
                             }`}>{s}</span>
                           </div>
                           {idx < STATUS_TIMELINE.length - 1 && (
-                            <div className={`h-px flex-1 mx-1 ${isPast ? 'bg-green-600' : 'bg-gray-700'}`} />
+                            <div className={`h-px flex-1 mx-1 ${isPast ? 'bg-green-600' : 'bg-[var(--surface-3)]'}`} />
                           )}
                         </div>
                       )
@@ -1166,7 +1166,7 @@ export default function Procurement() {
                   const next = nextMap[viewPO.status] || []
                   return next.length > 0 ? (
                     <div>
-                      <p className="text-gray-400 text-xs mb-2">{t('procurement.drawer.quickActions')}</p>
+                      <p className="text-[var(--text-secondary)] text-xs mb-2">{t('procurement.drawer.quickActions')}</p>
                       <div className="flex flex-wrap gap-2">
                         {next.map(ns => (
                           <button key={ns} onClick={() => updateStatus(viewPO, ns)}
@@ -1198,9 +1198,9 @@ export default function Procurement() {
                     [t('procurement.drawer.fields.approvedBy'),     viewPO.approved_by],
                     [t('procurement.drawer.fields.leadTime'),       viewPO.actual_delivery ? t('procurement.drawer.fields.leadTimeDays', { days: daysBetween(viewPO.order_date, viewPO.actual_delivery) }) : null],
                   ].filter(([, v]) => v).map(([label, value]) => (
-                    <div key={label} className="flex justify-between py-1.5 border-b border-gray-800">
-                      <span className="text-gray-400 text-sm">{label}</span>
-                      <span className="text-white text-sm font-medium">{value}</span>
+                    <div key={label} className="flex justify-between py-1.5 border-b border-[var(--border-dim)]">
+                      <span className="text-[var(--text-secondary)] text-sm">{label}</span>
+                      <span className="text-[var(--text-primary)] text-sm font-medium">{value}</span>
                     </div>
                   ))}
                 </div>
@@ -1208,33 +1208,33 @@ export default function Procurement() {
                 {/* Line items with received qty tracking */}
                 {(viewPO.items || []).length > 0 && (
                   <div>
-                    <p className="text-gray-400 text-xs mb-2 uppercase tracking-wide font-medium">{t('procurement.drawer.lineItemsTitle')}</p>
+                    <p className="text-[var(--text-secondary)] text-xs mb-2 uppercase tracking-wide font-medium">{t('procurement.drawer.lineItemsTitle')}</p>
                     <div className="space-y-2">
                       {viewPO.items.map((it, idx) => {
                         const received = it.received_qty ?? 0
                         const pct      = Math.min(100, (received / Math.max(1, it.quantity)) * 100)
                         return (
-                          <div key={idx} className="bg-gray-800 rounded-xl p-3">
+                          <div key={idx} className="bg-[var(--surface-2)] rounded-xl p-3">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-white text-sm font-medium">{it.brand} - {it.size}</span>
+                              <span className="text-[var(--text-primary)] text-sm font-medium">{it.brand} - {it.size}</span>
                               <span className="text-green-400 text-sm font-semibold">{fmtCur(calcItemTotal(it))}</span>
                             </div>
-                            <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                            <div className="flex items-center justify-between text-xs text-[var(--text-secondary)] mb-2">
                               <span>{t('procurement.drawer.unitsAtPrice', { qty: it.quantity, price: fmtCur(it.unit_price) })}</span>
                               <span className={received >= it.quantity ? 'text-green-400' : 'text-orange-400'}>
                                 {t('procurement.drawer.receivedOf', { received, qty: it.quantity })}
                               </span>
                             </div>
-                            <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden mb-2">
+                            <div className="h-1.5 bg-[var(--surface-3)] rounded-full overflow-hidden mb-2">
                               <div className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-green-500' : 'bg-orange-500'}`}
                                 style={{ width: `${pct}%` }} />
                             </div>
                             {['Ordered','Partial Delivery'].includes(viewPO.status) && (
                               <div className="flex items-center gap-2">
                                 <input type="number" min="0" max={it.quantity} defaultValue={received}
-                                  className="w-20 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-xs focus:outline-none"
+                                  className="w-20 px-2 py-1 bg-[var(--surface-3)] border border-[var(--border-bright)] rounded text-[var(--text-primary)] text-xs focus:outline-none"
                                   onBlur={e => updateItemReceivedQty(viewPO.id, idx, e.target.value)} />
-                                <span className="text-gray-500 text-xs">{t('procurement.drawer.markReceivedQty')}</span>
+                                <span className="text-[var(--text-muted)] text-xs">{t('procurement.drawer.markReceivedQty')}</span>
                               </div>
                             )}
                           </div>
@@ -1245,26 +1245,26 @@ export default function Procurement() {
                 )}
 
                 {/* Cost summary */}
-                <div className="bg-gray-800 rounded-xl p-4 space-y-2">
-                  <p className="text-gray-400 text-xs mb-2 uppercase tracking-wide font-medium">{t('procurement.drawer.costSummary')}</p>
+                <div className="bg-[var(--surface-2)] rounded-xl p-4 space-y-2">
+                  <p className="text-[var(--text-secondary)] text-xs mb-2 uppercase tracking-wide font-medium">{t('procurement.drawer.costSummary')}</p>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">{t('procurement.drawer.subtotal')}</span>
-                    <span className="text-white">{fmtCur(viewPO.subtotal)}</span>
+                    <span className="text-[var(--text-secondary)]">{t('procurement.drawer.subtotal')}</span>
+                    <span className="text-[var(--text-primary)]">{fmtCur(viewPO.subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">{t('procurement.drawer.tax')}</span>
-                    <span className="text-white">{fmtCur(viewPO.tax_amount)}</span>
+                    <span className="text-[var(--text-secondary)]">{t('procurement.drawer.tax')}</span>
+                    <span className="text-[var(--text-primary)]">{fmtCur(viewPO.tax_amount)}</span>
                   </div>
-                  <div className="flex justify-between text-base font-semibold border-t border-gray-700 pt-2 mt-2">
-                    <span className="text-white">{t('procurement.drawer.total')}</span>
+                  <div className="flex justify-between text-base font-semibold border-t border-[var(--border-bright)] pt-2 mt-2">
+                    <span className="text-[var(--text-primary)]">{t('procurement.drawer.total')}</span>
                     <span className="text-green-400 text-xl">{fmtCur(viewPO.total_amount)}</span>
                   </div>
                 </div>
 
                 {viewPO.notes && (
-                  <div className="bg-gray-800 rounded-xl p-4">
-                    <p className="text-gray-400 text-xs mb-2">{t('procurement.drawer.notes')}</p>
-                    <p className="text-gray-300 text-sm leading-relaxed">{viewPO.notes}</p>
+                  <div className="bg-[var(--surface-2)] rounded-xl p-4">
+                    <p className="text-[var(--text-secondary)] text-xs mb-2">{t('procurement.drawer.notes')}</p>
+                    <p className="text-[var(--text-secondary)] text-sm leading-relaxed">{viewPO.notes}</p>
                   </div>
                 )}
 
@@ -1275,7 +1275,7 @@ export default function Procurement() {
                     <Edit2 size={15} />{t('procurement.drawer.editPo')}
                   </button>
                   <button onClick={() => exportPDF(viewPO)}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-xl transition-colors">
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[var(--surface-3)] hover:bg-gray-600 text-[var(--text-primary)] text-sm font-medium rounded-xl transition-colors">
                     <FileText size={15} />{t('procurement.drawer.exportPdf')}
                   </button>
                 </div>

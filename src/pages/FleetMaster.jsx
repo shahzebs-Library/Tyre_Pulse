@@ -6,6 +6,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel } from '../lib/exportUtils'
 import { sanitizeSearchTerm } from '../lib/searchFilter'
+import { canAddResource } from '../lib/api/billing'
 import {
   Search, Plus, Edit2, Trash2, Save, X, AlertTriangle,
   FileSpreadsheet, Download, Upload, Truck
@@ -237,6 +238,19 @@ export default function FleetMaster() {
     if (!form.asset_no.trim()) { setFormError(t('fleetmaster.form.required')); return }
     setSaving(true)
     setFormError('')
+
+    // Plan entitlement: only gate NEW vehicles (edits never add to the count).
+    // Server-authoritative via org_can_add(); fails open on any RPC error so a
+    // transient failure never blocks a legitimate edit/create.
+    if (!editRecord?.id) {
+      const allowed = await canAddResource('vehicles')
+      if (!allowed) {
+        setFormError(t('fleetmaster.form.planLimit'))
+        setSaving(false)
+        return
+      }
+    }
+
     const payload = {
       ...form,
       year:                       form.year !== '' ? +form.year : null,

@@ -127,7 +127,8 @@
     "save": "Save Vehicle",
     "saving": "Saving...",
     "cancel": "Cancel",
-    "required": "Asset No is required"
+    "required": "Asset No is required",
+    "planLimit": "Your plan's vehicle limit has been reached. Upgrade in Billing & Subscription to add more vehicles."
   },
   "delete": {
     "title": "Delete Vehicle",

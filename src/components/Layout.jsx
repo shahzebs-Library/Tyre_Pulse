@@ -16,7 +16,7 @@ import {
   Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
   Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
-  Webhook, CheckSquare,
+  Webhook, CheckSquare, CreditCard,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -183,6 +183,7 @@ const NAV_GROUPS = [
       { to: '/permission-matrix', label: 'Permission Matrix', icon: ShieldCheck, adminOnly: true },
       { to: '/system-health',    label: 'System Health',      icon: HeartPulse, adminOnly: true },
       { to: '/tenant-health',    label: 'Usage & Adoption',   icon: BarChart, adminOnly: true },
+      { to: '/billing',          label: 'Billing & Subscription', icon: CreditCard, adminOnly: true, flag: 'billing' },
       { to: '/settings',         label: 'Settings',           icon: Settings },
     ],
   },

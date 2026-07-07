@@ -16,6 +16,7 @@ import {
   Target, ShoppingCart, HeartPulse, RefreshCw, Clock, Gauge, Fuel,
   RotateCcw, AlertCircle, ArrowLeftRight, FileWarning, LayoutGrid, Coffee,
   Recycle, Radio, PackagePlus, CalendarCheck2, BellRing, Brain, BarChart, Download,
+  Webhook, CheckSquare,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
@@ -152,6 +153,16 @@ const NAV_GROUPS = [
       { to: '/knowledge-base',    label: 'Knowledge Base',    icon: Brain, adminOnly: A },
       { to: '/ai-cost-monitor',   label: 'AI Cost Monitor',   icon: BarChart, adminOnly: A },
       { to: '/continuous-improvement', label: 'Continuous Improvement', icon: Zap, adminOnly: A },
+    ],
+  },
+  {
+    label: 'Automation',
+    items: [
+      { to: '/approvals',         label: 'Approvals',          icon: CheckSquare, roles: ANALYTICS_ROLES },
+      { to: '/events',            label: 'Event Stream',       icon: Radio, adminOnly: A },
+      { to: '/workflow-settings', label: 'Approval Workflows', icon: GitBranch, adminOnly: A },
+      { to: '/automation-rules',  label: 'Automation Rules',   icon: Zap, adminOnly: A },
+      { to: '/integrations',      label: 'API & Webhooks',     icon: Webhook, adminOnly: A },
     ],
   },
   {

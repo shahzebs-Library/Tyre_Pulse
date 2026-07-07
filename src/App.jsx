@@ -110,6 +110,11 @@ const ScheduledReports       = lazy(() => import('./pages/ScheduledReports'))
 const ReportCenter           = lazy(() => import('./pages/ReportCenter'))
 const KnowledgeBase          = lazy(() => import('./pages/KnowledgeBase'))
 const AiCostMonitor          = lazy(() => import('./pages/AiCostMonitor'))
+const EventStream            = lazy(() => import('./pages/EventStream'))
+const Approvals              = lazy(() => import('./pages/Approvals'))
+const WorkflowSettings       = lazy(() => import('./pages/WorkflowSettings'))
+const Integrations           = lazy(() => import('./pages/Integrations'))
+const AutomationRules        = lazy(() => import('./pages/AutomationRules'))
 
 // ── Per-page error boundary ───────────────────────────────────────────────
 function Safe({ children }) {
@@ -196,6 +201,12 @@ function MainApp() {
                       <Route path="/tyre-specs"           element={<Safe><TyreSpecifications /></Safe>} />
                       <Route path="/rotation"             element={<Safe><RotationSchedule /></Safe>} />
                       <Route path="/daily-ops"            element={<Safe><DailyOps /></Safe>} />
+                      {/* ── Automation ── */}
+                      <Route path="/events"               element={<Safe><EventStream /></Safe>} />
+                      <Route path="/approvals"            element={<Safe><Approvals /></Safe>} />
+                      <Route path="/workflow-settings"    element={<Safe><WorkflowSettings /></Safe>} />
+                      <Route path="/integrations"         element={<Safe><Integrations /></Safe>} />
+                      <Route path="/automation-rules"     element={<Safe><AutomationRules /></Safe>} />
                       {/* ── Intelligence ── */}
                       <Route path="/kpi-engine"              element={<Safe><ModuleRoute moduleKey="kpi_scorecard"><EngineeringKpi /></ModuleRoute></Safe>} />
                       <Route path="/kpi-command"             element={<Safe><ModuleRoute moduleKey="kpi_scorecard"><KpiCommandCenter /></ModuleRoute></Safe>} />

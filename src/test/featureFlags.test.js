@@ -13,6 +13,7 @@ const h = vi.hoisted(() => {
       _calls: calls,
       select(cols) { calls.select = cols; return b },
       eq(col, val) { calls.eq.push([col, val]); return b },
+      limit(n) { calls.limit = n; return Promise.resolve(state.result) },
       maybeSingle() { calls.maybeSingle = true; return Promise.resolve(state.result) },
       upsert(row, opts) {
         state.upserts.push({ table, row, opts })
@@ -147,7 +148,7 @@ describe('mergeFlags', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('fetchFlags', () => {
   it('reads app_settings by the feature_flags key and merges the value', async () => {
-    h.state.result = { data: { value: JSON.stringify({ erp_sync: false }) }, error: null }
+    h.state.result = { data: [{ value: JSON.stringify({ erp_sync: false }) }], error: null }
     const flags = await fetchFlags()
     expect(h.state.last._table).toBe('app_settings')
     expect(h.state.last._calls.eq).toContainEqual(['key', FEATURE_FLAGS_SETTINGS_KEY])
@@ -164,13 +165,13 @@ describe('fetchFlags', () => {
   })
 
   it('serves from cache within the TTL and refetches on force', async () => {
-    h.state.result = { data: { value: { ai_tools: false } }, error: null }
+    h.state.result = { data: [{ value: { ai_tools: false } }], error: null }
     await fetchFlags()
     h.state.last = null
     const cached = await fetchFlags()
     expect(cached.ai_tools).toBe(false)
     expect(h.state.last).toBeNull() // no second query
-    h.state.result = { data: { value: { ai_tools: true } }, error: null }
+    h.state.result = { data: [{ value: { ai_tools: true } }], error: null }
     const fresh = await fetchFlags({ force: true })
     expect(fresh.ai_tools).toBe(true)
   })

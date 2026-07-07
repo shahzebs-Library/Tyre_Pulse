@@ -215,12 +215,18 @@ export async function fetchFlags({ force = false } = {}) {
 
   inflight = (async () => {
     try {
+      // NB: `.limit(1)` (not `.maybeSingle()`) — if the table ever holds more
+      // than one feature_flags row, maybeSingle() throws and we would silently
+      // fall back to DEFAULT_FLAGS, where several capabilities (e.g.
+      // automation_platform) default OFF. That would hide those features and
+      // redirect their routes to the dashboard. Taking the first row keeps the
+      // real flags even in a benign duplicate/legacy state.
       const { data, error } = await supabase
         .from('app_settings')
         .select('value')
         .eq('key', FEATURE_FLAGS_SETTINGS_KEY)
-        .maybeSingle()
-      const flags = error ? { ...DEFAULT_FLAGS } : mergeFlags(data?.value)
+        .limit(1)
+      const flags = error ? { ...DEFAULT_FLAGS } : mergeFlags(data?.[0]?.value)
       cache = { flags, at: Date.now() }
       return flags
     } catch {

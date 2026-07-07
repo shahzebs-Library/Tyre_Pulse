@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { queryClient } from '../lib/queryClient'
+import { setMonitoringUser, clearMonitoringUser } from '../lib/monitoring'
 
 const AuthContext = createContext(null)
 
@@ -97,6 +98,7 @@ export function AuthProvider({ children }) {
       setModulePerms(null)
       unsubscribeFromProfile()
       setMfaEnabled(false)
+      clearMonitoringUser()
       setLoading(false)
       return
     }
@@ -150,6 +152,8 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('tp_access_revoked')
 
     setProfile(p)
+    // Monitoring context: id + role + site only — never email or name.
+    if (p) setMonitoringUser({ id: p.id, role: p.role, site: p.site })
     setModulePerms(permsRes.data ?? {})
     setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)
     setLoading(false)

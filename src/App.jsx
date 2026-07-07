@@ -111,6 +111,7 @@ const ScheduledReports       = lazy(() => import('./pages/ScheduledReports'))
 const ReportCenter           = lazy(() => import('./pages/ReportCenter'))
 const KnowledgeBase          = lazy(() => import('./pages/KnowledgeBase'))
 const AiCostMonitor          = lazy(() => import('./pages/AiCostMonitor'))
+const DisplayDashboard       = lazy(() => import('./pages/DisplayDashboard'))
 
 // ── Per-page error boundary ───────────────────────────────────────────────
 function Safe({ children }) {
@@ -149,6 +150,15 @@ function MainApp() {
           <Routes>
             <Route path="/login"          element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            {/* TV display mode: authed, but rendered WITHOUT the Layout chrome */}
+            <Route
+              path="/display"
+              element={
+                <ProtectedRoute>
+                  <Safe><DisplayDashboard /></Safe>
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/*"
               element={

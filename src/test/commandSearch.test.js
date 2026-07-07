@@ -183,7 +183,7 @@ describe('mapRecordRows', () => {
   })
 
   it('tyre, supplier, driver and inspection rows map to their module pages', () => {
-    expect(mapRecordRows(source('tyres'), [{ id: 1, serial_no: 'SN1', brand: 'Michelin' }])[0].path).toBe('/tyres')
+    expect(mapRecordRows(source('tyres'), [{ id: 1, serial_no: 'SN1', brand: 'Michelin' }])[0].path).toBe('/tyres?search=SN1')
     expect(mapRecordRows(source('suppliers'), [{ id: 2, supplier_name: 'Acme', supplier_code: 'AC1' }])[0].path).toBe('/suppliers')
     expect(mapRecordRows(source('drivers'), [{ id: 3, driver_id: 'D9', driver_name: 'Ali' }])[0].path).toBe('/driver-management')
     expect(mapRecordRows(source('inspections'), [{ id: 4, asset_no: 'TRK9' }])[0].path).toBe('/inspections')

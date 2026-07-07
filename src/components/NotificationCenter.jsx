@@ -19,6 +19,7 @@ import {
   Info,
 } from 'lucide-react'
 import { useRealtimeAlerts } from '../hooks/useRealtimeAlerts'
+import { useFeatureGate } from '../hooks/useFeatureFlags'
 import { groupByDay } from '../lib/notifications'
 
 // ─── Severity config ──────────────────────────────────────────────────────────
@@ -192,6 +193,7 @@ export default function NotificationCenter() {
     relativeTime,
   } = useRealtimeAlerts()
 
+  const notificationsEnabled = useFeatureGate('notifications_center')
   const [open, setOpen] = useState(false)
   const panelRef  = useRef(null)
   const buttonRef = useRef(null)
@@ -226,6 +228,8 @@ export default function NotificationCenter() {
 
   const hasCritical = notifications.some(n => n.severity === 'Critical' && !n.read)
   const dayGroups = useMemo(() => groupByDay(notifications), [notifications])
+
+  if (!notificationsEnabled) return null
 
   return (
     <div className="relative flex-shrink-0">

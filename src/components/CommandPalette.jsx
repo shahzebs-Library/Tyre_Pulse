@@ -16,6 +16,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useCommandPalette } from '../contexts/CommandPaletteContext'
+import { useFeatureGate } from '../hooks/useFeatureFlags'
 import { useLanguage } from '../contexts/LanguageContext'
 import {
   NAV_COMMANDS, ACTION_COMMANDS, RECORD_SOURCES,
@@ -124,6 +125,7 @@ function GroupHeader({ label }) {
 // ── Main component ────────────────────────────────────────────────────────────
 export default function CommandPalette() {
   const { open, setOpen } = useCommandPalette()
+  const paletteEnabled = useFeatureGate('command_palette')
   const { profile, hasPermission } = useAuth()
   const navigate = useNavigate()
   const { t } = useLanguage()
@@ -255,7 +257,7 @@ export default function CommandPalette() {
     return () => document.removeEventListener('keydown', onKey)
   }, [open, flatItems, activeIndex, handleSelect, setOpen])
 
-  if (!open) return null
+  if (!paletteEnabled || !open) return null
 
   const hasResults = flatItems.length > 0
   const showNoResults = !hasResults && !searching && query.trim().length > 0

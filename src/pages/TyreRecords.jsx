@@ -60,7 +60,10 @@ export default function TyreRecords() {
   const [sites, setSites]             = useState([])
   const [brands, setBrands]           = useState([])
 
-  const [search, setSearch]           = useState('')
+  // Deep links (Scan Center, QR labels): /tyres?search=<serial> pre-filters.
+  const [search, setSearch]           = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('search') || '' } catch { return '' }
+  })
   const [siteFilter, setSiteFilter]   = useState('')
   const [brandFilter, setBrandFilter] = useState('')
   const [riskFilter, setRiskFilter]   = useState('')

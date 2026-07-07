@@ -107,6 +107,15 @@ export const NAV_COMMANDS = [
   { id: 'users',          label: 'User Management',      path: '/users',        icon: 'UserCog',    adminOnly: true, moduleKey: 'user_management' },
   { id: 'settings',       label: 'Settings',             path: '/settings',     icon: 'Settings' },
   { id: 'scan',           label: 'Tyre Scan (QR)',       path: '/scan',         icon: 'QrCode' },
+  // Platform (roadmap tranche)
+  { id: 'report-builder',    label: 'Report Builder',      path: '/report-builder',    icon: 'FileText',   keywords: ['custom report', 'export', 'build'] },
+  { id: 'dashboard-builder', label: 'Dashboard Builder',   path: '/dashboard-builder', icon: 'LayoutGrid', keywords: ['widgets', 'layout', 'custom dashboard'] },
+  { id: 'executive-analytics', label: 'Executive Analytics', path: '/executive-analytics', icon: 'BarChart2', roles: ANALYTICS_ROLES, keywords: ['echarts', 'heatmap', 'sankey', 'treemap'] },
+  { id: 'tv-display',        label: 'TV Display Mode',     path: '/display',           icon: 'Radio',      adminOnly: true, keywords: ['tv', 'board', 'screen', 'wall'] },
+  { id: 'security-center',   label: 'Security Center',     path: '/security-center',   icon: 'Settings',   keywords: ['login history', 'session', 'mfa', 'password'] },
+  { id: 'permission-matrix', label: 'Permission Matrix',   path: '/permission-matrix', icon: 'UserCog',    adminOnly: true, keywords: ['roles', 'rbac', 'access'] },
+  { id: 'system-health',     label: 'System Health',       path: '/system-health',     icon: 'Activity',   adminOnly: true, keywords: ['status', 'uptime', 'monitoring'] },
+  { id: 'tenant-health',     label: 'Usage & Adoption',    path: '/tenant-health',     icon: 'BarChart2',  adminOnly: true, keywords: ['tenant', 'usage', 'ai cost', 'adoption'] },
 ]
 
 // Quick actions - same RBAC descriptors as their target routes.
@@ -194,7 +203,8 @@ export const RECORD_SOURCES = [
       id: `tyres-${row.id}`,
       label: row.serial_no || row.asset_no || 'Tyre',
       sub: [row.asset_no, row.brand].filter(Boolean).join(' · '),
-      path: '/tyres',
+      // Deep link: TyreRecords pre-filters from ?search= (serial jumps straight to the record)
+      path: row.serial_no ? `/tyres?search=${encodeURIComponent(row.serial_no)}` : '/tyres',
       icon: 'CircleDot',
     }),
   },

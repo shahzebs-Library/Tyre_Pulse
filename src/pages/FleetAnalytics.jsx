@@ -7,6 +7,7 @@ import { BarChart2, Download, FileText, AlertTriangle, RefreshCw } from 'lucide-
 import { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import {
@@ -126,6 +127,7 @@ export default function FleetAnalytics() {
 
   return (
     <div className="space-y-6">
+      <SectionTabs tabs={FLEET_TABS} />
       {/* Header */}
       <PageHeader
         title={t('fleetanalytics.title')}

@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { ANALYTICS_TABS } from '../components/ui/SectionTabs'
 import { SkeletonChart } from '../components/ui/Skeleton'
 import EChart from '../components/charts/EChart'
 import { getEchartsTheme } from '../components/charts/echartsTheme'
@@ -423,6 +424,7 @@ export default function ExecutiveAnalytics() {
 
   return (
     <div className="space-y-6">
+      <SectionTabs tabs={ANALYTICS_TABS} />
       <PageHeader
         title="Executive Analytics"
         subtitle="Boardroom-grade fleet intelligence — heatmaps, flows, gauges and risk quadrants"

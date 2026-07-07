@@ -21,6 +21,7 @@ import { formatDate } from '../lib/formatters'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import { useLanguage } from '../contexts/LanguageContext'
 
 ChartJS.register(
@@ -518,6 +519,7 @@ export default function FleetHealthBoard() {
   return (
     <div className="space-y-6">
 
+      <SectionTabs tabs={FLEET_TABS} />
       {/* ── Header ── */}
       <PageHeader
         title={t('fleethealth.header.title')}

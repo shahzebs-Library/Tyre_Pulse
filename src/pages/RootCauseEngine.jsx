@@ -15,6 +15,7 @@ import { fetchAllPages } from '../lib/fetchAll'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { RCA_TABS } from '../components/ui/SectionTabs'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -648,6 +649,7 @@ export default function RootCauseEngine() {
 
   return (
     <div className="space-y-6">
+      <SectionTabs tabs={RCA_TABS} />
       <PageHeader
         title="Root Cause Intelligence Engine"
         subtitle="Rule-based classification of 14 engineering root causes across the fleet"

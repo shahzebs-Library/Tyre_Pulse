@@ -22,6 +22,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { formatDate, formatMonthYear } from '../lib/formatters'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfTableTheme } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import SegmentedControl from '../components/ui/SegmentedControl'
 import {
   computeCpkFleet, computeAvgTyreLife, computeFailureRate,
@@ -896,6 +897,7 @@ export default function KpiCommandCenter() {
   return (
     <div className="space-y-5">
 
+      <SectionTabs tabs={KPI_TABS} />
       {/* Header */}
       <PageHeader
         title={t('kpicommand.title')}

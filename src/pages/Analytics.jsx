@@ -17,6 +17,7 @@ import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import { Maximize2, X, BarChart2, AlertTriangle, RefreshCw } from 'lucide-react'
 import { ChartModal } from '../components/ChartModal'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { ANALYTICS_TABS } from '../components/ui/SectionTabs'
 import PeriodFilter, { filterByPeriodValue } from '../components/ui/PeriodFilter'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement,
@@ -196,6 +197,7 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6">
+      <SectionTabs tabs={ANALYTICS_TABS} />
       <PageHeader
         title={t('analytics.title')}
         subtitle={t('analytics.subtitle')}

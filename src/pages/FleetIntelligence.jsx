@@ -19,6 +19,7 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { applyCountry } from '../lib/countryFilter'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { FLEET_TABS } from '../components/ui/SectionTabs'
 import PeriodFilter, { filterByPeriodValue, periodLabel } from '../components/ui/PeriodFilter'
 import {
   computeFleetAvailability,
@@ -996,6 +997,7 @@ export default function FleetIntelligence() {
   return (
     <div className="text-[var(--text-secondary)] space-y-6">
 
+      <SectionTabs tabs={FLEET_TABS} />
       {/* ── 1. Header ──────────────────────────────────────────────────────── */}
       <PageHeader
         title={t('fleetintel.header.title')}

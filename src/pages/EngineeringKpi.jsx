@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import EmailReportModal from '../components/EmailReportModal'
 
 ChartJS.register(
@@ -759,6 +760,7 @@ export default function EngineeringKpi() {
   return (
     <div className="space-y-6">
 
+      <SectionTabs tabs={KPI_TABS} />
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <PageHeader

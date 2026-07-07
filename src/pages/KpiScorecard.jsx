@@ -12,6 +12,7 @@ import { formatCurrency as _fmtCurrencyBase } from '../lib/formatters'
 import { Download, FileText, AlertTriangle, ToggleLeft, ToggleRight, Target, RefreshCw } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { KPI_TABS } from '../components/ui/SectionTabs'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement,
   Filler, Title, Tooltip, Legend,
@@ -325,6 +326,7 @@ export default function KpiScorecard() {
 
   return (
     <div className="space-y-6">
+      <SectionTabs tabs={KPI_TABS} />
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <PageHeader

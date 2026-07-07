@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Plus, Save, X, Search, Download, FileText, Camera, GitBranch } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { RCA_TABS } from '../components/ui/SectionTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 
 const CONTRIBUTING_FACTOR_OPTIONS = [
@@ -194,6 +195,7 @@ export default function RcaRecords() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
+          <SectionTabs tabs={RCA_TABS} />
           <PageHeader
             title="Root Cause Analysis"
             subtitle={`${records.length} RCA records`}

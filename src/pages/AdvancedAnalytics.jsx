@@ -17,6 +17,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import SectionTabs, { ANALYTICS_TABS } from '../components/ui/SectionTabs'
 import {
   mean, stdDev, sum, groupBy, bucketByMonth, rollingAverage,
   linearRegression, computeSiteMetrics, computeBrandMetrics,
@@ -663,6 +664,7 @@ export default function AdvancedAnalytics() {
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <div className="text-[var(--text-primary)] space-y-6">
+      <SectionTabs tabs={ANALYTICS_TABS} />
       {/* Page Header */}
       <div className="px-6 pt-6 pb-4 border-b border-[var(--input-border)]">
         <PageHeader

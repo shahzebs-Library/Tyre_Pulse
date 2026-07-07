@@ -92,6 +92,18 @@ export const FLAG_DEFS = [
     default: true,
     category: 'Workspace',
   },
+  {
+    key: 'automation_platform',
+    label: 'Automation Platform',
+    description:
+      'Event Stream, Approval Workflows, Automation Rules, and API & Webhooks. ' +
+      'Requires migrations V96–V103 + the automation edge functions to be applied ' +
+      'to the database first (see docs/AUTOMATION_PLATFORM_DEPLOYMENT.md) — keep OFF until then.',
+    // Default OFF: the backing tables/RPCs are not live yet, so these pages
+    // would error. Admins turn this on after applying the DB layer.
+    default: false,
+    category: 'Automation',
+  },
 ]
 
 /** Fast lookup: key -> definition. */

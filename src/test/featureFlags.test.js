@@ -52,15 +52,22 @@ beforeEach(() => {
 // Registry sanity — defaults must be all ON (no behaviour change on rollout)
 // ─────────────────────────────────────────────────────────────────────────────
 describe('FLAG_DEFS registry', () => {
-  it('defines every roadmap flag with default ON', () => {
+  it('defines every roadmap flag, default ON except the automation platform', () => {
     const keys = FLAG_DEFS.map((d) => d.key)
     for (const k of [
       'ai_tools', 'accidents_module', 'data_intake', 'erp_sync', 'tv_display',
       'command_palette', 'notifications_center', 'report_scheduling', 'vehicle_360',
+      'automation_platform',
     ]) {
       expect(keys).toContain(k)
     }
-    expect(FLAG_DEFS.every((d) => d.default === true)).toBe(true)
+    // All pre-existing capability flags default ON (zero change for live orgs).
+    // automation_platform is the deliberate exception: its backing DB layer
+    // (V96–V103 + edge functions) is not applied yet, so it MUST default OFF —
+    // flipping this to true without the DB live would error the Automation pages.
+    for (const d of FLAG_DEFS) {
+      expect(d.default).toBe(d.key === 'automation_platform' ? false : true)
+    }
   })
 
   it('has unique keys and complete metadata', () => {

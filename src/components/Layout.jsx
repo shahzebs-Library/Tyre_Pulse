@@ -23,6 +23,7 @@ import { detectAlerts, countAlertsBySeverity } from '../lib/alertEngine'
 import { syncPendingInspections, getPendingCount } from '../lib/offlineQueue'
 import { useWakeLock } from '../hooks/useWakeLock'
 import { useRealtimeSync } from '../hooks/useRealtime'
+import { useFeatureFlags } from '../hooks/useFeatureFlags'
 import TpLogo from '../assets/logo.svg'
 import InstallPwaPrompt from './InstallPwaPrompt'
 import NotificationCenter from './NotificationCenter'
@@ -162,11 +163,11 @@ const NAV_GROUPS = [
   {
     label: 'Automation',
     items: [
-      { to: '/approvals',         label: 'Approvals',          icon: CheckSquare, roles: ANALYTICS_ROLES },
-      { to: '/events',            label: 'Event Stream',       icon: Radio, adminOnly: A },
-      { to: '/workflow-settings', label: 'Approval Workflows', icon: GitBranch, adminOnly: A },
-      { to: '/automation-rules',  label: 'Automation Rules',   icon: Zap, adminOnly: A },
-      { to: '/integrations',      label: 'API & Webhooks',     icon: Webhook, adminOnly: A },
+      { to: '/approvals',         label: 'Approvals',          icon: CheckSquare, roles: ANALYTICS_ROLES, flag: 'automation_platform' },
+      { to: '/events',            label: 'Event Stream',       icon: Radio, adminOnly: A, flag: 'automation_platform' },
+      { to: '/workflow-settings', label: 'Approval Workflows', icon: GitBranch, adminOnly: A, flag: 'automation_platform' },
+      { to: '/automation-rules',  label: 'Automation Rules',   icon: Zap, adminOnly: A, flag: 'automation_platform' },
+      { to: '/integrations',      label: 'API & Webhooks',     icon: Webhook, adminOnly: A, flag: 'automation_platform' },
     ],
   },
   {
@@ -192,7 +193,10 @@ function shouldShowGroup(group, profile) {
   return group.groupRoles.includes(profile?.role)
 }
 
-function shouldShowNavItem(item, profile) {
+function shouldShowNavItem(item, profile, isFlagEnabled) {
+  // Feature-flag gate first: a disabled capability is hidden entirely, so its
+  // nav item never renders (not just redirected at the route).
+  if (item.flag && isFlagEnabled && !isFlagEnabled(item.flag)) return false
   if (profile?.role === 'Inspector') {
     return item.to === '/inspections' || item.to === '/settings'
   }
@@ -425,6 +429,7 @@ export default function Layout({ children }) {
   const location     = useLocation()
 
   const { setOpen: setCmdOpen } = useCommandPalette()
+  const { isEnabled: isFlagEnabled } = useFeatureFlags()
 
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < 768,
@@ -710,7 +715,7 @@ export default function Layout({ children }) {
           {NAV_GROUPS.map((group) => {
             const { label, items } = group
             if (!shouldShowGroup(group, profile)) return null
-            const visibleItems = items.filter(item => shouldShowNavItem(item, profile))
+            const visibleItems = items.filter(item => shouldShowNavItem(item, profile, isFlagEnabled))
             if (visibleItems.length === 0) return null
             const isCollapsed = collapsedGroups.has(label)
             return (

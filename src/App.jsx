@@ -120,6 +120,7 @@ const DashboardBuilder       = lazy(() => import('./pages/DashboardBuilder'))
 const TenantHealth           = lazy(() => import('./pages/TenantHealth'))
 const ExecutiveAnalytics     = lazy(() => import('./pages/ExecutiveAnalytics'))
 const PermissionMatrix       = lazy(() => import('./pages/PermissionMatrix'))
+const DisplayShare           = lazy(() => import('./pages/DisplayShare'))
 const EventStream            = lazy(() => import('./pages/EventStream'))
 const Approvals              = lazy(() => import('./pages/Approvals'))
 const WorkflowSettings       = lazy(() => import('./pages/WorkflowSettings'))
@@ -171,6 +172,10 @@ function MainApp() {
           <Routes>
             <Route path="/login"          element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            {/* Public read-only executive board (V103 share token) — ANON, no chrome,
+                no ProtectedRoute/flag: the RPC is anon-granted and the page degrades
+                gracefully until V103 is applied. */}
+            <Route path="/display/:token" element={<Safe><DisplayShare /></Safe>} />
             {/* TV display mode: authed, but rendered WITHOUT the Layout chrome */}
             <Route
               path="/display"
@@ -281,12 +286,12 @@ function MainApp() {
                       <Route path="/system-health"       element={<Safe><SystemHealth /></Safe>} />
                       <Route path="/tenant-health"       element={<Safe><TenantHealth /></Safe>} />
                       <Route path="/permission-matrix"   element={<Safe><PermissionMatrix /></Safe>} />
-                      {/* ── Automation platform (backend V96–V103) ── */}
-                      <Route path="/events"              element={<Safe><EventStream /></Safe>} />
-                      <Route path="/approvals"           element={<Safe><Approvals /></Safe>} />
-                      <Route path="/workflow-settings"   element={<Safe><WorkflowSettings /></Safe>} />
-                      <Route path="/automation-rules"    element={<Safe><AutomationRules /></Safe>} />
-                      <Route path="/integrations"        element={<Safe><Integrations /></Safe>} />
+                      {/* ── Automation platform (backend V96–V103; flag OFF until DB applied) ── */}
+                      <Route path="/events"              element={<Safe><FlagRoute flag="automation_platform"><EventStream /></FlagRoute></Safe>} />
+                      <Route path="/approvals"           element={<Safe><FlagRoute flag="automation_platform"><Approvals /></FlagRoute></Safe>} />
+                      <Route path="/workflow-settings"   element={<Safe><FlagRoute flag="automation_platform"><WorkflowSettings /></FlagRoute></Safe>} />
+                      <Route path="/automation-rules"    element={<Safe><FlagRoute flag="automation_platform"><AutomationRules /></FlagRoute></Safe>} />
+                      <Route path="/integrations"        element={<Safe><FlagRoute flag="automation_platform"><Integrations /></FlagRoute></Safe>} />
                       <Route path="*"            element={<Navigate to="/" replace />} />
                     </Routes>
                   </Layout>

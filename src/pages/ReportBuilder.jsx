@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   FileBarChart, Plus, Play, Save, Trash2, Loader2, AlertTriangle, RefreshCw,
-  Search, Share2, Lock, Download, FileSpreadsheet, X, ChevronDown, BarChart3,
+  Search, Share2, Lock, Download, FileSpreadsheet, X, BarChart3,
 } from 'lucide-react'
 import {
   Chart as ChartJS,

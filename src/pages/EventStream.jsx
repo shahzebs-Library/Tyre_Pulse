@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  Radio, RefreshCw, Search, X, XCircle, Loader2, Filter,
+  Radio, RefreshCw, Search, X, XCircle, Filter,
   ChevronDown, ChevronRight, ChevronLeft, CheckCircle, Clock,
   AlertTriangle, Plug, Inbox,
 } from 'lucide-react'

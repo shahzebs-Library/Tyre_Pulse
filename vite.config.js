@@ -188,6 +188,15 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.js'],
     exclude: ['**/.claude/**', '**/node_modules/**', '**/dist/**'],
+    // Hermetic test env: modules that construct the Supabase client at import
+    // time (src/lib/supabase.js) need the two public vars present. These are
+    // dummy placeholders — no real project is contacted in unit tests. Only
+    // the public URL/anon key are set, so supabase.js's secret-exposure guard
+    // (which trips on privileged VITE_* secrets) stays satisfied.
+    env: {
+      VITE_SUPABASE_URL: 'https://test.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'test-anon-key',
+    },
   },
 
   resolve: {

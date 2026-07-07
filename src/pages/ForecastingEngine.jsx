@@ -130,7 +130,7 @@ function fmtCurrency(n, currency, compact = false) {
 function trendIcon(slope) {
   if (slope > 0.5) return <ChevronUp className="w-4 h-4 text-red-400 inline" />
   if (slope < -0.5) return <ChevronDown className="w-4 h-4 text-green-400 inline" />
-  return <Minus className="w-4 h-4 text-gray-400 inline" />
+  return <Minus className="w-4 h-4 text-[var(--text-muted)] inline" />
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -152,20 +152,20 @@ function MetricCard({ icon: Icon, label, value, sub, color = 'blue', delay = 0 }
     >
       <div className="flex items-center gap-2">
         <Icon className={`w-4 h-4 ${colors[color].split(' ').find(c => c.startsWith('text-'))}`} />
-        <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">{label}</span>
+        <span className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wide">{label}</span>
       </div>
-      <div className="text-2xl font-bold text-white">{value}</div>
-      {sub && <div className="text-xs text-gray-500">{sub}</div>}
+      <div className="text-2xl font-bold text-[var(--text-primary)]">{value}</div>
+      {sub && <div className="text-xs text-[var(--text-muted)]">{sub}</div>}
     </motion.div>
   )
 }
 
 function SectionCard({ title, icon: Icon, children, className = '' }) {
   return (
-    <div className={`bg-gray-900 border border-gray-800 rounded-xl p-4 ${className}`}>
+    <div className={`bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4 ${className}`}>
       <div className="flex items-center gap-2 mb-4">
         <Icon className="w-4 h-4 text-blue-400" />
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
       </div>
       {children}
     </div>
@@ -175,9 +175,9 @@ function SectionCard({ title, icon: Icon, children, className = '' }) {
 function TableHeader({ cols }) {
   return (
     <thead>
-      <tr className="border-b border-gray-800">
+      <tr className="border-b border-[var(--input-border)]">
         {cols.map(c => (
-          <th key={c} className="text-left text-xs text-gray-500 font-medium uppercase tracking-wide py-2 px-3">
+          <th key={c} className="text-left text-xs text-[var(--text-muted)] font-medium uppercase tracking-wide py-2 px-3">
             {c}
           </th>
         ))}
@@ -654,7 +654,7 @@ export default function ForecastingEngine() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-sm">Loading forecasting data...</p>
+          <p className="text-[var(--text-muted)] text-sm">Loading forecasting data...</p>
         </div>
       </div>
     )
@@ -663,10 +663,10 @@ export default function ForecastingEngine() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="bg-gray-900 border border-red-800 rounded-xl p-8 text-center max-w-md">
+        <div className="bg-[var(--surface-1)] border border-red-800 rounded-xl p-8 text-center max-w-md">
           <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
           <p className="text-red-400 font-medium mb-1">Failed to load data</p>
-          <p className="text-gray-500 text-sm">{error}</p>
+          <p className="text-[var(--text-muted)] text-sm">{error}</p>
         </div>
       </div>
     )
@@ -675,10 +675,10 @@ export default function ForecastingEngine() {
   if (!records.length) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center max-w-md">
-          <BarChart2 className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-          <p className="text-white font-semibold mb-1">No Tyre Records Found</p>
-          <p className="text-gray-500 text-sm">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-10 text-center max-w-md">
+          <BarChart2 className="w-12 h-12 text-[var(--text-dim)] mx-auto mb-4" />
+          <p className="text-[var(--text-primary)] font-semibold mb-1">No Tyre Records Found</p>
+          <p className="text-[var(--text-muted)] text-sm">
             Add tyre records to generate forecasts, demand projections, and budget planning.
           </p>
         </div>
@@ -704,7 +704,7 @@ export default function ForecastingEngine() {
           <select
             value={siteFilter}
             onChange={e => setSiteFilter(e.target.value)}
-            className="bg-gray-800 border border-gray-700 text-sm text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="bg-[var(--input-bg)] border border-[var(--input-border)] text-sm text-[var(--text-secondary)] rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
           >
             {sites.map(s => (
               <option key={s} value={s}>{s === 'all' ? 'All Sites' : s}</option>
@@ -735,7 +735,7 @@ export default function ForecastingEngine() {
       />
 
       {/* ── Horizon selector ──────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 w-fit">
         {[
           { val: 3, label: 'Next 3 Months' },
           { val: 6, label: 'Next 6 Months' },
@@ -747,7 +747,7 @@ export default function ForecastingEngine() {
             className={`px-4 py-1.5 text-sm rounded-lg transition-colors font-medium ${
               horizon === h.val
                 ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
             {h.label}
@@ -843,7 +843,7 @@ export default function ForecastingEngine() {
             }}
           />
         </div>
-        <div className="flex flex-wrap gap-4 mt-3 text-xs text-gray-500">
+        <div className="flex flex-wrap gap-4 mt-3 text-xs text-[var(--text-muted)]">
           <span className="flex items-center gap-1">
             <span className="w-8 h-0.5 bg-blue-500 inline-block" />
             Historical (solid)
@@ -890,7 +890,7 @@ export default function ForecastingEngine() {
           />
         </div>
         {fleetMonthlyBudgetTarget > 0 && (
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-[var(--text-muted)] mt-2">
             Fleet monthly budget target: {fmtCurrency(fleetMonthlyBudgetTarget, activeCurrency)} (from vehicle master)
           </p>
         )}
@@ -907,12 +907,12 @@ export default function ForecastingEngine() {
               <tbody>
                 {brandForecast.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center text-gray-600 py-6 text-sm">No brand data available</td>
+                    <td colSpan={6} className="text-center text-[var(--text-dim)] py-6 text-sm">No brand data available</td>
                   </tr>
                 ) : brandForecast.map(b => (
-                  <tr key={b.brand} className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors">
-                    <td className="py-2 px-3 font-medium text-white">{b.brand}</td>
-                    <td className="py-2 px-3 text-gray-300">{fmtNum(b.actual12)}</td>
+                  <tr key={b.brand} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20 transition-colors">
+                    <td className="py-2 px-3 font-medium text-[var(--text-primary)]">{b.brand}</td>
+                    <td className="py-2 px-3 text-[var(--text-secondary)]">{fmtNum(b.actual12)}</td>
                     <td className="py-2 px-3 text-blue-300">{fmtNum(b.forecast3)}</td>
                     <td className="py-2 px-3 text-green-300">{fmtNum(b.forecast12)}</td>
                     <td className="py-2 px-3 text-amber-300">{fmtCurrency(b.estCost12, activeCurrency, true)}</td>
@@ -932,12 +932,12 @@ export default function ForecastingEngine() {
               <tbody>
                 {siteForecast.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center text-gray-600 py-6 text-sm">No site data available</td>
+                    <td colSpan={6} className="text-center text-[var(--text-dim)] py-6 text-sm">No site data available</td>
                   </tr>
                 ) : siteForecast.map(s => (
-                  <tr key={s.site} className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors">
-                    <td className="py-2 px-3 font-medium text-white">{s.site}</td>
-                    <td className="py-2 px-3 text-gray-300">{fmtNum(s.actual12)}</td>
+                  <tr key={s.site} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20 transition-colors">
+                    <td className="py-2 px-3 font-medium text-[var(--text-primary)]">{s.site}</td>
+                    <td className="py-2 px-3 text-[var(--text-secondary)]">{fmtNum(s.actual12)}</td>
                     <td className="py-2 px-3 text-blue-300">{fmtNum(s.forecast3)}</td>
                     <td className="py-2 px-3 text-green-300">{fmtNum(s.forecast12)}</td>
                     <td className="py-2 px-3 text-amber-300">{fmtCurrency(s.estCost12, activeCurrency, true)}</td>
@@ -960,7 +960,7 @@ export default function ForecastingEngine() {
               <tbody>
                 {siteForecast.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center text-gray-600 py-6 text-sm">No data</td>
+                    <td colSpan={5} className="text-center text-[var(--text-dim)] py-6 text-sm">No data</td>
                   </tr>
                 ) : siteForecast.map(s => {
                   const gap = s.stockGap
@@ -977,10 +977,10 @@ export default function ForecastingEngine() {
                     ? 'Overstocked'
                     : 'Adequate'
                   return (
-                    <tr key={s.site} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                      <td className="py-2 px-3 font-medium text-white">{s.site}</td>
+                    <tr key={s.site} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
+                      <td className="py-2 px-3 font-medium text-[var(--text-primary)]">{s.site}</td>
                       <td className="py-2 px-3 text-blue-300">{fmtNum(s.recommendedStock)}</td>
-                      <td className="py-2 px-3 text-gray-300">{fmtNum(s.currentStock)}</td>
+                      <td className="py-2 px-3 text-[var(--text-secondary)]">{fmtNum(s.currentStock)}</td>
                       <td className={`py-2 px-3 font-medium ${gap > 0 ? 'text-red-300' : 'text-green-300'}`}>
                         {gap > 0 ? `+${fmtNum(gap)}` : fmtNum(gap)}
                       </td>
@@ -1010,7 +1010,7 @@ export default function ForecastingEngine() {
                 }}
               />
             ) : (
-              <div className="flex items-center justify-center h-full text-gray-600 text-sm">No inventory data</div>
+              <div className="flex items-center justify-center h-full text-[var(--text-dim)] text-sm">No inventory data</div>
             )}
           </div>
         </div>
@@ -1063,7 +1063,7 @@ export default function ForecastingEngine() {
             <tbody>
               {vendorRequirements.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center text-gray-600 py-6 text-sm">No vendor data available</td>
+                  <td colSpan={5} className="text-center text-[var(--text-dim)] py-6 text-sm">No vendor data available</td>
                 </tr>
               ) : vendorRequirements.map(v => {
                 const priorityColor = v.priority === 'High'
@@ -1072,8 +1072,8 @@ export default function ForecastingEngine() {
                   ? 'text-amber-400 bg-amber-950/40 border-amber-900/40'
                   : 'text-green-400 bg-green-950/40 border-green-900/40'
                 return (
-                  <tr key={v.brand} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                    <td className="py-2 px-3 font-medium text-white">{v.brand}</td>
+                  <tr key={v.brand} className="border-b border-[var(--input-border)]/50 hover:bg-[var(--input-bg)]/20">
+                    <td className="py-2 px-3 font-medium text-[var(--text-primary)]">{v.brand}</td>
                     <td className="py-2 px-3 text-blue-300">{fmtNum(v.qty3mo)}</td>
                     <td className="py-2 px-3 text-green-300">{fmtNum(v.qty12mo)}</td>
                     <td className="py-2 px-3 text-amber-300">{fmtCurrency(v.estCost12, activeCurrency, true)}</td>
@@ -1095,25 +1095,25 @@ export default function ForecastingEngine() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25 }}
-        className="bg-gradient-to-br from-blue-950/30 to-gray-900 border border-blue-800/40 rounded-xl p-6"
+        className="bg-gradient-to-br from-blue-950/30 to-[var(--surface-1)] border border-blue-800/40 rounded-xl p-6"
       >
         <div className="flex items-center gap-2 mb-6">
           <Calendar className="w-5 h-5 text-blue-400" />
-          <h3 className="text-base font-bold text-white">Annual Budget Planning Summary</h3>
+          <h3 className="text-base font-bold text-[var(--text-primary)]">Annual Budget Planning Summary</h3>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
 
-          <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4 col-span-2">
-            <p className="text-xs text-gray-400 mb-1">Total Annual Forecast Spend</p>
-            <p className="text-2xl font-bold text-white">{fmtCurrency(annualBudgetForecast, activeCurrency, true)}</p>
-            <p className="text-xs text-gray-500 mt-1">{fmtNum(annualDemandForecast)} projected replacements</p>
+          <div className="bg-[var(--surface-1)]/60 border border-[var(--input-border)] rounded-xl p-4 col-span-2">
+            <p className="text-xs text-[var(--text-muted)] mb-1">Total Annual Forecast Spend</p>
+            <p className="text-2xl font-bold text-[var(--text-primary)]">{fmtCurrency(annualBudgetForecast, activeCurrency, true)}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1">{fmtNum(annualDemandForecast)} projected replacements</p>
           </div>
 
           {hasLastYear && (
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-              <p className="text-xs text-gray-400 mb-1">vs Last Year Actual</p>
-              <p className="text-xl font-bold text-white">{fmtCurrency(lastYearActual, activeCurrency, true)}</p>
+            <div className="bg-[var(--surface-1)]/60 border border-[var(--input-border)] rounded-xl p-4">
+              <p className="text-xs text-[var(--text-muted)] mb-1">vs Last Year Actual</p>
+              <p className="text-xl font-bold text-[var(--text-primary)]">{fmtCurrency(lastYearActual, activeCurrency, true)}</p>
               <div className={`flex items-center gap-1 mt-1 text-xs font-medium ${budgetChange > 0 ? 'text-red-400' : 'text-green-400'}`}>
                 {budgetChange > 0
                   ? <TrendingUp className="w-3.5 h-3.5" />
@@ -1123,20 +1123,20 @@ export default function ForecastingEngine() {
             </div>
           )}
 
-          <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-400 mb-1">Monthly Budget Target</p>
-            <p className="text-xl font-bold text-white">
+          <div className="bg-[var(--surface-1)]/60 border border-[var(--input-border)] rounded-xl p-4">
+            <p className="text-xs text-[var(--text-muted)] mb-1">Monthly Budget Target</p>
+            <p className="text-xl font-bold text-[var(--text-primary)]">
               {fleetMonthlyBudgetTarget > 0
                 ? fmtCurrency(fleetMonthlyBudgetTarget, activeCurrency, true)
                 : '-'}
             </p>
-            <p className="text-xs text-gray-500 mt-1">From fleet master</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1">From fleet master</p>
           </div>
 
-          <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-400 mb-1">Months Over Budget</p>
-            <p className="text-xl font-bold text-white">{monthsOverBudget}</p>
-            <p className="text-xs text-gray-500 mt-1">
+          <div className="bg-[var(--surface-1)]/60 border border-[var(--input-border)] rounded-xl p-4">
+            <p className="text-xs text-[var(--text-muted)] mb-1">Months Over Budget</p>
+            <p className="text-xl font-bold text-[var(--text-primary)]">{monthsOverBudget}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
               {fleetMonthlyBudgetTarget ? `of ${horizon} forecast months` : 'No target set'}
             </p>
           </div>
@@ -1150,21 +1150,21 @@ export default function ForecastingEngine() {
 
         {/* Sub-stats row */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-          <div className="bg-gray-900/40 border border-gray-800/50 rounded-lg p-3">
-            <p className="text-xs text-gray-500">Avg Cost Per Tyre</p>
-            <p className="text-base font-semibold text-white mt-1">{fmtCurrency(avgCostPerTyre, activeCurrency)}</p>
+          <div className="bg-[var(--surface-1)]/40 border border-[var(--input-border)]/50 rounded-lg p-3">
+            <p className="text-xs text-[var(--text-muted)]">Avg Cost Per Tyre</p>
+            <p className="text-base font-semibold text-[var(--text-primary)] mt-1">{fmtCurrency(avgCostPerTyre, activeCurrency)}</p>
           </div>
-          <div className="bg-gray-900/40 border border-gray-800/50 rounded-lg p-3">
-            <p className="text-xs text-gray-500">Total Records Analysed</p>
-            <p className="text-base font-semibold text-white mt-1">{fmtNum(records.length)}</p>
+          <div className="bg-[var(--surface-1)]/40 border border-[var(--input-border)]/50 rounded-lg p-3">
+            <p className="text-xs text-[var(--text-muted)]">Total Records Analysed</p>
+            <p className="text-base font-semibold text-[var(--text-primary)] mt-1">{fmtNum(records.length)}</p>
           </div>
-          <div className="bg-gray-900/40 border border-gray-800/50 rounded-lg p-3">
-            <p className="text-xs text-gray-500">Active Brands</p>
-            <p className="text-base font-semibold text-white mt-1">{fmtNum(brandForecast.length)}</p>
+          <div className="bg-[var(--surface-1)]/40 border border-[var(--input-border)]/50 rounded-lg p-3">
+            <p className="text-xs text-[var(--text-muted)]">Active Brands</p>
+            <p className="text-base font-semibold text-[var(--text-primary)] mt-1">{fmtNum(brandForecast.length)}</p>
           </div>
-          <div className="bg-gray-900/40 border border-gray-800/50 rounded-lg p-3">
-            <p className="text-xs text-gray-500">Active Sites</p>
-            <p className="text-base font-semibold text-white mt-1">{fmtNum(siteForecast.length)}</p>
+          <div className="bg-[var(--surface-1)]/40 border border-[var(--input-border)]/50 rounded-lg p-3">
+            <p className="text-xs text-[var(--text-muted)]">Active Sites</p>
+            <p className="text-base font-semibold text-[var(--text-primary)] mt-1">{fmtNum(siteForecast.length)}</p>
           </div>
         </div>
       </motion.div>

@@ -714,7 +714,7 @@ export default function TyreSizeAnalysis() {
   }
 
   const SortIcon = ({ field }) => {
-    if (sortField !== field) return <ChevronDown className="w-3 h-3 text-gray-600" />
+    if (sortField !== field) return <ChevronDown className="w-3 h-3 text-[var(--text-dim)]" />
     return sortDir === 'asc'
       ? <ChevronUp className="w-3 h-3 text-green-400" />
       : <ChevronDown className="w-3 h-3 text-green-400" />
@@ -730,14 +730,14 @@ export default function TyreSizeAnalysis() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setRefreshKey(k => k + 1)}
-              className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600 transition-colors"
+              className="p-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--input-border)] transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
             <button
               onClick={exportPDF}
               disabled={exporting}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-sm"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--input-border)] transition-colors text-sm"
             >
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
               PDF
@@ -745,7 +745,7 @@ export default function TyreSizeAnalysis() {
             <button
               onClick={exportExcel}
               disabled={exporting}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 transition-colors text-sm"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--input-border)] transition-colors text-sm"
             >
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
               Excel
@@ -755,7 +755,7 @@ export default function TyreSizeAnalysis() {
       />
 
       {/* ── Filters ────────────────────────────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex gap-1">
             {DATE_PRESETS.map(p => (
@@ -765,7 +765,7 @@ export default function TyreSizeAnalysis() {
                 className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
                   activeDatePreset === p.label
                     ? 'bg-green-900/50 border-green-700 text-green-300'
-                    : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                    : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:border-[var(--input-border)]'
                 }`}
               >{p.label}</button>
             ))}
@@ -773,17 +773,17 @@ export default function TyreSizeAnalysis() {
 
           <div className="flex gap-2 flex-wrap">
             <div className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-gray-500" />
+              <Calendar className="w-3.5 h-3.5 text-[var(--text-muted)]" />
               <input
                 type="date" value={dateFrom}
                 onChange={e => { setDateFrom(e.target.value); setActiveDatePreset('') }}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-green-600"
+                className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none focus:border-green-600"
               />
-              <span className="text-gray-600 text-xs">→</span>
+              <span className="text-[var(--text-dim)] text-xs">→</span>
               <input
                 type="date" value={dateTo}
                 onChange={e => { setDateTo(e.target.value); setActiveDatePreset('') }}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-green-600"
+                className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none focus:border-green-600"
               />
             </div>
 
@@ -794,11 +794,11 @@ export default function TyreSizeAnalysis() {
               { label: 'Position',value: filterPosition,setter: setFilterPosition,opts: filterOptions.positions, icon: CircleDot },
             ].map(({ label, value, setter, opts, icon: Icon }) => (
               <div key={label} className="flex items-center gap-1.5">
-                <Icon className="w-3.5 h-3.5 text-gray-500" />
+                <Icon className="w-3.5 h-3.5 text-[var(--text-muted)]" />
                 <select
                   value={value}
                   onChange={e => setter(e.target.value)}
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-green-600"
+                  className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-2 py-1.5 text-xs text-[var(--text-secondary)] focus:outline-none focus:border-green-600"
                 >
                   {opts.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
@@ -815,7 +815,7 @@ export default function TyreSizeAnalysis() {
             )}
           </div>
 
-          <div className="ml-auto text-xs text-gray-500">
+          <div className="ml-auto text-xs text-[var(--text-muted)]">
             {filtered.length.toLocaleString()} tyres · {kpis.uniqueSz} sizes
           </div>
         </div>
@@ -865,13 +865,13 @@ export default function TyreSizeAnalysis() {
               key={label}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+              className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-gray-500 mb-1">{label}</p>
-                  <p className="text-xl font-bold text-white truncate">{value}</p>
-                  <p className="text-xs text-gray-500 mt-1 truncate">{sub}</p>
+                  <p className="text-xs text-[var(--text-muted)] mb-1">{label}</p>
+                  <p className="text-xl font-bold text-[var(--text-primary)] truncate">{value}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-1 truncate">{sub}</p>
                 </div>
                 <div className={`p-2 rounded-lg border ${colorMap[color]}`}>
                   <Icon className="w-5 h-5" />
@@ -886,13 +886,13 @@ export default function TyreSizeAnalysis() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Doughnut */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <h2 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+          <h2 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-green-400" />
             Size Mix Distribution
           </h2>
           {doughnutData.labels.length === 0 ? (
-            <div className="flex items-center justify-center h-56 text-gray-500 text-sm">No data</div>
+            <div className="flex items-center justify-center h-56 text-[var(--text-muted)] text-sm">No data</div>
           ) : (
             <div className="h-56">
               <Doughnut data={doughnutData} options={doughnutOpts} />
@@ -901,18 +901,18 @@ export default function TyreSizeAnalysis() {
         </div>
 
         {/* CPK Horizontal Bar */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <h2 className="text-sm font-semibold text-gray-200 mb-1 flex items-center gap-2">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+          <h2 className="text-sm font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-2">
             <DollarSign className="w-4 h-4 text-green-400" />
             CPK by Size (ranked)
           </h2>
-          <div className="flex gap-4 text-xs text-gray-500 mb-3">
+          <div className="flex gap-4 text-xs text-[var(--text-muted)] mb-3">
             <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500 inline-block" /> ≤{BENCHMARK_GOOD} Good</span>
             <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-yellow-500 inline-block" /> ≤{BENCHMARK_AVG} Avg</span>
             <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-500 inline-block" /> &gt;{BENCHMARK_AVG} Poor</span>
           </div>
           {cpkBarData.labels.length === 0 ? (
-            <div className="flex items-center justify-center h-56 text-gray-500 text-sm">No CPK data (need km fields)</div>
+            <div className="flex items-center justify-center h-56 text-[var(--text-muted)] text-sm">No CPK data (need km fields)</div>
           ) : (
             <div style={{ height: Math.max(200, cpkBarData.labels.length * 26) }}>
               <Bar data={cpkBarData} options={cpkBarOpts} />
@@ -922,19 +922,19 @@ export default function TyreSizeAnalysis() {
       </div>
 
       {/* ── Size Distribution Table ─────────────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+        <div className="p-4 border-b border-[var(--input-border)] flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
             <Layers className="w-4 h-4 text-green-400" />
             Size Distribution Detail
           </h2>
-          <span className="text-xs text-gray-500">{sortedSizeMetrics.length} sizes · click row to expand</span>
+          <span className="text-xs text-[var(--text-muted)]">{sortedSizeMetrics.length} sizes · click row to expand</span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-gray-800 bg-gray-950">
+              <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
                 {[
                   { label: 'Size',         field: 'size' },
                   { label: 'Count',        field: 'count' },
@@ -949,7 +949,7 @@ export default function TyreSizeAnalysis() {
                   <th
                     key={col.label}
                     onClick={col.field ? () => toggleSort(col.field) : undefined}
-                    className={`text-left px-4 py-3 text-gray-400 font-medium whitespace-nowrap ${col.field ? 'cursor-pointer hover:text-gray-200 select-none' : ''}`}
+                    className={`text-left px-4 py-3 text-[var(--text-muted)] font-medium whitespace-nowrap ${col.field ? 'cursor-pointer hover:text-[var(--text-secondary)] select-none' : ''}`}
                   >
                     <div className="flex items-center gap-1">
                       {col.label}
@@ -963,7 +963,7 @@ export default function TyreSizeAnalysis() {
             <tbody>
               {sortedSizeMetrics.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-12 text-gray-500">No tyre records found</td>
+                  <td colSpan={10} className="text-center py-12 text-[var(--text-muted)]">No tyre records found</td>
                 </tr>
               ) : sortedSizeMetrics.map((m, idx) => {
                 const isExpanded = expandedSize === m.size
@@ -974,23 +974,23 @@ export default function TyreSizeAnalysis() {
                       key={m.size}
                       onClick={() => setExpandedSize(isExpanded ? null : m.size)}
                       className={`border-b border-gray-800/50 cursor-pointer transition-colors ${
-                        isExpanded ? 'bg-gray-800/60' : idx % 2 === 0 ? 'bg-gray-900 hover:bg-gray-800/40' : 'bg-gray-950 hover:bg-gray-800/40'
+                        isExpanded ? 'bg-gray-800/60' : idx % 2 === 0 ? 'bg-[var(--surface-1)] hover:bg-gray-800/40' : 'bg-[var(--input-bg)] hover:bg-gray-800/40'
                       }`}
                     >
                       <td className="px-4 py-2.5 font-mono text-green-300 font-medium whitespace-nowrap">{m.size}</td>
-                      <td className="px-4 py-2.5 text-white font-medium">{m.count.toLocaleString()}</td>
-                      <td className="px-4 py-2.5 text-gray-300">{fmtPct(m.pct)}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{m.count.toLocaleString()}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtPct(m.pct)}</td>
                       <td className={`px-4 py-2.5 font-mono ${cpkColor(m.avgCpk)}`}>
-                        {m.avgCpk != null ? `${activeCurrency} ${m.avgCpk.toFixed(4)}` : <span className="text-gray-600">N/A</span>}
+                        {m.avgCpk != null ? `${activeCurrency} ${m.avgCpk.toFixed(4)}` : <span className="text-[var(--text-dim)]">N/A</span>}
                       </td>
-                      <td className="px-4 py-2.5 text-gray-300">{fmtKm(m.avgLife)}</td>
-                      <td className={`px-4 py-2.5 ${m.failRate > 20 ? 'text-red-400' : m.failRate > 10 ? 'text-yellow-400' : 'text-gray-300'}`}>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)]">{fmtKm(m.avgLife)}</td>
+                      <td className={`px-4 py-2.5 ${m.failRate > 20 ? 'text-red-400' : m.failRate > 10 ? 'text-yellow-400' : 'text-[var(--text-secondary)]'}`}>
                         {fmtPct(m.failRate)}
                       </td>
-                      <td className="px-4 py-2.5 text-gray-400 max-w-[180px] truncate">
+                      <td className="px-4 py-2.5 text-[var(--text-muted)] max-w-[180px] truncate">
                         {m.brands.slice(0, 3).join(', ')}{m.brands.length > 3 ? ` +${m.brands.length - 3}` : ''}
                       </td>
-                      <td className="px-4 py-2.5 text-gray-400 max-w-[140px] truncate">
+                      <td className="px-4 py-2.5 text-[var(--text-muted)] max-w-[140px] truncate">
                         {m.sites.slice(0, 2).join(', ')}{m.sites.length > 2 ? ` +${m.sites.length - 2}` : ''}
                       </td>
                       <td className="px-4 py-2.5">
@@ -998,25 +998,25 @@ export default function TyreSizeAnalysis() {
                           {m.flag}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-gray-600">
+                      <td className="px-4 py-2.5 text-[var(--text-dim)]">
                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                       </td>
                     </tr>
                     <AnimatePresence>
                       {isExpanded && (
                         <tr key={`${m.size}-expand`}>
-                          <td colSpan={10} className="bg-gray-800/40 border-b border-gray-800">
+                          <td colSpan={10} className="bg-gray-800/40 border-b border-[var(--input-border)]">
                             <motion.div
                               initial={{ opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: 'auto' }}
                               exit={{ opacity: 0, height: 0 }}
                               className="px-4 py-3"
                             >
-                              <p className="text-xs font-semibold text-gray-300 mb-2">Brand breakdown for {m.size}</p>
+                              <p className="text-xs font-semibold text-[var(--text-secondary)] mb-2">Brand breakdown for {m.size}</p>
                               <div className="overflow-x-auto">
                                 <table className="text-xs w-auto">
                                   <thead>
-                                    <tr className="text-gray-500">
+                                    <tr className="text-[var(--text-muted)]">
                                       <th className="pr-8 py-1 text-left font-medium">Brand</th>
                                       <th className="pr-8 py-1 text-left font-medium">Count</th>
                                       <th className="pr-8 py-1 text-left font-medium">Avg CPK</th>
@@ -1026,12 +1026,12 @@ export default function TyreSizeAnalysis() {
                                   <tbody>
                                     {brandBreakdown.map(b => (
                                       <tr key={b.brand} className="border-t border-gray-700/50">
-                                        <td className="pr-8 py-1.5 text-gray-200 font-medium">{b.brand}</td>
-                                        <td className="pr-8 py-1.5 text-gray-300">{b.count}</td>
+                                        <td className="pr-8 py-1.5 text-[var(--text-secondary)] font-medium">{b.brand}</td>
+                                        <td className="pr-8 py-1.5 text-[var(--text-secondary)]">{b.count}</td>
                                         <td className={`pr-8 py-1.5 font-mono ${cpkColor(b.avgCpk)}`}>
-                                          {b.avgCpk != null ? `${activeCurrency} ${b.avgCpk.toFixed(4)}` : <span className="text-gray-600">N/A</span>}
+                                          {b.avgCpk != null ? `${activeCurrency} ${b.avgCpk.toFixed(4)}` : <span className="text-[var(--text-dim)]">N/A</span>}
                                         </td>
-                                        <td className="pr-8 py-1.5 text-gray-300">{fmtKm(b.avgLife)}</td>
+                                        <td className="pr-8 py-1.5 text-[var(--text-secondary)]">{fmtKm(b.avgLife)}</td>
                                       </tr>
                                     ))}
                                   </tbody>
@@ -1051,13 +1051,13 @@ export default function TyreSizeAnalysis() {
       </div>
 
       {/* ── Size × Brand Matrix ─────────────────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+        <div className="p-4 border-b border-[var(--input-border)] flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-green-400" />
             Size × Brand CPK Performance Matrix
           </h2>
-          <div className="flex gap-3 text-xs text-gray-500">
+          <div className="flex gap-3 text-xs text-[var(--text-muted)]">
             <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-800 inline-block" /> &lt;{BENCHMARK_GOOD}</span>
             <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-yellow-800 inline-block" /> {BENCHMARK_GOOD}-{BENCHMARK_AVG}</span>
             <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-800 inline-block" /> &gt;{BENCHMARK_AVG}</span>
@@ -1065,25 +1065,25 @@ export default function TyreSizeAnalysis() {
         </div>
         <div className="overflow-x-auto">
           {matrixData.sizes.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-gray-500 text-sm">Insufficient data for matrix</div>
+            <div className="flex items-center justify-center h-32 text-[var(--text-muted)] text-sm">Insufficient data for matrix</div>
           ) : (
             <table className="text-xs w-full">
               <thead>
-                <tr className="border-b border-gray-800 bg-gray-950">
-                  <th className="text-left px-4 py-3 text-gray-400 font-medium">Size / Brand</th>
+                <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)]">
+                  <th className="text-left px-4 py-3 text-[var(--text-muted)] font-medium">Size / Brand</th>
                   {matrixData.brands.map(br => (
-                    <th key={br} className="text-center px-4 py-3 text-gray-400 font-medium whitespace-nowrap">{br}</th>
+                    <th key={br} className="text-center px-4 py-3 text-[var(--text-muted)] font-medium whitespace-nowrap">{br}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {matrixData.sizes.map((sz, i) => (
-                  <tr key={sz} className={`border-b border-gray-800/50 ${i % 2 === 0 ? 'bg-gray-900' : 'bg-gray-950'}`}>
+                  <tr key={sz} className={`border-b border-gray-800/50 ${i % 2 === 0 ? 'bg-[var(--surface-1)]' : 'bg-[var(--input-bg)]'}`}>
                     <td className="px-4 py-3 font-mono text-green-300 whitespace-nowrap">{sz}</td>
                     {matrixData.brands.map(br => {
                       const cpk = matrixData.matrix[sz]?.[br]
                       return (
-                        <td key={br} className={`px-4 py-3 text-center font-mono rounded-sm ${cpk != null ? cpkBgCell(cpk) : 'text-gray-700'}`}>
+                        <td key={br} className={`px-4 py-3 text-center font-mono rounded-sm ${cpk != null ? cpkBgCell(cpk) : 'text-[var(--text-dim)]'}`}>
                           {cpk != null ? `${cpk.toFixed(3)}` : '-'}
                         </td>
                       )
@@ -1100,20 +1100,20 @@ export default function TyreSizeAnalysis() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Position-Size Compliance */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-gray-800">
-            <h2 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-[var(--input-border)]">
+            <h2 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-green-400" />
               Position-Size Compliance
             </h2>
           </div>
           {posCompliance.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-gray-500 text-sm">No position data</div>
+            <div className="flex items-center justify-center h-32 text-[var(--text-muted)] text-sm">No position data</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="text-xs w-full">
                 <thead>
-                  <tr className="border-b border-gray-800 bg-gray-950 text-gray-400">
+                  <tr className="border-b border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text-muted)]">
                     <th className="text-left px-4 py-2.5 font-medium">Position</th>
                     <th className="text-left px-4 py-2.5 font-medium">Required Sizes</th>
                     <th className="text-right px-4 py-2.5 font-medium">Non-Std</th>
@@ -1123,12 +1123,12 @@ export default function TyreSizeAnalysis() {
                 </thead>
                 <tbody>
                   {posCompliance.map((p, i) => (
-                    <tr key={p.pos} className={`border-b border-gray-800/50 ${i % 2 === 0 ? 'bg-gray-900' : 'bg-gray-950'}`}>
-                      <td className="px-4 py-2.5 text-gray-200 font-medium">{p.pos}</td>
-                      <td className="px-4 py-2.5 text-gray-400 font-mono text-xs">
+                    <tr key={p.pos} className={`border-b border-gray-800/50 ${i % 2 === 0 ? 'bg-[var(--surface-1)]' : 'bg-[var(--input-bg)]'}`}>
+                      <td className="px-4 py-2.5 text-[var(--text-secondary)] font-medium">{p.pos}</td>
+                      <td className="px-4 py-2.5 text-[var(--text-muted)] font-mono text-xs">
                         {p.required.join(', ') || '-'}
                       </td>
-                      <td className={`px-4 py-2.5 text-right ${p.nonStd > 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                      <td className={`px-4 py-2.5 text-right ${p.nonStd > 0 ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
                         {p.nonStd}
                       </td>
                       <td className={`px-4 py-2.5 text-right font-medium ${
@@ -1137,7 +1137,7 @@ export default function TyreSizeAnalysis() {
                         {fmtPct(p.compliance)}
                       </td>
                       <td className="px-4 py-2.5">
-                        <div className="w-full bg-gray-800 rounded-full h-1.5">
+                        <div className="w-full bg-[var(--input-bg)] rounded-full h-1.5">
                           <div
                             className={`h-1.5 rounded-full transition-all ${
                               p.compliance >= 90 ? 'bg-green-500' : p.compliance >= 70 ? 'bg-yellow-500' : 'bg-red-500'
@@ -1155,13 +1155,13 @@ export default function TyreSizeAnalysis() {
         </div>
 
         {/* Brand-Size CPK Trend */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <h2 className="text-sm font-semibold text-gray-200 mb-4 flex items-center gap-2">
+        <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+          <h2 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-green-400" />
             Top Size-Brand Combos - CPK Trend (12 months)
           </h2>
           {trendData.datasets.length === 0 ? (
-            <div className="flex items-center justify-center h-56 text-gray-500 text-sm">No trend data available</div>
+            <div className="flex items-center justify-center h-56 text-[var(--text-muted)] text-sm">No trend data available</div>
           ) : (
             <div className="h-56">
               <Line data={trendData} options={trendOpts} />
@@ -1171,17 +1171,17 @@ export default function TyreSizeAnalysis() {
       </div>
 
       {/* ── Consolidation Opportunities ─────────────────────────────────────── */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+      <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+        <div className="p-4 border-b border-[var(--input-border)] flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[var(--text-secondary)] flex items-center gap-2">
             <Lightbulb className="w-4 h-4 text-yellow-400" />
             Consolidation Opportunities
           </h2>
-          <span className="text-xs text-gray-500">{consolidationOps.length} recommendations</span>
+          <span className="text-xs text-[var(--text-muted)]">{consolidationOps.length} recommendations</span>
         </div>
 
         {consolidationOps.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-500">
+          <div className="flex flex-col items-center justify-center py-12 gap-3 text-[var(--text-muted)]">
             <CheckCircle className="w-10 h-10 text-green-700" />
             <p className="text-sm">No consolidation opportunities detected - fleet is well optimized</p>
           </div>
@@ -1214,13 +1214,13 @@ export default function TyreSizeAnalysis() {
                   <div className="flex items-start gap-2 mb-2">
                     {typeIcon[op.type]}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-100 leading-tight">{op.title}</p>
+                      <p className="text-sm font-semibold text-[var(--text-secondary)] leading-tight">{op.title}</p>
                     </div>
                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap ${impactBadge[op.impact]}`}>
                       {op.impact}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-400 leading-relaxed">{op.desc}</p>
+                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">{op.desc}</p>
                   {op.savings != null && (
                     <div className="mt-3 flex items-center gap-1.5 text-xs text-green-400">
                       <DollarSign className="w-3.5 h-3.5" />

@@ -85,12 +85,12 @@ function relativeTime(ts) {
 function EmptyState({ onNew, onPreset }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-8">
-      <div className="w-20 h-20 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center">
-        <Bell className="w-9 h-9 text-gray-500" />
+      <div className="w-20 h-20 rounded-full bg-[var(--surface-1)] border border-[var(--input-border)] flex items-center justify-center">
+        <Bell className="w-9 h-9 text-[var(--text-muted)]" />
       </div>
       <div className="text-center">
-        <p className="text-gray-300 text-lg font-medium">No alert thresholds configured</p>
-        <p className="text-gray-500 text-sm mt-1">Create rules to get notified when fleet metrics exceed safe limits.</p>
+        <p className="text-[var(--text-secondary)] text-lg font-medium">No alert thresholds configured</p>
+        <p className="text-[var(--text-muted)] text-sm mt-1">Create rules to get notified when fleet metrics exceed safe limits.</p>
         <button
           onClick={onNew}
           className="mt-4 inline-flex items-center gap-2 text-orange-400 hover:text-orange-300 text-sm font-medium transition-colors"
@@ -101,7 +101,7 @@ function EmptyState({ onNew, onPreset }) {
 
       {/* Preset suggestions */}
       <div className="w-full max-w-3xl">
-        <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-3">Suggested presets</p>
+        <p className="text-[var(--text-muted)] text-xs font-semibold uppercase tracking-widest mb-3">Suggested presets</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {PRESETS.map(p => {
             const meta = metaFor(p.metric)
@@ -110,14 +110,14 @@ function EmptyState({ onNew, onPreset }) {
               <button
                 key={p.name}
                 onClick={() => onPreset(p)}
-                className="flex items-start gap-3 p-4 rounded-xl bg-gray-800 border border-gray-700 hover:border-orange-500/50 hover:bg-gray-750 transition-all text-left group"
+                className="flex items-start gap-3 p-4 rounded-xl bg-[var(--surface-1)] border border-[var(--input-border)] hover:border-orange-500/50 hover:bg-gray-750 transition-all text-left group"
               >
                 <div className={`mt-0.5 p-2 rounded-lg ${METRIC_BADGE[p.metric]}`}>
                   <Icon className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-white text-sm font-medium group-hover:text-orange-400 transition-colors">{p.name}</p>
-                  <p className="text-gray-500 text-xs mt-0.5">{humanDescription(p)}</p>
+                  <p className="text-[var(--text-primary)] text-sm font-medium group-hover:text-orange-400 transition-colors">{p.name}</p>
+                  <p className="text-[var(--text-muted)] text-xs mt-0.5">{humanDescription(p)}</p>
                 </div>
               </button>
             )
@@ -151,7 +151,7 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
   }
 
   return (
-    <div className={`relative bg-gray-800 rounded-xl border border-gray-700 border-l-4 ${METRIC_BORDER[threshold.metric]} overflow-hidden transition-all hover:border-gray-600`}>
+    <div className={`relative bg-[var(--surface-1)] rounded-xl border border-[var(--input-border)] border-l-4 ${METRIC_BORDER[threshold.metric]} overflow-hidden transition-all hover:border-[var(--text-dim)]`}>
       {/* Top row */}
       <div className="p-4 pb-3">
         <div className="flex items-start justify-between gap-3">
@@ -160,8 +160,8 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
               <Icon className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <p className="text-white font-semibold text-sm truncate">{threshold.name}</p>
-              <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">{humanDescription(threshold)}</p>
+              <p className="text-[var(--text-primary)] font-semibold text-sm truncate">{threshold.name}</p>
+              <p className="text-[var(--text-muted)] text-xs mt-0.5 leading-relaxed">{humanDescription(threshold)}</p>
             </div>
           </div>
           {/* Active toggle */}
@@ -169,7 +169,7 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
             onClick={handleToggle}
             disabled={toggling}
             title={threshold.active ? 'Disable' : 'Enable'}
-            className="shrink-0 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+            className="shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50"
           >
             {toggling
               ? <Loader2 className="w-5 h-5 animate-spin" />
@@ -184,12 +184,12 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
         {(threshold.site_filter || threshold.brand_filter) && (
           <div className="flex flex-wrap gap-1.5 mt-2.5 ml-11">
             {threshold.site_filter && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 text-xs">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)] text-xs">
                 <Tag className="w-3 h-3" /> {threshold.site_filter}
               </span>
             )}
             {threshold.brand_filter && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 text-xs">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-secondary)] text-xs">
                 <Zap className="w-3 h-3" /> {threshold.brand_filter}
               </span>
             )}
@@ -198,30 +198,30 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
       </div>
 
       {/* Bottom row */}
-      <div className="px-4 py-2.5 border-t border-gray-700/60 flex items-center justify-between gap-2">
+      <div className="px-4 py-2.5 border-t border-[var(--input-border)]/60 flex items-center justify-between gap-2">
         {/* Notification methods */}
         <div className="flex items-center gap-2">
           <span title={threshold.notify_email ? 'Email on' : 'Email off'}>
             {threshold.notify_email
               ? <Mail className="w-3.5 h-3.5 text-blue-400" />
-              : <MailOff className="w-3.5 h-3.5 text-gray-600" />
+              : <MailOff className="w-3.5 h-3.5 text-[var(--text-dim)]" />
             }
           </span>
           <span title={threshold.notify_in_app ? 'In-app on' : 'In-app off'}>
             {threshold.notify_in_app
               ? <Bell className="w-3.5 h-3.5 text-orange-400" />
-              : <BellOff className="w-3.5 h-3.5 text-gray-600" />
+              : <BellOff className="w-3.5 h-3.5 text-[var(--text-dim)]" />
             }
           </span>
-          <span className="text-gray-600 text-xs mx-1">|</span>
-          <span className="text-gray-500 text-xs">
+          <span className="text-[var(--text-dim)] text-xs mx-1">|</span>
+          <span className="text-[var(--text-muted)] text-xs">
             {threshold.triggered_count > 0
               ? `Triggered ${threshold.triggered_count} time${threshold.triggered_count !== 1 ? 's' : ''}`
               : 'Never triggered'
             }
           </span>
           {triggered && (
-            <span className="text-gray-600 text-xs">· {triggered}</span>
+            <span className="text-[var(--text-dim)] text-xs">· {triggered}</span>
           )}
         </div>
 
@@ -229,7 +229,7 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
         <div className="flex items-center gap-1">
           <button
             onClick={() => onEdit(threshold)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-all"
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg-hover)] transition-all"
             title="Edit"
           >
             <Edit2 className="w-3.5 h-3.5" />
@@ -237,7 +237,7 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50"
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50"
             title="Delete"
           >
             {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
@@ -247,7 +247,7 @@ function ThresholdCard({ threshold, onEdit, onDelete, onToggle }) {
 
       {/* Inactive overlay */}
       {!threshold.active && (
-        <div className="absolute inset-0 bg-gray-900/40 rounded-xl pointer-events-none" />
+        <div className="absolute inset-0 bg-black/40 rounded-xl pointer-events-none" />
       )}
     </div>
   )
@@ -303,13 +303,13 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-lg bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-lg bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h2 className="text-white font-semibold text-base">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--input-border)]">
+          <h2 className="text-[var(--text-primary)] font-semibold text-base">
             {mode === 'edit' ? 'Edit Threshold' : 'New Alert Threshold'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-gray-800">
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-1 rounded-lg hover:bg-[var(--input-bg)]">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -320,7 +320,7 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
 
             {/* Name */}
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
                 Rule Name <span className="text-orange-500">*</span>
               </label>
               <input
@@ -328,18 +328,18 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
                 value={form.name}
                 onChange={e => set('name', e.target.value)}
                 placeholder="e.g. Low tread warning"
-                className={`w-full bg-gray-800 border rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.name ? 'border-red-500' : 'border-gray-700'}`}
+                className={`w-full bg-[var(--input-bg)] border rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.name ? 'border-red-500' : 'border-[var(--input-border)]'}`}
               />
               {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
             </div>
 
             {/* Metric */}
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Metric</label>
+              <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Metric</label>
               <select
                 value={form.metric}
                 onChange={e => set('metric', e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
+                className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
               >
                 {METRICS.map(m => (
                   <option key={m.value} value={m.value}>{m.label}</option>
@@ -350,11 +350,11 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
             {/* Condition + Threshold */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Condition</label>
+                <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Condition</label>
                 <select
                   value={form.operator}
                   onChange={e => set('operator', e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
                 >
                   {OPERATORS.map(o => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -362,8 +362,8 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                  Value <span className="text-gray-600 normal-case font-normal">({unit})</span>
+                <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+                  Value <span className="text-[var(--text-dim)] normal-case font-normal">({unit})</span>
                 </label>
                 <input
                   type="number"
@@ -371,51 +371,51 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
                   value={form.threshold}
                   onChange={e => set('threshold', e.target.value)}
                   placeholder={unit === 'mm' ? '4.0' : unit === 'PSI' ? '80' : '30'}
-                  className={`w-full bg-gray-800 border rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.threshold ? 'border-red-500' : 'border-gray-700'}`}
+                  className={`w-full bg-[var(--input-bg)] border rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all ${errors.threshold ? 'border-red-500' : 'border-[var(--input-border)]'}`}
                 />
                 {errors.threshold && <p className="text-red-400 text-xs mt-1">{errors.threshold}</p>}
               </div>
             </div>
 
             {/* Preview */}
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800/60 border border-gray-700/50">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--input-bg)]/60 border border-[var(--input-border)]/50">
               <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0" />
-              <p className="text-gray-300 text-xs">
-                Alert when: <span className="text-white font-medium">{humanDescription(form)}</span>
+              <p className="text-[var(--text-secondary)] text-xs">
+                Alert when: <span className="text-[var(--text-primary)] font-medium">{humanDescription(form)}</span>
               </p>
             </div>
 
             {/* Filters */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                  Site Filter <span className="text-gray-600 font-normal">(optional)</span>
+                <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+                  Site Filter <span className="text-[var(--text-dim)] font-normal">(optional)</span>
                 </label>
                 <input
                   type="text"
                   value={form.site_filter}
                   onChange={e => set('site_filter', e.target.value)}
                   placeholder="Leave blank for all sites"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
-                  Brand Filter <span className="text-gray-600 font-normal">(optional)</span>
+                <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+                  Brand Filter <span className="text-[var(--text-dim)] font-normal">(optional)</span>
                 </label>
                 <input
                   type="text"
                   value={form.brand_filter}
                   onChange={e => set('brand_filter', e.target.value)}
                   placeholder="Leave blank for all brands"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+                  className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                 />
               </div>
             </div>
 
             {/* Notification methods */}
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Notify via</label>
+              <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">Notify via</label>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
@@ -425,7 +425,7 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
                     className="w-4 h-4 rounded accent-orange-500 cursor-pointer"
                   />
                   <Mail className="w-4 h-4 text-blue-400" />
-                  <span className="text-gray-300 text-sm">Email</span>
+                  <span className="text-[var(--text-secondary)] text-sm">Email</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
@@ -435,17 +435,17 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
                     className="w-4 h-4 rounded accent-orange-500 cursor-pointer"
                   />
                   <Bell className="w-4 h-4 text-orange-400" />
-                  <span className="text-gray-300 text-sm">In-app</span>
+                  <span className="text-[var(--text-secondary)] text-sm">In-app</span>
                 </label>
               </div>
               {errors.notify && <p className="text-red-400 text-xs mt-1">{errors.notify}</p>}
             </div>
 
             {/* Active */}
-            <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-gray-800 border border-gray-700">
+            <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-[var(--surface-1)] border border-[var(--input-border)]">
               <div>
-                <p className="text-white text-sm font-medium">Rule active</p>
-                <p className="text-gray-500 text-xs">Disable to pause without deleting</p>
+                <p className="text-[var(--text-primary)] text-sm font-medium">Rule active</p>
+                <p className="text-[var(--text-muted)] text-xs">Disable to pause without deleting</p>
               </div>
               <button
                 type="button"
@@ -454,7 +454,7 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
               >
                 {form.active
                   ? <ToggleRight className="w-8 h-8 text-orange-500" />
-                  : <ToggleLeft className="w-8 h-8 text-gray-500" />
+                  : <ToggleLeft className="w-8 h-8 text-[var(--text-muted)]" />
                 }
               </button>
             </div>
@@ -462,11 +462,11 @@ function Modal({ mode, initial, onSave, onClose, saving }) {
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-gray-800 flex gap-3 justify-end bg-gray-900/80">
+          <div className="px-6 py-4 border-t border-[var(--input-border)] flex gap-3 justify-end bg-[var(--surface-1)]/80">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-all"
+              className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] rounded-lg border border-[var(--input-border)] transition-all"
             >
               Cancel
             </button>
@@ -570,7 +570,7 @@ export default function AlertThresholds() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="text-white space-y-6">
+    <div className="text-[var(--text-secondary)] space-y-6">
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
         <div>
@@ -578,9 +578,9 @@ export default function AlertThresholds() {
             <div className="p-2 rounded-lg bg-orange-500/20">
               <Bell className="w-5 h-5 text-orange-400" />
             </div>
-            <h1 className="text-2xl font-bold text-white">Alert Thresholds</h1>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">Alert Thresholds</h1>
           </div>
-          <p className="text-gray-400 text-sm ml-11">Personal notification rules for your fleet</p>
+          <p className="text-[var(--text-muted)] text-sm ml-11">Personal notification rules for your fleet</p>
         </div>
         <button
           onClick={openNew}
@@ -600,11 +600,11 @@ export default function AlertThresholds() {
           ].map(s => {
             const Icon = s.icon
             return (
-              <div key={s.label} className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 flex items-center gap-3">
+              <div key={s.label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl px-4 py-3 flex items-center gap-3">
                 <Icon className={`w-5 h-5 ${s.color} shrink-0`} />
                 <div>
-                  <p className="text-white font-bold text-xl leading-none">{s.value}</p>
-                  <p className="text-gray-500 text-xs mt-0.5">{s.label}</p>
+                  <p className="text-[var(--text-primary)] font-bold text-xl leading-none">{s.value}</p>
+                  <p className="text-[var(--text-muted)] text-xs mt-0.5">{s.label}</p>
                 </div>
               </div>
             )
@@ -617,16 +617,16 @@ export default function AlertThresholds() {
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
           {/* Search */}
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search thresholds..."
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-9 pr-4 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
+              className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl pl-9 pr-4 py-2.5 text-[var(--text-primary)] text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -636,7 +636,7 @@ export default function AlertThresholds() {
           <select
             value={filterMetric}
             onChange={e => setFilterMetric(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
+            className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
           >
             <option value="all">All Metrics</option>
             {METRICS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
@@ -646,7 +646,7 @@ export default function AlertThresholds() {
           <select
             value={filterActive}
             onChange={e => setFilterActive(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
+            className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all appearance-none cursor-pointer"
           >
             <option value="all">All Status</option>
             <option value="active">Active only</option>
@@ -681,8 +681,8 @@ export default function AlertThresholds() {
         <>
           {visible.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <Filter className="w-8 h-8 text-gray-600" />
-              <p className="text-gray-400 text-sm">No thresholds match your filters.</p>
+              <Filter className="w-8 h-8 text-[var(--text-dim)]" />
+              <p className="text-[var(--text-muted)] text-sm">No thresholds match your filters.</p>
               <button onClick={() => { setSearch(''); setFilterMetric('all'); setFilterActive('all') }} className="text-orange-400 text-xs hover:text-orange-300 transition-colors">
                 Clear filters
               </button>
@@ -703,7 +703,7 @@ export default function AlertThresholds() {
 
           {/* Suggested presets (shown below existing cards) */}
           <div className="mt-10">
-            <p className="text-gray-500 text-xs font-semibold uppercase tracking-widest mb-3">Suggested presets</p>
+            <p className="text-[var(--text-muted)] text-xs font-semibold uppercase tracking-widest mb-3">Suggested presets</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {PRESETS.map(p => {
                 const meta = metaFor(p.metric)
@@ -712,14 +712,14 @@ export default function AlertThresholds() {
                   <button
                     key={p.name}
                     onClick={() => openPreset(p)}
-                    className="flex items-start gap-3 p-3.5 rounded-xl bg-gray-800/60 border border-gray-700 hover:border-orange-500/40 hover:bg-gray-800 transition-all text-left group"
+                    className="flex items-start gap-3 p-3.5 rounded-xl bg-[var(--input-bg)]/60 border border-[var(--input-border)] hover:border-orange-500/40 hover:bg-[var(--input-bg)] transition-all text-left group"
                   >
                     <div className={`shrink-0 mt-0.5 p-1.5 rounded-lg ${METRIC_BADGE[p.metric]}`}>
                       <Icon className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <p className="text-gray-300 text-xs font-medium group-hover:text-white transition-colors">{p.name}</p>
-                      <p className="text-gray-600 text-xs mt-0.5">{humanDescription(p)}</p>
+                      <p className="text-[var(--text-secondary)] text-xs font-medium group-hover:text-[var(--text-primary)] transition-colors">{p.name}</p>
+                      <p className="text-[var(--text-dim)] text-xs mt-0.5">{humanDescription(p)}</p>
                     </div>
                   </button>
                 )

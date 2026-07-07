@@ -108,7 +108,7 @@ function Select({ value, onChange, options, placeholder, className = '' }) {
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
-      className={`bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-500 ${className}`}
+      className={`bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-green-500 ${className}`}
     >
       <option value="">{placeholder}</option>
       {options.map(o => (
@@ -129,13 +129,13 @@ function KpiCard({ title, value, sub, icon: Icon, color, alert }) {
     blue:   { border: 'border-blue-700/40 bg-blue-950/20',   icon: 'text-blue-400',  val: 'text-blue-300'  },
     purple: { border: 'border-purple-700/40 bg-purple-950/20', icon: 'text-purple-400', val: 'text-purple-300' },
   }
-  const s = styles[color] ?? { border: 'border-gray-700/40 bg-gray-900/40', icon: 'text-gray-400', val: 'text-white' }
+  const s = styles[color] ?? { border: 'border-[var(--input-border)] bg-[var(--surface-1)]', icon: 'text-[var(--text-muted)]', val: 'text-[var(--text-primary)]' }
   return (
     <div className={`rounded-xl border p-4 flex flex-col gap-2 ${s.border}`}>
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
           <Icon size={14} className={s.icon} />
-          <span className="text-xs text-gray-400 font-medium">{title}</span>
+          <span className="text-xs text-[var(--text-muted)] font-medium">{title}</span>
         </div>
         {alert && (
           <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 font-bold animate-pulse">
@@ -144,7 +144,7 @@ function KpiCard({ title, value, sub, icon: Icon, color, alert }) {
         )}
       </div>
       <p className={`text-2xl font-bold leading-tight ${s.val}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-500">{sub}</p>}
+      {sub && <p className="text-xs text-[var(--text-muted)]">{sub}</p>}
     </div>
   )
 }
@@ -154,7 +154,7 @@ function InspectionBadge({ status }) {
     compliant: 'bg-green-500/20 text-green-300 border border-green-500/40',
     due_soon:  'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40',
     overdue:   'bg-red-500/20 text-red-300 border border-red-500/40',
-    no_data:   'bg-gray-800 text-gray-400',
+    no_data:   'bg-[var(--input-bg)] text-[var(--text-muted)]',
   }
   const label = { compliant: 'Compliant', due_soon: 'Due Soon', overdue: 'Overdue', no_data: 'No Data' }
   return (
@@ -172,7 +172,7 @@ function RiskBadge({ risk }) {
     Low:      'bg-green-500/20 text-green-300 border border-green-500/40',
   }
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[risk] ?? 'bg-gray-800 text-gray-400'}`}>
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[risk] ?? 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
       {risk || 'Unknown'}
     </span>
   )
@@ -219,14 +219,14 @@ function TabBtn({ active, onClick, icon: Icon, label, count, countColor }) {
       className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap ${
         active
           ? 'bg-green-900/40 text-green-300 border border-green-700/50'
-          : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+          : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
       }`}
     >
       <Icon size={13} />
       {label}
       {count !== undefined && (
         <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-          countColor ?? 'bg-gray-700 text-gray-300'
+          countColor ?? 'bg-[var(--input-bg)] text-[var(--text-secondary)]'
         }`}>
           {count}
         </span>
@@ -986,7 +986,7 @@ export default function ComplianceDashboard() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={fetchData}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 text-xs hover:bg-gray-700 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs hover:bg-[var(--input-bg-hover)] transition-colors"
             >
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
             </button>
@@ -1017,8 +1017,8 @@ export default function ComplianceDashboard() {
       {/* ── Filters ── */}
       <div className="card">
         <div className="flex items-center gap-2 mb-3">
-          <Filter size={13} className="text-gray-400" />
-          <span className="text-xs font-medium text-gray-400">Filters</span>
+          <Filter size={13} className="text-[var(--text-muted)]" />
+          <span className="text-xs font-medium text-[var(--text-muted)]">Filters</span>
           {hasFilter && (
             <button
               onClick={() => { setSiteFilter(''); setCountryFilter('') }}
@@ -1031,9 +1031,9 @@ export default function ComplianceDashboard() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <Select value={siteFilter} onChange={setSiteFilter} options={sites} placeholder="All Sites" />
           <Select value={countryFilter} onChange={setCountryFilter} options={countries} placeholder="All Countries" />
-          <div className="flex items-center gap-2 col-span-2 bg-gray-800/50 rounded-lg px-3 py-2">
-            <Info size={12} className="text-gray-500 shrink-0" />
-            <span className="text-xs text-gray-500">
+          <div className="flex items-center gap-2 col-span-2 bg-[var(--surface-2)] rounded-lg px-3 py-2">
+            <Info size={12} className="text-[var(--text-muted)] shrink-0" />
+            <span className="text-xs text-[var(--text-muted)]">
               Fleet standard: ≥{FLEET_MIN_TREAD}mm tread | Legal min: {LEGAL_MIN_TREAD}mm | Inspection: every {INSPECTION_MAX_DAYS} days
             </span>
           </div>
@@ -1044,7 +1044,7 @@ export default function ComplianceDashboard() {
       {loading && (
         <div className="flex items-center justify-center py-24">
           <RefreshCw size={22} className="text-green-400 animate-spin mr-2" />
-          <span className="text-gray-400 text-sm">Loading compliance data...</span>
+          <span className="text-[var(--text-muted)] text-sm">Loading compliance data...</span>
         </div>
       )}
       {error && (
@@ -1079,14 +1079,14 @@ export default function ComplianceDashboard() {
                 ].map(({ label, pct, weight, icon: Icon }) => {
                   const col = scoreColor(pct)
                   return (
-                    <div key={label} className="bg-gray-900/60 rounded-xl p-4 border border-gray-700/40">
+                    <div key={label} className="bg-[var(--surface-1)] rounded-xl p-4 border border-[var(--input-border)]">
                       <div className="flex items-center gap-2 mb-2">
                         <Icon size={13} className={col.text} />
-                        <span className="text-xs text-gray-400">{label}</span>
-                        <span className="ml-auto text-xs text-gray-600">Weight: {weight}</span>
+                        <span className="text-xs text-[var(--text-muted)]">{label}</span>
+                        <span className="ml-auto text-xs text-[var(--text-dim)]">Weight: {weight}</span>
                       </div>
                       <p className={`text-2xl font-black ${col.text}`}>{pct.toFixed(1)}%</p>
-                      <div className="mt-2 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <div className="mt-2 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all duration-700"
                           style={{ width: `${pct}%`, backgroundColor: col.hex }}
@@ -1099,20 +1099,20 @@ export default function ComplianceDashboard() {
 
               {/* Last audit info + trend */}
               <div className="shrink-0 flex flex-col gap-3 min-w-[180px]">
-                <div className="bg-gray-900/60 rounded-xl p-3 border border-gray-700/40">
-                  <p className="text-xs text-gray-500 mb-1">Last Audit</p>
-                  <p className="text-sm font-semibold text-white">
+                <div className="bg-[var(--surface-1)] rounded-xl p-3 border border-[var(--input-border)]">
+                  <p className="text-xs text-[var(--text-muted)] mb-1">Last Audit</p>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">
                     {lastRefresh ? lastRefresh.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
                   </p>
                 </div>
-                <div className="bg-gray-900/60 rounded-xl p-3 border border-gray-700/40">
-                  <p className="text-xs text-gray-500 mb-1">Critical Alerts</p>
+                <div className="bg-[var(--surface-1)] rounded-xl p-3 border border-[var(--input-border)]">
+                  <p className="text-xs text-[var(--text-muted)] mb-1">Critical Alerts</p>
                   <p className={`text-sm font-semibold ${criticalCount > 0 ? 'text-red-400' : 'text-green-400'}`}>
                     {criticalCount > 0 ? `${criticalCount} Critical` : 'None Active'}
                   </p>
                 </div>
-                <div className="bg-gray-900/60 rounded-xl p-3 border border-gray-700/40">
-                  <p className="text-xs text-gray-500 mb-1">Overdue Inspections</p>
+                <div className="bg-[var(--surface-1)] rounded-xl p-3 border border-[var(--input-border)]">
+                  <p className="text-xs text-[var(--text-muted)] mb-1">Overdue Inspections</p>
                   <p className={`text-sm font-semibold ${overdueCount > 0 ? 'text-red-400' : 'text-green-400'}`}>
                     {overdueCount > 0 ? `${overdueCount} Overdue` : 'All Current'}
                   </p>
@@ -1165,8 +1165,8 @@ export default function ComplianceDashboard() {
           <div className="card">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp size={14} className="text-green-400" />
-              <h3 className="text-sm font-semibold text-white">Compliance Trend</h3>
-              <span className="ml-auto text-xs text-gray-500">Tread compliance % - last 6 months</span>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">Compliance Trend</h3>
+              <span className="ml-auto text-xs text-[var(--text-muted)]">Tread compliance % - last 6 months</span>
             </div>
             <div className="h-48">
               <Line data={trendLineChart} options={trendLineOpts} />
@@ -1174,15 +1174,15 @@ export default function ComplianceDashboard() {
           </div>
 
           {/* ── Tabs ── */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-            <div className="flex items-center gap-1 p-3 border-b border-gray-800 overflow-x-auto">
+          <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+            <div className="flex items-center gap-1 p-3 border-b border-[var(--input-border)] overflow-x-auto">
               <TabBtn
                 active={activeTab === 'tread'}
                 onClick={() => setActiveTab('tread')}
                 icon={Gauge}
                 label="Tread Depth"
                 count={treadStats.fleetFail.length}
-                countColor={treadStats.fleetFail.length > 0 ? 'bg-red-900/40 text-red-300 border border-red-700/40' : 'bg-gray-700 text-gray-300'}
+                countColor={treadStats.fleetFail.length > 0 ? 'bg-red-900/40 text-red-300 border border-red-700/40' : 'bg-[var(--input-bg)] text-[var(--text-secondary)]'}
               />
               <TabBtn
                 active={activeTab === 'pressure'}
@@ -1190,7 +1190,7 @@ export default function ComplianceDashboard() {
                 icon={AlertCircle}
                 label="Pressure"
                 count={pressureStats.anomalies}
-                countColor={pressureStats.anomalies > 0 ? 'bg-orange-900/40 text-orange-300 border border-orange-700/40' : 'bg-gray-700 text-gray-300'}
+                countColor={pressureStats.anomalies > 0 ? 'bg-orange-900/40 text-orange-300 border border-orange-700/40' : 'bg-[var(--input-bg)] text-[var(--text-secondary)]'}
               />
               <TabBtn
                 active={activeTab === 'inspection'}
@@ -1198,7 +1198,7 @@ export default function ComplianceDashboard() {
                 icon={ClipboardList}
                 label="Inspection Schedule"
                 count={overdueCount}
-                countColor={overdueCount > 0 ? 'bg-red-900/40 text-red-300 border border-red-700/40' : 'bg-gray-700 text-gray-300'}
+                countColor={overdueCount > 0 ? 'bg-red-900/40 text-red-300 border border-red-700/40' : 'bg-[var(--input-bg)] text-[var(--text-secondary)]'}
               />
             </div>
 
@@ -1222,8 +1222,8 @@ export default function ComplianceDashboard() {
                         { label: 'Below Fleet Min', val: treadStats.fleetFail.length, col: 'text-orange-400' },
                         { label: 'Legal Failures (<1.6mm)', val: treadStats.legalFail.length, col: 'text-red-400' },
                       ].map(({ label, val, col }) => (
-                        <div key={label} className="bg-gray-800/60 rounded-xl p-3 border border-gray-700/40">
-                          <p className="text-xs text-gray-500">{label}</p>
+                        <div key={label} className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
+                          <p className="text-xs text-[var(--text-muted)]">{label}</p>
                           <p className={`text-xl font-bold ${col}`}>{val}</p>
                         </div>
                       ))}
@@ -1231,10 +1231,10 @@ export default function ComplianceDashboard() {
 
                     {/* Charts */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/40">
+                      <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
                         <div className="flex items-center gap-2 mb-3">
                           <BarChart3 size={13} className="text-blue-400" />
-                          <span className="text-sm font-medium text-white">Tread Depth Distribution</span>
+                          <span className="text-sm font-medium text-[var(--text-primary)]">Tread Depth Distribution</span>
                         </div>
                         <div className="h-52">
                           <Bar data={treadDistChart} options={{
@@ -1251,19 +1251,19 @@ export default function ComplianceDashboard() {
                           ].map(l => (
                             <div key={l.label} className="flex items-center gap-1.5">
                               <span className={`w-2.5 h-2.5 rounded-sm ${l.color}`} />
-                              <span className="text-xs text-gray-500">{l.label}</span>
+                              <span className="text-xs text-[var(--text-muted)]">{l.label}</span>
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/40">
+                      <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
                         <div className="flex items-center gap-2 mb-3">
                           <Building2 size={13} className="text-purple-400" />
-                          <span className="text-sm font-medium text-white">Tread Compliance by Site</span>
+                          <span className="text-sm font-medium text-[var(--text-primary)]">Tread Compliance by Site</span>
                         </div>
                         {treadBySite.length === 0 ? (
-                          <div className="flex items-center justify-center h-52 text-gray-600 text-sm">No site data</div>
+                          <div className="flex items-center justify-center h-52 text-[var(--text-dim)] text-sm">No site data</div>
                         ) : (
                           <div className="h-52">
                             <Bar data={treadBySiteChart} options={{
@@ -1287,19 +1287,19 @@ export default function ComplianceDashboard() {
                       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
                         <div className="flex items-center gap-2">
                           <AlertTriangle size={13} className="text-red-400" />
-                          <span className="text-sm font-semibold text-white">Non-Compliant Tyres</span>
+                          <span className="text-sm font-semibold text-[var(--text-primary)]">Non-Compliant Tyres</span>
                           <span className="text-xs px-2 py-0.5 bg-red-900/30 text-red-300 border border-red-700/40 rounded-full">
                             {nonCompliantTyres.length}
                           </span>
                         </div>
                         <div className="sm:ml-auto flex items-center gap-2">
                           <div className="relative">
-                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                             <input
                               value={treadSearch}
                               onChange={e => { setTreadSearch(e.target.value); setTreadPage(1) }}
                               placeholder="Search asset, serial, site..."
-                              className="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
+                              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
                             />
                           </div>
                           <button
@@ -1315,16 +1315,16 @@ export default function ComplianceDashboard() {
                       {nonCompliantTyres.length === 0 ? (
                         <div className="flex flex-col items-center py-12 gap-2">
                           <CheckCircle size={28} className="text-green-500" />
-                          <p className="text-gray-400 text-sm">All tyres meet the fleet minimum tread depth - fully compliant!</p>
+                          <p className="text-[var(--text-muted)] text-sm">All tyres meet the fleet minimum tread depth - fully compliant!</p>
                         </div>
                       ) : (
                         <>
                           <div className="overflow-x-auto">
                             <table className="w-full text-xs">
                               <thead>
-                                <tr className="border-b border-gray-700/60">
+                                <tr className="border-b border-[var(--input-border)]">
                                   {['Asset', 'Position', 'Brand', 'Tread (mm)', 'Site', 'Days in Service', 'Risk', 'Status'].map(h => (
-                                    <th key={h} className="text-left text-gray-500 pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
+                                    <th key={h} className="text-left text-[var(--text-muted)] pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
                                   ))}
                                 </tr>
                               </thead>
@@ -1335,16 +1335,16 @@ export default function ComplianceDashboard() {
                                   return (
                                     <tr
                                       key={r.id ?? i}
-                                      className={`border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors ${isLegalFail ? 'bg-red-950/20' : ''}`}
+                                      className={`border-b border-[var(--input-border)] hover:bg-[var(--input-bg-hover)] transition-colors ${isLegalFail ? 'bg-red-950/20' : ''}`}
                                     >
-                                      <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '-'}</td>
-                                      <td className="py-2 pr-3 text-gray-300">{r.position || '-'}</td>
-                                      <td className="py-2 pr-3 text-gray-300">{r.brand || '-'}</td>
+                                      <td className="py-2 pr-3 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
+                                      <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.position || '-'}</td>
+                                      <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.brand || '-'}</td>
                                       <td className={`py-2 pr-3 font-bold ${isLegalFail ? 'text-red-400' : 'text-orange-400'}`}>
-                                        {td !== null ? `${td.toFixed(1)} mm` : <span className="text-gray-600">No Data</span>}
+                                        {td !== null ? `${td.toFixed(1)} mm` : <span className="text-[var(--text-dim)]">No Data</span>}
                                       </td>
-                                      <td className="py-2 pr-3 text-gray-400">{r.site || '-'}</td>
-                                      <td className="py-2 pr-3 text-gray-400">
+                                      <td className="py-2 pr-3 text-[var(--text-muted)]">{r.site || '-'}</td>
+                                      <td className="py-2 pr-3 text-[var(--text-muted)]">
                                         {r.issue_date ? `${daysInService(r.issue_date)} days` : '-'}
                                       </td>
                                       <td className="py-2 pr-3"><RiskBadge risk={r.risk_level} /></td>
@@ -1354,7 +1354,7 @@ export default function ComplianceDashboard() {
                                             LEGAL FAILURE
                                           </span>
                                         ) : td === null ? (
-                                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400">
+                                          <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--input-bg)] text-[var(--text-muted)]">
                                             Unknown
                                           </span>
                                         ) : (
@@ -1370,17 +1370,17 @@ export default function ComplianceDashboard() {
                             </table>
                           </div>
                           <div className="flex items-center justify-between mt-3">
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-[var(--text-muted)]">
                               {(treadPage - 1) * PAGE_SIZE + 1}-{Math.min(treadPage * PAGE_SIZE, nonCompliantTyres.length)} of {nonCompliantTyres.length}
                             </p>
                             <div className="flex items-center gap-1">
                               <button disabled={treadPage === 1} onClick={() => setTreadPage(p => p - 1)}
-                                className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40">
+                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
                                 <ChevronLeft size={13} />
                               </button>
-                              <span className="text-xs text-gray-400 px-2">{treadPage} / {treadPageCount}</span>
+                              <span className="text-xs text-[var(--text-muted)] px-2">{treadPage} / {treadPageCount}</span>
                               <button disabled={treadPage === treadPageCount} onClick={() => setTreadPage(p => p + 1)}
-                                className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40">
+                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
                                 <ChevronRight size={13} />
                               </button>
                             </div>
@@ -1408,8 +1408,8 @@ export default function ComplianceDashboard() {
                         { label: 'Compliant (85-130 PSI)', val: pressureStats.compliant, col: 'text-green-400' },
                         { label: 'Anomalies / No Data', val: `${pressureStats.anomalies} / ${pressureStats.noReading}`, col: 'text-red-400' },
                       ].map(({ label, val, col }) => (
-                        <div key={label} className="bg-gray-800/60 rounded-xl p-3 border border-gray-700/40">
-                          <p className="text-xs text-gray-500">{label}</p>
+                        <div key={label} className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
+                          <p className="text-xs text-[var(--text-muted)]">{label}</p>
                           <p className={`text-xl font-bold ${col}`}>{val}</p>
                         </div>
                       ))}
@@ -1417,10 +1417,10 @@ export default function ComplianceDashboard() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {/* Doughnut */}
-                      <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/40">
+                      <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
                         <div className="flex items-center gap-2 mb-3">
                           <AlertCircle size={13} className="text-orange-400" />
-                          <span className="text-sm font-medium text-white">Pressure Compliance Breakdown</span>
+                          <span className="text-sm font-medium text-[var(--text-primary)]">Pressure Compliance Breakdown</span>
                         </div>
                         <div className="h-56">
                           <Doughnut data={pressureDoughnutData} options={doughnutOpts} />
@@ -1429,10 +1429,10 @@ export default function ComplianceDashboard() {
                           {[
                             { label: 'Compliant', val: pressureStats.compliant, color: 'text-green-400' },
                             { label: 'Anomaly',   val: pressureStats.anomalies, color: 'text-red-400' },
-                            { label: 'No Data',   val: pressureStats.noReading, color: 'text-gray-400' },
+                            { label: 'No Data',   val: pressureStats.noReading, color: 'text-[var(--text-muted)]' },
                           ].map(({ label, val, color }) => (
-                            <div key={label} className="bg-gray-900/50 rounded-lg p-2">
-                              <p className="text-xs text-gray-500">{label}</p>
+                            <div key={label} className="bg-[var(--surface-1)] rounded-lg p-2">
+                              <p className="text-xs text-[var(--text-muted)]">{label}</p>
                               <p className={`text-lg font-bold ${color}`}>{val}</p>
                             </div>
                           ))}
@@ -1440,13 +1440,13 @@ export default function ComplianceDashboard() {
                       </div>
 
                       {/* By site */}
-                      <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/40">
+                      <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
                         <div className="flex items-center gap-2 mb-3">
                           <Building2 size={13} className="text-purple-400" />
-                          <span className="text-sm font-medium text-white">Pressure Compliance by Site</span>
+                          <span className="text-sm font-medium text-[var(--text-primary)]">Pressure Compliance by Site</span>
                         </div>
                         {pressureBySite.length === 0 ? (
-                          <div className="flex items-center justify-center h-56 text-gray-600 text-sm">No site data</div>
+                          <div className="flex items-center justify-center h-56 text-[var(--text-dim)] text-sm">No site data</div>
                         ) : (
                           <div className="h-56">
                             <Bar data={pressureBySiteChart} options={{
@@ -1470,19 +1470,19 @@ export default function ComplianceDashboard() {
                       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
                         <div className="flex items-center gap-2">
                           <AlertTriangle size={13} className="text-orange-400" />
-                          <span className="text-sm font-semibold text-white">Pressure Anomalies & Missing Data</span>
+                          <span className="text-sm font-semibold text-[var(--text-primary)]">Pressure Anomalies & Missing Data</span>
                           <span className="text-xs px-2 py-0.5 bg-orange-900/30 text-orange-300 border border-orange-700/40 rounded-full">
                             {pressureAnomalies.length}
                           </span>
                         </div>
                         <div className="sm:ml-auto">
                           <div className="relative">
-                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                             <input
                               value={pressureSearch}
                               onChange={e => { setPressureSearch(e.target.value); setPressurePage(1) }}
                               placeholder="Search asset, serial, site..."
-                              className="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
+                              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
                             />
                           </div>
                         </div>
@@ -1491,16 +1491,16 @@ export default function ComplianceDashboard() {
                       {pressureAnomalies.length === 0 ? (
                         <div className="flex flex-col items-center py-12 gap-2">
                           <CheckCircle size={28} className="text-green-500" />
-                          <p className="text-gray-400 text-sm">No pressure anomalies - all tyres have valid readings!</p>
+                          <p className="text-[var(--text-muted)] text-sm">No pressure anomalies - all tyres have valid readings!</p>
                         </div>
                       ) : (
                         <>
                           <div className="overflow-x-auto">
                             <table className="w-full text-xs">
                               <thead>
-                                <tr className="border-b border-gray-700/60">
+                                <tr className="border-b border-[var(--input-border)]">
                                   {['Asset', 'Serial', 'Brand', 'Position', 'Pressure Reading', 'Site', 'Risk', 'Flag'].map(h => (
-                                    <th key={h} className="text-left text-gray-500 pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
+                                    <th key={h} className="text-left text-[var(--text-muted)] pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
                                   ))}
                                 </tr>
                               </thead>
@@ -1508,22 +1508,22 @@ export default function ComplianceDashboard() {
                                 {pressurePageRows.map((r, i) => (
                                   <tr
                                     key={r.id ?? i}
-                                    className={`border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors ${r.pressureFlag === 'Anomaly' ? 'bg-orange-950/10' : ''}`}
+                                    className={`border-b border-[var(--input-border)] hover:bg-[var(--input-bg-hover)] transition-colors ${r.pressureFlag === 'Anomaly' ? 'bg-orange-950/10' : ''}`}
                                   >
-                                    <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '-'}</td>
-                                    <td className="py-2 pr-3 text-gray-400 font-mono text-[11px]">{r.serial_number || '-'}</td>
-                                    <td className="py-2 pr-3 text-gray-300">{r.brand || '-'}</td>
-                                    <td className="py-2 pr-3 text-gray-300">{r.position || '-'}</td>
-                                    <td className={`py-2 pr-3 font-bold ${r.pressureFlag === 'Anomaly' ? 'text-orange-400' : 'text-gray-600'}`}>
+                                    <td className="py-2 pr-3 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
+                                    <td className="py-2 pr-3 text-[var(--text-muted)] font-mono text-[11px]">{r.serial_number || '-'}</td>
+                                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.brand || '-'}</td>
+                                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.position || '-'}</td>
+                                    <td className={`py-2 pr-3 font-bold ${r.pressureFlag === 'Anomaly' ? 'text-orange-400' : 'text-[var(--text-dim)]'}`}>
                                       {r.pressure_reading ? `${Number(r.pressure_reading).toFixed(0)} PSI` : '-'}
                                     </td>
-                                    <td className="py-2 pr-3 text-gray-400">{r.site || '-'}</td>
+                                    <td className="py-2 pr-3 text-[var(--text-muted)]">{r.site || '-'}</td>
                                     <td className="py-2 pr-3"><RiskBadge risk={r.risk_level} /></td>
                                     <td className="py-2 pr-3">
                                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                                         r.pressureFlag === 'Anomaly'
                                           ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
-                                          : 'bg-gray-800 text-gray-400'
+                                          : 'bg-[var(--input-bg)] text-[var(--text-muted)]'
                                       }`}>
                                         {r.pressureFlag}
                                       </span>
@@ -1534,17 +1534,17 @@ export default function ComplianceDashboard() {
                             </table>
                           </div>
                           <div className="flex items-center justify-between mt-3">
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-[var(--text-muted)]">
                               {(pressurePage - 1) * PAGE_SIZE + 1}-{Math.min(pressurePage * PAGE_SIZE, pressureAnomalies.length)} of {pressureAnomalies.length}
                             </p>
                             <div className="flex items-center gap-1">
                               <button disabled={pressurePage === 1} onClick={() => setPressurePage(p => p - 1)}
-                                className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40">
+                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
                                 <ChevronLeft size={13} />
                               </button>
-                              <span className="text-xs text-gray-400 px-2">{pressurePage} / {pressurePageCount}</span>
+                              <span className="text-xs text-[var(--text-muted)] px-2">{pressurePage} / {pressurePageCount}</span>
                               <button disabled={pressurePage === pressurePageCount} onClick={() => setPressurePage(p => p + 1)}
-                                className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40">
+                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
                                 <ChevronRight size={13} />
                               </button>
                             </div>
@@ -1572,8 +1572,8 @@ export default function ComplianceDashboard() {
                         { label: `Due Soon (${INSPECTION_MAX_DAYS + 1}-${INSPECTION_DUE_DAYS}d)`, val: inspectionStats.dueSoon, col: 'text-yellow-400' },
                         { label: `Overdue (>${INSPECTION_DUE_DAYS}d)`, val: inspectionStats.overdue, col: 'text-red-400' },
                       ].map(({ label, val, col }) => (
-                        <div key={label} className="bg-gray-800/60 rounded-xl p-3 border border-gray-700/40">
-                          <p className="text-xs text-gray-500">{label}</p>
+                        <div key={label} className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
+                          <p className="text-xs text-[var(--text-muted)]">{label}</p>
                           <p className={`text-xl font-bold ${col}`}>{val}</p>
                         </div>
                       ))}
@@ -1581,10 +1581,10 @@ export default function ComplianceDashboard() {
 
                     {/* Bar chart by site */}
                     {inspBySite.length > 0 && (
-                      <div className="bg-gray-800/40 rounded-xl p-4 border border-gray-700/40">
+                      <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--input-border)]">
                         <div className="flex items-center gap-2 mb-3">
                           <BarChart3 size={13} className="text-blue-400" />
-                          <span className="text-sm font-medium text-white">Inspection Status by Site</span>
+                          <span className="text-sm font-medium text-[var(--text-primary)]">Inspection Status by Site</span>
                         </div>
                         <div className="h-52">
                           <Bar data={inspBySiteChart} options={{
@@ -1607,7 +1607,7 @@ export default function ComplianceDashboard() {
                       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
                         <div className="flex items-center gap-2">
                           <Calendar size={13} className="text-blue-400" />
-                          <span className="text-sm font-semibold text-white">Vehicle Inspection Schedule</span>
+                          <span className="text-sm font-semibold text-[var(--text-primary)]">Vehicle Inspection Schedule</span>
                           {overdueCount > 0 && (
                             <span className="text-xs px-2 py-0.5 bg-red-900/30 text-red-300 border border-red-700/40 rounded-full">
                               {overdueCount} Overdue
@@ -1616,12 +1616,12 @@ export default function ComplianceDashboard() {
                         </div>
                         <div className="sm:ml-auto flex items-center gap-2">
                           <div className="relative">
-                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                             <input
                               value={inspSearch}
                               onChange={e => { setInspSearch(e.target.value); setInspPage(1) }}
                               placeholder="Search asset, site, inspector..."
-                              className="bg-gray-800 border border-gray-700 text-gray-200 text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
+                              className="bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-xs rounded-lg pl-7 pr-3 py-2 w-48 focus:outline-none focus:ring-1 focus:ring-green-500"
                             />
                           </div>
                           {overdueCount > 0 && (
@@ -1639,16 +1639,16 @@ export default function ComplianceDashboard() {
                       {inspectionRows.length === 0 ? (
                         <div className="flex flex-col items-center py-12 gap-2">
                           <ClipboardList size={28} className="text-gray-700" />
-                          <p className="text-gray-500 text-sm">No inspection data found for the selected filters.</p>
+                          <p className="text-[var(--text-muted)] text-sm">No inspection data found for the selected filters.</p>
                         </div>
                       ) : (
                         <>
                           <div className="overflow-x-auto">
                             <table className="w-full text-xs">
                               <thead>
-                                <tr className="border-b border-gray-700/60">
+                                <tr className="border-b border-[var(--input-border)]">
                                   {['Asset No', 'Vehicle Type', 'Site', 'Last Inspection', 'Days Since', 'Next Due', 'Status', 'Inspector'].map(h => (
-                                    <th key={h} className="text-left text-gray-500 pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
+                                    <th key={h} className="text-left text-[var(--text-muted)] pb-2 pr-3 font-medium whitespace-nowrap">{h}</th>
                                   ))}
                                 </tr>
                               </thead>
@@ -1656,28 +1656,28 @@ export default function ComplianceDashboard() {
                                 {inspPageRows.map((r, i) => (
                                   <tr
                                     key={r.asset_no ?? i}
-                                    className={`border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors ${
+                                    className={`border-b border-[var(--input-border)] hover:bg-[var(--input-bg-hover)] transition-colors ${
                                       r.status === 'overdue' ? 'bg-red-950/10' :
                                       r.status === 'due_soon' ? 'bg-yellow-950/10' : ''
                                     }`}
                                   >
-                                    <td className="py-2 pr-3 text-white font-medium">{r.asset_no || '-'}</td>
-                                    <td className="py-2 pr-3 text-gray-300">{r.vehicle_type}</td>
-                                    <td className="py-2 pr-3 text-gray-400">{r.site}</td>
-                                    <td className="py-2 pr-3 text-gray-400 whitespace-nowrap">
+                                    <td className="py-2 pr-3 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
+                                    <td className="py-2 pr-3 text-[var(--text-secondary)]">{r.vehicle_type}</td>
+                                    <td className="py-2 pr-3 text-[var(--text-muted)]">{r.site}</td>
+                                    <td className="py-2 pr-3 text-[var(--text-muted)] whitespace-nowrap">
                                       {r.last_inspection
                                         ? formatDate(r.last_inspection, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
-                                        : <span className="text-gray-600">Never</span>}
+                                        : <span className="text-[var(--text-dim)]">Never</span>}
                                     </td>
                                     <td className={`py-2 pr-3 font-medium ${
-                                      r.days_since === null ? 'text-gray-600' :
+                                      r.days_since === null ? 'text-[var(--text-dim)]' :
                                       r.days_since > INSPECTION_DUE_DAYS ? 'text-red-400' :
                                       r.days_since > INSPECTION_MAX_DAYS ? 'text-yellow-400' :
                                       'text-green-400'
                                     }`}>
                                       {r.days_since !== null ? `${r.days_since}d` : '-'}
                                     </td>
-                                    <td className="py-2 pr-3 text-gray-400 whitespace-nowrap">
+                                    <td className="py-2 pr-3 text-[var(--text-muted)] whitespace-nowrap">
                                       {r.next_due
                                         ? formatDate(r.next_due, 'All', { day: '2-digit', month: 'short', year: 'numeric' })
                                         : '-'}
@@ -1685,24 +1685,24 @@ export default function ComplianceDashboard() {
                                     <td className="py-2 pr-3">
                                       <InspectionBadge status={r.status} />
                                     </td>
-                                    <td className="py-2 pr-3 text-gray-400">{r.inspector}</td>
+                                    <td className="py-2 pr-3 text-[var(--text-muted)]">{r.inspector}</td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
                           </div>
                           <div className="flex items-center justify-between mt-3">
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-[var(--text-muted)]">
                               {(inspPage - 1) * PAGE_SIZE + 1}-{Math.min(inspPage * PAGE_SIZE, inspectionRows.length)} of {inspectionRows.length}
                             </p>
                             <div className="flex items-center gap-1">
                               <button disabled={inspPage === 1} onClick={() => setInspPage(p => p - 1)}
-                                className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40">
+                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
                                 <ChevronLeft size={13} />
                               </button>
-                              <span className="text-xs text-gray-400 px-2">{inspPage} / {inspPageCount}</span>
+                              <span className="text-xs text-[var(--text-muted)] px-2">{inspPage} / {inspPageCount}</span>
                               <button disabled={inspPage === inspPageCount} onClick={() => setInspPage(p => p + 1)}
-                                className="p-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white disabled:opacity-40">
+                                className="p-1.5 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40">
                                 <ChevronRight size={13} />
                               </button>
                             </div>
@@ -1721,7 +1721,7 @@ export default function ComplianceDashboard() {
           {tyreRecords.length === 0 && inspections.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
               <ShieldCheck size={44} className="text-gray-700" />
-              <p className="text-gray-500 text-sm">No fleet data found. Upload tyre records or inspection data to begin compliance tracking.</p>
+              <p className="text-[var(--text-muted)] text-sm">No fleet data found. Upload tyre records or inspection data to begin compliance tracking.</p>
             </div>
           )}
 
@@ -1742,14 +1742,14 @@ export default function ComplianceDashboard() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md"
+              className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-2xl p-6 w-full max-w-md"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Mail size={16} className="text-blue-400" />
-                  <h3 className="text-sm font-semibold text-white">Share Compliance Report</h3>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">Share Compliance Report</h3>
                 </div>
-                <button onClick={() => { setShowEmailModal(false); setEmailSent(false) }} className="text-gray-500 hover:text-white">
+                <button onClick={() => { setShowEmailModal(false); setEmailSent(false) }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                   <X size={16} />
                 </button>
               </div>
@@ -1758,7 +1758,7 @@ export default function ComplianceDashboard() {
                 <div className="flex flex-col items-center py-8 gap-3">
                   <CheckCircle size={32} className="text-green-400" />
                   <p className="text-green-300 text-sm font-medium">Report shared successfully!</p>
-                  <p className="text-gray-500 text-xs">Sent to: {emailTo}</p>
+                  <p className="text-[var(--text-muted)] text-xs">Sent to: {emailTo}</p>
                   <button onClick={() => { setShowEmailModal(false); setEmailSent(false) }}
                     className="mt-2 px-4 py-2 rounded-lg bg-green-900/40 border border-green-700/50 text-green-300 text-xs">
                     Close
@@ -1768,17 +1768,17 @@ export default function ComplianceDashboard() {
                 <>
                   <div className="space-y-4">
                     <div>
-                      <label className="text-xs text-gray-400 mb-1.5 block">Recipient Email</label>
+                      <label className="text-xs text-[var(--text-muted)] mb-1.5 block">Recipient Email</label>
                       <input
                         type="email"
                         value={emailTo}
                         onChange={e => setEmailTo(e.target.value)}
                         placeholder="email@company.com"
-                        className="w-full bg-gray-800 border border-gray-700 text-gray-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="w-full bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                     </div>
-                    <div className="bg-gray-800/60 rounded-xl p-3 border border-gray-700/40">
-                      <p className="text-xs text-gray-400 font-medium mb-2">Report includes:</p>
+                    <div className="bg-[var(--surface-2)] rounded-xl p-3 border border-[var(--input-border)]">
+                      <p className="text-xs text-[var(--text-muted)] font-medium mb-2">Report includes:</p>
                       <ul className="space-y-1">
                         {[
                           `Overall compliance score: ${overallScore}%`,
@@ -1787,27 +1787,27 @@ export default function ComplianceDashboard() {
                           `Inspection compliance: ${inspectionStats.pct.toFixed(1)}%`,
                           `${criticalCount} critical alerts`,
                         ].map(item => (
-                          <li key={item} className="flex items-center gap-2 text-xs text-gray-500">
+                          <li key={item} className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
                             <CheckCircle size={10} className="text-green-500 shrink-0" />
                             {item}
                           </li>
                         ))}
                       </ul>
                     </div>
-                    <p className="text-xs text-gray-600 flex items-center gap-1">
+                    <p className="text-xs text-[var(--text-dim)] flex items-center gap-1">
                       <Info size={11} />
                       Email delivery requires a configured SMTP service. This generates a shareable compliance summary.
                     </p>
                   </div>
                   <div className="flex items-center justify-end gap-2 mt-5">
                     <button onClick={() => setShowEmailModal(false)}
-                      className="px-4 py-2 rounded-lg text-gray-400 text-xs hover:text-white transition-colors">
+                      className="px-4 py-2 rounded-lg text-[var(--text-muted)] text-xs hover:text-[var(--text-primary)] transition-colors">
                       Cancel
                     </button>
                     <button
                       onClick={() => { if (emailTo) setEmailSent(true) }}
                       disabled={!emailTo}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-700 text-white text-xs hover:bg-blue-600 transition-colors disabled:opacity-40"
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-700 text-[var(--text-primary)] text-xs hover:bg-blue-600 transition-colors disabled:opacity-40"
                     >
                       <Mail size={12} /> Send Report
                     </button>

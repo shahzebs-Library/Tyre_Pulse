@@ -32,7 +32,8 @@
     "stockSites": "Stock Sites",
     "openActions": "Open Actions",
     "highRisk": "High Risk",
-    "totalCost": "Total Cost"
+    "totalCost": "Total Cost",
+    "recordsSub": "{count} vehicles"
   },
   "filters": {
     "searchPlaceholder": "Search asset, brand, site...",
@@ -110,5 +111,25 @@
     "errorTitle": "Could not load dashboard",
     "errorDefault": "Failed to load dashboard data.",
     "retry": "Retry"
+  },
+  "attention": {
+    "title": "Needs attention",
+    "count": "{count} open",
+    "allClear": "All clear — no critical tyres in view.",
+    "highRisk": "High risk",
+    "spend": "spend"
+  },
+  "gauges": {
+    "title": "Fleet health",
+    "sub": "live gauges",
+    "health": "Fleet health",
+    "critical": "Critical rate",
+    "lifeTarget": "Life vs target"
+  },
+  "topVehicles": {
+    "title": "Top vehicles by tyre cost",
+    "sub": "green under fleet avg · red over",
+    "empty": "No vehicle cost data in this view yet.",
+    "avgNote": "Fleet average: {avg} per vehicle"
   }
 }

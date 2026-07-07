@@ -13,6 +13,7 @@ import Layout from './components/Layout'
 import LoadingSpinner from './components/LoadingSpinner'
 import PwaUpdatePrompt from './components/PwaUpdatePrompt'
 import ErrorBoundary from './components/ErrorBoundary'
+import { useFeatureGate } from './hooks/useFeatureFlags'
 // Console (completely isolated auth context)
 import { ConsoleAuthProvider, useConsoleAuth } from './console/ConsoleAuthContext'
 import ConsoleLayout from './console/components/ConsoleLayout'
@@ -53,6 +54,7 @@ const VehicleHistory         = lazy(() => import('./pages/VehicleHistory'))
 const UserManagement         = lazy(() => import('./pages/UserManagement'))
 const AiAnalytics            = lazy(() => import('./pages/AiAnalytics'))
 const FleetMaster            = lazy(() => import('./pages/FleetMaster'))
+const Vehicle360             = lazy(() => import('./pages/Vehicle360'))
 const AuditTrail             = lazy(() => import('./pages/AuditTrail'))
 const ResetPassword          = lazy(() => import('./pages/ResetPassword'))
 const Accidents              = lazy(() => import('./pages/Accidents'))
@@ -110,10 +112,26 @@ const ScheduledReports       = lazy(() => import('./pages/ScheduledReports'))
 const ReportCenter           = lazy(() => import('./pages/ReportCenter'))
 const KnowledgeBase          = lazy(() => import('./pages/KnowledgeBase'))
 const AiCostMonitor          = lazy(() => import('./pages/AiCostMonitor'))
+const DisplayDashboard       = lazy(() => import('./pages/DisplayDashboard'))
+const ReportBuilder          = lazy(() => import('./pages/ReportBuilder'))
+const SystemHealth           = lazy(() => import('./pages/SystemHealth'))
+const SecurityCenter         = lazy(() => import('./pages/SecurityCenter'))
+const DashboardBuilder       = lazy(() => import('./pages/DashboardBuilder'))
+const TenantHealth           = lazy(() => import('./pages/TenantHealth'))
+const ExecutiveAnalytics     = lazy(() => import('./pages/ExecutiveAnalytics'))
+const PermissionMatrix       = lazy(() => import('./pages/PermissionMatrix'))
 
 // ── Per-page error boundary ───────────────────────────────────────────────
 function Safe({ children }) {
   return <ErrorBoundary>{children}</ErrorBoundary>
+}
+
+// ── Feature-flag gate (org-level toggles from Settings → Feature flags) ───
+// Fails open while flags load; disabled features redirect home like ModuleRoute.
+function FlagRoute({ flag, children }) {
+  const enabled = useFeatureGate(flag)
+  if (!enabled) return <Navigate to="/" replace />
+  return children
 }
 
 // ── Main app home redirect based on role ─────────────────────────────────
@@ -148,6 +166,15 @@ function MainApp() {
           <Routes>
             <Route path="/login"          element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            {/* TV display mode: authed, but rendered WITHOUT the Layout chrome */}
+            <Route
+              path="/display"
+              element={
+                <ProtectedRoute>
+                  <FlagRoute flag="tv_display"><Safe><DisplayDashboard /></Safe></FlagRoute>
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/*"
               element={
@@ -168,16 +195,17 @@ function MainApp() {
                       <Route path="/stock"       element={<Safe><StockManagement /></Safe>} />
                       <Route path="/budgets"     element={<Safe><Budgets /></Safe>} />
                       <Route path="/actions"     element={<Safe><CorrectiveActions /></Safe>} />
-                      <Route path="/accidents"   element={<Safe><Accidents /></Safe>} />
+                      <Route path="/accidents"   element={<Safe><FlagRoute flag="accidents_module"><Accidents /></FlagRoute></Safe>} />
                       <Route path="/rca"         element={<Safe><RcaRecords /></Safe>} />
                       <Route path="/inspections" element={<Safe><Inspections /></Safe>} />
                       <Route path="/alerts"      element={<Safe><Alerts /></Safe>} />
                       <Route path="/fleet-master"         element={<Safe><FleetMaster /></Safe>} />
+                      <Route path="/vehicle/:assetNo"     element={<Safe><FlagRoute flag="vehicle_360"><Vehicle360 /></FlagRoute></Safe>} />
                       <Route path="/reports"              element={<Safe><Reports /></Safe>} />
                       <Route path="/report-center"       element={<Safe><ReportCenter /></Safe>} />
-                      <Route path="/scheduled-reports"   element={<Safe><ScheduledReports /></Safe>} />
-                      <Route path="/knowledge-base"       element={<Safe><KnowledgeBase /></Safe>} />
-                      <Route path="/ai-cost-monitor"      element={<Safe><AiCostMonitor /></Safe>} />
+                      <Route path="/scheduled-reports"   element={<Safe><FlagRoute flag="report_scheduling"><ScheduledReports /></FlagRoute></Safe>} />
+                      <Route path="/knowledge-base"       element={<Safe><FlagRoute flag="ai_tools"><KnowledgeBase /></FlagRoute></Safe>} />
+                      <Route path="/ai-cost-monitor"      element={<Safe><FlagRoute flag="ai_tools"><AiCostMonitor /></FlagRoute></Safe>} />
                       <Route path="/gate-pass"            element={<Safe><GatePass /></Safe>} />
                       <Route path="/serial-tracker"       element={<Safe><SerialTracker /></Safe>} />
                       <Route path="/work-orders"          element={<Safe><WorkOrders /></Safe>} />
@@ -209,7 +237,7 @@ function MainApp() {
                       <Route path="/fleet-intelligence"      element={<Safe><ModuleRoute moduleKey="fleet_intelligence"><FleetIntelligence /></ModuleRoute></Safe>} />
                       <Route path="/fleet-health"            element={<Safe><ModuleRoute moduleKey="fleet_intelligence"><FleetHealthBoard /></ModuleRoute></Safe>} />
                       <Route path="/advanced-analytics"      element={<Safe><ModuleRoute moduleKey="analytics"><AdvancedAnalytics /></ModuleRoute></Safe>} />
-                      <Route path="/ai-command-center"       element={<Safe><ModuleRoute moduleKey="ai_command_center"><AiCommandCenter /></ModuleRoute></Safe>} />
+                      <Route path="/ai-command-center"       element={<Safe><FlagRoute flag="ai_tools"><ModuleRoute moduleKey="ai_command_center"><AiCommandCenter /></ModuleRoute></FlagRoute></Safe>} />
                       <Route path="/executive-report"        element={<Safe><ModuleRoute moduleKey="executive_report"><ExecutiveReport /></ModuleRoute></Safe>} />
                       <Route path="/forecasting"             element={<Safe><ModuleRoute moduleKey="forecasting"><ForecastingEngine /></ModuleRoute></Safe>} />
                       <Route path="/cost-center"             element={<Safe><ModuleRoute moduleKey="budgets"><CostCenter /></ModuleRoute></Safe>} />
@@ -223,23 +251,31 @@ function MainApp() {
                       <Route path="/workshop"                element={<Safe><ModuleRoute moduleKey="work_orders"><WorkshopManagement /></ModuleRoute></Safe>} />
                       <Route path="/fuel-efficiency"         element={<Safe><ModuleRoute moduleKey="fleet_analytics"><FuelEfficiency /></ModuleRoute></Safe>} />
                       <Route path="/continuous-improvement"  element={<Safe><ModuleRoute moduleKey="analytics"><ContinuousImprovement /></ModuleRoute></Safe>} />
-                      <Route path="/erp-sync"                element={<Safe><ModuleRoute moduleKey="erp_sync"><ErpSync /></ModuleRoute></Safe>} />
+                      <Route path="/erp-sync"                element={<Safe><FlagRoute flag="erp_sync"><ModuleRoute moduleKey="erp_sync"><ErpSync /></ModuleRoute></FlagRoute></Safe>} />
                       <Route path="/anomalies"               element={<Safe><ModuleRoute moduleKey="tyre_records"><Anomalies /></ModuleRoute></Safe>} />
                       <Route path="/vehicle-history"         element={<Safe><ModuleRoute moduleKey="fleet_master"><VehicleHistory /></ModuleRoute></Safe>} />
-                      <Route path="/ai"                      element={<Safe><ModuleRoute moduleKey="ai_analytics"><AiAnalytics /></ModuleRoute></Safe>} />
+                      <Route path="/ai"                      element={<Safe><FlagRoute flag="ai_tools"><ModuleRoute moduleKey="ai_analytics"><AiAnalytics /></ModuleRoute></FlagRoute></Safe>} />
                       {/* ── Data ── */}
                       <Route path="/cleaning"    element={<Safe><ModuleRoute moduleKey="data_cleaning"><DataCleaning /></ModuleRoute></Safe>} />
                       <Route path="/audit"       element={<Safe><ModuleRoute moduleKey="audit_trail"><AuditTrail /></ModuleRoute></Safe>} />
                       <Route path="/users"       element={<Safe><ModuleRoute moduleKey="user_management"><UserManagement /></ModuleRoute></Safe>} />
                       {/* ── Universal ── */}
-                      <Route path="/upload"      element={<Safe><UploadData /></Safe>} />
-                      <Route path="/data-intake" element={<Safe><DataIntakeCenter /></Safe>} />
-                      <Route path="/data-intake/history" element={<Safe><DataIntakeHistory /></Safe>} />
-                      <Route path="/upload-approvals" element={<Safe><UploadApprovals /></Safe>} />
+                      <Route path="/upload"      element={<Safe><FlagRoute flag="data_intake"><UploadData /></FlagRoute></Safe>} />
+                      <Route path="/data-intake" element={<Safe><FlagRoute flag="data_intake"><DataIntakeCenter /></FlagRoute></Safe>} />
+                      <Route path="/data-intake/history" element={<Safe><FlagRoute flag="data_intake"><DataIntakeHistory /></FlagRoute></Safe>} />
+                      <Route path="/upload-approvals" element={<Safe><FlagRoute flag="data_intake"><UploadApprovals /></FlagRoute></Safe>} />
                       <Route path="/custom-data" element={<Safe><CustomData /></Safe>} />
                       <Route path="/settings"    element={<Safe><Settings /></Safe>} />
                       <Route path="/scan"        element={<Safe><TyreScan /></Safe>} />
                       <Route path="/qr-labels"   element={<Safe><QrLabels /></Safe>} />
+                      {/* ── Platform (roadmap tranche: pages self-gate their roles) ── */}
+                      <Route path="/report-builder"      element={<Safe><ReportBuilder /></Safe>} />
+                      <Route path="/dashboard-builder"   element={<Safe><DashboardBuilder /></Safe>} />
+                      <Route path="/executive-analytics" element={<Safe><ExecutiveAnalytics /></Safe>} />
+                      <Route path="/security-center"     element={<Safe><SecurityCenter /></Safe>} />
+                      <Route path="/system-health"       element={<Safe><SystemHealth /></Safe>} />
+                      <Route path="/tenant-health"       element={<Safe><TenantHealth /></Safe>} />
+                      <Route path="/permission-matrix"   element={<Safe><PermissionMatrix /></Safe>} />
                       <Route path="*"            element={<Navigate to="/" replace />} />
                     </Routes>
                   </Layout>

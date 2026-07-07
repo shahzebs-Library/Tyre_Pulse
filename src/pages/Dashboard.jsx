@@ -6,7 +6,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { useLanguage } from '../contexts/LanguageContext'
-import StatCard from '../components/StatCard'
 import { exportToPptx, exportToExcel, exportToPdf, exportDailyExecutivePdf } from '../lib/exportUtils'
 import { formatDate } from '../lib/formatters'
 import {
@@ -18,7 +17,7 @@ import {
   Title, Tooltip, Legend, ArcElement, LineElement, PointElement, Filler,
 } from 'chart.js'
 import {
-  CircleDot, Package, ClipboardList, AlertTriangle,
+  CircleDot, Package, ClipboardList, AlertTriangle, ShieldCheck,
   TrendingUp, TrendingDown, DollarSign, Presentation, Minus,
   FileSpreadsheet, FileText, Search, X, Calendar, Activity, Clock,
   Bell, Upload, ClipboardCheck, Maximize2, Zap, ChevronRight,
@@ -27,6 +26,8 @@ import {
 import { ChartModal } from '../components/ChartModal'
 import EmptyState from '../components/EmptyState'
 import SegmentedControl from '../components/ui/SegmentedControl'
+import StatTile from '../components/ui/StatTile'
+import Gauge from '../components/ui/Gauge'
 import Skeleton, { SkeletonCards, SkeletonChart } from '../components/ui/Skeleton'
 
 ChartJS.register(
@@ -34,9 +35,11 @@ ChartJS.register(
   ArcElement, LineElement, PointElement, Filler,
 )
 
-const GRID   = { color:'var(--text-muted)' }
-const TICK   = { color: '#4b5563', font: { size: 11 } }
-const LEGEND = { labels: { color: '#6b7280', boxWidth: 10, font: { size: 11 } } }
+// Canvas can't read CSS vars — use theme-neutral real colours that read cleanly
+// on both white and dark grounds (subtle slate gridlines, legible slate labels).
+const GRID   = { color: 'rgba(148,163,184,0.18)', drawBorder: false }
+const TICK   = { color: '#64748b', font: { size: 11 } }
+const LEGEND = { labels: { color: '#64748b', boxWidth: 10, boxHeight: 10, font: { size: 11 }, usePointStyle: true } }
 
 const BASE_OPTS = {
   responsive: true, maintainAspectRatio: false,
@@ -86,11 +89,10 @@ function HealthRing({ score }) {
             initial={{ strokeDashoffset: circ }}
             animate={{ strokeDashoffset: circ - dash }}
             transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.3 }}
-            style={{ filter: `drop-shadow(0 0 6px ${color})` }}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-xl font-bold text-white leading-none">{score}</span>
+          <span className="text-xl font-bold text-[var(--text-primary)] leading-none tabular-nums">{score}</span>
           <span className="text-[9px] text-gray-500 uppercase tracking-wider mt-0.5">/ 100</span>
         </div>
       </div>
@@ -113,7 +115,7 @@ function ChartPanel({ title, subtitle, icon: Icon, onExpand, children, className
             </div>
           )}
           <div>
-            <h3 className="text-sm font-semibold text-white leading-none">{title}</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] leading-none">{title}</h3>
             {subtitle && <p className="text-[11px] text-gray-500 mt-0.5">{subtitle}</p>}
           </div>
         </div>
@@ -275,6 +277,36 @@ export default function Dashboard() {
     const crit = tyres.filter(isHigh).length
     return { tyres: tyres.length, stock: rawStock.length, actions: open, critical: crit, cost, vehicles: new Set(tyres.map(t => t.asset_no).filter(Boolean)).size }
   }, [tyres, rawActions, rawStock, summary, search])
+
+  // "Needs attention" — the highest-cost critical tyres, surfaced so the thing
+  // that needs action reads at a glance. Real data only; empty when clean.
+  const attentionItems = useMemo(() => {
+    return (tyres || [])
+      .filter(isHigh)
+      .map(r => ({
+        id: r.id ?? `${r.asset_no}-${r.serial_no}`,
+        asset: r.asset_no || '—',
+        detail: [r.brand, r.site].filter(Boolean).join(' · ') || (r.category || ''),
+        cost: recordCost(r),
+      }))
+      .sort((a, b) => b.cost - a.cost)
+      .slice(0, 5)
+  }, [tyres])
+
+  // Top vehicles by tyre spend — benchmark bars (green under fleet-avg, red over).
+  const topVehicles = useMemo(() => {
+    const byAsset = new Map()
+    for (const r of tyres) {
+      if (!r.asset_no) continue
+      byAsset.set(r.asset_no, (byAsset.get(r.asset_no) || 0) + recordCost(r))
+    }
+    const rows = [...byAsset.entries()].map(([asset, cost]) => ({ asset, cost }))
+    if (!rows.length) return { rows: [], avg: 0, max: 1 }
+    const avg = rows.reduce((s, r) => s + r.cost, 0) / rows.length
+    rows.sort((a, b) => b.cost - a.cost)
+    const top = rows.slice(0, 8)
+    return { rows: top, avg, max: top[0]?.cost || 1 }
+  }, [tyres])
 
   const fleetHealthScore = useMemo(() => computeFleetHealthScore(tyres), [tyres])
   const seasonalTrends   = useMemo(() => computeSeasonalTrends(tyres), [tyres])
@@ -721,14 +753,11 @@ export default function Dashboard() {
         style={{
           background: 'linear-gradient(135deg, var(--hero-from) 0%, var(--hero-to) 100%)',
           border: '1px solid rgba(22,163,74,0.2)',
-          boxShadow: '0 0 80px rgba(22,163,74,0.06), 0 8px 32px rgba(0,0,0,0.5)',
+          boxShadow: 'var(--shadow-card)',
         }}>
         {/* Background glow */}
         <div className="absolute inset-0 pointer-events-none" style={{
-          background: 'radial-gradient(ellipse 60% 60% at 100% 0%, rgba(22,163,74,0.1) 0%, transparent 60%)',
-        }} />
-        <div className="absolute inset-0 pointer-events-none" style={{
-          background: 'radial-gradient(ellipse 40% 40% at 0% 100%, rgba(22,163,74,0.05) 0%, transparent 60%)',
+          background: 'radial-gradient(ellipse 60% 60% at 100% 0%, rgba(22,163,74,0.06) 0%, transparent 60%)',
         }} />
         {/* Top glow line */}
         <div className="absolute top-0 left-8 right-8 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(22,163,74,0.6) 30%, rgba(74,222,128,0.8) 50%, rgba(22,163,74,0.6) 70%, transparent)' }} />
@@ -798,21 +827,77 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── KPI METRICS ──────────────────────────────────────────────────── */}
+      {/* ── KPI METRICS (console stat-tiles) ─────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
-        {[
-          { to:'/tyres',    label:t('dashboard.kpi.tyreRecords'), value:stats.tyres,   icon:CircleDot,     color:'blue',   spark:sparkSeries.tyres },
-          { to:'/stock',    label:t('dashboard.kpi.stockSites'),  value:stats.stock,   icon:Package,       color:'green'  },
-          { to:'/actions',  label:t('dashboard.kpi.openActions'), value:stats.actions, icon:ClipboardList, color:'yellow' },
-          { to:'/anomalies',label:t('dashboard.kpi.highRisk'),    value:`${stats.critical} (${stats.tyres?((stats.critical/stats.tyres)*100).toFixed(1):0}%)`, icon:AlertTriangle, color:'red',    spark:sparkSeries.risk },
-          { to:'/analytics',label:t('dashboard.kpi.totalCost'),   value:`${activeCurrency} ${(stats.cost/1000).toFixed(0)}K`, icon:DollarSign, color:'purple', spark:sparkSeries.cost },
-        ].map(({ to, label, value, icon, color, spark }, i) => (
-          <motion.div key={to} initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }} transition={{ delay: i * 0.06, duration: 0.4, ease:[0.22,1,0.36,1] }}>
-            <Link to={to} className="block">
-              <StatCard label={label} value={value} icon={icon} color={color} spark={spark} />
-            </Link>
-          </motion.div>
-        ))}
+        <StatTile index={0} to="/tyres" icon={CircleDot} tone="info"
+          label={t('dashboard.kpi.tyreRecords')} value={Number(stats.tyres || 0).toLocaleString()}
+          sub={t('dashboard.kpi.recordsSub', { count: stats.vehicles || 0 })} spark={sparkSeries.tyres} />
+        <StatTile index={1} to="/stock" icon={Package} tone="accent"
+          label={t('dashboard.kpi.stockSites')} value={Number(stats.stock || 0).toLocaleString()} />
+        <StatTile index={2} to="/actions" icon={ClipboardList} tone="warn"
+          label={t('dashboard.kpi.openActions')} value={Number(stats.actions || 0).toLocaleString()} />
+        <StatTile index={3} to="/anomalies" icon={AlertTriangle} tone="crit"
+          label={t('dashboard.kpi.highRisk')} value={Number(stats.critical || 0).toLocaleString()}
+          unit={stats.tyres ? `(${((stats.critical / stats.tyres) * 100).toFixed(1)}%)` : ''}
+          delta={riskTrend?.delta} deltaSuffix="" deltaGood={(riskTrend?.delta ?? 0) <= 0}
+          spark={sparkSeries.risk} />
+        <StatTile index={4} to="/analytics" icon={DollarSign} tone="accent"
+          label={t('dashboard.kpi.totalCost')} value={`${(stats.cost / 1000).toFixed(0)}K`}
+          unit={activeCurrency} spark={sparkSeries.cost} />
+      </div>
+
+      {/* ── FLEET GAUGES + NEEDS ATTENTION (instrument row) ──────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="card lg:col-span-3">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.gauges.title')}</h3>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{t('dashboard.gauges.sub')}</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 justify-items-center pt-3">
+            <Gauge index={0} value={fleetHealthScore} max={100} label={t('dashboard.gauges.health')} />
+            <Gauge index={1} value={stats.tyres ? (stats.critical / stats.tyres) * 100 : 0} max={100} unit="%"
+              label={t('dashboard.gauges.critical')} reverse format={(x) => x.toFixed(1)} />
+            <Gauge index={2}
+              value={Math.min(100, ((tyreLife?.avgLifeKm || 0) / ((appSettings?.expected_km_per_tyre) || 100000)) * 100)}
+              max={100} unit="%" label={t('dashboard.gauges.lifeTarget')} format={(x) => Math.round(x)} />
+          </div>
+        </div>
+
+        {/* NEEDS ATTENTION */}
+        <div className="card !p-0 overflow-hidden lg:col-span-2">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--card-border,rgba(255,255,255,0.06))]">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={15} className="text-[#f26161]" />
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.attention.title')}</h3>
+          </div>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+            {t('dashboard.attention.count', { count: attentionItems.length })}
+          </span>
+        </div>
+        {attentionItems.length === 0 ? (
+          <div className="px-4 py-6 text-sm text-[var(--text-muted)] flex items-center gap-2">
+            <ShieldCheck size={15} className="text-[var(--accent)]" /> {t('dashboard.attention.allClear')}
+          </div>
+        ) : (
+          <ul className="divide-y divide-[var(--card-border,rgba(255,255,255,0.05))]">
+            {attentionItems.map((it) => (
+              <li key={it.id}>
+                <Link to="/anomalies" className="flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--input-bg,rgba(255,255,255,0.03))] transition-colors">
+                  <span className="w-[3px] self-stretch rounded-full bg-[#f26161] shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{it.asset}</p>
+                    <p className="text-[11.5px] text-[var(--text-muted)] truncate">{it.detail || t('dashboard.attention.highRisk')}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[13px] font-bold tabular-nums text-[var(--text-primary)]">{activeCurrency} {Math.round(it.cost).toLocaleString()}</p>
+                    <p className="text-[10.5px] text-[var(--text-dim)]">{t('dashboard.attention.spend')}</p>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        </div>
       </div>
 
       {/* ── COMMAND BAR (filters) ─────────────────────────────────────────── */}
@@ -890,7 +975,7 @@ export default function Dashboard() {
             <Clock size={16} className="text-blue-400" />
           </div>
           <p className="text-label">{t('dashboard.intel.avgTyreLife')}</p>
-          <p className="text-3xl font-extrabold text-blue-400 leading-none mt-1">
+          <p className="text-3xl font-extrabold text-blue-400 leading-none mt-1 tabular-nums">
             {tyreLife?.avgLifeDays != null ? tyreLife.avgLifeDays : '-'}
           </p>
           <p className="text-xs text-gray-600">{t('dashboard.intel.days')}</p>
@@ -921,6 +1006,36 @@ export default function Dashboard() {
         </ChartPanel>
       </div>
 
+      {/* ── TOP VEHICLES (benchmark bars) ────────────────────────────────── */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.topVehicles.title')}</h3>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{t('dashboard.topVehicles.sub')}</span>
+        </div>
+        {topVehicles.rows.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)] py-4">{t('dashboard.topVehicles.empty')}</p>
+        ) : (
+          <div className="space-y-1.5">
+            {topVehicles.rows.map((v) => {
+              const over = v.cost > topVehicles.avg
+              const pct = Math.max(3, Math.round((v.cost / topVehicles.max) * 100))
+              const color = over ? '#f26161' : 'var(--accent)'
+              return (
+                <Link key={v.asset} to={`/vehicle/${encodeURIComponent(v.asset)}`}
+                  className="grid grid-cols-[6rem_1fr_5.5rem] items-center gap-3 py-1 group">
+                  <span className="text-xs font-semibold text-[var(--text-secondary)] truncate group-hover:text-[var(--accent)]">{v.asset}</span>
+                  <span className="h-4 rounded bg-[var(--input-bg,rgba(148,163,184,0.12))] overflow-hidden">
+                    <span className="block h-full rounded" style={{ width: `${pct}%`, background: color }} />
+                  </span>
+                  <span className="text-xs font-bold tabular-nums text-right" style={{ color }}>{activeCurrency} {Math.round(v.cost).toLocaleString()}</span>
+                </Link>
+              )
+            })}
+            <p className="text-[11px] text-[var(--text-dim)] pt-1">{t('dashboard.topVehicles.avgNote', { avg: `${activeCurrency} ${Math.round(topVehicles.avg).toLocaleString()}` })}</p>
+          </div>
+        )}
+      </div>
+
       {/* ── COST TREND ───────────────────────────────────────────────────── */}
       <ChartPanel title={t('dashboard.charts.monthlyCostTrend', { currency: activeCurrency })} subtitle={t('dashboard.charts.costSubtitle')} icon={DollarSign} onExpand={() => setExpandedChart('cost')}>
         <div className="h-52">
@@ -936,7 +1051,7 @@ export default function Dashboard() {
               <Zap size={14} className="text-blue-400" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-white">{t('dashboard.forecast.title')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.forecast.title')}</h3>
               <p className="text-[11px] text-gray-500">{t('dashboard.forecast.subtitle')} <span className="text-blue-400">{forecastData.confidence}</span></p>
             </div>
           </div>
@@ -947,7 +1062,7 @@ export default function Dashboard() {
             { label:t('dashboard.forecast.nextMonth'), value:`~${forecastData.forecastNextMonth}`, color:'text-blue-300' },
           ].map(({ label, value, color }) => (
             <div key={label} className="rounded-xl p-3 text-center" style={{ background:'rgba(59,130,246,0.06)', border:'1px solid rgba(59,130,246,0.14)' }}>
-              <p className={`text-2xl font-extrabold ${color} leading-none`}>{value}</p>
+              <p className={`text-2xl font-extrabold ${color} leading-none tabular-nums`}>{value}</p>
               <p className="text-label mt-1.5">{label}</p>
             </div>
           ))}
@@ -1018,7 +1133,7 @@ export default function Dashboard() {
               <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background:'rgba(22,163,74,0.1)', border:'1px solid rgba(22,163,74,0.2)' }}>
                 <CircleDot size={13} className="text-green-400" />
               </div>
-              <h3 className="text-sm font-semibold text-white">{t('dashboard.activity.recentTyreRecords')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.activity.recentTyreRecords')}</h3>
             </div>
             <Link to="/tyres" className="text-[11px] text-green-600 hover:text-green-400 font-medium flex items-center gap-1 transition-colors">
               {t('dashboard.activity.viewAll')} <ChevronRight size={11} />
@@ -1035,7 +1150,7 @@ export default function Dashboard() {
                     onMouseEnter={e => e.currentTarget.style.background='rgba(22,163,74,0.05)'}
                     onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,0.025)'}>
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: r.risk_level === 'Critical' ? '#ef4444' : r.risk_level === 'High' ? '#f97316' : r.risk_level === 'Low' ? '#22c55e' : '#f59e0b', boxShadow: `0 0 6px currentColor` }} />
+                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: r.risk_level === 'Critical' ? '#ef4444' : r.risk_level === 'High' ? '#f97316' : r.risk_level === 'Low' ? '#22c55e' : '#f59e0b' }} />
                       <div className="min-w-0">
                         <Link to={`/vehicle-history?asset=${r.asset_no}`} className="text-sm text-gray-200 font-medium hover:text-green-400 transition-colors truncate block">
                           {r.asset_no ?? 'N/A'}
@@ -1060,7 +1175,7 @@ export default function Dashboard() {
               <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background:'rgba(245,158,11,0.1)', border:'1px solid rgba(245,158,11,0.2)' }}>
                 <ClipboardList size={13} className="text-yellow-400" />
               </div>
-              <h3 className="text-sm font-semibold text-white">{t('dashboard.activity.openActions')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('dashboard.activity.openActions')}</h3>
             </div>
             <Link to="/actions" className="text-[11px] text-yellow-600 hover:text-yellow-400 font-medium flex items-center gap-1 transition-colors">
               {t('dashboard.activity.viewAll')} <ChevronRight size={11} />

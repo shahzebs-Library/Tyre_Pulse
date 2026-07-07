@@ -126,15 +126,15 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', warn 
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`bg-gray-900 border ${warn ? 'border-red-700/60' : 'border-gray-800'} rounded-xl p-4 flex items-start gap-3`}
+      className={`bg-[var(--surface-1)] border ${warn ? 'border-red-700/60' : 'border-[var(--input-border)]'} rounded-xl p-4 flex items-start gap-3`}
     >
-      <div className={`p-2 rounded-lg bg-gray-800 shrink-0 ${color}`}>
+      <div className={`p-2 rounded-lg bg-[var(--input-bg)] shrink-0 ${color}`}>
         <Icon size={18} />
       </div>
       <div className="min-w-0">
-        <p className="text-gray-400 text-xs leading-none">{label}</p>
+        <p className="text-[var(--text-muted)] text-xs leading-none">{label}</p>
         <p className={`text-2xl font-bold mt-1 ${color} truncate`}>{value}</p>
-        {sub && <p className="text-gray-500 text-xs mt-0.5 leading-tight">{sub}</p>}
+        {sub && <p className="text-[var(--text-muted)] text-xs mt-0.5 leading-tight">{sub}</p>}
         {badge && (
           <span className={`inline-block mt-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${badge.cls}`}>
             {badge.label}
@@ -148,7 +148,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', warn 
 function TrendArrow({ trend }) {
   if (trend === 'up')     return <TrendingUp  size={14} className="text-red-400" />
   if (trend === 'down')   return <TrendingDown size={14} className="text-green-400" />
-  return <Minus size={14} className="text-gray-500" />
+  return <Minus size={14} className="text-[var(--text-muted)]" />
 }
 
 function Badge({ label, cfg }) {
@@ -693,20 +693,20 @@ export default function TyreScrapManagement() {
           <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={exportDisposalPdf}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition"
           >
             <FileText size={14} /> PDF
           </button>
           <button
             onClick={exportDisposalExcel}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition"
           >
             <FileSpreadsheet size={14} /> Excel
           </button>
           <button
             onClick={loadData}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition disabled:opacity-50"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
@@ -735,7 +735,7 @@ export default function TyreScrapManagement() {
         <select
           value={dateRangeIdx}
           onChange={e => setDateRangeIdx(Number(e.target.value))}
-          className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-red-600"
+          className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-red-600"
         >
           {DATE_RANGE_OPTS.map((o, i) => (
             <option key={o.label} value={i}>{o.label}</option>
@@ -745,7 +745,7 @@ export default function TyreScrapManagement() {
         <select
           value={filterSite}
           onChange={e => setFilterSite(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-red-600"
+          className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-red-600"
         >
           {siteOptions.map(s => <option key={s}>{s}</option>)}
         </select>
@@ -753,7 +753,7 @@ export default function TyreScrapManagement() {
         <select
           value={filterBrand}
           onChange={e => setFilterBrand(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-red-600"
+          className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-red-600"
         >
           {brandOptions.map(b => <option key={b}>{b}</option>)}
         </select>
@@ -761,12 +761,12 @@ export default function TyreScrapManagement() {
         <select
           value={filterReason}
           onChange={e => setFilterReason(e.target.value)}
-          className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-red-600"
+          className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-red-600"
         >
           {REMOVAL_REASONS.map(r => <option key={r}>{r}</option>)}
         </select>
 
-        <div className="flex items-center gap-2 ml-auto text-xs text-gray-500">
+        <div className="flex items-center gap-2 ml-auto text-xs text-[var(--text-muted)]">
           <Filter size={12} />
           <span>{scrapped.length} scrapped of {filtered.length} tyres</span>
         </div>
@@ -836,7 +836,7 @@ export default function TyreScrapManagement() {
           </div>
 
           {/* ── Tabs ── */}
-          <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 overflow-x-auto">
+          <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 overflow-x-auto">
             {TABS.map(t => (
               <button
                 key={t}
@@ -844,7 +844,7 @@ export default function TyreScrapManagement() {
                 className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${
                   activeTab === t
                     ? 'bg-gray-700 text-white'
-                    : 'text-gray-400 hover:text-gray-200'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {t}
@@ -885,8 +885,8 @@ export default function TyreScrapManagement() {
 
               {/* Monthly trend + reason doughnut */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-4">
-                  <p className="text-xs text-gray-400 font-medium mb-3 flex items-center gap-2">
+                <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                  <p className="text-xs text-[var(--text-muted)] font-medium mb-3 flex items-center gap-2">
                     <TrendingDown className="text-red-400" size={13} /> Monthly Scrap Trend - Last 12 Months
                   </p>
                   <div className="h-52">
@@ -897,8 +897,8 @@ export default function TyreScrapManagement() {
                   </div>
                 </div>
 
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                  <p className="text-xs text-gray-400 font-medium mb-3">Scrap by Removal Reason</p>
+                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                  <p className="text-xs text-[var(--text-muted)] font-medium mb-3">Scrap by Removal Reason</p>
                   <div className="h-52">
                     {reasonDonut.labels.length > 0
                       ? <Doughnut data={reasonDonut} options={CHART_OPTS_NO_SCALES} />
@@ -910,8 +910,8 @@ export default function TyreScrapManagement() {
 
               {/* Position doughnut + early scrap */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                  <p className="text-xs text-gray-400 font-medium mb-3">Scrap by Tyre Position</p>
+                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                  <p className="text-xs text-[var(--text-muted)] font-medium mb-3">Scrap by Tyre Position</p>
                   <div className="h-52">
                     {positionDonut.labels.length > 0
                       ? <Doughnut data={positionDonut} options={CHART_OPTS_NO_SCALES} />
@@ -920,12 +920,12 @@ export default function TyreScrapManagement() {
                   </div>
                 </div>
 
-                <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs text-gray-400 font-medium flex items-center gap-2">
+                    <p className="text-xs text-[var(--text-muted)] font-medium flex items-center gap-2">
                       <AlertTriangle className="text-yellow-400" size={13} />
                       Early Scrap Analysis
-                      <span className="text-gray-600">(&lt;50% of expected fleet life)</span>
+                      <span className="text-[var(--text-dim)]">(&lt;50% of expected fleet life)</span>
                     </p>
                     {earlyScrap.length > 0 && (
                       <span className="text-yellow-400 font-bold text-sm">{earlyScrap.length} tyres</span>
@@ -933,7 +933,7 @@ export default function TyreScrapManagement() {
                   </div>
 
                   {earlyScrap.length === 0 ? (
-                    <div className="flex items-center justify-center h-40 text-gray-500 text-sm flex-col gap-2">
+                    <div className="flex items-center justify-center h-40 text-[var(--text-muted)] text-sm flex-col gap-2">
                       <CheckCircle size={28} className="text-green-600" />
                       No early scrap detected in current filter window
                     </div>
@@ -941,7 +941,7 @@ export default function TyreScrapManagement() {
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="text-gray-500 border-b border-gray-800">
+                          <tr className="text-[var(--text-muted)] border-b border-[var(--input-border)]">
                             <th className="py-2 text-left">Serial</th>
                             <th className="py-2 text-left">Brand</th>
                             <th className="py-2 text-left">Position</th>
@@ -958,23 +958,23 @@ export default function TyreScrapManagement() {
                             return (
                               <tr key={t.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
                                 <td className="py-1.5 font-mono text-blue-300">{t.serial_number ?? '-'}</td>
-                                <td className="py-1.5 text-gray-300">{t.brand}</td>
-                                <td className="py-1.5 text-gray-400">{t.position ?? '-'}</td>
-                                <td className="py-1.5 text-gray-400">{t.site ?? '-'}</td>
+                                <td className="py-1.5 text-[var(--text-secondary)]">{t.brand}</td>
+                                <td className="py-1.5 text-[var(--text-muted)]">{t.position ?? '-'}</td>
+                                <td className="py-1.5 text-[var(--text-muted)]">{t.site ?? '-'}</td>
                                 <td className="py-1.5 text-right text-red-400 font-semibold">{fmt(life)}</td>
                                 <td className="py-1.5 text-right">
                                   <span className={`font-bold ${pct < 30 ? 'text-red-400' : 'text-yellow-400'}`}>
                                     {pct.toFixed(0)}%
                                   </span>
                                 </td>
-                                <td className="py-1.5 text-gray-500">{t.removal_reason ?? '-'}</td>
+                                <td className="py-1.5 text-[var(--text-muted)]">{t.removal_reason ?? '-'}</td>
                               </tr>
                             )
                           })}
                         </tbody>
                       </table>
                       {earlyScrap.length > 8 && (
-                        <p className="text-gray-600 text-xs mt-2 text-center">
+                        <p className="text-[var(--text-dim)] text-xs mt-2 text-center">
                           + {earlyScrap.length - 8} more - use Disposal Log tab for full list
                         </p>
                       )}
@@ -985,7 +985,7 @@ export default function TyreScrapManagement() {
 
               {/* Empty state for overview */}
               {scrapped.length === 0 && !loading && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl">
+                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl">
                   <EmptyState
                     icon={CheckCircle}
                     title="No scrapped tyres found"
@@ -1011,7 +1011,7 @@ export default function TyreScrapManagement() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.07 }}
-                      className={`bg-gray-900 border rounded-xl p-4 ${
+                      className={`bg-[var(--surface-1)] border rounded-xl p-4 ${
                         i === 0 ? 'border-red-700/70' : i === 1 ? 'border-orange-700/60' : 'border-yellow-700/50'
                       }`}
                     >
@@ -1025,14 +1025,14 @@ export default function TyreScrapManagement() {
                         </span>
                         <Flame size={14} className={i === 0 ? 'text-red-400' : i === 1 ? 'text-orange-400' : 'text-yellow-400'} />
                       </div>
-                      <p className="font-bold text-gray-100 text-lg">{b.brand}</p>
+                      <p className="font-bold text-[var(--text-secondary)] text-lg">{b.brand}</p>
                       <p className={`text-3xl font-extrabold mt-0.5 ${
                         i === 0 ? 'text-red-400' : i === 1 ? 'text-orange-400' : 'text-yellow-400'
                       }`}>
                         {b.scrapRate.toFixed(1)}%
                       </p>
-                      <p className="text-gray-500 text-xs mt-0.5">scrap rate · {b.scrap} of {b.total}</p>
-                      <div className="mt-2 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                      <p className="text-[var(--text-muted)] text-xs mt-0.5">scrap rate · {b.scrap} of {b.total}</p>
+                      <div className="mt-2 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${
                             i === 0 ? 'bg-red-500' : i === 1 ? 'bg-orange-500' : 'bg-yellow-500'
@@ -1041,8 +1041,8 @@ export default function TyreScrapManagement() {
                         />
                       </div>
                       {b.avgKm != null && (
-                        <p className="text-gray-500 text-xs mt-2">
-                          Avg km life: <span className="text-gray-300 font-semibold">{fmt(b.avgKm)} km</span>
+                        <p className="text-[var(--text-muted)] text-xs mt-2">
+                          Avg km life: <span className="text-[var(--text-secondary)] font-semibold">{fmt(b.avgKm)} km</span>
                         </p>
                       )}
                     </motion.div>
@@ -1051,8 +1051,8 @@ export default function TyreScrapManagement() {
               )}
 
               {/* Brand bar chart */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-400 font-medium mb-3">Scrap Rate by Brand (Top 10)</p>
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                <p className="text-xs text-[var(--text-muted)] font-medium mb-3">Scrap Rate by Brand (Top 10)</p>
                 <div className="h-56">
                   {brandAnalysis.length > 0
                     ? <Bar data={brandChartData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
@@ -1062,10 +1062,10 @@ export default function TyreScrapManagement() {
               </div>
 
               {/* Brand table */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
                   <Tag className="text-blue-400" size={15} />
-                  <h2 className="font-semibold text-gray-200 text-sm">Brand Scrap Performance</h2>
+                  <h2 className="font-semibold text-[var(--text-secondary)] text-sm">Brand Scrap Performance</h2>
                 </div>
                 {brandAnalysis.length === 0 ? (
                   <EmptyState
@@ -1078,7 +1078,7 @@ export default function TyreScrapManagement() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-800 text-gray-400 text-xs">
+                        <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
                           <th className="px-4 py-3 text-left">Brand</th>
                           <th className="px-4 py-3 text-right">Total</th>
                           <th className="px-4 py-3 text-right">Scrapped</th>
@@ -1100,19 +1100,19 @@ export default function TyreScrapManagement() {
                               b.scrapRate > 20 ? 'bg-red-900/5' : ''
                             }`}
                           >
-                            <td className="px-4 py-3 font-medium text-gray-100">
+                            <td className="px-4 py-3 font-medium text-[var(--text-secondary)]">
                               <div className="flex items-center gap-2">
                                 {b.scrapRate > 20 && <AlertTriangle size={12} className="text-red-400 shrink-0" />}
                                 {b.brand}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right text-gray-400">{b.total}</td>
+                            <td className="px-4 py-3 text-right text-[var(--text-muted)]">{b.total}</td>
                             <td className="px-4 py-3 text-right">
-                              <span className={b.scrap > 0 ? 'text-red-400 font-semibold' : 'text-gray-500'}>{b.scrap}</span>
+                              <span className={b.scrap > 0 ? 'text-red-400 font-semibold' : 'text-[var(--text-muted)]'}>{b.scrap}</span>
                             </td>
                             <td className="px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                <div className="w-14 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                <div className="w-14 h-1.5 bg-[var(--input-bg)] rounded-full overflow-hidden">
                                   <div
                                     className={`h-full rounded-full ${
                                       b.scrapRate > 20 ? 'bg-red-500' : b.scrapRate > 10 ? 'bg-orange-500' : 'bg-green-500'
@@ -1125,14 +1125,14 @@ export default function TyreScrapManagement() {
                                 }`}>{b.scrapRate.toFixed(1)}%</span>
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right text-gray-400 text-xs">
+                            <td className="px-4 py-3 text-right text-[var(--text-muted)] text-xs">
                               {b.avgKm != null ? `${fmt(b.avgKm)} km` : '-'}
                             </td>
-                            <td className="px-4 py-3 text-right text-gray-400 text-xs">
+                            <td className="px-4 py-3 text-right text-[var(--text-muted)] text-xs">
                               {b.avgCPK != null ? b.avgCPK.toFixed(4) : '-'}
                             </td>
                             <td className="px-4 py-3 text-right text-xs">
-                              <span className={b.earlyPct > 30 ? 'text-red-400 font-bold' : 'text-gray-400'}>
+                              <span className={b.earlyPct > 30 ? 'text-red-400 font-bold' : 'text-[var(--text-muted)]'}>
                                 {b.earlyPct.toFixed(0)}%
                               </span>
                             </td>
@@ -1152,7 +1152,7 @@ export default function TyreScrapManagement() {
                     </table>
                   </div>
                 )}
-                <div className="px-4 py-2 border-t border-gray-800 text-xs text-gray-500">
+                <div className="px-4 py-2 border-t border-[var(--input-border)] text-xs text-[var(--text-muted)]">
                   {brandAnalysis.length} brands · Early scrap = removed at &lt;50% of fleet average km life
                 </div>
               </div>
@@ -1166,8 +1166,8 @@ export default function TyreScrapManagement() {
             <div className="space-y-5">
 
               {/* Site grouped bar chart */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <p className="text-xs text-gray-400 font-medium mb-3 flex items-center gap-2">
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-4">
+                <p className="text-xs text-[var(--text-muted)] font-medium mb-3 flex items-center gap-2">
                   <Building2 size={13} className="text-blue-400" /> Scrap Count by Site - Last 6 Months
                 </p>
                 <div className="h-56">
@@ -1179,10 +1179,10 @@ export default function TyreScrapManagement() {
               </div>
 
               {/* Site table */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
                   <Building2 className="text-blue-400" size={15} />
-                  <h2 className="font-semibold text-gray-200 text-sm">Site Scrap Analysis</h2>
+                  <h2 className="font-semibold text-[var(--text-secondary)] text-sm">Site Scrap Analysis</h2>
                 </div>
                 {siteAnalysis.length === 0 ? (
                   <EmptyState
@@ -1195,7 +1195,7 @@ export default function TyreScrapManagement() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-800 text-gray-400 text-xs">
+                        <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
                           <th className="px-4 py-3 text-left">Site</th>
                           <th className="px-4 py-3 text-right">Total Scrapped</th>
                           <th className="px-4 py-3 text-right">Scrap Cost</th>
@@ -1213,9 +1213,9 @@ export default function TyreScrapManagement() {
                             transition={{ delay: i * 0.03 }}
                             className="border-b border-gray-800/60 hover:bg-gray-800/30 transition"
                           >
-                            <td className="px-4 py-3 font-medium text-gray-100">{s.site}</td>
+                            <td className="px-4 py-3 font-medium text-[var(--text-secondary)]">{s.site}</td>
                             <td className="px-4 py-3 text-right">
-                              <span className={s.scrap > 0 ? 'text-red-400 font-semibold' : 'text-gray-500'}>{s.scrap}</span>
+                              <span className={s.scrap > 0 ? 'text-red-400 font-semibold' : 'text-[var(--text-muted)]'}>{s.scrap}</span>
                             </td>
                             <td className="px-4 py-3 text-right text-orange-400 text-xs font-medium">
                               {fmtCurrency(s.cost, activeCurrency)}
@@ -1227,12 +1227,12 @@ export default function TyreScrapManagement() {
                                 {s.scrapRate.toFixed(1)}%
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-gray-400 text-xs">{s.worstBrand}</td>
+                            <td className="px-4 py-3 text-[var(--text-muted)] text-xs">{s.worstBrand}</td>
                             <td className="px-4 py-3 text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <TrendArrow trend={s.trend} />
                                 <span className={`text-xs ${
-                                  s.trend === 'up' ? 'text-red-400' : s.trend === 'down' ? 'text-green-400' : 'text-gray-500'
+                                  s.trend === 'up' ? 'text-red-400' : s.trend === 'down' ? 'text-green-400' : 'text-[var(--text-muted)]'
                                 }`}>
                                   {s.trend === 'up' ? 'Rising' : s.trend === 'down' ? 'Improving' : 'Stable'}
                                 </span>
@@ -1248,19 +1248,19 @@ export default function TyreScrapManagement() {
 
               {/* Heat map: brand × site */}
               {heatMapData.topBrands.length > 0 && heatMapData.topSites.length > 0 && (
-                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
+                <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-[var(--input-border)] flex items-center gap-2">
                     <Layers className="text-purple-400" size={15} />
-                    <h2 className="font-semibold text-gray-200 text-sm">Brand × Site Scrap Heat Map</h2>
-                    <span className="text-gray-600 text-xs ml-1">(count of scrapped tyres)</span>
+                    <h2 className="font-semibold text-[var(--text-secondary)] text-sm">Brand × Site Scrap Heat Map</h2>
+                    <span className="text-[var(--text-dim)] text-xs ml-1">(count of scrapped tyres)</span>
                   </div>
                   <div className="overflow-x-auto p-4">
                     <table className="text-xs border-separate" style={{ borderSpacing: '3px' }}>
                       <thead>
                         <tr>
-                          <th className="px-2 py-1.5 text-gray-500 text-left font-normal w-24">Brand \ Site</th>
+                          <th className="px-2 py-1.5 text-[var(--text-muted)] text-left font-normal w-24">Brand \ Site</th>
                           {heatMapData.topSites.map(s => (
-                            <th key={s} className="px-2 py-1.5 text-gray-400 font-semibold text-center min-w-[80px]">
+                            <th key={s} className="px-2 py-1.5 text-[var(--text-muted)] font-semibold text-center min-w-[80px]">
                               {s}
                             </th>
                           ))}
@@ -1269,7 +1269,7 @@ export default function TyreScrapManagement() {
                       <tbody>
                         {heatMapData.topBrands.map(brand => (
                           <tr key={brand}>
-                            <td className="px-2 py-1.5 text-gray-300 font-medium">{brand}</td>
+                            <td className="px-2 py-1.5 text-[var(--text-secondary)] font-medium">{brand}</td>
                             {heatMapData.topSites.map(site => {
                               const val = heatMapData.map[`${brand}__${site}`] ?? 0
                               const intensity = heatMapData.maxVal > 0 ? val / heatMapData.maxVal : 0
@@ -1280,7 +1280,7 @@ export default function TyreScrapManagement() {
                                 : intensity > 0.2 ? 'bg-yellow-600'
                                 : 'bg-yellow-900/60'
                               return (
-                                <td key={site} className={`px-2 py-1.5 text-center rounded font-bold ${bg} ${val > 0 ? 'text-white' : 'text-gray-600'}`}>
+                                <td key={site} className={`px-2 py-1.5 text-center rounded font-bold ${bg} ${val > 0 ? 'text-white' : 'text-[var(--text-dim)]'}`}>
                                   {val > 0 ? val : '·'}
                                 </td>
                               )
@@ -1289,7 +1289,7 @@ export default function TyreScrapManagement() {
                         ))}
                       </tbody>
                     </table>
-                    <p className="text-gray-600 text-xs mt-2">
+                    <p className="text-[var(--text-dim)] text-xs mt-2">
                       Colour scale: <span className="text-yellow-600">Low</span> → <span className="text-orange-500">Medium</span> → <span className="text-red-500">High</span>
                     </p>
                   </div>
@@ -1307,25 +1307,25 @@ export default function TyreScrapManagement() {
               {/* Log filters */}
               <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
                 <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={14} />
                   <input
                     value={logSearch}
                     onChange={e => setLogSearch(e.target.value)}
                     placeholder="Search serial, brand, asset, site..."
-                    className="w-full pl-8 pr-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-red-600"
+                    className="w-full pl-8 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] placeholder-gray-500 focus:outline-none focus:border-red-600"
                   />
                 </div>
                 <select
                   value={logBrand}
                   onChange={e => setLogBrand(e.target.value)}
-                  className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-red-600"
+                  className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-red-600"
                 >
                   {brandOptions.map(b => <option key={b}>{b}</option>)}
                 </select>
                 <select
                   value={logSite}
                   onChange={e => setLogSite(e.target.value)}
-                  className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-red-600"
+                  className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-red-600"
                 >
                   {siteOptions.map(s => <option key={s}>{s}</option>)}
                 </select>
@@ -1333,14 +1333,14 @@ export default function TyreScrapManagement() {
                   type="date"
                   value={logDateFrom}
                   onChange={e => setLogDateFrom(e.target.value)}
-                  className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-red-600"
+                  className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-red-600"
                   title="Date from"
                 />
                 <input
                   type="date"
                   value={logDateTo}
                   onChange={e => setLogDateTo(e.target.value)}
-                  className="px-3 py-2 bg-gray-900 border border-gray-800 rounded-lg text-sm text-gray-300 focus:outline-none focus:border-red-600"
+                  className="px-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] focus:outline-none focus:border-red-600"
                   title="Date to"
                 />
                 {disposalError && (
@@ -1349,13 +1349,13 @@ export default function TyreScrapManagement() {
                 <div className="flex gap-2 ml-auto">
                   <button
                     onClick={exportDisposalExcel}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition"
                   >
                     <FileSpreadsheet size={14} /> Excel
                   </button>
                   <button
                     onClick={exportDisposalPdf}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] transition"
                   >
                     <FileText size={14} /> Manifest
                   </button>
@@ -1363,11 +1363,11 @@ export default function TyreScrapManagement() {
               </div>
 
               {/* Table */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-800 text-gray-400 text-xs">
+                      <tr className="border-b border-[var(--input-border)] text-[var(--text-muted)] text-xs">
                         <th className="px-4 py-3 text-left">Serial No</th>
                         <th className="px-4 py-3 text-left">Brand</th>
                         <th className="px-4 py-3 text-left">Size</th>
@@ -1385,9 +1385,9 @@ export default function TyreScrapManagement() {
                     <tbody>
                       {disposalLog.length === 0 && (
                         <tr>
-                          <td colSpan={12} className="px-4 py-14 text-center text-gray-500">
-                            <Trash2 className="inline mb-2 text-gray-700" size={36} />
-                            <p className="mt-1 font-medium text-gray-400">No disposal records match current filters</p>
+                          <td colSpan={12} className="px-4 py-14 text-center text-[var(--text-muted)]">
+                            <Trash2 className="inline mb-2 text-[var(--text-dim)]" size={36} />
+                            <p className="mt-1 font-medium text-[var(--text-muted)]">No disposal records match current filters</p>
                             <p className="text-xs mt-0.5">Adjust search or date range to find records</p>
                           </td>
                         </tr>
@@ -1405,23 +1405,23 @@ export default function TyreScrapManagement() {
                             className="border-b border-gray-800/60 hover:bg-gray-800/30 transition"
                           >
                             <td className="px-4 py-2.5 font-mono text-blue-300 text-xs">{t.serial_number ?? '-'}</td>
-                            <td className="px-4 py-2.5 text-gray-200 font-medium">{t.brand ?? '-'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{t.size ?? '-'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">{t.position ?? '-'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">{t.asset_no ?? '-'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">{t.site ?? '-'}</td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">
+                            <td className="px-4 py-2.5 text-[var(--text-secondary)] font-medium">{t.brand ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs font-mono">{t.size ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs">{t.position ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs">{t.asset_no ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs">{t.site ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs">
                               {t.removal_date || t.issue_date || '-'}
                             </td>
                             <td className="px-4 py-2.5 text-right text-xs">
-                              <span className={life != null ? (life < fleetAvgKmLife * 0.5 ? 'text-red-400 font-semibold' : 'text-gray-300') : 'text-gray-600'}>
+                              <span className={life != null ? (life < fleetAvgKmLife * 0.5 ? 'text-red-400 font-semibold' : 'text-[var(--text-secondary)]') : 'text-[var(--text-dim)]'}>
                                 {life != null ? `${fmt(life)} km` : '-'}
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-right text-xs text-orange-400">
                               {t.cost_per_tyre != null ? `${activeCurrency} ${fmt(Number(t.cost_per_tyre))}` : '-'}
                             </td>
-                            <td className="px-4 py-2.5 text-gray-500 text-xs">{t.removal_reason ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs">{t.removal_reason ?? '-'}</td>
                             <td className="px-4 py-2.5 text-center">
                               <Badge label={status} cfg={cfg} />
                             </td>
@@ -1446,7 +1446,7 @@ export default function TyreScrapManagement() {
                               ) : (
                                 <button
                                   onClick={() => markDisposed(t.id, 'Pending')}
-                                  className="px-2 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-gray-500 text-[10px] transition"
+                                  className="px-2 py-1 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] rounded text-[var(--text-muted)] text-[10px] transition"
                                   title="Reset to Pending"
                                 >
                                   Reset
@@ -1460,7 +1460,7 @@ export default function TyreScrapManagement() {
                   </table>
                 </div>
 
-                <div className="px-4 py-2 border-t border-gray-800 flex items-center justify-between text-xs text-gray-500">
+                <div className="px-4 py-2 border-t border-[var(--input-border)] flex items-center justify-between text-xs text-[var(--text-muted)]">
                   <span>{disposalLog.length} records</span>
                   <span>
                     {disposalLog.filter(t => (disposals[t.id] ?? 'Pending') === 'Disposed').length} disposed ·&nbsp;
@@ -1481,8 +1481,8 @@ export default function TyreScrapManagement() {
 
 function EmptyChart() {
   return (
-    <div className="h-full flex items-center justify-center text-gray-600 text-xs flex-col gap-2">
-      <BarChart3 size={24} className="text-gray-700" />
+    <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-xs flex-col gap-2">
+      <BarChart3 size={24} className="text-[var(--text-dim)]" />
       No data available for current filters
     </div>
   )

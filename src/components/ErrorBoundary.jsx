@@ -1,5 +1,6 @@
 import { Component } from 'react'
 import { RefreshCw } from 'lucide-react'
+import { captureError } from '../lib/monitoring'
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -13,6 +14,7 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     this.setState({ componentStack: info?.componentStack ?? null })
+    captureError(error, { boundary: 'page', componentStack: info?.componentStack ?? null })
     console.error('[ErrorBoundary]', error, info)
   }
 

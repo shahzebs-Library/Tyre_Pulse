@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { queryClient } from '../lib/queryClient'
+import { setMonitoringUser, clearMonitoringUser } from '../lib/monitoring'
+import { audit } from '../lib/auditLogger'
 
 const AuthContext = createContext(null)
 
@@ -35,7 +37,7 @@ export function AuthProvider({ children }) {
     }
     function checkIdle() {
       if (Date.now() - lastActivityRef.current > IDLE_MS) {
-        supabase.auth.signOut()
+        audit.logout().finally(() => supabase.auth.signOut())
         localStorage.setItem('tp_session_expired', '1')
       }
     }
@@ -97,6 +99,7 @@ export function AuthProvider({ children }) {
       setModulePerms(null)
       unsubscribeFromProfile()
       setMfaEnabled(false)
+      clearMonitoringUser()
       setLoading(false)
       return
     }
@@ -150,6 +153,8 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('tp_access_revoked')
 
     setProfile(p)
+    // Monitoring context: id + role + site only — never email or name.
+    if (p) setMonitoringUser({ id: p.id, role: p.role, site: p.site })
     setModulePerms(permsRes.data ?? {})
     setMfaEnabled((factorsRes.data?.totp?.length ?? 0) > 0)
     setLoading(false)
@@ -179,6 +184,7 @@ export function AuthProvider({ children }) {
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) return error
+    audit.login() // fire-and-forget LOGIN row in audit_log_v2 (never throws)
 
     // Check whether MFA challenge is still required for this session
     const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
@@ -189,6 +195,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signOut = useCallback(async () => {
+    await audit.logout() // record before the session is destroyed (never throws)
     await supabase.auth.signOut()
     // Clear user-scoped client caches so a different account on this device
     // cannot see the previous user's data after switching (account-switch

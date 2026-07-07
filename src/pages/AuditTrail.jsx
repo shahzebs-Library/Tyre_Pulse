@@ -14,9 +14,78 @@ const PAGE_SIZE = 50
 
 const ACTION_BADGE = {
   UPLOAD: 'bg-blue-900/50 text-blue-300 border-blue-700/50',
+  CREATE: 'bg-green-900/50 text-green-300 border-green-700/50',
+  UPDATE: 'bg-amber-900/50 text-amber-300 border-amber-700/50',
   DELETE: 'bg-red-900/50 text-red-300 border-red-700/50',
   EDIT:   'bg-amber-900/50 text-amber-300 border-amber-700/50',
   EXPORT: 'bg-green-900/50 text-green-300 border-green-700/50',
+}
+
+function nonEmpty(obj) {
+  return obj && typeof obj === 'object' && Object.keys(obj).length > 0
+}
+
+function hasExpandable(row) {
+  return nonEmpty(row.details) || nonEmpty(row.old_values) || nonEmpty(row.new_values)
+}
+
+function fmtVal(v) {
+  if (v === null || v === undefined || v === '') return '—'
+  if (typeof v === 'object') { try { return JSON.stringify(v) } catch { return String(v) } }
+  return String(v)
+}
+
+/**
+ * Expanded audit row: field-level old → new diff built from old_values /
+ * new_values (written by src/lib/audit.js — changed fields only for UPDATE,
+ * full record for CREATE/DELETE). Falls back to the legacy `details` JSON.
+ */
+function AuditChangeDetail({ row }) {
+  const oldV = nonEmpty(row.old_values) ? row.old_values : null
+  const newRaw = nonEmpty(row.new_values) ? row.new_values : null
+  const meta = newRaw?._meta
+  const newV = newRaw
+    ? Object.fromEntries(Object.entries(newRaw).filter(([k]) => k !== '_meta'))
+    : null
+  const fields = [...new Set([...Object.keys(oldV || {}), ...Object.keys(newV || {})])]
+
+  return (
+    <div className="space-y-2">
+      {fields.length > 0 && (
+        <table className="text-xs w-full max-w-3xl">
+          <thead>
+            <tr className="text-gray-500">
+              <th className="text-left font-medium py-1 pr-4">Field</th>
+              <th className="text-left font-medium py-1 pr-4">Old value</th>
+              <th className="text-left font-medium py-1">New value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fields.map(f => (
+              <tr key={f} className="border-t border-gray-800">
+                <td className="py-1 pr-4 text-gray-400 font-medium whitespace-nowrap">{f}</td>
+                <td className="py-1 pr-4 text-red-300/80 break-all">{fmtVal(oldV?.[f])}</td>
+                <td className="py-1 text-green-300/80 break-all">{fmtVal(newV?.[f])}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {nonEmpty(meta) && (
+        <pre className="text-xs text-gray-400 bg-gray-800/60 rounded p-3 overflow-auto max-h-40">
+          {JSON.stringify(meta, null, 2)}
+        </pre>
+      )}
+      {nonEmpty(row.details) && (
+        <pre className="text-xs text-gray-400 bg-gray-800/60 rounded p-3 overflow-auto max-h-40">
+          {JSON.stringify(row.details, null, 2)}
+        </pre>
+      )}
+      {fields.length === 0 && !nonEmpty(meta) && !nonEmpty(row.details) && (
+        <p className="text-xs text-gray-500">No change detail recorded.</p>
+      )}
+    </div>
+  )
 }
 
 function SummarySkeleton() {
@@ -385,7 +454,7 @@ export default function AuditTrail() {
                         <td className="table-cell text-gray-400">{row.table_name ?? '-'}</td>
                         <td className="table-cell text-gray-200 text-right">{row.record_count ?? '-'}</td>
                         <td className="table-cell">
-                          {row.details && Object.keys(row.details).length > 0 ? (
+                          {hasExpandable(row) ? (
                             <button
                               onClick={() => setExpandedRow(expandedRow === row.id ? null : row.id)}
                               className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
@@ -398,9 +467,7 @@ export default function AuditTrail() {
                       {expandedRow === row.id && (
                         <tr className="bg-gray-900/50">
                           <td colSpan={6} className="px-4 pb-3 pt-0">
-                            <pre className="text-xs text-gray-400 bg-gray-800/60 rounded p-3 overflow-auto max-h-40">
-                              {JSON.stringify(row.details, null, 2)}
-                            </pre>
+                            <AuditChangeDetail row={row} />
                           </td>
                         </tr>
                       )}

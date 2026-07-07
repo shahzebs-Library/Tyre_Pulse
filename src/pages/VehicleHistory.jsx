@@ -37,7 +37,7 @@ const RISK_BADGE = {
   High:     'bg-orange-900/50 text-orange-300 border-orange-700/50',
   Medium:   'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
   Low:      'bg-green-900/50 text-green-300 border-green-700/50',
-  Unknown:  'bg-gray-800 text-gray-400 border-gray-700',
+  Unknown:  'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
 
 function riskBadgeClass(level) {
@@ -213,7 +213,7 @@ const FLAG_META = {
 }
 
 function getFlagMeta(type) {
-  return FLAG_META[type] || { labelKey: null, label: type, color: 'text-gray-400', bg: 'bg-gray-800/40 border-gray-700/40' }
+  return FLAG_META[type] || { labelKey: null, label: type, color: 'text-muted', bg: 'bg-[var(--input-bg)] border-[var(--input-border)]' }
 }
 
 // ── Detail Panel Tabs ─────────────────────────────────────────────────────────
@@ -387,7 +387,7 @@ export default function VehicleHistory() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400">
+      <div className="flex items-center justify-center h-64 text-muted">
         <div className="text-center">
           <Car size={40} className="mx-auto mb-3 opacity-40" />
           <p>{t('vehiclehistory.loading')}</p>
@@ -433,7 +433,7 @@ export default function VehicleHistory() {
       <div className="card">
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-48">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <input
               className="input pl-9"
               placeholder={t('vehiclehistory.filters.searchPlaceholder')}
@@ -464,7 +464,7 @@ export default function VehicleHistory() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-gray-400 border-b border-gray-800 text-xs">
+              <tr className="text-left text-muted border-b border-[var(--input-border)] text-xs">
                 <th className="px-4 py-3">{t('vehiclehistory.table.assetNo')}</th>
                 <th className="px-3 py-3 text-right">{t('vehiclehistory.table.replacements')}</th>
                 <th className="px-3 py-3 text-right">{t('vehiclehistory.table.totalCost')}</th>
@@ -479,7 +479,7 @@ export default function VehicleHistory() {
             <tbody>
               {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-10 text-center text-muted">
                     {t('vehiclehistory.table.noMatch')}
                   </td>
                 </tr>
@@ -488,31 +488,31 @@ export default function VehicleHistory() {
                 <tr
                   key={row.assetNo}
                   onClick={() => setSelected(selected === row.assetNo ? null : row.assetNo)}
-                  className={`border-b border-gray-800/50 cursor-pointer transition-colors ${
-                    selected === row.assetNo ? 'bg-blue-900/20' : 'hover:bg-gray-800/20'
+                  className={`border-b border-[var(--input-border)] cursor-pointer transition-colors ${
+                    selected === row.assetNo ? 'bg-blue-900/20' : 'hover:bg-[var(--input-bg)]'
                   }`}
                 >
                   <td className="px-4 py-2 font-mono text-xs text-blue-400 font-medium">{row.assetNo}</td>
-                  <td className="px-3 py-2 text-gray-300 text-right">{row.count}</td>
-                  <td className="px-3 py-2 text-gray-300 text-right text-xs">
+                  <td className="px-3 py-2 text-secondary text-right">{row.count}</td>
+                  <td className="px-3 py-2 text-secondary text-right text-xs">
                     {activeCurrency} {row.totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 })}
                   </td>
                   <td className="px-3 py-2 text-right">
                     {row.highRiskCount > 0
                       ? <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/40 text-red-400">{row.highRiskCount}</span>
-                      : <span className="text-gray-600 text-xs">0</span>
+                      : <span className="text-dim text-xs">0</span>
                     }
                   </td>
                   <td className="px-3 py-2 text-right">
                     {row.anomalies.length > 0
                       ? <span className="text-xs px-2 py-0.5 rounded-full bg-orange-900/40 text-orange-400">{row.anomalies.length}</span>
-                      : <span className="text-gray-600 text-xs">0</span>
+                      : <span className="text-dim text-xs">0</span>
                     }
                   </td>
-                  <td className="px-3 py-2 text-gray-400 text-right text-xs">
+                  <td className="px-3 py-2 text-muted text-right text-xs">
                     {row.avgDays !== null ? `${row.avgDays}d` : '-'}
                   </td>
-                  <td className="px-3 py-2 text-gray-500 text-xs">{row.lastSeen || '-'}</td>
+                  <td className="px-3 py-2 text-muted text-xs">{row.lastSeen || '-'}</td>
                   <td className="px-3 py-2 text-center">
                     <span className={`text-xs px-2 py-0.5 rounded-full border font-bold ${misuseBadgeClass(row.misuseScore)}`}>
                       {row.misuseScore}
@@ -529,7 +529,7 @@ export default function VehicleHistory() {
                         )
                       })}
                       {row.allFlags.length > 3 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded border bg-gray-800 text-gray-400 border-gray-700">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded border bg-[var(--input-bg)] text-muted border-[var(--input-border)]">
                           +{row.allFlags.length - 3}
                         </span>
                       )}
@@ -541,7 +541,7 @@ export default function VehicleHistory() {
           </table>
         </div>
         {filteredRows.length > 200 && (
-          <p className="text-xs text-gray-500 text-center py-3">
+          <p className="text-xs text-muted text-center py-3">
             {t('vehiclehistory.table.showingOf', { count: filteredRows.length })}
           </p>
         )}
@@ -641,7 +641,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="text-white font-bold text-xl font-mono">{row.assetNo}</h2>
+            <h2 className="text-[var(--text-primary)] font-bold text-xl font-mono">{row.assetNo}</h2>
             <span className={`text-xs px-2.5 py-1 rounded-full border font-bold ${misuseBadgeClass(row.misuseScore)}`}>
               {t('vehiclehistory.detail.misuseRisk', { score: row.misuseScore })}
             </span>
@@ -651,11 +651,11 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
               </span>
             )}
           </div>
-          <p className="text-gray-400 text-sm mt-1.5">
+          <p className="text-muted text-sm mt-1.5">
             {row.sites.slice(0, 3).join(' · ')}
             {row.lastSeen ? ` · ${t('vehiclehistory.detail.lastReplaced', { date: row.lastSeen })}` : ''}
           </p>
-          <p className="text-gray-500 text-xs mt-0.5">
+          <p className="text-muted text-xs mt-0.5">
             {t('vehiclehistory.detail.replacementsSummary', { count: row.count, currency, cost: totalCost.toLocaleString('en-SA', { maximumFractionDigits: 0 }) })}
             {row.firstSeen ? ` · ${t('vehiclehistory.detail.since', { date: row.firstSeen })}` : ''}
           </p>
@@ -673,35 +673,35 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
       {/* Vehicle Specs row */}
       {fleetRecord ? (
         <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-xs text-gray-500 mr-1">{t('vehiclehistory.detail.vehicleSpecs')}</span>
+          <span className="text-xs text-muted mr-1">{t('vehiclehistory.detail.vehicleSpecs')}</span>
           {fleetRecord.make && (
             <span className="text-xs px-2 py-0.5 rounded bg-blue-900/30 border border-blue-700/40 text-blue-300">
-              <span className="text-gray-500 mr-1">{t('vehiclehistory.detail.make')}</span>{fleetRecord.make}
+              <span className="text-muted mr-1">{t('vehiclehistory.detail.make')}</span>{fleetRecord.make}
             </span>
           )}
           {fleetRecord.model && (
             <span className="text-xs px-2 py-0.5 rounded bg-blue-900/30 border border-blue-700/40 text-blue-300">
-              <span className="text-gray-500 mr-1">{t('vehiclehistory.detail.model')}</span>{fleetRecord.model}
+              <span className="text-muted mr-1">{t('vehiclehistory.detail.model')}</span>{fleetRecord.model}
             </span>
           )}
           {fleetRecord.year && (
-            <span className="text-xs px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300">
-              <span className="text-gray-500 mr-1">{t('vehiclehistory.detail.year')}</span>{fleetRecord.year}
+            <span className="text-xs px-2 py-0.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-secondary">
+              <span className="text-muted mr-1">{t('vehiclehistory.detail.year')}</span>{fleetRecord.year}
             </span>
           )}
           {fleetRecord.vehicle_type && (
-            <span className="text-xs px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300">
-              <span className="text-gray-500 mr-1">{t('vehiclehistory.detail.type')}</span>{vehicleIcon(fleetRecord.vehicle_type)} {fleetRecord.vehicle_type}
+            <span className="text-xs px-2 py-0.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-secondary">
+              <span className="text-muted mr-1">{t('vehiclehistory.detail.type')}</span>{vehicleIcon(fleetRecord.vehicle_type)} {fleetRecord.vehicle_type}
             </span>
           )}
           {fleetRecord.operator_name && (
-            <span className="text-xs px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-300">
-              <span className="text-gray-500 mr-1">{t('vehiclehistory.detail.operator')}</span>{fleetRecord.operator_name}
+            <span className="text-xs px-2 py-0.5 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-secondary">
+              <span className="text-muted mr-1">{t('vehiclehistory.detail.operator')}</span>{fleetRecord.operator_name}
             </span>
           )}
         </div>
       ) : (
-        <p className="text-xs text-gray-600">
+        <p className="text-xs text-dim">
           {t('vehiclehistory.detail.noFleetRecord')}{' '}
           <a href="/fleet-master" className="text-blue-500 hover:text-blue-400 underline">
             {t('vehiclehistory.detail.addInFleetMaster')}
@@ -712,42 +712,42 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
       {/* Tyre Position Overview */}
       {fleetRecord?.vehicle_type && (
         <div className="card">
-          <p className="text-sm font-semibold text-gray-300 mb-4">{t('vehiclehistory.detail.tyrePositionOverview')}</p>
+          <p className="text-sm font-semibold text-secondary mb-4">{t('vehiclehistory.detail.tyrePositionOverview')}</p>
           <div className="flex flex-wrap gap-8 items-start">
             <VehicleTyreDiagram
               positions={tyrePositions}
               vehicleType={fleetRecord.vehicle_type}
             />
             <div className="flex-1 min-w-48">
-              <p className="text-xs text-gray-500 mb-3">{t('vehiclehistory.detail.riskLevelByPosition')}</p>
+              <p className="text-xs text-muted mb-3">{t('vehiclehistory.detail.riskLevelByPosition')}</p>
               <div className="flex flex-wrap gap-3">
                 {[
                   { label: t('vehiclehistory.detail.riskLow'),      color: '#16a34a', isNoData: false },
                   { label: t('vehiclehistory.detail.riskMedium'),   color: '#ca8a04', isNoData: false },
                   { label: t('vehiclehistory.detail.riskHigh'),     color: '#ea580c', isNoData: false },
                   { label: t('vehiclehistory.detail.riskCritical'), color: '#dc2626', isNoData: false },
-                  { label: t('vehiclehistory.detail.noData'),       color: '#374151', isNoData: true },
+                  { label: t('vehiclehistory.detail.noData'),       color: 'var(--text-dim)', isNoData: true },
                 ].map(item => (
                   <div key={item.label} className="flex items-center gap-1.5">
                     <span
                       className="inline-block w-3 h-3 rounded-full flex-shrink-0"
                       style={{ backgroundColor: item.color, opacity: item.isNoData ? 0.4 : 1 }}
                     />
-                    <span className="text-xs text-gray-400">{item.label}</span>
+                    <span className="text-xs text-muted">{item.label}</span>
                   </div>
                 ))}
               </div>
               {tyrePositions.length > 0 && (
                 <div className="mt-4 space-y-1">
-                  <p className="text-xs text-gray-500 mb-2">{t('vehiclehistory.detail.currentTyreData')}</p>
+                  <p className="text-xs text-muted mb-2">{t('vehiclehistory.detail.currentTyreData')}</p>
                   {tyrePositions.filter(p => p.risk_level).map(p => (
                     <div key={p.position} className="flex items-center gap-2 text-xs">
                       <span
                         className="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: { Low: '#16a34a', Medium: '#ca8a04', High: '#ea580c', Critical: '#dc2626' }[p.risk_level] ?? '#374151' }}
+                        style={{ backgroundColor: { Low: '#16a34a', Medium: '#ca8a04', High: '#ea580c', Critical: '#dc2626' }[p.risk_level] ?? 'var(--text-dim)' }}
                       />
-                      <span className="font-mono text-gray-400 w-16">{p.position}</span>
-                      <span className="text-gray-500">{p.brand || '-'}</span>
+                      <span className="font-mono text-muted w-16">{p.position}</span>
+                      <span className="text-muted">{p.brand || '-'}</span>
                     </div>
                   ))}
                 </div>
@@ -771,8 +771,8 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
               return (
                 <div key={i} className={`rounded p-2.5 border text-xs ${meta.bg}`}>
                   <span className={`font-semibold ${meta.color}`}>[{flagLabel}]</span>
-                  <span className="text-gray-300 ml-2">{flag.message}</span>
-                  {flag.detail && <p className="text-gray-500 mt-0.5 text-[11px]">{flag.detail}</p>}
+                  <span className="text-secondary ml-2">{flag.message}</span>
+                  {flag.detail && <p className="text-muted mt-0.5 text-[11px]">{flag.detail}</p>}
                 </div>
               )
             })}
@@ -781,7 +781,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-800 gap-1 flex-wrap">
+      <div className="flex border-b border-[var(--input-border)] gap-1 flex-wrap">
         {DETAIL_TABS.map((tab, i) => (
           <button
             key={tab.key}
@@ -789,7 +789,7 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
             className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
               activeTab === i
                 ? 'border-blue-500 text-blue-400'
-                : 'border-transparent text-gray-400 hover:text-white'
+                : 'border-transparent text-muted hover:text-[var(--text-primary)]'
             }`}
           >
             {tab.key === 'forecast' && <TrendingUp size={13} />}
@@ -863,14 +863,14 @@ function VehicleDetailPanel({ row, currency, defaultCost, onClose, relatedAction
 function TimelineTab({ records, flaggedIds, currency, defaultCost }) {
   const { t } = useLanguage()
   if (records.length === 0) {
-    return <p className="text-gray-500 text-sm py-4 text-center">{t('vehiclehistory.timeline.noRecords')}</p>
+    return <p className="text-muted text-sm py-4 text-center">{t('vehiclehistory.timeline.noRecords')}</p>
   }
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-gray-400 border-b border-gray-800 text-left">
+          <tr className="text-muted border-b border-[var(--input-border)] text-left">
             <th className="pb-2 pr-3">{t('vehiclehistory.timeline.columns.date')}</th>
             <th className="pb-2 pr-3">{t('vehiclehistory.timeline.columns.brand')}</th>
             <th className="pb-2 pr-3">{t('vehiclehistory.timeline.columns.description')}</th>
@@ -892,21 +892,21 @@ function TimelineTab({ records, flaggedIds, currency, defaultCost }) {
             return (
               <tr
                 key={r.id}
-                className={`border-b border-gray-800/30 hover:bg-gray-800/20 ${
+                className={`border-b border-[var(--input-border)] hover:bg-[var(--input-bg)] ${
                   isFlagged ? 'bg-red-950/10' : ''
                 }`}
                 style={isFlagged ? { borderLeft: '2px solid rgba(239,68,68,0.6)' } : {}}
               >
-                <td className="py-1.5 pr-3 text-gray-400 whitespace-nowrap">
+                <td className="py-1.5 pr-3 text-muted whitespace-nowrap">
                   {isFlagged && <AlertTriangle size={10} className="inline text-red-400 mr-1" />}
                   {r.issue_date || '-'}
                 </td>
-                <td className="py-1.5 pr-3 text-gray-300">{r.brand || '-'}</td>
-                <td className="py-1.5 pr-3 text-gray-400 max-w-[120px] truncate">{r.description || '-'}</td>
+                <td className="py-1.5 pr-3 text-secondary">{r.brand || '-'}</td>
+                <td className="py-1.5 pr-3 text-muted max-w-[120px] truncate">{r.description || '-'}</td>
                 <td className="py-1.5 pr-3">
                   {r.category
                     ? <span className="px-1.5 py-0.5 rounded bg-blue-900/30 text-blue-400 text-[10px]">{r.category}</span>
-                    : <span className="text-gray-600">-</span>
+                    : <span className="text-dim">-</span>
                   }
                 </td>
                 <td className="py-1.5 pr-3">
@@ -914,13 +914,13 @@ function TimelineTab({ records, flaggedIds, currency, defaultCost }) {
                     {r.risk_level || '?'}
                   </span>
                 </td>
-                <td className="py-1.5 pr-3 text-gray-300 text-right whitespace-nowrap">
+                <td className="py-1.5 pr-3 text-secondary text-right whitespace-nowrap">
                   {currency} {((r.cost_per_tyre || defaultCost) * (r.qty || 1)).toLocaleString()}
                 </td>
-                <td className="py-1.5 pr-3 text-gray-500 whitespace-nowrap">{kmRun}</td>
-                <td className="py-1.5 pr-3 text-gray-400 text-right">{r.qty || 1}</td>
-                <td className="py-1.5 pr-3 text-gray-400 whitespace-nowrap">{r.site || '-'}</td>
-                <td className="py-1.5 text-gray-500 max-w-[160px] truncate">{r.remarks_cleaned || r.remarks || '-'}</td>
+                <td className="py-1.5 pr-3 text-muted whitespace-nowrap">{kmRun}</td>
+                <td className="py-1.5 pr-3 text-muted text-right">{r.qty || 1}</td>
+                <td className="py-1.5 pr-3 text-muted whitespace-nowrap">{r.site || '-'}</td>
+                <td className="py-1.5 text-muted max-w-[160px] truncate">{r.remarks_cleaned || r.remarks || '-'}</td>
               </tr>
             )
           })}
@@ -976,7 +976,7 @@ function AnalysisTab({ monthlyBuckets, categoryBreakdown, brandBreakdown, totalC
         ].map(({ label, value, color }) => (
           <div key={label} className="rounded-lg p-4 text-center" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <p className={`text-xl font-bold ${color}`}>{value}</p>
-            <p className="text-gray-500 text-xs mt-1">{label}</p>
+            <p className="text-muted text-xs mt-1">{label}</p>
           </div>
         ))}
       </div>
@@ -984,36 +984,36 @@ function AnalysisTab({ monthlyBuckets, categoryBreakdown, brandBreakdown, totalC
       {/* Charts row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <p className="text-xs text-gray-400 mb-2">{t('vehiclehistory.analysis.costByMonth', { currency })}</p>
+          <p className="text-xs text-muted mb-2">{t('vehiclehistory.analysis.costByMonth', { currency })}</p>
           {monthlyBuckets.length > 0 ? (
             <div style={{ height: 200 }}>
               <Bar data={costByMonth} options={BAR_OPTS} />
             </div>
           ) : (
-            <p className="text-gray-600 text-xs text-center py-10">{t('vehiclehistory.analysis.noMonthlyData')}</p>
+            <p className="text-dim text-xs text-center py-10">{t('vehiclehistory.analysis.noMonthlyData')}</p>
           )}
         </div>
         <div>
-          <p className="text-xs text-gray-400 mb-2">{t('vehiclehistory.analysis.failureCategoryBreakdown')}</p>
+          <p className="text-xs text-muted mb-2">{t('vehiclehistory.analysis.failureCategoryBreakdown')}</p>
           {categoryBreakdown.length > 0 ? (
             <div style={{ height: 200 }}>
               <Doughnut data={catData} options={DOUGHNUT_OPTS} />
             </div>
           ) : (
-            <p className="text-gray-600 text-xs text-center py-10">{t('vehiclehistory.analysis.noCategoryData')}</p>
+            <p className="text-dim text-xs text-center py-10">{t('vehiclehistory.analysis.noCategoryData')}</p>
           )}
         </div>
       </div>
 
       {/* Brand chart */}
       <div>
-        <p className="text-xs text-gray-400 mb-2">{t('vehiclehistory.analysis.brandUsageFrequency')}</p>
+        <p className="text-xs text-muted mb-2">{t('vehiclehistory.analysis.brandUsageFrequency')}</p>
         {brandBreakdown.length > 0 ? (
           <div style={{ height: 180 }}>
             <Bar data={brandData} options={BAR_OPTS} />
           </div>
         ) : (
-          <p className="text-gray-600 text-xs text-center py-10">{t('vehiclehistory.analysis.noBrandData')}</p>
+          <p className="text-dim text-xs text-center py-10">{t('vehiclehistory.analysis.noBrandData')}</p>
         )}
       </div>
     </div>
@@ -1069,21 +1069,21 @@ function RedFlagsTab({ flags }) {
               <span className={`text-xs px-2 py-0.5 rounded-full border font-bold ${sevClass}`}>{sevLabel}</span>
               <span className={`font-semibold text-sm ${meta.color}`}>{flagLabel}</span>
             </div>
-            <p className="text-gray-300 text-sm">{flag.message}</p>
-            {flag.detail && <p className="text-gray-500 text-xs">{flag.detail}</p>}
+            <p className="text-secondary text-sm">{flag.message}</p>
+            {flag.detail && <p className="text-muted text-xs">{flag.detail}</p>}
             {flag.records && flag.records.length > 0 && (
               <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-[10px] text-gray-600">{t('vehiclehistory.redFlagsTab.affectedRecords')}</span>
+                <span className="text-[10px] text-dim">{t('vehiclehistory.redFlagsTab.affectedRecords')}</span>
                 {flag.records.slice(0, 5).map(r => (
-                  <span key={r.id} className="text-[10px] font-mono text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">
+                  <span key={r.id} className="text-[10px] font-mono text-muted bg-[var(--input-bg)] px-1.5 py-0.5 rounded">
                     {r.issue_date || r.id?.slice(0, 8)}
                   </span>
                 ))}
               </div>
             )}
             <div className="pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-              <p className="text-xs text-gray-400">
-                <span className="text-gray-600 font-medium">{t('vehiclehistory.redFlagsTab.recommendation')}</span>{rec}
+              <p className="text-xs text-muted">
+                <span className="text-dim font-medium">{t('vehiclehistory.redFlagsTab.recommendation')}</span>{rec}
               </p>
             </div>
           </div>
@@ -1103,9 +1103,9 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
 
   if (!hasAny) {
     return (
-      <div className="text-center py-10 text-gray-500 text-sm">
+      <div className="text-center py-10 text-muted text-sm">
         {t('vehiclehistory.related.noneFound')}{' '}
-        <span className="font-mono text-gray-400">{assetNo}</span>.
+        <span className="font-mono text-muted">{assetNo}</span>.
       </div>
     )
   }
@@ -1115,23 +1115,23 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
       {/* Corrective Actions */}
       {actions.length > 0 && (
         <div>
-          <p className="text-sm font-medium text-gray-300 mb-3">{t('vehiclehistory.related.correctiveActions', { count: actions.length })}</p>
+          <p className="text-sm font-medium text-secondary mb-3">{t('vehiclehistory.related.correctiveActions', { count: actions.length })}</p>
           <div className="space-y-2">
             {actions.map(a => (
-              <div key={a.id} className="flex items-center gap-3 bg-gray-800/30 rounded-lg px-4 py-2.5 text-sm flex-wrap">
+              <div key={a.id} className="flex items-center gap-3 bg-[var(--input-bg)] rounded-lg px-4 py-2.5 text-sm flex-wrap">
                 <span className={`text-xs px-2 py-0.5 rounded-full border ${
                   a.status === 'Closed'
                     ? 'bg-green-900/30 text-green-400 border-green-700/40'
                     : 'bg-yellow-900/30 text-yellow-400 border-yellow-700/40'
                 }`}>{a.status || '-'}</span>
-                <span className="text-gray-300 flex-1">{a.title || t('vehiclehistory.related.noTitle')}</span>
-                {a.site && <span className="text-gray-500 text-xs">{a.site}</span>}
+                <span className="text-secondary flex-1">{a.title || t('vehiclehistory.related.noTitle')}</span>
+                {a.site && <span className="text-muted text-xs">{a.site}</span>}
                 {a.priority && (
                   <span className={`text-xs px-1.5 py-0.5 rounded border ${riskBadgeClass(a.priority)}`}>
                     {a.priority}
                   </span>
                 )}
-                {a.due_date && <span className="text-gray-600 text-xs">{a.due_date}</span>}
+                {a.due_date && <span className="text-dim text-xs">{a.due_date}</span>}
               </div>
             ))}
           </div>
@@ -1141,14 +1141,14 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
       {/* RCA Records */}
       {rca.length > 0 && (
         <div>
-          <p className="text-sm font-medium text-gray-300 mb-3">{t('vehiclehistory.related.rootCauseAnalysis', { count: rca.length })}</p>
+          <p className="text-sm font-medium text-secondary mb-3">{t('vehiclehistory.related.rootCauseAnalysis', { count: rca.length })}</p>
           <div className="space-y-2">
             {rca.map(r => (
-              <div key={r.id} className="flex items-center gap-3 bg-gray-800/30 rounded-lg px-4 py-2.5 text-sm flex-wrap">
+              <div key={r.id} className="flex items-center gap-3 bg-[var(--input-bg)] rounded-lg px-4 py-2.5 text-sm flex-wrap">
                 <span className="font-mono text-xs text-blue-400">{r.tyre_serial || '-'}</span>
-                <span className="text-gray-300 flex-1">{r.root_cause || t('vehiclehistory.related.noRootCause')}</span>
-                {r.brand && <span className="text-gray-500 text-xs">{r.brand}</span>}
-                {r.site  && <span className="text-gray-500 text-xs">{r.site}</span>}
+                <span className="text-secondary flex-1">{r.root_cause || t('vehiclehistory.related.noRootCause')}</span>
+                {r.brand && <span className="text-muted text-xs">{r.brand}</span>}
+                {r.site  && <span className="text-muted text-xs">{r.site}</span>}
               </div>
             ))}
           </div>
@@ -1158,18 +1158,18 @@ function RelatedTab({ assetNo, actions, rca, inspections }) {
       {/* Inspections */}
       {inspections.length > 0 && (
         <div>
-          <p className="text-sm font-medium text-gray-300 mb-3">{t('vehiclehistory.related.inspections', { count: inspections.length })}</p>
+          <p className="text-sm font-medium text-secondary mb-3">{t('vehiclehistory.related.inspections', { count: inspections.length })}</p>
           <div className="space-y-2">
             {inspections.map(r => (
-              <div key={r.id} className="flex items-center gap-3 bg-gray-800/30 rounded-lg px-4 py-2.5 text-sm flex-wrap">
+              <div key={r.id} className="flex items-center gap-3 bg-[var(--input-bg)] rounded-lg px-4 py-2.5 text-sm flex-wrap">
                 <span className={`text-xs px-2 py-0.5 rounded-full border ${
                   r.status === 'Completed'
                     ? 'bg-green-900/30 text-green-400 border-green-700/40'
                     : 'bg-blue-900/30 text-blue-400 border-blue-700/40'
                 }`}>{r.status || '-'}</span>
-                <span className="text-gray-300 flex-1 font-mono text-xs">{r.id?.slice(0, 12)}...</span>
-                {r.site && <span className="text-gray-500 text-xs">{r.site}</span>}
-                <span className="text-gray-600 text-xs">{r.created_at?.slice(0, 10) || '-'}</span>
+                <span className="text-secondary flex-1 font-mono text-xs">{r.id?.slice(0, 12)}...</span>
+                {r.site && <span className="text-muted text-xs">{r.site}</span>}
+                <span className="text-dim text-xs">{r.created_at?.slice(0, 10) || '-'}</span>
               </div>
             ))}
           </div>
@@ -1277,11 +1277,11 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
       <div>
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp size={15} className="text-blue-400" />
-          <p className="text-sm font-semibold text-gray-200">{t('vehiclehistory.forecast.healthScoreTitle')}</p>
+          <p className="text-sm font-semibold text-secondary">{t('vehiclehistory.forecast.healthScoreTitle')}</p>
         </div>
 
         {!hasPositions ? (
-          <div className="rounded-lg border border-gray-700/40 bg-gray-800/20 p-6 text-center text-gray-500 text-sm">
+          <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] p-6 text-center text-muted text-sm">
             {t('vehiclehistory.forecast.noPositionData')}
           </div>
         ) : (
@@ -1295,9 +1295,9 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <span className="font-mono text-sm font-semibold text-gray-200">{p.position}</span>
+                      <span className="font-mono text-sm font-semibold text-secondary">{p.position}</span>
                       {p.brand && (
-                        <span className="ml-2 text-xs text-gray-500">{p.brand}</span>
+                        <span className="ml-2 text-xs text-muted">{p.brand}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
@@ -1310,19 +1310,19 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                     </div>
                   </div>
                   {/* Health bar */}
-                  <div className="h-2 rounded-full bg-gray-700/50 overflow-hidden">
+                  <div className="h-2 rounded-full bg-[var(--input-border)] overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all ${colors.bar}`}
                       style={{ width: `${p.healthScore}%` }}
                     />
                   </div>
                   <div className="flex justify-between mt-1">
-                    <span className="text-[10px] text-gray-600">0</span>
+                    <span className="text-[10px] text-dim">0</span>
                     <span className={`text-[10px] font-medium ${colors.text}`}>{p.healthScore}/100</span>
-                    <span className="text-[10px] text-gray-600">100</span>
+                    <span className="text-[10px] text-dim">100</span>
                   </div>
                   {p.issue_date && (
-                    <p className="text-[10px] text-gray-600 mt-1.5">{t('vehiclehistory.forecast.lastRecorded', { date: p.issue_date })}</p>
+                    <p className="text-[10px] text-dim mt-1.5">{t('vehiclehistory.forecast.lastRecorded', { date: p.issue_date })}</p>
                   )}
                 </div>
               )
@@ -1335,18 +1335,18 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
       <div>
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp size={15} className="text-purple-400" />
-          <p className="text-sm font-semibold text-gray-200">{t('vehiclehistory.forecast.replacementForecastTitle')}</p>
+          <p className="text-sm font-semibold text-secondary">{t('vehiclehistory.forecast.replacementForecastTitle')}</p>
         </div>
 
         {!hasPositions ? (
-          <div className="rounded-lg border border-gray-700/40 bg-gray-800/20 p-6 text-center text-gray-500 text-sm">
+          <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] p-6 text-center text-muted text-sm">
             {t('vehiclehistory.forecast.noForecastData')}
           </div>
         ) : (
           <div className="space-y-2">
             {positionScores.map(p => {
               let forecastText = null
-              let forecastClass = 'text-gray-400'
+              let forecastClass = 'text-muted'
               let isDueSoon = false
 
               if (avgMonthlyKm && avgMonthlyKm > 0 && avgKm !== null) {
@@ -1371,11 +1371,11 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                   forecastClass = isDueSoon ? 'text-red-400' : monthsLeft <= 2 ? 'text-orange-400' : 'text-blue-400'
                 } else {
                   forecastText = t('vehiclehistory.forecast.insufficientForecastData')
-                  forecastClass = 'text-gray-500'
+                  forecastClass = 'text-muted'
                 }
               } else {
                 forecastText = t('vehiclehistory.forecast.noKmData')
-                forecastClass = 'text-gray-500'
+                forecastClass = 'text-muted'
               }
 
               return (
@@ -1384,22 +1384,22 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                   className={`flex items-center justify-between rounded-lg px-4 py-3 border ${
                     isDueSoon
                       ? 'bg-red-950/20 border-red-800/40'
-                      : 'bg-gray-800/30 border-gray-700/40'
+                      : 'bg-[var(--input-bg)] border-[var(--input-border)]'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm text-gray-300 w-20">{p.position}</span>
-                    {p.brand && <span className="text-xs text-gray-500">{p.brand}</span>}
+                    <span className="font-mono text-sm text-secondary w-20">{p.position}</span>
+                    {p.brand && <span className="text-xs text-muted">{p.brand}</span>}
                     {/* serial_no disabled - re-enable when ready
                     {p.serial_no && (
-                      <span className="text-[10px] font-mono text-gray-600">{p.serial_no}</span>
+                      <span className="text-[10px] font-mono text-dim">{p.serial_no}</span>
                     )} */}
                   </div>
                   <span className={`text-xs font-medium ${forecastClass}`}>{forecastText}</span>
                 </div>
               )
             })}
-            <p className="text-[10px] text-gray-600 mt-2 pl-1">
+            <p className="text-[10px] text-dim mt-2 pl-1">
               {t('vehiclehistory.forecast.expectedKmPerTyre', { km: expectedKmPerTyre.toLocaleString() })}
               {' '}{fleetRecord?.expected_km_per_tyre ? t('vehiclehistory.forecast.fromFleetMaster') : t('vehiclehistory.forecast.defaultSource')}
               {avgMonthlyKm ? t('vehiclehistory.forecast.avgMonthlyKm', { km: Math.round(avgMonthlyKm).toLocaleString() }) : ''}
@@ -1412,13 +1412,13 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
       <div>
         <div className="flex items-center gap-2 mb-4">
           <AlertTriangle size={15} className="text-orange-400" />
-          <p className="text-sm font-semibold text-gray-200">{t('vehiclehistory.forecast.topActionsTitle')}</p>
+          <p className="text-sm font-semibold text-secondary">{t('vehiclehistory.forecast.topActionsTitle')}</p>
         </div>
 
         {actionItems.length === 0 ? (
           <div className="rounded-lg border border-green-700/30 bg-green-900/10 p-5 text-center">
             <p className="text-green-400 text-sm">{t('vehiclehistory.forecast.allWithinRange')}</p>
-            <p className="text-gray-500 text-xs mt-1">{t('vehiclehistory.forecast.noActionRequired')}</p>
+            <p className="text-muted text-xs mt-1">{t('vehiclehistory.forecast.noActionRequired')}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -1428,14 +1428,14 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
               return (
                 <div
                   key={p.position}
-                  className="flex items-start gap-4 rounded-lg border border-gray-700/40 bg-gray-800/30 px-4 py-3"
+                  className="flex items-start gap-4 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3"
                 >
-                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-700 text-gray-300 text-xs font-bold flex items-center justify-center mt-0.5">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--input-bg)] text-secondary text-xs font-bold flex items-center justify-center mt-0.5">
                     {idx + 1}
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="text-sm font-medium text-gray-200">
+                      <span className="text-sm font-medium text-secondary">
                         {p.position}{p.brand ? ` · ${p.brand}` : ''}
                       </span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${urgency.cls}`}>
@@ -1445,7 +1445,7 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                         {t('vehiclehistory.forecast.healthLabel', { score: p.healthScore })}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400">{t(`vehiclehistory.forecast.${reasonKey}`)}</p>
+                    <p className="text-xs text-muted">{t(`vehiclehistory.forecast.${reasonKey}`)}</p>
                     {p.flagCount > 0 && (
                       <p className="text-[10px] text-orange-400 mt-0.5">{t('vehiclehistory.forecast.associatedFlags', { count: p.flagCount })}</p>
                     )}
@@ -1461,11 +1461,11 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
       <div>
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp size={15} className="text-green-400" />
-          <p className="text-sm font-semibold text-gray-200">{t('vehiclehistory.forecast.costProjectionTitle')}</p>
+          <p className="text-sm font-semibold text-secondary">{t('vehiclehistory.forecast.costProjectionTitle')}</p>
         </div>
 
         {avgMonthlyCost === null ? (
-          <div className="rounded-lg border border-gray-700/40 bg-gray-800/20 p-6 text-center text-gray-500 text-sm">
+          <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] p-6 text-center text-muted text-sm">
             {t('vehiclehistory.forecast.insufficientCostData')}
           </div>
         ) : (
@@ -1482,10 +1482,10 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                     className={`rounded-lg border p-4 text-center ${
                       isOverBudget
                         ? 'bg-red-950/20 border-red-800/40'
-                        : 'bg-gray-800/30 border-gray-700/40'
+                        : 'bg-[var(--input-bg)] border-[var(--input-border)]'
                     }`}
                   >
-                    <p className="text-xs text-gray-500 mb-1">{monthLabel}</p>
+                    <p className="text-xs text-muted mb-1">{monthLabel}</p>
                     <p className={`text-lg font-bold ${isOverBudget ? 'text-red-400' : 'text-green-400'}`}>
                       {currency} {avgMonthlyCost.toLocaleString()}
                     </p>
@@ -1501,10 +1501,10 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
                 )
               })}
             </div>
-            <div className="rounded-lg border border-gray-700/30 bg-gray-800/20 px-4 py-3">
-              <p className="text-xs text-gray-400">
+            <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
+              <p className="text-xs text-muted">
                 {t('vehiclehistory.forecast.basedOnAverageLead')}{' '}
-                <span className="text-white font-semibold">{currency} {avgMonthlyCost.toLocaleString()}</span>
+                <span className="text-[var(--text-primary)] font-semibold">{currency} {avgMonthlyCost.toLocaleString()}</span>
                 {t('vehiclehistory.forecast.basedOnAverageTail', { months: Math.round(spanMonths) })}
                 {monthlyBudget !== null && (
                   <span className="ml-1">

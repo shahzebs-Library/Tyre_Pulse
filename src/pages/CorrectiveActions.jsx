@@ -72,7 +72,7 @@ function KpiCard({ label, value, sub, icon: Icon, color = 'text-blue-400', onCli
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</p>
-          <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
+          <p className={`text-2xl font-bold tabular-nums mt-0.5 ${color}`}>{value}</p>
           {sub !== undefined && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
         </div>
         {Icon && <Icon size={20} className={`${color} opacity-60 flex-shrink-0 mt-0.5`} />}
@@ -96,7 +96,7 @@ function RootCauseBar({ actions }) {
     <div className="card p-4">
       <div className="flex items-center gap-2 mb-3">
         <BarChart2 size={14} className="text-blue-400" />
-        <span className="text-sm font-semibold text-white">{t('correctiveactions.analytics.rootCauseDistribution')}</span>
+        <span className="text-sm font-semibold text-[var(--text-primary)]">{t('correctiveactions.analytics.rootCauseDistribution')}</span>
         <span className="text-xs text-gray-500 ml-auto">{t('correctiveactions.analytics.withCause', { count: actions.filter(a => a.root_cause).length })}</span>
       </div>
       <div className="space-y-2">
@@ -130,7 +130,7 @@ function ActionCard({ a, onEdit, onStatusChange, country }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Icon size={14} className={meta.color} />
-            <h3 className="font-semibold text-white text-sm">
+            <h3 className="font-semibold text-[var(--text-primary)] text-sm">
               {a.title}
               {a.photo_data && <Camera className="inline w-3 h-3 ml-1.5 text-gray-500" title={t('correctiveactions.card.hasPhoto')} />}
             </h3>
@@ -200,7 +200,7 @@ function TableRow({ a, onEdit, onStatusChange, country }) {
       <td className="px-4 py-2.5">
         <div className="flex items-center gap-1.5">
           <Icon size={12} className={meta.color} />
-          <span className="text-sm text-white font-medium">{a.title}</span>
+          <span className="text-sm text-[var(--text-primary)] font-medium">{a.title}</span>
           {a.photo_data && <Camera size={10} className="text-gray-600" />}
         </div>
         {a.root_cause && (
@@ -598,7 +598,7 @@ export default function CorrectiveActions() {
           <div className="card p-4">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp size={14} className="text-blue-400" />
-              <span className="text-sm font-semibold text-white">{t('correctiveactions.analytics.resolutionPerformance')}</span>
+              <span className="text-sm font-semibold text-[var(--text-primary)]">{t('correctiveactions.analytics.resolutionPerformance')}</span>
             </div>
             <div className="space-y-2">
               {[

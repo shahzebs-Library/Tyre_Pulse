@@ -1,161 +1,46 @@
+// CommandPalette.jsx - global Ctrl/Cmd+K command palette (Linear/Notion style).
+// Two result groups: COMMANDS (RBAC-filtered navigation + quick actions) and
+// RECORDS (debounced universal search across Supabase entities). Theme-aware:
+// every surface uses index.css tokens so it renders correctly in light + dark.
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Search,
-  LayoutDashboard,
-  CircleDot,
-  ClipboardList,
-  Bell,
-  Package,
-  Truck,
-  FileText,
-  ClipboardCheck,
-  BarChart2,
-  Target,
-  Activity,
-  TrendingUp,
-  GitCompare,
-  Cpu,
-  Presentation,
-  Zap,
-  AlertTriangle,
-  Heart,
-  MapPin,
-  Gauge,
-  Wrench,
-  Building2,
-  Trash2,
-  ArrowLeftRight,
-  RefreshCw,
-  ShoppingCart,
-  Users,
-  Shield,
-  AlertCircle,
-  RefreshCcw,
-  Calendar,
-  Radio,
-  CalendarCheck,
-  Upload,
-  History,
-  UserCog,
-  Settings,
-  QrCode,
-  Tag,
+  Search, LayoutDashboard, CircleDot, ClipboardList, Bell, Package, Truck,
+  FileText, ClipboardCheck, BarChart2, Target, Activity, TrendingUp,
+  GitCompare, Cpu, Presentation, Zap, AlertTriangle, Heart, MapPin, Gauge,
+  Wrench, Building2, Trash2, ArrowLeftRight, RefreshCw, ShoppingCart, Users,
+  Shield, AlertCircle, RefreshCcw, Calendar, Radio, CalendarCheck, Upload,
+  History, UserCog, Settings, QrCode, Tag, LayoutGrid, Clock, CornerDownLeft,
+  Loader2, WifiOff,
 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import { useCommandPalette } from '../contexts/CommandPaletteContext'
+import { useFeatureGate } from '../hooks/useFeatureFlags'
 import { useLanguage } from '../contexts/LanguageContext'
+import {
+  NAV_COMMANDS, ACTION_COMMANDS, RECORD_SOURCES,
+  visibleCommands, visibleRecordSources, rankCommands, buildOrClause, mapRecordRows,
+} from '../lib/commandSearch'
 
-// ── Icon lookup map ───────────────────────────────────────────────────────────
+// ── Icon lookup ───────────────────────────────────────────────────────────────
 const ICON_MAP = {
-  LayoutDashboard,
-  CircleDot,
-  ClipboardList,
-  Bell,
-  Package,
-  Truck,
-  FileText,
-  ClipboardCheck,
-  BarChart2,
-  Target,
-  Activity,
-  TrendingUp,
-  GitCompare,
-  Cpu,
-  Presentation,
-  Zap,
-  Search,
-  AlertTriangle,
-  Heart,
-  MapPin,
-  Gauge,
-  Wrench,
-  Building2,
-  Trash2,
-  ArrowLeftRight,
-  RefreshCw,
-  ShoppingCart,
-  Users,
-  Shield,
-  AlertCircle,
-  RefreshCcw,
-  Calendar,
-  Radio,
-  CalendarCheck,
-  Upload,
-  History,
-  UserCog,
-  Settings,
-  QrCode,
-  Tag,
+  LayoutDashboard, CircleDot, ClipboardList, Bell, Package, Truck, FileText,
+  ClipboardCheck, BarChart2, Target, Activity, TrendingUp, GitCompare, Cpu,
+  Presentation, Zap, Search, AlertTriangle, Heart, MapPin, Gauge, Wrench,
+  Building2, Trash2, ArrowLeftRight, RefreshCw, ShoppingCart, Users, Shield,
+  AlertCircle, RefreshCcw, Calendar, Radio, CalendarCheck, Upload, History,
+  UserCog, Settings, QrCode, Tag, LayoutGrid, Clock,
 }
 
-// ── Nav items ─────────────────────────────────────────────────────────────────
-const NAV_ITEMS = [
-  // Core
-  { id: 'dashboard',      label: 'Dashboard',              path: '/',                           icon: 'LayoutDashboard',  group: 'Navigation' },
-  { id: 'tyres',          label: 'Tyre Records',           path: '/tyres',                      icon: 'CircleDot',        group: 'Navigation' },
-  { id: 'inspections',    label: 'Inspections',            path: '/inspections',                icon: 'ClipboardList',    group: 'Navigation' },
-  { id: 'alerts',         label: 'Alerts',                 path: '/alerts',                     icon: 'Bell',             group: 'Navigation' },
-  { id: 'stock',          label: 'Stock Management',       path: '/stock',                      icon: 'Package',          group: 'Navigation' },
-  { id: 'fleet-master',   label: 'Fleet Master',           path: '/fleet-master',               icon: 'Truck',            group: 'Navigation' },
-  { id: 'reports',        label: 'Reports',                path: '/reports',                    icon: 'FileText',         group: 'Navigation' },
-  { id: 'gate-pass',      label: 'Gate Pass',              path: '/gate-pass',                  icon: 'ClipboardCheck',   group: 'Navigation' },
-  // Analytics
-  { id: 'analytics',      label: 'Analytics',              path: '/analytics',                  icon: 'BarChart2',        group: 'Navigation' },
-  { id: 'kpi',            label: 'KPI Scorecard',          path: '/kpi',                        icon: 'Target',           group: 'Navigation' },
-  { id: 'fleet',          label: 'Fleet Analytics',        path: '/fleet',                      icon: 'Activity',         group: 'Navigation' },
-  { id: 'brand-perf',     label: 'Brand Performance',      path: '/brand-perf',                 icon: 'TrendingUp',       group: 'Navigation' },
-  { id: 'site-comp',      label: 'Site Comparison',        path: '/site-comp',                  icon: 'GitCompare',       group: 'Navigation' },
-  { id: 'ai',             label: 'AI Analytics',           path: '/ai',                         icon: 'Cpu',              group: 'Navigation' },
-  { id: 'executive-report', label: 'Executive Report',     path: '/executive-report',           icon: 'Presentation',     group: 'Navigation' },
-  { id: 'forecasting',    label: 'Forecasting Engine',     path: '/forecasting',                icon: 'TrendingUp',       group: 'Navigation' },
-  // Intelligence
-  { id: 'predictive-maintenance', label: 'Predictive Maintenance', path: '/predictive-maintenance', icon: 'Zap',          group: 'Navigation' },
-  { id: 'root-cause',     label: 'Root Cause Engine',      path: '/root-cause',                 icon: 'Search',           group: 'Navigation' },
-  { id: 'anomalies',      label: 'Anomalies',              path: '/anomalies',                  icon: 'AlertTriangle',    group: 'Navigation' },
-  { id: 'fleet-health',   label: 'Fleet Health Board',     path: '/fleet-health',               icon: 'Heart',            group: 'Navigation' },
-  { id: 'ai-command-center', label: 'AI Command Center',   path: '/ai-command-center',          icon: 'Cpu',              group: 'Navigation' },
-  { id: 'position-intelligence', label: 'Position Intelligence', path: '/position-intelligence', icon: 'MapPin',          group: 'Navigation' },
-  { id: 'pressure-intel', label: 'Pressure Intelligence',  path: '/pressure-intel',             icon: 'Gauge',            group: 'Navigation' },
-  // Operations
-  { id: 'work-orders',    label: 'Work Orders',            path: '/work-orders',                icon: 'Wrench',           group: 'Navigation' },
-  { id: 'workshop',       label: 'Workshop Management',    path: '/workshop',                   icon: 'Building2',        group: 'Navigation' },
-  { id: 'scrap',          label: 'Tyre Scrap',             path: '/scrap',                      icon: 'Trash2',           group: 'Navigation' },
-  { id: 'tyre-exchange',  label: 'Tyre Exchange',          path: '/tyre-exchange',              icon: 'ArrowLeftRight',   group: 'Navigation' },
-  { id: 'retread',        label: 'Retread Management',     path: '/retread',                    icon: 'RefreshCw',        group: 'Navigation' },
-  { id: 'procurement',    label: 'Procurement',            path: '/procurement',                icon: 'ShoppingCart',     group: 'Navigation' },
-  { id: 'suppliers',      label: 'Supplier Management',    path: '/suppliers',                  icon: 'Users',            group: 'Navigation' },
-  { id: 'warranty',       label: 'Warranty Tracker',       path: '/warranty',                   icon: 'Shield',           group: 'Navigation' },
-  { id: 'recall-tracker', label: 'Recall Tracker',         path: '/recall-tracker',             icon: 'AlertCircle',      group: 'Navigation' },
-  { id: 'rotation',       label: 'Rotation Schedule',      path: '/rotation',                   icon: 'RefreshCcw',       group: 'Navigation' },
-  { id: 'daily-ops',      label: 'Daily Operations',       path: '/daily-ops',                  icon: 'Calendar',         group: 'Navigation' },
-  { id: 'live-fleet',     label: 'Live Fleet Status',      path: '/live-fleet',                 icon: 'Radio',            group: 'Navigation' },
-  { id: 'inspection-planner', label: 'Inspection Planner', path: '/inspection-planner',         icon: 'CalendarCheck',    group: 'Navigation' },
-  // Data & Admin
-  { id: 'upload',         label: 'Upload Data',            path: '/upload',                     icon: 'Upload',           group: 'Navigation' },
-  { id: 'audit',          label: 'Audit Trail',            path: '/audit',                      icon: 'History',          group: 'Navigation' },
-  { id: 'users',          label: 'User Management',        path: '/users',                      icon: 'UserCog',          group: 'Navigation' },
-  { id: 'settings',       label: 'Settings',               path: '/settings',                   icon: 'Settings',         group: 'Navigation' },
-  { id: 'scan',           label: 'Tyre Scan (QR)',         path: '/scan',                       icon: 'QrCode',           group: 'Navigation' },
-  { id: 'qr-labels',      label: 'QR Labels',              path: '/qr-labels',                  icon: 'Tag',              group: 'Navigation' },
-]
-
-const ACTIONS = [
-  { id: 'action-upload',   label: 'Upload Excel Data',    path: '/upload',   icon: 'Upload',   group: 'Actions' },
-  { id: 'action-scan',     label: 'Scan a Tyre QR Code',  path: '/scan',     icon: 'QrCode',   group: 'Actions' },
-  { id: 'action-settings', label: 'Open Settings',        path: '/settings', icon: 'Settings', group: 'Actions' },
-  { id: 'action-alerts',   label: 'View Active Alerts',   path: '/alerts',   icon: 'Bell',     group: 'Actions' },
-]
-
-const ALL_SEARCHABLE = [...NAV_ITEMS, ...ACTIONS]
-
-// ── localStorage helpers ──────────────────────────────────────────────────────
+// ── Recent items (localStorage) ──────────────────────────────────────────────
 const STORAGE_KEY = 'tp_recent_commands'
 const MAX_RECENT = 5
 
 function loadRecent() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
@@ -164,60 +49,74 @@ function loadRecent() {
 function saveRecent(item) {
   try {
     const prev = loadRecent().filter((r) => r.id !== item.id)
-    const next = [{ id: item.id, label: item.label, path: item.path, icon: item.icon, group: item.group }, ...prev].slice(0, MAX_RECENT)
+    const next = [
+      { id: item.id, label: item.label, path: item.path, icon: item.icon, sub: item.sub },
+      ...prev,
+    ].slice(0, MAX_RECENT)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  } catch {
-    // silently ignore storage errors
-  }
+  } catch { /* ignore storage errors */ }
 }
 
-// ── Icon renderer ─────────────────────────────────────────────────────────────
-function ItemIcon({ name, size = 16 }) {
-  const Icon = ICON_MAP[name]
-  if (!Icon) return null
+function ItemIcon({ name, size = 15 }) {
+  const Icon = ICON_MAP[name] || Search
   return <Icon size={size} />
 }
 
-// ── Result item ───────────────────────────────────────────────────────────────
-function ResultItem({ item, isActive, onSelect, onHover, index }) {
+// ── Row ───────────────────────────────────────────────────────────────────────
+function ResultRow({ item, isActive, index, onSelect, onHover }) {
   const ref = useRef(null)
-
   useEffect(() => {
-    if (isActive && ref.current) {
-      ref.current.scrollIntoView({ block: 'nearest' })
-    }
+    if (isActive && ref.current) ref.current.scrollIntoView({ block: 'nearest' })
   }, [isActive])
 
   return (
     <div
       ref={ref}
+      id={`cp-item-${item.id}`}
       role="option"
       aria-selected={isActive}
-      className={[
-        'flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none transition-colors',
-        isActive
-          ? 'bg-orange-500/10 text-white border-l-2 border-orange-500'
-          : 'text-gray-300 border-l-2 border-transparent hover:bg-gray-800',
-      ].join(' ')}
-      onMouseEnter={() => onHover(index)}
-      onMouseDown={(e) => {
-        e.preventDefault()
-        onSelect(item)
+      className="flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none transition-colors"
+      style={{
+        background: isActive ? 'var(--brand-subtle)' : 'transparent',
+        borderLeft: isActive ? '2px solid var(--brand)' : '2px solid transparent',
       }}
+      onMouseEnter={() => onHover(index)}
+      onMouseDown={(e) => { e.preventDefault(); onSelect(item) }}
     >
-      <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center text-gray-400">
-        <ItemIcon name={item.icon} size={15} />
+      <div
+        className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center"
+        style={{
+          background: 'var(--input-bg)',
+          border: '1px solid var(--border-dim)',
+          color: isActive ? 'var(--brand-bright)' : 'var(--text-muted)',
+        }}
+      >
+        <ItemIcon name={item.icon} />
       </div>
-      <span className="flex-1 text-sm font-medium truncate">{item.label}</span>
-      <span className="text-[11px] text-gray-600 truncate hidden sm:block">{item.path}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+          {item.label}
+        </p>
+        {item.sub && (
+          <p className="text-xs truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>{item.sub}</p>
+        )}
+      </div>
+      {item.path && !item.sub && (
+        <span className="text-[11px] truncate hidden sm:block" style={{ color: 'var(--text-dim)' }}>
+          {item.path}
+        </span>
+      )}
+      {isActive && <CornerDownLeft size={13} style={{ color: 'var(--text-dim)' }} className="flex-shrink-0" />}
     </div>
   )
 }
 
-// ── Group header ──────────────────────────────────────────────────────────────
 function GroupHeader({ label }) {
   return (
-    <div className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 px-4 py-2 mt-1 first:mt-0">
+    <div
+      className="text-[10px] font-semibold uppercase tracking-widest px-4 pt-3 pb-1.5"
+      style={{ color: 'var(--text-dim)' }}
+    >
       {label}
     </div>
   )
@@ -226,205 +125,274 @@ function GroupHeader({ label }) {
 // ── Main component ────────────────────────────────────────────────────────────
 export default function CommandPalette() {
   const { open, setOpen } = useCommandPalette()
+  const paletteEnabled = useFeatureGate('command_palette')
+  const { profile, hasPermission } = useAuth()
   const navigate = useNavigate()
   const { t } = useLanguage()
-  const groupLabel = (label) => t(`ui.command.groups.${label.toLowerCase()}`)
+
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
+  const [recordGroups, setRecordGroups] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState(false)
   const inputRef = useRef(null)
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
 
-  // ── Ctrl/Cmd+K listener ───────────────────────────────────────────────────
-  useEffect(() => {
-    function onKeyDown(e) {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault()
-        setOpen((prev) => !prev)
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [setOpen])
+  // ── RBAC-filtered command lists (same rules as the sidebar nav + ModuleRoute)
+  const navCommands = useMemo(
+    () => visibleCommands(NAV_COMMANDS, profile, hasPermission),
+    [profile, hasPermission],
+  )
+  const actionCommands = useMemo(
+    () => visibleCommands(ACTION_COMMANDS, profile, hasPermission),
+    [profile, hasPermission],
+  )
+  const allowedPaths = useMemo(
+    () => new Set([...navCommands, ...actionCommands].map((c) => c.path)),
+    [navCommands, actionCommands],
+  )
 
-  // ── Focus input when opened ───────────────────────────────────────────────
+  // ── Reset on open + focus input ────────────────────────────────────────────
   useEffect(() => {
     if (open) {
       setQuery('')
       setActiveIndex(0)
-      // defer to next frame so the element is mounted
+      setRecordGroups([])
+      setSearchError(false)
       requestAnimationFrame(() => inputRef.current?.focus())
     }
   }, [open])
 
-  // ── Build result groups ───────────────────────────────────────────────────
-  const groups = useMemo(() => {
-    const q = query.trim().toLowerCase()
-
-    if (!q) {
-      const recents = loadRecent()
-      const result = []
-      if (recents.length > 0) {
-        result.push({ label: 'Recent', items: recents })
+  // ── Debounced (300ms) universal record search across Supabase ──────────────
+  useEffect(() => {
+    if (!open) return undefined
+    const q = query.trim()
+    if (q.length < 2) {
+      setRecordGroups([])
+      setSearching(false)
+      setSearchError(false)
+      return undefined
+    }
+    let cancelled = false
+    setSearching(true)
+    setSearchError(false)
+    const timer = setTimeout(async () => {
+      const sources = visibleRecordSources(RECORD_SOURCES, profile, hasPermission)
+      if (sources.length === 0) {
+        if (!cancelled) { setRecordGroups([]); setSearching(false) }
+        return
       }
-      result.push({ label: 'Actions', items: ACTIONS })
-      result.push({ label: 'Navigation', items: NAV_ITEMS.slice(0, 8) })
+      const settled = await Promise.allSettled(
+        sources.map((s) => {
+          const orClause = buildOrClause(s.fields, q)
+          if (!orClause) return Promise.resolve({ data: [] })
+          return supabase.from(s.table).select(s.select).or(orClause).limit(5)
+        }),
+      )
+      if (cancelled) return
+      const groups = []
+      let anyOk = false
+      settled.forEach((res, i) => {
+        if (res.status === 'fulfilled' && !res.value?.error) {
+          anyOk = true
+          const items = mapRecordRows(sources[i], res.value?.data)
+          if (items.length) groups.push({ label: sources[i].label, items })
+        }
+      })
+      setRecordGroups(groups)
+      setSearchError(!anyOk)
+      setSearching(false)
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query, open, profile, hasPermission])
+
+  // ── Build the visible group list ────────────────────────────────────────────
+  const groups = useMemo(() => {
+    const q = query.trim()
+    if (!q) {
+      const result = []
+      const recents = loadRecent().filter((r) => allowedPaths.has(r.path) || r.path?.startsWith('/vehicle/'))
+      if (recents.length) result.push({ label: t('ui.command.groups.recent'), items: recents })
+      if (actionCommands.length) result.push({ label: t('ui.command.groups.actions'), items: actionCommands })
+      result.push({ label: t('ui.command.groups.navigation'), items: navCommands.slice(0, 8) })
       return result
     }
+    const result = []
+    const commands = rankCommands([...actionCommands, ...navCommands], q, 8)
+    if (commands.length) result.push({ label: t('ui.command.groups.commands'), items: commands })
+    for (const g of recordGroups) result.push({ label: g.label, items: g.items })
+    return result
+  }, [query, navCommands, actionCommands, allowedPaths, recordGroups, t])
 
-    const matched = ALL_SEARCHABLE.filter((item) =>
-      item.label.toLowerCase().includes(q) || item.path.toLowerCase().includes(q)
-    )
-
-    const byGroup = {}
-    for (const item of matched) {
-      if (!byGroup[item.group]) byGroup[item.group] = []
-      byGroup[item.group].push(item)
-    }
-
-    // order: Recent first, then Navigation, then Actions
-    const order = ['Recent', 'Navigation', 'Actions']
-    return order
-      .filter((g) => byGroup[g]?.length)
-      .map((g) => ({ label: g, items: byGroup[g] }))
-  }, [query, open]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // flat list for keyboard nav
   const flatItems = useMemo(() => groups.flatMap((g) => g.items), [groups])
 
-  // reset active index when results change
-  useEffect(() => {
-    setActiveIndex(0)
-  }, [query])
+  useEffect(() => { setActiveIndex(0) }, [query, recordGroups])
 
-  // ── Keyboard navigation ───────────────────────────────────────────────────
-  const handleKeyDown = useCallback(
-    (e) => {
-      if (e.key === 'Escape') {
-        setOpen(false)
-        return
-      }
+  // ── Select ──────────────────────────────────────────────────────────────────
+  const handleSelect = useCallback((item) => {
+    saveRecent(item)
+    setOpen(false)
+    navigate(item.path)
+  }, [navigate, setOpen])
+
+  // ── Keyboard: Esc / arrows / Enter / focus trap (document-level while open) ─
+  useEffect(() => {
+    if (!open) return undefined
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); setOpen(false); return }
+      if (e.key === 'Tab') { e.preventDefault(); inputRef.current?.focus(); return }
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        setActiveIndex((i) => Math.min(i + 1, flatItems.length - 1))
+        setActiveIndex((i) => (flatItems.length ? Math.min(i + 1, flatItems.length - 1) : 0))
         return
       }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setActiveIndex((i) => Math.max(i - 1, 0))
-        return
-      }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex((i) => Math.max(i - 1, 0)); return }
       if (e.key === 'Enter') {
         e.preventDefault()
         const item = flatItems[activeIndex]
         if (item) handleSelect(item)
-        return
       }
-    },
-    [flatItems, activeIndex] // eslint-disable-line react-hooks/exhaustive-deps
-  )
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, flatItems, activeIndex, handleSelect, setOpen])
 
-  // ── Select handler ────────────────────────────────────────────────────────
-  const handleSelect = useCallback(
-    (item) => {
-      saveRecent(item)
-      setOpen(false)
-      navigate(item.path)
-    },
-    [navigate, setOpen]
-  )
-
-  if (!open) return null
+  if (!paletteEnabled || !open) return null
 
   const hasResults = flatItems.length > 0
+  const showNoResults = !hasResults && !searching && query.trim().length > 0
+
+  let globalIndex = 0
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-center"
+      className="fixed inset-0 z-[100] flex items-start justify-center pt-[14vh] px-4"
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) setOpen(false)
-      }}
+      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
     >
-      <div className="max-w-2xl w-full mx-4 mt-[15vh] h-fit">
-        <div className="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
-
-          {/* ── Search input bar ─────────────────────────────────────────── */}
-          <div className="flex items-center gap-3 px-4 border-b border-gray-800">
-            <Search size={18} className="text-gray-500 flex-shrink-0" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={t('ui.command.placeholder', { key: isMac ? '⌘' : 'Ctrl' })}
-              className="flex-1 bg-transparent text-white text-lg py-4 outline-none placeholder:text-gray-500"
-              autoComplete="off"
-              spellCheck={false}
-              role="combobox"
-              aria-expanded={hasResults}
-              aria-autocomplete="list"
-              aria-activedescendant={flatItems[activeIndex] ? `cp-item-${flatItems[activeIndex].id}` : undefined}
-            />
-            <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-800 text-gray-500 text-[11px] font-mono border border-gray-700 select-none">
-              Esc
-            </kbd>
-          </div>
-
-          {/* ── Results list ─────────────────────────────────────────────── */}
-          <div
-            className="max-h-[60vh] overflow-y-auto overscroll-contain py-1"
-            role="listbox"
-            aria-label="Results"
+      <div
+        className="w-full max-w-2xl overflow-hidden"
+        style={{
+          background: 'var(--panel)',
+          color: 'var(--text-primary)',
+          border: '1px solid var(--border-bright)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-float)',
+        }}
+      >
+        {/* ── Input bar ─────────────────────────────────────────────────────── */}
+        <div
+          className="flex items-center gap-3 px-4"
+          style={{ borderBottom: '1px solid var(--border-dim)' }}
+        >
+          {searching
+            ? <Loader2 size={17} className="animate-spin flex-shrink-0" style={{ color: 'var(--brand)' }} />
+            : <Search size={17} className="flex-shrink-0" style={{ color: 'var(--text-muted)' }} />}
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('ui.command.placeholder', { key: isMac ? '⌘' : 'Ctrl+' })}
+            className="flex-1 bg-transparent text-base py-3.5 outline-none"
+            style={{ color: 'var(--text-primary)' }}
+            autoComplete="off"
+            spellCheck={false}
+            role="combobox"
+            aria-expanded={hasResults}
+            aria-autocomplete="list"
+            aria-activedescendant={flatItems[activeIndex] ? `cp-item-${flatItems[activeIndex].id}` : undefined}
+          />
+          <kbd
+            className="hidden sm:inline-flex items-center px-2 py-1 rounded-md text-[11px] font-mono select-none cursor-pointer"
+            style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)', color: 'var(--text-muted)' }}
+            onClick={() => setOpen(false)}
           >
-            {hasResults ? (
-              (() => {
-                let globalIndex = 0
-                return groups.map((group) => (
-                  <div key={group.label}>
-                    <GroupHeader label={groupLabel(group.label)} />
-                    {group.items.map((item) => {
-                      const idx = globalIndex++
-                      return (
-                        <ResultItem
-                          key={item.id}
-                          item={item}
-                          index={idx}
-                          isActive={activeIndex === idx}
-                          onSelect={handleSelect}
-                          onHover={setActiveIndex}
-                        />
-                      )
-                    })}
-                  </div>
-                ))
-              })()
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-gray-500 text-sm">
-                <Search size={32} className="mb-3 text-gray-700" />
-                {t('ui.search.noResultsFor')} &ldquo;{query}&rdquo;
-              </div>
-            )}
-          </div>
+            Esc
+          </kbd>
+        </div>
 
-          {/* ── Footer ───────────────────────────────────────────────────── */}
-          <div className="border-t border-gray-800 px-4 py-2.5 flex items-center gap-4 text-[11px] text-gray-600">
-            <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 font-mono">↑</kbd>
-              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 font-mono">↓</kbd>
-              {t('ui.hints.navigate')}
+        {/* ── Results ───────────────────────────────────────────────────────── */}
+        <div className="max-h-[55vh] overflow-y-auto overscroll-contain pb-1" role="listbox" aria-label="Results">
+          {groups.map((group) => (
+            <div key={group.label}>
+              <GroupHeader label={group.label} />
+              {group.items.map((item) => {
+                const idx = globalIndex++
+                return (
+                  <ResultRow
+                    key={item.id}
+                    item={item}
+                    index={idx}
+                    isActive={activeIndex === idx}
+                    onSelect={handleSelect}
+                    onHover={setActiveIndex}
+                  />
+                )
+              })}
+            </div>
+          ))}
+
+          {/* Record search error (commands still shown above) */}
+          {searchError && !searching && (
+            <div className="flex items-center gap-2 px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+              <WifiOff size={14} style={{ color: 'var(--text-dim)' }} />
+              {t('ui.command.searchError')}
+            </div>
+          )}
+
+          {/* Loading state when nothing rendered yet */}
+          {!hasResults && searching && (
+            <div className="flex flex-col items-center justify-center py-10 gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+              <Loader2 size={22} className="animate-spin" style={{ color: 'var(--brand)' }} />
+              {t('common.loading')}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {showNoResults && !searchError && (
+            <div className="flex flex-col items-center justify-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>
+              <Search size={28} className="mb-3" style={{ color: 'var(--text-dim)' }} />
+              {t('ui.search.noResultsFor')} &ldquo;{query}&rdquo;
+              <span className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>
+                {t('ui.search.noResultsHint')}
+              </span>
+            </div>
+          )}
+          {showNoResults && searchError && (
+            <div className="flex flex-col items-center justify-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>
+              <WifiOff size={28} className="mb-3" style={{ color: 'var(--text-dim)' }} />
+              {t('ui.command.searchError')}
+            </div>
+          )}
+        </div>
+
+        {/* ── Footer ────────────────────────────────────────────────────────── */}
+        <div
+          className="px-4 py-2.5 flex items-center gap-4 text-[11px]"
+          style={{ borderTop: '1px solid var(--border-dim)', color: 'var(--text-dim)' }}
+        >
+          {[
+            { keys: ['↑', '↓'], label: t('ui.hints.navigate') },
+            { keys: ['↵'], label: t('ui.hints.open') },
+            { keys: ['esc'], label: t('ui.hints.close') },
+          ].map(({ keys, label }) => (
+            <span key={label} className="flex items-center gap-1">
+              {keys.map((k) => (
+                <kbd
+                  key={k}
+                  className="px-1.5 py-0.5 rounded font-mono"
+                  style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}
+                >
+                  {k}
+                </kbd>
+              ))}
+              {label}
             </span>
-            <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 font-mono">↵</kbd>
-              {t('ui.hints.open')}
-            </span>
-            <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 font-mono">esc</kbd>
-              {t('ui.hints.close')}
-            </span>
-          </div>
+          ))}
         </div>
       </div>
     </div>

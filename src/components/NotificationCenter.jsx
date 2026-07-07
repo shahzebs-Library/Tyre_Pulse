@@ -4,7 +4,8 @@
  * Severity-coded rows, relative timestamps, individual dismiss, mark-all-read, clear-all.
  */
 
-import { useRef, useEffect, useCallback, useState } from 'react'
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bell,
@@ -13,9 +14,13 @@ import {
   CheckCircle,
   AlertTriangle,
   AlertOctagon,
+  ArrowRight,
+  RefreshCw,
   Info,
 } from 'lucide-react'
-import { useRealtimeAlerts, SEVERITY_COLORS } from '../hooks/useRealtimeAlerts'
+import { useRealtimeAlerts } from '../hooks/useRealtimeAlerts'
+import { useFeatureGate } from '../hooks/useFeatureFlags'
+import { groupByDay } from '../lib/notifications'
 
 // ─── Severity config ──────────────────────────────────────────────────────────
 
@@ -137,12 +142,50 @@ function EmptyState() {
   )
 }
 
+function LoadingState() {
+  return (
+    <div className="px-3 py-3 space-y-3" aria-label="Loading notifications">
+      {[0, 1, 2].map(i => (
+        <div key={i} className="flex gap-3 animate-pulse">
+          <div className="w-4 h-4 rounded bg-gray-800 flex-shrink-0" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-2.5 bg-gray-800 rounded w-3/4" />
+            <div className="h-2 bg-gray-800/70 rounded w-full" />
+            <div className="h-2 bg-gray-800/50 rounded w-1/3" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ErrorState({ message, onRetry }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-8 px-4 gap-3">
+      <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+        <AlertTriangle size={18} className="text-red-400" />
+      </div>
+      <p className="text-xs text-gray-500 text-center">{message || 'Failed to load notifications'}</p>
+      <button
+        onClick={onRetry}
+        className="flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-green-400 transition-colors border border-gray-700/60 rounded-md px-2 py-1"
+      >
+        <RefreshCw size={11} />
+        Retry
+      </button>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function NotificationCenter() {
   const {
     notifications,
     unreadCount,
+    loading,
+    error,
+    refresh,
     markRead,
     markAllRead,
     clearAll,
@@ -150,6 +193,7 @@ export default function NotificationCenter() {
     relativeTime,
   } = useRealtimeAlerts()
 
+  const notificationsEnabled = useFeatureGate('notifications_center')
   const [open, setOpen] = useState(false)
   const panelRef  = useRef(null)
   const buttonRef = useRef(null)
@@ -183,6 +227,9 @@ export default function NotificationCenter() {
   }, [])
 
   const hasCritical = notifications.some(n => n.severity === 'Critical' && !n.read)
+  const dayGroups = useMemo(() => groupByDay(notifications), [notifications])
+
+  if (!notificationsEnabled) return null
 
   return (
     <div className="relative flex-shrink-0">
@@ -261,33 +308,56 @@ export default function NotificationCenter() {
 
             {/* Notification list */}
             <div className="max-h-96 overflow-y-auto overflow-x-hidden">
-              <AnimatePresence initial={false}>
-                {notifications.length === 0
-                  ? <EmptyState key="empty" />
-                  : notifications.map(notif => (
-                      <NotificationRow
-                        key={notif.id}
-                        notification={notif}
-                        onMarkRead={markRead}
-                        onDismiss={dismiss}
-                        relativeTime={relativeTime}
-                      />
-                    ))
-                }
-              </AnimatePresence>
+              {loading && notifications.length === 0 ? (
+                <LoadingState />
+              ) : error && notifications.length === 0 ? (
+                <ErrorState message={error} onRetry={refresh} />
+              ) : notifications.length === 0 ? (
+                <EmptyState />
+              ) : (
+                dayGroups.map(group => (
+                  <div key={group.key}>
+                    <div
+                      className="sticky top-0 z-10 px-3 py-1 bg-gray-900/95 backdrop-blur-sm text-[10px] font-semibold uppercase tracking-wider text-gray-600"
+                      style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                    >
+                      {group.label}
+                    </div>
+                    <AnimatePresence initial={false}>
+                      {group.items.map(notif => (
+                        <NotificationRow
+                          key={notif.id}
+                          notification={notif}
+                          onMarkRead={markRead}
+                          onDismiss={dismiss}
+                          relativeTime={relativeTime}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                ))
+              )}
             </div>
 
             {/* Footer */}
-            {notifications.length > 0 && (
-              <div
-                className="px-3 py-2 text-center"
-                style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
-              >
+            <div
+              className="flex items-center justify-between px-3 py-2"
+              style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
+            >
+              {notifications.length > 0 ? (
                 <span className="text-[10px] text-gray-700">
                   Showing {notifications.length} of {MAX_NOTIFICATIONS_LABEL} max
                 </span>
-              </div>
-            )}
+              ) : <span />}
+              <Link
+                to="/alerts"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-green-400 transition-colors"
+              >
+                View all
+                <ArrowRight size={11} />
+              </Link>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

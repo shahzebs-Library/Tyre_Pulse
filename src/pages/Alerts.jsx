@@ -174,9 +174,8 @@ export default function Alerts() {
               transition={{ delay: i * 0.06, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               onClick={() => setSevFilter(isActive ? 'all' : key)}
               className={cn(
-                'card text-left transition-all duration-200',
-                'hover:scale-[1.02] hover:-translate-y-0.5',
-                isActive && `ring-1 ${s.ring} shadow-[0_0_20px_rgba(0,0,0,0.3)]`
+                'card text-left transition-colors duration-200',
+                isActive && `ring-1 ${s.ring} shadow-[var(--shadow-card)]`
               )}
             >
               <div className="flex items-center justify-between mb-2">
@@ -313,7 +312,7 @@ export default function Alerts() {
           className="card py-16 flex flex-col items-center gap-3"
         >
           <CheckCircle2 className="w-10 h-10 text-brand-bright opacity-60" />
-          <p className="text-white font-semibold">
+          <p className="text-[var(--text-primary)] font-semibold">
             {sevFilter !== 'all' || typeFilter !== 'all' || search ? t('alerts.states.noMatch') : t('alerts.states.allClear')}
           </p>
           <p className="text-muted text-sm">

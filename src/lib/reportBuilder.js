@@ -408,7 +408,13 @@ export function applyAggregations(rows, config) {
   return { rows: outRows, columns }
 }
 
-// ── Saved reports persistence (app_settings, same pattern as lib/api/erp.js) ──
+// ── Saved reports persistence ────────────────────────────────────────────────
+// The canonical persistence entry points live in lib/api/savedViews.js, which
+// prefers the V102 `report_definitions` table (per-user rows) and falls back to
+// the legacy app_settings blob below when that table is not yet applied.
+// Pages import listReports/saveReport/deleteReport/renameReport from there.
+// The functions below remain the LEGACY (app_settings) primitives that
+// savedViews consumes as its fallback path — do not call them directly from UI.
 export const SAVED_REPORTS_KEY = 'saved_reports'
 
 function parseSavedValue(value) {

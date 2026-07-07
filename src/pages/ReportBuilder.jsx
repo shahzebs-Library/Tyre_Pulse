@@ -11,9 +11,12 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import {
   AGG_FNS, DATASETS, DATASET_LIST, DEFAULT_LIMIT, LIST_OPS, MAX_LIMIT,
   OPERATORS, OPERATOR_LABELS, RANGE_OPS, VALUELESS_OPS,
-  applyAggregations, buildQuery, fetchSavedReports, makeSavedReport,
-  persistSavedReports, validateConfig,
+  applyAggregations, buildQuery, makeSavedReport, validateConfig,
 } from '../lib/reportBuilder'
+import {
+  listReports, saveReport, deleteReport as deleteSavedReport,
+  renameReport as renameSavedReport, reportSaveTarget,
+} from '../lib/api/savedViews'
 
 /**
  * Report Builder — self-service reporting. Users pick a dataset, choose and
@@ -113,7 +116,7 @@ export default function ReportBuilder() {
     setSavedLoading(true)
     setSavedError(null)
     try {
-      setSaved(await fetchSavedReports(supabase))
+      setSaved(await listReports())
     } catch (e) {
       setSavedError(e.message)
     } finally {
@@ -253,12 +256,16 @@ export default function ReportBuilder() {
         config: check.config,
         createdBy: profile?.id || user?.id || user?.email || null,
       })
-      const next = await persistSavedReports(supabase, [record, ...saved])
-      setSaved(next)
+      await saveReport(record, saved)
+      setSaved([record, ...saved.filter(r => r.id !== record.id)])
       setActiveReportName(record.name)
       setShowSaveModal(false)
       setSaveName('')
       setSaveDesc('')
+      // Non-blocking heads-up when this dataset can't live in the server-side
+      // report table (module mismatch); the report is still saved to settings.
+      const target = reportSaveTarget(check.config.dataset)
+      if (!target.table && target.reason) setSavedError(target.reason)
     } catch (e) {
       setSaveError(e.message)
     } finally {
@@ -289,10 +296,7 @@ export default function ReportBuilder() {
     const name = renameText.trim()
     if (!name) { setRenamingId(null); return }
     try {
-      const next = await persistSavedReports(
-        supabase,
-        saved.map(r => r.id === id ? { ...r, name: name.slice(0, 120), updated_at: new Date().toISOString() } : r),
-      )
+      const next = await renameSavedReport(id, name, saved)
       setSaved(next)
     } catch (e) {
       setSavedError(e.message)
@@ -304,8 +308,8 @@ export default function ReportBuilder() {
 
   async function deleteReport(id) {
     try {
-      const next = await persistSavedReports(supabase, saved.filter(r => r.id !== id))
-      setSaved(next)
+      await deleteSavedReport(id, saved)
+      setSaved(saved.filter(r => r.id !== id))
     } catch (e) {
       setSavedError(e.message)
     }

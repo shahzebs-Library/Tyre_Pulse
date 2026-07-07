@@ -393,7 +393,13 @@ export function groupWorkOrdersByStatus(rows = [], limit = 8) {
     .slice(0, limit)
 }
 
-// ── Persistence (app_settings, same pattern as lib/api/erp.js) ───────────────
+// ── Persistence ──────────────────────────────────────────────────────────────
+// The canonical persistence entry points live in lib/api/savedViews.js, which
+// prefers the V102 `user_dashboards` table (per-user rows) and falls back to the
+// legacy app_settings blob below when that table is not yet applied. Pages
+// import listDashboards/saveDashboard/deleteDashboard/setDefaultDashboard/
+// shareDashboard from there. The functions below remain the LEGACY (app_settings)
+// primitives that savedViews consumes as its fallback — do not call from UI.
 export const DASHBOARD_LAYOUTS_KEY = 'dashboard_layouts'
 
 /**

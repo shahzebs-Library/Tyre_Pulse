@@ -20,7 +20,6 @@ import {
   ChevronLeft, ChevronRight, GripVertical, Star, Globe, RefreshCw,
   AlertTriangle, ChevronDown, Eye,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import WidgetRenderer, { createWidgetDataLoader } from '../components/dashboard/WidgetRenderer'
@@ -28,9 +27,12 @@ import {
   WIDGET_CATALOG, WIDGET_BY_ID, WIDGET_CATEGORIES, SIZE_PRESETS,
   MIN_W, MAX_W, DEFAULT_LAYOUT, MAX_LAYOUTS,
   addWidget, removeWidget, moveWidget, resizeWidget, validateLayout,
-  makeLayout, visibleLayouts, setDefaultLayout, pickInitialLayout,
-  fetchLayouts, saveLayouts,
+  makeLayout, visibleLayouts, pickInitialLayout,
 } from '../lib/dashboardBuilder'
+import {
+  listDashboards, saveDashboard, deleteDashboard,
+  setDefaultDashboard, shareDashboard,
+} from '../lib/api/savedViews'
 
 const REFRESH_MS = 120_000
 
@@ -196,7 +198,7 @@ export default function DashboardBuilder() {
     ;(async () => {
       setLoading(true); setLoadError(null)
       try {
-        const rows = await fetchLayouts(supabase)
+        const rows = await listDashboards()
         if (!alive) return
         setLayouts(rows)
         const initial = pickInitialLayout(rows, userId) || DEFAULT_LAYOUT
@@ -264,13 +266,19 @@ export default function DashboardBuilder() {
   const handlePreset  = (i, key) => mutate(l => resizeWidget(l, i, SIZE_PRESETS[key]))
 
   /* ── Persistence actions ─────────────────────────────────────────────── */
-  async function persist(nextLayouts, okMsg) {
+  /**
+   * Run a per-record persistence action against savedViews (which prefers the
+   * V102 user_dashboards table and falls back to app_settings). `action`
+   * receives the current layouts list and returns the next list to store
+   * locally; the network write is performed inside it.
+   */
+  async function persist(action, okMsg) {
     setSaving(true)
     try {
-      const saved = await saveLayouts(supabase, nextLayouts)
-      setLayouts(saved)
+      const next = await action(layouts)
+      if (next) setLayouts(next)
       flash(okMsg)
-      return saved
+      return next
     } catch (e) {
       flash(e.message || 'Save failed.', 'err')
       return null
@@ -281,10 +289,12 @@ export default function DashboardBuilder() {
 
   async function handleSave() {
     if (!draft || !canSaveInPlace) return
-    const next = layouts.map(l => (l.id === draft.id ? { ...draft, updated_at: new Date().toISOString() } : l))
-    // Layout not persisted yet (edge case): append instead of silently dropping.
-    if (!next.some(l => l.id === draft.id)) next.push({ ...draft, created_by: draft.created_by ?? userId })
-    const saved = await persist(next, 'Layout saved.')
+    const record = { ...draft, updated_at: new Date().toISOString(), created_by: draft.created_by ?? userId }
+    const saved = await persist(async list => {
+      await saveDashboard(record, list)
+      const exists = list.some(l => l.id === record.id)
+      return exists ? list.map(l => (l.id === record.id ? record : l)) : [...list, record]
+    }, 'Layout saved.')
     if (saved) setDirty(false)
   }
 
@@ -292,7 +302,10 @@ export default function DashboardBuilder() {
     setModal(null)
     if (layouts.length >= MAX_LAYOUTS) { flash(`Layout limit reached (${MAX_LAYOUTS}).`, 'err'); return }
     const created = makeLayout({ name, widgets: draft?.widgets || [], createdBy: userId })
-    const saved = await persist([...layouts, created], `Saved as "${created.name}".`)
+    const saved = await persist(async list => {
+      await saveDashboard(created, list)
+      return [...list, created]
+    }, `Saved as "${created.name}".`)
     if (saved) { setDraft(created); setDirty(false) }
   }
 
@@ -300,7 +313,10 @@ export default function DashboardBuilder() {
     setModal(null)
     if (layouts.length >= MAX_LAYOUTS) { flash(`Layout limit reached (${MAX_LAYOUTS}).`, 'err'); return }
     const created = makeLayout({ name, widgets: DEFAULT_LAYOUT.widgets, createdBy: userId })
-    const saved = await persist([...layouts, created], `Created "${created.name}".`)
+    const saved = await persist(async list => {
+      await saveDashboard(created, list)
+      return [...list, created]
+    }, `Created "${created.name}".`)
     if (saved) { setDraft(created); setDirty(false); setEditMode(true) }
   }
 
@@ -308,15 +324,20 @@ export default function DashboardBuilder() {
     setModal(null)
     if (!draft || !canSaveInPlace) return
     const renamed = { ...draft, name, updated_at: new Date().toISOString() }
-    const saved = await persist(layouts.map(l => (l.id === draft.id ? renamed : l)), 'Layout renamed.')
+    const saved = await persist(async list => {
+      await saveDashboard(renamed, list)
+      return list.map(l => (l.id === draft.id ? renamed : l))
+    }, 'Layout renamed.')
     if (saved) setDraft(renamed)
   }
 
   async function handleDelete() {
     if (!draft || !canDelete) return
     if (!window.confirm(`Delete layout "${draft.name}"? This cannot be undone.`)) return
-    const remaining = layouts.filter(l => l.id !== draft.id)
-    const saved = await persist(remaining, 'Layout deleted.')
+    const saved = await persist(async list => {
+      await deleteDashboard(draft.id, list)
+      return list.filter(l => l.id !== draft.id)
+    }, 'Layout deleted.')
     if (saved) {
       const next = pickInitialLayout(saved, userId) || DEFAULT_LAYOUT
       setDraft(validateLayout(next)); setDirty(false); setEditMode(false)
@@ -325,16 +346,20 @@ export default function DashboardBuilder() {
 
   async function handleSetDefault() {
     if (!draft || draft.id === DEFAULT_LAYOUT.id) return
-    const saved = await persist(setDefaultLayout(layouts, draft.id, userId), 'Default layout set.')
+    const saved = await persist(
+      list => setDefaultDashboard(draft.id, list, userId),
+      'Default layout set.',
+    )
     if (saved) setDraft(prev => ({ ...prev, is_default: true }))
   }
 
   async function handleToggleShared() {
     if (!draft || !isAdmin || draft.id === DEFAULT_LAYOUT.id) return
-    const toggled = { ...draft, shared: !draft.shared, updated_at: new Date().toISOString() }
+    const willShare = !draft.shared
+    const toggled = { ...draft, shared: willShare, updated_at: new Date().toISOString() }
     const saved = await persist(
-      layouts.map(l => (l.id === draft.id ? toggled : l)),
-      toggled.shared ? 'Layout published to everyone.' : 'Layout is now private.',
+      list => shareDashboard(draft.id, willShare, list),
+      willShare ? 'Layout published to everyone.' : 'Layout is now private.',
     )
     if (saved) setDraft(toggled)
   }

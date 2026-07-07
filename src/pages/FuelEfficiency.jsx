@@ -551,7 +551,7 @@ export default function FuelEfficiency() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="text-gray-100 space-y-6">
+    <div className="text-[var(--text-primary)] space-y-6">
 
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <PageHeader
@@ -567,7 +567,7 @@ export default function FuelEfficiency() {
           <button
             onClick={fetchData}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] rounded-lg text-sm transition-colors disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             {t('fuel.actions.refresh')}
@@ -619,17 +619,17 @@ export default function FuelEfficiency() {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"
+            className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl overflow-hidden"
           >
             <button
               onClick={() => setConfigOpen(o => !o)}
-              className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-800/50 transition-colors"
+              className="w-full flex items-center justify-between px-5 py-3 hover:bg-[var(--surface-2)] transition-colors"
             >
-              <span className="flex items-center gap-2 font-semibold text-white">
+              <span className="flex items-center gap-2 font-semibold text-[var(--text-primary)]">
                 <Settings2 className="w-5 h-5 text-amber-400" />
                 {t('fuel.config.heading')}
               </span>
-              {configOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+              {configOpen ? <ChevronUp className="w-5 h-5 text-[var(--text-secondary)]" /> : <ChevronDown className="w-5 h-5 text-[var(--text-secondary)]" />}
             </button>
             <AnimatePresence initial={false}>
               {configOpen && (
@@ -641,7 +641,7 @@ export default function FuelEfficiency() {
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <div className="px-5 pb-5 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-gray-800">
+                  <div className="px-5 pb-5 grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-[var(--border-dim)]">
                     <ConfigField
                       label={t('fuel.config.fuelCostPerLiter', { currency: activeCurrency })}
                       value={fuelCostPerLiter}
@@ -727,8 +727,8 @@ export default function FuelEfficiency() {
               className="grid md:grid-cols-2 gap-4"
             >
               {/* Compliance doughnut */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
+              <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5">
+                <h3 className="font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                   <BarChart2 className="w-5 h-5 text-blue-400" />
                   {t('fuel.compliance.heading')}
                 </h3>
@@ -749,32 +749,32 @@ export default function FuelEfficiency() {
                   </div>
                   <div className="space-y-2">
                     <div>
-                      <p className="text-gray-400 text-xs">{t('fuel.compliance.compliantTyres')}</p>
+                      <p className="text-[var(--text-secondary)] text-xs">{t('fuel.compliance.compliantTyres')}</p>
                       <p className="text-2xl font-bold text-green-400">{kpis.currentCompliancePct}%</p>
                     </div>
                     <div>
-                      <p className="text-gray-400 text-xs">{t('fuel.compliance.avgDeviationFromNominal')}</p>
+                      <p className="text-[var(--text-secondary)] text-xs">{t('fuel.compliance.avgDeviationFromNominal')}</p>
                       <p className="text-2xl font-bold text-amber-400">{kpis.avgDevPct}%</p>
                     </div>
                     <div>
-                      <p className="text-gray-400 text-xs">{t('fuel.compliance.nominalPressure')}</p>
-                      <p className="text-lg font-semibold text-gray-300">{NOMINAL_PRESSURE_PSI}</p>
+                      <p className="text-[var(--text-secondary)] text-xs">{t('fuel.compliance.nominalPressure')}</p>
+                      <p className="text-lg font-semibold text-[var(--text-secondary)]">{NOMINAL_PRESSURE_PSI}</p>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Savings slider */}
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
+              <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5">
+                <h3 className="font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                   <Zap className="w-5 h-5 text-amber-400" />
                   {t('fuel.calculator.heading')}
                 </h3>
                 <div className="space-y-5">
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-400">{t('fuel.calculator.current', { pct: kpis.currentCompliancePct })}</span>
-                      <span className="text-gray-400">{t('fuel.calculator.target', { pct: complianceSlider })}</span>
+                      <span className="text-[var(--text-secondary)]">{t('fuel.calculator.current', { pct: kpis.currentCompliancePct })}</span>
+                      <span className="text-[var(--text-secondary)]">{t('fuel.calculator.target', { pct: complianceSlider })}</span>
                     </div>
                     <input
                       type="range"
@@ -782,19 +782,19 @@ export default function FuelEfficiency() {
                       max={99}
                       value={complianceSlider}
                       onChange={e => setComplianceSlider(+e.target.value)}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                      className="w-full h-2 bg-[var(--surface-3)] rounded-lg appearance-none cursor-pointer accent-amber-400"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-gray-800 rounded-xl p-4">
-                      <p className="text-gray-400 text-xs mb-1">{t('fuel.calculator.monthlySaving')}</p>
+                    <div className="bg-[var(--surface-2)] rounded-xl p-4">
+                      <p className="text-[var(--text-secondary)] text-xs mb-1">{t('fuel.calculator.monthlySaving')}</p>
                       <p className="text-xl font-bold text-green-400">{fmtCur(sliderSavings.monthly, activeCurrency)}</p>
-                      <p className="text-xs text-gray-500 mt-1">{t('fuel.calculator.litersSaved', { liters: fmt(fuelCostPerLiter > 0 ? sliderSavings.monthly / fuelCostPerLiter : 0, 0) })}</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">{t('fuel.calculator.litersSaved', { liters: fmt(fuelCostPerLiter > 0 ? sliderSavings.monthly / fuelCostPerLiter : 0, 0) })}</p>
                     </div>
-                    <div className="bg-gray-800 rounded-xl p-4">
-                      <p className="text-gray-400 text-xs mb-1">{t('fuel.calculator.annualSaving')}</p>
+                    <div className="bg-[var(--surface-2)] rounded-xl p-4">
+                      <p className="text-[var(--text-secondary)] text-xs mb-1">{t('fuel.calculator.annualSaving')}</p>
                       <p className="text-xl font-bold text-green-400">{fmtCur(sliderSavings.annual, activeCurrency)}</p>
-                      <p className="text-xs text-gray-500 mt-1">{t('fuel.calculator.litersSaved', { liters: fmt(sliderSavings.annual / fuelCostPerLiter, 0) })}</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">{t('fuel.calculator.litersSaved', { liters: fmt(sliderSavings.annual / fuelCostPerLiter, 0) })}</p>
                     </div>
                   </div>
                   <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-3 text-xs text-blue-300">
@@ -879,17 +879,17 @@ export default function FuelEfficiency() {
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"
+              className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl overflow-hidden"
             >
-              <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
+              <div className="px-5 py-4 border-b border-[var(--border-dim)] flex items-center gap-2">
                 <Globe className="w-5 h-5 text-blue-400" />
-                <h3 className="font-semibold text-white">{t('fuel.siteTable.heading')}</h3>
-                <span className="ml-auto text-xs text-gray-500">{t('fuel.siteTable.sortedBy')}</span>
+                <h3 className="font-semibold text-[var(--text-primary)]">{t('fuel.siteTable.heading')}</h3>
+                <span className="ml-auto text-xs text-[var(--text-muted)]">{t('fuel.siteTable.sortedBy')}</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-800/50 text-gray-400 text-xs uppercase tracking-wide">
+                    <tr className="bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs uppercase tracking-wide">
                       <th className="px-4 py-3 text-left">{t('fuel.siteTable.columns.site')}</th>
                       <th className="px-4 py-3 text-right">{t('fuel.siteTable.columns.vehicles')}</th>
                       <th className="px-4 py-3 text-right">{t('fuel.siteTable.columns.pressureCompliance')}</th>
@@ -899,11 +899,11 @@ export default function FuelEfficiency() {
                       <th className="px-4 py-3 text-right">{t('fuel.siteTable.columns.annualImpact')}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800">
+                  <tbody className="divide-y divide-[var(--border-dim)]">
                     {siteMetrics.map((s, i) => (
-                      <tr key={s.site} className="hover:bg-gray-800/30 transition-colors">
-                        <td className="px-4 py-3 font-medium text-white">{s.site}</td>
-                        <td className="px-4 py-3 text-right text-gray-300">{s.vehicles}</td>
+                      <tr key={s.site} className="hover:bg-[var(--surface-2)] transition-colors">
+                        <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{s.site}</td>
+                        <td className="px-4 py-3 text-right text-[var(--text-secondary)]">{s.vehicles}</td>
                         <td className="px-4 py-3 text-right">
                           <span className={`font-medium ${s.compliancePct >= 90 ? 'text-green-400' : s.compliancePct >= 75 ? 'text-amber-400' : 'text-red-400'}`}>
                             {s.compliancePct}%
@@ -912,12 +912,12 @@ export default function FuelEfficiency() {
                         <td className="px-4 py-3 text-right">
                           {s.avgTread != null
                             ? <span className={s.avgTread <= 3 ? 'text-red-400' : s.avgTread <= 5 ? 'text-amber-400' : 'text-green-400'}>{s.avgTread}</span>
-                            : <span className="text-gray-500">{t('fuel.na')}</span>}
+                            : <span className="text-[var(--text-muted)]">{t('fuel.na')}</span>}
                         </td>
-                        <td className="px-4 py-3 text-right text-gray-300">{fmt(s.extraFuelMonth)}</td>
+                        <td className="px-4 py-3 text-right text-[var(--text-secondary)]">{fmt(s.extraFuelMonth)}</td>
                         <td className="px-4 py-3 text-right text-amber-400 font-medium">{fmtCur(s.totalExtraCostMonth, activeCurrency)}</td>
                         <td className="px-4 py-3 text-right">
-                          <span className={`font-bold ${i === 0 ? 'text-red-400' : i === 1 ? 'text-orange-400' : 'text-gray-300'}`}>
+                          <span className={`font-bold ${i === 0 ? 'text-red-400' : i === 1 ? 'text-orange-400' : 'text-[var(--text-secondary)]'}`}>
                             {fmtCur(s.annualExtraCost, activeCurrency)}
                           </span>
                         </td>
@@ -925,7 +925,7 @@ export default function FuelEfficiency() {
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-gray-800/50 font-semibold text-white">
+                    <tr className="bg-[var(--surface-2)] font-semibold text-[var(--text-primary)]">
                       <td className="px-4 py-3">{t('fuel.siteTable.total')}</td>
                       <td className="px-4 py-3 text-right">{siteMetrics.reduce((s, r) => s + r.vehicles, 0)}</td>
                       <td className="px-4 py-3 text-right">-</td>
@@ -945,17 +945,17 @@ export default function FuelEfficiency() {
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"
+              className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl overflow-hidden"
             >
-              <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
+              <div className="px-5 py-4 border-b border-[var(--border-dim)] flex items-center gap-2">
                 <TrendingDown className="w-5 h-5 text-green-400" />
-                <h3 className="font-semibold text-white">{t('fuel.opportunitiesTable.heading')}</h3>
-                <span className="ml-auto text-xs text-gray-500">{t('fuel.opportunitiesTable.sortedBy')}</span>
+                <h3 className="font-semibold text-[var(--text-primary)]">{t('fuel.opportunitiesTable.heading')}</h3>
+                <span className="ml-auto text-xs text-[var(--text-muted)]">{t('fuel.opportunitiesTable.sortedBy')}</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-800/50 text-gray-400 text-xs uppercase tracking-wide">
+                    <tr className="bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs uppercase tracking-wide">
                       <th className="px-4 py-3 text-left">{t('fuel.opportunitiesTable.columns.rank')}</th>
                       <th className="px-4 py-3 text-left">{t('fuel.opportunitiesTable.columns.asset')}</th>
                       <th className="px-4 py-3 text-left">{t('fuel.opportunitiesTable.columns.site')}</th>
@@ -965,12 +965,12 @@ export default function FuelEfficiency() {
                       <th className="px-4 py-3 text-right">{t('fuel.opportunitiesTable.columns.potentialSaving')}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800">
+                  <tbody className="divide-y divide-[var(--border-dim)]">
                     {savingsOpportunities.map((v, i) => (
-                      <tr key={v.asset_no} className="hover:bg-gray-800/30 transition-colors">
-                        <td className="px-4 py-3 text-gray-500 font-mono">{i + 1}</td>
-                        <td className="px-4 py-3 font-semibold text-white">{v.asset_no}</td>
-                        <td className="px-4 py-3 text-gray-400">{v.site}</td>
+                      <tr key={v.asset_no} className="hover:bg-[var(--surface-2)] transition-colors">
+                        <td className="px-4 py-3 text-[var(--text-muted)] font-mono">{i + 1}</td>
+                        <td className="px-4 py-3 font-semibold text-[var(--text-primary)]">{v.asset_no}</td>
+                        <td className="px-4 py-3 text-[var(--text-secondary)]">{v.site}</td>
                         <td className="px-4 py-3 text-right">
                           <span className={v.compliancePct >= 90 ? 'text-green-400' : v.compliancePct >= 75 ? 'text-amber-400' : 'text-red-400'}>
                             {v.compliancePct}%
@@ -978,8 +978,8 @@ export default function FuelEfficiency() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           {v.avgTread != null
-                            ? <span className={v.avgTread <= 3 ? 'text-red-400' : v.avgTread <= 5 ? 'text-amber-400' : 'text-gray-300'}>{v.avgTread}mm</span>
-                            : <span className="text-gray-500">{t('fuel.na')}</span>}
+                            ? <span className={v.avgTread <= 3 ? 'text-red-400' : v.avgTread <= 5 ? 'text-amber-400' : 'text-[var(--text-secondary)]'}>{v.avgTread}mm</span>
+                            : <span className="text-[var(--text-muted)]">{t('fuel.na')}</span>}
                         </td>
                         <td className="px-4 py-3 text-right text-red-400">{fmtCur(v.totalExtraCostMonth, activeCurrency)}</td>
                         <td className="px-4 py-3 text-right text-green-400 font-semibold">{fmtCur(v.potentialSaving, activeCurrency)}</td>
@@ -1041,9 +1041,9 @@ export default function FuelEfficiency() {
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-5"
+              className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5"
             >
-              <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
+              <h3 className="font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                 <Leaf className="w-5 h-5 text-green-400" />
                 {t('fuel.env.heading')}
               </h3>
@@ -1078,21 +1078,21 @@ export default function FuelEfficiency() {
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden"
+              className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl overflow-hidden"
             >
-              <div className="px-5 py-4 border-b border-gray-800 flex items-center gap-2">
+              <div className="px-5 py-4 border-b border-[var(--border-dim)] flex items-center gap-2">
                 <Zap className="w-5 h-5 text-amber-400" />
-                <h3 className="font-semibold text-white">{t('fuel.recommendations.heading')}</h3>
-                <span className="ml-auto text-xs text-gray-500">{t('fuel.recommendations.autoGenerated')}</span>
+                <h3 className="font-semibold text-[var(--text-primary)]">{t('fuel.recommendations.heading')}</h3>
+                <span className="ml-auto text-xs text-[var(--text-muted)]">{t('fuel.recommendations.autoGenerated')}</span>
               </div>
-              <div className="divide-y divide-gray-800">
+              <div className="divide-y divide-[var(--border-dim)]">
                 {recommendations.map((r, i) => (
                   <div key={i} className="px-5 py-4 flex items-start gap-4">
                     <div className="mt-0.5">
                       <r.icon className={`w-5 h-5 ${r.color}`} />
                     </div>
                     <div className="flex-1">
-                      <p className="text-gray-200 text-sm">{r.text}</p>
+                      <p className="text-[var(--text-primary)] text-sm">{r.text}</p>
                     </div>
                     <ImpactBadge impact={r.impact} />
                   </div>
@@ -1103,9 +1103,9 @@ export default function FuelEfficiency() {
 
           {/* ── Empty state ──────────────────────────────────────────────── */}
           {!loading && !error && records.length === 0 && (
-            <div className="text-center py-24 text-gray-500">
-              <Fuel className="w-16 h-16 mx-auto mb-4 text-gray-700" />
-              <p className="text-lg font-medium text-gray-400">{t('fuel.empty.title')}</p>
+            <div className="text-center py-24 text-[var(--text-muted)]">
+              <Fuel className="w-16 h-16 mx-auto mb-4 text-[var(--text-dim)]" />
+              <p className="text-lg font-medium text-[var(--text-secondary)]">{t('fuel.empty.title')}</p>
               <p className="text-sm mt-1">{t('fuel.empty.subtitle')}</p>
             </div>
           )}
@@ -1120,14 +1120,14 @@ export default function FuelEfficiency() {
 function ConfigField({ label, value, onChange, step = 1, min = 0 }) {
   return (
     <div className="pt-4">
-      <label className="block text-xs text-gray-400 mb-1.5">{label}</label>
+      <label className="block text-xs text-[var(--text-secondary)] mb-1.5">{label}</label>
       <input
         type="number"
         value={value}
         onChange={e => onChange(e.target.value)}
         step={step}
         min={min}
-        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500 transition-colors"
+        className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2 text-[var(--text-primary)] text-sm focus:outline-none focus:border-amber-500 transition-colors"
       />
     </div>
   )
@@ -1154,8 +1154,8 @@ function KpiCard({ label, value, sub, icon: Icon, color = 'blue', trend }) {
         {trend === 'down' && <ArrowDownRight className="w-4 h-4 text-red-400" />}
       </div>
       <p className={`text-xl font-bold ${c.value}`}>{value}</p>
-      <p className="text-gray-400 text-xs font-medium leading-tight">{label}</p>
-      {sub && <p className="text-gray-500 text-xs">{sub}</p>}
+      <p className="text-[var(--text-secondary)] text-xs font-medium leading-tight">{label}</p>
+      {sub && <p className="text-[var(--text-muted)] text-xs">{sub}</p>}
     </motion.div>
   )
 }
@@ -1165,14 +1165,14 @@ function ChartCard({ title, subtitle, icon: Icon, children }) {
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gray-900 border border-gray-800 rounded-xl p-5"
+      className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5"
     >
       <div className="mb-4">
-        <h3 className="font-semibold text-white flex items-center gap-2">
+        <h3 className="font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <Icon className="w-5 h-5 text-blue-400" />
           {title}
         </h3>
-        {subtitle && <p className="text-gray-500 text-xs mt-0.5">{subtitle}</p>}
+        {subtitle && <p className="text-[var(--text-muted)] text-xs mt-0.5">{subtitle}</p>}
       </div>
       {children}
     </motion.div>
@@ -1186,8 +1186,8 @@ function EnvCard({ icon: Icon, color, value, label, sub }) {
       <Icon className={`w-8 h-8 ${c.icon} mt-1 shrink-0`} />
       <div>
         <p className={`text-2xl font-bold ${c.value}`}>{value}</p>
-        <p className="text-gray-300 text-sm font-medium">{label}</p>
-        <p className="text-gray-500 text-xs mt-0.5">{sub}</p>
+        <p className="text-[var(--text-secondary)] text-sm font-medium">{label}</p>
+        <p className="text-[var(--text-muted)] text-xs mt-0.5">{sub}</p>
       </div>
     </div>
   )
@@ -1199,8 +1199,8 @@ function ImpactBadge({ impact }) {
     Critical: 'bg-red-900/40 text-red-400 border-red-800',
     High: 'bg-orange-900/40 text-orange-400 border-orange-800',
     Medium: 'bg-amber-900/40 text-amber-400 border-amber-800',
-    Low: 'bg-gray-800 text-gray-400 border-gray-700',
-  }[impact] ?? 'bg-gray-800 text-gray-400 border-gray-700'
+    Low: 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]',
+  }[impact] ?? 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
   return (
     <span className={`shrink-0 text-xs border rounded-full px-2.5 py-0.5 font-medium ${cls}`}>
       {t(`fuel.impact.${impact.toLowerCase()}`)}

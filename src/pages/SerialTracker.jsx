@@ -13,44 +13,44 @@ function SearchSkeleton() {
         <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <div className="h-8 w-40 bg-gray-800/40 rounded-md" />
-              <div className="h-6 w-16 bg-gray-800/40 rounded-full" />
+              <div className="h-8 w-40 bg-[var(--surface-2)] rounded-md" />
+              <div className="h-6 w-16 bg-[var(--surface-2)] rounded-full" />
             </div>
-            <div className="h-4 w-56 bg-gray-800/40 rounded" />
+            <div className="h-4 w-56 bg-[var(--surface-2)] rounded" />
           </div>
           <div className="flex gap-2">
-            <div className="h-8 w-20 bg-gray-800/40 rounded-md" />
-            <div className="h-8 w-16 bg-gray-800/40 rounded-md" />
+            <div className="h-8 w-20 bg-[var(--surface-2)] rounded-md" />
+            <div className="h-8 w-16 bg-[var(--surface-2)] rounded-md" />
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-gray-800/40 rounded-lg p-3 text-center space-y-2">
-              <div className="h-6 w-12 bg-gray-700/40 rounded mx-auto" />
-              <div className="h-3 w-20 bg-gray-700/40 rounded mx-auto" />
+            <div key={i} className="bg-[var(--surface-2)] rounded-lg p-3 text-center space-y-2">
+              <div className="h-6 w-12 bg-[var(--surface-3)] rounded mx-auto" />
+              <div className="h-3 w-20 bg-[var(--surface-3)] rounded mx-auto" />
             </div>
           ))}
         </div>
-        <div className="h-4 w-32 bg-gray-800/40 rounded mt-3" />
+        <div className="h-4 w-32 bg-[var(--surface-2)] rounded mt-3" />
       </div>
 
       <div className="card animate-pulse">
-        <div className="h-5 w-32 bg-gray-800/40 rounded mb-4" />
+        <div className="h-5 w-32 bg-[var(--surface-2)] rounded mb-4" />
         <div className="space-y-4">
           {[...Array(3)].map((_, gi) => (
             <div key={gi}>
-              <div className="h-4 w-28 bg-gray-800/40 rounded mb-2" />
-              <div className="space-y-2 pl-3 border-l border-gray-800">
+              <div className="h-4 w-28 bg-[var(--surface-2)] rounded mb-2" />
+              <div className="space-y-2 pl-3 border-l border-[var(--border-dim)]">
                 {[...Array(2)].map((_, ri) => (
                   <div key={ri} className="flex items-start gap-3 py-2">
-                    <div className="h-3 w-20 bg-gray-800/40 rounded flex-shrink-0 mt-1" />
+                    <div className="h-3 w-20 bg-[var(--surface-2)] rounded flex-shrink-0 mt-1" />
                     <div className="flex-1 space-y-1.5">
                       <div className="flex gap-3">
-                        <div className="h-3 w-16 bg-gray-800/40 rounded" />
-                        <div className="h-3 w-12 bg-gray-800/40 rounded" />
-                        <div className="h-3 w-10 bg-gray-800/40 rounded" />
+                        <div className="h-3 w-16 bg-[var(--surface-2)] rounded" />
+                        <div className="h-3 w-12 bg-[var(--surface-2)] rounded" />
+                        <div className="h-3 w-10 bg-[var(--surface-2)] rounded" />
                       </div>
-                      <div className="h-3 w-36 bg-gray-800/40 rounded" />
+                      <div className="h-3 w-36 bg-[var(--surface-2)] rounded" />
                     </div>
                   </div>
                 ))}
@@ -159,7 +159,7 @@ export default function SerialTracker() {
   }
 
   const riskColor = r => {
-    if (!r) return 'text-gray-500'
+    if (!r) return 'text-[var(--text-muted)]'
     const l = r.toLowerCase()
     if (l === 'critical') return 'text-red-400'
     if (l === 'high')     return 'text-orange-400'
@@ -293,13 +293,13 @@ export default function SerialTracker() {
         icon={ScanLine}
       />
 
-      <div className="flex gap-1 p-1 bg-gray-800/50 rounded-lg w-fit">
+      <div className="flex gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit">
         {[['single', 'Single Search'], ['bulk', 'Bulk Lookup']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-              activeTab === key ? 'bg-gray-700 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+              activeTab === key ? 'bg-[var(--surface-3)] text-[var(--text-primary)] shadow' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
             {label}
@@ -345,17 +345,17 @@ export default function SerialTracker() {
                 <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
                   <div>
                     <div className="flex items-center gap-3 mb-1">
-                      <span className="text-2xl font-bold font-mono text-white">{lastQuery}</span>
+                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)]">{lastQuery}</span>
                       <span className={`text-xs px-2.5 py-1 rounded-full font-medium border ${
                         stats.active
                           ? 'bg-green-900/30 text-green-400 border-green-700/50'
-                          : 'bg-gray-800 text-gray-400 border-gray-700'
+                          : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
                       }`}>
                         {stats.active ? 'Active' : 'Retired'}
                       </span>
                     </div>
                     {(stats.brand || stats.description) && (
-                      <p className="text-gray-400 text-sm">{[stats.brand, stats.description].filter(Boolean).join(' · ')}</p>
+                      <p className="text-[var(--text-secondary)] text-sm">{[stats.brand, stats.description].filter(Boolean).join(' · ')}</p>
                     )}
                   </div>
                   <div className="flex gap-2">
@@ -375,21 +375,21 @@ export default function SerialTracker() {
                     { label: 'Vehicles Used',   value: stats.assets },
                     { label: 'Days in Service', value: stats.days || '-' },
                   ].map(s => (
-                    <div key={s.label} className="bg-gray-800/50 rounded-lg p-3 text-center">
-                      <p className="text-lg font-bold text-white">{s.value}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+                    <div key={s.label} className="bg-[var(--surface-2)] rounded-lg p-3 text-center">
+                      <p className="text-lg font-bold text-[var(--text-primary)]">{s.value}</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">{s.label}</p>
                     </div>
                   ))}
                 </div>
                 {stats.totalCost > 0 && (
-                  <p className="text-gray-400 text-sm mt-3">
-                    Total cost: <span className="text-white font-semibold">{formatCurrencyCompact(stats.totalCost)}</span>
+                  <p className="text-[var(--text-secondary)] text-sm mt-3">
+                    Total cost: <span className="text-[var(--text-primary)] font-semibold">{formatCurrencyCompact(stats.totalCost)}</span>
                   </p>
                 )}
               </div>
 
               <div className="card">
-                <h3 className="text-base font-semibold text-white mb-4">Service Timeline</h3>
+                <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4">Service Timeline</h3>
                 <div className="space-y-4">
                   {timeline.map((group, gi) => (
                     <div key={gi}>
@@ -399,21 +399,21 @@ export default function SerialTracker() {
                         </div>
                       )}
                       <div className="mb-1">
-                        <span className="text-sm font-semibold text-white font-mono">{group.asset || 'Unknown Asset'}</span>
-                        <span className="text-xs text-gray-500 ml-2">{group.records.length} record{group.records.length !== 1 ? 's' : ''}</span>
+                        <span className="text-sm font-semibold text-[var(--text-primary)] font-mono">{group.asset || 'Unknown Asset'}</span>
+                        <span className="text-xs text-[var(--text-muted)] ml-2">{group.records.length} record{group.records.length !== 1 ? 's' : ''}</span>
                       </div>
-                      <div className="space-y-2 pl-3 border-l border-gray-700">
+                      <div className="space-y-2 pl-3 border-l border-[var(--border-bright)]">
                         {group.records.map(r => (
                           <div key={r.id} className="flex items-start gap-3 py-2">
-                            <div className="text-xs font-mono text-gray-500 w-24 flex-shrink-0 pt-0.5">{formatDate(r.issue_date)}</div>
+                            <div className="text-xs font-mono text-[var(--text-muted)] w-24 flex-shrink-0 pt-0.5">{formatDate(r.issue_date)}</div>
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-                                <span className="text-gray-400">{r.site || '-'}</span>
-                                {r.position && <span className="text-gray-500">Pos: <span className="text-white font-mono">{r.position}</span></span>}
+                                <span className="text-[var(--text-secondary)]">{r.site || '-'}</span>
+                                {r.position && <span className="text-[var(--text-muted)]">Pos: <span className="text-[var(--text-primary)] font-mono">{r.position}</span></span>}
                                 {r.risk_level && <span className={riskColor(r.risk_level)}>{r.risk_level}</span>}
-                                {r.cost > 0 && <span className="text-gray-500">{formatCurrencyCompact(r.cost)}</span>}
+                                {r.cost > 0 && <span className="text-[var(--text-muted)]">{formatCurrencyCompact(r.cost)}</span>}
                               </div>
-                              {r.description && <p className="text-xs text-gray-600 mt-0.5 truncate">{r.description}</p>}
+                              {r.description && <p className="text-xs text-[var(--text-dim)] mt-0.5 truncate">{r.description}</p>}
                             </div>
                           </div>
                         ))}
@@ -432,7 +432,7 @@ export default function SerialTracker() {
         <div className="space-y-4">
           <div
             className={`card border-2 border-dashed transition-all cursor-pointer ${
-              bulkDragOver ? 'border-green-500 bg-green-900/10' : 'border-gray-700 hover:border-gray-500'
+              bulkDragOver ? 'border-green-500 bg-green-900/10' : 'border-[var(--border-bright)] hover:border-gray-500'
             }`}
             onDragOver={e => { e.preventDefault(); setBulkDragOver(true) }}
             onDragLeave={() => setBulkDragOver(false)}
@@ -447,12 +447,12 @@ export default function SerialTracker() {
               onChange={handleBulkFileInput}
             />
             <div className="flex flex-col items-center justify-center py-10 gap-3 text-center pointer-events-none">
-              <Upload size={32} className={bulkDragOver ? 'text-green-400' : 'text-gray-500'} />
-              <p className="text-white font-medium">
+              <Upload size={32} className={bulkDragOver ? 'text-green-400' : 'text-[var(--text-muted)]'} />
+              <p className="text-[var(--text-primary)] font-medium">
                 {bulkFileName ? bulkFileName : 'Drop an Excel or CSV file here'}
               </p>
-              <p className="text-gray-500 text-sm">
-                File must have a column: <span className="font-mono text-gray-400">serial_no</span>, <span className="font-mono text-gray-400">Serial No</span>, <span className="font-mono text-gray-400">Serial Number</span>, or <span className="font-mono text-gray-400">serial</span>
+              <p className="text-[var(--text-muted)] text-sm">
+                File must have a column: <span className="font-mono text-[var(--text-secondary)]">serial_no</span>, <span className="font-mono text-[var(--text-secondary)]">Serial No</span>, <span className="font-mono text-[var(--text-secondary)]">Serial Number</span>, or <span className="font-mono text-[var(--text-secondary)]">serial</span>
               </p>
               <button
                 className="btn-secondary text-sm px-4 py-1.5 pointer-events-auto"
@@ -466,7 +466,7 @@ export default function SerialTracker() {
           {bulkLoading && (
             <div className="card text-center py-10">
               <div className="inline-block w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mb-3" />
-              <p className="text-gray-400">Processing serial numbers...</p>
+              <p className="text-[var(--text-secondary)]">Processing serial numbers...</p>
             </div>
           )}
 
@@ -490,14 +490,14 @@ export default function SerialTracker() {
                             chip.active && chip.key === null
                               ? 'bg-green-900/40 text-green-300 border-green-600/50'
                               : chip.active
-                                ? 'bg-gray-700 text-white border-gray-500'
-                                : 'bg-gray-800/50 text-gray-400 border-gray-700/50 hover:border-gray-500 hover:text-gray-200'
+                                ? 'bg-[var(--surface-3)] text-[var(--text-primary)] border-gray-500'
+                                : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)] hover:border-gray-500 hover:text-[var(--text-primary)]'
                           }`}
                         >
                           <span className={`text-base font-bold ${
                             chip.label === 'Found'   ? 'text-green-400' :
                             chip.label === 'Active'  ? 'text-emerald-400' :
-                            chip.label === 'Missing' ? 'text-red-400' : 'text-gray-400'
+                            chip.label === 'Missing' ? 'text-red-400' : 'text-[var(--text-secondary)]'
                           }`}>{chip.value}</span>
                           <span>{chip.label}</span>
                         </button>
@@ -505,7 +505,7 @@ export default function SerialTracker() {
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="relative">
-                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                         <input
                           className="input text-sm pl-7 pr-3 py-1.5 w-44"
                           placeholder="Filter results..."
@@ -519,11 +519,11 @@ export default function SerialTracker() {
                     </div>
                   </div>
                   {(statusFilter || bulkSearch.trim()) && (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-[var(--text-muted)]">
                       Showing {filteredBulkResults.length} of {bulkResults.length} results
-                      {statusFilter && <> · filtered by <span className="text-gray-300">{statusFilter}</span></>}
-                      {bulkSearch.trim() && <> · matching <span className="text-gray-300">"{bulkSearch}"</span></>}
-                      <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="ml-2 text-gray-500 hover:text-gray-300 underline">Clear</button>
+                      {statusFilter && <> · filtered by <span className="text-[var(--text-secondary)]">{statusFilter}</span></>}
+                      {bulkSearch.trim() && <> · matching <span className="text-[var(--text-secondary)]">"{bulkSearch}"</span></>}
+                      <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="ml-2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline">Clear</button>
                     </p>
                   )}
                 </div>
@@ -539,14 +539,14 @@ export default function SerialTracker() {
                 </div>
               ) : filteredBulkResults.length === 0 ? (
                 <div className="card text-center py-10">
-                  <p className="text-gray-400">No results match the current filter.</p>
-                  <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="text-sm text-gray-500 hover:text-gray-300 underline mt-1">Clear filters</button>
+                  <p className="text-[var(--text-secondary)]">No results match the current filter.</p>
+                  <button onClick={() => { setStatusFilter(null); setBulkSearch('') }} className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)] underline mt-1">Clear filters</button>
                 </div>
               ) : (
                 <div className="card overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-left text-gray-400 border-b border-gray-800">
+                      <tr className="text-left text-[var(--text-secondary)] border-b border-[var(--border-dim)]">
                         <th className="pb-2 pr-4">Serial No</th>
                         <th className="pb-2 pr-4">First Seen</th>
                         <th className="pb-2 pr-4">Last Asset</th>
@@ -557,21 +557,21 @@ export default function SerialTracker() {
                     </thead>
                     <tbody>
                       {filteredBulkResults.map(r => (
-                        <tr key={r.serial} className="border-b border-gray-800/50 hover:bg-gray-800/20">
-                          <td className="py-2 pr-4 font-mono text-white">{r.serial}</td>
-                          <td className="py-2 pr-4 text-gray-400 text-xs">{formatDate(r.first_seen)}</td>
-                          <td className="py-2 pr-4 font-mono text-gray-300 text-xs">{r.last_asset || '-'}</td>
-                          <td className="py-2 pr-4 text-gray-300 text-right">{r.total_records}</td>
-                          <td className="py-2 pr-4 text-gray-400 text-right text-xs">
+                        <tr key={r.serial} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)]">
+                          <td className="py-2 pr-4 font-mono text-[var(--text-primary)]">{r.serial}</td>
+                          <td className="py-2 pr-4 text-[var(--text-secondary)] text-xs">{formatDate(r.first_seen)}</td>
+                          <td className="py-2 pr-4 font-mono text-[var(--text-secondary)] text-xs">{r.last_asset || '-'}</td>
+                          <td className="py-2 pr-4 text-[var(--text-secondary)] text-right">{r.total_records}</td>
+                          <td className="py-2 pr-4 text-[var(--text-secondary)] text-right text-xs">
                             {r.cost > 0 ? formatCurrencyCompact(r.cost) : '-'}
                           </td>
                           <td className="py-2">
                             {r.status === 'Not Found' ? (
-                              <span className="text-xs px-2 py-0.5 rounded-full border bg-gray-800 text-gray-500 border-gray-700">Not Found</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full border bg-[var(--surface-2)] text-[var(--text-muted)] border-[var(--border-bright)]">Not Found</span>
                             ) : r.status === 'Active' ? (
                               <span className="text-xs px-2 py-0.5 rounded-full border bg-green-900/30 text-green-400 border-green-700/50">Active</span>
                             ) : (
-                              <span className="text-xs px-2 py-0.5 rounded-full border bg-gray-800 text-gray-400 border-gray-700">Retired</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full border bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]">Retired</span>
                             )}
                           </td>
                         </tr>

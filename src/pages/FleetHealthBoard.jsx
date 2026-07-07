@@ -47,7 +47,7 @@ function riskBgClass(level) {
     High:     'bg-orange-900/40 text-orange-300 border-orange-800/50',
     Medium:   'bg-yellow-900/40 text-yellow-300 border-yellow-800/50',
     Low:      'bg-green-900/40 text-green-300 border-green-800/50',
-  }[level] ?? 'bg-gray-800/60 text-gray-400 border-gray-700'
+  }[level] ?? 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
 }
 
 function worstRisk(tyres) {
@@ -112,9 +112,9 @@ function TyrePositionDot({ tyre, position }) {
         onMouseLeave={() => setShowTip(false)}
       />
       {showTip && tyre && (
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 rounded-lg p-2 text-xs whitespace-nowrap shadow-xl pointer-events-none">
-          <p className="text-white font-semibold">{position}</p>
-          <p className="text-gray-400">{t('fleethealth.card.tread', { value: tyre.tread_depth != null ? `${tyre.tread_depth}mm` : '-' })}</p>
+        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-50 bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-lg p-2 text-xs whitespace-nowrap shadow-xl pointer-events-none">
+          <p className="text-[var(--text-primary)] font-semibold">{position}</p>
+          <p className="text-[var(--text-secondary)]">{t('fleethealth.card.tread', { value: tyre.tread_depth != null ? `${tyre.tread_depth}mm` : '-' })}</p>
           <p style={{ color: riskColor(tyre.risk_level) }}>{tyre.risk_level ?? '-'}</p>
         </div>
       )}
@@ -180,16 +180,16 @@ function SkeletonCard() {
   return (
     <div className="card animate-pulse">
       <div className="flex items-start justify-between mb-3">
-        <div className="h-5 w-24 bg-gray-800 rounded" />
-        <div className="h-4 w-16 bg-gray-800 rounded-full" />
+        <div className="h-5 w-24 bg-[var(--surface-2)] rounded" />
+        <div className="h-4 w-16 bg-[var(--surface-2)] rounded-full" />
       </div>
       <div className="flex items-center justify-between mb-3">
-        <div className="h-14 w-14 bg-gray-800 rounded-full" />
+        <div className="h-14 w-14 bg-[var(--surface-2)] rounded-full" />
         <div className="flex flex-col gap-1">
-          {[1,2,3].map(i => <div key={i} className="h-3 w-20 bg-gray-800 rounded" />)}
+          {[1,2,3].map(i => <div key={i} className="h-3 w-20 bg-[var(--surface-2)] rounded" />)}
         </div>
       </div>
-      <div className="h-8 bg-gray-800 rounded mt-2" />
+      <div className="h-8 bg-[var(--surface-2)] rounded mt-2" />
     </div>
   )
 }
@@ -484,15 +484,15 @@ export default function FleetHealthBoard() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">{t('fleethealth.header.title')}</h1>
-            <p className="text-gray-400 text-sm mt-1">{t('fleethealth.header.loading')}</p>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">{t('fleethealth.header.title')}</h1>
+            <p className="text-[var(--text-secondary)] text-sm mt-1">{t('fleethealth.header.loading')}</p>
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[1,2,3,4].map(i => (
             <div key={i} className="card animate-pulse h-24">
-              <div className="h-4 w-24 bg-gray-800 rounded mb-2" />
-              <div className="h-7 w-16 bg-gray-800 rounded" />
+              <div className="h-4 w-24 bg-[var(--surface-2)] rounded mb-2" />
+              <div className="h-7 w-16 bg-[var(--surface-2)] rounded" />
             </div>
           ))}
         </div>
@@ -578,7 +578,7 @@ export default function FleetHealthBoard() {
             <div className="flex flex-wrap gap-3 items-center">
               {/* Search */}
               <div className="relative flex-1 min-w-48">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
                   className="input pl-8 w-full text-sm"
                   placeholder={t('fleethealth.filters.searchPlaceholder')}
@@ -586,7 +586,7 @@ export default function FleetHealthBoard() {
                   onChange={e => setSearch(e.target.value)}
                 />
                 {search && (
-                  <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                  <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
                     <X size={12} />
                   </button>
                 )}
@@ -594,7 +594,7 @@ export default function FleetHealthBoard() {
 
               {/* Site */}
               <div className="flex items-center gap-1.5">
-                <MapPin size={13} className="text-gray-500" />
+                <MapPin size={13} className="text-[var(--text-muted)]" />
                 <select
                   className="input text-sm py-1.5"
                   value={siteFilter}
@@ -606,7 +606,7 @@ export default function FleetHealthBoard() {
 
               {/* Country */}
               <div className="flex items-center gap-1.5">
-                <Globe size={13} className="text-gray-500" />
+                <Globe size={13} className="text-[var(--text-muted)]" />
                 <select
                   className="input text-sm py-1.5"
                   value={countryFilter}
@@ -618,7 +618,7 @@ export default function FleetHealthBoard() {
 
               {/* Risk */}
               <div className="flex items-center gap-1.5">
-                <Filter size={13} className="text-gray-500" />
+                <Filter size={13} className="text-[var(--text-muted)]" />
                 <select
                   className="input text-sm py-1.5"
                   value={riskFilter}
@@ -631,16 +631,16 @@ export default function FleetHealthBoard() {
               </div>
 
               {/* View toggle */}
-              <div className="flex bg-gray-800 rounded-lg border border-gray-700 overflow-hidden ml-auto">
+              <div className="flex bg-[var(--surface-2)] rounded-lg border border-[var(--border-bright)] overflow-hidden ml-auto">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`p-2 transition-colors ${viewMode === 'grid' ? 'bg-green-700 text-white' : 'text-gray-400 hover:text-white'}`}
+                  className={`p-2 transition-colors ${viewMode === 'grid' ? 'bg-green-700 text-white' : 'text-[var(--text-secondary)] hover:text-white'}`}
                 >
                   <Grid size={14} />
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`p-2 transition-colors ${viewMode === 'list' ? 'bg-green-700 text-white' : 'text-gray-400 hover:text-white'}`}
+                  className={`p-2 transition-colors ${viewMode === 'list' ? 'bg-green-700 text-white' : 'text-[var(--text-secondary)] hover:text-white'}`}
                 >
                   <List size={14} />
                 </button>
@@ -657,9 +657,9 @@ export default function FleetHealthBoard() {
           {/* ── Empty state ── */}
           {filtered.length === 0 && (
             <div className="card flex flex-col items-center justify-center py-16 gap-3">
-              <Truck size={40} className="text-gray-700" />
-              <p className="text-gray-400 font-medium">{t('fleethealth.empty.noMatch')}</p>
-              <p className="text-gray-600 text-sm">{t('fleethealth.empty.tryAdjusting')}</p>
+              <Truck size={40} className="text-[var(--text-dim)]" />
+              <p className="text-[var(--text-secondary)] font-medium">{t('fleethealth.empty.noMatch')}</p>
+              <p className="text-[var(--text-dim)] text-sm">{t('fleethealth.empty.tryAdjusting')}</p>
               <button
                 onClick={() => { setSiteFilter('All'); setCountryFilter('All'); setRiskFilter('All'); setSearch('') }}
                 className="btn-secondary text-sm mt-1"
@@ -699,9 +699,9 @@ export default function FleetHealthBoard() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800">
+                    <tr className="border-b border-[var(--border-dim)]">
                       {['asset','site','country','health','critical','high','medium','low','avgTread','lastTyre'].map(hKey => (
-                        <th key={hKey} className="text-left px-3 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide whitespace-nowrap">
+                        <th key={hKey} className="text-left px-3 py-3 text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide whitespace-nowrap">
                           {t(`fleethealth.list.columns.${hKey}`)}
                         </th>
                       ))}
@@ -724,12 +724,12 @@ export default function FleetHealthBoard() {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="border-b border-gray-800/50 hover:bg-gray-800/30 cursor-pointer transition-colors"
+                            className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] cursor-pointer transition-colors"
                             onClick={() => openDrawer(v.asset_no)}
                           >
-                            <td className="px-3 py-2.5 font-semibold text-white">{v.asset_no}</td>
-                            <td className="px-3 py-2.5 text-gray-300">{v.site ?? '-'}</td>
-                            <td className="px-3 py-2.5 text-gray-400">{v.country ?? '-'}</td>
+                            <td className="px-3 py-2.5 font-semibold text-[var(--text-primary)]">{v.asset_no}</td>
+                            <td className="px-3 py-2.5 text-[var(--text-secondary)]">{v.site ?? '-'}</td>
+                            <td className="px-3 py-2.5 text-[var(--text-secondary)]">{v.country ?? '-'}</td>
                             <td className="px-3 py-2.5">
                               <span className="font-bold tabular-nums" style={{ color: scoreColor(v.score) }}>
                                 {v.score}%
@@ -738,27 +738,27 @@ export default function FleetHealthBoard() {
                             <td className="px-3 py-2.5">
                               {counts.Critical > 0
                                 ? <span className="badge bg-red-900/40 text-red-300 border border-red-800/50">{counts.Critical}</span>
-                                : <span className="text-gray-600">-</span>}
+                                : <span className="text-[var(--text-dim)]">-</span>}
                             </td>
                             <td className="px-3 py-2.5">
                               {counts.High > 0
                                 ? <span className="badge bg-orange-900/40 text-orange-300 border border-orange-800/50">{counts.High}</span>
-                                : <span className="text-gray-600">-</span>}
+                                : <span className="text-[var(--text-dim)]">-</span>}
                             </td>
                             <td className="px-3 py-2.5">
                               {counts.Medium > 0
                                 ? <span className="badge bg-yellow-900/40 text-yellow-300 border border-yellow-800/50">{counts.Medium}</span>
-                                : <span className="text-gray-600">-</span>}
+                                : <span className="text-[var(--text-dim)]">-</span>}
                             </td>
                             <td className="px-3 py-2.5">
                               {counts.Low > 0
                                 ? <span className="badge bg-green-900/40 text-green-300 border border-green-800/50">{counts.Low}</span>
-                                : <span className="text-gray-600">-</span>}
+                                : <span className="text-[var(--text-dim)]">-</span>}
                             </td>
-                            <td className="px-3 py-2.5 text-gray-300">
+                            <td className="px-3 py-2.5 text-[var(--text-secondary)]">
                               {v.tyres.some(t => t.tread_depth != null) ? `${avgTread.toFixed(1)}mm` : '-'}
                             </td>
-                            <td className="px-3 py-2.5 text-gray-500 text-xs">{fmtDate(lastDate)}</td>
+                            <td className="px-3 py-2.5 text-[var(--text-muted)] text-xs">{fmtDate(lastDate)}</td>
                           </motion.tr>
                         )
                       })}
@@ -798,7 +798,7 @@ export default function FleetHealthBoard() {
               <div className="flex flex-col items-center gap-2 py-8">
                 <CheckCircle size={28} className="text-green-500" />
                 <p className="text-green-400 text-sm font-medium">{t('fleethealth.sidebar.noCriticalAlerts')}</p>
-                <p className="text-gray-600 text-xs text-center">{t('fleethealth.sidebar.allSafe')}</p>
+                <p className="text-[var(--text-dim)] text-xs text-center">{t('fleethealth.sidebar.allSafe')}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -809,10 +809,10 @@ export default function FleetHealthBoard() {
                     className="w-full text-left bg-red-950/30 border border-red-900/40 rounded-lg px-3 py-2.5 hover:border-red-700/60 transition-colors group"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-white font-semibold text-sm">{v.asset_no}</span>
-                      <ChevronRight size={12} className="text-gray-600 group-hover:text-white transition-colors" />
+                      <span className="text-[var(--text-primary)] font-semibold text-sm">{v.asset_no}</span>
+                      <ChevronRight size={12} className="text-[var(--text-dim)] group-hover:text-[var(--text-primary)] transition-colors" />
                     </div>
-                    <p className="text-gray-400 text-xs mt-0.5">{v.site} · {v.country}</p>
+                    <p className="text-[var(--text-secondary)] text-xs mt-0.5">{v.site} · {v.country}</p>
                     {v.worstTread != null && (
                       <p className="text-red-400 text-xs mt-1">
                         {t('fleethealth.sidebar.treadAt', { mm: v.worstTread, position: v.worstPos ?? t('fleethealth.sidebar.na') })}
@@ -846,16 +846,16 @@ export default function FleetHealthBoard() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[520px] lg:w-[600px] z-50 bg-gray-950 border-l border-gray-800 flex flex-col shadow-2xl"
+              className="fixed top-0 right-0 h-full w-full sm:w-[520px] lg:w-[600px] z-50 bg-[var(--surface-0)] border-l border-[var(--border-dim)] flex flex-col shadow-2xl"
             >
               {/* Drawer header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-dim)]">
                 <div>
-                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
                     <Truck size={18} className="text-green-400" />
                     {drawerVehicle.asset_no}
                   </h2>
-                  <p className="text-gray-400 text-sm mt-0.5">
+                  <p className="text-[var(--text-secondary)] text-sm mt-0.5">
                     {drawerVehicle.site ?? '-'} · {drawerVehicle.country ?? '-'}
                   </p>
                 </div>
@@ -863,7 +863,7 @@ export default function FleetHealthBoard() {
                   <HealthCircle score={vehicleHealthScore(drawerVehicle.tyres)} size={52} />
                   <button
                     onClick={() => setDrawerOpen(false)}
-                    className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                   >
                     <X size={18} />
                   </button>
@@ -875,27 +875,27 @@ export default function FleetHealthBoard() {
 
                 {/* Tyre table */}
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-300 mb-2">{t('fleethealth.drawer.activeTyres')}</h3>
-                  <div className="overflow-x-auto rounded-lg border border-gray-800">
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">{t('fleethealth.drawer.activeTyres')}</h3>
+                  <div className="overflow-x-auto rounded-lg border border-[var(--border-dim)]">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="border-b border-gray-800 bg-gray-900/50">
+                        <tr className="border-b border-[var(--border-dim)] bg-[var(--surface-1)]">
                           {['position','serial','brand','size','tread','pressure','risk','fitted'].map(hKey => (
-                            <th key={hKey} className="text-left px-2.5 py-2 text-gray-500 font-medium whitespace-nowrap">{t(`fleethealth.drawer.tyreColumns.${hKey}`)}</th>
+                            <th key={hKey} className="text-left px-2.5 py-2 text-[var(--text-muted)] font-medium whitespace-nowrap">{t(`fleethealth.drawer.tyreColumns.${hKey}`)}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {drawerVehicle.tyres.map(t => (
-                          <tr key={t.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                            <td className="px-2.5 py-2 text-gray-300 font-mono">{t.position ?? '-'}</td>
-                            <td className="px-2.5 py-2 text-gray-400 font-mono">{t.serial_number?.slice(-8) ?? '-'}</td>
-                            <td className="px-2.5 py-2 text-gray-300">{t.brand ?? '-'}</td>
-                            <td className="px-2.5 py-2 text-gray-400">{t.size ?? '-'}</td>
-                            <td className="px-2.5 py-2 text-gray-300">
+                          <tr key={t.id} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)]">
+                            <td className="px-2.5 py-2 text-[var(--text-secondary)] font-mono">{t.position ?? '-'}</td>
+                            <td className="px-2.5 py-2 text-[var(--text-secondary)] font-mono">{t.serial_number?.slice(-8) ?? '-'}</td>
+                            <td className="px-2.5 py-2 text-[var(--text-secondary)]">{t.brand ?? '-'}</td>
+                            <td className="px-2.5 py-2 text-[var(--text-secondary)]">{t.size ?? '-'}</td>
+                            <td className="px-2.5 py-2 text-[var(--text-secondary)]">
                               {t.tread_depth != null ? `${t.tread_depth}mm` : '-'}
                             </td>
-                            <td className="px-2.5 py-2 text-gray-300">
+                            <td className="px-2.5 py-2 text-[var(--text-secondary)]">
                               {t.pressure_reading != null ? `${t.pressure_reading}` : '-'}
                             </td>
                             <td className="px-2.5 py-2">
@@ -903,7 +903,7 @@ export default function FleetHealthBoard() {
                                 {t.risk_level ?? '-'}
                               </span>
                             </td>
-                            <td className="px-2.5 py-2 text-gray-500 flex items-center gap-1">
+                            <td className="px-2.5 py-2 text-[var(--text-muted)] flex items-center gap-1">
                               <Clock size={10} />
                               {daysFitted(t.issue_date)}
                             </td>
@@ -917,8 +917,8 @@ export default function FleetHealthBoard() {
                 {/* Risk trend mini chart */}
                 {drawerTrendData && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-300 mb-2">{t('fleethealth.drawer.riskIndexTrend')}</h3>
-                    <div className="bg-gray-900 rounded-lg border border-gray-800 p-3 h-36">
+                    <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">{t('fleethealth.drawer.riskIndexTrend')}</h3>
+                    <div className="bg-[var(--surface-1)] rounded-lg border border-[var(--border-dim)] p-3 h-36">
                       <Line
                         data={drawerTrendData}
                         options={{
@@ -981,9 +981,9 @@ function KpiCard({ label, value, sub, icon: Icon, color }) {
     <div className="card">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-gray-400 text-xs uppercase tracking-wide font-medium">{label}</p>
+          <p className="text-[var(--text-secondary)] text-xs uppercase tracking-wide font-medium">{label}</p>
           <p className={`text-2xl font-bold mt-1 tabular-nums ${c.value}`}>{value}</p>
-          {sub && <p className="text-gray-600 text-xs mt-0.5">{sub}</p>}
+          {sub && <p className="text-[var(--text-dim)] text-xs mt-0.5">{sub}</p>}
         </div>
         <div className={`p-2 rounded-lg ${c.bg}`}>
           <Icon size={18} className={c.icon} />
@@ -1016,15 +1016,15 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
       {/* Asset + location */}
       <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="text-white font-bold text-base leading-tight">{asset_no}</p>
+          <p className="text-[var(--text-primary)] font-bold text-base leading-tight">{asset_no}</p>
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
             {site && (
-              <span className="flex items-center gap-1 text-xs text-gray-400 bg-gray-800/60 rounded px-1.5 py-0.5">
+              <span className="flex items-center gap-1 text-xs text-[var(--text-secondary)] bg-[var(--surface-2)] rounded px-1.5 py-0.5">
                 <MapPin size={9} />{site}
               </span>
             )}
             {country && (
-              <span className="flex items-center gap-1 text-xs text-gray-500 bg-gray-800/40 rounded px-1.5 py-0.5">
+              <span className="flex items-center gap-1 text-xs text-[var(--text-muted)] bg-[var(--surface-2)] rounded px-1.5 py-0.5">
                 <Globe size={9} />{country}
               </span>
             )}
@@ -1040,24 +1040,24 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
         </div>
       ) : (
         <div className="flex items-center justify-center py-4">
-          <span className="text-gray-600 text-xs">{t('fleethealth.card.noTyreData')}</span>
+          <span className="text-[var(--text-dim)] text-xs">{t('fleethealth.card.noTyreData')}</span>
         </div>
       )}
 
       {/* Footer row */}
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-800/60">
-        <span className="text-gray-500 text-xs">{t('fleethealth.card.tyresCount', { count: tyres.length })}</span>
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-dim)]">
+        <span className="text-[var(--text-muted)] text-xs">{t('fleethealth.card.tyresCount', { count: tyres.length })}</span>
         {worst && (
           <span className={`badge border text-xs ${riskBgClass(worst)}`}>{worst}</span>
         )}
         {!worst && (
-          <span className="text-gray-600 text-xs">{t('fleethealth.card.noData')}</span>
+          <span className="text-[var(--text-dim)] text-xs">{t('fleethealth.card.noData')}</span>
         )}
-        <span className="text-gray-600 text-xs">{lastDate ? formatDate(lastDate, 'All', { day:'2-digit', month:'short' }) : '-'}</span>
+        <span className="text-[var(--text-dim)] text-xs">{lastDate ? formatDate(lastDate, 'All', { day:'2-digit', month:'short' }) : '-'}</span>
       </div>
 
       {/* Drill-in hint */}
-      <div className="flex items-center justify-end mt-2 gap-1 text-gray-700 hover:text-gray-400 transition-colors">
+      <div className="flex items-center justify-end mt-2 gap-1 text-[var(--text-dim)] hover:text-[var(--text-secondary)] transition-colors">
         <span className="text-xs">{t('fleethealth.card.details')}</span>
         <ChevronRight size={11} />
       </div>

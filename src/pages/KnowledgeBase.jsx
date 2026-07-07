@@ -20,7 +20,7 @@ const DOC_TYPES = [
   { value: 'inspection', label: 'Inspection Report', color: 'text-green-400',  bg: 'bg-green-400/10'  },
   { value: 'rca',        label: 'RCA / Failure',     color: 'text-red-400',    bg: 'bg-red-400/10'    },
   { value: 'vendor',     label: 'Vendor Data',       color: 'text-orange-400', bg: 'bg-orange-400/10' },
-  { value: 'other',      label: 'Other',             color: 'text-gray-400',   bg: 'bg-gray-400/10'   },
+  { value: 'other',      label: 'Other',             color: 'text-[var(--text-secondary)]',   bg: 'bg-gray-400/10'   },
 ]
 
 const CHUNK_SIZE = 1500  // chars per chunk (safe for embedding model)
@@ -134,20 +134,20 @@ function UploadModal({ onClose, onSuccess, sites }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-2xl bg-[var(--surface-1)] rounded-2xl border border-[var(--border-bright)] shadow-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-800">
+        <div className="flex items-center justify-between p-5 border-b border-[var(--border-dim)]">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-green-400/10 flex items-center justify-center">
               <Plus className="w-5 h-5 text-green-400" />
             </div>
             <div>
-              <p className="text-white font-semibold">Add Knowledge Document</p>
-              <p className="text-gray-400 text-xs mt-0.5">Upload a document to the AI knowledge base</p>
+              <p className="text-[var(--text-primary)] font-semibold">Add Knowledge Document</p>
+              <p className="text-[var(--text-secondary)] text-xs mt-0.5">Upload a document to the AI knowledge base</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-800 transition-colors">
-            <X className="w-5 h-5 text-gray-400" />
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--surface-2)] transition-colors">
+            <X className="w-5 h-5 text-[var(--text-secondary)]" />
           </button>
         </div>
 
@@ -158,7 +158,7 @@ function UploadModal({ onClose, onSuccess, sites }) {
             onDragOver={e => { e.preventDefault(); dropRef.current.classList.add('border-green-500') }}
             onDragLeave={() => dropRef.current.classList.remove('border-green-500')}
             onDrop={e => { e.preventDefault(); dropRef.current.classList.remove('border-green-500'); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
-            className="border-2 border-dashed border-gray-700 rounded-xl p-6 text-center cursor-pointer hover:border-gray-500 transition-colors"
+            className="border-2 border-dashed border-[var(--border-bright)] rounded-xl p-6 text-center cursor-pointer hover:border-gray-500 transition-colors"
             onClick={() => document.getElementById('kb-file-input').click()}
           >
             <input
@@ -166,16 +166,16 @@ function UploadModal({ onClose, onSuccess, sites }) {
               accept=".txt,.md,.csv,.json,.log"
               onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
             />
-            <Upload className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-            <p className="text-gray-300 text-sm font-medium">{file ? file.name : 'Drop a file or click to browse'}</p>
-            <p className="text-gray-500 text-xs mt-1">.txt · .md · .csv · .json - or paste text below</p>
+            <Upload className="w-8 h-8 text-[var(--text-muted)] mx-auto mb-2" />
+            <p className="text-[var(--text-secondary)] text-sm font-medium">{file ? file.name : 'Drop a file or click to browse'}</p>
+            <p className="text-[var(--text-muted)] text-xs mt-1">.txt · .md · .csv · .json - or paste text below</p>
           </div>
 
           {/* Title */}
           <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Title *</label>
+            <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-1.5">Title *</label>
             <input
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-green-500 transition-colors"
+              className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:border-green-500 transition-colors"
               value={form.title} onChange={e => set('title', e.target.value)}
               placeholder="e.g. Tyre Pressure SOP - Heavy Fleet"
             />
@@ -184,18 +184,18 @@ function UploadModal({ onClose, onSuccess, sites }) {
           {/* Type + Site row */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Document Type</label>
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-1.5">Document Type</label>
               <select
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-green-500 transition-colors"
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:border-green-500 transition-colors"
                 value={form.doc_type} onChange={e => set('doc_type', e.target.value)}
               >
                 {DOC_TYPES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Site (optional)</label>
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-1.5">Site (optional)</label>
               <select
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-green-500 transition-colors"
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:border-green-500 transition-colors"
                 value={form.site} onChange={e => set('site', e.target.value)}
               >
                 <option value="">All Sites</option>
@@ -207,17 +207,17 @@ function UploadModal({ onClose, onSuccess, sites }) {
           {/* Tags + Asset */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Tags (comma-separated)</label>
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-1.5">Tags (comma-separated)</label>
               <input
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-green-500 transition-colors"
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:border-green-500 transition-colors"
                 value={form.tags} onChange={e => set('tags', e.target.value)}
                 placeholder="inflation, pressure, heavy-truck"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Asset No. (optional)</label>
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-1.5">Asset No. (optional)</label>
               <input
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-green-500 transition-colors"
+                className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:border-green-500 transition-colors"
                 value={form.asset_no} onChange={e => set('asset_no', e.target.value)}
                 placeholder="e.g. RMX-042"
               />
@@ -226,11 +226,11 @@ function UploadModal({ onClose, onSuccess, sites }) {
 
           {/* Content */}
           <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
-              Content * <span className="text-gray-500 normal-case font-normal">({form.content.length.toLocaleString()} chars · {chunkText(form.content).length} chunk{chunkText(form.content).length !== 1 ? 's' : ''})</span>
+            <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-1.5">
+              Content * <span className="text-[var(--text-muted)] normal-case font-normal">({form.content.length.toLocaleString()} chars · {chunkText(form.content).length} chunk{chunkText(form.content).length !== 1 ? 's' : ''})</span>
             </label>
             <textarea
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-green-500 transition-colors font-mono resize-none"
+              className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-3 py-2.5 text-[var(--text-primary)] text-sm focus:outline-none focus:border-green-500 transition-colors font-mono resize-none"
               rows={8}
               value={form.content} onChange={e => set('content', e.target.value)}
               placeholder="Paste document text here, or load from file above..."
@@ -245,10 +245,10 @@ function UploadModal({ onClose, onSuccess, sites }) {
         </div>
 
         {/* Footer */}
-        <div className="p-5 border-t border-gray-800 flex items-center justify-between gap-3">
-          <p className="text-gray-500 text-xs">{progress || (form.content ? `${chunkText(form.content).length} chunk(s) will be embedded` : '')}</p>
+        <div className="p-5 border-t border-[var(--border-dim)] flex items-center justify-between gap-3">
+          <p className="text-[var(--text-muted)] text-xs">{progress || (form.content ? `${chunkText(form.content).length} chunk(s) will be embedded` : '')}</p>
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-800 text-gray-300 text-sm font-medium hover:bg-gray-700 transition-colors">Cancel</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] text-[var(--text-secondary)] text-sm font-medium hover:bg-[var(--surface-3)] transition-colors">Cancel</button>
             <button
               onClick={handleSubmit}
               disabled={uploading || !form.title.trim() || !form.content.trim()}
@@ -364,8 +364,8 @@ export default function KnowledgeBase() {
               <Icon className={`w-5 h-5 ${color}`} />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{value}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+              <p className="text-2xl font-bold text-[var(--text-primary)]">{value}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">{label}</p>
             </div>
           </div>
         ))}
@@ -374,9 +374,9 @@ export default function KnowledgeBase() {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex-1 min-w-52 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
           <input
-            className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors"
+            className="w-full bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-xl pl-9 pr-4 py-2.5 text-sm text-[var(--text-primary)] placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors"
             placeholder="Search by title, type, site, tag..."
             value={search} onChange={e => setSearch(e.target.value)}
           />
@@ -385,26 +385,26 @@ export default function KnowledgeBase() {
         {/* Type filter */}
         <div className="relative">
           <select
-            className="appearance-none bg-gray-900 border border-gray-700 rounded-xl pl-3 pr-8 py-2.5 text-sm text-white focus:outline-none focus:border-green-500 transition-colors cursor-pointer"
+            className="appearance-none bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-xl pl-3 pr-8 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-green-500 transition-colors cursor-pointer"
             value={filterType} onChange={e => setFilterType(e.target.value)}
           >
             <option value="all">All Types</option>
             {DOC_TYPES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
           </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none" />
         </div>
 
         {/* Site filter */}
         {sites.length > 0 && (
           <div className="relative">
             <select
-              className="appearance-none bg-gray-900 border border-gray-700 rounded-xl pl-3 pr-8 py-2.5 text-sm text-white focus:outline-none focus:border-green-500 transition-colors cursor-pointer"
+              className="appearance-none bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-xl pl-3 pr-8 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-green-500 transition-colors cursor-pointer"
               value={filterSite} onChange={e => setFilterSite(e.target.value)}
             >
               <option value="all">All Sites</option>
               {sites.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)] pointer-events-none" />
           </div>
         )}
 
@@ -446,67 +446,67 @@ export default function KnowledgeBase() {
 
       {/* Document list */}
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-gray-500">
+        <div className="flex items-center justify-center py-16 text-[var(--text-muted)]">
           <Loader className="w-6 h-6 animate-spin mr-3" />Loading knowledge base...
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-20 text-gray-500">
+        <div className="text-center py-20 text-[var(--text-muted)]">
           <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p className="font-medium text-gray-400">{docs.length === 0 ? 'No documents yet' : 'No documents match your filters'}</p>
+          <p className="font-medium text-[var(--text-secondary)]">{docs.length === 0 ? 'No documents yet' : 'No documents match your filters'}</p>
           <p className="text-sm mt-1">{docs.length === 0 ? 'Upload SOPs, manuals, and policies to enable AI-powered knowledge retrieval.' : 'Try adjusting your search or filters.'}</p>
         </div>
       ) : (
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+        <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-2xl overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800">
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Title</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Site</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Tags</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Added</th>
+              <tr className="border-b border-[var(--border-dim)]">
+                <th className="text-left px-5 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Title</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Type</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide hidden md:table-cell">Site</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide hidden lg:table-cell">Tags</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide hidden md:table-cell">Added</th>
                 {canWrite && <th className="px-4 py-3 w-10" />}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-800">
+            <tbody className="divide-y divide-[var(--border-dim)]">
               {filtered.map(doc => (
-                <tr key={doc.id} className="hover:bg-gray-800/50 transition-colors">
+                <tr key={doc.id} className="hover:bg-[var(--surface-2)] transition-colors">
                   <td className="px-5 py-3.5">
-                    <p className="text-white font-medium leading-tight">{doc.title}</p>
+                    <p className="text-[var(--text-primary)] font-medium leading-tight">{doc.title}</p>
                     {doc.asset_no && (
-                      <p className="text-gray-500 text-xs mt-0.5 flex items-center gap-1">
+                      <p className="text-[var(--text-muted)] text-xs mt-0.5 flex items-center gap-1">
                         <Truck className="w-3 h-3" />{doc.asset_no}
                       </p>
                     )}
                   </td>
                   <td className="px-4 py-3.5"><DocTypeBadge type={doc.doc_type} /></td>
                   <td className="px-4 py-3.5 hidden md:table-cell">
-                    <span className="text-gray-400 text-xs flex items-center gap-1">
+                    <span className="text-[var(--text-secondary)] text-xs flex items-center gap-1">
                       <Globe className="w-3 h-3" />{doc.site || 'All Sites'}
                     </span>
                   </td>
                   <td className="px-4 py-3.5 hidden lg:table-cell">
                     <div className="flex flex-wrap gap-1">
                       {(doc.tags ?? []).slice(0, 3).map(tag => (
-                        <span key={tag} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 text-xs">
+                        <span key={tag} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[var(--surface-3)] text-[var(--text-secondary)] text-xs">
                           <Tag className="w-2.5 h-2.5" />{tag}
                         </span>
                       ))}
                       {(doc.tags ?? []).length > 3 && (
-                        <span className="text-gray-500 text-xs">+{doc.tags.length - 3}</span>
+                        <span className="text-[var(--text-muted)] text-xs">+{doc.tags.length - 3}</span>
                       )}
                     </div>
                   </td>
                   <td className="px-4 py-3.5"><EmbedStatusBadge hasEmbedding={!!doc.embedding} /></td>
-                  <td className="px-4 py-3.5 text-gray-500 text-xs hidden md:table-cell">
+                  <td className="px-4 py-3.5 text-[var(--text-muted)] text-xs hidden md:table-cell">
                     {formatDate(doc.created_at, 'All', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </td>
                   {canWrite && (
                     <td className="px-4 py-3.5">
                       <button
                         onClick={() => handleDelete(doc.id)}
-                        className="p-1.5 rounded-lg hover:bg-red-400/10 text-gray-600 hover:text-red-400 transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-red-400/10 text-[var(--text-dim)] hover:text-red-400 transition-colors"
                         title="Delete document"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -517,7 +517,7 @@ export default function KnowledgeBase() {
               ))}
             </tbody>
           </table>
-          <div className="px-5 py-3 border-t border-gray-800 text-gray-500 text-xs">
+          <div className="px-5 py-3 border-t border-[var(--border-dim)] text-[var(--text-muted)] text-xs">
             {filtered.length} document{filtered.length !== 1 ? 's' : ''}{filtered.length !== docs.length ? ` (filtered from ${docs.length})` : ''}
           </div>
         </div>

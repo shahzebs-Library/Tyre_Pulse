@@ -16,8 +16,8 @@ const SEVERITY_STYLE = {
   high:      { badge: 'bg-orange-500/15 text-orange-200 border-orange-500/40', icon: '🟠', label: 'High' },
   medium:    { badge: 'bg-yellow-500/15 text-yellow-200 border-yellow-500/35', icon: '🟡', label: 'Medium' },
   low:       { badge: 'bg-blue-500/15 text-blue-300 border-blue-500/35',     icon: '🔵', label: 'Low' },
-  dismissed: { badge: 'bg-gray-800/50 text-gray-400 border-gray-700/50',    icon: '⚪', label: 'Dismissed' },
-  unknown:   { badge: 'bg-gray-800/50 text-gray-400 border-gray-700/50',    icon: '⚪', label: 'Unknown' },
+  dismissed: { badge: 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]',    icon: '⚪', label: 'Dismissed' },
+  unknown:   { badge: 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]',    icon: '⚪', label: 'Unknown' },
 }
 
 const TYPE_ICON = {
@@ -57,20 +57,20 @@ function AnomalyTypeGroup({ typeName, items }) {
           <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${sevBg} ${sevColour}`}>
             {maxSev}
           </span>
-          <span className="text-xs text-gray-500">{items.length} instance{items.length !== 1 ? 's' : ''}</span>
+          <span className="text-xs text-[var(--text-muted)]">{items.length} instance{items.length !== 1 ? 's' : ''}</span>
         </div>
-        <span className="text-gray-500 text-xs">{open ? '▲' : '▼'}</span>
+        <span className="text-[var(--text-muted)] text-xs">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && items.map((anomaly, idx) => (
         <div key={anomaly.id ?? idx} className="border-t border-white/5 px-4 py-3">
-          <p className="text-sm text-gray-300 mb-2">{anomaly.message}</p>
-          {anomaly.detail && <p className="text-xs text-gray-500 mb-2">{anomaly.detail}</p>}
+          <p className="text-sm text-[var(--text-secondary)] mb-2">{anomaly.message}</p>
+          {anomaly.detail && <p className="text-xs text-[var(--text-muted)] mb-2">{anomaly.detail}</p>}
           {anomaly.records && anomaly.records.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="text-gray-500 border-b border-white/5">
+                  <tr className="text-[var(--text-muted)] border-b border-white/5">
                     <th className="text-left pb-1 pr-3">Date</th>
                     <th className="text-left pb-1 pr-3">Brand</th>
                     <th className="text-left pb-1 pr-3">Serial</th>
@@ -81,11 +81,11 @@ function AnomalyTypeGroup({ typeName, items }) {
                 <tbody>
                   {anomaly.records.map((r, ri) => (
                     <tr key={ri} className="border-b border-white/5 last:border-0">
-                      <td className="py-1 pr-3 text-gray-400">{r.issue_date ?? '-'}</td>
-                      <td className="py-1 pr-3 text-gray-300">{r.brand ?? '-'}</td>
-                      <td className="py-1 pr-3 text-gray-400 font-mono">{r.serial_no ?? '-'}</td>
-                      <td className="py-1 pr-3 text-gray-400">{r.site ?? '-'}</td>
-                      <td className="py-1 text-gray-300">{r.cost_per_tyre ? formatCurrencyCompact(r.cost_per_tyre) : '-'}</td>
+                      <td className="py-1 pr-3 text-[var(--text-secondary)]">{r.issue_date ?? '-'}</td>
+                      <td className="py-1 pr-3 text-[var(--text-secondary)]">{r.brand ?? '-'}</td>
+                      <td className="py-1 pr-3 text-[var(--text-secondary)] font-mono">{r.serial_no ?? '-'}</td>
+                      <td className="py-1 pr-3 text-[var(--text-secondary)]">{r.site ?? '-'}</td>
+                      <td className="py-1 text-[var(--text-secondary)]">{r.cost_per_tyre ? formatCurrencyCompact(r.cost_per_tyre) : '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -248,7 +248,7 @@ export default function Anomalies() {
         {header}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="bg-gray-800/40 h-20 rounded-xl animate-pulse" />
+            <div key={i} className="bg-[var(--surface-2)] h-20 rounded-xl animate-pulse" />
           ))}
         </div>
       </div>
@@ -267,8 +267,8 @@ export default function Anomalies() {
             <div key={type} className="card flex items-start gap-3">
               <span className="text-2xl flex-shrink-0">{TYPE_ICON[type]}</span>
               <div>
-                <p className="text-white text-sm font-semibold">{ANOMALY_TYPE_LABELS[type]}</p>
-                <p className="text-gray-400 text-xs mt-1">{ANOMALY_TYPE_DESC[type]}</p>
+                <p className="text-[var(--text-primary)] text-sm font-semibold">{ANOMALY_TYPE_LABELS[type]}</p>
+                <p className="text-[var(--text-secondary)] text-xs mt-1">{ANOMALY_TYPE_DESC[type]}</p>
               </div>
             </div>
           ))}
@@ -293,7 +293,7 @@ export default function Anomalies() {
               </div>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-3">Changes apply on next scan.</p>
+          <p className="text-xs text-[var(--text-muted)] mt-3">Changes apply on next scan.</p>
         </div>
       )}
 
@@ -303,11 +303,11 @@ export default function Anomalies() {
           {[
             { label: 'High',   count: summary.bySeverity.high,   style: SEVERITY_STYLE.high },
             { label: 'Medium', count: summary.bySeverity.medium, style: SEVERITY_STYLE.medium },
-            { label: 'Total',  count: summary.total,             style: { badge: 'bg-gray-800 text-gray-300 border-gray-700', icon: '⚪' } },
+            { label: 'Total',  count: summary.total,             style: { badge: 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]', icon: '⚪' } },
           ].map(({ label, count, style }) => (
             <div key={label} className={`card border ${style.badge}`}>
               <p className="text-2xl font-bold">{count}</p>
-              <p className="text-sm mt-1 text-gray-400">{label} anomalies</p>
+              <p className="text-sm mt-1 text-[var(--text-secondary)]">{label} anomalies</p>
             </div>
           ))}
         </div>
@@ -316,7 +316,7 @@ export default function Anomalies() {
       {/* Search + mode toggle */}
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
           <input
             type="text"
             value={assetSearch}
@@ -325,12 +325,12 @@ export default function Anomalies() {
             className="input pl-9 w-full"
           />
           {assetSearch && (
-            <button onClick={() => setAssetSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">✕</button>
+            <button onClick={() => setAssetSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]">✕</button>
           )}
         </div>
         <button
           onClick={() => setViewMode(m => m === 'all' ? 'search' : 'all')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${viewMode === 'all' ? 'bg-green-700/20 border-green-600/40 text-green-400' : 'border-white/10 text-gray-400 hover:text-white'}`}
+          className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${viewMode === 'all' ? 'bg-green-700/20 border-green-600/40 text-green-400' : 'border-white/10 text-[var(--text-secondary)] hover:text-white'}`}
         >
           {viewMode === 'all' ? '✓ Viewing All' : 'View All Anomalies'}
         </button>
@@ -338,12 +338,12 @@ export default function Anomalies() {
 
       {/* Content area */}
       {viewMode === 'search' && !assetSearch && hasRun && (
-        <p className="text-gray-500 text-sm">Type an asset number above to see its anomalies, or click "View All Anomalies".</p>
+        <p className="text-[var(--text-muted)] text-sm">Type an asset number above to see its anomalies, or click "View All Anomalies".</p>
       )}
 
       {viewMode === 'search' && assetSearch && hasRun && (() => {
         const filtered = anomalies.filter(a => (a.asset_no ?? '').toLowerCase().includes(assetSearch.toLowerCase()))
-        if (filtered.length === 0) return <p className="text-gray-500 text-sm">No anomalies found for "{assetSearch}".</p>
+        if (filtered.length === 0) return <p className="text-[var(--text-muted)] text-sm">No anomalies found for "{assetSearch}".</p>
         const grouped = filtered.reduce((acc, a) => {
           const t = a.type ?? 'OTHER'
           if (!acc[t]) acc[t] = []
@@ -352,7 +352,7 @@ export default function Anomalies() {
         }, {})
         return (
           <div>
-            <p className="text-xs text-gray-500 mb-4">{filtered.length} anomal{filtered.length !== 1 ? 'ies' : 'y'} found for <span className="text-white font-medium">{assetSearch}</span></p>
+            <p className="text-xs text-[var(--text-muted)] mb-4">{filtered.length} anomal{filtered.length !== 1 ? 'ies' : 'y'} found for <span className="text-[var(--text-primary)] font-medium">{assetSearch}</span></p>
             {Object.entries(grouped).map(([type, items]) => (
               <AnomalyTypeGroup key={type} typeName={type} items={items} />
             ))}
@@ -367,7 +367,7 @@ export default function Anomalies() {
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setFilterType('all')}
               className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                filterType === 'all' ? 'bg-green-700 text-white border-green-600' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'
+                filterType === 'all' ? 'bg-green-700 text-white border-green-600' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)] hover:border-gray-500'
               }`}>
               All ({active.length})
             </button>
@@ -379,7 +379,7 @@ export default function Anomalies() {
                   key={type}
                   onClick={() => setFilterType(filterType === type ? 'all' : type)}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex items-center gap-1 ${
-                    filterType === type ? 'bg-green-700 text-white border-green-600' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'
+                    filterType === type ? 'bg-green-700 text-white border-green-600' : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)] hover:border-gray-500'
                   }`}
                 >
                   {TYPE_ICON[type]} {ANOMALY_TYPE_LABELS[type]} ({cnt})
@@ -397,8 +397,8 @@ export default function Anomalies() {
                     filterSeverity === s
                       ? s === 'high' ? 'bg-red-600 text-white border-red-500'
                         : s === 'medium' ? 'bg-yellow-600 text-white border-yellow-500'
-                        : 'bg-gray-700 text-white border-gray-600'
-                      : 'bg-gray-800 text-gray-400 border-gray-700'
+                        : 'bg-[var(--surface-3)] text-[var(--text-primary)] border-[var(--border-bright)]'
+                      : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
                   }`}>
                   {s === 'all' ? 'All Severity' : s.charAt(0).toUpperCase() + s.slice(1)}
                 </button>
@@ -416,8 +416,8 @@ export default function Anomalies() {
           {visible.length === 0 ? (
             <div className="card text-center py-12">
               <p className="text-4xl mb-3">✅</p>
-              <p className="text-white font-semibold">No anomalies found</p>
-              <p className="text-gray-400 text-sm mt-2">
+              <p className="text-[var(--text-primary)] font-semibold">No anomalies found</p>
+              <p className="text-[var(--text-secondary)] text-sm mt-2">
                 {filterType !== 'all' || filterSeverity !== 'all' || filterSite !== 'all'
                   ? 'No anomalies match your current filters.'
                   : `All ${records.length} records passed the configured detection rules.`}
@@ -425,7 +425,7 @@ export default function Anomalies() {
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[var(--text-muted)]">
                 {visible.length} anomal{visible.length !== 1 ? 'ies' : 'y'} detected across {records.length} records
               </p>
 
@@ -436,7 +436,7 @@ export default function Anomalies() {
                   <div key={a.id} className={`rounded-xl border overflow-hidden ${a.severity === 'high' ? 'border-red-800/50' : 'border-yellow-800/40'}`}>
                     {/* Summary row */}
                     <div
-                      className={`flex items-start gap-3 p-4 cursor-pointer hover:bg-gray-800/20 transition-colors`}
+                      className={`flex items-start gap-3 p-4 cursor-pointer hover:bg-[var(--surface-2)] transition-colors`}
                       onClick={() => setExpanded(isOpen ? null : a.id)}
                     >
                       <span className="text-xl flex-shrink-0 mt-0.5">{TYPE_ICON[a.type]}</span>
@@ -448,27 +448,27 @@ export default function Anomalies() {
                           <span className={`text-xs px-2 py-0.5 rounded-full border ${sev.badge}`}>
                             {sev.icon} {sev.label}
                           </span>
-                          <span className="text-xs bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded-full">
+                          <span className="text-xs bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border-bright)] px-2 py-0.5 rounded-full">
                             {ANOMALY_TYPE_LABELS[a.type]}
                           </span>
                         </div>
-                        <p className="text-gray-400 text-xs mt-1">{a.detail}</p>
-                        {a.site && <p className="text-gray-500 text-xs mt-0.5">📍 {a.site}</p>}
+                        <p className="text-[var(--text-secondary)] text-xs mt-1">{a.detail}</p>
+                        {a.site && <p className="text-[var(--text-muted)] text-xs mt-0.5">📍 {a.site}</p>}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <button
                           onClick={e => { e.stopPropagation(); dismiss(a.id) }}
-                          className="text-xs text-gray-600 hover:text-gray-400"
+                          className="text-xs text-[var(--text-dim)] hover:text-[var(--text-secondary)]"
                         >
                           ✕
                         </button>
-                        <span className="text-gray-600 text-xs">{isOpen ? '▲' : '▼'}</span>
+                        <span className="text-[var(--text-dim)] text-xs">{isOpen ? '▲' : '▼'}</span>
                       </div>
                     </div>
 
                     {/* Expanded detail */}
                     {isOpen && (
-                      <div className="border-t border-gray-800 bg-gray-900/50 p-4">
+                      <div className="border-t border-[var(--border-dim)] bg-[var(--surface-1)] p-4">
                         <AnomalyDetail anomaly={a} />
                       </div>
                     )}
@@ -487,11 +487,11 @@ function AnomalyDetail({ anomaly: a }) {
   const { activeCurrency } = useSettings()
   return (
     <div className="space-y-3">
-      <p className="text-xs text-gray-400 font-medium">Affected Records ({a.records.length})</p>
+      <p className="text-xs text-[var(--text-secondary)] font-medium">Affected Records ({a.records.length})</p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-gray-500 border-b border-gray-800">
+            <tr className="text-[var(--text-muted)] border-b border-[var(--border-dim)]">
               <th className="pb-1.5 pr-3 text-left">Date</th>
               <th className="pb-1.5 pr-3 text-left">Asset</th>
               <th className="pb-1.5 pr-3 text-left">Serial</th>
@@ -503,20 +503,20 @@ function AnomalyDetail({ anomaly: a }) {
           </thead>
           <tbody>
             {a.records.map(r => (
-              <tr key={r.id} className="border-b border-gray-800/40">
-                <td className="py-1.5 pr-3 text-gray-300">{r.issue_date || '-'}</td>
+              <tr key={r.id} className="border-b border-[var(--border-dim)]">
+                <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{r.issue_date || '-'}</td>
                 <td className="py-1.5 pr-3 font-mono text-blue-400">{r.asset_no || '-'}</td>
-                <td className="py-1.5 pr-3 font-mono text-gray-400">{r.serial_no || '-'}</td>
-                <td className="py-1.5 pr-3 text-gray-300">{r.brand || '-'}</td>
-                <td className="py-1.5 pr-3 text-gray-400">{r.site || '-'}</td>
+                <td className="py-1.5 pr-3 font-mono text-[var(--text-secondary)]">{r.serial_no || '-'}</td>
+                <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{r.brand || '-'}</td>
+                <td className="py-1.5 pr-3 text-[var(--text-secondary)]">{r.site || '-'}</td>
                 <td className="py-1.5 pr-3">
                   <span className={`px-1.5 py-0.5 rounded text-xs ${
                     r.risk_level === 'High' ? 'bg-red-900/40 text-red-400' :
                     r.risk_level === 'Medium' ? 'bg-yellow-900/40 text-yellow-400' :
-                    'bg-gray-800 text-gray-400'
+                    'bg-[var(--surface-2)] text-[var(--text-secondary)]'
                   }`}>{r.risk_level || '?'}</span>
                 </td>
-                <td className="py-1.5 text-right text-gray-400">
+                <td className="py-1.5 text-right text-[var(--text-secondary)]">
                   {r.cost_per_tyre ? formatCurrencyCompact(r.cost_per_tyre, activeCurrency) : '-'}
                 </td>
               </tr>
@@ -529,8 +529,8 @@ function AnomalyDetail({ anomaly: a }) {
       {a.type === ANOMALY_TYPES.SHORT_INTERVAL && (
         <div className="bg-red-900/10 border border-red-800/30 rounded-lg p-3">
           <p className="text-xs text-red-300 font-medium mb-1">Why this matters</p>
-          <p className="text-xs text-gray-400">
-            Replacing a tyre only <strong className="text-white">{a.daysDiff} day{a.daysDiff !== 1 ? 's' : ''}</strong> after the previous replacement on Asset {a.asset_no} is unusual.
+          <p className="text-xs text-[var(--text-secondary)]">
+            Replacing a tyre only <strong className="text-[var(--text-primary)]">{a.daysDiff} day{a.daysDiff !== 1 ? 's' : ''}</strong> after the previous replacement on Asset {a.asset_no} is unusual.
             This could indicate: premature failure, wrong tyre type for duty, vehicle misuse, or a data entry error on the date.
           </p>
         </div>
@@ -538,8 +538,8 @@ function AnomalyDetail({ anomaly: a }) {
       {a.type === ANOMALY_TYPES.SAME_DAY_BURST && (
         <div className="bg-orange-900/10 border border-orange-800/30 rounded-lg p-3">
           <p className="text-xs text-orange-300 font-medium mb-1">Why this matters</p>
-          <p className="text-xs text-gray-400">
-            <strong className="text-white">{a.count} records</strong> (total qty: {a.totalQty}) on Asset {a.asset_no} on {a.date}.
+          <p className="text-xs text-[var(--text-secondary)]">
+            <strong className="text-[var(--text-primary)]">{a.count} records</strong> (total qty: {a.totalQty}) on Asset {a.asset_no} on {a.date}.
             Could be a full axle replacement (legitimate), a batch entry error, or a vehicle involved in an incident.
           </p>
         </div>
@@ -547,8 +547,8 @@ function AnomalyDetail({ anomaly: a }) {
       {a.type === ANOMALY_TYPES.RAPID_RECURRENCE && (
         <div className="bg-red-900/10 border border-red-800/30 rounded-lg p-3">
           <p className="text-xs text-red-300 font-medium mb-1">Why this matters</p>
-          <p className="text-xs text-gray-400">
-            Asset {a.asset_no} had <strong className="text-white">{a.count} high-risk failures in {a.days} days</strong>.
+          <p className="text-xs text-[var(--text-secondary)]">
+            Asset {a.asset_no} had <strong className="text-[var(--text-primary)]">{a.count} high-risk failures in {a.days} days</strong>.
             This asset may require mechanical inspection, route review, or driver behaviour assessment.
           </p>
         </div>
@@ -556,8 +556,8 @@ function AnomalyDetail({ anomaly: a }) {
       {a.type === ANOMALY_TYPES.COST_SPIKE && (
         <div className="bg-yellow-900/10 border border-yellow-800/30 rounded-lg p-3">
           <p className="text-xs text-yellow-300 font-medium mb-1">Why this matters</p>
-          <p className="text-xs text-gray-400">
-            Cost {formatCurrencyCompact(a.cost, activeCurrency)} is <strong className="text-white">{a.zScore?.toFixed(1)}σ</strong> from the fleet average ({formatCurrencyCompact(a.fleetAvg, activeCurrency)}).
+          <p className="text-xs text-[var(--text-secondary)]">
+            Cost {formatCurrencyCompact(a.cost, activeCurrency)} is <strong className="text-[var(--text-primary)]">{a.zScore?.toFixed(1)}σ</strong> from the fleet average ({formatCurrencyCompact(a.fleetAvg, activeCurrency)}).
             Verify the price entry is correct or check for special tyre procurement.
           </p>
         </div>
@@ -565,8 +565,8 @@ function AnomalyDetail({ anomaly: a }) {
       {a.type === ANOMALY_TYPES.SERIAL_REUSE && (
         <div className="bg-purple-900/10 border border-purple-800/30 rounded-lg p-3">
           <p className="text-xs text-purple-300 font-medium mb-1">Why this matters</p>
-          <p className="text-xs text-gray-400">
-            Serial <strong className="text-white">{a.serial}</strong> appears on assets: {a.assets?.join(', ')}.
+          <p className="text-xs text-[var(--text-secondary)]">
+            Serial <strong className="text-[var(--text-primary)]">{a.serial}</strong> appears on assets: {a.assets?.join(', ')}.
             Either the serial was mis-typed, or a tyre was transferred between vehicles without a proper record.
           </p>
         </div>
@@ -574,8 +574,8 @@ function AnomalyDetail({ anomaly: a }) {
       {a.type === ANOMALY_TYPES.DUPLICATE_ENTRY && (
         <div className="bg-red-900/10 border border-red-800/30 rounded-lg p-3">
           <p className="text-xs text-red-300 font-medium mb-1">Why this matters</p>
-          <p className="text-xs text-gray-400">
-            The exact same asset, serial and date combination has been entered <strong className="text-white">{a.count} times</strong>.
+          <p className="text-xs text-[var(--text-secondary)]">
+            The exact same asset, serial and date combination has been entered <strong className="text-[var(--text-primary)]">{a.count} times</strong>.
             These are likely duplicate uploads and one or more records should be deleted.
           </p>
         </div>

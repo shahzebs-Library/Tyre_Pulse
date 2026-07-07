@@ -19,6 +19,7 @@ import {
   FileSpreadsheet, Upload, Trash2,
 } from 'lucide-react'
 import { workOrders } from '../lib/api'
+import { logAudit } from '../lib/audit'
 import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import { useSettings } from '../contexts/SettingsContext'
@@ -258,6 +259,7 @@ export default function WorkOrders() {
     setDeleteError('')
     try {
       await workOrders.deleteWorkOrder(deleteTarget.id)
+      logAudit({ action: 'DELETE', entity: 'work_orders', entityId: deleteTarget.id, before: deleteTarget })
       setDeleteTarget(null)
       if (viewOrder?.id === deleteTarget.id) setViewOrder(null)
       await load()
@@ -293,6 +295,7 @@ export default function WorkOrders() {
     setDeleteError('')
     try {
       const n = await workOrders.deleteWorkOrders([...selectedIds])
+      logAudit({ action: 'DELETE', entity: 'work_orders', meta: { bulk: true, ids: [...selectedIds] } })
       setBulkDeleteOpen(false)
       setSelectedIds(new Set())
       if (viewOrder && selectedIds.has(viewOrder.id)) setViewOrder(null)
@@ -366,11 +369,13 @@ export default function WorkOrders() {
 
       if (editOrder) {
         await workOrders.updateWorkOrderById(editOrder.id, payload)
+        logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: editOrder.id, before: editOrder, after: payload })
       } else {
         // Generate work order number
         const woNo = await workOrders.generateWorkOrderNo()
         payload.work_order_no = woNo || `WO-${Date.now()}`
         await workOrders.insertWorkOrder(payload)
+        logAudit({ action: 'CREATE', entity: 'work_orders', entityId: payload.work_order_no, after: payload })
       }
       await load()
       setShowForm(false)
@@ -388,6 +393,7 @@ export default function WorkOrders() {
     if (newStatus === 'Completed') patch.completed_at = new Date().toISOString()
     try {
       await workOrders.updateWorkOrderById(order.id, patch)
+      logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: order.id, before: order, after: patch })
     } catch (err) { alert(t('workorders.form.updateFailed', { msg: err.message })); return }
     await load()
     if (viewOrder?.id === order.id) setViewOrder(o => ({ ...o, ...patch }))

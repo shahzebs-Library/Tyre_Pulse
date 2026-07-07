@@ -12,6 +12,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/EmptyState'
 import { gatePasses } from '../lib/api'
+import { logAudit } from '../lib/audit'
 
 const STATUS_CONFIG = {
   Cleared: { color: 'text-green-400', bg: 'bg-green-900/30', border: 'border-green-700/50' },
@@ -131,8 +132,10 @@ export default function GatePass() {
         // Route release through the safety gate - refuses when critical defects are open.
         const { blockers: b } = await gatePasses.createGatePass(values)
         if (b) setBlockers(b)
+        else logAudit({ action: 'CREATE', entity: 'gate_passes', entityId: `${values.asset_no}|${values.pass_date}`, after: values })
       } else {
         await gatePassPageApi.insertGatePass(values) // denials/other are never blocked
+        logAudit({ action: 'CREATE', entity: 'gate_passes', entityId: `${values.asset_no}|${values.pass_date}`, after: values })
       }
     } catch (err) {
       if (err?.code === 'BLOCKED') {

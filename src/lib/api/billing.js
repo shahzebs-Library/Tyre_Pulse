@@ -153,14 +153,20 @@ export async function canAddResource(resource) {
 }
 
 /**
- * Stripe checkout seam. Throws a clear, non-crashing error until a checkout
- * edge function + STRIPE keys are configured, so the UI can show an actionable
- * message instead of pretending a payment happened.
+ * Start Stripe self-serve checkout for a paid plan via the billing-checkout
+ * edge function. Returns `{ configured, url }`:
+ *   - configured:true + url  → redirect the browser to Stripe's hosted page.
+ *   - configured:false       → Stripe keys not set; caller falls back to an
+ *                              admin-applied plan change (changePlan).
+ * Throws only on a real transport/function error.
+ *
+ * @param {{planCode:string, interval?:'monthly'|'annual'}} opts
  */
-export async function startCheckout() {
-  throw new Error(
-    'Online payment is not configured yet. Set the Stripe keys and deploy the ' +
-    'billing-checkout edge function, then plan upgrades can be paid self-serve. ' +
-    'For now an administrator applies the plan directly.',
-  )
+export async function startCheckout({ planCode, interval = 'monthly' } = {}) {
+  if (!planCode || planCode === 'trial') throw new Error('A paid plan is required for checkout.')
+  const { data, error } = await supabase.functions.invoke('billing-checkout', {
+    body: { planCode, interval },
+  })
+  if (error) throw new Error(error.message || 'Checkout could not be started.')
+  return data || { configured: false }
 }

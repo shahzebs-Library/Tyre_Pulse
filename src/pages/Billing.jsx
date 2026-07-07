@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   CreditCard, Check, Zap, TrendingUp, AlertTriangle, RefreshCw, Clock,
   ShieldCheck, XCircle, Loader2, FileText, Infinity as InfinityIcon,
@@ -97,6 +97,19 @@ export default function Billing() {
   const [actionErr, setActionErr] = useState('')
   const [confirm, setConfirm] = useState(null) // { plan }
 
+  // Reflect the Stripe checkout return (billing-checkout success/cancel_url).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const outcome = params.get('checkout')
+    if (!outcome) return
+    if (outcome === 'success') { setActionMsg('Payment received — your plan is now active.'); refresh() }
+    else if (outcome === 'cancel') setActionErr('Checkout was cancelled. Your plan is unchanged.')
+    // Strip the query param so a refresh doesn't repeat the message.
+    window.history.replaceState({}, '', '/billing')
+    const id = setTimeout(() => { setActionMsg(''); setActionErr('') }, 5000)
+    return () => clearTimeout(id)
+  }, [refresh])
+
   const sub = overview?.subscription
   const plan = overview?.plan
   const currency = plan?.currency || 'USD'
@@ -114,6 +127,15 @@ export default function Billing() {
     setActionErr('')
     setActionMsg('')
     try {
+      const paid = target.code !== 'trial' && (target.price_monthly > 0 || target.price_annual > 0)
+      // Paid plan: try Stripe self-serve checkout. If Stripe isn't configured
+      // yet, transparently fall back to an admin-applied plan change.
+      if (paid) {
+        try {
+          const res = await billing.startCheckout({ planCode: target.code, interval })
+          if (res?.configured && res.url) { window.location.href = res.url; return }
+        } catch { /* fall through to direct change */ }
+      }
       await billing.changePlan({ planCode: target.code, interval })
       setActionMsg(`Switched to the ${target.name} plan.`)
       refresh()

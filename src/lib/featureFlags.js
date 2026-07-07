@@ -93,6 +93,16 @@ export const FLAG_DEFS = [
     category: 'Workspace',
   },
   {
+    key: 'billing',
+    label: 'Billing & Subscription',
+    description:
+      'Subscription plans, usage-vs-limit metering and invoice history. ' +
+      'Requires migration V105 (subscription_plans / org_subscriptions / invoices) ' +
+      'to be applied to the database.',
+    default: true,
+    category: 'Commercial',
+  },
+  {
     key: 'automation_platform',
     label: 'Automation Platform',
     description:

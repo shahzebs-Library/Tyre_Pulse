@@ -126,6 +126,7 @@ const Approvals              = lazy(() => import('./pages/Approvals'))
 const WorkflowSettings       = lazy(() => import('./pages/WorkflowSettings'))
 const AutomationRules        = lazy(() => import('./pages/AutomationRules'))
 const Integrations           = lazy(() => import('./pages/Integrations'))
+const Billing                = lazy(() => import('./pages/Billing'))
 
 // ── Per-page error boundary ───────────────────────────────────────────────
 function Safe({ children }) {
@@ -286,6 +287,8 @@ function MainApp() {
                       <Route path="/system-health"       element={<Safe><SystemHealth /></Safe>} />
                       <Route path="/tenant-health"       element={<Safe><TenantHealth /></Safe>} />
                       <Route path="/permission-matrix"   element={<Safe><PermissionMatrix /></Safe>} />
+                      {/* ── Commercial: Subscription & Billing (roadmap #6) ── */}
+                      <Route path="/billing"             element={<Safe><FlagRoute flag="billing"><Billing /></FlagRoute></Safe>} />
                       {/* ── Automation platform (backend V96–V103; flag OFF until DB applied) ── */}
                       <Route path="/events"              element={<Safe><FlagRoute flag="automation_platform"><EventStream /></FlagRoute></Safe>} />
                       <Route path="/approvals"           element={<Safe><FlagRoute flag="automation_platform"><Approvals /></FlagRoute></Safe>} />

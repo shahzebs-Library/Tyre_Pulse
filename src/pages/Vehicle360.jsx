@@ -9,6 +9,7 @@ import StatTile from '../components/ui/StatTile'
 import VehicleMap from '../components/ui/VehicleMap'
 import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
+import CopilotCard from '../components/ai/CopilotCard'
 
 const isHigh = (r) => r.risk_level === 'High' || r.risk_level === 'Critical'
 
@@ -110,6 +111,8 @@ export default function Vehicle360() {
       {msg && (
         <div className={`text-sm rounded-lg px-3 py-2 ${msg.type === 'ok' ? 'bg-emerald-950/30 border border-emerald-800/40 text-emerald-300' : 'bg-red-900/25 border border-red-700/40 text-red-300'}`}>{msg.text}</div>
       )}
+
+      <CopilotCard task="assess_vehicle_tyres" context={{ vehicle, tyres }} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* LEFT: photo + details + gps */}

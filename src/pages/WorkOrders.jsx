@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { workOrders } from '../lib/api'
 import { logAudit } from '../lib/audit'
+import { publish } from '../lib/events'
 import PageHeader from '../components/ui/PageHeader'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import { useSettings } from '../contexts/SettingsContext'
@@ -260,6 +261,7 @@ export default function WorkOrders() {
     try {
       await workOrders.deleteWorkOrder(deleteTarget.id)
       logAudit({ action: 'DELETE', entity: 'work_orders', entityId: deleteTarget.id, before: deleteTarget })
+      publish('workorder.deleted', { id: deleteTarget.id, work_order_no: deleteTarget.work_order_no })
       setDeleteTarget(null)
       if (viewOrder?.id === deleteTarget.id) setViewOrder(null)
       await load()
@@ -296,6 +298,7 @@ export default function WorkOrders() {
     try {
       const n = await workOrders.deleteWorkOrders([...selectedIds])
       logAudit({ action: 'DELETE', entity: 'work_orders', meta: { bulk: true, ids: [...selectedIds] } })
+      publish('workorder.deleted', { ids: [...selectedIds], bulk: true })
       setBulkDeleteOpen(false)
       setSelectedIds(new Set())
       if (viewOrder && selectedIds.has(viewOrder.id)) setViewOrder(null)
@@ -376,6 +379,7 @@ export default function WorkOrders() {
         payload.work_order_no = woNo || `WO-${Date.now()}`
         await workOrders.insertWorkOrder(payload)
         logAudit({ action: 'CREATE', entity: 'work_orders', entityId: payload.work_order_no, after: payload })
+        publish('workorder.created', { work_order_no: payload.work_order_no, asset_no: payload.asset_no, work_type: payload.work_type, priority: payload.priority })
       }
       await load()
       setShowForm(false)
@@ -394,6 +398,7 @@ export default function WorkOrders() {
     try {
       await workOrders.updateWorkOrderById(order.id, patch)
       logAudit({ action: 'UPDATE', entity: 'work_orders', entityId: order.id, before: order, after: patch })
+      publish('workorder.status_changed', { id: order.id, work_order_no: order.work_order_no, from_status: order.status, to_status: newStatus })
     } catch (err) { alert(t('workorders.form.updateFailed', { msg: err.message })); return }
     await load()
     if (viewOrder?.id === order.id) setViewOrder(o => ({ ...o, ...patch }))

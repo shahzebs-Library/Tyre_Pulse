@@ -7,6 +7,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import { useLanguage } from '../contexts/LanguageContext'
 import ErpConnectionPanel from '../components/erp/ErpConnectionPanel'
+import WebhooksPanel from '../components/integrations/WebhooksPanel'
 
 // ── Honest state ──────────────────────────────────────────────────────────────
 // No ERP connector is provisioned for this project yet. Rather than fabricate
@@ -96,6 +97,9 @@ export default function ErpSync() {
 
       {/* ERP connection config */}
       <ErpConnectionPanel />
+
+      {/* Outbound webhooks (event-driven integrations) */}
+      <WebhooksPanel />
 
       {/* Integration targets */}
       <section>

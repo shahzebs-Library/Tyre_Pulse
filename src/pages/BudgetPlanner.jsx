@@ -13,6 +13,7 @@ import {
 } from 'chart.js'
 import { Bar, Line, Doughnut } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
+import BudgetTabs from '../components/budgets/BudgetTabs'
 import { fetchAllPages } from '../lib/fetchAll'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertTriangle, CheckCircle,
@@ -797,6 +798,7 @@ export default function BudgetPlanner() {
   return (
     <div className="space-y-6 pb-10">
 
+      <BudgetTabs />
       {/* ── Header ── */}
       <PageHeader
         title={t('budgetplanner.title')}

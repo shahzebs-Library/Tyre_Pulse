@@ -43,7 +43,7 @@ function statusColor(s) {
   return s === 'ready' ? 'text-green-400 bg-green-900/30'
     : s === 'warning' ? 'text-amber-400 bg-amber-900/30'
     : s === 'error' ? 'text-red-400 bg-red-900/30'
-    : 'text-gray-400 bg-gray-800'
+    : 'text-[var(--text-secondary)] bg-[var(--surface-2)]'
 }
 
 export default function DataIntakeCenter() {
@@ -564,7 +564,7 @@ export default function DataIntakeCenter() {
   if (!countryReady) {
     return (
       <div className="p-8 max-w-3xl mx-auto">
-        <h1 className="text-2xl font-bold text-white mb-2">Data Intake Center</h1>
+        <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Data Intake Center</h1>
         <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-6 text-amber-300 flex gap-3">
           <AlertTriangle className="shrink-0" />
           <p>Select a single country (top bar) before importing. Every import is scoped to one country - mixing countries is not allowed.</p>
@@ -574,21 +574,21 @@ export default function DataIntakeCenter() {
   }
 
   return (
-    <div className="p-6 max-w-[1800px] mx-auto text-gray-200">
+    <div className="p-6 max-w-[1800px] mx-auto text-[var(--text-primary)]">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2"><Database size={22} /> Data Intake Center</h1>
-          <p className="text-sm text-gray-400">Controlled import for <span className="text-white">{activeCountry}</span> - staged, validated, approved, then committed.</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2"><Database size={22} /> Data Intake Center</h1>
+          <p className="text-sm text-[var(--text-secondary)]">Controlled import for <span className="text-[var(--text-primary)]">{activeCountry}</span> - staged, validated, approved, then committed.</p>
         </div>
-        <button onClick={reset} className="text-sm px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 flex items-center gap-2"><RefreshCw size={15} /> New import</button>
+        <button onClick={reset} className="text-sm px-3 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] flex items-center gap-2"><RefreshCw size={15} /> New import</button>
       </div>
 
       {/* stepper */}
       <div className="flex items-center gap-2 mb-6">
         {STEP_KEYS.map((key, i) => (
-          <div key={key} className={`flex items-center gap-2 text-sm ${i === step ? 'text-white' : i < step ? 'text-green-400' : 'text-gray-500'}`}>
-            <span className={`w-6 h-6 rounded-full grid place-items-center text-xs ${i === step ? 'bg-green-600 text-white' : i < step ? 'bg-green-900/40' : 'bg-gray-800'}`}>{i + 1}</span>
-            {t(`intake.steps.${key}`)}{i < STEP_KEYS.length - 1 && <span className="text-gray-700 mx-1">-</span>}
+          <div key={key} className={`flex items-center gap-2 text-sm ${i === step ? 'text-[var(--text-primary)]' : i < step ? 'text-green-400' : 'text-[var(--text-muted)]'}`}>
+            <span className={`w-6 h-6 rounded-full grid place-items-center text-xs ${i === step ? 'bg-green-600 text-white' : i < step ? 'bg-green-900/40' : 'bg-[var(--surface-2)]'}`}>{i + 1}</span>
+            {t(`intake.steps.${key}`)}{i < STEP_KEYS.length - 1 && <span className="text-[var(--text-dim)] mx-1">-</span>}
           </div>
         ))}
       </div>
@@ -599,33 +599,33 @@ export default function DataIntakeCenter() {
       {step === 0 && (
         <div className="space-y-5">
           <div>
-            <label className="block text-sm text-gray-400 mb-2">Module</label>
+            <label className="block text-sm text-[var(--text-secondary)] mb-2">Module</label>
             <div className="flex gap-2">
               {MODULES.map((m) => (
-                <button key={m.key} onClick={() => setModule(m.key)} className={`px-4 py-2 rounded-lg text-sm border ${module === m.key ? 'bg-green-600 border-green-600 text-white' : 'bg-gray-900 border-gray-700 hover:border-gray-500'}`}>{m.label}</button>
+                <button key={m.key} onClick={() => setModule(m.key)} className={`px-4 py-2 rounded-lg text-sm border ${module === m.key ? 'bg-green-600 border-green-600 text-white' : 'bg-[var(--surface-1)] border-[var(--border-bright)] hover:border-[var(--border-bright)]'}`}>{m.label}</button>
               ))}
             </div>
           </div>
 
           <ImportTemplatePanel module={module} />
-          <label className="block border-2 border-dashed border-gray-700 rounded-xl p-10 text-center cursor-pointer hover:border-green-600/60">
+          <label className="block border-2 border-dashed border-[var(--border-bright)] rounded-xl p-10 text-center cursor-pointer hover:border-green-600/60">
             <input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.ods,.csv,.tsv,.txt" multiple className="hidden" onChange={onFile} />
-            {busy ? <Loader2 className="animate-spin mx-auto text-green-400" /> : <UploadCloud className="mx-auto text-gray-500" size={34} />}
-            <p className="mt-2 text-sm text-gray-400">{file ? file.name : 'Choose one or more Excel / CSV files'}</p>
+            {busy ? <Loader2 className="animate-spin mx-auto text-green-400" /> : <UploadCloud className="mx-auto text-[var(--text-muted)]" size={34} />}
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">{file ? file.name : 'Choose one or more Excel / CSV files'}</p>
             {fileQueue.length > 0 && (
               <p className="mt-1 text-xs text-sky-400">{fileQueue.length} more file{fileQueue.length !== 1 ? 's' : ''} queued - offered after this import finishes.</p>
             )}
           </label>
 
           {parsed && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
-              <p className="text-sm text-gray-400 flex items-center gap-2"><FileSpreadsheet size={15} /> {parsed.sheets.length} sheet(s)</p>
+            <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 space-y-3">
+              <p className="text-sm text-[var(--text-secondary)] flex items-center gap-2"><FileSpreadsheet size={15} /> {parsed.sheets.length} sheet(s)</p>
               <div className="flex flex-wrap gap-2">
                 {parsed.sheets.map((s, i) => (
-                  <button key={s.name + i} onClick={() => setSheetIdx(i)} className={`px-3 py-1.5 rounded-lg text-xs ${i === sheetIdx ? 'bg-green-600 text-white' : 'bg-gray-800 hover:bg-gray-700'}`}>{s.name} <span className="opacity-70">({s.rows.length} rows)</span></button>
+                  <button key={s.name + i} onClick={() => setSheetIdx(i)} className={`px-3 py-1.5 rounded-lg text-xs ${i === sheetIdx ? 'bg-green-600 text-white' : 'bg-[var(--surface-2)] hover:bg-[var(--surface-3)]'}`}>{s.name} <span className="opacity-70">({s.rows.length} rows)</span></button>
                 ))}
               </div>
-              {sheet && <p className="text-xs text-gray-500">Header row detected at line {(sheet.headerRow ?? 0) + 1} · {sheet.columns.length} columns</p>}
+              {sheet && <p className="text-xs text-[var(--text-muted)]">Header row detected at line {(sheet.headerRow ?? 0) + 1} · {sheet.columns.length} columns</p>}
               <button onClick={startBatch} disabled={busy || !sheet} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <ArrowRight size={15} />} Continue to mapping</button>
             </div>
           )}
@@ -654,15 +654,15 @@ export default function DataIntakeCenter() {
             </div>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-gray-400 flex items-center gap-2"><Wand2 size={15} /> Review the suggested mapping. Unknown columns are kept (never dropped).</p>
+            <p className="text-sm text-[var(--text-secondary)] flex items-center gap-2"><Wand2 size={15} /> Review the suggested mapping. Unknown columns are kept (never dropped).</p>
             <div className="flex items-center gap-2">
               {profiles.length > 0 && (
                 <div className="flex items-center gap-1.5">
-                  <Bookmark size={15} className="text-gray-500" />
+                  <Bookmark size={15} className="text-[var(--text-muted)]" />
                   <select
                     defaultValue=""
                     onChange={(e) => { applyProfile(e.target.value); e.target.value = '' }}
-                    className="bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs"
+                    className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-lg px-2 py-1.5 text-xs"
                     title="Apply a saved mapping profile"
                   >
                     <option value="">Apply saved profile...</option>
@@ -670,23 +670,23 @@ export default function DataIntakeCenter() {
                   </select>
                 </div>
               )}
-              <button onClick={saveAsProfile} disabled={busy || !mapping.some((m) => m.target)} className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs flex items-center gap-1.5 disabled:opacity-50" title="Save this mapping for reuse"><Save size={14} /> Save as profile</button>
+              <button onClick={saveAsProfile} disabled={busy || !mapping.some((m) => m.target)} className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-xs flex items-center gap-1.5 disabled:opacity-50" title="Save this mapping for reuse"><Save size={14} /> Save as profile</button>
             </div>
           </div>
-          <div className="overflow-x-auto border border-gray-800 rounded-xl">
+          <div className="overflow-x-auto border border-[var(--border-dim)] rounded-xl">
             <table className="w-full text-sm">
-              <thead className="bg-gray-800/60 text-gray-400 text-xs">
+              <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs">
                 <tr><th className="text-left px-3 py-2">Source header</th><th className="text-left px-3 py-2">Sample</th><th className="text-left px-3 py-2">Map to</th><th className="text-left px-3 py-2">Confidence</th></tr>
               </thead>
               <tbody>
                 {mapping.map((m) => {
                   const sample = sheet.rows.find((r) => r[m.sourceHeader] != null && r[m.sourceHeader] !== '')?.[m.sourceHeader]
                   return (
-                    <tr key={m.sourceHeader} className="border-t border-gray-800">
+                    <tr key={m.sourceHeader} className="border-t border-[var(--border-dim)]">
                       <td className="px-3 py-2 font-medium">{m.sourceHeader}</td>
-                      <td className="px-3 py-2 text-gray-500 truncate max-w-[160px]">{String(sample ?? '')}</td>
+                      <td className="px-3 py-2 text-[var(--text-muted)] truncate max-w-[160px]">{String(sample ?? '')}</td>
                       <td className="px-3 py-2">
-                        <select value={m.target || ''} onChange={(e) => setTarget(m.sourceHeader, e.target.value)} className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs">
+                        <select value={m.target || ''} onChange={(e) => setTarget(m.sourceHeader, e.target.value)} className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded px-2 py-1 text-xs">
                           <option value="">- preserve as custom -</option>
                           {targetOptions.map((t) => <option key={t.key} value={t.key}>{t.label}{t.required ? ' *' : ''}</option>)}
                         </select>
@@ -702,7 +702,7 @@ export default function DataIntakeCenter() {
                           </button>
                         )}
                       </td>
-                      <td className="px-3 py-2"><span className={`text-xs px-2 py-0.5 rounded ${m.confidence >= 90 ? 'bg-green-900/30 text-green-400' : m.confidence >= 60 ? 'bg-amber-900/30 text-amber-400' : 'bg-gray-800 text-gray-400'}`}>{m.target ? `${m.confidence}%` : 'custom'}</span></td>
+                      <td className="px-3 py-2"><span className={`text-xs px-2 py-0.5 rounded ${m.confidence >= 90 ? 'bg-green-900/30 text-green-400' : m.confidence >= 60 ? 'bg-amber-900/30 text-amber-400' : 'bg-[var(--surface-2)] text-[var(--text-secondary)]'}`}>{m.target ? `${m.confidence}%` : 'custom'}</span></td>
                     </tr>
                   )
                 })}
@@ -710,7 +710,7 @@ export default function DataIntakeCenter() {
             </table>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setStep(0)} className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm flex items-center gap-2"><ArrowLeft size={15} /> Back</button>
+            <button onClick={() => setStep(0)} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2"><ArrowLeft size={15} /> Back</button>
             <button onClick={() => setStep(2)} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2">Validate <ArrowRight size={15} /></button>
           </div>
         </div>
@@ -721,8 +721,8 @@ export default function DataIntakeCenter() {
         <div className="space-y-4">
           {counts && (
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-              {[['Total', counts.total, 'text-white'], ['Ready', counts.ready, 'text-green-400'], ['Warning', counts.warning, 'text-amber-400'], ['Error', counts.error, 'text-red-400'], ['Duplicate', counts.duplicate, 'text-purple-400'], ['Already live', counts.liveDuplicate || 0, 'text-sky-400']].map(([l, v, c]) => (
-                <div key={l} className="bg-gray-900 border border-gray-800 rounded-xl p-3"><p className="text-xs text-gray-500">{l}</p><p className={`text-2xl font-bold ${c}`}>{v}</p></div>
+              {[['Total', counts.total, 'text-[var(--text-primary)]'], ['Ready', counts.ready, 'text-green-400'], ['Warning', counts.warning, 'text-amber-400'], ['Error', counts.error, 'text-red-400'], ['Duplicate', counts.duplicate, 'text-purple-400'], ['Already live', counts.liveDuplicate || 0, 'text-sky-400']].map(([l, v, c]) => (
+                <div key={l} className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-3"><p className="text-xs text-[var(--text-muted)]">{l}</p><p className={`text-2xl font-bold ${c}`}>{v}</p></div>
               ))}
             </div>
           )}
@@ -732,7 +732,7 @@ export default function DataIntakeCenter() {
                 <p className="text-xs text-emerald-300/80 uppercase tracking-wide">Total tyre amount (this import)</p>
                 <p className="text-3xl font-bold text-emerald-300">{fmtMoney(counts.amount)}</p>
               </div>
-              <p className="text-xs text-gray-400 max-w-xs">Derived from <span className="text-gray-200">{counts.qty || counts.total}</span> tyres × unit cost. Quantity and unit cost are stored; the total is computed so all spend rolls up in one place.
+              <p className="text-xs text-[var(--text-secondary)] max-w-xs">Derived from <span className="text-[var(--text-primary)]">{counts.qty || counts.total}</span> tyres × unit cost. Quantity and unit cost are stored; the total is computed so all spend rolls up in one place.
                 <span className="block mt-1 text-amber-300/90">Looks too high vs your file? Your cost column may already include the quantity — go Back and map it to <span className="font-semibold">"Total Amount"</span> instead; the per-tyre price is derived automatically.</span></p>
             </div>
           )}
@@ -742,9 +742,9 @@ export default function DataIntakeCenter() {
                 <AlertTriangle size={16} />
                 This file looks like line-item / finer-grained data - it may be the wrong module.
               </p>
-              <p className="text-xs text-gray-400">
-                The natural key for <span className="text-gray-200 font-semibold">{MODULES.find((m) => m.key === module)?.label || module}</span> is
-                {' '}<span className="text-gray-200 font-semibold">{granularityWarning.keyLabel}</span>, but
+              <p className="text-xs text-[var(--text-secondary)]">
+                The natural key for <span className="text-[var(--text-primary)] font-semibold">{MODULES.find((m) => m.key === module)?.label || module}</span> is
+                {' '}<span className="text-[var(--text-primary)] font-semibold">{granularityWarning.keyLabel}</span>, but
                 {' '}<span className="text-amber-200 font-semibold">{granularityWarning.pct}%</span> of keyed rows
                 {' '}({granularityWarning.collapsed.toLocaleString('en-US')} of {granularityWarning.keyed.toLocaleString('en-US')})
                 {' '}collapse to existing keys. Committing here would discard the line-item detail. If this is
@@ -752,16 +752,16 @@ export default function DataIntakeCenter() {
               </p>
             </div>
           )}
-          <div className="overflow-x-auto border border-gray-800 rounded-xl max-h-80 overflow-y-auto">
+          <div className="overflow-x-auto border border-[var(--border-dim)] rounded-xl max-h-80 overflow-y-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-800/60 text-gray-400 text-xs sticky top-0"><tr><th className="text-left px-3 py-2">#</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Dup</th><th className="text-left px-3 py-2">Issues</th></tr></thead>
+              <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs sticky top-0"><tr><th className="text-left px-3 py-2">#</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Dup</th><th className="text-left px-3 py-2">Issues</th></tr></thead>
               <tbody>
                 {annotated.slice(0, 200).map((r) => (
-                  <tr key={r.sourceRowNo} className="border-t border-gray-800">
-                    <td className="px-3 py-1.5 text-gray-500">{r.sourceRowNo}</td>
+                  <tr key={r.sourceRowNo} className="border-t border-[var(--border-dim)]">
+                    <td className="px-3 py-1.5 text-[var(--text-muted)]">{r.sourceRowNo}</td>
                     <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${statusColor(r.validationStatus)}`}>{r.validationStatus}</span></td>
-                    <td className="px-3 py-1.5 text-xs text-gray-400">{r.liveDuplicate ? <span className="text-sky-400">already live · skip</span> : r.dupStatus !== 'none' ? r.dupStatus : '-'}</td>
-                    <td className="px-3 py-1.5 text-xs text-gray-500 truncate max-w-[280px]">{r.issues.map((i) => i.message).join('; ') || '-'}</td>
+                    <td className="px-3 py-1.5 text-xs text-[var(--text-secondary)]">{r.liveDuplicate ? <span className="text-sky-400">already live · skip</span> : r.dupStatus !== 'none' ? r.dupStatus : '-'}</td>
+                    <td className="px-3 py-1.5 text-xs text-[var(--text-muted)] truncate max-w-[280px]">{r.issues.map((i) => i.message).join('; ') || '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -770,7 +770,7 @@ export default function DataIntakeCenter() {
           {counts?.countryConflict > 0 && (
             <div className="bg-amber-900/20 border border-amber-600/50 rounded-xl p-4 space-y-2">
               <p className="text-sm text-amber-300 flex items-center gap-2"><AlertTriangle size={16} /> {counts.countryConflict} row(s) carry a country that differs from the selected import country <span className="font-semibold">{activeCountry}</span>.</p>
-              <p className="text-xs text-gray-400">To protect country isolation these will be committed under <span className="text-gray-200">{activeCountry}</span> only if you explicitly confirm the override. The original country value is preserved in the source row either way.</p>
+              <p className="text-xs text-[var(--text-secondary)]">To protect country isolation these will be committed under <span className="text-[var(--text-primary)]">{activeCountry}</span> only if you explicitly confirm the override. The original country value is preserved in the source row either way.</p>
               <label className="flex items-center gap-2 text-sm text-amber-200 cursor-pointer">
                 <input type="checkbox" checked={countryAck} onChange={(e) => setCountryAck(e.target.checked)} className="accent-amber-500" />
                 I confirm these rows belong to {activeCountry} and approve the override.
@@ -784,7 +784,7 @@ export default function DataIntakeCenter() {
                 <input type="checkbox" checked={enrichExisting} onChange={(e) => setEnrichExisting(e.target.checked)} className="accent-sky-500" />
                 Enrich existing records — fill their blank fields from this file (don't skip).
               </label>
-              <p className="text-xs text-gray-400">Combines this file with data already on record: it only fills fields that are currently empty and <span className="text-gray-200">never overwrites</span> a value you already have. Great for stitching together assets/tyres/work orders from different source files. Every change is audited.</p>
+              <p className="text-xs text-[var(--text-secondary)]">Combines this file with data already on record: it only fills fields that are currently empty and <span className="text-[var(--text-primary)]">never overwrites</span> a value you already have. Great for stitching together assets/tyres/work orders from different source files. Every change is audited.</p>
             </div>
           )}
           {isElevated && counts?.error > 0 && (
@@ -794,11 +794,11 @@ export default function DataIntakeCenter() {
                 <input type="checkbox" checked={forceFlagged} onChange={(e) => setForceFlagged(e.target.checked)} className="accent-red-500" />
                 Force-include these {counts.error} flagged row(s) — commit them anyway.
               </label>
-              <p className="text-xs text-gray-400">Use this to push through rows you know are acceptable despite a validation warning. Rows that are genuinely un-insertable (e.g. a missing required field) still fail safely at commit and are logged — the rest of the batch is unaffected.</p>
+              <p className="text-xs text-[var(--text-secondary)]">Use this to push through rows you know are acceptable despite a validation warning. Rows that are genuinely un-insertable (e.g. a missing required field) still fail safely at commit and are logged — the rest of the batch is unaffected.</p>
             </div>
           )}
           <div className="flex gap-2">
-            <button onClick={() => setStep(1)} className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm flex items-center gap-2"><ArrowLeft size={15} /> Back</button>
+            <button onClick={() => setStep(1)} className="px-4 py-2 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-sm flex items-center gap-2"><ArrowLeft size={15} /> Back</button>
             <button onClick={stageAll} disabled={busy || (counts?.countryConflict > 0 && !countryAck)} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} Stage & continue{forceFlagged ? ' (forced)' : ''}</button>
           </div>
         </div>
@@ -809,20 +809,20 @@ export default function DataIntakeCenter() {
         <div className="space-y-4 max-w-xl">
           {/* Accident-only: attach an evidence package (.zip) and match to rows */}
           {module === 'accident' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
+            <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <Paperclip size={16} className="text-sky-400" />
-                <h3 className="text-sm font-semibold text-white">Attach evidence package (optional)</h3>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Attach evidence package (optional)</h3>
               </div>
-              <p className="text-xs text-gray-400">
-                Upload a <span className="text-gray-200">.zip</span> of photos, police reports, invoices, quotations, or insurance
+              <p className="text-xs text-[var(--text-secondary)]">
+                Upload a <span className="text-[var(--text-primary)]">.zip</span> of photos, police reports, invoices, quotations, or insurance
                 docs. Files are stored privately and matched to staged accident rows by claim no, police report no, or asset no.
                 Unmatched files are kept for later reconciliation.
               </p>
-              <label className={`block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer ${attachBusy ? 'border-gray-700 opacity-60 pointer-events-none' : 'border-gray-700 hover:border-sky-600/60'}`}>
+              <label className={`block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer ${attachBusy ? 'border-[var(--border-bright)] opacity-60 pointer-events-none' : 'border-[var(--border-bright)] hover:border-sky-600/60'}`}>
                 <input type="file" accept=".zip,application/zip" className="hidden" onChange={onAttachmentZip} disabled={attachBusy} />
-                {attachBusy ? <Loader2 className="animate-spin mx-auto text-sky-400" /> : <FileArchive className="mx-auto text-gray-500" size={28} />}
-                <p className="mt-2 text-xs text-gray-400">{attachBusy ? 'Processing package...' : 'Choose a .zip evidence package'}</p>
+                {attachBusy ? <Loader2 className="animate-spin mx-auto text-sky-400" /> : <FileArchive className="mx-auto text-[var(--text-muted)]" size={28} />}
+                <p className="mt-2 text-xs text-[var(--text-secondary)]">{attachBusy ? 'Processing package...' : 'Choose a .zip evidence package'}</p>
               </label>
 
               {attachWarnings.length > 0 && (
@@ -835,9 +835,9 @@ export default function DataIntakeCenter() {
               )}
 
               {attachItems.length > 0 && (
-                <div className="overflow-x-auto border border-gray-800 rounded-lg max-h-72 overflow-y-auto">
+                <div className="overflow-x-auto border border-[var(--border-dim)] rounded-lg max-h-72 overflow-y-auto">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-800/60 text-gray-400 sticky top-0">
+                    <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] sticky top-0">
                       <tr>
                         <th className="text-left px-3 py-2">File</th>
                         <th className="text-left px-3 py-2">Matched to</th>
@@ -847,16 +847,16 @@ export default function DataIntakeCenter() {
                     </thead>
                     <tbody>
                       {attachItems.map((it, i) => (
-                        <tr key={it.name + i} className="border-t border-gray-800">
-                          <td className="px-3 py-1.5 text-gray-200 truncate max-w-[200px]">{it.name}</td>
+                        <tr key={it.name + i} className="border-t border-[var(--border-dim)]">
+                          <td className="px-3 py-1.5 text-[var(--text-primary)] truncate max-w-[200px]">{it.name}</td>
                           <td className="px-3 py-1.5">
                             {it.matchedBy
                               ? <span className="text-green-400">{it.matchedBy === 'claim_no' ? 'Claim no' : it.matchedBy === 'police_report_no' ? 'Police report' : 'Asset no'}</span>
-                              : <span className="text-gray-500">unmatched</span>}
+                              : <span className="text-[var(--text-muted)]">unmatched</span>}
                           </td>
-                          <td className="px-3 py-1.5 text-gray-400">{(it.sizeBytes / 1024).toFixed(0)} KB</td>
+                          <td className="px-3 py-1.5 text-[var(--text-secondary)]">{(it.sizeBytes / 1024).toFixed(0)} KB</td>
                           <td className="px-3 py-1.5">
-                            <span className={`px-2 py-0.5 rounded ${it.status === 'uploaded' ? 'text-green-400 bg-green-900/30' : it.status === 'failed' ? 'text-red-400 bg-red-900/30' : 'text-gray-400 bg-gray-800'}`}>{it.status}</span>
+                            <span className={`px-2 py-0.5 rounded ${it.status === 'uploaded' ? 'text-green-400 bg-green-900/30' : it.status === 'failed' ? 'text-red-400 bg-red-900/30' : 'text-[var(--text-secondary)] bg-[var(--surface-2)]'}`}>{it.status}</span>
                             {it.error && <span className="ml-2 text-red-400">{it.error}</span>}
                           </td>
                         </tr>
@@ -876,10 +876,10 @@ export default function DataIntakeCenter() {
           )}
 
           {!result ? (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
-              <p className="text-sm text-gray-300">{counts?.ready ?? 0} ready + {counts?.warning ?? 0} warning rows will be committed to the live <span className="text-white">{module}</span> table. Error rows are skipped.</p>
+            <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-6 space-y-4">
+              <p className="text-sm text-[var(--text-secondary)]">{counts?.ready ?? 0} ready + {counts?.warning ?? 0} warning rows will be committed to the live <span className="text-[var(--text-primary)]">{module}</span> table. Error rows are skipped.</p>
               {module === 'tyre' && counts?.amount > 0 && (
-                <p className="text-sm text-emerald-300 border-t border-gray-800 pt-3">Total tyre amount to be recorded: <span className="font-bold">{fmtMoney(counts.amount)}</span> across {counts.qty || counts.total} tyres.</p>
+                <p className="text-sm text-emerald-300 border-t border-[var(--border-dim)] pt-3">Total tyre amount to be recorded: <span className="font-bold">{fmtMoney(counts.amount)}</span> across {counts.qty || counts.total} tyres.</p>
               )}
               {!isElevated && <p className="text-xs text-amber-400">Your role can stage but not approve - this will be submitted for approval.</p>}
               <button onClick={commit} disabled={busy} className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm flex items-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} {isElevated ? 'Approve & commit' : 'Submit for approval'}</button>
@@ -887,11 +887,11 @@ export default function DataIntakeCenter() {
                 <div className="space-y-1.5">
                   {commitProgress.phase === 'commit' ? (
                     <>
-                      <div className="w-full bg-gray-800 rounded h-1.5 overflow-hidden">
+                      <div className="w-full bg-[var(--surface-2)] rounded h-1.5 overflow-hidden">
                         <div className="bg-green-500 h-1.5 rounded transition-all"
                           style={{ width: `${Math.min(100, Math.round(((commitProgress.inserted + commitProgress.skipped + commitProgress.failed + commitProgress.merged) / Math.max(1, commitProgress.inserted + commitProgress.skipped + commitProgress.failed + commitProgress.merged + (commitProgress.remaining || 0))) * 100))}%` }} />
                       </div>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-[var(--text-secondary)]">
                         Committing in chunks… {(commitProgress.inserted || 0).toLocaleString('en-US')} inserted
                         {commitProgress.merged ? ` · ${commitProgress.merged.toLocaleString('en-US')} merged` : ''}
                         {commitProgress.failed ? ` · ${commitProgress.failed.toLocaleString('en-US')} failed` : ''}
@@ -899,7 +899,7 @@ export default function DataIntakeCenter() {
                       </p>
                     </>
                   ) : (
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-[var(--text-secondary)]">
                       Enriching existing records… {(commitProgress.enriched || 0).toLocaleString('en-US')} enriched · {(commitProgress.no_match || 0).toLocaleString('en-US')} no match
                     </p>
                   )}
@@ -952,31 +952,31 @@ export default function DataIntakeCenter() {
 
       {/* recent imports */}
       <div className="mt-10">
-        <h2 className="text-sm font-semibold text-gray-400 mb-2">Recent imports</h2>
-        <div className="border border-gray-800 rounded-xl overflow-hidden">
+        <h2 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">Recent imports</h2>
+        <div className="border border-[var(--border-dim)] rounded-xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-800/60 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">Module</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Rows</th><th className="text-left px-3 py-2">When</th><th className="text-right px-3 py-2">Actions</th></tr></thead>
+            <thead className="bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs"><tr><th className="text-left px-3 py-2">Module</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Status</th><th className="text-left px-3 py-2">Rows</th><th className="text-left px-3 py-2">When</th><th className="text-right px-3 py-2">Actions</th></tr></thead>
             <tbody>
-              {recent.length === 0 && <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-600">No imports yet.</td></tr>}
+              {recent.length === 0 && <tr><td colSpan={6} className="px-3 py-4 text-center text-[var(--text-dim)]">No imports yet.</td></tr>}
               {recent.map((b) => {
                 const committed = b.import_status === 'committed'
                 const rowBusy = rowBusyId === b.id
                 return (
-                <tr key={b.id} className="border-t border-gray-800">
+                <tr key={b.id} className="border-t border-[var(--border-dim)]">
                   <td className="px-3 py-1.5 capitalize">{b.module}</td>
-                  <td className="px-3 py-1.5 text-gray-400">{b.country || '-'}</td>
-                  <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${committed ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>{b.import_status}</span></td>
-                  <td className="px-3 py-1.5 text-gray-400">{b.imported_rows || 0}/{b.total_rows || 0}</td>
-                  <td className="px-3 py-1.5 text-gray-500 text-xs">{b.created_at ? new Date(b.created_at).toLocaleString('en-GB') : ''}</td>
+                  <td className="px-3 py-1.5 text-[var(--text-secondary)]">{b.country || '-'}</td>
+                  <td className="px-3 py-1.5"><span className={`text-xs px-2 py-0.5 rounded ${committed ? 'bg-green-900/30 text-green-400' : 'bg-[var(--surface-2)] text-[var(--text-secondary)]'}`}>{b.import_status}</span></td>
+                  <td className="px-3 py-1.5 text-[var(--text-secondary)]">{b.imported_rows || 0}/{b.total_rows || 0}</td>
+                  <td className="px-3 py-1.5 text-[var(--text-muted)] text-xs">{b.created_at ? new Date(b.created_at).toLocaleString('en-GB') : ''}</td>
                   <td className="px-3 py-1.5 text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       <Link to="/data-intake/history" title="Open in import history"
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600">
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-bright)]">
                         Open
                       </Link>
                       <button onClick={() => deleteRecent(b)} disabled={rowBusy}
                         title={committed ? 'Reverse this committed import' : 'Delete this staged batch'}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-red-400 hover:border-red-700/50 disabled:opacity-50">
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-red-400 hover:border-red-700/50 disabled:opacity-50">
                         {rowBusy ? <Loader2 size={12} className="animate-spin" /> : committed ? <RotateCcw size={12} /> : <Trash2 size={12} />}
                         {committed ? 'Reverse' : 'Delete'}
                       </button>
@@ -988,27 +988,27 @@ export default function DataIntakeCenter() {
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-xs text-gray-600">Original files are stored privately; every source row is preserved. Commits run server-side (permission + country scope + idempotency). <Link to="/upload" className="underline">Legacy upload</Link></p>
+        <p className="mt-3 text-xs text-[var(--text-dim)]">Original files are stored privately; every source row is preserved. Commits run server-side (permission + country scope + idempotency). <Link to="/upload" className="underline">Legacy upload</Link></p>
       </div>
 
       {/* uploaded-but-not-imported files (orphans) - nothing is hidden */}
       {orphanFiles.length > 0 && (
         <div className="mt-8">
           <h2 className="text-sm font-semibold text-amber-400/90 mb-2 flex items-center gap-2"><AlertTriangle size={15} /> Uploaded but not yet imported</h2>
-          <p className="text-xs text-gray-500 mb-2">These files were uploaded but never completed the wizard, so they added nothing to your live data. Re-run the import from step 1, or remove them.</p>
+          <p className="text-xs text-[var(--text-muted)] mb-2">These files were uploaded but never completed the wizard, so they added nothing to your live data. Re-run the import from step 1, or remove them.</p>
           <div className="border border-amber-800/40 rounded-xl overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-amber-900/10 text-gray-400 text-xs"><tr><th className="text-left px-3 py-2">File</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Size</th><th className="text-left px-3 py-2">Uploaded</th><th className="text-right px-3 py-2">Actions</th></tr></thead>
+              <thead className="bg-amber-900/10 text-[var(--text-secondary)] text-xs"><tr><th className="text-left px-3 py-2">File</th><th className="text-left px-3 py-2">Country</th><th className="text-left px-3 py-2">Size</th><th className="text-left px-3 py-2">Uploaded</th><th className="text-right px-3 py-2">Actions</th></tr></thead>
               <tbody>
                 {orphanFiles.map((f) => (
-                  <tr key={f.id} className="border-t border-gray-800">
-                    <td className="px-3 py-1.5 text-gray-300 truncate max-w-[240px]">{f.original_filename}</td>
-                    <td className="px-3 py-1.5 text-gray-400">{f.country || '-'}</td>
-                    <td className="px-3 py-1.5 text-gray-500 text-xs">{f.size_bytes ? `${Math.round(f.size_bytes / 1024)} KB` : '-'}</td>
-                    <td className="px-3 py-1.5 text-gray-500 text-xs">{f.created_at ? new Date(f.created_at).toLocaleString('en-GB') : ''}</td>
+                  <tr key={f.id} className="border-t border-[var(--border-dim)]">
+                    <td className="px-3 py-1.5 text-[var(--text-secondary)] truncate max-w-[240px]">{f.original_filename}</td>
+                    <td className="px-3 py-1.5 text-[var(--text-secondary)]">{f.country || '-'}</td>
+                    <td className="px-3 py-1.5 text-[var(--text-muted)] text-xs">{f.size_bytes ? `${Math.round(f.size_bytes / 1024)} KB` : '-'}</td>
+                    <td className="px-3 py-1.5 text-[var(--text-muted)] text-xs">{f.created_at ? new Date(f.created_at).toLocaleString('en-GB') : ''}</td>
                     <td className="px-3 py-1.5 text-right">
                       <button onClick={() => deleteOrphan(f)} title="Remove this unused upload"
-                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-700 text-gray-400 hover:text-red-400 hover:border-red-700/50">
+                        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-red-400 hover:border-red-700/50">
                         <Trash2 size={12} /> Remove
                       </button>
                     </td>

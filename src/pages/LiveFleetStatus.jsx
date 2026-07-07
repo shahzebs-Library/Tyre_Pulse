@@ -59,7 +59,7 @@ function riskBgClass(level) {
     High:     'bg-orange-900/40 text-orange-300 border-orange-800/50',
     Medium:   'bg-yellow-900/40 text-yellow-300 border-yellow-800/50',
     Low:      'bg-green-900/40 text-green-300 border-green-800/50',
-  }[level] ?? 'bg-gray-800/60 text-gray-400 border-gray-700'
+  }[level] ?? 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
 }
 
 function severityBgClass(s) {
@@ -68,7 +68,7 @@ function severityBgClass(s) {
     High:     'bg-orange-900/40 text-orange-300 border-orange-800/50',
     Medium:   'bg-yellow-900/40 text-yellow-300 border-yellow-800/50',
     Low:      'bg-blue-900/40 text-blue-300 border-blue-800/50',
-  }[s] ?? 'bg-gray-800/60 text-gray-400 border-gray-700'
+  }[s] ?? 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
 }
 
 // ── Health score (per spec) ───────────────────────────────────────────────────
@@ -208,13 +208,13 @@ function TyreDot({ tyre, label }) {
         onMouseEnter={() => setTip(true)}
         onMouseLeave={() => setTip(false)}
       />
-      <span className="text-gray-600 font-mono" style={{ fontSize: '8px' }}>{label}</span>
+      <span className="text-[var(--text-dim)] font-mono" style={{ fontSize: '8px' }}>{label}</span>
       {tip && tyre && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-gray-700 rounded-lg p-2 text-xs whitespace-nowrap shadow-xl pointer-events-none">
-          <p className="text-white font-semibold">{label}</p>
-          <p className="text-gray-400">{tyre.brand ?? '-'}</p>
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-lg p-2 text-xs whitespace-nowrap shadow-xl pointer-events-none">
+          <p className="text-[var(--text-primary)] font-semibold">{label}</p>
+          <p className="text-[var(--text-secondary)]">{tyre.brand ?? '-'}</p>
           {/* tread_depth disabled - re-enable when ready */}
-          {tyre.pressure_reading != null && <p className="text-gray-400">PSI: {tyre.pressure_reading}</p>}
+          {tyre.pressure_reading != null && <p className="text-[var(--text-secondary)]">PSI: {tyre.pressure_reading}</p>}
           <p style={{ color: riskColor(tyre.risk_level) }}>{tyre.risk_level}</p>
         </div>
       )}
@@ -262,20 +262,20 @@ function MiniPositionGrid({ tyres }) {
 // ── Skeleton card ─────────────────────────────────────────────────────────────
 function SkeletonCard() {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 animate-pulse">
+    <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 animate-pulse">
       <div className="flex items-start justify-between mb-3">
         <div className="space-y-1.5">
-          <div className="h-5 w-28 bg-gray-800 rounded" />
-          <div className="h-3.5 w-20 bg-gray-800 rounded" />
+          <div className="h-5 w-28 bg-[var(--surface-2)] rounded" />
+          <div className="h-3.5 w-20 bg-[var(--surface-2)] rounded" />
         </div>
-        <div className="h-12 w-12 bg-gray-800 rounded-full" />
+        <div className="h-12 w-12 bg-[var(--surface-2)] rounded-full" />
       </div>
       <div className="flex justify-center py-3">
-        <div className="h-10 w-28 bg-gray-800 rounded" />
+        <div className="h-10 w-28 bg-[var(--surface-2)] rounded" />
       </div>
-      <div className="flex justify-between pt-3 border-t border-gray-800 mt-2">
-        <div className="h-4 w-16 bg-gray-800 rounded" />
-        <div className="h-4 w-12 bg-gray-800 rounded" />
+      <div className="flex justify-between pt-3 border-t border-[var(--border-dim)] mt-2">
+        <div className="h-4 w-16 bg-[var(--surface-2)] rounded" />
+        <div className="h-4 w-12 bg-[var(--surface-2)] rounded" />
       </div>
     </div>
   )
@@ -293,11 +293,11 @@ function KpiCard({ label, value, sub, icon: Icon, color, pulse }) {
   const c = colors[color] ?? colors.blue
 
   return (
-    <div className={`bg-gray-900 border ${c.border} rounded-xl p-4 flex items-start justify-between`}>
+    <div className={`bg-[var(--surface-1)] border ${c.border} rounded-xl p-4 flex items-start justify-between`}>
       <div>
-        <p className="text-gray-400 text-xs uppercase tracking-wide font-medium leading-tight">{label}</p>
+        <p className="text-[var(--text-secondary)] text-xs uppercase tracking-wide font-medium leading-tight">{label}</p>
         <p className={`text-2xl font-bold mt-1.5 ${c.value}`}>{value}</p>
-        {sub && <p className="text-gray-600 text-xs mt-0.5">{sub}</p>}
+        {sub && <p className="text-[var(--text-dim)] text-xs mt-0.5">{sub}</p>}
       </div>
       <div className={`p-2.5 rounded-lg ${c.bg} relative`}>
         <Icon size={18} className={c.icon} />
@@ -324,10 +324,10 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
       whileHover={{ y: -2 }}
       onClick={onClick}
       className={`
-        bg-gray-900 border rounded-xl p-4 cursor-pointer transition-all duration-200
+        bg-[var(--surface-1)] border rounded-xl p-4 cursor-pointer transition-all duration-200
         hover:shadow-lg hover:shadow-black/30 select-none
         ${scoreBorderClass(score)}
-        ${isSelected ? 'ring-1 ring-green-500/50 bg-gray-800/50' : ''}
+        ${isSelected ? 'ring-1 ring-green-500/50 bg-[var(--surface-2)]' : ''}
       `}
     >
       {/* Header */}
@@ -336,9 +336,9 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
           <div className="flex items-center gap-2">
             <span className="text-lg leading-none">{vehicleEmoji(vehicle_type)}</span>
             <div>
-              <p className="text-white font-bold text-sm leading-tight truncate">{asset_no}</p>
+              <p className="text-[var(--text-primary)] font-bold text-sm leading-tight truncate">{asset_no}</p>
               {fleet_number && (
-                <p className="text-gray-500 text-xs leading-tight font-mono">{fleet_number}</p>
+                <p className="text-[var(--text-muted)] text-xs leading-tight font-mono">{fleet_number}</p>
               )}
             </div>
           </div>
@@ -349,12 +349,12 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
       {/* Badges row */}
       <div className="flex flex-wrap gap-1 mb-3">
         {site && (
-          <span className="flex items-center gap-0.5 text-xs text-gray-400 bg-gray-800/70 rounded px-1.5 py-0.5">
+          <span className="flex items-center gap-0.5 text-xs text-[var(--text-secondary)] bg-[var(--surface-2)] rounded px-1.5 py-0.5">
             <MapPin size={8} />{site}
           </span>
         )}
         {operator_name && (
-          <span className="flex items-center gap-0.5 text-xs text-gray-500 bg-gray-800/40 rounded px-1.5 py-0.5 truncate max-w-[80px]">
+          <span className="flex items-center gap-0.5 text-xs text-[var(--text-muted)] bg-[var(--surface-2)] rounded px-1.5 py-0.5 truncate max-w-[80px]">
             <Users size={8} />{operator_name}
           </span>
         )}
@@ -362,19 +362,19 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
 
       {/* Mini tyre grid */}
       {tyres.length > 0 ? (
-        <div className="flex justify-center py-1.5 bg-gray-950/40 rounded-lg mb-3">
+        <div className="flex justify-center py-1.5 bg-[var(--surface-2)] rounded-lg mb-3">
           <MiniPositionGrid tyres={tyres} />
         </div>
       ) : (
-        <div className="flex items-center justify-center py-4 bg-gray-950/40 rounded-lg mb-3">
-          <span className="text-gray-600 text-xs">{t('livefleet.card.noTyreData')}</span>
+        <div className="flex items-center justify-center py-4 bg-[var(--surface-2)] rounded-lg mb-3">
+          <span className="text-[var(--text-dim)] text-xs">{t('livefleet.card.noTyreData')}</span>
         </div>
       )}
 
       {/* Footer */}
       <div className="flex items-center justify-between text-xs">
         {/* Last inspection */}
-        <span className={`flex items-center gap-1 ${inspectionStale ? 'text-red-400' : 'text-gray-500'}`}>
+        <span className={`flex items-center gap-1 ${inspectionStale ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
           <Clock size={9} />
           {lastInspectionDate
             ? t('livefleet.card.daysAgo', { days: daysSinceInspection })
@@ -400,14 +400,14 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
             <Bell size={8} />{alertCount}
           </span>
         ) : (
-          <span className="text-gray-700 flex items-center gap-0.5">
+          <span className="text-[var(--text-dim)] flex items-center gap-0.5">
             <Bell size={8} />0
           </span>
         )}
       </div>
 
       {/* Drill hint */}
-      <div className="flex items-center justify-end mt-2 gap-0.5 text-gray-700 hover:text-gray-400 transition-colors">
+      <div className="flex items-center justify-end mt-2 gap-0.5 text-[var(--text-dim)] hover:text-[var(--text-secondary)] transition-colors">
         <span className="text-xs">{t('livefleet.card.details')}</span>
         <ChevronRight size={10} />
       </div>
@@ -700,15 +700,15 @@ export default function LiveFleetStatus() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">{t('livefleet.header.title')}</h1>
-            <p className="text-gray-400 text-sm mt-1">{t('livefleet.header.loading')}</p>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">{t('livefleet.header.title')}</h1>
+            <p className="text-[var(--text-secondary)] text-sm mt-1">{t('livefleet.header.loading')}</p>
           </div>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           {[1,2,3,4,5].map(i => (
-            <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4 animate-pulse h-24">
-              <div className="h-3 w-20 bg-gray-800 rounded mb-2" />
-              <div className="h-7 w-14 bg-gray-800 rounded" />
+            <div key={i} className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 animate-pulse h-24">
+              <div className="h-3 w-20 bg-[var(--surface-2)] rounded mb-2" />
+              <div className="h-7 w-14 bg-[var(--surface-2)] rounded" />
             </div>
           ))}
         </div>
@@ -747,7 +747,7 @@ export default function LiveFleetStatus() {
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-colors ${
               autoRefresh
                 ? 'bg-green-900/40 border-green-700 text-green-300'
-                : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+                : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
             {autoRefresh ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
@@ -756,14 +756,14 @@ export default function LiveFleetStatus() {
           </button>
           <button
             onClick={() => exportFleetStatus(filtered, alertsData)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-800 text-gray-400 hover:text-white text-xs transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-bright)] bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs transition-colors"
           >
             <Download size={13} /> {t('livefleet.actions.export')}
           </button>
           <button
             onClick={() => load(true)}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-800 text-gray-400 hover:text-white text-xs transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-bright)] bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs transition-colors"
           >
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
             {t('livefleet.actions.refresh')}
@@ -819,20 +819,20 @@ export default function LiveFleetStatus() {
         <div className="flex-1 min-w-0 space-y-4">
 
           {/* ── Filter & View Bar ── */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3">
+          <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-3">
             <div className="flex flex-wrap gap-2 items-center">
 
               {/* Search */}
               <div className="relative flex-1 min-w-40">
-                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                 <input
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-7 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700/30 transition"
+                  className="w-full bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg pl-8 pr-7 py-1.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-green-700 focus:ring-1 focus:ring-green-700/30 transition"
                   placeholder={t('livefleet.filters.searchPlaceholder')}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
                 {search && (
-                  <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                  <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
                     <X size={12} />
                   </button>
                 )}
@@ -840,9 +840,9 @@ export default function LiveFleetStatus() {
 
               {/* Site filter */}
               <div className="flex items-center gap-1">
-                <MapPin size={12} className="text-gray-500" />
+                <MapPin size={12} className="text-[var(--text-muted)]" />
                 <select
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-green-700 transition"
+                  className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-2 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-green-700 transition"
                   value={siteFilter}
                   onChange={e => setSiteFilter(e.target.value)}
                 >
@@ -852,9 +852,9 @@ export default function LiveFleetStatus() {
 
               {/* Status filter */}
               <div className="flex items-center gap-1">
-                <Filter size={12} className="text-gray-500" />
+                <Filter size={12} className="text-[var(--text-muted)]" />
                 <select
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-green-700 transition"
+                  className="bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg px-2 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-green-700 transition"
                   value={statusFilter}
                   onChange={e => setStatusFilter(e.target.value)}
                 >
@@ -877,7 +877,7 @@ export default function LiveFleetStatus() {
               )}
 
               {/* View mode toggle */}
-              <div className="flex bg-gray-800 rounded-lg border border-gray-700 overflow-hidden ml-auto">
+              <div className="flex bg-[var(--surface-2)] rounded-lg border border-[var(--border-bright)] overflow-hidden ml-auto">
                 {[
                   { mode: 'grid', Icon: Grid, titleKey: 'gridView' },
                   { mode: 'list', Icon: List, titleKey: 'listView' },
@@ -890,7 +890,7 @@ export default function LiveFleetStatus() {
                     className={`p-2 transition-colors ${
                       viewMode === mode
                         ? 'bg-green-700 text-white'
-                        : 'text-gray-400 hover:text-white'
+                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                     }`}
                   >
                     <Icon size={14} />
@@ -908,10 +908,10 @@ export default function LiveFleetStatus() {
 
           {/* ── Map view placeholder ── */}
           {viewMode === 'map' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-16 flex flex-col items-center justify-center gap-3">
-              <Map size={48} className="text-gray-700" />
-              <p className="text-gray-400 font-semibold">{t('livefleet.map.comingSoon')}</p>
-              <p className="text-gray-600 text-sm text-center">
+            <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-16 flex flex-col items-center justify-center gap-3">
+              <Map size={48} className="text-[var(--text-dim)]" />
+              <p className="text-[var(--text-secondary)] font-semibold">{t('livefleet.map.comingSoon')}</p>
+              <p className="text-[var(--text-dim)] text-sm text-center">
                 {t('livefleet.map.description')}
               </p>
               <button
@@ -925,10 +925,10 @@ export default function LiveFleetStatus() {
 
           {/* ── Empty state ── */}
           {viewMode !== 'map' && filtered.length === 0 && vehicles.length === 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl py-16 flex flex-col items-center justify-center gap-3">
-              <Truck size={48} className="text-gray-700" />
-              <p className="text-gray-300 font-semibold">{t('livefleet.empty.noFleetTitle')}</p>
-              <p className="text-gray-600 text-sm text-center max-w-sm">
+            <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl py-16 flex flex-col items-center justify-center gap-3">
+              <Truck size={48} className="text-[var(--text-dim)]" />
+              <p className="text-[var(--text-secondary)] font-semibold">{t('livefleet.empty.noFleetTitle')}</p>
+              <p className="text-[var(--text-dim)] text-sm text-center max-w-sm">
                 {t('livefleet.empty.noFleetDesc')}
               </p>
               <button
@@ -941,9 +941,9 @@ export default function LiveFleetStatus() {
           )}
 
           {viewMode !== 'map' && filtered.length === 0 && vehicles.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl py-12 flex flex-col items-center justify-center gap-3">
-              <Filter size={36} className="text-gray-700" />
-              <p className="text-gray-400 font-medium">{t('livefleet.empty.noMatch')}</p>
+            <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl py-12 flex flex-col items-center justify-center gap-3">
+              <Filter size={36} className="text-[var(--text-dim)]" />
+              <p className="text-[var(--text-secondary)] font-medium">{t('livefleet.empty.noMatch')}</p>
               <button onClick={clearFilters} className="text-sm text-green-500 hover:text-green-400 underline">
                 {t('livefleet.filters.clearFilters')}
               </button>
@@ -976,16 +976,16 @@ export default function LiveFleetStatus() {
 
           {/* ── List view ── */}
           {viewMode === 'list' && filtered.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+            <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800 bg-gray-900/80">
+                    <tr className="border-b border-[var(--border-dim)] bg-[var(--surface-2)]">
                       {[
                         'assetNo', 'fleetNo', 'type', 'site', 'operator',
                         'tyres', 'health', 'lastInspection', 'alerts', 'status',
                       ].map(hKey => (
-                        <th key={hKey} className="text-left px-3 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide whitespace-nowrap">
+                        <th key={hKey} className="text-left px-3 py-3 text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide whitespace-nowrap">
                           {t(`livefleet.list.columns.${hKey}`)}
                         </th>
                       ))}
@@ -1002,19 +1002,19 @@ export default function LiveFleetStatus() {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="border-b border-gray-800/50 hover:bg-gray-800/30 cursor-pointer transition-colors"
+                            className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] cursor-pointer transition-colors"
                             onClick={() => openDrawer(v.asset_no)}
                           >
                             <td className="px-3 py-2.5">
                               <div className="flex items-center gap-1.5">
                                 <span>{vehicleEmoji(v.vehicle_type)}</span>
-                                <span className="text-white font-semibold">{v.asset_no}</span>
+                                <span className="text-[var(--text-primary)] font-semibold">{v.asset_no}</span>
                               </div>
                             </td>
-                            <td className="px-3 py-2.5 text-gray-400 font-mono text-xs">{v.fleet_number ?? '-'}</td>
-                            <td className="px-3 py-2.5 text-gray-300 whitespace-nowrap">{v.vehicle_type ?? '-'}</td>
-                            <td className="px-3 py-2.5 text-gray-400">{v.site ?? '-'}</td>
-                            <td className="px-3 py-2.5 text-gray-400 max-w-24 truncate">{v.operator_name ?? '-'}</td>
+                            <td className="px-3 py-2.5 text-[var(--text-secondary)] font-mono text-xs">{v.fleet_number ?? '-'}</td>
+                            <td className="px-3 py-2.5 text-[var(--text-secondary)] whitespace-nowrap">{v.vehicle_type ?? '-'}</td>
+                            <td className="px-3 py-2.5 text-[var(--text-secondary)]">{v.site ?? '-'}</td>
+                            <td className="px-3 py-2.5 text-[var(--text-secondary)] max-w-24 truncate">{v.operator_name ?? '-'}</td>
                             <td className="px-3 py-2.5 whitespace-nowrap">
                               <div className="flex items-center gap-1 text-xs">
                                 {v.criticalCount > 0 && (
@@ -1028,7 +1028,7 @@ export default function LiveFleetStatus() {
                                   </span>
                                 )}
                                 {v.criticalCount === 0 && v.highCount === 0 && (
-                                  <span className="text-gray-600">{v.tyres.length} {t('livefleet.list.ok')}</span>
+                                  <span className="text-[var(--text-dim)]">{v.tyres.length} {t('livefleet.list.ok')}</span>
                                 )}
                               </div>
                             </td>
@@ -1037,11 +1037,11 @@ export default function LiveFleetStatus() {
                                 <span className="font-bold text-sm" style={{ color: scoreColor(v.score) }}>
                                   {v.score}
                                 </span>
-                                <span className="text-gray-600 text-xs">/100</span>
+                                <span className="text-[var(--text-dim)] text-xs">/100</span>
                               </div>
                             </td>
                             <td className="px-3 py-2.5">
-                              <span className={`text-xs ${inspStale ? 'text-red-400' : 'text-gray-500'}`}>
+                              <span className={`text-xs ${inspStale ? 'text-red-400' : 'text-[var(--text-muted)]'}`}>
                                 {v.lastInspectionDate
                                   ? t('livefleet.card.daysAgo', { days: daysSinceInsp })
                                   : t('livefleet.list.never')
@@ -1054,7 +1054,7 @@ export default function LiveFleetStatus() {
                                   <Bell size={9} />{v.alertCount}
                                 </span>
                               ) : (
-                                <span className="text-gray-700 text-xs">-</span>
+                                <span className="text-[var(--text-dim)] text-xs">-</span>
                               )}
                             </td>
                             <td className="px-3 py-2.5">
@@ -1084,16 +1084,16 @@ export default function LiveFleetStatus() {
         <div className="hidden lg:flex flex-col gap-3 w-64 xl:w-72 flex-shrink-0">
 
           {/* Briefing Panel */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl overflow-hidden">
             <button
               onClick={() => setBriefingOpen(v => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 border-b border-gray-800 hover:bg-gray-800/40 transition-colors"
+              className="w-full flex items-center justify-between px-4 py-3 border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors"
             >
               <div className="flex items-center gap-2">
                 <Eye size={14} className="text-green-400" />
-                <span className="text-sm font-semibold text-white">{t('livefleet.sidebar.dailyBriefing')}</span>
+                <span className="text-sm font-semibold text-[var(--text-primary)]">{t('livefleet.sidebar.dailyBriefing')}</span>
               </div>
-              {briefingOpen ? <ChevronUp size={13} className="text-gray-500" /> : <ChevronDown size={13} className="text-gray-500" />}
+              {briefingOpen ? <ChevronUp size={13} className="text-[var(--text-muted)]" /> : <ChevronDown size={13} className="text-[var(--text-muted)]" />}
             </button>
 
             <AnimatePresence initial={false}>
@@ -1107,8 +1107,8 @@ export default function LiveFleetStatus() {
                 >
                   <div className="px-4 py-3 space-y-3">
                     {/* Summary text */}
-                    <div className="bg-gray-950/60 border border-gray-800/60 rounded-lg p-3">
-                      <p className="text-xs text-gray-300 leading-relaxed">
+                    <div className="bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-lg p-3">
+                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
                         {t('livefleet.sidebar.briefingOperational', { count: kpis.operational })}
                         {kpis.atRisk > 0 && t('livefleet.sidebar.briefingAtRisk', { count: kpis.atRisk })}
                         {kpis.overdue > 0 && t('livefleet.sidebar.briefingOverdue', { count: kpis.overdue })}
@@ -1118,34 +1118,34 @@ export default function LiveFleetStatus() {
 
                     {/* Top 5 needing attention */}
                     <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
+                      <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
                         <TrendingDown size={10} />
                         {t('livefleet.sidebar.needsAttention')}
                       </p>
                       <div className="space-y-1.5">
                         {topAttention.length === 0 ? (
-                          <p className="text-xs text-gray-600 text-center py-2">{t('livefleet.sidebar.allHealthy')}</p>
+                          <p className="text-xs text-[var(--text-dim)] text-center py-2">{t('livefleet.sidebar.allHealthy')}</p>
                         ) : (
                           topAttention.map(v => (
                             <button
                               key={v.asset_no}
                               onClick={() => openDrawer(v.asset_no)}
-                              className="w-full text-left bg-gray-800/50 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 rounded-lg px-2.5 py-2 transition-colors group"
+                              className="w-full text-left bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-dim)] hover:border-[var(--border-bright)] rounded-lg px-2.5 py-2 transition-colors group"
                             >
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-sm">{vehicleEmoji(v.vehicle_type)}</span>
-                                  <span className="text-white text-xs font-semibold">{v.asset_no}</span>
+                                  <span className="text-[var(--text-primary)] text-xs font-semibold">{v.asset_no}</span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <span className="text-xs font-bold" style={{ color: scoreColor(v.score) }}>
                                     {v.score}
                                   </span>
-                                  <ChevronRight size={10} className="text-gray-600 group-hover:text-white transition-colors" />
+                                  <ChevronRight size={10} className="text-[var(--text-dim)] group-hover:text-[var(--text-primary)] transition-colors" />
                                 </div>
                               </div>
                               {v.site && (
-                                <p className="text-gray-500 text-xs mt-0.5 truncate">{v.site}</p>
+                                <p className="text-[var(--text-muted)] text-xs mt-0.5 truncate">{v.site}</p>
                               )}
                               {(v.criticalCount > 0 || v.highCount > 0) && (
                                 <p className="text-xs mt-0.5" style={{ color: riskColor(v.criticalCount > 0 ? 'Critical' : 'High') }}>
@@ -1162,22 +1162,22 @@ export default function LiveFleetStatus() {
 
                     {/* Upcoming inspections this week */}
                     <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
+                      <p className="text-xs text-[var(--text-muted)] uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
                         <Calendar size={10} />
                         {t('livefleet.sidebar.inspectionsThisWeek')}
                       </p>
                       <div className="space-y-1">
                         {upcomingInspections.length === 0 ? (
-                          <p className="text-xs text-gray-600 text-center py-2">{t('livefleet.sidebar.noneScheduled')}</p>
+                          <p className="text-xs text-[var(--text-dim)] text-center py-2">{t('livefleet.sidebar.noneScheduled')}</p>
                         ) : (
                           upcomingInspections.map((ins, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-gray-800/50 last:border-0">
+                            <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-[var(--border-dim)] last:border-0">
                               <div>
-                                <span className="text-white font-medium">{ins.asset_no}</span>
-                                <span className="text-gray-500 ml-1">{ins.inspection_type ?? t('livefleet.sidebar.generalInspection')}</span>
+                                <span className="text-[var(--text-primary)] font-medium">{ins.asset_no}</span>
+                                <span className="text-[var(--text-muted)] ml-1">{ins.inspection_type ?? t('livefleet.sidebar.generalInspection')}</span>
                               </div>
                               <span className={`font-mono ${
-                                ins.status === 'Overdue' ? 'text-red-400' : 'text-gray-500'
+                                ins.status === 'Overdue' ? 'text-red-400' : 'text-[var(--text-muted)]'
                               }`}>
                                 {fmtShortDate(ins.scheduled_date)}
                               </span>
@@ -1194,10 +1194,10 @@ export default function LiveFleetStatus() {
 
           {/* Active alerts mini list */}
           {alertsData.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex-1 max-h-72 overflow-y-auto">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-800">
+            <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl overflow-hidden flex-1 max-h-72 overflow-y-auto">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-dim)]">
                 <Bell size={13} className="text-red-400" />
-                <span className="text-sm font-semibold text-white">{t('livefleet.sidebar.fleetAlerts')}</span>
+                <span className="text-sm font-semibold text-[var(--text-primary)]">{t('livefleet.sidebar.fleetAlerts')}</span>
                 <span className="ml-auto bg-red-900/50 text-red-300 text-xs px-1.5 py-0.5 rounded-full border border-red-800/50">
                   {alertsData.length}
                 </span>
@@ -1207,19 +1207,19 @@ export default function LiveFleetStatus() {
                   <button
                     key={i}
                     onClick={() => a.asset_no && openDrawer(a.asset_no)}
-                    className="w-full text-left bg-gray-800/40 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 rounded-lg px-2.5 py-2 transition-colors"
+                    className="w-full text-left bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-dim)] hover:border-[var(--border-bright)] rounded-lg px-2.5 py-2 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-1.5">
                       <span className={`text-xs px-1.5 py-0.5 rounded border ${severityBgClass(a.severity)} flex-shrink-0`}>
                         {a.severity ?? t('livefleet.sidebar.infoSeverity')}
                       </span>
-                      {a.asset_no && <span className="text-gray-400 text-xs font-mono flex-shrink-0">{a.asset_no}</span>}
+                      {a.asset_no && <span className="text-[var(--text-secondary)] text-xs font-mono flex-shrink-0">{a.asset_no}</span>}
                     </div>
                     {a.message && (
-                      <p className="text-gray-400 text-xs mt-1 line-clamp-2 leading-relaxed">{a.message}</p>
+                      <p className="text-[var(--text-secondary)] text-xs mt-1 line-clamp-2 leading-relaxed">{a.message}</p>
                     )}
                     {a.created_at && (
-                      <p className="text-gray-600 text-xs mt-0.5">
+                      <p className="text-[var(--text-dim)] text-xs mt-0.5">
                         {fmtDate(a.created_at)}
                       </p>
                     )}
@@ -1251,23 +1251,23 @@ export default function LiveFleetStatus() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              className="fixed top-0 right-0 h-full w-full sm:w-[540px] lg:w-[620px] z-50 bg-gray-950 border-l border-gray-800 flex flex-col shadow-2xl"
+              className="fixed top-0 right-0 h-full w-full sm:w-[540px] lg:w-[620px] z-50 bg-[var(--surface-0)] border-l border-[var(--border-dim)] flex flex-col shadow-2xl"
             >
               {/* Drawer header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-dim)] flex-shrink-0">
                 <div>
-                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
                     <span className="text-2xl">{vehicleEmoji(drawerVehicle.vehicle_type)}</span>
                     {drawerVehicle.asset_no}
                     {drawerVehicle.fleet_number && (
-                      <span className="text-gray-500 font-mono text-sm">#{drawerVehicle.fleet_number}</span>
+                      <span className="text-[var(--text-muted)] font-mono text-sm">#{drawerVehicle.fleet_number}</span>
                     )}
                   </h2>
-                  <p className="text-gray-400 text-sm mt-0.5">
+                  <p className="text-[var(--text-secondary)] text-sm mt-0.5">
                     {drawerVehicle.make} {drawerVehicle.model}
                     {drawerVehicle.site && <span> · {drawerVehicle.site}</span>}
                     {drawerVehicle.operator_name && (
-                      <span className="ml-1 text-gray-500">· {drawerVehicle.operator_name}</span>
+                      <span className="ml-1 text-[var(--text-muted)]">· {drawerVehicle.operator_name}</span>
                     )}
                   </p>
                 </div>
@@ -1275,7 +1275,7 @@ export default function LiveFleetStatus() {
                   <HealthCircle score={drawerVehicle.score} size={52} />
                   <button
                     onClick={() => setDrawerOpen(false)}
-                    className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-[var(--surface-2)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                   >
                     <X size={18} />
                   </button>
@@ -1288,7 +1288,7 @@ export default function LiveFleetStatus() {
                 {/* Vehicle info badges */}
                 <div className="flex flex-wrap gap-2">
                   {drawerVehicle.vehicle_type && (
-                    <span className="px-2.5 py-1 rounded-full text-xs bg-gray-800 border border-gray-700 text-gray-300">
+                    <span className="px-2.5 py-1 rounded-full text-xs bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)]">
                       {drawerVehicle.vehicle_type}
                     </span>
                   )}
@@ -1296,7 +1296,7 @@ export default function LiveFleetStatus() {
                     <span className={`px-2.5 py-1 rounded-full text-xs border ${
                       drawerVehicle.status === 'Active'
                         ? 'bg-green-900/30 border-green-800/50 text-green-300'
-                        : 'bg-gray-800 border-gray-700 text-gray-400'
+                        : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)]'
                     }`}>
                       {drawerVehicle.status}
                     </span>
@@ -1315,10 +1315,10 @@ export default function LiveFleetStatus() {
 
                 {/* Tyre diagram + tyre table */}
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-300 mb-3">{t('livefleet.drawer.tyreHealthMap')}</h3>
+                  <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3">{t('livefleet.drawer.tyreHealthMap')}</h3>
                   <div className="grid grid-cols-2 gap-4 items-start">
                     {/* SVG diagram */}
-                    <div className="bg-gray-900 border border-gray-800 rounded-lg p-2 flex items-center justify-center min-h-32">
+                    <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-lg p-2 flex items-center justify-center min-h-32">
                       <VehicleTyreDiagram
                         vehicleType={drawerVehicle.vehicle_type}
                         positions={drawerVehicle.tyres.map(t => ({
@@ -1334,8 +1334,8 @@ export default function LiveFleetStatus() {
 
                     {/* Doughnut risk breakdown */}
                     {drawerVehicle.tyres.length > 0 && (
-                      <div className="bg-gray-900 border border-gray-800 rounded-lg p-3">
-                        <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">{t('livefleet.drawer.riskBreakdown')}</p>
+                      <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-lg p-3">
+                        <p className="text-xs text-[var(--text-muted)] mb-2 uppercase tracking-wide">{t('livefleet.drawer.riskBreakdown')}</p>
                         <div className="h-32">
                           <Doughnut
                             data={drawerDoughnutData(drawerVehicle.tyres)}
@@ -1366,13 +1366,13 @@ export default function LiveFleetStatus() {
                 {/* Tyre table */}
                 {drawerVehicle.tyres.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-300 mb-2">{t('livefleet.drawer.currentTyres')}</h3>
-                    <div className="overflow-x-auto rounded-lg border border-gray-800">
+                    <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">{t('livefleet.drawer.currentTyres')}</h3>
+                    <div className="overflow-x-auto rounded-lg border border-[var(--border-dim)]">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-gray-800 bg-gray-900/60">
+                          <tr className="border-b border-[var(--border-dim)] bg-[var(--surface-2)]">
                             {['position', 'brand', 'tread', 'psi', 'risk', 'fitted'].map(hKey => (
-                              <th key={hKey} className="text-left px-2.5 py-2 text-gray-500 font-medium whitespace-nowrap">{t(`livefleet.drawer.tyreColumns.${hKey}`)}</th>
+                              <th key={hKey} className="text-left px-2.5 py-2 text-[var(--text-muted)] font-medium whitespace-nowrap">{t(`livefleet.drawer.tyreColumns.${hKey}`)}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1380,17 +1380,17 @@ export default function LiveFleetStatus() {
                           {[...drawerVehicle.tyres]
                             .sort((a, b) => (a.position ?? '').localeCompare(b.position ?? ''))
                             .map((t, i) => (
-                            <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                              <td className="px-2.5 py-2 text-gray-300 font-mono font-semibold">{t.position ?? '-'}</td>
-                              <td className="px-2.5 py-2 text-gray-300">{t.brand ?? '-'}</td>
-                              <td className="px-2.5 py-2 text-gray-300">
+                            <tr key={i} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
+                              <td className="px-2.5 py-2 text-[var(--text-secondary)] font-mono font-semibold">{t.position ?? '-'}</td>
+                              <td className="px-2.5 py-2 text-[var(--text-secondary)]">{t.brand ?? '-'}</td>
+                              <td className="px-2.5 py-2 text-[var(--text-secondary)]">
                                 {t.tread_depth != null ? (
                                   <span style={{ color: t.tread_depth < 3 ? '#dc2626' : t.tread_depth < 5 ? '#ca8a04' : '#16a34a' }}>
                                     {t.tread_depth}mm
                                   </span>
                                 ) : '-'}
                               </td>
-                              <td className="px-2.5 py-2 text-gray-300">
+                              <td className="px-2.5 py-2 text-[var(--text-secondary)]">
                                 {t.pressure_reading != null ? `${t.pressure_reading}` : '-'}
                               </td>
                               <td className="px-2.5 py-2">
@@ -1399,10 +1399,10 @@ export default function LiveFleetStatus() {
                                     {t.risk_level}
                                   </span>
                                 ) : (
-                                  <span className="text-gray-600">-</span>
+                                  <span className="text-[var(--text-dim)]">-</span>
                                 )}
                               </td>
-                              <td className="px-2.5 py-2 text-gray-500 flex items-center gap-1">
+                              <td className="px-2.5 py-2 text-[var(--text-muted)] flex items-center gap-1">
                                 <Clock size={9} />
                                 {t.issue_date ? `${daysAgo(t.issue_date)}d` : '-'}
                               </td>
@@ -1417,23 +1417,23 @@ export default function LiveFleetStatus() {
                 {/* Recent inspections */}
                 {drawerInspections.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-300 mb-2">{t('livefleet.drawer.recentInspections')}</h3>
+                    <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">{t('livefleet.drawer.recentInspections')}</h3>
                     <div className="space-y-1.5">
                       {drawerInspections.map((ins, i) => (
                         <div
                           key={i}
-                          className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-lg px-3 py-2"
+                          className="flex items-center justify-between bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-lg px-3 py-2"
                         >
                           <div>
-                            <p className="text-gray-300 text-xs font-medium">{ins.inspection_type ?? t('livefleet.drawer.generalInspectionFallback')}</p>
-                            <p className="text-gray-500 text-xs">{fmtDate(ins.scheduled_date)}</p>
+                            <p className="text-[var(--text-secondary)] text-xs font-medium">{ins.inspection_type ?? t('livefleet.drawer.generalInspectionFallback')}</p>
+                            <p className="text-[var(--text-muted)] text-xs">{fmtDate(ins.scheduled_date)}</p>
                           </div>
                           <span className={`px-2 py-0.5 rounded text-xs border ${
                             ins.status === 'Done'
                               ? 'bg-green-900/30 border-green-800/50 text-green-300'
                               : ins.status === 'Overdue'
                               ? 'bg-red-900/30 border-red-800/50 text-red-300'
-                              : 'bg-gray-800 border-gray-700 text-gray-400'
+                              : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)]'
                           }`}>
                             {ins.status ?? t('livefleet.drawer.scheduledFallback')}
                           </span>
@@ -1446,7 +1446,7 @@ export default function LiveFleetStatus() {
                 {/* Vehicle alerts */}
                 {drawerVehicle.vehicleAlerts.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-1.5">
+                    <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2 flex items-center gap-1.5">
                       <Bell size={13} className="text-red-400" />
                       {t('livefleet.drawer.activeAlerts')}
                     </h3>
@@ -1487,7 +1487,7 @@ export default function LiveFleetStatus() {
                       setDrawerOpen(false)
                       navigate(`/inspection-planner?asset=${drawerVehicle.asset_no}`)
                     }}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm font-medium transition-colors"
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--border-bright)] text-[var(--text-secondary)] text-sm font-medium transition-colors"
                   >
                     <Calendar size={14} /> {t('livefleet.drawer.scheduleInspection')}
                   </button>

@@ -5,6 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { Plus, Save, X, Download, FileText, PiggyBank } from 'lucide-react'
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import BudgetTabs from '../components/budgets/BudgetTabs'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import { formatCurrencyCompact } from '../lib/formatters'
 import * as budgetsApi from '../lib/api/budgets'
@@ -258,6 +259,7 @@ export default function Budgets() {
 
   return (
     <div className="space-y-4">
+      <BudgetTabs />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <PageHeader
           title={t('budgets.title')}

@@ -224,7 +224,7 @@ const PRIORITY_STYLES = {
 // ── Card component ────────────────────────────────────────────────────────────
 function Card({ children, className = '' }) {
   return (
-    <div className={`bg-gray-900 border border-gray-800 rounded-xl p-4 ${className}`}>
+    <div className={`bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 ${className}`}>
       {children}
     </div>
   )
@@ -238,8 +238,8 @@ function SectionHeader({ icon: Icon, title, subtitle, badge }) {
           <Icon className="w-5 h-5 text-emerald-400" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          {subtitle && <p className="text-sm text-gray-400 mt-0.5">{subtitle}</p>}
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
+          {subtitle && <p className="text-sm text-[var(--text-secondary)] mt-0.5">{subtitle}</p>}
         </div>
       </div>
       {badge && (
@@ -884,10 +884,10 @@ export default function ExecutiveReport() {
   // ── Loading / Error states ────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--surface-0)] flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-400 text-sm">{t('execreport.states.loading')}</p>
+          <p className="text-[var(--text-secondary)] text-sm">{t('execreport.states.loading')}</p>
         </div>
       </div>
     )
@@ -895,11 +895,11 @@ export default function ExecutiveReport() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--surface-0)] flex items-center justify-center">
         <Card className="max-w-md text-center">
           <AlertOctagon className="w-10 h-10 text-red-400 mx-auto mb-3" />
-          <p className="text-white font-semibold mb-1">{t('execreport.states.errorTitle')}</p>
-          <p className="text-gray-400 text-sm">{error}</p>
+          <p className="text-[var(--text-primary)] font-semibold mb-1">{t('execreport.states.errorTitle')}</p>
+          <p className="text-[var(--text-secondary)] text-sm">{error}</p>
         </Card>
       </div>
     )
@@ -907,11 +907,11 @@ export default function ExecutiveReport() {
 
   if (!periodRecords.length && !periodInspections.length) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--surface-0)] flex items-center justify-center">
         <Card className="max-w-md text-center">
-          <FileText className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-          <p className="text-white font-semibold mb-1">{t('execreport.states.emptyTitle')}</p>
-          <p className="text-gray-400 text-sm">{t('execreport.states.emptyDesc')}</p>
+          <FileText className="w-10 h-10 text-[var(--text-dim)] mx-auto mb-3" />
+          <p className="text-[var(--text-primary)] font-semibold mb-1">{t('execreport.states.emptyTitle')}</p>
+          <p className="text-[var(--text-secondary)] text-sm">{t('execreport.states.emptyDesc')}</p>
         </Card>
       </div>
     )
@@ -1011,7 +1011,7 @@ export default function ExecutiveReport() {
   ]
 
   return (
-    <div className="text-white print:bg-white print:text-black space-y-6">
+    <div className="text-[var(--text-primary)] print:bg-white print:text-black space-y-6">
 
       {/* ── Print Styles ────────────────────────────────────────────────── */}
       <style>{`
@@ -1019,15 +1019,15 @@ export default function ExecutiveReport() {
           .no-print { display: none !important; }
           .print-break { page-break-before: always; }
           body { background: white; color: black; }
-          .bg-gray-950, .bg-gray-900 { background: white !important; }
-          .border-gray-800 { border-color: #e5e7eb !important; }
-          .text-white, .text-gray-100 { color: black !important; }
-          .text-gray-400 { color: #6b7280 !important; }
+          [class*="surface-0"], [class*="surface-1"], [class*="surface-2"], [class*="surface-3"] { background: white !important; }
+          [class*="border-dim"], [class*="border-bright"] { border-color: #e5e7eb !important; }
+          [class*="text-primary"] { color: black !important; }
+          [class*="text-secondary"], [class*="text-muted"], [class*="text-dim"] { color: #6b7280 !important; }
         }
       `}</style>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800 no-print">
+      <div className="sticky top-0 z-30 bg-[var(--surface-0)] backdrop-blur border-b border-[var(--border-dim)] no-print">
         <div className="max-w-[1800px] mx-auto px-4 py-3">
           <PageHeader
             title={t('execreport.header.title')}
@@ -1037,14 +1037,14 @@ export default function ExecutiveReport() {
               <PeriodFilter records={records} value={period} onChange={setPeriod} />
               <button
                 onClick={exportExcel}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium transition-all border border-gray-700"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] text-xs font-medium transition-all border border-[var(--border-bright)]"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
                 {t('execreport.header.excel')}
               </button>
               <button
                 onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium transition-all border border-gray-700"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-primary)] text-xs font-medium transition-all border border-[var(--border-bright)]"
               >
                 <Printer className="w-3.5 h-3.5" />
                 {t('execreport.header.print')}
@@ -1084,22 +1084,22 @@ export default function ExecutiveReport() {
                 <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
                   <Star className="w-5 h-5 text-emerald-400" />
                 </div>
-                <h2 className="text-lg font-semibold text-white">{t('execreport.section1.title')}</h2>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('execreport.section1.title')}</h2>
               </div>
               <div className="flex items-center gap-2">
                 <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-red-500/10 text-red-400 border border-red-500/20 tracking-wide">
                   {t('execreport.section1.confidential')}
                 </span>
-                <span className="px-2.5 py-1 text-xs rounded-full bg-gray-800 text-gray-400 border border-gray-700">
+                <span className="px-2.5 py-1 text-xs rounded-full bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border-bright)]">
                   {t('execreport.section1.badge')}
                 </span>
               </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-             <div className="lg:col-span-2 bg-gray-950 border border-gray-800 rounded-xl p-5 space-y-4">
+             <div className="lg:col-span-2 bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-5 space-y-4">
               <div className="border-l-4 border-emerald-500 pl-4">
-                <p className="text-sm leading-relaxed text-gray-200">
+                <p className="text-sm leading-relaxed text-[var(--text-primary)]">
                   {t('execreport.section1.p1', {
                     period: periodValueLabel(period),
                     company: companyName,
@@ -1121,7 +1121,7 @@ export default function ExecutiveReport() {
               </div>
 
               <div className="border-l-4 border-amber-500 pl-4">
-                <p className="text-sm leading-relaxed text-gray-200">
+                <p className="text-sm leading-relaxed text-[var(--text-primary)]">
                   {t('execreport.section1.p2', {
                     criticalCount: periodRecords.filter(r => r.risk_level === 'Critical').length,
                     criticalPct: fmtPct(kpis.failureRate.criticalRate * 100),
@@ -1146,7 +1146,7 @@ export default function ExecutiveReport() {
                       <Award className="w-4 h-4 text-emerald-400" />
                       <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wide">{t('execreport.section1.keyWinLabel')}</span>
                     </div>
-                    <p className="text-sm text-gray-200">
+                    <p className="text-sm text-[var(--text-primary)]">
                       {t('execreport.section1.keyWinText', {
                         brand: bestBrandByScore.brand,
                         cpk: fmtCpk(bestBrandByScore.avgCpk, currency),
@@ -1161,7 +1161,7 @@ export default function ExecutiveReport() {
                       <AlertOctagon className="w-4 h-4 text-red-400" />
                       <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">{t('execreport.section1.keyConcernLabel')}</span>
                     </div>
-                    <p className="text-sm text-gray-200">
+                    <p className="text-sm text-[var(--text-primary)]">
                       {t('execreport.section1.keyConcernText', {
                         site: worstSiteByFailure.site,
                         rate: fmtPct(worstSiteByFailure.rate * 100),
@@ -1172,7 +1172,7 @@ export default function ExecutiveReport() {
               </div>
 
               <div className="border-l-4 border-blue-500 pl-4">
-                <p className="text-sm leading-relaxed text-gray-200">
+                <p className="text-sm leading-relaxed text-[var(--text-primary)]">
                   {t('execreport.section1.p4', { projectedAnnual: fmtCurrency(projectedAnnual, currency) })}
                   {savingsOpportunity > 1000 && (
                     <>{' '}{t('execreport.section1.p4Savings', { savings: `${fmtCurrency(savingsOpportunity, currency)}` })}</>
@@ -1187,8 +1187,8 @@ export default function ExecutiveReport() {
              </div>
 
              {/* Right: Key Highlights (saves vertical space — UI/UX #12) */}
-             <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col gap-2.5">
-               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">{t('execreport.section1.keyHighlights')}</p>
+             <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 flex flex-col gap-2.5">
+               <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide mb-0.5">{t('execreport.section1.keyHighlights')}</p>
                {[
                  { key: 'fleetAvailability', label: t('execreport.section1.highlights.fleetAvailability'),    value: fmtPct(kpis.fleetAvailability.availabilityPct),   good: kpis.fleetAvailability.availabilityPct >= 95 },
                  { key: 'inspectionCompliance', label: t('execreport.section1.highlights.inspectionCompliance'), value: fmtPct(kpis.inspectionCompliance.compliancePct),  good: kpis.inspectionCompliance.compliancePct >= 85 },
@@ -1196,9 +1196,9 @@ export default function ExecutiveReport() {
                  { key: 'avgCostPerKm', label: t('execreport.section1.highlights.avgCostPerKm'),         value: `${fmtCpk(kpis.cpk.fleetAvgCpk, currency)}`,       good: true, neutral: true },
                  { key: 'criticalAlerts', label: t('execreport.section1.highlights.criticalAlerts'),       value: periodRecords.filter(r => r.risk_level === 'Critical').length.toLocaleString(), good: periodRecords.filter(r => r.risk_level === 'Critical').length === 0 },
                ].map((h) => (
-                 <div key={h.key} className="bg-gray-900/60 border border-gray-800 rounded-lg px-3 py-2.5 flex items-center justify-between">
-                   <span className="text-xs text-gray-400">{h.label}</span>
-                   <span className={`text-base font-bold tabular-nums ${h.neutral ? 'text-white' : h.good ? 'text-emerald-400' : 'text-amber-400'}`}>{h.value}</span>
+                 <div key={h.key} className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-lg px-3 py-2.5 flex items-center justify-between">
+                   <span className="text-xs text-[var(--text-secondary)]">{h.label}</span>
+                   <span className={`text-base font-bold tabular-nums ${h.neutral ? 'text-[var(--text-primary)]' : h.good ? 'text-emerald-400' : 'text-amber-400'}`}>{h.value}</span>
                  </div>
                ))}
              </div>
@@ -1232,9 +1232,9 @@ export default function ExecutiveReport() {
                     </div>
                     <div>
                       <p className={`text-lg font-bold leading-tight tabular-nums ${sc.text}`}>{card.value}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 leading-tight">{card.label}</p>
+                      <p className="text-xs text-[var(--text-secondary)] mt-0.5 leading-tight">{card.label}</p>
                     </div>
-                    <p className="text-xs text-gray-600 leading-tight">Target: {card.target}</p>
+                    <p className="text-xs text-[var(--text-dim)] leading-tight">Target: {card.target}</p>
                   </div>
                 )
               })}
@@ -1274,7 +1274,7 @@ export default function ExecutiveReport() {
                     }}
                   />
                 ) : (
-                  <div className="h-full flex items-center justify-center text-gray-600 text-sm">No root cause data</div>
+                  <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No root cause data</div>
                 )}
               </div>
 
@@ -1282,25 +1282,25 @@ export default function ExecutiveReport() {
               <div className="overflow-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="text-left py-2 text-gray-400 font-medium">Cause</th>
-                      <th className="text-right py-2 text-gray-400 font-medium">Count</th>
-                      <th className="text-right py-2 text-gray-400 font-medium">%</th>
-                      <th className="text-right py-2 text-gray-400 font-medium">Cost Impact</th>
+                    <tr className="border-b border-[var(--border-dim)]">
+                      <th className="text-left py-2 text-[var(--text-secondary)] font-medium">Cause</th>
+                      <th className="text-right py-2 text-[var(--text-secondary)] font-medium">Count</th>
+                      <th className="text-right py-2 text-[var(--text-secondary)] font-medium">%</th>
+                      <th className="text-right py-2 text-[var(--text-secondary)] font-medium">Cost Impact</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rootCauses.map(cause => (
-                      <tr key={cause.key} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                      <tr key={cause.key} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
                         <td className="py-2">
                           <div className="flex items-center gap-2">
                             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cause.color }} />
-                            <span className="text-gray-200">{cause.label}</span>
+                            <span className="text-[var(--text-primary)]">{cause.label}</span>
                           </div>
                         </td>
-                        <td className="py-2 text-right text-white font-medium">{cause.count}</td>
+                        <td className="py-2 text-right text-[var(--text-primary)] font-medium">{cause.count}</td>
                         <td className="py-2 text-right">
-                          <span className="text-gray-300">{fmtPct(cause.pct)}</span>
+                          <span className="text-[var(--text-secondary)]">{fmtPct(cause.pct)}</span>
                         </td>
                         <td className="py-2 text-right text-amber-400">{fmtCurrency(cause.cost, currency)}</td>
                       </tr>
@@ -1313,13 +1313,13 @@ export default function ExecutiveReport() {
             {/* Prevention summaries */}
             <div className="mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {rootCauses.slice(0, 3).map(cause => (
-                <div key={cause.key} className="bg-gray-950 rounded-lg p-3 border border-gray-800">
+                <div key={cause.key} className="bg-[var(--surface-1)] rounded-lg p-3 border border-[var(--border-dim)]">
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cause.color }} />
-                    <span className="text-xs font-semibold text-gray-300">{cause.label}</span>
+                    <span className="text-xs font-semibold text-[var(--text-secondary)]">{cause.label}</span>
                     <span className="ml-auto text-xs text-red-400 font-bold">{fmtPct(cause.pct)}</span>
                   </div>
-                  <p className="text-xs text-gray-500 leading-relaxed">{cause.prevention}</p>
+                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">{cause.prevention}</p>
                 </div>
               ))}
             </div>
@@ -1340,15 +1340,15 @@ export default function ExecutiveReport() {
             {/* Top stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               {[
-                { label: 'Total Period Spend', value: fmtCurrency(totalSpend, currency), sub: periodValueLabel(period), color: 'text-white' },
+                { label: 'Total Period Spend', value: fmtCurrency(totalSpend, currency), sub: periodValueLabel(period), color: 'text-[var(--text-primary)]' },
                 { label: 'Projected Annual', value: fmtCurrency(projectedAnnual, currency), sub: 'at current rate', color: 'text-amber-400' },
                 { label: 'Budget vs Actual', value: totalBudget > 0 ? fmtPct(((totalSpend / totalBudget) * 100)) : 'N/A', sub: totalBudget > 0 ? `Budget: ${fmtCurrency(totalBudget, currency)}` : 'No budget data', color: totalBudget > 0 && totalSpend > totalBudget ? 'text-red-400' : 'text-emerald-400' },
                 { label: 'Savings Opportunity', value: fmtCurrency(savingsOpportunity, currency), sub: 'if CPK reached fleet best', color: 'text-emerald-400' },
               ].map(s => (
-                <div key={s.label} className="bg-gray-950 border border-gray-800 rounded-xl p-4">
+                <div key={s.label} className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4">
                   <p className={`text-xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
-                  <p className="text-xs text-white font-medium mt-1">{s.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{s.sub}</p>
+                  <p className="text-xs text-[var(--text-primary)] font-medium mt-1">{s.label}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">{s.sub}</p>
                 </div>
               ))}
             </div>
@@ -1356,22 +1356,22 @@ export default function ExecutiveReport() {
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               <div className="lg:col-span-2">
-                <p className="text-xs text-gray-400 font-medium mb-2 uppercase tracking-wide">Monthly Spend Trend</p>
+                <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Monthly Spend Trend</p>
                 <div className="h-52">
                   {costTrend.byMonth.length > 0 ? (
                     <Bar ref={costTrendRef} data={costTrendChart} options={CHART_DARK_NO_LEGEND} />
                   ) : (
-                    <div className="h-full flex items-center justify-center text-gray-600 text-sm">No trend data</div>
+                    <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No trend data</div>
                   )}
                 </div>
               </div>
               <div>
-                <p className="text-xs text-gray-400 font-medium mb-2 uppercase tracking-wide">Cost by Site</p>
+                <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Cost by Site</p>
                 <div className="h-52">
                   {costBySite.length > 0 ? (
                     <Bar ref={costBySiteRef} data={costBySiteChart} options={CHART_HORIZONTAL} />
                   ) : (
-                    <div className="h-full flex items-center justify-center text-gray-600 text-sm">No site data</div>
+                    <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No site data</div>
                   )}
                 </div>
               </div>
@@ -1380,32 +1380,32 @@ export default function ExecutiveReport() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
               {/* Cost by Brand */}
               <div>
-                <p className="text-xs text-gray-400 font-medium mb-2 uppercase tracking-wide">Cost by Brand</p>
+                <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Cost by Brand</p>
                 <div className="h-44">
                   {costByBrand.length > 0 ? (
                     <Bar ref={costByBrandRef} data={costByBrandChart} options={CHART_HORIZONTAL} />
                   ) : (
-                    <div className="h-full flex items-center justify-center text-gray-600 text-sm">No brand data</div>
+                    <div className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No brand data</div>
                   )}
                 </div>
               </div>
 
               {/* Top 5 cost drivers */}
               <div>
-                <p className="text-xs text-gray-400 font-medium mb-2 uppercase tracking-wide">Top 5 Cost Vehicles</p>
+                <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Top 5 Cost Vehicles</p>
                 <div className="space-y-2">
                   {topCostVehicles.map((v, i) => (
-                    <div key={v.asset_no} className="flex items-center gap-3 bg-gray-950 rounded-lg px-3 py-2 border border-gray-800">
-                      <span className="text-xs font-bold text-gray-500 w-4">{i + 1}</span>
+                    <div key={v.asset_no} className="flex items-center gap-3 bg-[var(--surface-1)] rounded-lg px-3 py-2 border border-[var(--border-dim)]">
+                      <span className="text-xs font-bold text-[var(--text-muted)] w-4">{i + 1}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-white truncate">{v.asset_no}</p>
-                        <p className="text-xs text-gray-500">{v.site} · {v.count} tyres</p>
+                        <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{v.asset_no}</p>
+                        <p className="text-xs text-[var(--text-muted)]">{v.site} · {v.count} tyres</p>
                       </div>
                       <span className="text-xs font-bold text-amber-400">{fmtCurrency(v.cost, currency)}</span>
                     </div>
                   ))}
                   {topCostVehicles.length === 0 && (
-                    <p className="text-xs text-gray-600 text-center py-4">No vehicle cost data</p>
+                    <p className="text-xs text-[var(--text-dim)] text-center py-4">No vehicle cost data</p>
                   )}
                 </div>
               </div>
@@ -1426,15 +1426,15 @@ export default function ExecutiveReport() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               {/* Fleet risk score */}
-              <div className="bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col items-center justify-center text-center">
-                <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-3">Fleet Risk Score</p>
+              <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 flex flex-col items-center justify-center text-center">
+                <p className="text-xs text-[var(--text-secondary)] uppercase tracking-wide font-medium mb-3">Fleet Risk Score</p>
                 <div className={`text-5xl font-black mb-2 tabular-nums ${
                   fleetRiskScore >= 3 ? 'text-red-400' : fleetRiskScore >= 2 ? 'text-amber-400' : 'text-emerald-400'
                 }`}>
                   {fleetRiskScore.toFixed(2)}
                 </div>
-                <p className="text-xs text-gray-500">out of 4.00 (max)</p>
-                <div className="mt-3 w-full bg-gray-800 rounded-full h-2">
+                <p className="text-xs text-[var(--text-muted)]">out of 4.00 (max)</p>
+                <div className="mt-3 w-full bg-[var(--surface-3)] rounded-full h-2">
                   <div
                     className={`h-2 rounded-full transition-all ${
                       fleetRiskScore >= 3 ? 'bg-red-500' : fleetRiskScore >= 2 ? 'bg-amber-500' : 'bg-emerald-500'
@@ -1455,9 +1455,9 @@ export default function ExecutiveReport() {
                     { label: 'Medium', count: periodRecords.filter(r => r.risk_level === 'Medium').length, color: 'text-amber-400' },
                     { label: 'Low', count: periodRecords.filter(r => r.risk_level === 'Low').length, color: 'text-emerald-400' },
                   ].map(item => (
-                    <div key={item.label} className="bg-gray-900 rounded-lg p-2 border border-gray-800">
+                    <div key={item.label} className="bg-[var(--surface-1)] rounded-lg p-2 border border-[var(--border-dim)]">
                       <p className={`text-base font-bold ${item.color}`}>{item.count}</p>
-                      <p className="text-gray-500">{item.label}</p>
+                      <p className="text-[var(--text-muted)]">{item.label}</p>
                     </div>
                   ))}
                 </div>
@@ -1465,7 +1465,7 @@ export default function ExecutiveReport() {
 
               {/* Risk trend chart */}
               <div>
-                <p className="text-xs text-gray-400 font-medium mb-2 uppercase tracking-wide">6-Month Risk Score Trend</p>
+                <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">6-Month Risk Score Trend</p>
                 <div className="h-56">
                   <Line ref={riskTrendRef} data={riskTrendChart} options={{
                     ...CHART_DARK,
@@ -1476,7 +1476,7 @@ export default function ExecutiveReport() {
 
               {/* Risk heat map */}
               <div>
-                <p className="text-xs text-gray-400 font-medium mb-2 uppercase tracking-wide">Site Risk Heat Map</p>
+                <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Site Risk Heat Map</p>
                 <div className="space-y-1.5 max-h-56 overflow-y-auto">
                   {riskMatrix.slice(0, 10).map(row => {
                     const sc = row.score >= 3 ? 'bg-red-500/20 border-red-500/30 text-red-400'
@@ -1484,7 +1484,7 @@ export default function ExecutiveReport() {
                       : 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
                     return (
                       <div key={row.site} className={`flex items-center justify-between rounded-lg px-3 py-2 border ${sc} text-xs`}>
-                        <span className="font-medium text-white">{row.site}</span>
+                        <span className="font-medium text-[var(--text-primary)]">{row.site}</span>
                         <div className="flex items-center gap-3">
                           <span className="text-red-400">{row.Critical}C</span>
                           <span className="text-orange-400">{row.High}H</span>
@@ -1495,7 +1495,7 @@ export default function ExecutiveReport() {
                     )
                   })}
                   {riskMatrix.length === 0 && (
-                    <p className="text-xs text-gray-600 text-center py-6">No risk data</p>
+                    <p className="text-xs text-[var(--text-dim)] text-center py-6">No risk data</p>
                   )}
                 </div>
               </div>
@@ -1503,45 +1503,45 @@ export default function ExecutiveReport() {
 
             {/* Risk matrix table */}
             <div className="mt-6">
-              <p className="text-xs text-gray-400 font-medium mb-2 uppercase tracking-wide">Risk Matrix - Sites × Risk Level</p>
+              <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Risk Matrix - Sites × Risk Level</p>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="text-left py-2 px-3 text-gray-400 font-medium">Site</th>
+                    <tr className="border-b border-[var(--border-dim)]">
+                      <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Site</th>
                       <th className="text-center py-2 px-3 text-red-400 font-medium">Critical</th>
                       <th className="text-center py-2 px-3 text-orange-400 font-medium">High</th>
                       <th className="text-center py-2 px-3 text-amber-400 font-medium">Medium</th>
                       <th className="text-center py-2 px-3 text-emerald-400 font-medium">Low</th>
-                      <th className="text-center py-2 px-3 text-gray-400 font-medium">Total</th>
-                      <th className="text-center py-2 px-3 text-gray-400 font-medium">Risk Score</th>
+                      <th className="text-center py-2 px-3 text-[var(--text-secondary)] font-medium">Total</th>
+                      <th className="text-center py-2 px-3 text-[var(--text-secondary)] font-medium">Risk Score</th>
                     </tr>
                   </thead>
                   <tbody>
                     {riskMatrix.map(row => (
-                      <tr key={row.site} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                        <td className="py-2 px-3 text-gray-200 font-medium">{row.site}</td>
+                      <tr key={row.site} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
+                        <td className="py-2 px-3 text-[var(--text-primary)] font-medium">{row.site}</td>
                         <td className="py-2 px-3 text-center">
                           {row.Critical > 0
                             ? <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-bold">{row.Critical}</span>
-                            : <span className="text-gray-700">-</span>}
+                            : <span className="text-[var(--text-dim)]">-</span>}
                         </td>
                         <td className="py-2 px-3 text-center">
                           {row.High > 0
                             ? <span className="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-bold">{row.High}</span>
-                            : <span className="text-gray-700">-</span>}
+                            : <span className="text-[var(--text-dim)]">-</span>}
                         </td>
                         <td className="py-2 px-3 text-center">
                           {row.Medium > 0
                             ? <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">{row.Medium}</span>
-                            : <span className="text-gray-700">-</span>}
+                            : <span className="text-[var(--text-dim)]">-</span>}
                         </td>
                         <td className="py-2 px-3 text-center">
                           {row.Low > 0
                             ? <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">{row.Low}</span>
-                            : <span className="text-gray-700">-</span>}
+                            : <span className="text-[var(--text-dim)]">-</span>}
                         </td>
-                        <td className="py-2 px-3 text-center text-gray-300">{row.total}</td>
+                        <td className="py-2 px-3 text-center text-[var(--text-secondary)]">{row.total}</td>
                         <td className="py-2 px-3 text-center">
                           <span className={`font-bold ${row.score >= 3 ? 'text-red-400' : row.score >= 2 ? 'text-amber-400' : 'text-emerald-400'}`}>
                             {row.score.toFixed(2)}
@@ -1557,24 +1557,24 @@ export default function ExecutiveReport() {
             {/* Top 10 high risk records */}
             {top10HighRisk.length > 0 && (
               <div className="mt-6">
-                <p className="text-xs text-gray-400 font-medium mb-2 uppercase tracking-wide">Top 10 Highest-Risk Records</p>
+                <p className="text-xs text-[var(--text-secondary)] font-medium mb-2 uppercase tracking-wide">Top 10 Highest-Risk Records</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-gray-800">
-                        <th className="text-left py-2 px-3 text-gray-400 font-medium">Asset No</th>
-                        <th className="text-left py-2 px-3 text-gray-400 font-medium">Site</th>
-                        <th className="text-center py-2 px-3 text-gray-400 font-medium">Risk</th>
-                        <th className="text-left py-2 px-3 text-gray-400 font-medium">Brand</th>
-                        <th className="text-left py-2 px-3 text-gray-400 font-medium">Position</th>
-                        <th className="text-left py-2 px-3 text-gray-400 font-medium">Findings</th>
+                      <tr className="border-b border-[var(--border-dim)]">
+                        <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Asset No</th>
+                        <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Site</th>
+                        <th className="text-center py-2 px-3 text-[var(--text-secondary)] font-medium">Risk</th>
+                        <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Brand</th>
+                        <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Position</th>
+                        <th className="text-left py-2 px-3 text-[var(--text-secondary)] font-medium">Findings</th>
                       </tr>
                     </thead>
                     <tbody>
                       {top10HighRisk.map((r, i) => (
-                        <tr key={r.id || i} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                          <td className="py-2 px-3 text-white font-medium">{r.asset_no || '-'}</td>
-                          <td className="py-2 px-3 text-gray-300">{r.site || '-'}</td>
+                        <tr key={r.id || i} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
+                          <td className="py-2 px-3 text-[var(--text-primary)] font-medium">{r.asset_no || '-'}</td>
+                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.site || '-'}</td>
                           <td className="py-2 px-3 text-center">
                             <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${
                               r.risk_level === 'Critical' ? 'bg-red-500/20 text-red-400' : 'bg-orange-500/20 text-orange-400'
@@ -1582,9 +1582,9 @@ export default function ExecutiveReport() {
                               {r.risk_level}
                             </span>
                           </td>
-                          <td className="py-2 px-3 text-gray-300">{r.brand || '-'}</td>
-                          <td className="py-2 px-3 text-gray-400">{r.position || '-'}</td>
-                          <td className="py-2 px-3 text-gray-400 max-w-xs truncate">{r.findings?.slice(0, 60) || '-'}</td>
+                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.brand || '-'}</td>
+                          <td className="py-2 px-3 text-[var(--text-secondary)]">{r.position || '-'}</td>
+                          <td className="py-2 px-3 text-[var(--text-secondary)] max-w-xs truncate">{r.findings?.slice(0, 60) || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1611,21 +1611,21 @@ export default function ExecutiveReport() {
               {recommendations.map((rec, i) => (
                 <div
                   key={i}
-                  className="bg-gray-950 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-colors"
+                  className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4 hover:border-[var(--border-bright)] transition-colors"
                 >
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${PRIORITY_STYLES[rec.priority]}`}>
                         {rec.priority}
                       </span>
-                      <h3 className="text-sm font-semibold text-white">{rec.title}</h3>
+                      <h3 className="text-sm font-semibold text-[var(--text-primary)]">{rec.title}</h3>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <Building2 className="w-3 h-3 text-gray-500" />
-                      <span className="text-xs text-gray-400">{rec.owner}</span>
+                      <Building2 className="w-3 h-3 text-[var(--text-muted)]" />
+                      <span className="text-xs text-[var(--text-secondary)]">{rec.owner}</span>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-400 leading-relaxed mb-2">{rec.description}</p>
+                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-2">{rec.description}</p>
                   <div className="flex items-center gap-1.5">
                     <DollarSign className="w-3 h-3 text-emerald-500" />
                     <span className="text-xs text-emerald-400">{rec.impact}</span>
@@ -1647,8 +1647,8 @@ export default function ExecutiveReport() {
                   <CheckCircle className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">Section 7 - Action Plan</h2>
-                  <p className="text-sm text-gray-400 mt-0.5">30/60/90 day structured delivery plan</p>
+                  <h2 className="text-lg font-semibold text-[var(--text-primary)]">Section 7 - Action Plan</h2>
+                  <p className="text-sm text-[var(--text-secondary)] mt-0.5">30/60/90 day structured delivery plan</p>
                 </div>
               </div>
               <button
@@ -1676,27 +1676,27 @@ export default function ExecutiveReport() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-gray-800">
-                        <th className="text-left py-1.5 px-3 text-gray-500 font-medium">Action</th>
-                        <th className="text-center py-1.5 px-3 text-gray-500 font-medium">Priority</th>
-                        <th className="text-center py-1.5 px-3 text-gray-500 font-medium">Timeline</th>
-                        <th className="text-center py-1.5 px-3 text-gray-500 font-medium">Owner</th>
-                        <th className="text-right py-1.5 px-3 text-gray-500 font-medium">Est. Saving</th>
-                        <th className="text-center py-1.5 px-3 text-gray-500 font-medium">Status</th>
+                      <tr className="border-b border-[var(--border-dim)]">
+                        <th className="text-left py-1.5 px-3 text-[var(--text-muted)] font-medium">Action</th>
+                        <th className="text-center py-1.5 px-3 text-[var(--text-muted)] font-medium">Priority</th>
+                        <th className="text-center py-1.5 px-3 text-[var(--text-muted)] font-medium">Timeline</th>
+                        <th className="text-center py-1.5 px-3 text-[var(--text-muted)] font-medium">Owner</th>
+                        <th className="text-right py-1.5 px-3 text-[var(--text-muted)] font-medium">Est. Saving</th>
+                        <th className="text-center py-1.5 px-3 text-[var(--text-muted)] font-medium">Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {phase.rows.map((action, i) => (
-                        <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors">
-                          <td className="py-2 px-3 text-gray-200 max-w-sm">{action.action}</td>
+                        <tr key={i} className="border-b border-[var(--border-dim)] hover:bg-[var(--surface-2)] transition-colors">
+                          <td className="py-2 px-3 text-[var(--text-primary)] max-w-sm">{action.action}</td>
                           <td className="py-2 px-3 text-center">
                             <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${PRIORITY_STYLES[action.priority]}`}>
                               {action.priority}
                             </span>
                           </td>
-                          <td className="py-2 px-3 text-center text-gray-400">{action.timeline}</td>
+                          <td className="py-2 px-3 text-center text-[var(--text-secondary)]">{action.timeline}</td>
                           <td className="py-2 px-3 text-center">
-                            <span className="px-2 py-0.5 rounded bg-gray-800 text-gray-300 text-xs">{action.owner}</span>
+                            <span className="px-2 py-0.5 rounded bg-[var(--surface-2)] text-[var(--text-secondary)] text-xs">{action.owner}</span>
                           </td>
                           <td className="py-2 px-3 text-right text-emerald-400 font-medium">{action.saving}</td>
                           <td className="py-2 px-3 text-center">
@@ -1713,7 +1713,7 @@ export default function ExecutiveReport() {
             ))}
 
             {/* Summary footer */}
-            <div className="mt-4 border-t border-gray-800 pt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
+            <div className="mt-4 border-t border-[var(--border-dim)] pt-4 flex flex-wrap items-center gap-4 text-xs text-[var(--text-muted)]">
               <span className="flex items-center gap-1.5">
                 <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
                 {actionPlan.length} actions identified
@@ -1726,7 +1726,7 @@ export default function ExecutiveReport() {
                 <Users className="w-3.5 h-3.5 text-blue-400" />
                 4 stakeholder groups engaged
               </span>
-              <span className="ml-auto text-gray-700">
+              <span className="ml-auto text-[var(--text-dim)]">
                 Report generated {formatDate(new Date(), 'All', { day: '2-digit', month: 'long', year: 'numeric' })}
               </span>
             </div>

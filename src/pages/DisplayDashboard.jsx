@@ -16,10 +16,12 @@
  *   import_batches  → pending approvals (approval_status = 'pending_approval')
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Truck, MapPin, Bell, ClipboardList, CircleDot, DollarSign,
   AlertTriangle, ShieldCheck, Inbox, Maximize2, Minimize2,
   RefreshCw, Play, Pause, Radio, Gauge as GaugeIcon,
+  LayoutGrid, LogOut, Check, X as XIcon,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
@@ -41,6 +43,16 @@ const BOARDS = [
   { key: 'tyre',   label: 'Tyre & Maintenance' },
   { key: 'alerts', label: 'Alerts & Compliance' },
 ]
+
+// Which boards are shown / rotated, persisted so a given TV keeps its selection.
+const BOARD_STORE = 'tp_tv_boards'
+function loadEnabledBoards() {
+  try {
+    const v = JSON.parse(localStorage.getItem(BOARD_STORE))
+    if (v && typeof v === 'object' && !Array.isArray(v)) return v
+  } catch { /* ignore */ }
+  return {}
+}
 
 const SEVERITY_COLORS = {
   Critical: '#ef4444', High: '#f97316', Medium: '#eab308', Low: '#22c55e', Info: '#38bdf8',
@@ -147,6 +159,7 @@ function SiteBars({ sites, total }) {
 
 export default function DisplayDashboard() {
   const { branding, orgName } = useTenant()
+  const navigate = useNavigate()
 
   // Per-dataset slices so one failing query never blanks the board.
   const [fleet,        setFleet]        = useState(EMPTY_SLICE)
@@ -165,6 +178,31 @@ export default function DisplayDashboard() {
   const [autoRotate,   setAutoRotate]   = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [cursorHidden, setCursorHidden] = useState(false)
+  const [enabledBoards, setEnabledBoards] = useState(loadEnabledBoards)
+  const [showPicker,   setShowPicker]   = useState(false)
+
+  // Boards the operator has chosen to show (missing key = on). Never empty:
+  // if everything is toggled off we fall back to the full set.
+  const visibleBoards = useMemo(() => {
+    const vis = BOARDS.filter(b => enabledBoards[b.key] !== false)
+    return vis.length ? vis : BOARDS
+  }, [enabledBoards])
+
+  // Keep the active index in range as the visible set changes.
+  const safeIndex = Math.min(boardIndex, visibleBoards.length - 1)
+  useEffect(() => {
+    if (boardIndex > visibleBoards.length - 1) setBoardIndex(0)
+  }, [visibleBoards.length, boardIndex])
+
+  const toggleBoard = useCallback((key) => {
+    setEnabledBoards(prev => {
+      const next = { ...prev, [key]: prev[key] === false }
+      // Guarantee at least one board stays enabled.
+      if (!BOARDS.some(b => next[b.key] !== false)) return prev
+      try { localStorage.setItem(BOARD_STORE, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }, [])
 
   const rootRef        = useRef(null)
   const cursorTimerRef = useRef(null)
@@ -291,13 +329,13 @@ export default function DisplayDashboard() {
 
   // ── Board auto-rotation ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (!autoRotate) return undefined
+    if (!autoRotate || visibleBoards.length < 2) return undefined
     const id = setInterval(
-      () => setBoardIndex(i => nextBoardIndex(i, BOARDS.length)),
+      () => setBoardIndex(i => nextBoardIndex(i, visibleBoards.length)),
       ROTATE_SECS * 1000,
     )
     return () => clearInterval(id)
-  }, [autoRotate])
+  }, [autoRotate, visibleBoards.length])
 
   // ── Fullscreen ──────────────────────────────────────────────────────────────
   const toggleFullscreen = useCallback(() => {
@@ -345,7 +383,7 @@ export default function DisplayDashboard() {
   const todayInsp    = useMemo(() => countTodaysInspections(inspections.rows, todayStr), [inspections.rows, todayStr])
   const alertSummary = useMemo(() => summariseAlerts(alerts.rows), [alerts.rows])
 
-  const board = BOARDS[boardIndex]
+  const board = visibleBoards[safeIndex] ?? BOARDS[0]
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -410,6 +448,51 @@ export default function DisplayDashboard() {
               {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Loading…'}
             </p>
           </div>
+          {/* Board picker — choose which boards are shown / rotated */}
+          <div className="relative">
+            <button
+              onClick={() => setShowPicker(v => !v)}
+              title="Choose boards to display"
+              className={`p-2.5 rounded-xl border transition-colors ${
+                showPicker
+                  ? 'bg-emerald-900/30 border-emerald-800/60 text-emerald-300'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              <LayoutGrid size={17} />
+            </button>
+            {showPicker && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowPicker(false)} />
+                <div className="absolute right-0 mt-2 z-20 w-64 rounded-xl border border-slate-700 bg-[#0d1420] shadow-2xl p-2">
+                  <div className="flex items-center justify-between px-2 py-1.5">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Displayed boards</p>
+                    <button onClick={() => setShowPicker(false)} className="text-slate-500 hover:text-slate-300">
+                      <XIcon size={14} />
+                    </button>
+                  </div>
+                  {BOARDS.map(b => {
+                    const on = enabledBoards[b.key] !== false
+                    return (
+                      <button
+                        key={b.key}
+                        onClick={() => toggleBoard(b.key)}
+                        className="w-full flex items-center justify-between gap-2 px-2 py-2 rounded-lg text-left text-sm text-slate-200 hover:bg-slate-800/70 transition-colors"
+                      >
+                        <span>{b.label}</span>
+                        <span className={`w-5 h-5 rounded-md border flex items-center justify-center ${
+                          on ? 'bg-emerald-600 border-emerald-500' : 'border-slate-600'
+                        }`}>
+                          {on && <Check size={13} className="text-white" />}
+                        </span>
+                      </button>
+                    )
+                  })}
+                  <p className="text-[11px] text-slate-600 px-2 pt-1.5 pb-0.5">At least one board stays on.</p>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={() => setAutoRotate(v => !v)}
             title={autoRotate ? 'Pause board rotation' : 'Resume board rotation'}
@@ -427,6 +510,14 @@ export default function DisplayDashboard() {
             className="p-2.5 rounded-xl border bg-slate-900 border-slate-800 text-slate-400 hover:text-white transition-colors"
           >
             {isFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+          </button>
+          {/* Exit TV mode back to the app */}
+          <button
+            onClick={() => { if (document.fullscreenElement) document.exitFullscreen?.(); navigate('/') }}
+            title="Exit TV display"
+            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-600 transition-colors text-sm font-semibold"
+          >
+            <LogOut size={16} /> Exit
           </button>
         </div>
       </header>
@@ -642,18 +733,18 @@ export default function DisplayDashboard() {
 
       {/* ── Footer: board dots ── */}
       <footer className="flex items-center justify-center gap-3 pb-6 flex-shrink-0">
-        {BOARDS.map((b, i) => (
+        {visibleBoards.map((b, i) => (
           <button
             key={b.key}
             onClick={() => { setBoardIndex(i) }}
             title={b.label}
             className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-colors ${
-              i === boardIndex
+              i === safeIndex
                 ? 'bg-emerald-900/40 border-emerald-700/60 text-emerald-300'
                 : 'bg-slate-900/60 border-slate-800 text-slate-500 hover:text-slate-300'
             }`}
           >
-            <span className={`w-2 h-2 rounded-full ${i === boardIndex ? 'bg-emerald-400' : 'bg-slate-700'}`} />
+            <span className={`w-2 h-2 rounded-full ${i === safeIndex ? 'bg-emerald-400' : 'bg-slate-700'}`} />
             {b.label}
           </button>
         ))}

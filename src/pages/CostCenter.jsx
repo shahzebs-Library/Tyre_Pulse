@@ -6,6 +6,7 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import PageHeader from '../components/ui/PageHeader'
+import BudgetTabs from '../components/budgets/BudgetTabs'
 import {
   DollarSign, TrendingUp, TrendingDown, BarChart2, PieChart, Target,
   AlertTriangle, Award, ArrowUpRight, ArrowDownRight, Minus, Download,
@@ -552,6 +553,7 @@ export default function CostCenter() {
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
     >
 
+      <BudgetTabs />
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <PageHeader
         title={t('costcenter.title')}

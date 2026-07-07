@@ -14,10 +14,7 @@ import {
 import PageHeader from '../components/ui/PageHeader'
 import { supabase } from '../lib/supabase'
 import { classifyQuery, AGENT_TYPES, AGENT_LABELS, AGENT_COLORS, AGENT_DESCRIPTIONS } from '../lib/aiRouter'
-import { runAnalystAgent } from '../lib/agents/analystAgent'
-import { runTyreEngineerAgent } from '../lib/agents/tyreEngineerAgent'
-import { runQaDataAgent } from '../lib/agents/qaDataAgent'
-import { runPlannerAgent } from '../lib/agents/plannerAgent'
+import { runOrchestration } from '../lib/agents/orchestrator'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState } from '../lib/exportUtils'
@@ -529,21 +526,9 @@ export default function AiCommandCenter() {
     inputRef.current?.focus()
 
     try {
-      let result
-
-      switch (agentType) {
-        case AGENT_TYPES.TYRE_ENGINEER:
-          result = await runTyreEngineerAgent(text, agentContext)
-          break
-        case AGENT_TYPES.QA_DATA:
-          result = await runQaDataAgent(text, agentContext)
-          break
-        case AGENT_TYPES.PLANNER:
-          result = await runPlannerAgent(text, agentContext)
-          break
-        default:
-          result = await runAnalystAgent(text, agentContext)
-      }
+      // Orchestrated run: a focused question uses one specialist; a cross-domain
+      // question fans out to several agents and fuses their answers.
+      const result = await runOrchestration(text, agentContext)
 
       if (abortRef.current) return
 
@@ -552,6 +537,8 @@ export default function AiCommandCenter() {
         role:        'assistant',
         content:     result.response,
         agentType:   result.agentType ?? agentType,
+        agents:      result.agents,
+        synthesized: result.synthesized,
         timestamp:   new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         // Agent-specific data for panels
         kpis:         result.kpis,

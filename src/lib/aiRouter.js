@@ -33,32 +33,44 @@ export const AGENT_DESCRIPTIONS = {
 
 // ── Query Classification ──────────────────────────────────────────────────────
 
+// Domain patterns, ordered by specificity (QA → Planner → Engineer → Analyst).
+// Shared by the single-agent classifier and the multi-agent orchestrator.
+const AGENT_PATTERNS = [
+  [AGENT_TYPES.QA_DATA,       /duplicat|data qualit|clean|incorrect|invalid|missing data|serial.*(error|wrong|dup)|error in data|wrong entry|bad data|corrupt|data issue|verify data/],
+  [AGENT_TYPES.PLANNER,       /schedul|forecast|when.*(replac|due|expire|next)|plan|next month|next quarter|next year|budget|replacement date|upcoming|predict|demand|inventory need|stock plan|order plan|how many.*next|procurement plan/],
+  [AGENT_TYPES.TYRE_ENGINEER, /root cause|why.*fail|why.*wear|why.*blow|wear pattern|abnormal wear|shoulder wear|center wear|pressure|inflation|under.?inflat|over.?inflat|alignment|camber|toe.in|toe.out|suspension|failure mode|blowout|puncture|sidewall|diagnos|engineer|technical analysis|tyre.*(issue|problem|fault)|heat buildup|ply separat|bead damage/],
+  [AGENT_TYPES.ANALYST,       /trend|kpi|cost|cpk|compar|report|summ|breakdown|spend|expense|average|per km|per mile|benchmark|performance|how much|total/],
+]
+
 /**
- * Classify a user query into an agent type based on keyword/pattern matching.
- * Rules are ordered by specificity - QA and Planner checked before Engineer and Analyst.
+ * Classify a user query into a SINGLE agent type (most specific match wins;
+ * Analyst is the default). Preserves the original routing behaviour.
  * @param {string} query
  * @returns {string} AGENT_TYPES value
  */
 export function classifyQuery(query) {
-  const q = query.toLowerCase().trim()
-
-  // QA Data agent: data quality, duplicates, cleaning, validation, data errors
-  if (/duplicat|data qualit|clean|incorrect|invalid|missing data|serial.*(error|wrong|dup)|error in data|wrong entry|bad data|corrupt|data issue|verify data/.test(q)) {
-    return AGENT_TYPES.QA_DATA
+  const q = String(query || '').toLowerCase().trim()
+  for (const [type, re] of AGENT_PATTERNS) {
+    if (type !== AGENT_TYPES.ANALYST && re.test(q)) return type
   }
-
-  // Planner agent: scheduling, forecasting, when, planning, budget, next period, upcoming
-  if (/schedul|forecast|when.*(replac|due|expire|next)|plan|next month|next quarter|next year|budget|replacement date|upcoming|predict|demand|inventory need|stock plan|order plan|how many.*next|procurement plan/.test(q)) {
-    return AGENT_TYPES.PLANNER
-  }
-
-  // Tyre Engineer agent: root cause, wear, pressure, alignment, failure diagnosis, technical
-  if (/root cause|why.*fail|why.*wear|why.*blow|wear pattern|abnormal wear|shoulder wear|center wear|pressure|inflation|under.?inflat|over.?inflat|alignment|camber|toe.in|toe.out|suspension|failure mode|blowout|puncture|sidewall|diagnos|engineer|technical analysis|tyre.*(issue|problem|fault)|heat buildup|ply separat|bead damage/.test(q)) {
-    return AGENT_TYPES.TYRE_ENGINEER
-  }
-
-  // Default: Analyst agent for trends, KPIs, cost, comparison, report, summary
   return AGENT_TYPES.ANALYST
+}
+
+/**
+ * Classify into ALL relevant agent types for multi-agent orchestration, ordered
+ * by specificity (primary first). A cross-domain question like "why did cost
+ * rise and when should I replace these tyres" returns several agents; a focused
+ * question returns one. Always non-empty (falls back to Analyst).
+ * @param {string} query
+ * @returns {string[]} ordered AGENT_TYPES values, deduped
+ */
+export function classifyQueryMulti(query) {
+  const q = String(query || '').toLowerCase().trim()
+  const matches = []
+  for (const [type, re] of AGENT_PATTERNS) {
+    if (re.test(q)) matches.push(type)
+  }
+  return matches.length ? matches : [AGENT_TYPES.ANALYST]
 }
 
 // ── Agent Routing ─────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import {
   CheckCircle, Ban, Eye, EyeOff,
 } from 'lucide-react'
 import * as integrations from '../lib/api/integrations'
+import { canAddResource } from '../lib/api/billing'
 import { formatDistanceToNow } from 'date-fns'
 import { formatDateTime } from '../lib/formatters'
 
@@ -118,6 +119,13 @@ function ApiKeysTab({ search }) {
     setCreating(true)
     setFormError(null)
     try {
+      // Plan entitlement: block minting beyond the org's API-key cap.
+      // Server-authoritative (org_can_add); fails open on RPC error.
+      if (!(await canAddResource('api_keys'))) {
+        setFormError("Your plan's API-key limit has been reached. Upgrade in Billing & Subscription to mint more keys.")
+        setCreating(false)
+        return
+      }
       const result = await integrations.createApiKey({
         name: name.trim(),
         scopes: ['read'],
